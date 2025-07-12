@@ -7,10 +7,10 @@ import { getFirestore } from 'firebase/firestore'; // Para o Firestore Database
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDC1qtoweF5dlV_nx1PSLCK291Pv9KNGkg',
-  authDomain: 'pedeai-9413b.firebaseapp.com',
-  databaseURL: 'https://pedeai-9413b-default-rtdb.europe-west1.firebasedatabase.app',
-  projectId: 'pedeai-9413b',
-  storageBucket: 'pedeai-9413b.appspot.com',
+  authDomain: 'matafome-9413b.firebaseapp.com',
+  databaseURL: 'https://matafome-9413b-default-rtdb.europe-west1.firebasedatabase.app',
+  projectId: 'matafome-9413b',
+  storageBucket: 'matafome-9413b.appspot.com',
   messagingSenderId: '315880064175',
   appId: '1:315880064175:web:22f3c0b9714b7b1ca5c05a'
 };
