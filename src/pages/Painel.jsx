@@ -1,5 +1,5 @@
 // src/pages/Painel.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react"; // Adicionado useRef aqui!
 import { collection, onSnapshot, doc, updateDoc, Timestamp, query, orderBy, where } from "firebase/firestore";
 import { db } from "../firebase";
 import PedidoCard from "../components/PedidoCard";
@@ -10,13 +10,18 @@ function Painel() {
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
 
+  // Ref para o elemento de áudio
+  const audioRef = useRef(null);
+  // Para controlar quais IDs de pedido já tocaram o som (persistente através de re-renderizações)
+  const playedOrderIds = useRef(new Set()); 
+
   const paramStartDate = searchParams.get('startDate');
   const paramEndDate = searchParams.get('endDate');
 
   useEffect(() => {
     setLoading(true);
 
-    let pedidosQuery = collection(db, "pedidos");
+    let pedidosQueryRef = collection(db, "pedidos");
     let q;
 
     if (paramStartDate && paramEndDate) {
@@ -32,32 +37,58 @@ function Painel() {
       console.log(`Painel: Filtrando de ${startOfDay.toLocaleString()} até ${endOfDay.toLocaleString()}`);
 
       q = query(
-        pedidosQuery,
+        pedidosQueryRef,
         where('criadoEm', '>=', startTimestamp),
         where('criadoEm', '<=', endTimestamp),
         orderBy('criadoEm', 'desc')
       );
     } else {
-      q = query(pedidosQuery, orderBy('criadoEm', 'desc'));
+      q = query(pedidosQueryRef, orderBy('criadoEm', 'desc')); // Usando 'criadoEm' para ordenar
       console.log("Painel: Sem filtro de data, buscando todos os pedidos.");
     }
 
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const dados = snapshot.docs.map((doc) => ({
+      const dadosAtuais = [];
+      let novoPedidoChegou = false;
+
+      // Primeiro, processa as mudanças
+      snapshot.docChanges().forEach((change) => {
+        const pedidoData = { id: change.doc.id, ...change.doc.data() };
+
+        if (change.type === "added") {
+          // Se um novo documento foi ADICIONADO e o ID ainda não está na nossa lista de IDs que já tocaram o som
+          if (!playedOrderIds.current.has(pedidoData.id)) {
+            novoPedidoChegou = true; // Sinaliza que um novo pedido chegou
+            playedOrderIds.current.add(pedidoData.id); // Adiciona o ID para não tocar novamente
+          }
+        }
+        // Para 'modified' e 'removed' não precisamos tocar som de 'novo pedido'
+        // mas sua lógica de 'setPedidos' abaixo irá re-sincronizar tudo
+      });
+
+      // Segundo, atualiza a lista completa de pedidos baseada no snapshot inteiro
+      const todosPedidosNoSnapshot = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      setPedidos(dados);
+      setPedidos(todosPedidosNoSnapshot); // Atualiza o estado com a lista filtrada/ordenada
+
+      // Toca o som se um novo pedido foi detectado
+      if (novoPedidoChegou && audioRef.current) {
+        audioRef.current.play().catch(e => console.error("Erro ao tocar áudio:", e));
+      }
+
       setLoading(false);
-      console.log(`Painel: ${dados.length} pedidos carregados.`);
+      console.log(`Painel: ${todosPedidosNoSnapshot.length} pedidos carregados.`);
     }, (error) => {
       console.error("Erro ao carregar pedidos no Painel:", error);
       setLoading(false);
     });
 
     return () => unsub();
-  }, [paramStartDate, paramEndDate]);
+  }, [paramStartDate, paramEndDate]); // Dependências do useEffect
+
 
   const mudarStatus = async (id, novoStatus) => {
     try {
@@ -129,6 +160,10 @@ function Painel() {
           Painel de Pedidos
         </h1>
 
+        {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
+        {/* Certifique-se que o caminho 'src' aponta para o seu arquivo de som na pasta 'public' */}
+        <audio ref={audioRef} src="/campainha.mp3" preload="auto" /> {/* Verifique o nome do arquivo aqui! */}
+
         {loading ? (
             <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando pedidos...</p>
         ) : (
@@ -152,6 +187,7 @@ function Painel() {
                             p.status?.toLowerCase() === coluna.status.toLowerCase()
                         )
                         .sort((a, b) => {
+                            // Certifique-se que 'criadoEm' é um Timestamp do Firebase ou um Date
                             const dataA = a.criadoEm && typeof a.criadoEm.toDate === 'function' ? a.criadoEm.toDate() : new Date(0);
                             const dataB = b.criadoEm && typeof b.criadoEm.toDate === 'function' ? b.criadoEm.toDate() : new Date(0);
                             return dataA - dataB;
