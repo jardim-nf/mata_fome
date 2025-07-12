@@ -1,26 +1,21 @@
-// src/firebase.js
-import { initializeApp } from 'firebase/app'; // Importação correta
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDC1qtoweF5dlV_nx1PSLCK291Pv9KNGkg",
-  authDomain: "pedeai-9413b.firebaseapp.com",
-  // databaseURL não é estritamente necessário para Firestore, mas não atrapalha
-  databaseURL: "https://pedeai-9413b-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "pedeai-9413b",
-  storageBucket: "pedeai-9413b.firebasestorage.app",
-  messagingSenderId: "315880064175",
-  appId: "1:315880064175:web:22f3c0b9714b7b1ca5c05a",
-  measurementId: "G-SKXD29NM1J"
+  apiKey: "AIzaSyBMe3VD7wEQJeyovVDwRS01nWnebAtkcgM",
+  authDomain: "matafome-a4926.firebaseapp.com",
+  projectId: "matafome-a4926",
+  storageBucket: "matafome-a4926.firebasestorage.app",
+  messagingSenderId: "866002554434",
+  appId: "1:866002554434:web:1f8c98e76c6e8df9d2a7db",
+  measurementId: "G-Y9Y275QZ3T"
 };
 
-// VOCCÊ PRECISA DESSA LINHA AQUI!
-const app = initializeApp(firebaseConfig); // Inicializa o aplicativo Firebase e atribui à variável 'app'
-
-// Agora 'app' está definido e pode ser usado para inicializar os serviços
-const auth = getAuth(app); // Para autenticação
-const db = getFirestore(app); // Para o Firestore Database
-
-
-export { auth, db };
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
