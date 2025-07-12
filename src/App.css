@@ -1,0 +1,48 @@
+/* src/App.css */
+
+:root {
+  --vermelho-principal: hsl(0, 91%, 49%); /* Vermelho vibrante do logo */
+  --marrom-escuro: hsl(28, 48%, 20%);   /* Cor mais escura do logo */
+  --bege-claro: hsl(38, 77%, 86%);      /* Cor clara do logo */
+  --verde-destaque: hsl(120, 50%, 45%); /* Verde do recheio do burrito */
+  --branco: #FFFFFF;
+  --preto: #000000;
+  --cinza-texto: #4A4A4A; /* Um cinza para textos gerais */
+}
+
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--branco); /* Fundo branco ou bege claro, dependendo da seção */
+  color: var(--marrom-escuro); /* Cor de texto padrão */
+}
+
+/* Estilos gerais do Header */
+header {
+  background-color: var(--vermelho-principal); /* Vermelho para o header */
+  color: var(--branco);
+  padding: 1rem 2rem;
+  /* Classes do Tailwind serão adicionadas diretamente no componente Header.jsx */
+}
+
+/* Estilos gerais do Hero */
+.hero {
+  padding: 4rem 2rem;
+  text-align: center;
+  background-color: var(--bege-claro); /* Fundo bege claro */
+  color: var(--marrom-escuro); /* Cor de texto para o hero */
+  /* Classes do Tailwind para imagem de fundo, etc. serão no componente Hero.jsx */
+}
+
+.hero h1 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: var(--branco); /* Título do hero em branco para contrastar com imagem de fundo */
+}
+
+.hero p {
+  font-size: 1.2rem;
+  max-width: 600px;
+  margin: 0 auto;
+  color: var(--branco); /* Texto do hero em branco */
+}
