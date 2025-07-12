@@ -1,7 +1,7 @@
-
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-
+// src/firebase.js
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 const firebaseConfig = {
   apiKey: "AIzaSyDC1qtoweF5dlV_nx1PSLCK291Pv9KNGkg",
   authDomain: "matafome-9413b.firebaseapp.com",
@@ -13,7 +13,7 @@ const firebaseConfig = {
   measurementId: "G-SKXD29NM1J"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const auth = getAuth(app); // Para autenticação
+const db = getFirestore(app); // Para o Firestore Database
 
-export { db };
+export { auth, db };

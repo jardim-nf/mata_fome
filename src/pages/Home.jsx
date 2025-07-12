@@ -1,22 +1,24 @@
+// src/pages/Home.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth'; 
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore'; // Importar doc e getDoc
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore'; 
 import { auth, db } from '../firebase'; 
 import "../App.css"; // Importar o CSS global 
+
 function Home() {
   const { currentUser, authLoading } = useAuth(); 
   const navigate = useNavigate();
 
   // Estados para o card de login do CLIENTE
-  const [showClientLoginCard, setShowClientLoginCard] = useState(false); // Renomeado para cliente
-  const [clientEmail, setClientEmail] = useState(''); // Renomeado
-  const [clientPassword, setClientPassword] = useState(''); // Renomeado
-  const [clientLoginError, setClientLoginError] = useState(''); // Renomeado
-  const [loadingClientLogin, setLoadingClientLogin] = useState(false); // Renomeado
+  const [showClientLoginCard, setShowClientLoginCard] = useState(false);
+  const [clientEmail, setClientEmail] = useState('');
+  const [clientPassword, setClientPassword] = useState('');
+  const [clientLoginError, setClientLoginError] = useState('');
+  const [loadingClientLogin, setLoadingClientLogin] = useState(false);
 
-  // <<-- NOVOS ESTADOS PARA O CARD DE LOGIN DO ADMINISTRADOR -->>
+  // ESTADOS PARA O CARD DE LOGIN DO ADMINISTRADOR
   const [showAdminLoginCard, setShowAdminLoginCard] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -26,17 +28,17 @@ function Home() {
   // Estados para os estabelecimentos em destaque
   const [estabelecimentosDestaque, setEstabelecimentosDestaque] = useState([]);
   const [loadingEstabelecimentos, setLoadingEstabelecimentos] = useState(true);
-  const [errorEstabelecimentos, setErrorEstabelecimentos] = useState('');
+  const [errorEstabelecimentos, setErrorEstabelecimentos] = useState(''); // Estado para exibir erros
 
   // Função para alternar a visibilidade do card de login do cliente
-  const toggleClientLoginCard = () => { // Renomeado
+  const toggleClientLoginCard = () => {
     setShowClientLoginCard(!showClientLoginCard);
     setClientLoginError(''); 
     setClientEmail(''); 
     setClientPassword(''); 
   };
 
-  // <<-- NOVA FUNÇÃO PARA ALTERNAR VISIBILIDADE DO CARD DE LOGIN DO ADMINISTRADOR -->>
+  // FUNÇÃO PARA ALTERNAR VISIBILIDADE DO CARD DE LOGIN DO ADMINISTRADOR
   const toggleAdminLoginCard = () => {
     setShowAdminLoginCard(!showAdminLoginCard);
     setAdminLoginError('');
@@ -45,13 +47,13 @@ function Home() {
   };
 
   // Função para lidar com o login do CLIENTE (usado no card da Home)
-  const handleClientLogin = async (e) => { // Renomeado
+  const handleClientLogin = async (e) => {
     e.preventDefault();
     setLoadingClientLogin(true);
     setClientLoginError('');
 
     try {
-      await signInWithEmailAndPassword(auth, clientEmail, clientPassword); // Usando clientEmail e clientPassword
+      await signInWithEmailAndPassword(auth, clientEmail, clientPassword);
       setShowClientLoginCard(false); 
       navigate('/'); 
     } catch (error) {
@@ -66,7 +68,7 @@ function Home() {
     }
   };
 
-  // <<-- NOVA FUNÇÃO PARA LIDAR COM O LOGIN DO ADMINISTRADOR -->>
+  // FUNÇÃO PARA LIDAR COM O LOGIN DO ADMINISTRADOR
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoadingAdminLogin(true);
@@ -81,8 +83,8 @@ function Home() {
       const userDocSnap = await getDoc(userDocRef);
 
       if (userDocSnap.exists() && userDocSnap.data()?.isAdmin) {
-        setShowAdminLoginCard(false); // Fecha o card de login
-        navigate('/dashboard'); // Redireciona para o Dashboard
+        setShowAdminLoginCard(false); 
+        navigate('/dashboard'); 
       } else {
         // Não é admin, faz logout
         await auth.signOut();
@@ -102,8 +104,7 @@ function Home() {
     }
   };
 
-
-  // Efeito para buscar estabelecimentos em destaque (mantido)
+  // Efeito para buscar estabelecimentos em destaque
   useEffect(() => {
     const fetchEstabelecimentosDestaque = async () => {
       try {
@@ -114,16 +115,21 @@ function Home() {
           ...doc.data()
         }));
         setEstabelecimentosDestaque(estabelecimentosList);
+        // Se a lista estiver vazia, pode ser que não haja dados ou que algo falhou
+        if (estabelecimentosList.length === 0) {
+            setErrorEstabelecimentos("Nenhum estabelecimento em destaque encontrado. Verifique seu banco de dados.");
+        }
       } catch (err) {
         console.error("Erro ao buscar estabelecimentos:", err);
-        setErrorEstabelecimentos("Não foi possível carregar os estabelecimentos em destaque.");
+        // Esta mensagem de erro será exibida no app, complementando o erro do console
+        setErrorEstabelecimentos("Não foi possível carregar os estabelecimentos em destaque. Por favor, tente novamente mais tarde ou verifique a conexão.");
       } finally {
         setLoadingEstabelecimentos(false);
       }
     };
 
     fetchEstabelecimentosDestaque();
-  }, []);
+  }, []); // Array de dependências vazio para rodar apenas uma vez na montagem do componente
 
   // Espera o AuthContext carregar antes de renderizar o conteúdo principal
   if (authLoading) {
@@ -155,7 +161,7 @@ function Home() {
               <h3 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-4">Você é cliente?</h3>
               <p className="text-[var(--cinza-texto)] mb-6">Peça sua comida favorita em poucos cliques!</p>
               <button
-                onClick={toggleClientLoginCard} // <<-- ALTERADO -->>
+                onClick={toggleClientLoginCard}
                 className="bg-[var(--vermelho-principal)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-red-700 transition duration-300 shadow-md"
               >
                 Fazer Login
@@ -172,13 +178,12 @@ function Home() {
             <div className="flex flex-col items-center p-4">
               <h3 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-4">Você é administrador?</h3>
               <p className="text-[var(--cinza-texto)] mb-6">Gerencie seus pedidos e seu negócio!</p>
-              <button // <<-- ALTERADO: AGORA É UM BOTÃO QUE ABRE O CARD -->>
+              <button
                 onClick={toggleAdminLoginCard} 
                 className="bg-[var(--marrom-escuro)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-gray-700 transition duration-300 shadow-md"
               >
                 Acessar Painel
               </button>
-              {/* Opcional: Link para cadastro de admin se for aberto (o Login.jsx pode ser só para admin register) */}
               <Link to="/login-admin" className="text-[var(--marrom-escuro)] hover:underline mt-4">
                 Cadastrar Admin
               </Link>
@@ -188,53 +193,53 @@ function Home() {
       )}
 
       {/* Card de Login do Cliente (aparece sobreposto) */}
-      {showClientLoginCard && !currentUser && ( // Renomeado showLoginCard para showClientLoginCard
+      {showClientLoginCard && !currentUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full relative">
             <button
-              onClick={toggleClientLoginCard} // Renomeado
+              onClick={toggleClientLoginCard}
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl"
             >
               &times; 
             </button>
             <h2 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-6 text-center">Login do Cliente</h2>
-            <form onSubmit={handleClientLogin}> {/* Renomeado */}
+            <form onSubmit={handleClientLogin}>
               <div className="mb-4">
-                <label htmlFor="clientEmail" className="block text-gray-700 text-sm font-bold mb-2"> {/* Renomeado id */}
+                <label htmlFor="clientEmail" className="block text-gray-700 text-sm font-bold mb-2">
                   Email:
                 </label>
                 <input
                   type="email"
-                  id="clientEmail" // Renomeado id
+                  id="clientEmail"
                   className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  value={clientEmail} // Renomeado
-                  onChange={(e) => setClientEmail(e.target.value)} // Renomeado
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
                   required
                 />
               </div>
               <div className="mb-6">
-                <label htmlFor="clientPassword" className="block text-gray-700 text-sm font-bold mb-2"> {/* Renomeado id */}
+                <label htmlFor="clientPassword" className="block text-gray-700 text-sm font-bold mb-2">
                   Senha:
                 </label>
                 <input
                   type="password"
-                  id="clientPassword" // Renomeado id
+                  id="clientPassword"
                   className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
-                  value={clientPassword} // Renomeado
-                  onChange={(e) => setClientPassword(e.target.value)} // Renomeado
+                  value={clientPassword}
+                  onChange={(e) => setClientPassword(e.target.value)}
                   required
                 />
               </div>
-              {clientLoginError && ( // Renomeado
-                <p className="text-red-500 text-xs italic mb-4 text-center">{clientLoginError}</p> // Renomeado
+              {clientLoginError && (
+                <p className="text-red-500 text-xs italic mb-4 text-center">{clientLoginError}</p>
               )}
               <div className="flex items-center justify-between">
                 <button
                   type="submit"
                   className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full focus:outline-none focus:shadow-outline w-full"
-                  disabled={loadingClientLogin} // Renomeado
+                  disabled={loadingClientLogin}
                 >
-                  {loadingClientLogin ? 'Entrando...' : 'Entrar'} {/* Renomeado */}
+                  {loadingClientLogin ? 'Entrando...' : 'Entrar'}
                 </button>
               </div>
             </form>
@@ -248,7 +253,7 @@ function Home() {
         </div>
       )}
 
-      {/* <<-- NOVO CARD DE LOGIN DO ADMINISTRADOR (aparece sobreposto) -->> */}
+      {/* NOVO CARD DE LOGIN DO ADMINISTRADOR (aparece sobreposto) */}
       {showAdminLoginCard && !currentUser && ( 
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full relative">
@@ -308,7 +313,6 @@ function Home() {
           </div>
         </div>
       )}
-
 
       {/* Seção de Categorias */}
       <section className="container mx-auto my-12 px-4">
