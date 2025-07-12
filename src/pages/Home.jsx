@@ -1,52 +1,78 @@
 // src/pages/Home.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; 
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth'; 
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore'; 
-import { auth, db } from '../firebase'; 
-import "../App.css"; // Importar o CSS global 
+import { useAuth } from '../context/AuthContext';
+// Importa funções do Firebase para autenticação e Firestore
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase'; // Importa as instâncias de auth e db do seu arquivo de configuração do Firebase
+import "../App.css"; // Importar o CSS global
 
 function Home() {
-  const { currentUser, authLoading } = useAuth(); 
+  const { currentUser, authLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Estados para o card de login do CLIENTE
-  const [showClientLoginCard, setShowClientLoginCard] = useState(false);
+  // NÚMERO DE WHATSAPP PARA CONTATO ADMIN (SUBSTITUA POR UM NÚMERO REAL COM DDD, SEM ESPAÇOS OU TRAÇOS)
+  const whatsappNumber = "5522999822324"; // Ex: 55 DDD NÚMERO (Ex: 5511987654321)
+  // Mensagem para Acessar Painel (URL-encoded)
+  const messageAcessarPainel = encodeURIComponent("Olá, gostaria de informações sobre como acessar o painel de administrador do Mata Fome.");
+  // Mensagem para Cadastrar Admin (URL-encoded)
+  const messageCadastrarAdmin = encodeURIComponent("Olá, gostaria de informações sobre como me cadastrar como administrador no Mata Fome.");
+
+
+  // ESTADOS PARA O CARD DE LOGIN/CADASTRO DO CLIENTE (UNIFICADO)
+  const [showClientModal, setShowClientModal] = useState(false); // Controla a visibilidade do modal
+  const [isClientLoginView, setIsClientLoginView] = useState(true); // true = Login, false = Cadastro
+
   const [clientEmail, setClientEmail] = useState('');
   const [clientPassword, setClientPassword] = useState('');
   const [clientLoginError, setClientLoginError] = useState('');
   const [loadingClientLogin, setLoadingClientLogin] = useState(false);
+  const [clientName, setClientName] = useState(''); // Novo estado para nome (cadastro)
+  const [clientConfirmPassword, setClientConfirmPassword] = useState(''); // Novo estado para confirmação de senha (cadastro)
+  const [clientRegisterError, setClientRegisterError] = useState(''); // Novo estado para erros de cadastro
+  const [loadingClientRegister, setLoadingClientRegister] = useState(false); // Novo estado para loading de cadastro
 
-  // ESTADOS PARA O CARD DE LOGIN DO ADMINISTRADOR
-  const [showAdminLoginCard, setShowAdminLoginCard] = useState(false);
+  // ESTADOS PARA O CARD DE LOGIN DO ADMINISTRADOR (AGORA SÓ APARECE SE CLICAR NO PRÓPRIO LOGIN MODAL DO HEADER)
+  const [showAdminLoginCard, setShowAdminLoginCard] = useState(false); // Mantido caso o login admin seja chamado de outra forma
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [loadingAdminLogin, setLoadingAdminLogin] = useState(false);
 
-  // Estados para os estabelecimentos em destaque
+  // ESTADOS PARA OS ESTABELECIMENTOS EM DESTAQUE
   const [estabelecimentosDestaque, setEstabelecimentosDestaque] = useState([]);
   const [loadingEstabelecimentos, setLoadingEstabelecimentos] = useState(true);
   const [errorEstabelecimentos, setErrorEstabelecimentos] = useState(''); // Estado para exibir erros
 
-  // Função para alternar a visibilidade do card de login do cliente
-  const toggleClientLoginCard = () => {
-    setShowClientLoginCard(!showClientLoginCard);
-    setClientLoginError(''); 
-    setClientEmail(''); 
-    setClientPassword(''); 
+  // --- FUNÇÕES DE CONTROLE DE MODAL CLIENTE ---
+  const openClientLoginModal = () => {
+    setShowClientModal(true);
+    setIsClientLoginView(true); // Abre no modo login
+    setClientLoginError('');
+    setClientEmail('');
+    setClientPassword('');
+    setClientName('');
+    setClientConfirmPassword('');
+    setClientRegisterError('');
   };
 
-  // FUNÇÃO PARA ALTERNAR VISIBILIDADE DO CARD DE LOGIN DO ADMINISTRADOR
-  const toggleAdminLoginCard = () => {
-    setShowAdminLoginCard(!showAdminLoginCard);
-    setAdminLoginError('');
-    setAdminEmail('');
-    setAdminPassword('');
+  const openClientRegisterModal = () => {
+    setShowClientModal(true);
+    setIsClientLoginView(false); // Abre no modo cadastro
+    setClientRegisterError('');
+    setClientName('');
+    setClientEmail('');
+    setClientPassword('');
+    setClientConfirmPassword('');
+    setClientLoginError('');
   };
 
-  // Função para lidar com o login do CLIENTE (usado no card da Home)
+  const closeClientModal = () => {
+    setShowClientModal(false);
+  };
+
+  // --- FUNÇÕES DE LOGIN/CADASTRO CLIENTE ---
   const handleClientLogin = async (e) => {
     e.preventDefault();
     setLoadingClientLogin(true);
@@ -54,13 +80,15 @@ function Home() {
 
     try {
       await signInWithEmailAndPassword(auth, clientEmail, clientPassword);
-      setShowClientLoginCard(false); 
-      navigate('/'); 
+      closeClientModal();
+      navigate('/');
     } catch (error) {
       console.error("Erro ao fazer login do cliente:", error);
       let errorMessage = "Email ou senha incorretos.";
       if (error.code === 'auth/invalid-email') {
         errorMessage = "Formato de email inválido.";
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = "Usuário não encontrado. Cadastre-se!";
       }
       setClientLoginError(errorMessage);
     } finally {
@@ -68,7 +96,53 @@ function Home() {
     }
   };
 
-  // FUNÇÃO PARA LIDAR COM O LOGIN DO ADMINISTRADOR
+  const handleClientRegister = async (e) => {
+    e.preventDefault();
+    setLoadingClientRegister(true);
+    setClientRegisterError('');
+
+    if (clientPassword !== clientConfirmPassword) {
+      setClientRegisterError("As senhas não coincidem.");
+      setLoadingClientRegister(false);
+      return;
+    }
+    if (clientPassword.length < 6) {
+      setClientRegisterError("A senha deve ter pelo menos 6 caracteres.");
+      setLoadingClientRegister(false);
+      return;
+    }
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, clientEmail, clientPassword);
+      const user = userCredential.user;
+
+      await setDoc(doc(db, 'clientes', user.uid), {
+        nome: clientName,
+        email: clientEmail,
+        telefone: '',
+        dataCadastro: new Date(),
+      });
+
+      closeClientModal();
+      navigate('/');
+
+    } catch (error) {
+      console.error("Erro ao fazer cadastro do cliente:", error);
+      let errorMessage = "Erro ao cadastrar. Por favor, tente novamente.";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "Este email já está em uso.";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "Senha muito fraca.";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "Formato de email inválido.";
+      }
+      setClientRegisterError(errorMessage);
+    } finally {
+      setLoadingClientRegister(false);
+    }
+  };
+
+  // --- FUNÇÃO DE LOGIN ADMINISTRADOR (MANTIDA, AGORA CHAMADA APENAS PELO HEADER SE DESEJADO) ---
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoadingAdminLogin(true);
@@ -78,15 +152,13 @@ function Home() {
       const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
       const user = userCredential.user;
 
-      // Verifica se o usuário é um administrador (busca no Firestore)
       const userDocRef = doc(db, 'usuarios', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (userDocSnap.exists() && userDocSnap.data()?.isAdmin) {
-        setShowAdminLoginCard(false); 
-        navigate('/dashboard'); 
+        setShowAdminLoginCard(false);
+        navigate('/dashboard');
       } else {
-        // Não é admin, faz logout
         await auth.signOut();
         setAdminLoginError('Acesso negado. Você não tem permissões de administrador.');
       }
@@ -104,7 +176,7 @@ function Home() {
     }
   };
 
-  // Efeito para buscar estabelecimentos em destaque
+  // --- EFEITO PARA BUSCAR ESTABELECIMENTOS EM DESTAQUE ---
   useEffect(() => {
     const fetchEstabelecimentosDestaque = async () => {
       try {
@@ -115,13 +187,11 @@ function Home() {
           ...doc.data()
         }));
         setEstabelecimentosDestaque(estabelecimentosList);
-        // Se a lista estiver vazia, pode ser que não haja dados ou que algo falhou
         if (estabelecimentosList.length === 0) {
             setErrorEstabelecimentos("Nenhum estabelecimento em destaque encontrado. Verifique seu banco de dados.");
         }
       } catch (err) {
         console.error("Erro ao buscar estabelecimentos:", err);
-        // Esta mensagem de erro será exibida no app, complementando o erro do console
         setErrorEstabelecimentos("Não foi possível carregar os estabelecimentos em destaque. Por favor, tente novamente mais tarde ou verifique a conexão.");
       } finally {
         setLoadingEstabelecimentos(false);
@@ -129,152 +199,249 @@ function Home() {
     };
 
     fetchEstabelecimentosDestaque();
-  }, []); // Array de dependências vazio para rodar apenas uma vez na montagem do componente
+  }, []);
 
   // Espera o AuthContext carregar antes de renderizar o conteúdo principal
   if (authLoading) {
     return (
-      <div className="flex justify-center items-center h-screen bg-[var(--bege-claro)]">
+      <div className="flex justify-center items-center h-screen bg-white">
         <p className="text-[var(--marrom-escuro)]">Carregando...</p>
       </div>
     );
   }
 
   return (
-    <div className="relative bg-[var(--bege-claro)] min-h-screen"> 
+    <div className="relative bg-white min-h-screen">
       
       {/* Seção Hero: Fundo vermelho principal */}
       <section className="bg-[var(--vermelho-principal)] text-white py-20 text-center">
         <div className="container mx-auto">
           <h1 className="text-5xl font-bold mb-4">Mata Fome</h1>
           <p className="text-xl mb-8">Seu delivery favorito, rápido e fácil!</p>
-          {/* O botão de login/cadastro principal agora está abaixo do Hero */}
         </div>
       </section>
 
-      {/* Nova Seção: Escolha de Usuário */}
-      {!currentUser && ( // Só mostra esta seção se não houver usuário logado
-        <section className="container mx-auto mt-[-40px] mb-12 px-4 relative z-10"> {/* Margem negativa para sobrepor um pouco o Hero */}
-          <div className="bg-white p-8 rounded-lg shadow-xl grid grid-cols-1 md:grid-cols-2 gap-8 text-center">
+      {/* Nova Seção: Escolha de Usuário (Cliente/Administrador) */}
+      {!currentUser && (
+        <section className="container mx-auto mt-[-40px] mb-12 px-4 relative z-10">
+          <div className="bg-white p-8 rounded-lg shadow-xl grid grid-cols-1 md:grid-cols-2 gap-8 text-center max-w-3xl mx-auto">
             {/* Opção Cliente */}
             <div className="flex flex-col items-center p-4">
               <h3 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-4">Você é cliente?</h3>
               <p className="text-[var(--cinza-texto)] mb-6">Peça sua comida favorita em poucos cliques!</p>
               <button
-                onClick={toggleClientLoginCard}
+                onClick={openClientLoginModal} // <-- Abre o modal em modo login
                 className="bg-[var(--vermelho-principal)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-red-700 transition duration-300 shadow-md"
               >
                 Fazer Login
               </button>
-              <Link to="/login-cliente" className="text-[var(--vermelho-principal)] hover:underline mt-4">
+              <button
+                onClick={openClientRegisterModal} // <-- Abre o modal em modo cadastro
+                className="text-[var(--vermelho-principal)] hover:underline mt-4 bg-transparent border-none p-0 cursor-pointer"
+              >
                 Não tem conta? Cadastre-se
-              </Link>
+              </button>
             </div>
             
-            {/* Divisor vertical (apenas para desktop) */}
-            <div className="hidden md:block w-px bg-gray-300 mx-auto"></div> {/* Linha divisória */}
+            {/* Divisor vertical (removido, mas o comentário pode ficar se quiser) */}
+            {/* <div className="hidden md:block w-px bg-gray-300 mx-auto"></div> */}
 
             {/* Opção Administrador */}
             <div className="flex flex-col items-center p-4">
               <h3 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-4">Você é administrador?</h3>
               <p className="text-[var(--cinza-texto)] mb-6">Gerencie seus pedidos e seu negócio!</p>
-              <button
-                onClick={toggleAdminLoginCard} 
-                className="bg-[var(--marrom-escuro)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-gray-700 transition duration-300 shadow-md"
+              <a // <-- ALTERADO: Agora é um link para WhatsApp
+                href={`https://wa.me/${whatsappNumber}?text=${messageAcessarPainel}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-[var(--marrom-escuro)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-gray-700 transition duration-300 shadow-md inline-block text-center"
               >
                 Acessar Painel
-              </button>
-              <Link to="/login-admin" className="text-[var(--marrom-escuro)] hover:underline mt-4">
+              </a>
+              <a // <-- ALTERADO: Agora é um link para WhatsApp
+                href={`https://wa.me/${whatsappNumber}?text=${messageCadastrarAdmin}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--marrom-escuro)] hover:underline mt-4 bg-transparent border-none p-0 cursor-pointer inline-block text-center"
+              >
                 Cadastrar Admin
-              </Link>
+              </a>
             </div>
           </div>
         </section>
       )}
 
-      {/* Card de Login do Cliente (aparece sobreposto) */}
-      {showClientLoginCard && !currentUser && (
+      {/* --- NOVO MODAL UNIFICADO PARA LOGIN/CADASTRO DO CLIENTE --- */}
+      {showClientModal && !currentUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full relative">
             <button
-              onClick={toggleClientLoginCard}
+              onClick={closeClientModal}
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl"
             >
-              &times; 
+              &times;
             </button>
-            <h2 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-6 text-center">Login do Cliente</h2>
-            <form onSubmit={handleClientLogin}>
-              <div className="mb-4">
-                <label htmlFor="clientEmail" className="block text-gray-700 text-sm font-bold mb-2">
-                  Email:
-                </label>
-                <input
-                  type="email"
-                  id="clientEmail"
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="mb-6">
-                <label htmlFor="clientPassword" className="block text-gray-700 text-sm font-bold mb-2">
-                  Senha:
-                </label>
-                <input
-                  type="password"
-                  id="clientPassword"
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
-                  value={clientPassword}
-                  onChange={(e) => setClientPassword(e.target.value)}
-                  required
-                />
-              </div>
-              {clientLoginError && (
-                <p className="text-red-500 text-xs italic mb-4 text-center">{clientLoginError}</p>
-              )}
-              <div className="flex items-center justify-between">
-                <button
-                  type="submit"
-                  className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full focus:outline-none focus:shadow-outline w-full"
-                  disabled={loadingClientLogin}
-                >
-                  {loadingClientLogin ? 'Entrando...' : 'Entrar'}
-                </button>
-              </div>
-            </form>
-            <p className="text-center text-sm text-gray-600 mt-4">
-              Não tem uma conta?{' '}
-              <Link to="/login-cliente" className="text-[var(--vermelho-principal)] hover:underline" onClick={toggleClientLoginCard}>
-                Cadastre-se aqui
-              </Link>
-            </p>
+            <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-6 text-center">
+              {isClientLoginView ? 'Login do Cliente' : 'Cadastro de Cliente'}
+            </h2>
+
+            {/* Formulário de LOGIN */}
+            {isClientLoginView ? (
+              <form onSubmit={handleClientLogin}>
+                <div className="mb-4">
+                  <label htmlFor="clientEmailLogin" className="block text-gray-700 text-sm font-bold mb-2">
+                    Email:
+                  </label>
+                  <input
+                    type="email"
+                    id="clientEmailLogin"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-6">
+                  <label htmlFor="clientPasswordLogin" className="block text-gray-700 text-sm font-bold mb-2">
+                    Senha:
+                  </label>
+                  <input
+                    type="password"
+                    id="clientPasswordLogin"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientPassword}
+                    onChange={(e) => setClientPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                {clientLoginError && (
+                  <p className="text-red-500 text-xs italic mb-4 text-center">{clientLoginError}</p>
+                )}
+                <div className="flex items-center justify-between">
+                  <button
+                    type="submit"
+                    className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full focus:outline-none focus:shadow-outline w-full"
+                    disabled={loadingClientLogin}
+                  >
+                    {loadingClientLogin ? 'Entrando...' : 'Entrar'}
+                  </button>
+                </div>
+                <p className="text-center text-sm text-gray-600 mt-4">
+                  Não tem uma conta?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setIsClientLoginView(false)} // Alterna para cadastro
+                    className="text-[var(--vermelho-principal)] hover:underline bg-transparent border-none p-0 cursor-pointer"
+                  >
+                    Cadastre-se aqui
+                  </button>
+                </p>
+              </form>
+            ) : (
+              // --- Formulário de CADASTRO ---
+              <form onSubmit={handleClientRegister}>
+                <div className="mb-4">
+                  <label htmlFor="clientNameRegister" className="block text-gray-700 text-sm font-bold mb-2">
+                    Nome:
+                  </label>
+                  <input
+                    type="text"
+                    id="clientNameRegister"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="clientEmailRegister" className="block text-gray-700 text-sm font-bold mb-2">
+                    Email:
+                  </label>
+                  <input
+                    type="email"
+                    id="clientEmailRegister"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="clientPasswordRegister" className="block text-gray-700 text-sm font-bold mb-2">
+                    Senha:
+                  </label>
+                  <input
+                    type="password"
+                    id="clientPasswordRegister"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientPassword}
+                    onChange={(e) => setClientPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-6">
+                  <label htmlFor="clientConfirmPasswordRegister" className="block text-gray-700 text-sm font-bold mb-2">
+                    Confirmar Senha:
+                  </label>
+                  <input
+                    type="password"
+                    id="clientConfirmPasswordRegister"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientConfirmPassword}
+                    onChange={(e) => setClientConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                {clientRegisterError && (
+                  <p className="text-red-500 text-xs italic mb-4 text-center">{clientRegisterError}</p>
+                )}
+                <div className="flex items-center justify-between">
+                  <button
+                    type="submit"
+                    className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full focus:outline-none focus:shadow-outline w-full"
+                    disabled={loadingClientRegister}
+                  >
+                    {loadingClientRegister ? 'Cadastrando...' : 'Cadastrar'}
+                  </button>
+                </div>
+                <p className="text-center text-sm text-gray-600 mt-4">
+                  Já tem uma conta?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setIsClientLoginView(true)} // Alterna para login
+                    className="text-[var(--vermelho-principal)] hover:underline bg-transparent border-none p-0 cursor-pointer"
+                  >
+                    Fazer Login
+                  </button>
+                </p>
+              </form>
+            )}
           </div>
         </div>
       )}
 
-      {/* NOVO CARD DE LOGIN DO ADMINISTRADOR (aparece sobreposto) */}
-      {showAdminLoginCard && !currentUser && ( 
+      {/* CARD DE LOGIN DO ADMINISTRADOR (AINDA EXISTE, MAS NÃO É ATIVADO PELOS BOTÕES DA HOME MAIS) */}
+      {showAdminLoginCard && !currentUser && ( // Este modal só aparecerá se 'showAdminLoginCard' for true, que não é ativado por botões agora
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full relative">
             <button
-              onClick={toggleAdminLoginCard} 
+              onClick={() => setShowAdminLoginCard(false)}
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl"
             >
-              &times; 
+              &times;
             </button>
             <h2 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-6 text-center">Login do Administrador</h2>
-            <form onSubmit={handleAdminLogin}> 
+            <form onSubmit={handleAdminLogin}>
               <div className="mb-4">
                 <label htmlFor="adminEmail" className="block text-gray-700 text-sm font-bold mb-2">
                   Email:
                 </label>
                 <input
                   type="email"
-                  id="adminEmail" 
+                  id="adminEmail"
                   className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  value={adminEmail} 
-                  onChange={(e) => setAdminEmail(e.target.value)} 
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
                   required
                 />
               </div>
@@ -284,36 +451,35 @@ function Home() {
                 </label>
                 <input
                   type="password"
-                  id="adminPassword" 
+                  id="adminPassword"
                   className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
-                  value={adminPassword} 
-                  onChange={(e) => setAdminPassword(e.target.value)} 
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
                   required
                 />
               </div>
-              {adminLoginError && ( 
-                <p className="text-red-500 text-xs italic mb-4 text-center">{adminLoginError}</p> 
+              {adminLoginError && (
+                <p className="text-red-500 text-xs italic mb-4 text-center">{adminLoginError}</p>
               )}
               <div className="flex items-center justify-between">
                 <button
                   type="submit"
                   className="bg-[var(--marrom-escuro)] hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-full focus:outline-none focus:shadow-outline w-full"
-                  disabled={loadingAdminLogin} 
+                  disabled={loadingAdminLogin}
                 >
-                  {loadingAdminLogin ? 'Entrando...' : 'Entrar'} 
+                  {loadingAdminLogin ? 'Entrando...' : 'Entrar'}
                 </button>
               </div>
             </form>
             <p className="text-center text-sm text-gray-600 mt-4">
               Não tem uma conta de admin?{' '}
-              <Link to="/login-admin" className="text-[var(--marrom-escuro)] hover:underline" onClick={toggleAdminLoginCard}>
+              <Link to="/login-admin" className="text-[var(--marrom-escuro)] hover:underline" onClick={() => setShowAdminLoginCard(false)}>
                 Cadastre-se aqui
               </Link>
             </p>
           </div>
         </div>
       )}
-
       {/* Seção de Categorias */}
       <section className="container mx-auto my-12 px-4">
         <h2 className="text-3xl font-bold text-[var(--marrom-escuro)] mb-8 text-center">Categorias Populares</h2>
