@@ -13,11 +13,9 @@ function Home() {
   const navigate = useNavigate();
 
   // NÚMERO DE WHATSAPP PARA CONTATO ADMIN (SUBSTITUA POR UM NÚMERO REAL COM DDD, SEM ESPAÇOS OU TRAÇOS)
-  const whatsappNumber = "5522999822324"; // Ex: 55 DDD NÚMERO (Ex: 5511987654321)
-  // Mensagem para Acessar Painel (URL-encoded)
-  const messageAcessarPainel = encodeURIComponent("Olá, gostaria de informações sobre como acessar o painel de administrador do Mata Fome.");
-  // Mensagem para Cadastrar Admin (URL-encoded)
-  const messageCadastrarAdmin = encodeURIComponent("Olá, gostaria de informações sobre como me cadastrar como administrador no Mata Fome.");
+  const whatsappNumber = "5511999999999"; // Ex: 55 DDD NÚMERO (Ex: 5511987654321)
+  // Mensagem para Suporte Admin (URL-encoded)
+  const messageSuporteAdmin = encodeURIComponent("Olá, estou com dificuldades para acessar/cadastrar como administrador no Mata Fome. Poderiam me ajudar?");
 
 
   // ESTADOS PARA O CARD DE LOGIN/CADASTRO DO CLIENTE (UNIFICADO)
@@ -28,10 +26,20 @@ function Home() {
   const [clientPassword, setClientPassword] = useState('');
   const [clientLoginError, setClientLoginError] = useState('');
   const [loadingClientLogin, setLoadingClientLogin] = useState(false);
+
   const [clientName, setClientName] = useState(''); // Novo estado para nome (cadastro)
   const [clientConfirmPassword, setClientConfirmPassword] = useState(''); // Novo estado para confirmação de senha (cadastro)
   const [clientRegisterError, setClientRegisterError] = useState(''); // Novo estado para erros de cadastro
   const [loadingClientRegister, setLoadingClientRegister] = useState(false); // Novo estado para loading de cadastro
+  
+  // NOVOS ESTADOS PARA OS CAMPOS DE CADASTRO DO CLIENTE (TELEFONE E ENDEREÇO)
+  const [clientPhone, setClientPhone] = useState('');
+  const [clientAddressRua, setClientAddressRua] = useState('');
+  const [clientAddressNumero, setClientAddressNumero] = useState('');
+  const [clientAddressBairro, setClientAddressBairro] = useState('');
+  const [clientAddressCidade, setClientAddressCidade] = useState('');
+  const [clientAddressCep, setClientAddressCep] = useState('');
+
 
   // ESTADOS PARA O CARD DE LOGIN DO ADMINISTRADOR (AGORA SÓ APARECE SE CLICAR NO PRÓPRIO LOGIN MODAL DO HEADER)
   const [showAdminLoginCard, setShowAdminLoginCard] = useState(false); // Mantido caso o login admin seja chamado de outra forma
@@ -52,24 +60,53 @@ function Home() {
     setClientLoginError('');
     setClientEmail('');
     setClientPassword('');
+    // Limpa todos os campos do modal ao abrir em login
     setClientName('');
     setClientConfirmPassword('');
     setClientRegisterError('');
+    setClientPhone('');
+    setClientAddressRua('');
+    setClientAddressNumero('');
+    setClientAddressBairro('');
+    setClientAddressCidade('');
+    setClientAddressCep('');
   };
 
   const openClientRegisterModal = () => {
     setShowClientModal(true);
     setIsClientLoginView(false); // Abre no modo cadastro
     setClientRegisterError('');
+    // Limpa todos os campos do modal ao abrir em cadastro
     setClientName('');
     setClientEmail('');
     setClientPassword('');
     setClientConfirmPassword('');
     setClientLoginError('');
+    setClientPhone('');
+    setClientAddressRua('');
+    setClientAddressNumero('');
+    setClientAddressBairro('');
+    setClientAddressCidade('');
+    setClientAddressCep('');
   };
 
   const closeClientModal = () => {
     setShowClientModal(false);
+    // Garante que todos os campos são limpos ao fechar
+    setClientName('');
+    setClientEmail('');
+    setClientPassword('');
+    setClientConfirmPassword('');
+    setClientLoginError('');
+    setClientRegisterError('');
+    setLoadingClientLogin(false);
+    setLoadingClientRegister(false);
+    setClientPhone('');
+    setClientAddressRua('');
+    setClientAddressNumero('');
+    setClientAddressBairro('');
+    setClientAddressCidade('');
+    setClientAddressCep('');
   };
 
   // --- FUNÇÕES DE LOGIN/CADASTRO CLIENTE ---
@@ -119,7 +156,14 @@ function Home() {
       await setDoc(doc(db, 'clientes', user.uid), {
         nome: clientName,
         email: clientEmail,
-        telefone: '',
+        telefone: clientPhone, // <-- CAMPO DE TELEFONE ADICIONADO
+        endereco: { // <-- OBJETO DE ENDEREÇO ADICIONADO
+          rua: clientAddressRua,
+          numero: clientAddressNumero,
+          bairro: clientAddressBairro,
+          cidade: clientAddressCidade,
+          cep: clientAddressCep,
+        },
         dataCadastro: new Date(),
       });
 
@@ -142,7 +186,7 @@ function Home() {
     }
   };
 
-  // --- FUNÇÃO DE LOGIN ADMINISTRADOR (MANTIDA, AGORA CHAMADA APENAS PELO HEADER SE DESEJADO) ---
+  // --- FUNÇÃO DE LOGIN ADMINISTRADOR ---
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoadingAdminLogin(true);
@@ -155,22 +199,37 @@ function Home() {
       const userDocRef = doc(db, 'usuarios', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
-      if (userDocSnap.exists() && userDocSnap.data()?.isAdmin) {
+if (userDocSnap.exists() && userDocSnap.data()?.isAdmin === true) {
         setShowAdminLoginCard(false);
         navigate('/dashboard');
       } else {
         await auth.signOut();
-        setAdminLoginError('Acesso negado. Você não tem permissões de administrador.');
+        setAdminLoginError('Acesso negado. Por favor, entre em contato com o suporte para acesso de administrador.');
       }
     } catch (error) {
       console.error("Erro ao fazer login do administrador:", error);
       let errorMessage = "Erro ao fazer login. Por favor, tente novamente.";
+      
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        errorMessage = "Email ou senha incorretos.";
+        errorMessage = "Email ou senha incorretos. Se não tem cadastro de administrador, entre em contato.";
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = "Formato de email inválido.";
       }
-      setAdminLoginError(errorMessage);
+      
+      setAdminLoginError(
+        <>
+          {errorMessage}
+          <br />
+          <a
+            href={`https://wa.me/${whatsappNumber}?text=${messageSuporteAdmin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--vermelho-principal)] hover:underline mt-2 inline-block"
+          >
+            Fale conosco via WhatsApp
+          </a>
+        </>
+      );
     } finally {
       setLoadingAdminLogin(false);
     }
@@ -230,13 +289,13 @@ function Home() {
               <h3 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-4">Você é cliente?</h3>
               <p className="text-[var(--cinza-texto)] mb-6">Peça sua comida favorita em poucos cliques!</p>
               <button
-                onClick={openClientLoginModal} // <-- Abre o modal em modo login
+                onClick={openClientLoginModal}
                 className="bg-[var(--vermelho-principal)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-red-700 transition duration-300 shadow-md"
               >
                 Fazer Login
               </button>
               <button
-                onClick={openClientRegisterModal} // <-- Abre o modal em modo cadastro
+                onClick={openClientRegisterModal}
                 className="text-[var(--vermelho-principal)] hover:underline mt-4 bg-transparent border-none p-0 cursor-pointer"
               >
                 Não tem conta? Cadastre-se
@@ -250,28 +309,33 @@ function Home() {
             <div className="flex flex-col items-center p-4">
               <h3 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-4">Você é administrador?</h3>
               <p className="text-[var(--cinza-texto)] mb-6">Gerencie seus pedidos e seu negócio!</p>
-              <a // <-- ALTERADO: Agora é um link para WhatsApp
-                href={`https://wa.me/${whatsappNumber}?text=${messageAcessarPainel}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-[var(--marrom-escuro)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-gray-700 transition duration-300 shadow-md inline-block text-center"
+              <button // <-- BOTÃO "ACESSAR PAINEL" AGORA ABRE O MODAL
+                onClick={() => setShowAdminLoginCard(true)}
+                className="bg-[var(--marrom-escuro)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-gray-700 transition duration-300 shadow-md"
               >
                 Acessar Painel
-              </a>
-              <a // <-- ALTERADO: Agora é um link para WhatsApp
-                href={`https://wa.me/${whatsappNumber}?text=${messageCadastrarAdmin}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[var(--marrom-escuro)] hover:underline mt-4 bg-transparent border-none p-0 cursor-pointer inline-block text-center"
-              >
+              </button>
+              {/* O link "Cadastrar Admin" abaixo do botão foi removido, pois a lógica de contato está no modal */}
+              {/* <Link to="/login-admin" className="text-[var(--marrom-escuro)] hover:underline mt-4">
                 Cadastrar Admin
-              </a>
+              </Link> */}
+              <p className="text-center text-sm text-gray-600 mt-4">
+                Não tem conta de admin?
+                <a
+                  href={`https://wa.me/${whatsappNumber}?text=${messageSuporteAdmin}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--marrom-escuro)] hover:underline ml-1"
+                >
+                  Fale conosco
+                </a>
+              </p>
             </div>
           </div>
         </section>
       )}
 
-      {/* --- NOVO MODAL UNIFICADO PARA LOGIN/CADASTRO DO CLIENTE --- */}
+      {/* --- MODAL UNIFICADO PARA LOGIN/CADASTRO DO CLIENTE --- */}
       {showClientModal && !currentUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full relative">
@@ -330,7 +394,7 @@ function Home() {
                   Não tem uma conta?{' '}
                   <button
                     type="button"
-                    onClick={() => setIsClientLoginView(false)} // Alterna para cadastro
+                    onClick={() => setIsClientLoginView(false)}
                     className="text-[var(--vermelho-principal)] hover:underline bg-transparent border-none p-0 cursor-pointer"
                   >
                     Cadastre-se aqui
@@ -354,6 +418,19 @@ function Home() {
                   />
                 </div>
                 <div className="mb-4">
+                  <label htmlFor="clientPhoneRegister" className="block text-gray-700 text-sm font-bold mb-2">
+                    Telefone:
+                  </label>
+                  <input
+                    type="tel"
+                    id="clientPhoneRegister"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientPhone}
+                    onChange={(e) => setClientPhone(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-4">
                   <label htmlFor="clientEmailRegister" className="block text-gray-700 text-sm font-bold mb-2">
                     Email:
                   </label>
@@ -366,6 +443,80 @@ function Home() {
                     required
                   />
                 </div>
+                
+                {/* --- CAMPOS DE ENDEREÇO --- */}
+                <h4 className="text-md font-bold text-gray-800 mb-2 mt-4">Endereço:</h4>
+                <div className="mb-4">
+                  <label htmlFor="clientAddressRua" className="block text-gray-700 text-sm font-bold mb-2">
+                    Rua:
+                  </label>
+                  <input
+                    type="text"
+                    id="clientAddressRua"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    value={clientAddressRua}
+                    onChange={(e) => setClientAddressRua(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-4 flex gap-4">
+                  <div className="w-1/2">
+                    <label htmlFor="clientAddressNumero" className="block text-gray-700 text-sm font-bold mb-2">
+                      Número:
+                    </label>
+                    <input
+                      type="text"
+                      id="clientAddressNumero"
+                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                      value={clientAddressNumero}
+                      onChange={(e) => setClientAddressNumero(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="w-1/2">
+                    <label htmlFor="clientAddressBairro" className="block text-gray-700 text-sm font-bold mb-2">
+                      Bairro:
+                    </label>
+                    <input
+                      type="text"
+                      id="clientAddressBairro"
+                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                      value={clientAddressBairro}
+                      onChange={(e) => setClientAddressBairro(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="mb-4 flex gap-4">
+                    <div className="w-1/2">
+                        <label htmlFor="clientAddressCidade" className="block text-gray-700 text-sm font-bold mb-2">
+                            Cidade:
+                        </label>
+                        <input
+                            type="text"
+                            id="clientAddressCidade"
+                            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                            value={clientAddressCidade}
+                            onChange={(e) => setClientAddressCidade(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="w-1/2">
+                        <label htmlFor="clientAddressCep" className="block text-gray-700 text-sm font-bold mb-2">
+                            CEP:
+                        </label>
+                        <input
+                            type="text"
+                            id="clientAddressCep"
+                            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                            value={clientAddressCep}
+                            onChange={(e) => setClientAddressCep(e.target.value)}
+                            required
+                        />
+                    </div>
+                </div>
+                {/* --- FIM DOS CAMPOS DE ENDEREÇO --- */}
+
                 <div className="mb-4">
                   <label htmlFor="clientPasswordRegister" className="block text-gray-700 text-sm font-bold mb-2">
                     Senha:
@@ -408,7 +559,7 @@ function Home() {
                   Já tem uma conta?{' '}
                   <button
                     type="button"
-                    onClick={() => setIsClientLoginView(true)} // Alterna para login
+                    onClick={() => setIsClientLoginView(true)}
                     className="text-[var(--vermelho-principal)] hover:underline bg-transparent border-none p-0 cursor-pointer"
                   >
                     Fazer Login
@@ -471,12 +622,7 @@ function Home() {
                 </button>
               </div>
             </form>
-            <p className="text-center text-sm text-gray-600 mt-4">
-              Não tem uma conta de admin?{' '}
-              <Link to="/login-admin" className="text-[var(--marrom-escuro)] hover:underline" onClick={() => setShowAdminLoginCard(false)}>
-                Cadastre-se aqui
-              </Link>
-            </p>
+            {/* Opcional: Adicionar um link para o WhatsApp aqui se o adminLoginError não for suficiente */}
           </div>
         </div>
       )}
@@ -527,10 +673,10 @@ function Home() {
                   <div className="p-6">
                     <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">{estabelecimento.nome}</h3>
                     {estabelecimento.endereco && (
-                      <p className="text-gray-600 mb-2">
-                        {estabelecimento.endereco.rua || ''}, {estabelecimento.endereco.numero || ''} - {estabelecimento.endereco.bairro || ''}
-                        {estabelecimento.endereco.complemento && ` (${estabelecimento.endereco.complemento})`}
-                      </p>
+<p className="text-gray-600 mb-2">
+  {estabelecimento.endereco.rua || ''} Nº {estabelecimento.endereco.numero || ''} - {estabelecimento.endereco.bairro || ''}
+  {estabelecimento.endereco.complemento && ` (${estabelecimento.endereco.complemento})`}
+</p>
                     )}
                     <div className="flex items-center text-yellow-500">
                       {'⭐'.repeat(Math.round(estabelecimento.rating || 0))}
