@@ -3,19 +3,37 @@ import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from "firebase/firestore";
 import { db } from "../firebase";
 import PedidoCard from "../components/PedidoCard";
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'; // Importado useNavigate!
+
+// Função auxiliar para formatar a data de hoje no formato 'YYYY-MM-DD'
+const getTodayFormattedDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0'); // Mês de 0-11, então +1
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 function Painel() {
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams(); // Agora setSearchParams também!
+  const navigate = useNavigate(); // Importado para navegar e atualizar os parâmetros
 
   const audioRef = useRef(null);
-  const playedOrderIds = useRef(new Set()); 
-  const [isSoundEnabled, setIsSoundEnabled] = useState(false); // NOVO ESTADO: controla se o som está habilitado
+  const playedOrderIds = useRef(new Set());
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false); // Estado para controlar o som
 
+  // Lendo os parâmetros da URL
   const paramStartDate = searchParams.get('startDate');
   const paramEndDate = searchParams.get('endDate');
+
+  // NOVO ESTADO LOCAL PARA OS INPUTS DO FILTRO (para o usuário digitar antes de aplicar)
+  const [localStartDate, setLocalStartDate] = useState(paramStartDate || getTodayFormattedDate());
+  const [localEndDate, setLocalEndDate] = useState(paramEndDate || getTodayFormattedDate());
+
+
+  const [showPeriodFilter, setShowPeriodFilter] = useState(false);
 
   // NOVO: Função para ativar/desativar o som manualmente
   const toggleSound = () => {
@@ -50,7 +68,7 @@ function Painel() {
       const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
       const startTimestamp = Timestamp.fromDate(startOfDay);
 
-      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = paramEndDate.split('-').map(Number);
       const endOfDay = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
       const endTimestamp = Timestamp.fromDate(endOfDay);
       
@@ -88,12 +106,10 @@ function Painel() {
       }));
       setPedidos(todosPedidosNoSnapshot);
 
-      // --- MUDANÇA AQUI: Só toca o som se o usuário já habilitou ---
       if (novoPedidoChegou && isSoundEnabled && audioRef.current) { // Verifica 'isSoundEnabled'
-        audioRef.current.muted = false; // Garante que não está mutado
+        audioRef.current.muted = false;
         audioRef.current.play().catch(e => {
           console.error("Erro ao tocar áudio (autoplay bloqueado APÓS ativação ou outro):", e);
-          // Este erro só deve aparecer se o navegador bloquear mesmo APÓS o primeiro clique
         });
       }
 
@@ -105,7 +121,7 @@ function Painel() {
     });
 
     return () => unsub();
-  }, [paramStartDate, paramEndDate, isSoundEnabled]); // Adicionado isSoundEnabled às dependências para reativar o listener se o estado mudar
+  }, [paramStartDate, paramEndDate, isSoundEnabled]); // Dependências do useEffect
 
 
   const mudarStatus = async (id, novoStatus) => {
@@ -172,6 +188,15 @@ function Painel() {
   const countFinalizados = pedidosFinalizadosExibidos.length;
 
 
+  // --- FUNÇÃO PARA APLICAR O FILTRO (ATUALIZA A URL) ---
+  const handleApplyFilter = () => {
+    setSearchParams({ startDate: localStartDate, endDate: localEndDate });
+    // Navegar pode ser opcional se setSearchParams já acionar o useEffect.
+    // Mas para garantir que a URL muda e o useEffect é re-acionado:
+    navigate(`/painel?startDate=${localStartDate}&endDate=${localEndDate}`);
+  };
+
+
   return (
     <div className="min-h-screen bg-[var(--bege-claro)] p-4">
       <div className="max-w-7xl mx-auto">
@@ -193,9 +218,9 @@ function Painel() {
         </h1>
 
         {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
-        <audio ref={audioRef} src="/campainha.mp3" preload="auto" muted /> {/* Adicionado 'muted' */}
+        <audio ref={audioRef} src="/campainha.mp3" preload="auto" muted />
 
-        {/* NOVO BOTÃO PARA ATIVAR/DESATIVAR O SOM */}
+        {/* BOTÃO PARA ATIVAR/DESATIVAR O SOM */}
         <div className="text-center mb-6">
           <button
             onClick={toggleSound}
@@ -206,6 +231,46 @@ function Painel() {
             {isSoundEnabled ? '🔊 Desativar Som' : '🔇 Ativar Som'}
           </button>
         </div>
+
+        {/* Seção de Filtro por Período (com estado local para inputs) */}
+        <div className="text-center mb-6"> {/* Botão para mostrar/esconder o filtro */}
+            <button
+                onClick={() => setShowPeriodFilter(!showPeriodFilter)}
+                className="bg-gray-200 text-[var(--marrom-escuro)] px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
+            >
+                {showPeriodFilter ? 'Esconder Filtro de Período' : 'Filtrar por Período Específico'}
+            </button>
+        </div>
+
+        {showPeriodFilter && (
+            <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <label htmlFor="startDate" className="text-[var(--marrom-escuro)] font-medium">De:</label>
+                <input
+                    type="date"
+                    id="startDate"
+                    value={localStartDate} // Usando estado local
+                    onChange={(e) => setLocalStartDate(e.target.value)} // Atualiza estado local
+                    className="border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+                />
+
+                <label htmlFor="endDate" className="text-[var(--marrom-escuro)] font-medium">Até:</label>
+                <input
+                    type="date"
+                    id="endDate"
+                    value={localEndDate} // Usando estado local
+                    onChange={(e) => setLocalEndDate(e.target.value)} // Atualiza estado local
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+                />
+
+                <button
+                    onClick={handleApplyFilter} // Chama a nova função para aplicar filtro
+                    className="bg-[var(--vermelho-principal)] text-white px-5 py-2 rounded-lg font-semibold hover:bg-red-700 transition duration-300"
+                >
+                    Aplicar Filtro
+                </button>
+            </div>
+        )}
+
 
         {loading ? (
             <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando pedidos...</p>
