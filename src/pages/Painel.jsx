@@ -3,55 +3,70 @@ import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from "firebase/firestore";
 import { db } from "../firebase";
 import PedidoCard from "../components/PedidoCard";
-import { Link, useSearchParams, useNavigate } from 'react-router-dom'; // Importado useNavigate!
-
-// Função auxiliar para formatar a data de hoje no formato 'YYYY-MM-DD'
-const getTodayFormattedDate = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0'); // Mês de 0-11, então +1
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 
 function Painel() {
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchParams, setSearchParams] = useSearchParams(); // Agora setSearchParams também!
-  const navigate = useNavigate(); // Importado para navegar e atualizar os parâmetros
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate(); // Importado
 
   const audioRef = useRef(null);
   const playedOrderIds = useRef(new Set());
-  const [isSoundEnabled, setIsSoundEnabled] = useState(false); // Estado para controlar o som
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
+  const [showAutoplayWarning, setShowAutoplayWarning] = useState(true); // NOVO ESTADO para aviso de autoplay
 
-  // Lendo os parâmetros da URL
   const paramStartDate = searchParams.get('startDate');
   const paramEndDate = searchParams.get('endDate');
 
-  // NOVO ESTADO LOCAL PARA OS INPUTS DO FILTRO (para o usuário digitar antes de aplicar)
-  const [localStartDate, setLocalStartDate] = useState(paramStartDate || getTodayFormattedDate());
-  const [localEndDate, setLocalEndDate] = useState(paramEndDate || getTodayFormattedDate());
+  // NOVO: Função para lidar com o clique inicial em qualquer lugar da página
+  const handleInitialUserGesture = () => {
+    if (audioRef.current && !isSoundEnabled && showAutoplayWarning) {
+      audioRef.current.muted = true; // Mantém mutado
+      audioRef.current.volume = 0.01; // Volume muito baixo
+      audioRef.current.play().then(() => {
+        // Se conseguiu tocar (mesmo mutado e baixo), o gesto foi registrado
+        setShowAutoplayWarning(false); // Esconde o aviso
+        console.log("Gesto de usuário registrado. Áudio desbloqueado (inicialmente mudo).");
+        // O usuário ainda precisará clicar em "Ativar Som" para ouvir as notificações
+        // Ou você pode ativar aqui automaticamente: setIsSoundEnabled(true);
+      }).catch(e => {
+        console.warn("Gesto inicial ainda bloqueado:", e);
+      });
+    }
+  };
+
+  // Adiciona listener para registrar o primeiro clique em qualquer lugar
+  useEffect(() => {
+    // Este listener só é adicionado UMA VEZ
+    document.addEventListener('click', handleInitialUserGesture, { once: true });
+    return () => {
+      document.removeEventListener('click', handleInitialUserGesture);
+    };
+  }, []);
 
 
-  const [showPeriodFilter, setShowPeriodFilter] = useState(false);
-
-  // NOVO: Função para ativar/desativar o som manualmente
+  // Função para ativar/desativar o som manualmente
   const toggleSound = () => {
     if (audioRef.current) {
-      if (!isSoundEnabled) {
-        audioRef.current.muted = false; // Garante que não está mutado
-        audioRef.current.play().then(() => {
-          setIsSoundEnabled(true); // Se tocou, ativa
-          console.log("Notificações sonoras ativadas!");
-        }).catch(e => {
-          console.error("Não foi possível tocar som ao ativar (ainda bloqueado):", e);
-          alert("Por favor, clique em qualquer lugar da página para permitir a reprodução automática de áudio e tente ativar novamente.");
-        });
-      } else {
-        setIsSoundEnabled(false); // Desativa
-        audioRef.current.pause(); // Pausa se já estiver tocando
-        audioRef.current.currentTime = 0; // Reseta para o início
+      if (isSoundEnabled) {
+        setIsSoundEnabled(false);
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
         console.log("Notificações sonoras desativadas.");
+      } else {
+        // Tentar tocar agora que o gesto inicial pode ter sido registrado
+        audioRef.current.muted = false; // Garante que não está mutado
+        audioRef.current.volume = 1; // Volume normal
+        audioRef.current.play().then(() => {
+          setIsSoundEnabled(true);
+          setShowAutoplayWarning(false); // Esconde o aviso se o botão funcionou
+          console.log("Notificações sonoras ativadas por clique no botão!");
+        }).catch(e => {
+          console.error("Não foi possível tocar som ao ativar (bloqueado mesmo no clique):", e);
+          alert("As notificações sonoras ainda estão bloqueadas. Por favor, clique em qualquer lugar da página primeiro e tente 'Ativar Som' novamente.");
+          setIsSoundEnabled(false);
+        });
       }
     }
   };
@@ -68,7 +83,7 @@ function Painel() {
       const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
       const startTimestamp = Timestamp.fromDate(startOfDay);
 
-      const [endYear, endMonth, endDay] = paramEndDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
       const endOfDay = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
       const endTimestamp = Timestamp.fromDate(endOfDay);
       
@@ -106,10 +121,13 @@ function Painel() {
       }));
       setPedidos(todosPedidosNoSnapshot);
 
-      if (novoPedidoChegou && isSoundEnabled && audioRef.current) { // Verifica 'isSoundEnabled'
-        audioRef.current.muted = false;
+      // Só tenta tocar o som se o novo pedido chegou E o som já foi habilitado pelo usuário
+      if (novoPedidoChegou && isSoundEnabled && audioRef.current) { 
+        audioRef.current.muted = false; // Garante que não está mutado
+        audioRef.current.volume = 1; // Garante volume normal
         audioRef.current.play().catch(e => {
-          console.error("Erro ao tocar áudio (autoplay bloqueado APÓS ativação ou outro):", e);
+          console.error("Erro ao tocar áudio (autoplay bloqueado APÓS ativação):", e);
+          // Este erro só deve aparecer se o navegador bloquear mesmo APÓS o primeiro clique
         });
       }
 
@@ -121,7 +139,7 @@ function Painel() {
     });
 
     return () => unsub();
-  }, [paramStartDate, paramEndDate, isSoundEnabled]); // Dependências do useEffect
+  }, [paramStartDate, paramEndDate, isSoundEnabled]);
 
 
   const mudarStatus = async (id, novoStatus) => {
@@ -188,11 +206,8 @@ function Painel() {
   const countFinalizados = pedidosFinalizadosExibidos.length;
 
 
-  // --- FUNÇÃO PARA APLICAR O FILTRO (ATUALIZA A URL) ---
   const handleApplyFilter = () => {
     setSearchParams({ startDate: localStartDate, endDate: localEndDate });
-    // Navegar pode ser opcional se setSearchParams já acionar o useEffect.
-    // Mas para garantir que a URL muda e o useEffect é re-acionado:
     navigate(`/painel?startDate=${localStartDate}&endDate=${localEndDate}`);
   };
 
@@ -202,8 +217,8 @@ function Painel() {
       <div className="max-w-7xl mx-auto">
         {/* Botão de Voltar para o Dashboard */}
         <div className="mb-6 text-left">
-          <Link 
-            to="/dashboard" 
+          <Link
+            to="/dashboard"
             className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -218,22 +233,29 @@ function Painel() {
         </h1>
 
         {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
-        <audio ref={audioRef} src="/campainha.mp3" preload="auto" muted />
+        {/* Removido 'muted' do HTML, será gerenciado via JS no handleInitialUserGesture */}
+        <audio ref={audioRef} src="/campainha.mp3" preload="auto" /> 
 
-        {/* BOTÃO PARA ATIVAR/DESATIVAR O SOM */}
+        {/* NOVO BOTÃO PARA ATIVAR/DESATIVAR O SOM */}
         <div className="text-center mb-6">
+          {showAutoplayWarning && (
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
+              <p className="font-bold">Atenção!</p>
+              <p>O navegador bloqueia o som automático. Clique em qualquer lugar na página ou no botão abaixo para ativar as notificações sonoras.</p>
+            </div>
+          )}
           <button
             onClick={toggleSound}
             className={`px-6 py-2 rounded-lg font-semibold transition duration-300 ${
               isSoundEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
             } text-white`}
           >
-            {isSoundEnabled ? '🔊 Desativar Som' : '🔇 Ativar Som'}
+            {isSoundEnabled ? '🔊 Notificações Ativadas' : '🔇 Ativar Notificações'}
           </button>
         </div>
 
         {/* Seção de Filtro por Período (com estado local para inputs) */}
-        <div className="text-center mb-6"> {/* Botão para mostrar/esconder o filtro */}
+        <div className="text-center mb-6">
             <button
                 onClick={() => setShowPeriodFilter(!showPeriodFilter)}
                 className="bg-gray-200 text-[var(--marrom-escuro)] px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
@@ -248,8 +270,8 @@ function Painel() {
                 <input
                     type="date"
                     id="startDate"
-                    value={localStartDate} // Usando estado local
-                    onChange={(e) => setLocalStartDate(e.target.value)} // Atualiza estado local
+                    value={localStartDate}
+                    onChange={(e) => setLocalStartDate(e.target.value)}
                     className="border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
                 />
 
@@ -257,13 +279,13 @@ function Painel() {
                 <input
                     type="date"
                     id="endDate"
-                    value={localEndDate} // Usando estado local
-                    onChange={(e) => setLocalEndDate(e.target.value)} // Atualiza estado local
+                    value={localEndDate}
+                    onChange={(e) => setLocalEndDate(e.target.value)}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
                 />
 
                 <button
-                    onClick={handleApplyFilter} // Chama a nova função para aplicar filtro
+                    onClick={handleApplyFilter}
                     className="bg-[var(--vermelho-principal)] text-white px-5 py-2 rounded-lg font-semibold hover:bg-red-700 transition duration-300"
                 >
                     Aplicar Filtro
