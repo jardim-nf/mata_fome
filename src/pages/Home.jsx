@@ -9,7 +9,7 @@ import { auth, db } from '../firebase'; // Importa as instâncias de auth e db d
 import "../App.css"; // Importar o CSS global
 
 function Home() {
-  const { currentUser, authLoading } = useAuth();
+  const { currentUser, authLoading, currentClientData } = useAuth(); // currentClientData para mensagem de boas-vindas
   const navigate = useNavigate();
 
   // NÚMERO DE WHATSAPP PARA CONTATO ADMIN (SUBSTITUA POR UM NÚMERO REAL COM DDD, SEM ESPAÇOS OU TRAÇOS)
@@ -27,12 +27,12 @@ function Home() {
   const [clientLoginError, setClientLoginError] = useState('');
   const [loadingClientLogin, setLoadingClientLogin] = useState(false);
 
-  const [clientName, setClientName] = useState(''); // Novo estado para nome (cadastro)
-  const [clientConfirmPassword, setClientConfirmPassword] = useState(''); // Novo estado para confirmação de senha (cadastro)
-  const [clientRegisterError, setClientRegisterError] = useState(''); // Novo estado para erros de cadastro
-  const [loadingClientRegister, setLoadingClientRegister] = useState(false); // Novo estado para loading de cadastro
+  const [clientName, setClientName] = useState(''); // Estado para nome (cadastro)
+  const [clientConfirmPassword, setClientConfirmPassword] = useState(''); // Estado para confirmação de senha (cadastro)
+  const [clientRegisterError, setClientRegisterError] = useState(''); // Estado para erros de cadastro
+  const [loadingClientRegister, setLoadingClientRegister] = useState(false); // Estado para loading de cadastro
   
-  // NOVOS ESTADOS PARA OS CAMPOS DE CADASTRO DO CLIENTE (TELEFONE E ENDEREÇO)
+  // ESTADOS PARA OS CAMPOS DE CADASTRO DO CLIENTE (TELEFONE E ENDEREÇO)
   const [clientPhone, setClientPhone] = useState('');
   const [clientAddressRua, setClientAddressRua] = useState('');
   const [clientAddressNumero, setClientAddressNumero] = useState('');
@@ -41,7 +41,7 @@ function Home() {
   const [clientAddressCep, setClientAddressCep] = useState('');
 
 
-  // ESTADOS PARA O CARD DE LOGIN DO ADMINISTRADOR (AGORA SÓ APARECE SE CLICAR NO PRÓPRIO LOGIN MODAL DO HEADER)
+  // ESTADOS PARA O CARD DE LOGIN DO ADMINISTRADOR
   const [showAdminLoginCard, setShowAdminLoginCard] = useState(false); // Mantido caso o login admin seja chamado de outra forma
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -156,8 +156,8 @@ function Home() {
       await setDoc(doc(db, 'clientes', user.uid), {
         nome: clientName,
         email: clientEmail,
-        telefone: clientPhone, // <-- CAMPO DE TELEFONE ADICIONADO
-        endereco: { // <-- OBJETO DE ENDEREÇO ADICIONADO
+        telefone: clientPhone,
+        endereco: {
           rua: clientAddressRua,
           numero: clientAddressNumero,
           bairro: clientAddressBairro,
@@ -199,7 +199,7 @@ function Home() {
       const userDocRef = doc(db, 'usuarios', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
-if (userDocSnap.exists() && userDocSnap.data()?.isAdmin === true) {
+      if (userDocSnap.exists() && userDocSnap.data()?.isAdmin) {
         setShowAdminLoginCard(false);
         navigate('/dashboard');
       } else {
@@ -280,8 +280,28 @@ if (userDocSnap.exists() && userDocSnap.data()?.isAdmin === true) {
         </div>
       </section>
 
+      {/* --- NOVA SEÇÃO: BEM-VINDO PARA USUÁRIOS LOGADOS --- */}
+      {currentUser && ( // Só mostra esta seção se houver usuário logado
+        <section className="container mx-auto mt-[-40px] mb-12 px-4 relative z-10">
+          <div className="bg-white p-8 rounded-lg shadow-xl text-center max-w-3xl mx-auto">
+            <h3 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-4">
+              Bem-vindo de volta, {currentClientData?.nome || 'Cliente'}!
+            </h3>
+            <p className="text-[var(--cinza-texto)] mb-6">Estamos prontos para matar a sua fome!</p>
+            <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <Link
+                to="/cardapios" // Link para a lista de estabelecimentos
+                className="bg-[var(--vermelho-principal)] text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-red-700 transition duration-300 shadow-md inline-flex items-center justify-center"
+              >
+                Ver Cardápios Agora!
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Nova Seção: Escolha de Usuário (Cliente/Administrador) */}
-      {!currentUser && (
+      {!currentUser && ( // Continua a mostrar esta seção se NÃO houver usuário logado
         <section className="container mx-auto mt-[-40px] mb-12 px-4 relative z-10">
           <div className="bg-white p-8 rounded-lg shadow-xl grid grid-cols-1 md:grid-cols-2 gap-8 text-center max-w-3xl mx-auto">
             {/* Opção Cliente */}
@@ -315,10 +335,6 @@ if (userDocSnap.exists() && userDocSnap.data()?.isAdmin === true) {
               >
                 Acessar Painel
               </button>
-              {/* O link "Cadastrar Admin" abaixo do botão foi removido, pois a lógica de contato está no modal */}
-              {/* <Link to="/login-admin" className="text-[var(--marrom-escuro)] hover:underline mt-4">
-                Cadastrar Admin
-              </Link> */}
               <p className="text-center text-sm text-gray-600 mt-4">
                 Não tem conta de admin?
                 <a
@@ -626,28 +642,31 @@ if (userDocSnap.exists() && userDocSnap.data()?.isAdmin === true) {
           </div>
         </div>
       )}
-      {/* Seção de Categorias */}
-      <section className="container mx-auto my-12 px-4">
-        <h2 className="text-3xl font-bold text-[var(--marrom-escuro)] mb-8 text-center">Categorias Populares</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
-            <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Pizzas</h3>
-            <p className="text-gray-600">As melhores pizzarias da cidade.</p>
-          </div>
-          <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
-            <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Hambúrgueres</h3>
-            <p className="text-gray-600">Opções suculentas para seu lanche.</p>
-          </div>
-          <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
-            <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Comida Japonesa</h3>
-            <p className="text-gray-600">Sabores orientais autênticos.</p>
-          </div>
-          <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
-            <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Marmitas</h3>
-            <p className="text-gray-600">Refeições completas e saudáveis.</p>
-          </div>
-        </div>
-      </section>
+      /*
+{/*
+// Seção de Categorias (COMENTADA TEMPORARIAMENTE)
+<section className="container mx-auto my-12 px-4">
+  <h2 className="text-3xl font-bold text-[var(--marrom-escuro)] mb-8 text-center">Categorias Populares</h2>
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+    <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
+      <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Pizzas</h3>
+      <p className="text-gray-600">As melhores pizzarias da cidade.</p>
+    </div>
+    <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
+      <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Hambúrgueres</h3>
+      <p className="text-gray-600">Opções suculentas para seu lanche.</p>
+    </div>
+    <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
+      <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Comida Japonesa</h3>
+      <p className="text-gray-600">Sabores orientais autênticos.</p>
+    </div>
+    <div className="bg-gray-100 p-6 rounded-lg shadow-md text-center hover:shadow-lg transition duration-300">
+      <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">Marmitas</h3>
+      <p className="text-gray-600">Refeições completas e saudáveis.</p>
+    </div>
+  </div>
+</section>
+*/}
 
       {/* Estabelecimentos em Destaque */}
       <section className="container mx-auto my-12 px-4">
@@ -673,10 +692,10 @@ if (userDocSnap.exists() && userDocSnap.data()?.isAdmin === true) {
                   <div className="p-6">
                     <h3 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-2">{estabelecimento.nome}</h3>
                     {estabelecimento.endereco && (
-<p className="text-gray-600 mb-2">
-  {estabelecimento.endereco.rua || ''} Nº {estabelecimento.endereco.numero || ''} - {estabelecimento.endereco.bairro || ''}
-  {estabelecimento.endereco.complemento && ` (${estabelecimento.endereco.complemento})`}
-</p>
+                      <p className="text-gray-600 mb-2">
+                        {estabelecimento.endereco.rua || ''}, {estabelecimento.endereco.numero || ''} - {estabelecimento.endereco.bairro || ''}
+                        {estabelecimento.endereco.complemento && ` (${estabelecimento.endereco.complemento})`}
+                      </p>
                     )}
                     <div className="flex items-center text-yellow-500">
                       {'⭐'.repeat(Math.round(estabelecimento.rating || 0))}
