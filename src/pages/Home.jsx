@@ -642,7 +642,7 @@ function Home() {
           </div>
         </div>
       )}
-      /*
+      
 {/*
 // Seção de Categorias (COMENTADA TEMPORARIAMENTE)
 <section className="container mx-auto my-12 px-4">
