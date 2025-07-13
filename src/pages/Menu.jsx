@@ -1,14 +1,15 @@
 // src/pages/Menu.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom'; // Importe useNavigate
 import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, Timestamp, query, onSnapshot, orderBy } from 'firebase/firestore';
 import CardapioItem from '../components/CardapioItem';
-import { useAuth } from '../context/AuthContext'; // Importe useAuth
+import { useAuth } from '../context/AuthContext';
 
 function Menu() {
   const { estabelecimentoId } = useParams();
-  const { currentUser, currentClientData, loading: authLoading } = useAuth(); // Pega currentUser e currentClientData do contexto
+  const navigate = useNavigate(); // Inicialize useNavigate
+  const { currentUser, currentClientData, loading: authLoading } = useAuth();
   
   const [carrinho, setCarrinho] = useState([]);
   const [nomeCliente, setNomeCliente] = useState('');
@@ -18,50 +19,35 @@ function Menu() {
   const [bairro, setBairro] = useState('');
   const [complemento, setComplemento] = useState(''); 
 
+  const [formaPagamento, setFormaPagamento] = useState('');
+  const [trocoPara, setTrocoPara] = useState('');
+  const [taxaEntrega, setTaxaEntrega] = useState(0);
+
   const [produtos, setProdutos] = useState([]);
   const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando Cardápio...");
   const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
   
-  // Efeito para preencher nome, telefone e agora endereço do cliente logado
+  // Efeito para preencher nome, telefone e endereço do cliente logado ou do localStorage
   useEffect(() => {
-    // <<-- ADICIONADO LOGS AQUI -->>
-    console.log("Menu.jsx: useEffect de preenchimento iniciado.");
-    console.log("Menu.jsx: authLoading:", authLoading);
-    console.log("Menu.jsx: currentUser (Menu):", currentUser);
-    console.log("Menu.jsx: currentClientData (Menu):", currentClientData);
-
-    if (!authLoading) { // Garante que o AuthContext já carregou
+    if (!authLoading) {
       if (currentUser && currentClientData) {
-        console.log("Menu.jsx: Usuário logado e dados do cliente disponíveis.");
-        // <<-- LOGS CHAVE PARA VERIFICAR DADOS DE NOME, TELEFONE E ENDEREÇO -->>
-        console.log("Menu.jsx: currentClientData.nome:", currentClientData.nome);
-        console.log("Menu.jsx: currentClientData.telefone:", currentClientData.telefone);
-        console.log("Menu.jsx: currentClientData.endereco:", currentClientData.endereco);
-        
         setNomeCliente(currentClientData.nome || '');
         setTelefoneCliente(currentClientData.telefone || '');
         
-        // Verifica se currentClientData.endereco existe antes de tentar acessar suas propriedades
         if (currentClientData.endereco) {
             setRua(currentClientData.endereco.rua || '');
             setNumero(currentClientData.endereco.numero || '');
             setBairro(currentClientData.endereco.bairro || '');
             setComplemento(currentClientData.endereco.complemento || '');
-            console.log("Menu.jsx: Campos de endereço preenchidos de currentClientData.");
         } else {
-            console.log("Menu.jsx: currentClientData.endereco é nulo ou indefinido. Tentando localStorage.");
-            // Tenta puxar do localStorage se o AuthContext não tem endereço (mesmo estando logado)
-            // Isso pode acontecer se o perfil do cliente não tiver o endereço salvo ainda
-            setNomeCliente(localStorage.getItem('nomeCliente') || ''); // Pega nome do localStorage se não veio do AuthContext
-            setTelefoneCliente(localStorage.getItem('telefoneCliente') || ''); // Pega telefone do localStorage se não veio do AuthContext
+            setNomeCliente(localStorage.getItem('nomeCliente') || '');
+            setTelefoneCliente(localStorage.getItem('telefoneCliente') || '');
             setRua(localStorage.getItem('rua') || '');
             setNumero(localStorage.getItem('numero') || '');
             setBairro(localStorage.getItem('bairro') || '');
             setComplemento(localStorage.getItem('complemento') || '');
-            console.log("Menu.jsx: Campos de endereço (e talvez nome/telefone) preenchidos do localStorage (mesmo logado).");
         }
       } else {
-        console.log("Menu.jsx: Não logado ou dados do cliente não disponíveis. Preenchendo de localStorage.");
         setNomeCliente(localStorage.getItem('nomeCliente') || '');
         setTelefoneCliente(localStorage.getItem('telefoneCliente') || '');
         setRua(localStorage.getItem('rua') || '');
@@ -70,9 +56,9 @@ function Menu() {
         setComplemento(localStorage.getItem('complemento') || '');
       }
     }
-  }, [currentUser, currentClientData, authLoading]); // Roda quando o status de autenticação ou dados do cliente mudam
+  }, [currentUser, currentClientData, authLoading]);
 
-  // Efeito para carregar os produtos do Firestore (mantido do último ajuste)
+  // Efeito para carregar os produtos do Firestore e informações do estabelecimento
   useEffect(() => {
     if (!estabelecimentoId) {
       setNomeEstabelecimento("Nenhum estabelecimento selecionado.");
@@ -91,6 +77,8 @@ function Menu() {
           setEstabelecimentoInfo(data);
           setNomeEstabelecimento(data.nome || "Cardápio");
           
+          setTaxaEntrega(data.taxaEntrega || 0); 
+
           const cardapioRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
           const q = query(cardapioRef, orderBy('nome'));
           
@@ -143,13 +131,33 @@ function Menu() {
   };
 
   const enviarPedido = async () => {
-    // <<-- VALIDAÇÃO DOS NOVOS CAMPOS DE ENDEREÇO -->>
-    if (!nomeCliente.trim() || !telefoneCliente.trim() || !rua.trim() || !numero.trim() || !bairro.trim() || carrinho.length === 0) {
-      alert('Por favor, preencha seu nome, telefone e endereço completo, e adicione itens ao carrinho antes de enviar o pedido.');
+    const subtotalCalculado = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+    const totalComTaxaCalculado = subtotalCalculado + taxaEntrega;
+
+    if (
+      !nomeCliente.trim() || 
+      !telefoneCliente.trim() || 
+      !rua.trim() || 
+      !numero.trim() || 
+      !bairro.trim() || 
+      carrinho.length === 0 ||
+      !formaPagamento
+    ) {
+      alert('Por favor, preencha todos os seus dados, adicione itens ao carrinho e selecione uma forma de pagamento.');
       return;
     }
 
-    // <<-- SALVA OS NOVOS CAMPOS NO localStorage (se não logado) -->>
+    let valorTrocoPara = null;
+    if (formaPagamento === 'dinheiro' && trocoPara.trim() !== '') {
+        const trocoNum = Number(trocoPara);
+        if (trocoNum > totalComTaxaCalculado) { 
+            valorTrocoPara = trocoNum;
+        } else {
+            alert(`O valor para troco (R$ ${trocoNum.toFixed(2)}) deve ser maior que o total do pedido (R$ ${totalComTaxaCalculado.toFixed(2)}).`);
+            return;
+        }
+    }
+
     if (!currentUser) { 
       localStorage.setItem('nomeCliente', nomeCliente.trim());
       localStorage.setItem('telefoneCliente', telefoneCliente.trim());
@@ -159,12 +167,11 @@ function Menu() {
       localStorage.setItem('complemento', complemento.trim());
     }
 
-    // <<-- INCLUI OS NOVOS CAMPOS NO OBJETO PEDIDO -->>
     const pedido = {
       cliente: { 
         nome: nomeCliente.trim(), 
         telefone: telefoneCliente.trim(),
-        endereco: { // Objeto aninhado para o endereço
+        endereco: {
           rua: rua.trim(),
           numero: numero.trim(),
           bairro: bairro.trim(),
@@ -175,28 +182,41 @@ function Menu() {
       itens: carrinho.map(item => ({ 
         nome: item.nome, 
         quantidade: item.qtd, 
-        preco: Number(item.preco), // Garante que preco seja número
+        preco: Number(item.preco),
         imageUrl: item.imageUrl 
       })),
       status: 'recebido',
-      criadoEm: Timestamp.now()
+      criadoEm: Timestamp.now(),
+      formaPagamento: formaPagamento,
+      trocoPara: valorTrocoPara,
+      taxaEntrega: taxaEntrega,
+      totalFinal: totalComTaxaCalculado
     };
 
     try {
-      await addDoc(collection(db, 'pedidos'), pedido);
+      const docRef = await addDoc(collection(db, 'pedidos'), pedido);
+      
+      // Opcional: Navegar para a comanda na mesma aba
+      navigate(`/comanda/${docRef.id}`); 
+      // Ou, se preferir abrir em nova aba para impressão imediata (o que estava antes):
+      // window.open(`/comanda/${docRef.id}`, '_blank');
+
       alert('🎉 Seu pedido foi enviado com sucesso! Aguarde a confirmação.');
       setCarrinho([]);
-      // Não limpa campos do cliente para reuso ou preenchimento via AuthContext
+      setFormaPagamento('');
+      setTrocoPara('');
+
     } catch (error) {
       console.error("Erro ao enviar pedido: ", error);
       alert("❌ Ocorreu um erro ao enviar seu pedido. Por favor, tente novamente.");
     }
   };
 
-  const totalPedido = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+  const subtotalPedido = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+  const totalPedidoComTaxa = subtotalPedido + taxaEntrega;
 
   return (
-    <div className="p-4 max-w-3xl mx-auto">
+    <div className="p-4 max-w-3xl mx-auto mb-20 md:mb-0"> {/* Adicionado mb-20 para dar espaço para o botão fixo no mobile */}
       <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-4">
         Cardápio de {nomeEstabelecimento}
       </h1>
@@ -204,6 +224,7 @@ function Menu() {
         <p className="text-center text-[var(--cinza-texto)] mb-8">{estabelecimentoInfo.descricao}</p>
       )}
 
+      {/* Seção de Produtos */}
       {produtos.length === 0 && nomeEstabelecimento !== "Carregando Cardápio..." ? (
         <p className="text-center text-gray-500 italic mt-8">Nenhum item disponível neste cardápio ou estabelecimento não encontrado.</p>
       ) : (
@@ -220,6 +241,7 @@ function Menu() {
         </div>
       )}
 
+      {/* SEU PEDIDO (RESUMO DO CARRINHO) */}
       <div className="bg-white p-6 mt-10 rounded-lg shadow-xl border border-gray-200">
         <h2 className="font-bold text-2xl mb-4 text-[var(--marrom-escuro)]">Seu Pedido</h2>
         
@@ -256,100 +278,180 @@ function Menu() {
               ))}
             </ul>
             
-            <div className="border-t border-gray-200 pt-4 mt-4 flex justify-between items-center text-xl font-bold text-[var(--marrom-escuro)]">
-              <span>Total:</span>
-              <span>R$ {totalPedido.toFixed(2)}</span>
+            <div className="border-t border-gray-200 pt-4 mt-4 text-[var(--marrom-escuro)]">
+              <div className="flex justify-between items-center text-lg mb-1">
+                <span>Subtotal:</span>
+                <span>R$ {subtotalPedido.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-lg mb-2">
+                <span>Taxa de Entrega:</span>
+                <span>R$ {taxaEntrega.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-2xl font-bold">
+                <span>Total:</span>
+                <span>R$ {totalPedidoComTaxa.toFixed(2)}</span>
+              </div>
             </div>
           </>
         )}
 
+        {/* DADOS DO CLIENTE E ENDEREÇO */}
         <div className="mb-4 mt-6">
-          <label htmlFor="nomeCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Nome *</label>
-          <input
-            id="nomeCliente"
-            value={nomeCliente}
-            onChange={(e) => setNomeCliente(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-            placeholder="Ex: Ana Silva"
-            required
-            disabled={!!currentUser} 
-          />
-        </div>
-        <div className="mb-6">
-          <label htmlFor="telefoneCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Telefone (com DDD) *</label>
-          <input
-            id="telefoneCliente"
-            value={telefoneCliente}
-            onChange={(e) => setTelefoneCliente(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-            placeholder="Ex: 22999999999"
-            type="tel"
-            required
-            disabled={!!currentUser}
-          />
-        </div>
-
-        {/* <<-- NOVOS CAMPOS DE ENDEREÇO -->> */}
-        <div className="mb-4">
-          <label htmlFor="rua" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Rua *</label>
-          <input
-            id="rua"
-            value={rua}
-            onChange={(e) => setRua(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-            placeholder="Ex: Rua das Flores"
-            required
-            disabled={!!currentUser && currentClientData?.endereco?.rua} 
-          />
-        </div>
-        <div className="mb-4 flex gap-4">
-          <div className="flex-1">
-            <label htmlFor="numero" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Número *</label>
+          <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Seus Dados</h3>
+          <div className="mb-4">
+            <label htmlFor="nomeCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Nome *</label>
             <input
-              id="numero"
-              value={numero}
-              onChange={(e) => setNumero(e.target.value)}
+              id="nomeCliente"
+              value={nomeCliente}
+              onChange={(e) => setNomeCliente(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-              placeholder="Ex: 123"
+              placeholder="Ex: Ana Silva"
               required
-              disabled={!!currentUser && currentClientData?.endereco?.numero}
+              disabled={!!currentUser} 
             />
           </div>
-          <div className="flex-1">
-            <label htmlFor="bairro" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Bairro *</label>
+          <div className="mb-6">
+            <label htmlFor="telefoneCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Telefone (com DDD) *</label>
             <input
-              id="bairro"
-              value={bairro}
-              onChange={(e) => setBairro(e.target.value)}
+              id="telefoneCliente"
+              value={telefoneCliente}
+              onChange={(e) => setTelefoneCliente(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-              placeholder="Ex: Centro"
+              placeholder="Ex: 22999999999"
+              type="tel"
               required
-              disabled={!!currentUser && currentClientData?.endereco?.bairro}
+              disabled={!!currentUser}
+            />
+          </div>
+
+          {/* CAMPOS DE ENDEREÇO */}
+          <div className="mb-4">
+            <label htmlFor="rua" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Rua *</label>
+            <input
+              id="rua"
+              value={rua}
+              onChange={(e) => setRua(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+              placeholder="Ex: Rua das Flores"
+              required
+              disabled={!!currentUser && currentClientData?.endereco?.rua} 
+            />
+          </div>
+          <div className="mb-4 flex gap-4">
+            <div className="flex-1">
+              <label htmlFor="numero" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Número *</label>
+              <input
+                id="numero"
+                value={numero}
+                onChange={(e) => setNumero(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+                placeholder="Ex: 123"
+                required
+                disabled={!!currentUser && currentClientData?.endereco?.numero}
+              />
+            </div>
+            <div className="flex-1">
+              <label htmlFor="bairro" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Bairro *</label>
+              <input
+                id="bairro"
+                value={bairro}
+                onChange={(e) => setBairro(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+                placeholder="Ex: Centro"
+                required
+                disabled={!!currentUser && currentClientData?.endereco?.bairro}
+              />
+            </div>
+          </div>
+          <div className="mb-6">
+            <label htmlFor="complemento" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Complemento / Ponto de Referência</label>
+            <input
+              id="complemento"
+              value={complemento}
+              onChange={(e) => setComplemento(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+              placeholder="Ex: Apt 101, Próximo à praça"
+              disabled={!!currentUser && currentClientData?.endereco?.complemento}
             />
           </div>
         </div>
-        <div className="mb-6">
-          <label htmlFor="complemento" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Complemento / Ponto de Referência</label>
-          <input
-            id="complemento"
-            value={complemento}
-            onChange={(e) => setComplemento(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-            placeholder="Ex: Apt 101, Próximo à praça"
-            disabled={!!currentUser && currentClientData?.endereco?.complemento}
-          />
+
+        {/* --- SEÇÃO: FORMA DE PAGAMENTO --- */}
+        <div className="bg-white p-6 mt-6 rounded-lg shadow-xl border border-gray-200">
+            <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Forma de Pagamento *</h3>
+            <div className="space-y-3">
+                <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+                    <input 
+                        type="radio" 
+                        name="paymentMethod" 
+                        value="pix" 
+                        checked={formaPagamento === 'pix'} 
+                        onChange={(e) => setFormaPagamento(e.target.value)}
+                        className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
+                    />
+                    PIX
+                </label>
+                <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+                    <input 
+                        type="radio" 
+                        name="paymentMethod" 
+                        value="cartao" 
+                        checked={formaPagamento === 'cartao'} 
+                        onChange={(e) => setFormaPagamento(e.target.value)}
+                        className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
+                    />
+                    Cartão (Crédito/Débito na entrega)
+                </label>
+                <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+                    <input 
+                        type="radio" 
+                        name="paymentMethod" 
+                        value="dinheiro" 
+                        checked={formaPagamento === 'dinheiro'} 
+                        onChange={(e) => setFormaPagamento(e.target.value)}
+                        className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
+                    />
+                    Dinheiro
+                </label>
+            </div>
+
+            {/* Campo para troco, visível APENAS se "Dinheiro" for selecionado */}
+            {formaPagamento === 'dinheiro' && (
+                <div className="mt-4">
+                    <label htmlFor="troco" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">
+                        Precisa de troco para? (Opcional)
+                    </label>
+                    <input
+                        id="troco"
+                        type="number"
+                        value={trocoPara}
+                        onChange={(e) => setTrocoPara(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+                        placeholder={`Ex: R$ ${(totalPedidoComTaxa + 10).toFixed(2)}`} 
+                    />
+                </div>
+            )}
         </div>
+        {/* --- FIM SEÇÃO: FORMA DE PAGAMENTO --- */}
 
+      </div> {/* Fim do div que encapsula o pedido e dados */}
 
-        <button
-          onClick={enviarPedido}
-          className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg"
-          disabled={carrinho.length === 0 || !nomeCliente.trim() || !telefoneCliente.trim() || !rua.trim() || !numero.trim() || !bairro.trim()}
-        >
-          {carrinho.length === 0 ? 'Adicione itens para enviar' : 'Enviar Pedido Agora!'}
-        </button>
-      </div>
-    </div>
+      {/* --- NOVO: BOTÃO DE ENVIO FIXO NO RODAPÉ PARA MOBILE --- */}
+      {carrinho.length > 0 && ( // Só mostra o botão se houver itens no carrinho
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none">
+          <button
+            onClick={enviarPedido}
+            className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg"
+            disabled={!nomeCliente.trim() || !telefoneCliente.trim() || !rua.trim() || !numero.trim() || !bairro.trim() || !formaPagamento}
+          >
+            Enviar Pedido Agora!
+          </button>
+        </div>
+      )}
+      {/* --- FIM NOVO BOTÃO FIXO --- */}
+
+    </div> // Fim do div principal .p-4 .max-w-3xl .mx-auto
+
   );
 }
 
