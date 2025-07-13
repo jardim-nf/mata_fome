@@ -172,7 +172,7 @@ function Painel() {
 
         {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
         {/* MUDANÇA AQUI: Adicionado 'muted' */}
-        <audio ref={audioRef} src="/campainha.mp3" preload="auto" muted /> 
+        <audio ref={audioRef} src="/campainha.mp3" preload="auto" /> 
 
         {loading ? (
             <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando pedidos...</p>
