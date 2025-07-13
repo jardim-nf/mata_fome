@@ -1,7 +1,8 @@
 // src/components/PedidoCard.jsx
 import React from "react";
 
-function PedidoCard({ pedido, mudarStatus }) {
+// Adicionado 'excluirPedido' nas props
+function PedidoCard({ pedido, mudarStatus, excluirPedido }) {
   const status = (pedido?.status || "recebido").toLowerCase();
 
   const coresPorStatus = {
@@ -65,7 +66,6 @@ function PedidoCard({ pedido, mudarStatus }) {
           ✅ Finalizar
         </button>
 
-        {/* Botão Comanda é renderizado condicionalmente */}
         {showComandaButton && (
           <button
             onClick={abrirComanda}
@@ -74,6 +74,14 @@ function PedidoCard({ pedido, mudarStatus }) {
             📄 Comanda
           </button>
         )}
+
+        {/* <<< NOVO BOTÃO DE EXCLUIR PEDIDO >>> */}
+        <button
+          onClick={() => excluirPedido(pedido.id)} // Chama a função passada via props
+          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm shadow transition duration-300"
+        >
+          🗑️ Excluir
+        </button>
       </div>
     </div>
   );

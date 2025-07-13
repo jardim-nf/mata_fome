@@ -1,6 +1,6 @@
 // src/pages/Painel.jsx
-import React, { useEffect, useState, useRef } from "react"; // Adicionado useRef aqui!
-import { collection, onSnapshot, doc, updateDoc, Timestamp, query, orderBy, where } from "firebase/firestore";
+import React, { useEffect, useState, useRef } from "react";
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from "firebase/firestore"; // Importado deleteDoc!
 import { db } from "../firebase";
 import PedidoCard from "../components/PedidoCard";
 import { Link, useSearchParams } from 'react-router-dom';
@@ -10,9 +10,7 @@ function Painel() {
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
 
-  // Ref para o elemento de áudio
   const audioRef = useRef(null);
-  // Para controlar quais IDs de pedido já tocaram o som (persistente através de re-renderizações)
   const playedOrderIds = useRef(new Set()); 
 
   const paramStartDate = searchParams.get('startDate');
@@ -25,13 +23,12 @@ function Painel() {
     let q;
 
     if (paramStartDate && paramEndDate) {
-      // <<-- MUDANÇA CRUCIAL AQUI: Interpreta a data no fuso horário local explicitamente -->>
       const [startYear, startMonth, startDay] = paramStartDate.split('-').map(Number);
-      const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0); // Mês é 0-indexado
+      const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
       const startTimestamp = Timestamp.fromDate(startOfDay);
 
       const [endYear, endMonth, endDay] = paramEndDate.split('-').map(Number);
-      const endOfDay = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999); // Mês é 0-indexado
+      const endOfDay = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
       const endTimestamp = Timestamp.fromDate(endOfDay);
       
       console.log(`Painel: Filtrando de ${startOfDay.toLocaleString()} até ${endOfDay.toLocaleString()}`);
@@ -43,38 +40,31 @@ function Painel() {
         orderBy('criadoEm', 'desc')
       );
     } else {
-      q = query(pedidosQueryRef, orderBy('criadoEm', 'desc')); // Usando 'criadoEm' para ordenar
+      q = query(pedidosQueryRef, orderBy('criadoEm', 'desc'));
       console.log("Painel: Sem filtro de data, buscando todos os pedidos.");
     }
 
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const dadosAtuais = [];
       let novoPedidoChegou = false;
 
-      // Primeiro, processa as mudanças
       snapshot.docChanges().forEach((change) => {
         const pedidoData = { id: change.doc.id, ...change.doc.data() };
 
         if (change.type === "added") {
-          // Se um novo documento foi ADICIONADO e o ID ainda não está na nossa lista de IDs que já tocaram o som
           if (!playedOrderIds.current.has(pedidoData.id)) {
-            novoPedidoChegou = true; // Sinaliza que um novo pedido chegou
-            playedOrderIds.current.add(pedidoData.id); // Adiciona o ID para não tocar novamente
+            novoPedidoChegou = true;
+            playedOrderIds.current.add(pedidoData.id);
           }
         }
-        // Para 'modified' e 'removed' não precisamos tocar som de 'novo pedido'
-        // mas sua lógica de 'setPedidos' abaixo irá re-sincronizar tudo
       });
 
-      // Segundo, atualiza a lista completa de pedidos baseada no snapshot inteiro
       const todosPedidosNoSnapshot = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      setPedidos(todosPedidosNoSnapshot); // Atualiza o estado com a lista filtrada/ordenada
+      setPedidos(todosPedidosNoSnapshot);
 
-      // Toca o som se um novo pedido foi detectado
       if (novoPedidoChegou && audioRef.current) {
         audioRef.current.play().catch(e => console.error("Erro ao tocar áudio:", e));
       }
@@ -87,7 +77,7 @@ function Painel() {
     });
 
     return () => unsub();
-  }, [paramStartDate, paramEndDate]); // Dependências do useEffect
+  }, [paramStartDate, paramEndDate]);
 
 
   const mudarStatus = async (id, novoStatus) => {
@@ -129,6 +119,21 @@ function Painel() {
     }
   };
 
+  // <<< NOVA FUNÇÃO PARA EXCLUIR PEDIDO >>>
+  const excluirPedido = async (id) => {
+    if (window.confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
+      try {
+        const ref = doc(db, "pedidos", id);
+        await deleteDoc(ref);
+        alert("✅ Pedido excluído com sucesso!");
+      } catch (error) {
+        console.error("❌ Erro ao excluir pedido:", error);
+        alert("Ocorreu um erro ao excluir o pedido. Por favor, tente novamente.");
+      }
+    }
+  };
+
+
   const colunas = [
     { titulo: "Recebido", status: "recebido" },
     { titulo: "Em Preparo", status: "preparo" },
@@ -150,7 +155,7 @@ function Painel() {
             className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 0 010-1.414l4-4a1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 0 010 1.414z" clipRule="evenodd" />
             </svg>
             Voltar para o Dashboard
           </Link>
@@ -161,8 +166,7 @@ function Painel() {
         </h1>
 
         {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
-        {/* Certifique-se que o caminho 'src' aponta para o seu arquivo de som na pasta 'public' */}
-        <audio ref={audioRef} src="/campainha.mp3" preload="auto" /> {/* Verifique o nome do arquivo aqui! */}
+        <audio ref={audioRef} src="/campainha.mp3" preload="auto" /> 
 
         {loading ? (
             <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando pedidos...</p>
@@ -187,7 +191,6 @@ function Painel() {
                             p.status?.toLowerCase() === coluna.status.toLowerCase()
                         )
                         .sort((a, b) => {
-                            // Certifique-se que 'criadoEm' é um Timestamp do Firebase ou um Date
                             const dataA = a.criadoEm && typeof a.criadoEm.toDate === 'function' ? a.criadoEm.toDate() : new Date(0);
                             const dataB = b.criadoEm && typeof b.criadoEm.toDate === 'function' ? b.criadoEm.toDate() : new Date(0);
                             return dataA - dataB;
@@ -200,6 +203,7 @@ function Painel() {
                                 key={pedido.id}
                                 pedido={pedido}
                                 mudarStatus={mudarStatus}
+                                excluirPedido={excluirPedido} // <<< Passando a função de exclusão aqui!
                                 total={totalDoPedido}
                             />
                             );
