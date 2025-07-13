@@ -1,6 +1,6 @@
 // src/pages/Painel.jsx
 import React, { useEffect, useState, useRef } from "react";
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from "firebase/firestore"; // Importado deleteDoc!
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from "firebase/firestore";
 import { db } from "../firebase";
 import PedidoCard from "../components/PedidoCard";
 import { Link, useSearchParams } from 'react-router-dom';
@@ -65,8 +65,14 @@ function Painel() {
       }));
       setPedidos(todosPedidosNoSnapshot);
 
+      // --- MUDANÇA AQUI: Tenta desmutar antes de tocar o áudio ---
       if (novoPedidoChegou && audioRef.current) {
-        audioRef.current.play().catch(e => console.error("Erro ao tocar áudio:", e));
+        audioRef.current.muted = false; // Tenta desmutar
+        audioRef.current.play().catch(e => {
+          console.error("Erro ao tocar áudio (autoplay bloqueado ou outro):", e);
+          // Você pode adicionar um alerta opcional aqui se o som for essencial
+          // alert("As notificações sonoras podem estar bloqueadas pelo navegador. Clique em qualquer lugar na página para ativá-las.");
+        });
       }
 
       setLoading(false);
@@ -119,7 +125,6 @@ function Painel() {
     }
   };
 
-  // <<< NOVA FUNÇÃO PARA EXCLUIR PEDIDO >>>
   const excluirPedido = async (id) => {
     if (window.confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
       try {
@@ -166,7 +171,8 @@ function Painel() {
         </h1>
 
         {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
-        <audio ref={audioRef} src="/campainha.mp3" preload="auto" /> 
+        {/* MUDANÇA AQUI: Adicionado 'muted' */}
+        <audio ref={audioRef} src="/campainha.mp3" preload="auto" muted /> 
 
         {loading ? (
             <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando pedidos...</p>
@@ -203,7 +209,7 @@ function Painel() {
                                 key={pedido.id}
                                 pedido={pedido}
                                 mudarStatus={mudarStatus}
-                                excluirPedido={excluirPedido} // <<< Passando a função de exclusão aqui!
+                                excluirPedido={excluirPedido} 
                                 total={totalDoPedido}
                             />
                             );
