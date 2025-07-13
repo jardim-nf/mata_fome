@@ -12,9 +12,32 @@ function Painel() {
 
   const audioRef = useRef(null);
   const playedOrderIds = useRef(new Set()); 
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false); // NOVO ESTADO: controla se o som está habilitado
 
   const paramStartDate = searchParams.get('startDate');
   const paramEndDate = searchParams.get('endDate');
+
+  // NOVO: Função para ativar/desativar o som manualmente
+  const toggleSound = () => {
+    if (audioRef.current) {
+      if (!isSoundEnabled) {
+        audioRef.current.muted = false; // Garante que não está mutado
+        audioRef.current.play().then(() => {
+          setIsSoundEnabled(true); // Se tocou, ativa
+          console.log("Notificações sonoras ativadas!");
+        }).catch(e => {
+          console.error("Não foi possível tocar som ao ativar (ainda bloqueado):", e);
+          alert("Por favor, clique em qualquer lugar da página para permitir a reprodução automática de áudio e tente ativar novamente.");
+        });
+      } else {
+        setIsSoundEnabled(false); // Desativa
+        audioRef.current.pause(); // Pausa se já estiver tocando
+        audioRef.current.currentTime = 0; // Reseta para o início
+        console.log("Notificações sonoras desativadas.");
+      }
+    }
+  };
+
 
   useEffect(() => {
     setLoading(true);
@@ -27,7 +50,7 @@ function Painel() {
       const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
       const startTimestamp = Timestamp.fromDate(startOfDay);
 
-      const [endYear, endMonth, endDay] = paramEndDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
       const endOfDay = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
       const endTimestamp = Timestamp.fromDate(endOfDay);
       
@@ -65,13 +88,12 @@ function Painel() {
       }));
       setPedidos(todosPedidosNoSnapshot);
 
-      // --- MUDANÇA AQUI: Tenta desmutar antes de tocar o áudio ---
-      if (novoPedidoChegou && audioRef.current) {
-        audioRef.current.muted = false; // Tenta desmutar
+      // --- MUDANÇA AQUI: Só toca o som se o usuário já habilitou ---
+      if (novoPedidoChegou && isSoundEnabled && audioRef.current) { // Verifica 'isSoundEnabled'
+        audioRef.current.muted = false; // Garante que não está mutado
         audioRef.current.play().catch(e => {
-          console.error("Erro ao tocar áudio (autoplay bloqueado ou outro):", e);
-          // Você pode adicionar um alerta opcional aqui se o som for essencial
-          // alert("As notificações sonoras podem estar bloqueadas pelo navegador. Clique em qualquer lugar na página para ativá-las.");
+          console.error("Erro ao tocar áudio (autoplay bloqueado APÓS ativação ou outro):", e);
+          // Este erro só deve aparecer se o navegador bloquear mesmo APÓS o primeiro clique
         });
       }
 
@@ -83,7 +105,7 @@ function Painel() {
     });
 
     return () => unsub();
-  }, [paramStartDate, paramEndDate]);
+  }, [paramStartDate, paramEndDate, isSoundEnabled]); // Adicionado isSoundEnabled às dependências para reativar o listener se o estado mudar
 
 
   const mudarStatus = async (id, novoStatus) => {
@@ -171,8 +193,19 @@ function Painel() {
         </h1>
 
         {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
-        {/* MUDANÇA AQUI: Adicionado 'muted' */}
-        <audio ref={audioRef} src="/campainha.mp3" preload="auto" /> 
+        <audio ref={audioRef} src="/campainha.mp3" preload="auto" muted /> {/* Adicionado 'muted' */}
+
+        {/* NOVO BOTÃO PARA ATIVAR/DESATIVAR O SOM */}
+        <div className="text-center mb-6">
+          <button
+            onClick={toggleSound}
+            className={`px-6 py-2 rounded-lg font-semibold transition duration-300 ${
+              isSoundEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
+            } text-white`}
+          >
+            {isSoundEnabled ? '🔊 Desativar Som' : '🔇 Ativar Som'}
+          </button>
+        </div>
 
         {loading ? (
             <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando pedidos...</p>
