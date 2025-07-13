@@ -36,7 +36,6 @@ function Header() {
             {currentUser ? (
               // Se houver um usuário logado
               <>
-                {/* <<< NOVA CONDIÇÃO AQUI >>> */}
                 {currentClientData?.isAdmin ? ( // Se o usuário logado É um ADMINISTRADOR
                   <>
                     <li>
@@ -72,11 +71,14 @@ function Header() {
                     Login Cliente
                   </Link>
                 </li>
+                {/* REMOVIDO: O botão Login Admin estava aqui */}
+                {/*
                 <li>
                   <Link to="/login-admin" className="bg-[var(--vermelho-principal)] px-4 py-2 rounded-full text-sm font-semibold hover:bg-red-700 transition duration-300">
                     Login Admin
                   </Link>
                 </li>
+                */}
               </>
             )}
           </ul>
