@@ -1,6 +1,6 @@
 // src/pages/Painel.jsx
 import React, { useEffect, useState, useRef } from "react";
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where, getDoc } from "firebase/firestore"; // Adicionado getDoc
 import { db } from "../firebase";
 import PedidoCard from "../components/PedidoCard";
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
@@ -9,13 +9,14 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 const getTodayFormattedDate = () => {
   const today = new Date();
   const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0'); // Mês de 0-11, então +1
+  const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
 function Painel() {
   const [pedidos, setPedidos] = useState([]);
+  const [estabelecimentosCache, setEstabelecimentosCache] = useState({}); // NOVO: Cache para estabelecimentos
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -23,28 +24,23 @@ function Painel() {
   const audioRef = useRef(null);
   const playedOrderIds = useRef(new Set());
   const [isSoundEnabled, setIsSoundEnabled] = useState(false);
-  const [showAutoplayWarning, setShowAutoplayWarning] = useState(true); // Estado para o aviso de autoplay
+  const [showAutoplayWarning, setShowAutoplayWarning] = useState(true);
 
-  // Lendo os parâmetros da URL para o filtro
   const paramStartDate = searchParams.get('startDate');
   const paramEndDate = searchParams.get('endDate');
 
-  // Estados locais para os inputs do filtro (para o usuário digitar antes de aplicar)
   const [localStartDate, setLocalStartDate] = useState(paramStartDate || getTodayFormattedDate());
   const [localEndDate, setLocalEndDate] = useState(paramEndDate || getTodayFormattedDate());
 
-
   const [showPeriodFilter, setShowPeriodFilter] = useState(false);
 
-  // Função para lidar com o clique inicial em qualquer lugar da página
   const handleInitialUserGesture = () => {
     if (audioRef.current && !isSoundEnabled && showAutoplayWarning) {
-      audioRef.current.muted = true; // Mantém mutado
-      audioRef.current.volume = 0.01; // Volume muito baixo
+      audioRef.current.muted = true;
+      audioRef.current.volume = 0.01;
       
       audioRef.current.play().then(() => {
-        // Se conseguiu tocar (mesmo mutado e baixo), o gesto foi registrado
-        setShowAutoplayWarning(false); // Esconde o aviso
+        setShowAutoplayWarning(false);
         console.log("Gesto de usuário registrado. Áudio desbloqueado (inicialmente mudo).");
       }).catch(e => {
         console.warn("Gesto inicial ainda bloqueado:", e);
@@ -52,29 +48,26 @@ function Painel() {
     }
   };
 
-  // Adiciona listener para registrar o primeiro clique em qualquer lugar (para desbloquear o áudio)
   useEffect(() => {
     document.addEventListener('click', handleInitialUserGesture, { once: true });
     return () => {
       document.removeEventListener('click', handleInitialUserGesture);
     };
-  }, []); // Rodar apenas uma vez na montagem
+  }, []);
 
-
-  // Função para ativar/desativar o som manualmente
   const toggleSound = () => {
     if (audioRef.current) {
-      if (isSoundEnabled) { // Se o som está ativado e quer desativar
+      if (isSoundEnabled) {
         setIsSoundEnabled(false);
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         console.log("Notificações sonoras desativadas.");
-      } else { // Se o som está desativado e quer ativar
-        audioRef.current.muted = false; // Garante que não está mutado
-        audioRef.current.volume = 1; // Volume normal
+      } else {
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1;
         audioRef.current.play().then(() => {
           setIsSoundEnabled(true);
-          setShowAutoplayWarning(false); // Esconde o aviso se o botão funcionou
+          setShowAutoplayWarning(false);
           console.log("Notificações sonoras ativadas por clique no botão!");
         }).catch(e => {
           console.error("Não foi possível tocar som ao ativar (bloqueado mesmo no clique):", e);
@@ -92,7 +85,6 @@ function Painel() {
     let pedidosQueryRef = collection(db, "pedidos");
     let q;
 
-    // Constrói a query com base nos parâmetros de data da URL
     if (paramStartDate && paramEndDate) {
       const [startYear, startMonth, startDay] = paramStartDate.split('-').map(Number);
       const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
@@ -111,38 +103,62 @@ function Painel() {
         orderBy('criadoEm', 'desc')
       );
     } else {
-      // Query padrão: todos os pedidos, ordenados do mais novo para o mais velho
       q = query(pedidosQueryRef, orderBy('criadoEm', 'desc'));
       console.log("Painel: Sem filtro de data, buscando todos os pedidos.");
     }
 
-    // Configura o listener em tempo real do Firestore
-    const unsub = onSnapshot(q, (snapshot) => {
+    // Monitora os pedidos em tempo real
+    const unsub = onSnapshot(q, async (snapshot) => { // Tornar a função assíncrona para usar await
       let novoPedidoChegou = false;
+      const fetchedPedidos = [];
+      const newEstabelecimentosCache = { ...estabelecimentosCache }; // Cópia do cache atual
 
-      // Detecta novos pedidos e toca o som
-      snapshot.docChanges().forEach((change) => {
+      // Processa as mudanças no snapshot
+      for (const change of snapshot.docChanges()) { // Usar for...of para usar await dentro do loop
         const pedidoData = { id: change.doc.id, ...change.doc.data() };
 
         if (change.type === "added") {
           if (!playedOrderIds.current.has(pedidoData.id)) {
             novoPedidoChegou = true;
-            playedOrderIds.current.add(pedidoData.id); // Marca como 'som já tocado'
+            playedOrderIds.current.add(pedidoData.id);
           }
         }
+        
+        // NOVO: Buscar informações do estabelecimento (incluindo chavePix) para cada pedido
+        let estabelecimentoInfo = newEstabelecimentosCache[pedidoData.estabelecimentoId];
+        if (!estabelecimentoInfo && pedidoData.estabelecimentoId) { // Se não está no cache, busca
+          try {
+            const estabDocRef = doc(db, 'estabelecimentos', pedidoData.estabelecimentoId);
+            const estabDocSnap = await getDoc(estabDocRef);
+            if (estabDocSnap.exists()) {
+              estabelecimentoInfo = estabDocSnap.data();
+              newEstabelecimentosCache[pedidoData.estabelecimentoId] = estabelecimentoInfo;
+            } else {
+              console.warn(`Estabelecimento ${pedidoData.estabelecimentoId} não encontrado.`);
+            }
+          } catch (err) {
+            console.error(`Erro ao buscar estabelecimento ${pedidoData.estabelecimentoId}:`, err);
+          }
+        }
+        // Adiciona as informações do estabelecimento ao pedido
+        fetchedPedidos.push({ ...pedidoData, estabelecimento: estabelecimentoInfo });
+      }
+
+      // Atualiza o cache de estabelecimentos
+      setEstabelecimentosCache(newEstabelecimentosCache);
+
+      // Ordenar os pedidos após buscar todos os dados (snapshot.docs não garante ordem)
+      const todosPedidosNoSnapshot = fetchedPedidos.sort((a, b) => {
+        const dataA = a.criadoEm && typeof a.criadoEm.toDate === 'function' ? a.criadoEm.toDate() : new Date(0);
+        const dataB = b.criadoEm && typeof b.criadoEm.toDate === 'function' ? b.criadoEm.toDate() : new Date(0);
+        return dataB - dataA; // Mais novos primeiro
       });
 
-      // Atualiza o estado com todos os pedidos do snapshot
-      const todosPedidosNoSnapshot = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
       setPedidos(todosPedidosNoSnapshot);
 
-      // Toca o som apenas se um novo pedido chegou E o som está habilitado pelo usuário
       if (novoPedidoChegou && isSoundEnabled && audioRef.current) {
-        audioRef.current.muted = false; // Garante que não está mutado
-        audioRef.current.volume = 1; // Garante volume normal
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1;
         audioRef.current.play().catch(e => {
           console.error("Erro ao tocar áudio (autoplay bloqueado APÓS ativação):", e);
         });
@@ -155,8 +171,8 @@ function Painel() {
       setLoading(false);
     });
 
-    return () => unsub(); // Limpeza do listener ao desmontar o componente
-  }, [paramStartDate, paramEndDate, isSoundEnabled]); // Dependências: re-executa se filtro de data ou estado do som mudar
+    return () => unsub();
+  }, [paramStartDate, paramEndDate, isSoundEnabled]);
 
 
   const mudarStatus = async (id, novoStatus) => {
@@ -223,9 +239,7 @@ function Painel() {
   const countFinalizados = pedidosFinalizadosExibidos.length;
 
 
-  // Função para aplicar o filtro de data (atualiza a URL e aciona o useEffect)
   const handleApplyFilter = () => {
-    // setSearchParams({ startDate: localStartDate, endDate: localEndDate }); // Não use setSearchParams e navigate juntos assim
     navigate(`/painel?startDate=${localStartDate}&endDate=${localEndDate}`);
   };
 
@@ -233,7 +247,6 @@ function Painel() {
   return (
     <div className="min-h-screen bg-[var(--bege-claro)] p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Botão de Voltar para o Dashboard */}
         <div className="mb-6 text-left">
           <Link
             to="/dashboard"
@@ -250,10 +263,8 @@ function Painel() {
           Painel de Pedidos
         </h1>
 
-        {/* ELEMENTO DE ÁUDIO ESCONDIDO PARA NOTIFICAÇÕES */}
         <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
 
-        {/* NOVO BOTÃO PARA ATIVAR/DESATIVAR O SOM E AVISO DE AUTOPLAY */}
         <div className="text-center mb-6">
           {showAutoplayWarning && (
             <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
@@ -271,8 +282,7 @@ function Painel() {
           </button>
         </div>
 
-        {/* Seção de Filtro por Período (com estado local para inputs) */}
-        <div className="text-center mb-6"> {/* Botão para mostrar/esconder o filtro */}
+        <div className="text-center mb-6">
             <button
                 onClick={() => setShowPeriodFilter(!showPeriodFilter)}
                 className="bg-gray-200 text-[var(--marrom-escuro)] px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
@@ -348,6 +358,8 @@ function Painel() {
                                 mudarStatus={mudarStatus}
                                 excluirPedido={excluirPedido}
                                 total={totalDoPedido}
+                                // NOVO: Passando a chave PIX do estabelecimento para o PedidoCard
+                                estabelecimentoPixKey={pedido.estabelecimento?.chavePix || ''} // Passa a chave PIX, se existir
                             />
                             );
                         })}

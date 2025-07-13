@@ -1,6 +1,6 @@
 // src/pages/Menu.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom'; // Importe useNavigate
+import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, Timestamp, query, onSnapshot, orderBy } from 'firebase/firestore';
 import CardapioItem from '../components/CardapioItem';
@@ -40,6 +40,7 @@ function Menu() {
             setBairro(currentClientData.endereco.bairro || '');
             setComplemento(currentClientData.endereco.complemento || '');
         } else {
+            // Fallback para localStorage se não tiver no Firebase para cliente logado
             setNomeCliente(localStorage.getItem('nomeCliente') || '');
             setTelefoneCliente(localStorage.getItem('telefoneCliente') || '');
             setRua(localStorage.getItem('rua') || '');
@@ -48,6 +49,7 @@ function Menu() {
             setComplemento(localStorage.getItem('complemento') || '');
         }
       } else {
+        // Se não houver usuário logado, tenta do localStorage
         setNomeCliente(localStorage.getItem('nomeCliente') || '');
         setTelefoneCliente(localStorage.getItem('telefoneCliente') || '');
         setRua(localStorage.getItem('rua') || '');
@@ -176,7 +178,8 @@ function Menu() {
           numero: numero.trim(),
           bairro: bairro.trim(),
           complemento: complemento.trim() 
-        }
+        },
+        userId: currentUser ? currentUser.uid : null // Salva o UID do cliente logado, se houver
       },
       estabelecimentoId: estabelecimentoId,
       itens: carrinho.map(item => ({ 
@@ -190,18 +193,31 @@ function Menu() {
       formaPagamento: formaPagamento,
       trocoPara: valorTrocoPara,
       taxaEntrega: taxaEntrega,
-      totalFinal: totalComTaxaCalculado
+      totalFinal: totalComTaxaCalculado,
+      // --- INÍCIO DA ADIÇÃO PARA PIX ---
+      // Adiciona o status do pagamento PIX se a forma de pagamento for PIX
+      ...(formaPagamento === 'pix' && {
+        statusPagamentoPix: 'aguardando_pagamento',
+      })
+      // --- FIM DA ADIÇÃO PARA PIX ---
     };
 
     try {
       const docRef = await addDoc(collection(db, 'pedidos'), pedido);
       
-      // Opcional: Navegar para a comanda na mesma aba
-      navigate(`/comanda/${docRef.id}`); 
-      // Ou, se preferir abrir em nova aba para impressão imediata (o que estava antes):
-      // window.open(`/comanda/${docRef.id}`, '_blank');
+      // Mensagem para o cliente após o envio do pedido
+      let successMessage = '🎉 Seu pedido foi enviado com sucesso! Aguarde a confirmação.';
+      
+      if (formaPagamento === 'pix') {
+        successMessage += '\n\nPor favor, realize o pagamento via PIX para que possamos iniciar o preparo do seu pedido. Você pode encontrar os dados PIX na tela de confirmação do pedido ou aguardar o contato do estabelecimento.';
+        // Opcional: Adicionar a chave PIX ou um link para o QR Code aqui se você os tiver disponíveis no frontend.
+        // Ex: successMessage += `\nChave PIX: ${estabelecimentoInfo?.pixChave || 'Entre em contato com o estabelecimento para a chave PIX.'}`;
+        // ou um link para uma tela com o QR Code:
+        // successMessage += `\nVeja o QR Code aqui: https://seusite.com/pix-qrcode/${docRef.id}`;
+      }
 
-      alert('🎉 Seu pedido foi enviado com sucesso! Aguarde a confirmação.');
+      alert(successMessage); // Usa alert para uma mensagem simples. Considere usar uma biblioteca de toasts para melhor UX.
+
       setCarrinho([]);
       setFormaPagamento('');
       setTrocoPara('');
@@ -402,7 +418,7 @@ function Menu() {
                     />
                     Cartão (Crédito/Débito na entrega)
                 </label>
-                <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+                <label className="flex items-center text-base text-[var(--cinho-texto)] cursor-pointer">
                     <input 
                         type="radio" 
                         name="paymentMethod" 
