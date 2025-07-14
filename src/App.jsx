@@ -13,6 +13,8 @@ import Planos from "./pages/Planos";
 import AdminDashboard from "./pages/AdminDashboard";
 // <<-- NOVO IMPORT -->>
 import AdminMenuManagement from "./pages/AdminMenuManagement"; // Importe o novo componente
+// <<-- NOVO IMPORT PARA TAXAS DE ENTREGA -->>
+import TaxasDeEntrega from "./pages/TaxasDeEntrega"; // Importe o novo componente de Taxas de Entrega
 
 import { AuthProvider } from './context/AuthContext'; 
 
@@ -34,8 +36,10 @@ function App() {
                 <Route path="/login-admin" element={<Login />} /> 
                 <Route path="/login-cliente" element={<ClienteLogin />} /> 
                 <Route path="/planos" element={<Planos />} /> 
-                {/* <<-- NOVA ROTA AQUI -->> */}
+                {/* <<-- NOVA ROTA PARA GERENCIAR CARDÁPIO -->> */}
                 <Route path="/admin/gerenciar-cardapio" element={<AdminMenuManagement />} /> 
+                {/* <<-- NOVA ROTA AQUI PARA TAXAS DE ENTREGA -->> */}
+                <Route path="/admin/taxas-de-entrega" element={<TaxasDeEntrega />} /> 
               </Routes>
             </Layout>
           } />

@@ -46,9 +46,7 @@ Valor total: R$ ${totalPedido}.
 *Chave PIX:* ${estabelecimentoPixKey}
 
 Por favor, faça o pagamento para que possamos iniciar o preparo do seu pedido. 😊
-
-Acesse o app para ver os detalhes: [LINK_PARA_SEU_APP_OU_PEDIDO_ESPECÍFICO_AQUI]
-`;
+Obrigado!`;
 
     const texto = encodeURIComponent(mensagem);
     const url = `https://wa.me/55${numero}?text=${texto}`;

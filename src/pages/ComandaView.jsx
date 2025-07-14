@@ -78,6 +78,10 @@ function ComandaView() {
 
   // --- Processamento dos dados para exibição ---
   const totalPedido = pedido.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0) : 0;
+  // A taxa de entrega agora vem diretamente do pedido.taxaEntrega
+  const taxaEntregaExibida = pedido.taxaEntrega || 0; // Garante que é 0 se não estiver definido
+  const totalFinalComTaxa = totalPedido + taxaEntregaExibida; // NOVO: Calcula o total final com a taxa exibida
+
 
   const dataPedido = pedido.criadoEm && typeof pedido.criadoEm.toDate === 'function' 
                        ? pedido.criadoEm.toDate().toLocaleString('pt-BR') 
@@ -88,7 +92,7 @@ function ComandaView() {
   const enderecoFormatado = enderecoCliente 
     ? `${enderecoCliente.rua || ''}, ${enderecoCliente.numero || ''}` +
       (enderecoCliente.complemento ? `, ${enderecoCliente.complemento}` : '') +
-      (enderecoCliente.bairro ? `\n${enderecoCliente.bairro}` : '') +
+      (enderecoCliente.bairro ? `\n${enderecoCliente.bairro}` : '') + // Inclui o bairro
       (enderecoCliente.cidade && enderecoCliente.estado ? `\n${enderecoCliente.cidade}, ${enderecoCliente.estado}` : '') +
       (enderecoCliente.cep ? ` - CEP: ${enderecoCliente.cep}` : '')
     : 'Endereço não disponível';
@@ -99,7 +103,8 @@ function ComandaView() {
   // Formatar endereço do estabelecimento
   const enderecoEstabelecimento = estabelecimento?.endereco;
   const enderecoEstabelecimentoFormatado = enderecoEstabelecimento 
-    ? `${enderecoEstabelecimento.rua || ''}, ${enderecoEstabelecimento.numero || ''}` +
+    ? `${enderecoEstabelecimento.rua || '', 
+        enderecoEstabelecimento.numero || ''}` +
       (enderecoEstabelecimento.bairro ? `, ${enderecoEstabelecimento.bairro}` : '') +
       (enderecoEstabelecimento.cidade && enderecoEstabelecimento.estado ? ` - ${enderecoEstabelecimento.cidade}/${enderecoEstabelecimento.estado}` : '') +
       (enderecoEstabelecimento.cep ? ` - CEP: ${enderecoEstabelecimento.cep}` : '')
@@ -166,9 +171,11 @@ function ComandaView() {
 
       <div className="text-right text-xl font-bold mb-2">
         <p>Subtotal: R$ {totalPedido.toFixed(2)}</p>
-        {pedido.taxaEntrega > 0 && <p>Taxa de Entrega: R$ {pedido.taxaEntrega.toFixed(2)}</p>}
+        {/* Usa a taxa de entrega que veio do pedido */}
+        {taxaEntregaExibida > 0 && <p>Taxa de Entrega: R$ {taxaEntregaExibida.toFixed(2)}</p>}
         {pedido.desconto > 0 && <p>Desconto: R$ {pedido.desconto.toFixed(2)}</p>}
-        <p className="mt-2 text-2xl">TOTAL A PAGAR: R$ {totalPedido.toFixed(2)}</p>
+        {/* Exibe o total final com a taxa */}
+        <p className="mt-2 text-2xl">TOTAL A PAGAR: R$ {totalFinalComTaxa.toFixed(2)}</p>
       </div>
 
       <hr className="border-t border-gray-300 my-4" />

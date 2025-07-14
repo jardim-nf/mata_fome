@@ -1,9 +1,9 @@
 // src/pages/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, onSnapshot, orderBy, Timestamp, doc, getDoc } from 'firebase/firestore'; // Adicionado 'doc' e 'getDoc' aqui
+import { collection, query, where, onSnapshot, orderBy, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../context/AuthContext'; // Importe useAuth aqui
+import { useAuth } from '../context/AuthContext';
 
 // Função auxiliar para formatar a data de hoje no formato 'YYYY-MM-DD'
 const getTodayFormattedDate = () => {
@@ -15,13 +15,13 @@ const getTodayFormattedDate = () => {
 };
 
 function AdminDashboard() {
-  const { currentUser, authLoading } = useAuth(); // Obtém o usuário atual e o status de carregamento da autenticação
+  const { currentUser, authLoading } = useAuth();
 
   const [totalVendas, setTotalVendas] = useState(0);
   const [faturamentoTotal, setFaturamentoTotal] = useState(0);
   const [topSellingProducts, setTopSellingProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dashboardError, setDashboardError] = useState(null); // NOVO ESTADO para erros específicos do dashboard
+  const [dashboardError, setDashboardError] = useState(null);
 
   const [startDate, setStartDate] = useState(getTodayFormattedDate());
   const [endDate, setEndDate] = useState(getTodayFormattedDate());
@@ -32,7 +32,7 @@ function AdminDashboard() {
     // 1. Espera o contexto de autenticação carregar
     if (authLoading) {
       setLoading(true);
-      setDashboardError(null); // Limpa erros enquanto carrega
+      setDashboardError(null);
       return;
     }
 
@@ -43,11 +43,11 @@ function AdminDashboard() {
       return;
     }
 
-    // 3. Verifica o papel do usuário no Firestore (essa é a parte que a regra também faz)
+    // 3. Verifica o papel do usuário no Firestore
     const checkAdminStatusAndFetchData = async () => {
       try {
         setLoading(true);
-        setDashboardError(null); // Limpa erros ao iniciar a busca
+        setDashboardError(null);
 
         const userDocRef = doc(db, 'usuarios', currentUser.uid);
         const userDocSnap = await getDoc(userDocRef);
@@ -140,10 +140,9 @@ function AdminDashboard() {
       }
     };
 
-    checkAdminStatusAndFetchData(); // Chama a função assíncrona
+    checkAdminStatusAndFetchData();
 
-  }, [currentUser, authLoading, startDate, endDate]); // Dependências do useEffect
-
+  }, [currentUser, authLoading, startDate, endDate]);
 
   const handleApplyFilter = () => {
     // Ao clicar em 'Aplicar Filtro', o useEffect já será acionado pela mudança de startDate/endDate.
@@ -200,7 +199,7 @@ function AdminDashboard() {
         {/* Renderização Condicional do Dashboard */}
         {loading ? (
           <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando dados...</p>
-        ) : dashboardError ? ( // Exibe o NOVO ERRO AQUI
+        ) : dashboardError ? (
           <p className="text-center text-red-500 text-lg mt-8">{dashboardError}</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
@@ -239,6 +238,18 @@ function AdminDashboard() {
               <p className="text-5xl font-extrabold text-white">🍔</p>
               <p className="text-white text-opacity-90 mt-2">Adicionar e editar itens do menu.</p>
             </Link>
+
+            {/* NOVO BOTÃO: Gerenciar Taxas de Entrega */}
+            <Link
+              to="/admin/taxas-de-entrega"
+              className="bg-blue-600 p-6 rounded-lg shadow-md border border-blue-200 flex flex-col justify-between items-center text-center transform transition duration-300 hover:scale-105 hover:shadow-lg"
+              style={{ minHeight: '180px' }}
+            >
+              <h2 className="text-xl font-semibold text-white mb-2">Gerenciar Taxas de Entrega</h2>
+              <p className="text-5xl font-extrabold text-white">💲</p>
+              <p className="text-white text-opacity-90 mt-2">Definir valores de entrega por bairro.</p>
+            </Link>
+
           </div>
         )}
 

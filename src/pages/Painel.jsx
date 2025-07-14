@@ -1,6 +1,6 @@
 // src/pages/Painel.jsx
 import React, { useEffect, useState, useRef } from "react";
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where, getDoc } from "firebase/firestore"; // Adicionado getDoc
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import PedidoCard from "../components/PedidoCard";
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
@@ -16,7 +16,7 @@ const getTodayFormattedDate = () => {
 
 function Painel() {
   const [pedidos, setPedidos] = useState([]);
-  const [estabelecimentosCache, setEstabelecimentosCache] = useState({}); // NOVO: Cache para estabelecimentos
+  const [estabelecimentosCache, setEstabelecimentosCache] = useState({}); // Cache para estabelecimentos
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -107,14 +107,13 @@ function Painel() {
       console.log("Painel: Sem filtro de data, buscando todos os pedidos.");
     }
 
-    // Monitora os pedidos em tempo real
-    const unsub = onSnapshot(q, async (snapshot) => { // Tornar a função assíncrona para usar await
+    const unsub = onSnapshot(q, async (snapshot) => { // A função deve ser async para usar await
       let novoPedidoChegou = false;
-      const fetchedPedidos = [];
-      const newEstabelecimentosCache = { ...estabelecimentosCache }; // Cópia do cache atual
+      const currentPedidosData = []; // Esta vai armazenar o estado completo do snapshot
+      const newEstabelecimentosCache = { ...estabelecimentosCache }; // Usar cache para evitar leituras repetidas
 
-      // Processa as mudanças no snapshot
-      for (const change of snapshot.docChanges()) { // Usar for...of para usar await dentro do loop
+      // PRIMEIRO: Processa todas as mudanças para tocar som e atualizar o cache de estabelecimentos
+      snapshot.docChanges().forEach((change) => {
         const pedidoData = { id: change.doc.id, ...change.doc.data() };
 
         if (change.type === "added") {
@@ -123,13 +122,27 @@ function Painel() {
             playedOrderIds.current.add(pedidoData.id);
           }
         }
-        
-        // NOVO: Buscar informações do estabelecimento (incluindo chavePix) para cada pedido
+        // Atualiza cache para itens adicionados/modificados
+        if (pedidoData.estabelecimentoId && !newEstabelecimentosCache[pedidoData.estabelecimentoId]) {
+            // Se o estabelecimento não está no cache, marca para buscar depois (ou busca aqui se preferir síncrono/lento)
+            // Para evitar lentidão com muitos pedidos/estabelecimentos, é melhor buscar assincronamente fora deste loop
+            // ou garantir que o cache seja populado de outra forma.
+            // Por simplicidade, vamos permitir que ele seja buscado no próximo passo.
+        }
+      });
+
+
+      // SEGUNDO: Mapeia todos os documentos no snapshot para o estado, buscando estabelecimentos ausentes
+      // Usa Promise.all para buscar estabelecimentos em paralelo, se necessário
+      const promises = snapshot.docs.map(async (docSnapshot) => {
+        const pedidoData = { id: docSnapshot.id, ...docSnapshot.data() };
         let estabelecimentoInfo = newEstabelecimentosCache[pedidoData.estabelecimentoId];
-        if (!estabelecimentoInfo && pedidoData.estabelecimentoId) { // Se não está no cache, busca
+
+        // Se o estabelecimento não está no cache, busca no Firestore
+        if (!estabelecimentoInfo && pedidoData.estabelecimentoId) {
           try {
             const estabDocRef = doc(db, 'estabelecimentos', pedidoData.estabelecimentoId);
-            const estabDocSnap = await getDoc(estabDocRef);
+            const estabDocSnap = await getDoc(estabDocRef); // <-- await aqui
             if (estabDocSnap.exists()) {
               estabelecimentoInfo = estabDocSnap.data();
               newEstabelecimentosCache[pedidoData.estabelecimentoId] = estabelecimentoInfo;
@@ -140,21 +153,23 @@ function Painel() {
             console.error(`Erro ao buscar estabelecimento ${pedidoData.estabelecimentoId}:`, err);
           }
         }
-        // Adiciona as informações do estabelecimento ao pedido
-        fetchedPedidos.push({ ...pedidoData, estabelecimento: estabelecimentoInfo });
-      }
-
-      // Atualiza o cache de estabelecimentos
-      setEstabelecimentosCache(newEstabelecimentosCache);
-
-      // Ordenar os pedidos após buscar todos os dados (snapshot.docs não garante ordem)
-      const todosPedidosNoSnapshot = fetchedPedidos.sort((a, b) => {
-        const dataA = a.criadoEm && typeof a.criadoEm.toDate === 'function' ? a.criadoEm.toDate() : new Date(0);
-        const dataB = b.criadoEm && typeof b.criadoEm.toDate === 'function' ? b.criadoEm.toDate() : new Date(0);
-        return dataB - dataA; // Mais novos primeiro
+        return { ...pedidoData, estabelecimento: estabelecimentoInfo };
       });
 
-      setPedidos(todosPedidosNoSnapshot);
+      // Aguarda todas as buscas de estabelecimento serem concluídas
+      const todosPedidosComEstabelecimento = await Promise.all(promises);
+
+      // Atualiza o cache de estabelecimentos (agora com novos estabelecimentos que foram buscados)
+      setEstabelecimentosCache(newEstabelecimentosCache);
+
+      // Ordena os pedidos (do mais novo para o mais velho)
+      const sortedPedidos = todosPedidosComEstabelecimento.sort((a, b) => {
+        const dataA = a.criadoEm && typeof a.criadoEm.toDate === 'function' ? a.criadoEm.toDate() : new Date(0);
+        const dataB = b.criadoEm && typeof b.criadoEm.toDate === 'function' ? b.criadoEm.toDate() : new Date(0);
+        return dataB - dataA;
+      });
+
+      setPedidos(sortedPedidos);
 
       if (novoPedidoChegou && isSoundEnabled && audioRef.current) {
         audioRef.current.muted = false;
@@ -165,14 +180,14 @@ function Painel() {
       }
 
       setLoading(false);
-      console.log(`Painel: ${todosPedidosNoSnapshot.length} pedidos carregados.`);
+      console.log(`Painel: ${sortedPedidos.length} pedidos carregados.`);
     }, (error) => {
       console.error("Erro ao carregar pedidos no Painel:", error);
       setLoading(false);
     });
 
     return () => unsub();
-  }, [paramStartDate, paramEndDate, isSoundEnabled]);
+  }, [paramStartDate, paramEndDate, isSoundEnabled]); // Dependências
 
 
   const mudarStatus = async (id, novoStatus) => {
@@ -180,37 +195,24 @@ function Painel() {
       const ref = doc(db, "pedidos", id);
       await updateDoc(ref, { status: novoStatus });
 
-      const _pedido = pedidos.find((p) => p.id === id);
-      const statusFormatado = novoStatus.toLowerCase();
+      // IMPORTANTE: Não precisamos mais buscar o pedido aqui, pois o onSnapshot vai atualizar o estado
+      // _pedido = pedidos.find((p) => p.id === id); // Esta linha pode ser removida ou adaptada
+      // A lógica de WhatsApp agora está no PedidoCard, que já tem acesso ao 'pedido' completo.
 
-      if (!_pedido?.cliente?.telefone) {
-        console.warn("⚠️ Pedido sem telefone do cliente. Não é possível enviar mensagem via WhatsApp.");
-        return;
-      }
+      // Apenas para fins de depuração ou lógica que precise do pedido atual IMEDIATAMENTE
+      // const updatedPedido = pedidos.find(p => p.id === id); 
+      // if (!updatedPedido) {
+      //   console.warn("Pedido não encontrado no estado local após atualização do status.");
+      //   return; 
+      // }
 
-      const numero = _pedido.cliente.telefone.replace(/\D/g, "");
-      let mensagem = "";
-      let shouldOpenWhatsApp = true; 
+      // Como o onSnapshot vai reagir à mudança no DB, não há necessidade de enviar WhatsApp aqui.
+      // A lógica de envio de WhatsApp foi movida para o PedidoCard.
+      // O 'mudarStatus' do Painel agora só atualiza o DB e o listener cuida da UI.
 
-      if (statusFormatado === "preparo") {
-        mensagem = `Olá ${_pedido.cliente.nome}, seu pedido está em preparo! 👨‍🍳`;
-      } else if (statusFormatado === "entregando") {
-        mensagem = `Olá ${_pedido.cliente.nome}, seu pedido saiu para entrega! 🛵📦`;
-      } else if (statusFormatado === "finalizado") {
-        mensagem = `Olá ${_pedido.cliente.nome}, seu pedido foi finalizado com sucesso! ✅ Muito obrigado!`;
-      } else {
-        shouldOpenWhatsApp = false; 
-      }
-
-      if (mensagem && shouldOpenWhatsApp) {
-        const texto = encodeURIComponent(mensagem);
-        const url = `https://wa.me/55${numero}?text=${texto}`;
-        console.log("📤 Abrindo WhatsApp:", url);
-        window.open(url, "_blank");
-      }
     } catch (error) {
-      console.error("❌ Erro ao mudar status ou enviar mensagem:", error);
-      alert("Ocorreu um erro ao atualizar o status ou enviar a mensagem.");
+      console.error("❌ Erro ao mudar status:", error);
+      alert("Ocorreu um erro ao atualizar o status do pedido.");
     }
   };
 
@@ -358,8 +360,9 @@ function Painel() {
                                 mudarStatus={mudarStatus}
                                 excluirPedido={excluirPedido}
                                 total={totalDoPedido}
-                                // NOVO: Passando a chave PIX do estabelecimento para o PedidoCard
-                                estabelecimentoPixKey={pedido.estabelecimento?.chavePix || ''} // Passa a chave PIX, se existir
+                                // NOVO: Passando o estabelecimento completo para o PedidoCard
+                                estabelecimento={pedido.estabelecimento}
+                                estabelecimentoPixKey={pedido.estabelecimento?.chavePix || ''}
                             />
                             );
                         })}
