@@ -25,19 +25,40 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
 
   const showComandaButton = status === "recebido" || status === "entregando";
 
-  const enviarMensagemPixComChave = () => {
-    if (!pedido?.cliente?.telefone) {
-      alert("Telefone do cliente não disponível para enviar mensagem PIX.");
-      return;
+  // NOVA FUNÇÃO: Para centralizar a abertura do WhatsApp
+  const openWhatsAppLink = (message, phoneNumber, actionDescription = "mensagem") => {
+    if (!phoneNumber) {
+      alert(`Erro: Telefone do cliente não disponível para enviar ${actionDescription}.`);
+      return false;
     }
-    if (!estabelecimentoPixKey) {
-        alert("Chave PIX do estabelecimento não configurada. Por favor, adicione a chave PIX nas informações do estabelecimento no Firestore.");
-        return;
+    const numeroLimpo = phoneNumber.replace(/\D/g, "");
+    if (!numeroLimpo) {
+        alert(`Erro: Número de telefone inválido para enviar ${actionDescription}.`);
+        return false;
     }
 
-    const numero = pedido.cliente.telefone.replace(/\D/g, "");
-    const nomeCliente = pedido.cliente.nome || "Cliente";
-    const totalPedido = pedido.totalFinal ? pedido.totalFinal.toFixed(2) : (pedido.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0).toFixed(2) : 'N/A');
+    const texto = encodeURIComponent(message);
+    const url = `https://wa.me/55${numeroLimpo}?text=${texto}`; // Assumindo DDD 55
+    
+    try {
+      window.open(url, "_blank"); // Abre em nova aba
+      console.log(`📤 Abrindo WhatsApp para ${actionDescription}:`, url);
+      return true;
+    } catch (error) {
+      console.error(`❌ Erro ao abrir WhatsApp para ${actionDescription}:`, error);
+      alert(`Não foi possível abrir o WhatsApp para ${actionDescription}. Verifique as configurações do seu navegador ou tente novamente.`);
+      return false;
+    }
+  };
+
+  const enviarMensagemPixComChave = async () => { // Tornar async para await
+    if (!estabelecimentoPixKey) {
+      alert("Chave PIX do estabelecimento não configurada. Por favor, adicione a chave PIX nas informações do estabelecimento no Firestore.");
+      return;
+    }
+
+    const nomeCliente = pedido.cliente?.nome || "Cliente";
+    const totalPedido = pedido.totalFinal ? pedido.totalFinal.toFixed(2).replace('.', ',') : (pedido.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0).toFixed(2).replace('.', ',') : 'N/A');
 
     const mensagem = `Olá ${nomeCliente}, seu pedido no Mata Fome está aguardando pagamento via PIX!
     
@@ -48,37 +69,34 @@ Valor total: R$ ${totalPedido}.
 Por favor, faça o pagamento para que possamos iniciar o preparo do seu pedido. 😊
 Obrigado!`;
 
-    const texto = encodeURIComponent(mensagem);
-    const url = `https://wa.me/55${numero}?text=${texto}`;
-    console.log("📤 Abrindo WhatsApp para mensagem PIX:", url);
-    window.open(url, "_blank");
+    const success = openWhatsAppLink(mensagem, pedido.cliente?.telefone, "mensagem PIX");
+    if (success) {
+        // Opcional: feedback visual temporário, ou um log para depuração
+        console.log("Mensagem PIX solicitada. WhatsApp aberto.");
+        // alert("WhatsApp para PIX aberto. Retorne ao painel para continuar."); // Remover o alert caso seja muito intrusivo
+    }
   };
 
   const handleMudarStatus = async (id, novoStatus) => {
     try {
+      // 1. Atualiza o status no Firestore
       const ref = doc(db, "pedidos", id);
       await updateDoc(ref, { status: novoStatus });
 
-      const _pedido = pedido;
+      // 2. Prepara e envia a mensagem WhatsApp (se aplicável)
+      const _pedido = pedido; // Usa o pedido recebido via prop
       const statusFormatado = novoStatus.toLowerCase();
 
-      if (!_pedido?.cliente?.telefone) {
-        console.warn("⚠️ Pedido sem telefone do cliente. Não é possível enviar mensagem via WhatsApp.");
-        return;
-      }
-
-      const numero = _pedido.cliente.telefone.replace(/\D/g, "");
       let mensagem = "";
       let shouldOpenWhatsApp = true; 
-      const nomeCliente = _pedido.cliente.nome || "Cliente";
+      const nomeCliente = _pedido.cliente?.nome || "Cliente";
       const nomeEstabelecimento = estabelecimento?.nome || "Mata Fome";
 
       const itensDoPedido = _pedido.itens
         ? _pedido.itens.map(item => `${item.quantidade}x ${item.nome}`).join('\n- ')
         : 'N/A';
-      const valorTotal = _pedido.totalFinal ? _pedido.totalFinal.toFixed(2) : 'N/A';
+      const valorTotal = _pedido.totalFinal ? _pedido.totalFinal.toFixed(2).replace('.', ',') : 'N/A';
       const formaPgto = _pedido.formaPagamento ? _pedido.formaPagamento.charAt(0).toUpperCase() + _pedido.formaPagamento.slice(1) : 'N/A';
-
 
       if (statusFormatado === "preparo") {
         mensagem = `Olá ${nomeCliente}, seu pedido no ${nomeEstabelecimento} acaba de entrar em preparo! 👨‍🍳
@@ -92,21 +110,21 @@ ${itensDoPedido}
 Logo mais ele estará pronto para você! Fique de olho nas próximas atualizações. #MataFome
 `;
       } else if (statusFormatado === "entregando") {
-        // --- MENSAGEM DE ENTREGA MELHORADA ---
         mensagem = `Oba! ${nomeCliente}, seu pedido saiu para a entrega! 🛵📦 Chega já! Bom Apetite! #MataFome`;
       } else if (statusFormatado === "finalizado") {
         mensagem = `Olá ${nomeCliente}, seu pedido foi finalizado com sucesso! ✅ Muito obrigado!`;
       } else {
-        shouldOpenWhatsApp = false; 
+        shouldOpenWhatsApp = false; // Não enviar mensagem para outros status
       }
 
       if (mensagem && shouldOpenWhatsApp) {
-        const texto = encodeURIComponent(mensagem);
-        const url = `https://wa.me/55${numero}?text=${texto}`;
-        console.log("📤 Abrindo WhatsApp:", url);
-        window.open(url, "_blank");
+        const success = openWhatsAppLink(mensagem, _pedido.cliente?.telefone, `mudança de status para ${novoStatus}`);
+        if (success) {
+            // Opcional: Feedback visual ao admin
+            // alert(`Status atualizado para '${novoStatus}' e WhatsApp aberto. Retorne ao painel.`);
+        }
       }
-      
+
     } catch (error) {
       console.error("❌ Erro ao mudar status ou enviar mensagem:", error);
       alert("Ocorreu um erro ao atualizar o status ou enviar a mensagem.");
@@ -135,7 +153,7 @@ Logo mais ele estará pronto para você! Fique de olho nas próximas atualizaç�
 
       {pedido?.itens && pedido.itens.length > 0 && (
         <p className="font-bold text-[var(--marrom-escuro)] text-right mb-2">
-          Total: R$ {(pedido.totalFinal || pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0)).toFixed(2)}
+          Total: R$ {(pedido.totalFinal || pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0)).toFixed(2).replace('.', ',')}
         </p>
       )}
 
