@@ -2,8 +2,12 @@
 import React from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { useNavigate } from 'react-router-dom'; // IMPORTAR useNavigate AQUI
 
-function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey, estabelecimento }) {
+// REMOVER 'navigate' das props
+function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey, estabelecimento }) { 
+  const navigate = useNavigate(); // <-- PEGAR O NAVIGATE DIRETAMENTE AQUI
+
   const status = (pedido?.status || "recebido").toLowerCase();
   const formaPagamento = (pedido?.formaPagamento || "").toLowerCase();
   const statusPagamentoPix = (pedido?.statusPagamentoPix || "").toLowerCase();
@@ -20,12 +24,12 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
   const bgColor = coresPorStatus[status] || "bg-white border-gray-200";
 
   const abrirComanda = () => {
-    window.open(`/comanda/${pedido.id}`, '_blank', 'width=400,height=600');
+    // AGORA, 'navigate' SEMPRE ESTARÁ DISPONÍVEL AQUI
+    navigate(`/comanda/${pedido.id}`); 
   };
 
   const showComandaButton = status === "recebido" || status === "entregando";
 
-  // NOVA FUNÇÃO: Para centralizar a abertura do WhatsApp
   const openWhatsAppLink = (message, phoneNumber, actionDescription = "mensagem") => {
     if (!phoneNumber) {
       alert(`Erro: Telefone do cliente não disponível para enviar ${actionDescription}.`);
@@ -38,10 +42,10 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
     }
 
     const texto = encodeURIComponent(message);
-    const url = `https://wa.me/55${numeroLimpo}?text=${texto}`; // Assumindo DDD 55
+    const url = `https://wa.me/55${numeroLimpo}?text=${texto}`;
     
     try {
-      window.open(url, "_blank"); // Abre em nova aba
+      window.open(url, "_blank"); // WhatsApp ainda abre em nova aba/janela
       console.log(`📤 Abrindo WhatsApp para ${actionDescription}:`, url);
       return true;
     } catch (error) {
@@ -51,7 +55,7 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
     }
   };
 
-  const enviarMensagemPixComChave = async () => { // Tornar async para await
+  const enviarMensagemPixComChave = async () => {
     if (!estabelecimentoPixKey) {
       alert("Chave PIX do estabelecimento não configurada. Por favor, adicione a chave PIX nas informações do estabelecimento no Firestore.");
       return;
@@ -71,20 +75,16 @@ Obrigado!`;
 
     const success = openWhatsAppLink(mensagem, pedido.cliente?.telefone, "mensagem PIX");
     if (success) {
-        // Opcional: feedback visual temporário, ou um log para depuração
         console.log("Mensagem PIX solicitada. WhatsApp aberto.");
-        // alert("WhatsApp para PIX aberto. Retorne ao painel para continuar."); // Remover o alert caso seja muito intrusivo
     }
   };
 
   const handleMudarStatus = async (id, novoStatus) => {
     try {
-      // 1. Atualiza o status no Firestore
       const ref = doc(db, "pedidos", id);
       await updateDoc(ref, { status: novoStatus });
 
-      // 2. Prepara e envia a mensagem WhatsApp (se aplicável)
-      const _pedido = pedido; // Usa o pedido recebido via prop
+      const _pedido = pedido;
       const statusFormatado = novoStatus.toLowerCase();
 
       let mensagem = "";
@@ -114,14 +114,13 @@ Logo mais ele estará pronto para você! Fique de olho nas próximas atualizaç�
       } else if (statusFormatado === "finalizado") {
         mensagem = `Olá ${nomeCliente}, seu pedido foi finalizado com sucesso! ✅ Muito obrigado!`;
       } else {
-        shouldOpenWhatsApp = false; // Não enviar mensagem para outros status
+        shouldOpenWhatsApp = false; 
       }
 
       if (mensagem && shouldOpenWhatsApp) {
         const success = openWhatsAppLink(mensagem, _pedido.cliente?.telefone, `mudança de status para ${novoStatus}`);
         if (success) {
-            // Opcional: Feedback visual ao admin
-            // alert(`Status atualizado para '${novoStatus}' e WhatsApp aberto. Retorne ao painel.`);
+            // Feedback visual ao admin, se desejar
         }
       }
 
