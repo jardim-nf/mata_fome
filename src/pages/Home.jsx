@@ -15,7 +15,7 @@ function Home() {
   // NÚMERO DE WHATSAPP PARA CONTATO ADMIN (SUBSTITUA POR UM NÚMERO REAL COM DDD, SEM ESPAÇOS OU TRAÇOS)
   const whatsappNumber = "5511999999999"; // Ex: 55 DDD NÚMERO (Ex: 5511987654321)
   // Mensagem para Suporte Admin (URL-encoded)
-  const messageSuporteAdmin = encodeURIComponent("Olá, estou com dificuldades para acessar/cadastrar como administrador no Mata Fome. Poderiam me ajudar?");
+  const messageSuporteAdmin = encodeURIComponent("Olá, estou com dificuldades para acessar/cadastrar como administrador no DeuFome. Poderiam me ajudar?");
 
 
   // ESTADOS PARA O CARD DE LOGIN/CADASTRO DO CLIENTE (UNIFICADO)
@@ -275,7 +275,7 @@ function Home() {
       {/* Seção Hero: Fundo vermelho principal */}
       <section className="bg-[var(--vermelho-principal)] text-white py-20 text-center">
         <div className="container mx-auto">
-          <h1 className="text-5xl font-bold mb-4">Mata Fome</h1>
+          <h1 className="text-5xl font-bold mb-4">DeuFome</h1>
           <p className="text-xl mb-8">Seu delivery favorito, rápido e fácil!</p>
         </div>
       </section>

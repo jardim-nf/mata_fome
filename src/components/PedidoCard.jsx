@@ -64,7 +64,7 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
     const nomeCliente = pedido.cliente?.nome || "Cliente";
     const totalPedido = pedido.totalFinal ? pedido.totalFinal.toFixed(2).replace('.', ',') : (pedido.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0).toFixed(2).replace('.', ',') : 'N/A');
 
-    const mensagem = `Olá ${nomeCliente}, seu pedido no Mata Fome está aguardando pagamento via PIX!
+    const mensagem = `Olá ${nomeCliente}, seu pedido no ${estabelecimento} está aguardando pagamento via PIX!
     
 Valor total: R$ ${totalPedido}.
 
@@ -110,7 +110,7 @@ ${itensDoPedido}
 Logo mais ele estará pronto para você! Fique de olho nas próximas atualizações. #MataFome
 `;
       } else if (statusFormatado === "entregando") {
-        mensagem = `Oba! ${nomeCliente}, seu pedido saiu para a entrega! 🛵📦 Chega já! Bom Apetite! #MataFome`;
+        mensagem = `Oba! ${nomeCliente}, seu pedido saiu para a entrega! 🛵📦 Chega já! Bom Apetite! #DeuFome`;
       } else if (statusFormatado === "finalizado") {
         mensagem = `Olá ${nomeCliente}, seu pedido foi finalizado com sucesso! ✅ Muito obrigado!`;
       } else {

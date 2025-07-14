@@ -12,9 +12,9 @@ import ComandaView from "./pages/ComandaView";
 import Planos from "./pages/Planos";
 import AdminDashboard from "./pages/AdminDashboard";
 // <<-- NOVO IMPORT -->>
-import AdminMenuManagement from "./pages/AdminMenuManagement"; // Importe o novo componente
+import AdminMenuManagement from "./pages/AdminMenuManagement"; 
 // <<-- NOVO IMPORT PARA TAXAS DE ENTREGA -->>
-import TaxasDeEntrega from "./pages/TaxasDeEntrega"; // Importe o novo componente de Taxas de Entrega
+import TaxasDeEntrega from "./pages/TaxasDeEntrega"; 
 
 import { AuthProvider } from './context/AuthContext'; 
 
@@ -23,22 +23,34 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
+          {/* Rotas que não usam o Layout (ex: comanda em tela cheia) */}
           <Route path="/comanda/:pedidoId" element={<ComandaView />} /> 
           
-          <Route path="*" element={
+          {/* Todas as rotas que usam o Layout */}
+          <Route path="*" element={ // Este path="*" é um catch-all para rotas não definidas acima
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/cardapios" element={<ListaEstabelecimentos />} /> 
+                
+                {/* <<-- CORREÇÃO AQUI: MUDAR A ROTA DO MENU PARA USAR SLUG -->> */}
+                {/* Mude "/cardapio/:estabelecimentoId" para algo como "/loja/:estabelecimentoSlug" */}
+                <Route path="/loja/:estabelecimentoSlug" element={<Menu />} /> 
+                {/* MANTENHA A ROTA ANTIGA CASO ALGUÉM AINDA TENHA O LINK ANTIGO E VOCÊ QUEIRA TRATAR ISSO
+                    Você pode redirecionar essa rota antiga para a nova ou mostrar um aviso.
+                    Por enquanto, vou mantê-la para não quebrar links existentes imediatamente.
+                    No futuro, considere removê-la ou adicionar um <Navigate to="/loja/:estabelecimentoId" replace />
+                */}
                 <Route path="/cardapio/:estabelecimentoId" element={<Menu />} /> 
+                {/* FIM DA CORREÇÃO */}
+
                 <Route path="/dashboard" element={<AdminDashboard />} /> 
                 <Route path="/painel" element={<Painel />} />
                 <Route path="/login-admin" element={<Login />} /> 
                 <Route path="/login-cliente" element={<ClienteLogin />} /> 
                 <Route path="/planos" element={<Planos />} /> 
-                {/* <<-- NOVA ROTA PARA GERENCIAR CARDÁPIO -->> */}
+                
                 <Route path="/admin/gerenciar-cardapio" element={<AdminMenuManagement />} /> 
-                {/* <<-- NOVA ROTA AQUI PARA TAXAS DE ENTREGA -->> */}
                 <Route path="/admin/taxas-de-entrega" element={<TaxasDeEntrega />} /> 
               </Routes>
             </Layout>

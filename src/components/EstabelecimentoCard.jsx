@@ -3,8 +3,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 function EstabelecimentoCard({ estabelecimento }) {
-  // Garantir que o estabelecimento e o ID existem
-  if (!estabelecimento || !estabelecimento.id) {
+  // Garantir que o estabelecimento e o SLUG (agora) existam
+  // É fundamental que o seu Firestore tenha o campo 'slug' para cada estabelecimento
+  if (!estabelecimento || !estabelecimento.slug) { 
+    console.warn("EstabelecimentoCard: Estabelecimento ou slug não encontrado.", estabelecimento);
     return null; // Ou um placeholder, se preferir
   }
 
@@ -12,8 +14,9 @@ function EstabelecimentoCard({ estabelecimento }) {
   const defaultImageUrl = '/images/placeholder-restaurant.jpg'; 
 
   return (
+    // ATUALIZADO: Usando o slug do estabelecimento na URL
     <Link 
-      to={`/cardapio/${estabelecimento.id}`} // Ao clicar, vai para o cardápio específico
+      to={`/loja/${estabelecimento.slug}`} // <-- MUDANÇA AQUI: de /cardapio/${id} para /loja/${slug}
       className="bg-white rounded-lg shadow-md hover:shadow-xl transition duration-300 transform hover:scale-105 flex flex-col overflow-hidden border border-gray-100"
     >
       <div className="w-full h-40 overflow-hidden">
@@ -25,7 +28,7 @@ function EstabelecimentoCard({ estabelecimento }) {
       </div>
       <div className="p-4 flex-grow flex flex-col justify-between">
         <h3 className="text-xl font-bold text-[var(--marrom-escuro)] mb-2">{estabelecimento.nome}</h3>
-        <p className="text-[var(--cinza-texto)] text-sm mb-3 line-clamp-2"> {/* line-clamp para limitar a 2 linhas */}
+        <p className="text-[var(--cinza-texto)] text-sm mb-3 line-clamp-2">
           {estabelecimento.descricao || "Sem descrição."}
         </p>
         <p className="text-sm text-gray-500 mt-auto">

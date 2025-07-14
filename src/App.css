@@ -1,48 +1,54 @@
 /* src/App.css */
 
 :root {
-  --vermelho-principal: hsl(0, 91%, 49%); /* Vermelho vibrante do logo */
-  --marrom-escuro: hsl(28, 48%, 20%);   /* Cor mais escura do logo */
-  --bege-claro: hsl(38, 77%, 86%);      /* Cor clara do logo */
-  --verde-destaque: hsl(120, 50%, 45%); /* Verde do recheio do burrito */
-  --branco: #FFFFFF;
-  --preto: #000000;
-  --cinza-texto: #4A4A4A; /* Um cinza para textos gerais */
+  /* NOVAS CORES BASEADAS NA IMAGEM DA LOGO E ESTILO LARANJA */
+  --cor-de-destaque-principal: hsl(0, 0%, 0%); /* Amarelo vibrante: #FFC107 ou #FFDA63 */
+  --cor-secundaria-laranja: hsl(28, 89%, 55%);   /* Laranja/Marrom da bolsa: #E67E22 ou #F48024 */
+  --cor-texto-escuro: hsl(0, 0%, 0%);           /* Preto */
+  --cor-fundo-claro: hsl(0, 0%, 100%);          /* Branco puro */
+  --cor-cinza-texto: hsl(0, 0%, 0%);           /* Cinza para textos gerais: #4A4A4A */
+
+  /* Mapeando as variáveis antigas para as novas para facilitar a transição */
+  --vermelho-principal: var(--cor-de-destaque-principal); /* Será o amarelo */
+  --marrom-escuro: var(--cor-texto-escuro);           /* Será o preto */
+  --bege-claro: var(--cor-fundo-claro);               /* Será o branco */
+  --verde-destaque: var(--cor-secundaria-laranja);    /* O verde se torna o laranja (ou redefina para um verde se ainda tiver um elemento verde) */
+  --branco: var(--cor-fundo-claro);                  /* Continua branco */
+  --preto: var(--cor-texto-escuro);                   /* Continua preto */
+  --cinza-texto: var(--cor-cinza-texto);               /* Continua cinza */
 }
 
 body {
   margin: 0;
   font-family: 'Poppins', sans-serif;
-  background-color: var(--branco); /* Fundo branco ou bege claro, dependendo da seção */
-  color: var(--marrom-escuro); /* Cor de texto padrão */
+  background-color: var(--cor-fundo-claro); /* Fundo agora branco */
+  color: var(--cor-texto-escuro); /* Cor de texto padrão agora preto */
 }
 
 /* Estilos gerais do Header */
 header {
-  background-color: var(--vermelho-principal); /* Vermelho para o header */
-  color: var(--branco);
+  background-color: var(--cor-de-destaque-principal); /* Amarelo para o header */
+  color: var(--cor-texto-escuro); /* Texto do header em preto */
   padding: 1rem 2rem;
-  /* Classes do Tailwind serão adicionadas diretamente no componente Header.jsx */
 }
 
 /* Estilos gerais do Hero */
 .hero {
   padding: 4rem 2rem;
   text-align: center;
-  background-color: var(--bege-claro); /* Fundo bege claro */
-  color: var(--marrom-escuro); /* Cor de texto para o hero */
-  /* Classes do Tailwind para imagem de fundo, etc. serão no componente Hero.jsx */
+  background-color: var(--cor-secundaria-laranja); /* Fundo hero em laranja */
+  color: var(--cor-texto-escuro); /* Cor de texto para o hero agora preto */
 }
 
 .hero h1 {
   font-size: 3rem;
   margin-bottom: 1rem;
-  color: var(--branco); /* Título do hero em branco para contrastar com imagem de fundo */
+  color: var(--cor-texto-escuro); /* Título do hero em preto para contrastar com laranja */
 }
 
 .hero p {
   font-size: 1.2rem;
   max-width: 600px;
   margin: 0 auto;
-  color: var(--branco); /* Texto do hero em branco */
+  color: var(--cor-texto-escuro); /* Texto do hero em preto */
 }

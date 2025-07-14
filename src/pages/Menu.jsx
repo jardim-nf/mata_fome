@@ -2,12 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, doc, getDoc, addDoc, Timestamp, query, onSnapshot, orderBy } from 'firebase/firestore';
+// Importar getDocs para a consulta por slug
+import { collection, doc, getDoc, addDoc, Timestamp, query, onSnapshot, orderBy, where, getDocs } from 'firebase/firestore';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
 
 function Menu() {
-  const { estabelecimentoId } = useParams();
+  // Alterar de estabelecimentoId para estabelecimentoSlug
+  const { estabelecimentoSlug } = useParams();
   const navigate = useNavigate();
   const { currentUser, currentClientData, loading: authLoading } = useAuth();
 
@@ -17,7 +19,7 @@ function Menu() {
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
-  const [complemento, setComplemento] = useState(''); // Corrigido
+  const [complemento, setComplemento] = useState('');
 
   const [formaPagamento, setFormaPagamento] = useState('');
   const [trocoPara, setTrocoPara] = useState('');
@@ -26,16 +28,15 @@ function Menu() {
   const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
   const [bairroNaoEncontrado, setBairroNaoEncontrado] = useState(false);
 
-  // ESTADO: Para controlar o tipo de entrega (true para retirada, false para delivery)
-  const [isRetirada, setIsRetirada] = useState(false); 
+  const [isRetirada, setIsRetirada] = useState(false);
 
   const [produtos, setProdutos] = useState([]);
   const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando Cardápio...");
   const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
+  // NOVO: Estado para armazenar o ID REAL do estabelecimento, depois de encontrar pelo slug
+  const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
-  // NOVOS ESTADOS PARA O MODAL DE CONFIRMAÇÃO
   const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
-  // Mantemos confirmedOrderDetails para exibir o resumo no modal
   const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
 
 
@@ -51,12 +52,11 @@ function Menu() {
           setNumero(currentClientData.endereco.numero || '');
           setBairro(currentClientData.endereco.bairro || '');
           setComplemento(currentClientData.endereco.complemento || '');
-          setIsRetirada(false); // Se o usuário tem endereço, assume-se entrega
+          setIsRetirada(false);
         } else {
-          setIsRetirada(true); // Se não tem endereço, sugere retirada
+          setIsRetirada(true);
         }
       } else {
-        // Para usuários não logados, tenta carregar do localStorage
         const storedRua = localStorage.getItem('rua') || '';
         const storedNumero = localStorage.getItem('numero') || '';
         const storedBairro = localStorage.getItem('bairro') || '';
@@ -68,11 +68,10 @@ function Menu() {
         setBairro(storedBairro);
         setComplemento(localStorage.getItem('complemento') || '');
 
-        // Se houver dados de endereço no localStorage, assume-se entrega
         if (storedRua && storedNumero && storedBairro) {
           setIsRetirada(false);
         } else {
-          setIsRetirada(true); // Caso contrário, sugere retirada
+          setIsRetirada(true);
         }
       }
     }
@@ -95,9 +94,9 @@ function Menu() {
 
   // Efeito para calcular a taxa de entrega baseada no bairro OU se é retirada
   useEffect(() => {
-    if (isRetirada) { // Se for retirada, a taxa é zero
+    if (isRetirada) {
       setTaxaEntregaCalculada(0);
-      setBairroNaoEncontrado(false); // Reseta esta flag
+      setBairroNaoEncontrado(false);
       return;
     }
 
@@ -118,57 +117,75 @@ function Menu() {
       setTaxaEntregaCalculada(0);
       setBairroNaoEncontrado(true);
     }
-  }, [bairro, taxasBairro, isRetirada]); // Adicionado isRetirada como dependência
+  }, [bairro, taxasBairro, isRetirada]);
 
-  // Efeito para carregar informações do estabelecimento e cardápio
+  // Efeito para carregar informações do estabelecimento e cardápio (AGORA BUSCANDO POR SLUG)
   useEffect(() => {
-    if (!estabelecimentoId) {
+    // Se o slug não estiver presente, ou estiver vazio após trim, não fazemos nada
+    if (!estabelecimentoSlug || estabelecimentoSlug.trim() === '') {
       setNomeEstabelecimento("Nenhum estabelecimento selecionado.");
+      setProdutos([]);
+      setActualEstabelecimentoId(null); // Reseta o ID real
       return;
     }
 
-    let unsubscribeCardapio;
+    let unsubscribeCardapio; // Variável para o listener do cardápio
 
     const fetchEstabelecimentoAndCardapio = async () => {
       try {
-        const estabelecimentoRef = doc(db, 'estabelecimentos', estabelecimentoId);
-        const estabelecimentoSnap = await getDoc(estabelecimentoRef);
+        // 1. Buscar o estabelecimento pela SLUG
+        const estabelecimentosRef = collection(db, 'estabelecimentos');
+        const q = query(estabelecimentosRef, where('slug', '==', estabelecimentoSlug));
+        const querySnapshot = await getDocs(q); // Usamos getDocs para a consulta por slug
 
-        if (estabelecimentoSnap.exists()) {
-          const data = estabelecimentoSnap.data();
+        if (!querySnapshot.empty) {
+          const estabelecimentoDoc = querySnapshot.docs[0]; // Pega o primeiro (e único) resultado
+          const data = estabelecimentoDoc.data();
+          const idDoEstabelecimentoReal = estabelecimentoDoc.id; // <-- OBTÉM O ID REAL AQUI
+
           setEstabelecimentoInfo(data);
           setNomeEstabelecimento(data.nome || "Cardápio");
+          setActualEstabelecimentoId(idDoEstabelecimentoReal); // Armazena o ID real
 
-          const cardapioRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
-          const q = query(cardapioRef, orderBy('nome'));
+          // 2. Usar o ID real para carregar o cardápio (via onSnapshot)
+          const cardapioRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio');
+          const qCardapio = query(cardapioRef, orderBy('nome'));
 
-          unsubscribeCardapio = onSnapshot(q, (snapshot) => {
+          unsubscribeCardapio = onSnapshot(qCardapio, (snapshot) => {
             const produtosData = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
             setProdutos(produtosData);
+          }, (error) => {
+            console.error("Erro ao carregar cardápio em tempo real:", error);
+            setProdutos([]);
           });
 
         } else {
           setNomeEstabelecimento("Estabelecimento não encontrado.");
           setProdutos([]);
+          setActualEstabelecimentoId(null);
+          // Opcional: Redirecionar para uma página 404 ou lista de estabelecimentos
+          // navigate('/estabelecimentos-nao-encontrado');
         }
       } catch (error) {
-        console.error("Erro ao carregar cardápio:", error);
+        console.error("Erro ao carregar estabelecimento ou cardápio por slug:", error);
         setNomeEstabelecimento("Erro ao carregar cardápio.");
         setProdutos([]);
+        setActualEstabelecimentoId(null);
       }
     };
 
     fetchEstabelecimentoAndCardapio();
 
+    // Retorna a função de unsubscribe para limpar o listener ao desmontar
     return () => {
       if (unsubscribeCardapio) {
         unsubscribeCardapio();
       }
     };
-  }, [estabelecimentoId]);
+  }, [estabelecimentoSlug]); // A dependência agora é o estabelecimentoSlug
 
   const adicionarAoCarrinho = (item) => {
     const existe = carrinho.find((p) => p.id === item.id);
@@ -191,11 +208,17 @@ function Menu() {
   };
 
   const enviarPedido = async () => {
+    // VALIDAÇÃO: Garante que o ID do estabelecimento foi encontrado pelo slug
+    if (!actualEstabelecimentoId) {
+        alert('Erro: Estabelecimento não carregado corretamente. Por favor, recarregue a página.');
+        return;
+    }
+
     const subtotalCalculado = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const totalComTaxaCalculado = subtotalCalculado + taxaAplicada;
 
-    // Validações
+    // Validações de formulário
     if (
       !nomeCliente.trim() ||
       !telefoneCliente.trim() ||
@@ -245,7 +268,7 @@ function Menu() {
       cliente: {
         nome: nomeCliente.trim(),
         telefone: telefoneCliente.trim(),
-        endereco: isRetirada ? null : { // Endereço só é salvo se não for retirada
+        endereco: isRetirada ? null : {
           rua: rua.trim(),
           numero: numero.trim(),
           bairro: bairro.trim(),
@@ -253,7 +276,8 @@ function Menu() {
         },
         userId: currentUser ? currentUser.uid : null
       },
-      estabelecimentoId: estabelecimentoId,
+      // Usar o ID real do estabelecimento aqui
+      estabelecimentoId: actualEstabelecimentoId, 
       itens: carrinho.map(item => ({
         nome: item.nome,
         quantidade: item.qtd,
@@ -266,7 +290,7 @@ function Menu() {
       trocoPara: valorTrocoPara,
       taxaEntrega: taxaAplicada,
       totalFinal: totalComTaxaCalculado,
-      tipoEntrega: isRetirada ? 'retirada' : 'delivery', // Adiciona a informação se é retirada ou entrega
+      tipoEntrega: isRetirada ? 'retirada' : 'delivery',
       ...(formaPagamento === 'pix' && {
         statusPagamentoPix: 'aguardando_pagamento',
       })
@@ -275,7 +299,6 @@ function Menu() {
     try {
       const docRef = await addDoc(collection(db, 'pedidos'), pedido);
 
-      // PREENCHE OS DETALHES PARA O MODAL E ABRE O MODAL
       setConfirmedOrderDetails({
         id: docRef.id,
         cliente: pedido.cliente,
@@ -286,28 +309,14 @@ function Menu() {
         formaPagamento: formaPagamento,
         trocoPara: valorTrocoPara,
         tipoEntrega: pedido.tipoEntrega,
-        // estabelecimentoWhatsapp: estabelecimentoInfo?.whatsapp // Não é mais necessário para o modal sem WhatsApp
       });
-      setShowOrderConfirmationModal(true); // Abre o modal
+      setShowOrderConfirmationModal(true);
 
-      // Limpar estados após o envio para um novo pedido
       setCarrinho([]);
       setFormaPagamento('');
       setTrocoPara('');
-      // Mantém os dados do cliente para preenchimento rápido se não estiver logado
-      // ou se o usuário decidir fazer outro pedido.
-      // Se quiser limpar tudo, descomente as linhas abaixo:
-      // if (!currentUser) {
-      //    setNomeCliente('');
-      //    setTelefoneCliente('');
-      //    setRua('');
-      //    setNumero('');
-      //    setBairro('');
-      //    setComplemento('');
-      // }
-      // isRetirada mantém o último estado para facilitar, mas pode ser resetado se preferir.
-      setTaxaEntregaCalculada(0); // Reseta a taxa
-      setBairroNaoEncontrado(false); // Reseta a flag
+      setTaxaEntregaCalculada(0);
+      setBairroNaoEncontrado(false);
 
     } catch (error) {
       console.error("Erro ao enviar pedido: ", error);
@@ -315,16 +324,10 @@ function Menu() {
     }
   };
 
-  // FUNÇÕES RELACIONADAS AO WHATSAPP REMOVIDAS, POIS NÃO SÃO MAIS NECESSÁRIAS
-  // const formatWhatsAppMessage = (orderDetails) => { ... };
-  // const handleOpenWhatsApp = () => { ... };
-
-
   const subtotalPedido = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
-  const totalPedidoComTaxa = subtotalPedido + taxaEntregaCalculada; // Usa a taxa calculada
+  const totalPedidoComTaxa = subtotalPedido + taxaEntregaCalculada;
 
   return (
-    // DIV PRINCIPAL DO COMPONENTE MENU - Adicionado pb-40 para garantir espaço para o botão fixo
     <div className="p-4 max-w-3xl mx-auto pb-40 md:pb-0">
       <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-4">
         Cardápio de {nomeEstabelecimento}
@@ -333,7 +336,6 @@ function Menu() {
         <p className="text-center text-[var(--cinza-texto)] mb-8">{estabelecimentoInfo.descricao}</p>
       )}
 
-      {/* Renderização do Cardápio / Mensagem de Vazio */}
       {produtos.length === 0 && nomeEstabelecimento !== "Carregando Cardápio..." ? (
         <p className="text-center text-gray-500 italic mt-8">Nenhum item disponível neste cardápio ou estabelecimento não encontrado.</p>
       ) : (
@@ -548,7 +550,7 @@ function Menu() {
                 name="paymentMethod"
                 value="cartao"
                 checked={formaPagamento === 'cartao'}
-                onChange={(e) => setFormaPagamento(e.target.value)} // CORREÇÃO: trocado 'Pagento' por 'Pagamento'
+                onChange={(e) => setFormaPagamento(e.target.value)}
                 className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
                 />
                 Cartão (Crédito/Débito na entrega)
@@ -583,56 +585,56 @@ function Menu() {
             )}
         </div> {/* FIM DO BLOCO: FORMA DE PAGAMENTO (agora dentro de 'Seus Dados') */}
 
-      </div> {/* FIM DO BLOCO ÚNICO: SEUS DADOS E FORMA DE PAGAMENTO */}
+      </div> {/* FIM DO BLOCO ÚNICO: SEUS DADOS E FORMA DE PAGAMENTO */}
 
-      {/* BLOCO DO BOTÃO "ENVIAR PEDIDO AGORA!" - Condicional */}
-      {carrinho.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none">
-          <button
-            onClick={enviarPedido}
-            className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg"
-            disabled={
-              !nomeCliente.trim() ||
-              !telefoneCliente.trim() ||
-              (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || // Valida endereço apenas se não for retirada
-              carrinho.length === 0 ||
-              !formaPagamento
-            }
-          >
-            Enviar Pedido Agora!
-          </button>
-        </div>
-      )}
+      {/* BLOCO DO BOTÃO "ENVIAR PEDIDO AGORA!" - Condicional */}
+      {carrinho.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none">
+          <button
+            onClick={enviarPedido}
+            className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg"
+            disabled={
+              !nomeCliente.trim() ||
+              !telefoneCliente.trim() ||
+              (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || // Valida endereço apenas se não for retirada
+              carrinho.length === 0 ||
+              !formaPagamento
+            }
+          >
+            Enviar Pedido Agora!
+          </button>
+        </div>
+      )}
 
-      {/* MODAL DE CONFIRMAÇÃO DE PEDIDO (SEM BOTÃO DO WHATSAPP) */}
-      {showOrderConfirmationModal && confirmedOrderDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative">
-            <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4 text-center">Pedido Enviado! 🎉</h2>
-            <p className="text-gray-700 text-center mb-6">
-              Seu pedido foi registrado com sucesso! O estabelecimento está processando sua solicitação.
-              Você receberá atualizações em breve.
-            </p>
+      {/* MODAL DE CONFIRMAÇÃO DE PEDIDO (SEM BOTÃO DO WHATSAPP) */}
+      {showOrderConfirmationModal && confirmedOrderDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative">
+            <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4 text-center">Pedido Enviado! 🎉</h2>
+            <p className="text-gray-700 text-center mb-6">
+              Seu pedido foi registrado com sucesso! O estabelecimento está processando sua solicitação.
+              Você receberá atualizações em breve.
+            </p>
 
-            <div className="mb-6 border-t border-b border-gray-200 py-4">
-              <p className="font-semibold text-lg text-[var(--marrom-escuro)] mb-2">Resumo do Pedido:</p>
-              <p><strong>ID do Pedido:</strong> {confirmedOrderDetails.id.substring(0, 8)}...</p>
-              <p><strong>Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
-              <p><strong>Pagamento:</strong> {confirmedOrderDetails.formaPagamento.charAt(0).toUpperCase() + confirmedOrderDetails.formaPagamento.slice(1)}</p>
-              <p><strong>Entrega:</strong> {confirmedOrderDetails.tipoEntrega === 'retirada' ? 'Retirada' : 'Delivery'}</p>
-            </div>
+            <div className="mb-6 border-t border-b border-gray-200 py-4">
+              <p className="font-semibold text-lg text-[var(--marrom-escuro)] mb-2">Resumo do Pedido:</p>
+              <p><strong>ID do Pedido:</strong> {confirmedOrderDetails.id.substring(0, 8)}...</p>
+              <p><strong>Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
+              <p><strong>Pagamento:</strong> {confirmedOrderDetails.formaPagamento.charAt(0).toUpperCase() + confirmedOrderDetails.formaPagamento.slice(1)}</p>
+              <p><strong>Entrega:</strong> {confirmedOrderDetails.tipoEntrega === 'retirada' ? 'Retirada' : 'Delivery'}</p>
+            </div>
 
-            <button
-              onClick={() => { setShowOrderConfirmationModal(false); navigate('/'); }}
-              className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold"
-            >
-              Voltar ao Início
-            </button>
-          </div>
-        </div>
-      )}
-    </div> 
-  );
+            <button
+              onClick={() => { setShowOrderConfirmationModal(false); navigate('/'); }}
+              className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold"
+            >
+              Voltar ao Início
+            </button>
+          </div>
+        </div>
+      )}
+    </div> 
+  );
 }
 
 export default Menu;
