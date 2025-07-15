@@ -4,7 +4,7 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDo
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { format, formatDistanceToNow, isValid } from 'date-fns';
-import { ptBR }  from 'date-fns/locale';
+import { ptBR } from 'date-fns/locale';
 
 function Painel() {
   const navigate = useNavigate();
@@ -19,7 +19,6 @@ function Painel() {
   const [loadingPainel, setLoadingPainel] = useState(true);
   const [painelError, setPainelError] = useState('');
   
-  // Inicializa notificationsEnabled a partir do localStorage
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     const stored = localStorage.getItem('notificationsEnabled');
     return stored === 'true' ? true : false;
@@ -29,7 +28,6 @@ function Painel() {
   const audioRef = useRef(null); 
   const [audioBlockedMessage, setAudioBlockedMessage] = useState(''); 
 
-  // Inicializa o objeto Audio UMA VEZ quando o componente monta
   useEffect(() => {
     audioRef.current = new Audio('/campainha.mp3'); 
     audioRef.current.load();
@@ -51,25 +49,6 @@ function Painel() {
     };
   }, []);
 
-  // Efeito para solicitar permissão de notificação ao carregar a página (se a preferência estiver ativada)
-  useEffect(() => {
-    if (notificationsEnabled) {
-      if ('Notification' in window && Notification.permission !== 'granted') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            console.log("Painel Audio Debug: Permissão de notificação concedida ao carregar a página.");
-          } else {
-            console.warn("Painel Audio Debug: Permissão de notificação negada ao carregar a página.");
-          }
-        });
-      } else if (!('Notification' in window)) {
-        console.warn("Painel Audio Debug: API de Notificação de Desktop não suportada neste navegador ao carregar.");
-      }
-    }
-  }, [notificationsEnabled]);
-
-
-  // Efeito para redirecionar se não for admin
   useEffect(() => {
     if (!authLoading) {
       if (!currentUser || !isAdmin) {
@@ -79,7 +58,6 @@ function Painel() {
     }
   }, [currentUser, isAdmin, authLoading, navigate]);
 
-  // Efeito para carregar informações do estabelecimento e pedidos
   useEffect(() => {
     if (authLoading === false && currentUser && isAdmin) {
       setLoadingPainel(true);
@@ -110,23 +88,13 @@ function Painel() {
               orderBy('criadoEm', 'desc')
             );
 
-            // Listener para Pedidos Recebidos (com lógica de notificação)
             unsubscribeRecebidos = onSnapshot(createPedidoQuery('recebido'), (snapshot) => {
               const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
               
               const oldPedidosIds = new Set(prevPedidosRecebidosRef.current.map(p => p.id));
               const newlyReceivedOrders = newPedidos.filter(p => !oldPedidosIds.has(p.id));
 
-              console.log("Notif Debug: ----- START SNAPSHOT UPDATE -----");
-              console.log("Notif Debug: newPedidos (IDs do snapshot atual):", newPedidos.map(p => p.id));
-              console.log("Notif Debug: prevPedidosRecebidosRef.current (IDs do estado anterior):", prevPedidosRecebidosRef.current.map(p => p.id));
-              console.log("Notif Debug: newlyReceivedOrders (IDs de pedidos REALMENTE NOVOS):", newlyReceivedOrders.map(p => p.id));
-              console.log("Notif Debug: newlyReceivedOrders.length:", newlyReceivedOrders.length);
-              console.log("Notif Debug: notificationsEnabled state:", notificationsEnabled);
-              console.log("Notif Debug: Notification.permission:", Notification.permission);
-
               if (newlyReceivedOrders.length > 0) {
-                console.log("Notif Debug: --- ACIONANDO NOTIFICAÇÃO ---");
                 if (notificationsEnabled && Notification.permission === 'granted') {
                   newlyReceivedOrders.forEach(pedido => {
                     new Notification(`Novo Pedido - ${pedido.cliente.nome}`, {
@@ -136,30 +104,24 @@ function Painel() {
                   });
                   
                   if (audioRef.current) {
-                    console.log("Notif Debug: audioRef.current existe. readyState:", audioRef.current.readyState, "paused:", audioRef.current.paused);
                     audioRef.current.currentTime = 0; 
-                    audioRef.current.play().then(() => {
-                        console.log("Notif Debug: Áudio tocado com SUCESSO para novo pedido!");
-                        setAudioBlockedMessage(''); 
-                    }).catch(e => {
-                      console.error("Notif Debug: ERRO: Áudio bloqueado para novo pedido (promessa rejeitada):", e);
+                    audioRef.current.play().catch(e => {
+                      console.error("Erro ao tocar áudio (autoplay pode estar bloqueado):", e);
                       if (e.name === "NotAllowedError" || e.name === "AbortError") {
-                        setAudioBlockedMessage("Som de notificação bloqueado. Clique no banner acima para ativá-lo!"); // Define a mensagem
+                        setAudioBlockedMessage("Som de notificação bloqueado. Clique no banner acima para ativá-lo!");
                       }
                     });
                   } else {
-                      console.warn("Notif Debug: audioRef.current é null ao tentar tocar para novo pedido.");
+                      console.warn("audioRef.current é null ao tentar tocar para novo pedido.");
                   }
                 } else {
-                    console.log("Notif Debug: Notificações não disparadas. Condições (notificationsEnabled, permissão) não atendidas.");
+                    console.log("Notificações não disparadas. Condições (notificationsEnabled, permissão) não atendidas.");
                 }
               } else {
-                  console.log("Notif Debug: Nenhum pedido VERDADEIRAMENTE novo detectado para notificação.");
+                  console.log("Nenhum pedido VERDADEIRAMENTE novo detectado para notificação.");
               }
-              setPedidosRecebidos(newPedidos); // Atualiza o estado PRINCIPAL do componente
-              prevPedidosRecebidosRef.current = newPedidos; // Atualiza a referência para a PRÓXIMA comparação
-
-              console.log("Notif Debug: ----- FIM ATUALIZAÇÃO SNAPSHOT -----");
+              setPedidosRecebidos(newPedidos); 
+              prevPedidosRecebidosRef.current = newPedidos;
 
             }, (error) => console.error("Erro no listener de Recebidos:", error));
 
@@ -184,7 +146,7 @@ function Painel() {
             setPedidosFinalizados(new Map());
           }
         } catch (error) {
-          console.error("Painel Audio Debug: Erro ao carregar painel de pedidos (fetchEstabelecimentoAndPedidos):", error);
+          console.error("Erro ao carregar painel de pedidos:", error);
           setPainelError("Erro ao carregar o painel. Verifique os índices do Firestore e a conexão.");
         } finally {
           setLoadingPainel(false);
@@ -204,22 +166,19 @@ function Painel() {
     }
   }, [currentUser, isAdmin, authLoading, notificationsEnabled]);
 
-
   const toggleNotifications = async () => {
-    // Se as notificações já estão ativadas, este clique as desativa
     if (notificationsEnabled) {
       setNotificationsEnabled(false);
-      localStorage.setItem('notificationsEnabled', 'false'); // Salva a preferência
-      console.log('Painel Audio Debug: Notificações desativadas.');
+      localStorage.setItem('notificationsEnabled', 'false');
+      alert('Notificações desativadas.');
       if (audioRef.current && !audioRef.current.paused) {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
       }
-      setAudioBlockedMessage(''); // Garante que a mensagem de bloqueio seja limpa ao desativar
+      setAudioBlockedMessage('');
       return;
     }
 
-    // Se as notificações estão desativadas, este clique tenta ativá-las
     let permissionRequested = false;
     let permissionGranted = false;
 
@@ -230,41 +189,35 @@ function Painel() {
             permissionGranted = true;
         }
     } else {
-        console.warn('Painel Audio Debug: API de Notificação de Desktop não suportada neste navegador.');
+        console.warn('API de Notificação de Desktop não suportada neste navegador.');
     }
     
-    setNotificationsEnabled(true); // Ativa o estado de notificações
-    localStorage.setItem('notificationsEnabled', 'true'); // Salva a preferência
-    
-    console.log("Painel Audio Debug: Tentando tocar áudio no toggle (interação do usuário).");
+    setNotificationsEnabled(true);
+    localStorage.setItem('notificationsEnabled', 'true');
 
-    // Tenta tocar o som. Se conseguir, limpa a mensagem de bloqueio.
-    // Se falhar (autoplay policy), define a mensagem de bloqueio.
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.play().then(() => {
-        console.log("Painel Audio Debug: Áudio tocado com SUCESSO no toggle (interação do usuário).");
-        setAudioBlockedMessage(''); // Limpa a mensagem se o áudio tocou com sucesso
+        console.log("Áudio tocado com SUCESSO no toggle (interação do usuário).");
+        setAudioBlockedMessage('');
       }).catch(e => {
-        console.warn("Painel Audio Debug: Áudio pode ter sido bloqueado na primeira reprodução após permissão:", e);
+        console.warn("Áudio pode ter sido bloqueado na primeira reprodução após permissão:", e);
         if (e.name === "NotAllowedError" || e.name === "AbortError") {
-          setAudioBlockedMessage("Som de notificação bloqueado. Clique para reativar!"); // Define a mensagem para o botão
+          setAudioBlockedMessage("Som de notificação bloqueado. Clique no banner acima para ativá-lo!");
         }
       });
     } else {
-        console.warn("Painel Audio Debug: audioRef.current é null quando tentou tocar no toggle.");
-        setAudioBlockedMessage("Som de notificação bloqueado (erro de inicialização)."); // Mensagem de erro genérica
+        console.warn("audioRef.current é null quando tentou tocar no toggle.");
     }
 
-    // Alertas de feedback para o usuário (agora usando console.log para serem menos intrusivos)
     if (permissionRequested) {
         if (permissionGranted) {
-            console.log('Painel Audio Debug: Notificações ativadas (incluindo pop-ups)!');
+            alert('Notificações ativadas (incluindo pop-ups)!');
         } else {
-            console.log('Painel Audio Debug: Notificações ativadas (apenas som e alertas internos, pop-ups bloqueados)!');
+            alert('Notificações ativadas (apenas som e alertas internos, pop-ups bloqueados)!');
         }
     } else {
-        console.log('Painel Audio Debug: Notificações ativadas (apenas som e alertas internos, pop-ups não suportados)!');
+        alert('Notificações ativadas (apenas som e alertas internos, pop-ups não suportados)!');
     }
   };
 
@@ -354,7 +307,11 @@ function Painel() {
     return (
       <div className={`bg-white p-4 rounded-lg shadow mb-4 border ${isOldReceived ? 'border-orange-500 ring-2 ring-orange-400' : 'border-gray-200'}`}>
         <div className="flex justify-between items-start mb-2">
-          <h3 className="text-lg font-semibold text-gray-800">{pedido.cliente.nome}</h3>
+          {/* Transformar o nome do cliente em um Link com ícone e cor clara */}
+          <Link to={`/admin/clientes/${pedido.cliente.userId}`} className="flex items-center text-blue-600 hover:text-blue-800 hover:underline">
+            <span className="mr-1">👤</span> {/* Ícone de usuário */}
+            {pedido.cliente.nome}
+          </Link>
           {criadoEmDate && isValid(criadoEmDate) ? (
             <span className="text-sm text-gray-500">
               {format(criadoEmDate, 'dd/MM/yyyy HH:mm')}
@@ -474,19 +431,15 @@ function Painel() {
           </Link>
           <h1 className="text-3xl font-bold text-gray-800">Painel de Pedidos {estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}</h1>
           <div className="flex gap-2">
-            {/* BOTÃO CONSOLIDADO DE NOTIFICAÇÕES */}
             <button 
                 onClick={toggleNotifications}
-                // Classes condicionais para o botão
-                className={`px-4 py-2 rounded-lg font-semibold transition duration-300
-                    ${notificationsEnabled && !audioBlockedMessage 
-                       ? 'bg-green-500 hover:bg-green-600 text-white' // Ativo e funcionando
+                className={`${notificationsEnabled && !audioBlockedMessage 
+                       ? 'bg-green-500 hover:bg-green-600'
                        : notificationsEnabled && audioBlockedMessage 
-                         ? 'bg-yellow-500 hover:bg-yellow-600 text-black animate-pulse' // Ativo, mas com áudio bloqueado
-                         : 'bg-gray-300 hover:bg-gray-400 text-gray-800' // Desativado
-                    }`}
-            >
-                {notificationsEnabled && !audioBlockedMessage ? '🔔 Notificações Ativadas' :
+                         ? 'bg-yellow-500 hover:bg-yellow-600 text-black animate-pulse'
+                         : 'bg-gray-300 hover:bg-gray-400 text-gray-800'
+                    } text-white px-4 py-2 rounded-lg`}>
+                {notificationsEnabled ? '🔔 Notificações Ativadas' :
                  notificationsEnabled && audioBlockedMessage ? '⚠️ Som Bloqueado! Ativar?' :
                  '🔕 Notificações Desativadas'}
             </button>
@@ -494,13 +447,13 @@ function Painel() {
           </div>
         </div>
 
-        {/* REMOVIDO: O banner de mensagem de áudio bloqueado - a mensagem e a ação agora vão para o botão */}
-        {/* {audioBlockedMessage && (
+        {/* NOVO: Banner de mensagem de áudio bloqueado (agora com a função no botão principal) */}
+        {audioBlockedMessage && (
           <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
             <p className="font-bold">Atenção!</p>
             <p>{audioBlockedMessage} <button onClick={() => { if(audioRef.current) audioRef.current.play().catch(() => {}); setAudioBlockedMessage(''); }} className="underline font-semibold">Tocar agora</button></p>
           </div>
-        )} */}
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Coluna de Pedidos Recebidos */}

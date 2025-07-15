@@ -14,6 +14,7 @@ import AdminMenuManagement from "./pages/AdminMenuManagement";
 import TaxasDeEntrega from "./pages/TaxasDeEntrega";
 import AdminEstablishmentManagement from "./pages/AdminEstablishmentManagement";
 import NossosClientes from './pages/NossosClientes';
+import ClientDetails from "./pages/ClientDetails"; // <<< NOVO: Importe o componente ClientDetails >>>
 import { AuthProvider } from './context/AuthContext';
 
 function App() {
@@ -44,6 +45,9 @@ function App() {
             <Route path="/admin/gerenciar-estabelecimentos" element={<AdminEstablishmentManagement />} />
             <Route path="/nossos-clientes" element={<NossosClientes />} /> {/* Sua rota para listar clientes */}
             <Route path="/planos" element={<Planos />} />
+
+            {/* <<< NOVO: Rota para detalhes do cliente >>> */}
+            <Route path="/admin/clientes/:clientId" element={<ClientDetails />} /> 
           </Route>
 
           {/* Rota 404 (opcional - você pode criar um componente NotFoundPage) */}
