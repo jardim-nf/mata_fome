@@ -145,7 +145,7 @@ function ClienteLogin() {
                 <div className="flex-1">
                   <label htmlFor="numero" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Número *</label>
                   <input
-                    type="text" // Pode ser 'number' se preferir, mas 'text' permite números com letras (ex: 12A)
+                    type="text"
                     id="numero"
                     placeholder="Ex: 123"
                     value={numero}
@@ -179,7 +179,7 @@ function ClienteLogin() {
                 />
               </div>
             </>
-          )}
+          )} {/* <--- CORREÇÃO: REMOVIDO UM ')' EXTRA AQUI */}
           {/* Fim dos novos campos de endereço */}
 
           <div>

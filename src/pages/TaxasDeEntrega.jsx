@@ -161,7 +161,7 @@ function TaxasDeEntrega() {
                         </div>
                         <button
                             type="submit"
-                            className="w-full bg-[var(--vermelho-principal)] text-white py-2 px-4 rounded-md hover:bg-red-700 transition duration-300 font-semibold"
+                            className="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-red-700 transition duration-300 font-semibold"
                         >
                             {editingId ? 'Salvar Edição' : 'Adicionar Taxa'}
                         </button>
@@ -174,7 +174,7 @@ function TaxasDeEntrega() {
                                     setValorTaxa('');
                                     setError(null);
                                 }}
-                                className="w-full mt-2 bg-gray-400 text-white py-2 px-4 rounded-md hover:bg-gray-500 transition duration-300 font-semibold"
+                                className="w-full mt-2 bg-red-500 text-white py-2 px-4 rounded-md hover:bg-gray-500 transition duration-300 font-semibold"
                             >
                                 Cancelar Edição
                             </button>

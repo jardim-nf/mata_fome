@@ -1,4 +1,3 @@
-// src/context/AuthContext.js
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore'; 
@@ -14,7 +13,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null); 
   const [isAdmin, setIsAdmin] = useState(false); 
   const [currentClientData, setCurrentClientData] = useState(null); 
-  const [loading, setLoading] = useState(true); 
+  const [loading, setLoading] = useState(true);
 
   const logout = () => {
     const auth = getAuth();
@@ -24,41 +23,45 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user); 
+      console.log("AuthContext Debug: onAuthStateChanged - Callback disparado. User recebido:", user ? user.uid : "null (deslogado)");
+      
+      setCurrentUser(user);
 
       if (user) {
         const userAdminDocRef = doc(db, 'usuarios', user.uid);
         const userAdminDocSnap = await getDoc(userAdminDocRef);
 
         if (userAdminDocSnap.exists() && userAdminDocSnap.data()?.isAdmin) {
+          console.log("AuthContext Debug: Usuário é um administrador. UID:", user.uid);
           setIsAdmin(true);
           setCurrentClientData(null); 
         } else {
+          console.log("AuthContext Debug: Usuário NÃO é administrador. Tentando buscar dados de cliente. UID:", user.uid);
           setIsAdmin(false); 
           const clientDocRef = doc(db, 'clientes', user.uid); 
           const clientDocSnap = await getDoc(clientDocRef); 
 
           if (clientDocSnap.exists()) {
-            const data = clientDocSnap.data(); // Pegamos os dados aqui
-            setCurrentClientData(data); // Definimos os dados no estado
-            // <<-- ADICIONADO LOG AQUI -->>
-            console.log("AuthContext: currentClientData definido:", data);
-            console.log("AuthContext: Dados de endereço em currentClientData (AuthContext):", data.endereco);
+            const data = clientDocSnap.data();
+            setCurrentClientData(data); 
+            console.log("AuthContext Debug: currentClientData definido para cliente:", data);
           } else {
             setCurrentClientData(null); 
-            console.log("AuthContext: Documento de cliente não encontrado para o UID:", user.uid);
+            console.warn("AuthContext Debug: Documento de cliente NÃO encontrado no Firestore para o UID:", user.uid);
           }
         }
       } else {
+        console.log("AuthContext Debug: Nenhum usuário logado. Limpando estados.");
         setIsAdmin(false);
         setCurrentClientData(null);
-        console.log("AuthContext: Nenhum usuário logado.");
       }
+      
       setLoading(false);
+      console.log("AuthContext Debug: setLoading(false) chamado. Estado FINAL: loading:", false, "currentUser (vindo do callback):", user ? user.uid : "null");
     });
 
     return unsubscribe;
-  }, []); 
+  }, []);
 
   const value = {
     currentUser,       
@@ -70,7 +73,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {!loading && children} 
     </AuthContext.Provider>
   );
 }

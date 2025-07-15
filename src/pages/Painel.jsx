@@ -1,381 +1,471 @@
-// src/pages/Painel.jsx
-import React, { useEffect, useState, useRef } from "react";
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
-import PedidoCard from "../components/PedidoCard";
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-
-// Função auxiliar para formatar a data de hoje no formato 'YYYY-MM-DD'
-const getTodayFormattedDate = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
+import { format, formatDistanceToNow, isValid } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 function Painel() {
-  const [pedidos, setPedidos] = useState([]);
-  const [estabelecimentosCache, setEstabelecimentosCache] = useState({}); // Cache para estabelecimentos
-  const [loading, setLoading] = useState(true);
-  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { currentUser, isAdmin, loading: authLoading } = useAuth();
 
-  const audioRef = useRef(null);
-  const playedOrderIds = useRef(new Set());
-  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
-  const [showAutoplayWarning, setShowAutoplayWarning] = useState(true);
+  const [pedidosRecebidos, setPedidosRecebidos] = useState([]);
+  const [pedidosEmPreparo, setPedidosEmPreparo] = useState(new Map());
+  const [pedidosEmEntrega, setPedidosEmEntrega] = useState(new Map());
+  const [pedidosFinalizados, setPedidosFinalizados] = useState(new Map());
 
-  const paramStartDate = searchParams.get('startDate');
-  const paramEndDate = searchParams.get('endDate');
+  const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
+  const [loadingPainel, setLoadingPainel] = useState(true);
+  const [painelError, setPainelError] = useState('');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  const [localStartDate, setLocalStartDate] = useState(paramStartDate || getTodayFormattedDate());
-  const [localEndDate, setLocalEndDate] = useState(paramEndDate || getTodayFormattedDate());
+  const prevPedidosRecebidosRef = useRef([]);
+  // Inicializa a ref para um objeto Audio. Corrigido para garantir que sempre crie um novo.
+  const audioRef = useRef(null); 
 
-  const [showPeriodFilter, setShowPeriodFilter] = useState(false);
-
-  const handleInitialUserGesture = () => {
-    if (audioRef.current && !isSoundEnabled && showAutoplayWarning) {
-      audioRef.current.muted = true;
-      audioRef.current.volume = 0.01;
-      
-      audioRef.current.play().then(() => {
-        setShowAutoplayWarning(false);
-        console.log("Gesto de usuário registrado. Áudio desbloqueado (inicialmente mudo).");
-      }).catch(e => {
-        console.warn("Gesto inicial ainda bloqueado:", e);
-      });
-    }
-  };
-
+  // Inicializa o objeto Audio UMA VEZ quando o componente monta
   useEffect(() => {
-    document.addEventListener('click', handleInitialUserGesture, { once: true });
-    return () => {
-      document.removeEventListener('click', handleInitialUserGesture);
-    };
+    audioRef.current = new Audio('/campainha.mp3'); 
+    audioRef.current.load(); // Tenta carregar o áudio antecipadamente
   }, []);
 
-  const toggleSound = () => {
-    if (audioRef.current) {
-      if (isSoundEnabled) {
-        setIsSoundEnabled(false);
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        console.log("Notificações sonoras desativadas.");
-      } else {
-        audioRef.current.muted = false;
-        audioRef.current.volume = 1;
-        audioRef.current.play().then(() => {
-          setIsSoundEnabled(true);
-          setShowAutoplayWarning(false);
-          console.log("Notificações sonoras ativadas por clique no botão!");
-        }).catch(e => {
-          console.error("Não foi possível tocar som ao ativar (bloqueado mesmo no clique):", e);
-          alert("As notificações sonoras ainda estão bloqueadas. Por favor, clique em qualquer lugar da página primeiro e tente 'Ativar Notificações' novamente.");
-          setIsSoundEnabled(false);
-        });
-      }
-    }
-  };
-
-
+  // Efeito para redirecionar se não for admin
   useEffect(() => {
-    setLoading(true);
+    if (!authLoading) {
+      if (!currentUser || !isAdmin) {
+        alert('Acesso negado. Você precisa ser um administrador para acessar esta página.');
+        navigate('/');
+      }
+    }
+  }, [currentUser, isAdmin, authLoading, navigate]);
 
-    let pedidosQueryRef = collection(db, "pedidos");
-    let q;
+  // Efeito para carregar informações do estabelecimento e pedidos
+  useEffect(() => {
+    if (authLoading === false && currentUser && isAdmin) {
+      setLoadingPainel(true);
+      setPainelError('');
 
-    if (paramStartDate && paramEndDate) {
-      const [startYear, startMonth, startDay] = paramStartDate.split('-').map(Number);
-      const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
-      const startTimestamp = Timestamp.fromDate(startOfDay);
+      let unsubscribeRecebidos = () => {};
+      let unsubscribeEmPreparo = () => {};
+      let unsubscribeEmEntrega = () => {};
+      let unsubscribeFinalizados = () => {};
 
-      const [endYear, endMonth, endDay] = paramEndDate.split('-').map(Number);
-      const endOfDay = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
-      const endTimestamp = Timestamp.fromDate(endOfDay);
-      
-      console.log(`Painel: Filtrando de ${startOfDay.toLocaleString()} até ${endOfDay.toLocaleString()}`);
+      const fetchEstabelecimentoAndPedidos = async () => {
+        try {
+          const estabelecimentosRef = collection(db, 'estabelecimentos');
+          const qEstabelecimento = query(estabelecimentosRef, where('adminUID', '==', currentUser.uid));
+          const querySnapshotEstabelecimento = await getDocs(qEstabelecimento);
 
-      q = query(
-        pedidosQueryRef,
-        where('criadoEm', '>=', startTimestamp),
-        where('criadoEm', '<=', endTimestamp),
-        orderBy('criadoEm', 'desc')
-      );
-    } else {
-      q = query(pedidosQueryRef, orderBy('criadoEm', 'desc'));
-      console.log("Painel: Sem filtro de data, buscando todos os pedidos.");
+          if (!querySnapshotEstabelecimento.empty) {
+            const estDoc = querySnapshotEstabelecimento.docs[0];
+            setEstabelecimentoInfo({ id: estDoc.id, ...estDoc.data() });
+            const realEstabelecimentoId = estDoc.id;
+
+            const pedidosCollectionRef = collection(db, 'pedidos');
+
+            const createPedidoQuery = (status) => query(
+              pedidosCollectionRef,
+              where('status', '==', status),
+              where('estabelecimentoId', '==', realEstabelecimentoId),
+              orderBy('criadoEm', 'desc')
+            );
+
+            // Listener para Pedidos Recebidos (com lógica de notificação)
+            unsubscribeRecebidos = onSnapshot(createPedidoQuery('recebido'), (snapshot) => {
+              const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              
+              const oldPedidosIds = new Set(prevPedidosRecebidosRef.current.map(p => p.id));
+              const newlyReceivedOrders = newPedidos.filter(p => !oldPedidosIds.has(p.id));
+
+              if (newlyReceivedOrders.length > 0) {
+                // Tocar som e mostrar notificação APENAS se houver novos pedidos e notificações ativadas
+                if (notificationsEnabled && Notification.permission === 'granted') {
+                  newlyReceivedOrders.forEach(pedido => {
+                    new Notification(`Novo Pedido - ${pedido.cliente.nome}`, {
+                      body: `Total: R$ ${pedido.totalFinal.toFixed(2).replace('.', ',')}\nItens: ${pedido.itens.map(i => i.nome).join(', ')}`,
+                      icon: '/logo-deufome.png' // Use o caminho para o logo do seu app
+                    });
+                  });
+                  
+                  if (audioRef.current) {
+                    audioRef.current.currentTime = 0; // Reinicia o áudio para tocar se já estiver tocando
+                    audioRef.current.play().catch(e => {
+                      console.error("Erro ao tocar áudio (autoplay bloqueado?):", e);
+                      // Uma notificação interna ou visual para o admin caso o áudio seja bloqueado
+                      // alert("Som de notificação bloqueado pelo navegador. Por favor, clique na página para ativá-lo.");
+                    });
+                  }
+                }
+              }
+              setPedidosRecebidos(newPedidos); // Atualiza o estado APÓS a lógica de notificação
+              prevPedidosRecebidosRef.current = newPedidos; // Atualiza a ref para a próxima comparação
+
+            }, (error) => console.error("Erro no listener de Recebidos:", error));
+
+            unsubscribeEmPreparo = onSnapshot(createPedidoQuery('em_preparo'), (snapshot) => {
+              setPedidosEmPreparo(new Map(snapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }])));
+            }, (error) => console.error("Erro no listener de Em Preparo:", error));
+
+            unsubscribeEmEntrega = onSnapshot(createPedidoQuery('em_entrega'), (snapshot) => {
+              setPedidosEmEntrega(new Map(snapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }])));
+            }, (error) => console.error("Erro no listener de Em Entrega:", error));
+
+            unsubscribeFinalizados = onSnapshot(createPedidoQuery('finalizado'), (snapshot) => {
+              setPedidosFinalizados(new Map(snapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }])));
+            }, (error) => console.error("Erro no listener de Finalizados:", error));
+
+          } else {
+            setPainelError("Nenhum estabelecimento vinculado a este administrador.");
+            setEstabelecimentoInfo(null);
+            setPedidosRecebidos([]);
+            setPedidosEmPreparo(new Map());
+            setPedidosEmEntrega(new Map());
+            setPedidosFinalizados(new Map());
+          }
+        } catch (error) {
+          console.error("Erro ao carregar painel de pedidos:", error);
+          setPainelError("Erro ao carregar o painel. Verifique os índices do Firestore e a conexão.");
+        } finally {
+          setLoadingPainel(false);
+        }
+      };
+
+      fetchEstabelecimentoAndPedidos();
+
+      return () => {
+        unsubscribeRecebidos();
+        unsubscribeEmPreparo();
+        unsubscribeEmEntrega();
+        unsubscribeFinalizados();
+      };
+    } else if (authLoading === false && (!currentUser || !isAdmin)) {
+      setLoadingPainel(false);
+    }
+  }, [currentUser, isAdmin, authLoading, notificationsEnabled]);
+
+
+  const toggleNotifications = async () => {
+    if (notificationsEnabled) {
+      setNotificationsEnabled(false);
+      alert('Notificações desativadas.');
+      // Opcional: Se o áudio estiver tocando, pausar
+      if (audioRef.current && !audioRef.current.paused) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+      }
+      return;
     }
 
-    const unsub = onSnapshot(q, async (snapshot) => { // A função deve ser async para usar await
-      let novoPedidoChegou = false;
-      const currentPedidosData = []; // Esta vai armazenar o estado completo do snapshot
-      const newEstabelecimentosCache = { ...estabelecimentosCache }; // Usar cache para evitar leituras repetidas
+    if (!('Notification' in window)) {
+      alert('Este navegador não suporta notificações de desktop.');
+      return;
+    }
 
-      // PRIMEIRO: Processa todas as mudanças para tocar som e atualizar o cache de estabelecimentos
-      snapshot.docChanges().forEach((change) => {
-        const pedidoData = { id: change.doc.id, ...change.doc.data() };
-
-        if (change.type === "added") {
-          if (!playedOrderIds.current.has(pedidoData.id)) {
-            novoPedidoChegou = true;
-            playedOrderIds.current.add(pedidoData.id);
-          }
-        }
-        // Atualiza cache para itens adicionados/modificados
-        if (pedidoData.estabelecimentoId && !newEstabelecimentosCache[pedidoData.estabelecimentoId]) {
-            // Se o estabelecimento não está no cache, marca para buscar depois (ou busca aqui se preferir síncrono/lento)
-            // Para evitar lentidão com muitos pedidos/estabelecimentos, é melhor buscar assincronamente fora deste loop
-            // ou garantir que o cache seja populado de outra forma.
-            // Por simplicidade, vamos permitir que ele seja buscado no próximo passo.
-        }
-      });
-
-
-      // SEGUNDO: Mapeia todos os documentos no snapshot para o estado, buscando estabelecimentos ausentes
-      // Usa Promise.all para buscar estabelecimentos em paralelo, se necessário
-      const promises = snapshot.docs.map(async (docSnapshot) => {
-        const pedidoData = { id: docSnapshot.id, ...docSnapshot.data() };
-        let estabelecimentoInfo = newEstabelecimentosCache[pedidoData.estabelecimentoId];
-
-        // Se o estabelecimento não está no cache, busca no Firestore
-        if (!estabelecimentoInfo && pedidoData.estabelecimentoId) {
-          try {
-            const estabDocRef = doc(db, 'estabelecimentos', pedidoData.estabelecimentoId);
-            const estabDocSnap = await getDoc(estabDocRef); // <-- await aqui
-            if (estabDocSnap.exists()) {
-              estabelecimentoInfo = estabDocSnap.data();
-              newEstabelecimentosCache[pedidoData.estabelecimentoId] = estabelecimentoInfo;
-            } else {
-              console.warn(`Estabelecimento ${pedidoData.estabelecimentoId} não encontrado.`);
-            }
-          } catch (err) {
-            console.error(`Erro ao buscar estabelecimento ${pedidoData.estabelecimentoId}:`, err);
-          }
-        }
-        return { ...pedidoData, estabelecimento: estabelecimentoInfo };
-      });
-
-      // Aguarda todas as buscas de estabelecimento serem concluídas
-      const todosPedidosComEstabelecimento = await Promise.all(promises);
-
-      // Atualiza o cache de estabelecimentos (agora com novos estabelecimentos que foram buscados)
-      setEstabelecimentosCache(newEstabelecimentosCache);
-
-      // Ordena os pedidos (do mais novo para o mais velho)
-      const sortedPedidos = todosPedidosComEstabelecimento.sort((a, b) => {
-        const dataA = a.criadoEm && typeof a.criadoEm.toDate === 'function' ? a.criadoEm.toDate() : new Date(0);
-        const dataB = b.criadoEm && typeof b.criadoEm.toDate === 'function' ? b.criadoEm.toDate() : new Date(0);
-        return dataB - dataA;
-      });
-
-      setPedidos(sortedPedidos);
-
-      if (novoPedidoChegou && isSoundEnabled && audioRef.current) {
-        audioRef.current.muted = false;
-        audioRef.current.volume = 1;
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      setNotificationsEnabled(true);
+      // Tentar tocar o som UMA VEZ após a ativação, para que o navegador "permita"
+      // e "desbloqueie" o contexto de áudio para futuras notificações automáticas.
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0; // Garante que comece do início
         audioRef.current.play().catch(e => {
-          console.error("Erro ao tocar áudio (autoplay bloqueado APÓS ativação):", e);
+            console.warn("Áudio pode ter sido bloqueado na primeira reprodução após permissão (autoplay policy):", e);
+            alert("O navegador pode ter bloqueado o som. Por favor, interaja com a página (clicando em algo) para ativá-lo.");
         });
       }
-
-      setLoading(false);
-      console.log(`Painel: ${sortedPedidos.length} pedidos carregados.`);
-    }, (error) => {
-      console.error("Erro ao carregar pedidos no Painel:", error);
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, [paramStartDate, paramEndDate, isSoundEnabled]); // Dependências
-
-
-  const mudarStatus = async (id, novoStatus) => {
-    try {
-      const ref = doc(db, "pedidos", id);
-      await updateDoc(ref, { status: novoStatus });
-
-      // IMPORTANTE: Não precisamos mais buscar o pedido aqui, pois o onSnapshot vai atualizar o estado
-      // _pedido = pedidos.find((p) => p.id === id); // Esta linha pode ser removida ou adaptada
-      // A lógica de WhatsApp agora está no PedidoCard, que já tem acesso ao 'pedido' completo.
-
-      // Apenas para fins de depuração ou lógica que precise do pedido atual IMEDIATAMENTE
-      // const updatedPedido = pedidos.find(p => p.id === id); 
-      // if (!updatedPedido) {
-      //   console.warn("Pedido não encontrado no estado local após atualização do status.");
-      //   return; 
-      // }
-
-      // Como o onSnapshot vai reagir à mudança no DB, não há necessidade de enviar WhatsApp aqui.
-      // A lógica de envio de WhatsApp foi movida para o PedidoCard.
-      // O 'mudarStatus' do Painel agora só atualiza o DB e o listener cuida da UI.
-
-    } catch (error) {
-      console.error("❌ Erro ao mudar status:", error);
-      alert("Ocorreu um erro ao atualizar o status do pedido.");
+      alert('Notificações ativadas com sucesso!');
+    } else {
+      alert('Permissão de notificação negada. Não será possível receber alertas.');
+      setNotificationsEnabled(false);
     }
   };
 
-  const excluirPedido = async (id) => {
-    if (window.confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
+
+  const updateOrderStatus = async (pedidoId, newStatus) => {
+    try {
+      const pedidoRef = doc(db, 'pedidos', pedidoId);
+      await updateDoc(pedidoRef, { status: newStatus });
+      alert(`Status do pedido ${pedidoId.substring(0, 5)}... atualizado para ${newStatus.replace('_', ' ')}.`);
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
+      alert('Erro ao atualizar status do pedido.');
+    }
+  };
+
+  const deletePedido = async (pedidoId) => {
+    if (window.confirm('Tem certeza que deseja excluir este pedido? Esta ação é irreversível.')) {
       try {
-        const ref = doc(db, "pedidos", id);
-        await deleteDoc(ref);
-        alert("✅ Pedido excluído com sucesso!");
+        const pedidoRef = doc(db, 'pedidos', pedidoId);
+        await deleteDoc(pedidoRef);
+        alert('Pedido excluído com sucesso!');
       } catch (error) {
-        console.error("❌ Erro ao excluir pedido:", error);
-        alert("Ocorreu um erro ao excluir o pedido. Por favor, tente novamente.");
+        console.error("Erro ao excluir pedido:", error);
+        alert('Erro ao excluir pedido.');
       }
     }
   };
 
+  if (authLoading || loadingPainel) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <p className="text-xl text-gray-700">Carregando painel de administração...</p>
+      </div>
+    );
+  }
 
-  const colunas = [
-    { titulo: "Recebido", status: "recebido" },
-    { titulo: "Em Preparo", status: "preparo" },
-    { titulo: "Saiu p/ Entrega", status: "entregando" },
-    { titulo: "Finalizado", status: "finalizado" },
-  ];
+  if (painelError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-red-100 text-red-700 p-4 text-center">
+        <p className="text-xl font-semibold">Erro no Painel:</p>
+        <p className="mt-2">{painelError}</p>
+        <p className="mt-4 text-sm text-gray-600">
+          Por favor, certifique-se de que seu usuário administrador está vinculado a um estabelecimento no Firestore
+          (campo 'adminUID' no documento do estabelecimento com o UID do seu admin).
+          E verifique o console do navegador para links de criação de índices.
+        </p>
+        <button onClick={() => navigate('/')} className="mt-6 bg-red-500 text-white px-4 py-2 rounded">
+          Voltar para Home
+        </button>
+      </div>
+    );
+  }
+  
+  if (!currentUser || !isAdmin) {
+    return null;
+  }
 
-  const pedidosFinalizadosExibidos = pedidos.filter((p) => p.status?.toLowerCase() === "finalizado");
-  const countFinalizados = pedidosFinalizadosExibidos.length;
+  // Componente auxiliar para renderizar um cartão de pedido
+  const PedidoCard = ({ pedido, onUpdateStatus, onDelete }) => {
+    const criadoEmDate = pedido.criadoEm && typeof pedido.criadoEm.toDate === 'function' 
+                         ? pedido.criadoEm.toDate() 
+                         : null;
+    
+    let timeAgo = '';
+    if (criadoEmDate && isValid(criadoEmDate)) {
+      timeAgo = formatDistanceToNow(criadoEmDate, { addSuffix: true, locale: ptBR });
+    }
 
+    const isOldReceived = pedido.status === 'recebido' && 
+                          criadoEmDate && 
+                          isValid(criadoEmDate) && 
+                          (new Date().getTime() - criadoEmDate.getTime()) > (15 * 60 * 1000); // 15 minutos em ms
 
-  const handleApplyFilter = () => {
-    navigate(`/painel?startDate=${localStartDate}&endDate=${localEndDate}`);
+    // Define o ícone com base no status
+    const getStatusIcon = (status) => {
+      switch (status) {
+        case 'recebido': return '🆕';
+        case 'em_preparo': return '🧑‍🍳';
+        case 'em_entrega': return '🛵';
+        case 'finalizado': return '✅';
+        default: return '❓';
+      }
+    };
+
+    const telefoneLimpo = pedido.cliente.telefone ? pedido.cliente.telefone.replace(/\D/g, '') : '';
+    const telefoneWhatsApp = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`;
+
+    return (
+      <div className={`bg-white p-4 rounded-lg shadow mb-4 border ${isOldReceived ? 'border-orange-500 ring-2 ring-orange-400' : 'border-gray-200'}`}>
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-lg font-semibold text-gray-800">{pedido.cliente.nome}</h3>
+          {criadoEmDate && isValid(criadoEmDate) ? (
+            <span className="text-sm text-gray-500">
+              {format(criadoEmDate, 'dd/MM/yyyy HH:mm')}
+            </span>
+          ) : (
+            <span className="text-sm text-gray-500">Data Indisponível</span>
+          )}
+        </div>
+        
+        {timeAgo && (
+          <p className="text-xs text-gray-500 mb-2">
+            Chegou: <span className={`${isOldReceived ? 'text-orange-600 font-bold' : ''}`}>{timeAgo}</span>
+          </p>
+        )}
+
+        <p className="text-lg font-bold text-gray-900 mb-3">
+          Total: R$ {pedido.totalFinal !== undefined && pedido.totalFinal !== null ? 
+                    pedido.totalFinal.toFixed(2).replace('.', ',') : 
+                    'N/A'}
+        </p>
+        <ul className="list-disc list-inside text-gray-700 text-sm mb-2">
+          {pedido.itens && pedido.itens.length > 0 ? (
+            pedido.itens.map((item, index) => (
+              <li key={index}>
+                {item.nome} - {item.quantidade}
+                {item.preco !== undefined && item.preco !== null ? 
+                 ` - R$ ${item.preco.toFixed(2).replace('.', ',')}` : ''}
+              </li>
+            ))
+          ) : (
+            <li>Nenhum item listado.</li>
+          )}
+        </ul>
+        <p className="text-sm text-gray-600 mb-1">
+            Status: <span className="font-medium capitalize">{getStatusIcon(pedido.status)} {pedido.status ? pedido.status.replace('_', ' ') : 'Desconhecido'}</span>
+        </p>
+        
+        <div className="flex flex-wrap gap-2 mt-3">
+          {/* Botão Comanda - Sempre visível */}
+          <button
+            onClick={() => navigate(`/comanda/${pedido.id}`)}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm flex items-center"
+          >
+            📋 Comanda
+          </button>
+
+          {/* Botões para status 'recebido' */}
+          {pedido.status === 'recebido' && (
+            <>
+              <button
+                onClick={() => onUpdateStatus(pedido.id, 'em_preparo')}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center"
+              >
+                🧑‍🍳 Em Preparo
+              </button>
+              {pedido.formaPagamento === 'pix' && ( // 'pix' em minúsculas
+                <a
+                  href={`https://wa.me/${telefoneWhatsApp}?text=${encodeURIComponent(
+                    `Olá ${pedido.cliente.nome}, seu pedido do ${estabelecimentoInfo?.nome || 'nosso estabelecimento'} foi recebido e a forma de pagamento é PIX! Por favor, use a chave PIX: ${estabelecimentoInfo?.chavePix || 'Chave PIX não informada'}. Acompanhe seu pedido pelo app. Agradecemos a preferência!`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                >
+                  🔑 Enviar PIX WhatsApp
+                </a>
+              )}
+              <button
+                onClick={() => onDelete(pedido.id)}
+                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm flex items-center"
+              >
+                🗑️ Excluir
+              </button>
+            </>
+          )}
+
+          {/* Botões para status 'em_preparo' */}
+          {pedido.status === 'em_preparo' && (
+            <>
+              <button
+                onClick={() => onUpdateStatus(pedido.id, 'em_entrega')}
+                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm flex items-center"
+              >
+                🛵 Entregar
+              </button>
+              <button
+                onClick={() => onUpdateStatus(pedido.id, 'finalizado')}
+                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm flex items-center"
+              >
+                ✅ Finalizar
+              </button>
+            </>
+          )}
+
+          {/* Botões para status 'em_entrega' */}
+          {pedido.status === 'em_entrega' && (
+            <button
+              onClick={() => onUpdateStatus(pedido.id, 'finalizado')}
+              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm flex items-center"
+            >
+              ✅ Finalizar
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
 
   return (
-    <div className="min-h-screen bg-[var(--bege-claro)] p-4">
+    <div className="p-4 bg-gray-100 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 text-left">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 0 010-1.414l4-4a1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 0 010 1.414z" clipRule="evenodd" />
-            </svg>
+        <div className="flex justify-between items-center mb-6">
+          <Link to="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
             Voltar para o Dashboard
           </Link>
-        </div>
-
-        <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-6">
-          Painel de Pedidos
-        </h1>
-
-        <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
-
-        <div className="text-center mb-6">
-          {showAutoplayWarning && (
-            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
-              <p className="font-bold">Atenção!</p>
-              <p>O navegador bloqueia o som automático. Clique em qualquer lugar na página e depois em "Ativar Notificações" para ouvir.</p>
-            </div>
-          )}
-          <button
-            onClick={toggleSound}
-            className={`px-6 py-2 rounded-lg font-semibold transition duration-300 ${
-              isSoundEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
-            } text-white`}
-          >
-            {isSoundEnabled ? '🔊 Notificações Ativadas' : '🔇 Ativar Notificações'}
-          </button>
-        </div>
-
-        <div className="text-center mb-6">
-            <button
-                onClick={() => setShowPeriodFilter(!showPeriodFilter)}
-                className="bg-gray-200 text-[var(--marrom-escuro)] px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
-            >
-                {showPeriodFilter ? 'Esconder Filtro de Período' : 'Filtrar por Período Específico'}
+          <h1 className="text-3xl font-bold text-gray-800">Painel de Pedidos {estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}</h1>
+          <div className="flex gap-2">
+            <button 
+                onClick={toggleNotifications}
+                className={`${notificationsEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'} text-white px-4 py-2 rounded-lg`}>
+                {notificationsEnabled ? '🔔 Notificações Ativadas' : '🔕 Notificações Desativadas'}
             </button>
+            <button className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg">Filtrar por Período Específico</button>
+          </div>
         </div>
 
-        {showPeriodFilter && (
-            <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <label htmlFor="startDate" className="text-[var(--marrom-escuro)] font-medium">De:</label>
-                <input
-                    type="date"
-                    id="startDate"
-                    value={localStartDate}
-                    onChange={(e) => setLocalStartDate(e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Coluna de Pedidos Recebidos */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-red-600 border-red-300">🆕 Recebido ({pedidosRecebidos.length})</h2>
+            {pedidosRecebidos.length === 0 ? (
+              <p className="text-gray-500 italic">Nenhum pedido nesta coluna.</p>
+            ) : (
+              pedidosRecebidos.map(pedido => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  onUpdateStatus={updateOrderStatus}
+                  onDelete={deletePedido}
                 />
+              ))
+            )}
+          </div>
 
-                <label htmlFor="endDate" className="text-[var(--marrom-escuro)] font-medium">Até:</label>
-                <input
-                    type="date"
-                    id="endDate"
-                    value={localEndDate}
-                    onChange={(e) => setLocalEndDate(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+          {/* Coluna de Pedidos Em Preparo */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-blue-600 border-blue-300">🧑‍🍳 Em Preparo ({pedidosEmPreparo.size})</h2>
+            {[...pedidosEmPreparo.values()].length === 0 ? (
+              <p className="text-gray-500 italic">Nenhum pedido nesta coluna.</p>
+            ) : (
+              [...pedidosEmPreparo.values()].map(pedido => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  onUpdateStatus={updateOrderStatus}
+                  onDelete={deletePedido}
                 />
+              ))
+            )}
+          </div>
 
-                <button
-                    onClick={handleApplyFilter}
-                    className="bg-[var(--vermelho-principal)] text-white px-5 py-2 rounded-lg font-semibold hover:bg-red-700 transition duration-300"
-                >
-                    Aplicar Filtro
-                </button>
-            </div>
-        )}
+          {/* Coluna de Pedidos Em Entrega */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-orange-600 border-orange-300">🛵 Em Entrega ({pedidosEmEntrega.size})</h2>
+            {[...pedidosEmEntrega.values()].length === 0 ? (
+              <p className="text-gray-500 italic">Nenhum pedido nesta coluna.</p>
+            ) : (
+              [...pedidosEmEntrega.values()].map(pedido => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  onUpdateStatus={updateOrderStatus}
+                  onDelete={deletePedido}
+                />
+              ))
+            )}
+          </div>
 
-
-        {loading ? (
-            <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando pedidos...</p>
-        ) : (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {colunas.map((coluna) => (
-                <div key={coluna.status} className="bg-white p-4 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-center mb-4 text-[var(--marrom-escuro)]">
-                    {coluna.titulo}
-                </h2>
-                <div className="flex flex-col gap-4">
-                    {coluna.status === "finalizado" ? (
-                    <div className="text-center py-8">
-                        <p className="text-6xl font-extrabold text-[var(--verde-destaque)] mb-4">{countFinalizados}</p>
-                        <p className="text-xl text-[var(--cinza-texto)]">Pedidos Finalizados</p>
-                    </div>
-                    ) : (
-                    <>
-                        {pedidos
-                        .filter(
-                            (p) =>
-                            p.status?.toLowerCase() === coluna.status.toLowerCase()
-                        )
-                        .sort((a, b) => {
-                            const dataA = a.criadoEm && typeof a.criadoEm.toDate === 'function' ? a.criadoEm.toDate() : new Date(0);
-                            const dataB = b.criadoEm && typeof b.criadoEm.toDate === 'function' ? b.criadoEm.toDate() : new Date(0);
-                            return dataA - dataB;
-                        })
-                        .map((pedido) => {
-                            const totalDoPedido = pedido.itens ? pedido.itens.reduce((sum, item) => sum + (item.preco * item.quantidade), 0) : 0;
-                            
-                            return (
-                            <PedidoCard
-                                key={pedido.id}
-                                pedido={pedido}
-                                mudarStatus={mudarStatus}
-                                excluirPedido={excluirPedido}
-                                total={totalDoPedido}
-                                // NOVO: Passando o estabelecimento completo para o PedidoCard
-                                estabelecimento={pedido.estabelecimento}
-                                estabelecimentoPixKey={pedido.estabelecimento?.chavePix || ''}
-                            />
-                            );
-                        })}
-                        {pedidos.filter((p) => p.status?.toLowerCase() === coluna.status.toLowerCase()).length === 0 && (
-                        <p className="text-gray-500 text-center italic">Nenhum pedido nesta coluna.</p>
-                        )}
-                    </>
-                    )}
-                </div>
-                </div>
-            ))}
-            </div>
-        )}
+          {/* Coluna de Pedidos Finalizados */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-green-600 border-green-300">✅ Finalizados ({pedidosFinalizados.size})</h2>
+            {[...pedidosFinalizados.values()].length === 0 ? (
+              <p className="text-gray-500 italic">Nenhum pedido nesta coluna.</p>
+            ) : (
+              [...pedidosFinalizados.values()].map(pedido => (
+                <PedidoCard
+                  key={pedido.id}
+                  pedido={pedido}
+                  onUpdateStatus={updateOrderStatus}
+                  onDelete={deletePedido}
+                />
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

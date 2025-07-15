@@ -1,16 +1,15 @@
-// src/pages/Menu.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { db } from '../firebase';
-// Importar getDocs para a consulta por slug
-import { collection, doc, getDoc, addDoc, Timestamp, query, onSnapshot, orderBy, where, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore } from 'firebase/firestore';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
 
 function Menu() {
-  // Alterar de estabelecimentoId para estabelecimentoSlug
   const { estabelecimentoSlug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser, currentClientData, loading: authLoading } = useAuth();
 
   const [carrinho, setCarrinho] = useState([]);
@@ -33,12 +32,32 @@ function Menu() {
   const [produtos, setProdutos] = useState([]);
   const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando Cardápio...");
   const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
-  // NOVO: Estado para armazenar o ID REAL do estabelecimento, depois de encontrar pelo slug
   const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
   const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
   const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
 
+  // Estados para o modal de login/cadastro dentro do Menu.jsx
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
+  const [emailAuthModal, setEmailAuthModal] = useState('');
+  const [passwordAuthModal, setPasswordAuthModal] = useState('');
+  const [nomeAuthModal, setNomeAuthModal] = useState('');
+  const [telefoneAuthModal, setTelefoneAuthModal] = useState('');
+  const [errorAuthModal, setErrorAuthModal] = useState('');
+
+  const auth = getAuth(); // Instância de autenticação
+
+  // Efeito para verificar status de login ao carregar o componente
+  useEffect(() => {
+    if (authLoading === false) {
+      if (currentUser === null || (currentUser !== null && currentClientData === null)) {
+        setShowLoginPrompt(true);
+      } else {
+        setShowLoginPrompt(false);
+      }
+    }
+  }, [authLoading, currentUser, currentClientData]);
 
   // Efeito para carregar dados do cliente (logado ou localStorage)
   useEffect(() => {
@@ -57,16 +76,19 @@ function Menu() {
           setIsRetirada(true);
         }
       } else {
+        const storedNome = localStorage.getItem('nomeCliente') || '';
+        const storedTelefone = localStorage.getItem('telefoneCliente') || '';
         const storedRua = localStorage.getItem('rua') || '';
         const storedNumero = localStorage.getItem('numero') || '';
         const storedBairro = localStorage.getItem('bairro') || '';
+        const storedComplemento = localStorage.getItem('complemento') || '';
 
-        setNomeCliente(localStorage.getItem('nomeCliente') || '');
-        setTelefoneCliente(localStorage.getItem('telefoneCliente') || '');
+        setNomeCliente(storedNome);
+        setTelefoneCliente(storedTelefone);
         setRua(storedRua);
         setNumero(storedNumero);
         setBairro(storedBairro);
-        setComplemento(localStorage.getItem('complemento') || '');
+        setComplemento(storedComplemento);
 
         if (storedRua && storedNumero && storedBairro) {
           setIsRetirada(false);
@@ -92,7 +114,7 @@ function Menu() {
     return () => unsubscribe();
   }, []);
 
-  // Efeito para calcular a taxa de entrega baseada no bairro OU se é retirada
+  // Efeito para calcular a taxa de entrega
   useEffect(() => {
     if (isRetirada) {
       setTaxaEntregaCalculada(0);
@@ -119,37 +141,34 @@ function Menu() {
     }
   }, [bairro, taxasBairro, isRetirada]);
 
-  // Efeito para carregar informações do estabelecimento e cardápio (AGORA BUSCANDO POR SLUG)
+  // Efeito para carregar informações do estabelecimento e cardápio (por SLUG)
   useEffect(() => {
-    // Se o slug não estiver presente, ou estiver vazio após trim, não fazemos nada
     if (!estabelecimentoSlug || estabelecimentoSlug.trim() === '') {
       setNomeEstabelecimento("Nenhum estabelecimento selecionado.");
       setProdutos([]);
-      setActualEstabelecimentoId(null); // Reseta o ID real
+      setActualEstabelecimentoId(null);
       return;
     }
 
-    let unsubscribeCardapio; // Variável para o listener do cardápio
+    let unsubscribeCardapio;
 
     const fetchEstabelecimentoAndCardapio = async () => {
       try {
-        // 1. Buscar o estabelecimento pela SLUG
         const estabelecimentosRef = collection(db, 'estabelecimentos');
         const q = query(estabelecimentosRef, where('slug', '==', estabelecimentoSlug));
-        const querySnapshot = await getDocs(q); // Usamos getDocs para a consulta por slug
+        const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-          const estabelecimentoDoc = querySnapshot.docs[0]; // Pega o primeiro (e único) resultado
+          const estabelecimentoDoc = querySnapshot.docs[0];
           const data = estabelecimentoDoc.data();
-          const idDoEstabelecimentoReal = estabelecimentoDoc.id; // <-- OBTÉM O ID REAL AQUI
+          const idDoEstabelecimentoReal = estabelecimentoDoc.id;
 
           setEstabelecimentoInfo(data);
           setNomeEstabelecimento(data.nome || "Cardápio");
-          setActualEstabelecimentoId(idDoEstabelecimentoReal); // Armazena o ID real
+          setActualEstabelecimentoId(idDoEstabelecimentoReal);
 
-          // 2. Usar o ID real para carregar o cardápio (via onSnapshot)
-          const cardapioRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio');
-          const qCardapio = query(cardapioRef, orderBy('nome'));
+          const cardapioCollectionRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio');
+          const qCardapio = query(cardapioCollectionRef, orderBy('nome'));
 
           unsubscribeCardapio = onSnapshot(qCardapio, (snapshot) => {
             const produtosData = snapshot.docs.map(doc => ({
@@ -166,8 +185,6 @@ function Menu() {
           setNomeEstabelecimento("Estabelecimento não encontrado.");
           setProdutos([]);
           setActualEstabelecimentoId(null);
-          // Opcional: Redirecionar para uma página 404 ou lista de estabelecimentos
-          // navigate('/estabelecimentos-nao-encontrado');
         }
       } catch (error) {
         console.error("Erro ao carregar estabelecimento ou cardápio por slug:", error);
@@ -179,15 +196,19 @@ function Menu() {
 
     fetchEstabelecimentoAndCardapio();
 
-    // Retorna a função de unsubscribe para limpar o listener ao desmontar
     return () => {
       if (unsubscribeCardapio) {
         unsubscribeCardapio();
       }
     };
-  }, [estabelecimentoSlug]); // A dependência agora é o estabelecimentoSlug
+  }, [estabelecimentoSlug]);
 
   const adicionarAoCarrinho = (item) => {
+    if (!currentUser || currentClientData === null) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
     const existe = carrinho.find((p) => p.id === item.id);
     if (existe) {
       setCarrinho(carrinho.map((p) => (p.id === item.id ? { ...p, qtd: p.qtd + 1 } : p)));
@@ -208,17 +229,21 @@ function Menu() {
   };
 
   const enviarPedido = async () => {
-    // VALIDAÇÃO: Garante que o ID do estabelecimento foi encontrado pelo slug
+    if (!currentUser || currentClientData === null) {
+      alert('Você precisa estar logado e com o cadastro completo para enviar um pedido.');
+      setShowLoginPrompt(true);
+      return;
+    }
+
     if (!actualEstabelecimentoId) {
-        alert('Erro: Estabelecimento não carregado corretamente. Por favor, recarregue a página.');
-        return;
+      alert('Erro: Estabelecimento não carregado corretamente. Por favor, recarregue a página.');
+      return;
     }
 
     const subtotalCalculado = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const totalComTaxaCalculado = subtotalCalculado + taxaAplicada;
 
-    // Validações de formulário
     if (
       !nomeCliente.trim() ||
       !telefoneCliente.trim() ||
@@ -249,19 +274,9 @@ function Menu() {
       if (trocoNum > totalComTaxaCalculado) {
         valorTrocoPara = trocoNum;
       } else {
-        alert(`O valor para troco (R$ ${trocoNum.toFixed(2)}) deve ser maior que o total do pedido (R$ ${totalComTaxaCalculado.toFixed(2)}).`);
+        alert(`O valor para troco (R$ ${trocoNum.toFixed(2).replace('.', ',')}) deve ser maior que o total do pedido (R$ ${totalComTaxaCalculado.toFixed(2).replace('.', ',')}).`);
         return;
       }
-    }
-
-    // Salvar no localStorage APENAS se não for usuário logado E se for entrega
-    if (!currentUser && !isRetirada) {
-      localStorage.setItem('nomeCliente', nomeCliente.trim());
-      localStorage.setItem('telefoneCliente', telefoneCliente.trim());
-      localStorage.setItem('rua', rua.trim());
-      localStorage.setItem('numero', numero.trim());
-      localStorage.setItem('bairro', bairro.trim());
-      localStorage.setItem('complemento', complemento.trim());
     }
 
     const pedido = {
@@ -276,8 +291,7 @@ function Menu() {
         },
         userId: currentUser ? currentUser.uid : null
       },
-      // Usar o ID real do estabelecimento aqui
-      estabelecimentoId: actualEstabelecimentoId, 
+      estabelecimentoId: actualEstabelecimentoId,
       itens: carrinho.map(item => ({
         nome: item.nome,
         quantidade: item.qtd,
@@ -327,6 +341,69 @@ function Menu() {
   const subtotalPedido = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
   const totalPedidoComTaxa = subtotalPedido + taxaEntregaCalculada;
 
+  // Lida com o login diretamente dentro do modal
+  const handleLoginModal = async (e) => {
+    e.preventDefault();
+    setErrorAuthModal('');
+    try {
+      await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
+      alert('Login realizado com sucesso!');
+      setShowLoginPrompt(false); // Fecha o modal
+      setEmailAuthModal('');
+      setPasswordAuthModal('');
+      // O AuthContext vai atualizar currentUser, e Menu.jsx vai re-renderizar
+      // com currentUser definido, efetivamente "desbloqueando" a página.
+    } catch (error) {
+      let msg = "Erro no login. Verifique suas credenciais.";
+      if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado. Crie uma conta.";
+      else if (error.code === 'auth/wrong-password') msg = "Senha incorreta.";
+      else if (error.code === 'auth/invalid-email') msg = "Email inválido.";
+      setErrorAuthModal(msg);
+      console.error("Login error:", error);
+    }
+  };
+
+  // Lida com o cadastro diretamente dentro do modal
+  const handleRegisterModal = async (e) => {
+    e.preventDefault();
+    setErrorAuthModal('');
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
+      const user = userCredential.user;
+
+      await setDocFirestore(doc(db, 'clientes', user.uid), {
+        nome: nomeAuthModal,
+        telefone: telefoneAuthModal,
+        email: emailAuthModal,
+        endereco: { rua: '', numero: '', bairro: '', complemento: '' },
+        criadoEm: Timestamp.now(),
+      });
+
+      alert('Cadastro realizado com sucesso! Você está logado.');
+      setShowLoginPrompt(false); // Fecha o modal
+      setIsRegisteringInModal(false); // Volta para a visualização de login, se necessário
+      setEmailAuthModal('');
+      setPasswordAuthModal('');
+      setNomeAuthModal('');
+      setTelefoneAuthModal('');
+    } catch (error) {
+      let msg = "Erro no cadastro. Tente novamente.";
+      if (error.code === 'auth/email-already-in-use') msg = "Este email já está cadastrado.";
+      else if (error.code === 'auth/weak-password') msg = "Senha muito fraca (mín. 6 caracteres).";
+      setErrorAuthModal(msg);
+      console.error("Registration error:", error);
+    }
+  };
+
+
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-white">
+        <p className="text-[var(--marrom-escuro)]">Verificando status de login...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 max-w-3xl mx-auto pb-40 md:pb-0">
       <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-4">
@@ -336,7 +413,9 @@ function Menu() {
         <p className="text-center text-[var(--cinza-texto)] mb-8">{estabelecimentoInfo.descricao}</p>
       )}
 
-      {produtos.length === 0 && nomeEstabelecimento !== "Carregando Cardápio..." ? (
+      {produtos.length === 0 && nomeEstabelecimento === "Carregando Cardápio..." ? (
+        <p className="text-center text-[var(--marrom-escuro)] italic mt-8">Carregando cardápio...</p>
+      ) : produtos.length === 0 ? (
         <p className="text-center text-gray-500 italic mt-8">Nenhum item disponível neste cardápio ou estabelecimento não encontrado.</p>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -379,7 +458,7 @@ function Menu() {
                     <span className="font-semibold text-[var(--marrom-escuro)]">R$ {(item.preco * item.qtd).toFixed(2).replace('.', ',')}</span>
                     <button
                       onClick={() => adicionarAoCarrinho(item)}
-                      className="bg-[var(--verde-destaque)] hover:bg-green-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold"
+                      className="bg-green-500 hover:bg-green-700 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold"
                       aria-label={`Adicionar mais um ${item.nome}`}
                     >
                       +
@@ -447,31 +526,31 @@ function Menu() {
 
         {/* OPÇÕES DE TIPO DE ENTREGA (Retirada ou Entrega) */}
         <div className="mb-6 pt-4 border-t border-gray-200">
-            <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Tipo de Entrega *</h3>
-            <div className="space-y-3">
-              <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
-                  <input
-                      type="radio"
-                      name="deliveryType"
-                      value="retirada"
-                      checked={isRetirada === true}
-                      onChange={() => setIsRetirada(true)}
-                      className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
-                  />
-                  Retirada no Estabelecimento
-              </label>
-              <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
-                  <input
-                      type="radio"
-                      name="deliveryType"
-                      value="entrega"
-                      checked={isRetirada === false}
-                      onChange={() => setIsRetirada(false)}
-                      className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
-                  />
-                  Entrega no meu Endereço
-              </label>
-            </div>
+          <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Tipo de Entrega *</h3>
+          <div className="space-y-3">
+            <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+              <input
+                type="radio"
+                name="deliveryType"
+                value="retirada"
+                checked={isRetirada === true}
+                onChange={() => setIsRetirada(true)}
+                className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
+              />
+              Retirada no Estabelecimento
+            </label>
+            <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+              <input
+                type="radio"
+                name="deliveryType"
+                value="entrega"
+                checked={isRetirada === false}
+                onChange={() => setIsRetirada(false)}
+                className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
+              />
+              Entrega no meu Endereço
+            </label>
+          </div>
         </div>
 
         {/* CAMPOS DE ENDEREÇO (CONDICIONAIS - APENAS SE FOR ENTREGA) */}
@@ -531,110 +610,224 @@ function Menu() {
 
         {/* INÍCIO DO BLOCO: FORMA DE PAGAMENTO (agora dentro de 'Seus Dados') */}
         <div className="pt-6 mt-6 border-t border-gray-200">
-            <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Forma de Pagamento *</h3>
-            <div className="space-y-3">
+          <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Forma de Pagamento *</h3>
+          <div className="space-y-3">
             <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
-                <input
+              <input
                 type="radio"
                 name="paymentMethod"
                 value="pix"
                 checked={formaPagamento === 'pix'}
                 onChange={(e) => setFormaPagamento(e.target.value)}
                 className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
-                />
-                PIX
+              />
+              PIX
             </label>
             <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
-                <input
+              <input
                 type="radio"
                 name="paymentMethod"
                 value="cartao"
                 checked={formaPagamento === 'cartao'}
                 onChange={(e) => setFormaPagamento(e.target.value)}
                 className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
-                />
-                Cartão (Crédito/Débito na entrega)
+              />
+              Cartão (Crédito/Débito na entrega)
             </label>
             <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
-                <input
+              <input
                 type="radio"
                 name="paymentMethod"
                 value="dinheiro"
                 checked={formaPagamento === 'dinheiro'}
                 onChange={(e) => setFormaPagamento(e.target.value)}
                 className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
-                />
-                Dinheiro
+              />
+              Dinheiro
             </label>
-            </div>
+          </div>
 
-            {formaPagamento === 'dinheiro' && (
+          {formaPagamento === 'dinheiro' && (
             <div className="mt-4">
-                <label htmlFor="troco" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">
+              <label htmlFor="troco" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">
                 Precisa de troco para? (Opcional)
-                </label>
-                <input
+              </label>
+              <input
                 id="troco"
                 type="number"
                 value={trocoPara}
                 onChange={(e) => setTrocoPara(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
                 placeholder={`Ex: R$ ${(totalPedidoComTaxa + 10).toFixed(2).replace('.', ',')}`}
-                />
+              />
             </div>
-            )}
+          )}
         </div> {/* FIM DO BLOCO: FORMA DE PAGAMENTO (agora dentro de 'Seus Dados') */}
 
-      </div> {/* FIM DO BLOCO ÚNICO: SEUS DADOS E FORMA DE PAGAMENTO */}
+      </div> {/* FIM DO BLOCO ÚNICO: SEUS DADOS E FORMA DE PAGAMENTO */}
 
-      {/* BLOCO DO BOTÃO "ENVIAR PEDIDO AGORA!" - Condicional */}
-      {carrinho.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none">
-          <button
-            onClick={enviarPedido}
-            className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg"
-            disabled={
-              !nomeCliente.trim() ||
-              !telefoneCliente.trim() ||
-              (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || // Valida endereço apenas se não for retirada
-              carrinho.length === 0 ||
-              !formaPagamento
-            }
-          >
-            Enviar Pedido Agora!
-          </button>
-        </div>
-      )}
+      {/* BLOCO DO BOTÃO "ENVIAR PEDIDO AGORA!" - Condicional */}
+      {carrinho.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none">
+          <button
+            onClick={enviarPedido}
+            // Classes condicionais para o botão "Enviar Pedido Agora!"
+            className={`px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg ${
+              (!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser || currentClientData === null)
+                ? 'bg-gray-300 text-gray-900 cursor-not-allowed' // Desativado
+                : 'bg-green-600 text-white hover:bg-green-700' // Ativado
+            }`}
+            disabled={
+              !nomeCliente.trim() ||
+              !telefoneCliente.trim() ||
+              (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) ||
+              carrinho.length === 0 ||
+              !formaPagamento ||
+              !currentUser ||
+              currentClientData === null
+            }
+          >
+            Enviar Pedido Agora!
+          </button>
+        </div>
+      )}
 
-      {/* MODAL DE CONFIRMAÇÃO DE PEDIDO (SEM BOTÃO DO WHATSAPP) */}
-      {showOrderConfirmationModal && confirmedOrderDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative">
-            <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4 text-center">Pedido Enviado! 🎉</h2>
-            <p className="text-gray-700 text-center mb-6">
-              Seu pedido foi registrado com sucesso! O estabelecimento está processando sua solicitação.
-              Você receberá atualizações em breve.
-            </p>
+      {/* MODAL DE CONFIRMAÇÃO DE PEDIDO */}
+      {showOrderConfirmationModal && confirmedOrderDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative">
+            <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4 text-center">Pedido Enviado! 🎉</h2>
+            <p className="text-gray-700 text-center mb-6">
+              Seu pedido foi registrado com sucesso! O estabelecimento está processando sua solicitação.
+              Você receberá atualizações em breve.
+            </p>
 
-            <div className="mb-6 border-t border-b border-gray-200 py-4">
-              <p className="font-semibold text-lg text-[var(--marrom-escuro)] mb-2">Resumo do Pedido:</p>
-              <p><strong>ID do Pedido:</strong> {confirmedOrderDetails.id.substring(0, 8)}...</p>
-              <p><strong>Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
-              <p><strong>Pagamento:</strong> {confirmedOrderDetails.formaPagamento.charAt(0).toUpperCase() + confirmedOrderDetails.formaPagamento.slice(1)}</p>
-              <p><strong>Entrega:</strong> {confirmedOrderDetails.tipoEntrega === 'retirada' ? 'Retirada' : 'Delivery'}</p>
-            </div>
+            <div className="mb-6 border-t border-b border-gray-200 py-4">
+              <p className="font-semibold text-lg text-[var(--marrom-escuro)] mb-2">Resumo do Pedido:</p>
+              <p><strong>ID do Pedido:</strong> {confirmedOrderDetails.id.substring(0, 8)}...</p>
+              <p><strong>Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
+              <p><strong>Pagamento:</strong> {confirmedOrderDetails.formaPagamento.charAt(0).toUpperCase() + confirmedOrderDetails.formaPagamento.slice(1)}</p>
+              <p><strong>Entrega:</strong> {confirmedOrderDetails.tipoEntrega === 'retirada' ? 'Retirada' : 'Delivery'}</p>
+            </div>
 
-            <button
-              onClick={() => { setShowOrderConfirmationModal(false); navigate('/'); }}
-              className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 ease-in-out w-full text-lg font-semibold"
-            >
-              Voltar ao Início
-            </button>
-          </div>
-        </div>
-      )}
-    </div> 
-  );
+            <button
+              onClick={() => { setShowOrderConfirmationModal(false); navigate(`/cardapios/${estabelecimentoSlug}`); }} // Redireciona para a lista de estabelecimentos
+              className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold"
+            >
+              Pedido Concluído! Voltar ao Menu!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* NOVO MODAL: PROMPT DE LOGIN/CADASTRO */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[1000]">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative text-center">
+            <button
+              onClick={() => {
+                setShowLoginPrompt(false);
+                setErrorAuthModal(''); // Limpa erros ao fechar
+                setEmailAuthModal(''); // Limpa campos
+                setPasswordAuthModal('');
+                setNomeAuthModal('');
+                setTelefoneAuthModal('');
+                setIsRegisteringInModal(false); // Volta para tela de login padrão ao fechar
+              }}
+              className="absolute top-2 right-3 text-gray-600 hover:text-red-600 text-xl"
+              aria-label="Fechar"
+            >
+              &times;
+            </button>
+            <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4">
+              {isRegisteringInModal ? 'Cadastre-se' : 'Faça Login'}
+            </h2>
+            <p className="text-gray-700 mb-6">
+              {isRegisteringInModal
+                ? 'Preencha seus dados para criar uma conta.'
+                : 'Para acessar o cardápio e fazer pedidos, você precisa estar logado.'}
+            </p>
+
+            {errorAuthModal && <p className="text-red-500 text-sm mb-4">{errorAuthModal}</p>}
+
+            {isRegisteringInModal ? (
+              <form onSubmit={handleRegisterModal} className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Seu Nome Completo"
+                  className="w-full border rounded p-2"
+                  value={nomeAuthModal}
+                  onChange={(e) => setNomeAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="tel"
+                  placeholder="Seu Telefone (com DDD)"
+                  className="w-full border rounded p-2"
+                  value={telefoneAuthModal}
+                  onChange={(e) => setTelefoneAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  className="w-full border rounded p-2"
+                  value={emailAuthModal}
+                  onChange={(e) => setEmailAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="Senha (mín. 6 caracteres)"
+                  className="w-full border rounded p-2"
+                  value={passwordAuthModal}
+                  onChange={(e) => setPasswordAuthModal(e.target.value)}
+                  required
+                />
+                <button type="submit" className="bg-yellow-200 text-black w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">
+                  Cadastrar e Entrar
+                </button>
+                <p className="text-sm text-gray-600">
+                  Já tem uma conta?{' '}
+                  <button type="button" onClick={() => setIsRegisteringInModal(false)} className="text-[var(--vermelho-principal)] underline">
+                    Fazer Login
+                  </button>
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={handleLoginModal} className="space-y-4">
+                <input
+                  type="email"
+                  placeholder="Email"
+                  className="w-full border rounded p-2"
+                  value={emailAuthModal}
+                  onChange={(e) => setEmailAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="Senha"
+                  className="w-full border rounded p-2"
+                  value={passwordAuthModal}
+                  onChange={(e) => setPasswordAuthModal(e.target.value)}
+                  required
+                />
+                <button type="submit" className="bg-yellow-200 text-black w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700 ">
+                  Entrar
+                </button>
+                <p className="text-sm text-gray-600">
+                  Não tem uma conta?{' '}
+                  <button type="button" onClick={() => setIsRegisteringInModal(true)} className="text-[var(--vermelho-principal)] underline">
+                    Cadastre-se
+                  </button>
+                </p>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default Menu;

@@ -31,7 +31,7 @@ function CardapioItem({ item, cartItem, addToCart, removeFromCart }) {
             <span className="font-bold text-base sm:text-lg text-[var(--marrom-escuro)]">{quantity}</span> {/* Ajuste: text-base (default) e sm:text-lg */}
             <button
               onClick={() => addToCart(item)}
-              className="bg-[var(--verde-destaque)] hover:bg-green-600 text-white w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-base font-bold transition duration-200" // Ajuste: w-7 h-7 (default) e sm:w-8 sm:h-8
+              className="bg-green-500 hover:bg-green-800 text-white w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-base font-bold transition duration-200" // Ajuste: w-7 h-7 (default) e sm:w-8 sm:h-8
               aria-label={`Adicionar mais um ${item.nome}`}
             >
               +
@@ -40,7 +40,7 @@ function CardapioItem({ item, cartItem, addToCart, removeFromCart }) {
         ) : (
           <button
             onClick={() => addToCart(item)}
-            className="bg-[var(--verde-destaque)] hover:bg-green-600 text-white px-3 sm:px-4 py-1.5 rounded-lg font-semibold transition duration-300 ease-in-out w-full shadow-md text-base" // Ajuste: px-3 (default) e sm:px-4, py-1.5 (default) e py-2
+            className="bg-[var(--verde-destaque)] hover:bg-green-600  px-3 sm:px-4 py-1.5 rounded-lg font-semibold transition duration-300 ease-in-out w-full shadow-md text-base" // Ajuste: px-3 (default) e sm:px-4, py-1.5 (default) e py-2
           >
             + Adicionar
           </button>
