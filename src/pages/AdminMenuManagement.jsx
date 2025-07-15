@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 // <<< LINHA DE IMPORTAÇÃO CORRIGIDA >>>
 import AdminProductCard from '../components/AdminProductCard'; 
@@ -53,10 +54,12 @@ function AdminMenuManagement() {
                         setSelectedEstablishmentName(estabDoc.data().nome);
                     } else {
                         setAdminError("Nenhum estabelecimento encontrado para este administrador. Certifique-se de que o campo 'adminUID' está configurado no Firestore.");
+                        toast.error("Nenhum estabelecimento encontrado para este administrador."); // Adicionado toast de erro
                     }
                 } catch (err) {
                     console.error("Erro ao buscar informações do estabelecimento:", err);
                     setAdminError("Erro ao carregar informações do estabelecimento. Verifique sua conexão.");
+                    toast.error("Erro ao carregar informações do estabelecimento."); // Adicionado toast de erro
                 } finally {
                     setLoadingEstabelecimentos(false); // Indica que a parte inicial de carregamento está feita
                 }
@@ -64,6 +67,7 @@ function AdminMenuManagement() {
             fetchEstablishmentData();
         } else if (!authLoading && (!currentUser || !isAdmin)) {
             setAdminError("Acesso negado. Você não tem permissões de administrador para gerenciar o cardápio.");
+            toast.error("Acesso negado. Você não tem permissões de administrador para gerenciar o cardápio."); // Adicionado toast de erro
             setLoadingEstabelecimentos(false);
         }
     }, [currentUser, isAdmin, authLoading]);
@@ -83,6 +87,7 @@ function AdminMenuManagement() {
             console.error("Erro ao carregar itens do cardápio:", error);
             setLoadingMenuItems(false);
             setAdminError("Erro ao carregar itens do cardápio.");
+            toast.error("Erro ao carregar itens do cardápio."); // Adicionado toast de erro
         });
         return () => unsub();
     }, [selectedEstablishmentId]);
@@ -132,14 +137,17 @@ function AdminMenuManagement() {
         e.preventDefault();
         if (!selectedEstablishmentId) {
             setFormError("ID do estabelecimento não selecionado. Não foi possível salvar o item."); // Este erro não deve ocorrer com adminUID
+            toast.error("ID do estabelecimento não selecionado. Não foi possível salvar o item."); // Adicionado toast de erro
             return;
         }
         if (!itemName.trim() || !itemPrice || !itemCategory.trim()) {
             setFormError("Nome, Preço e Categoria são obrigatórios.");
+            toast.warn("Nome, Preço e Categoria são obrigatórios."); // Adicionado toast de aviso
             return;
         }
         if (isNaN(Number(itemPrice)) || Number(itemPrice) < 0) {
             setFormError("Preço deve ser um número positivo.");
+            toast.warn("Preço deve ser um número positivo."); // Adicionado toast de aviso
             return;
         }
 
@@ -156,10 +164,12 @@ function AdminMenuManagement() {
                 const uploadTask = await uploadBytes(storageRef, selectedImageFile);
                 finalImageUrl = await getDownloadURL(uploadTask.ref);
                 console.log("Imagem carregada:", finalImageUrl);
+                toast.success("Imagem carregada com sucesso!"); // Feedback de upload da imagem
                 setUploadComplete(true);
             } catch (error) {
                 console.error("Erro ao fazer upload da imagem:", error);
                 setFormError("Erro ao fazer upload da imagem. Verifique as regras de Storage e o plano Firebase.");
+                toast.error("Erro ao fazer upload da imagem. Verifique as regras de Storage e o plano Firebase."); // Adicionado toast de erro
                 setUploadingImage(false);
                 setFormLoading(false);
                 return;
@@ -181,15 +191,16 @@ function AdminMenuManagement() {
             if (editingItem) {
                 const itemRef = doc(db, 'estabelecimentos', selectedEstablishmentId, 'cardapio', editingItem.id);
                 await updateDoc(itemRef, itemData);
-                alert("Item atualizado com sucesso!");
+                toast.success("Item atualizado com sucesso!"); // Substituição do alert()
             } else {
                 await addDoc(collection(db, 'estabelecimentos', selectedEstablishmentId, 'cardapio'), itemData);
-                alert("Item cadastrado com sucesso!");
+                toast.success("Item cadastrado com sucesso!"); // Substituição do alert()
             }
             closeItemForm(); 
         } catch (error) {
             console.error("Erro ao salvar item:", error);
             setFormError("Erro ao salvar item. Verifique o console.");
+            toast.error("Erro ao salvar item. Verifique o console."); // Adicionado toast de erro
         } finally {
             setFormLoading(false);
         }
@@ -201,10 +212,10 @@ function AdminMenuManagement() {
             try {
                 const itemRef = doc(db, 'estabelecimentos', selectedEstablishmentId, 'cardapio', itemId);
                 await deleteDoc(itemRef);
-                alert("Item excluído com sucesso!");
+                toast.success("Item excluído com sucesso!"); // Substituição do alert()
             } catch (error) {
                 console.error("Erro ao excluir item:", error);
-                alert("Erro ao excluir item. Verifique o console.");
+                toast.error("Erro ao excluir item. Verifique o console."); // Substituição do alert()
             }
         }
     };

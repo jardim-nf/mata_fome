@@ -3,6 +3,7 @@
 import React from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase'; // Certifique-se de que o caminho para o seu db está correto
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 // Este componente é EXCLUSIVAMENTE para a visão e gerenciamento do ADMINISTRADOR
 // Ele recebe o item do produto e o ID do estabelecimento para operações no Firestore
@@ -12,7 +13,7 @@ const AdminProductCard = ({ produto, estabelecimentoId, onEdit, onDelete }) => {
   // Lógica para ativar/desativar produto
   const toggleAtivo = async () => {
     if (!estabelecimentoId || !produto || !produto.id) {
-      alert("Operação inválida. ID do estabelecimento ou produto ausente.");
+      toast.error("Operação inválida. ID do estabelecimento ou produto ausente."); // Substituição do alert()
       return;
     }
 
@@ -27,10 +28,10 @@ const AdminProductCard = ({ produto, estabelecimentoId, onEdit, onDelete }) => {
       await updateDoc(produtoRef, {
         ativo: !produto.ativo // Inverte o valor atual (true vira false, false vira true)
       });
-      alert(`Produto "${produto.nome}" foi ${produto.ativo ? 'desativado' : 'ativado'} com sucesso!`);
+      toast.success(`Produto "${produto.nome}" foi ${produto.ativo ? 'desativado' : 'ativado'} com sucesso!`); // Substituição do alert()
     } catch (error) {
       console.error("Erro ao atualizar status do produto:", error);
-      alert("Erro ao atualizar status do produto. Por favor, tente novamente.");
+      toast.error("Erro ao atualizar status do produto. Por favor, tente novamente."); // Substituição do alert()
     }
   };
 
@@ -39,7 +40,7 @@ const AdminProductCard = ({ produto, estabelecimentoId, onEdit, onDelete }) => {
     if (onDelete && produto.id) {
       onDelete(produto.id); // Chama a função onDelete passada como prop do AdminMenuManagement
     } else {
-      alert("Operação de exclusão inválida.");
+      toast.error("Operação de exclusão inválida."); // Substituição do alert()
     }
   };
 
@@ -48,7 +49,7 @@ const AdminProductCard = ({ produto, estabelecimentoId, onEdit, onDelete }) => {
     if (onEdit) {
       onEdit(produto); // Chama a função onEdit passada como prop do AdminMenuManagement
     } else {
-      alert("Operação de edição inválida.");
+      toast.error("Operação de edição inválida."); // Substituição do alert()
     }
   };
 

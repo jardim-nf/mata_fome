@@ -2,11 +2,12 @@
 import React from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { useNavigate } from 'react-router-dom'; // IMPORTAR useNavigate AQUI
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 // REMOVER 'navigate' das props
 function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey, estabelecimento }) { 
-  const navigate = useNavigate(); // <-- PEGAR O NAVIGATE DIRETAMENTE AQUI
+  const navigate = useNavigate();
 
   const status = (pedido?.status || "recebido").toLowerCase();
   const formaPagamento = (pedido?.formaPagamento || "").toLowerCase();
@@ -24,7 +25,6 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
   const bgColor = coresPorStatus[status] || "bg-white border-gray-200";
 
   const abrirComanda = () => {
-    // AGORA, 'navigate' SEMPRE ESTARÁ DISPONÍVEL AQUI
     navigate(`/comanda/${pedido.id}`); 
   };
 
@@ -32,12 +32,12 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
 
   const openWhatsAppLink = (message, phoneNumber, actionDescription = "mensagem") => {
     if (!phoneNumber) {
-      alert(`Erro: Telefone do cliente não disponível para enviar ${actionDescription}.`);
+      toast.error(`Erro: Telefone do cliente não disponível para enviar ${actionDescription}.`); // Substituição do alert()
       return false;
     }
     const numeroLimpo = phoneNumber.replace(/\D/g, "");
     if (!numeroLimpo) {
-        alert(`Erro: Número de telefone inválido para enviar ${actionDescription}.`);
+        toast.error(`Erro: Número de telefone inválido para enviar ${actionDescription}.`); // Substituição do alert()
         return false;
     }
 
@@ -45,19 +45,19 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
     const url = `https://wa.me/55${numeroLimpo}?text=${texto}`;
     
     try {
-      window.open(url, "_blank"); // WhatsApp ainda abre em nova aba/janela
+      window.open(url, "_blank");
       console.log(`📤 Abrindo WhatsApp para ${actionDescription}:`, url);
       return true;
     } catch (error) {
       console.error(`❌ Erro ao abrir WhatsApp para ${actionDescription}:`, error);
-      alert(`Não foi possível abrir o WhatsApp para ${actionDescription}. Verifique as configurações do seu navegador ou tente novamente.`);
+      toast.error(`Não foi possível abrir o WhatsApp para ${actionDescription}. Verifique as configurações do seu navegador ou tente novamente.`); // Substituição do alert()
       return false;
     }
   };
 
   const enviarMensagemPixComChave = async () => {
     if (!estabelecimentoPixKey) {
-      alert("Chave PIX do estabelecimento não configurada. Por favor, adicione a chave PIX nas informações do estabelecimento no Firestore.");
+      toast.error("Chave PIX do estabelecimento não configurada. Por favor, adicione a chave PIX nas informações do estabelecimento no Firestore."); // Substituição do alert()
       return;
     }
 
@@ -75,7 +75,7 @@ Obrigado!`;
 
     const success = openWhatsAppLink(mensagem, pedido.cliente?.telefone, "mensagem PIX");
     if (success) {
-        console.log("Mensagem PIX solicitada. WhatsApp aberto.");
+        toast.info("Mensagem PIX solicitada. Verifique o WhatsApp do cliente."); // Adicionado toast de informação
     }
   };
 
@@ -109,10 +109,13 @@ ${itensDoPedido}
 
 Logo mais ele estará pronto para você! Fique de olho nas próximas atualizações. #MataFome
 `;
+        toast.success(`Pedido em preparo: ${pedido.id.substring(0, 5)}...`); // Toast de sucesso
       } else if (statusFormatado === "entregando") {
         mensagem = `Oba! ${nomeCliente}, seu pedido saiu para a entrega! 🛵📦 Chega já! Bom Apetite! #DeuFome`;
+        toast.info(`Pedido em entrega: ${pedido.id.substring(0, 5)}...`); // Toast de informação
       } else if (statusFormatado === "finalizado") {
         mensagem = `Olá ${nomeCliente}, seu pedido foi finalizado com sucesso! ✅ Muito obrigado!`;
+        toast.success(`Pedido finalizado: ${pedido.id.substring(0, 5)}...`); // Toast de sucesso
       } else {
         shouldOpenWhatsApp = false; 
       }
@@ -120,13 +123,13 @@ Logo mais ele estará pronto para você! Fique de olho nas próximas atualizaç�
       if (mensagem && shouldOpenWhatsApp) {
         const success = openWhatsAppLink(mensagem, _pedido.cliente?.telefone, `mudança de status para ${novoStatus}`);
         if (success) {
-            // Feedback visual ao admin, se desejar
+            // Feedback visual ao admin, se desejar (já feito com toast acima)
         }
       }
 
     } catch (error) {
       console.error("❌ Erro ao mudar status ou enviar mensagem:", error);
-      alert("Ocorreu um erro ao atualizar o status ou enviar a mensagem.");
+      toast.error("Ocorreu um erro ao atualizar o status ou enviar a mensagem."); // Substituição do alert()
     }
   };
 

@@ -1,3 +1,4 @@
+// src/App.jsx
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout"; // Seu componente de Layout
@@ -14,8 +15,18 @@ import AdminMenuManagement from "./pages/AdminMenuManagement";
 import TaxasDeEntrega from "./pages/TaxasDeEntrega";
 import AdminEstablishmentManagement from "./pages/AdminEstablishmentManagement";
 import NossosClientes from './pages/NossosClientes';
-import ClientDetails from "./pages/ClientDetails"; // <<< NOVO: Importe o componente ClientDetails >>>
+import ClientDetails from "./pages/ClientDetails";
 import { AuthProvider } from './context/AuthContext';
+
+// Importe os componentes e o CSS da react-toastify
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+import AdminCouponManagement from './pages/AdminCouponManagement'; 
+import ClientOrderHistory from './pages/ClientOrderHistory';
+// <<-- IMPORTE AdminReports AQUI -->>
+import AdminReports from './pages/AdminReports';
+
 
 function App() {
   return (
@@ -23,37 +34,40 @@ function App() {
       <Router>
         <Routes>
           {/* Rotas que NÃO usam o Layout (ex: Home, Comanda em tela cheia) */}
-          <Route path="/" element={<Home />} /> {/* Home é a landing page, com modais de login/cadastro */}
-          <Route path="/login-admin" element={<Login />} /> {/* Página dedicada para login de Admin */}
-          {/* A rota /logincliente não precisa mais de um componente próprio se o login/cadastro for via modal na Home. */}
-          {/* <Route path="/logincliente" element={<ClienteLogin />} /> <<<<< COMENTE OU REMOVA ESTA ROTA >>>>> */}
+          <Route path="/" element={<Home />} />
+          <Route path="/login-admin" element={<Login />} />
           <Route path="/comanda/:pedidoId" element={<ComandaView />} />
 
           {/* GRUPO DE ROTAS QUE USAM O LAYOUT */}
           <Route element={<Layout />}>
-            {/* Rota para listar todos os estabelecimentos (se houver uma lista além dos destaques da Home) */}
             <Route path="/cardapios" element={<ListaEstabelecimentos />} />
-
-            {/* ROTA PRINCIPAL DO MENU/CARDÁPIO ESPECÍFICO: AGORA ESPERA UM SLUG */}
             <Route path="/cardapios/:estabelecimentoSlug" element={<Menu />} />
-
-            {/* Rotas do Painel Administrativo (geralmente exigem autenticação de admin) */}
-            <Route path="/painel" element={<Painel />} /> {/* Para onde o admin loga */}
+            <Route path="/admin/cupons" element={<AdminCouponManagement />} />
+            <Route path="/historico-pedidos" element={<ClientOrderHistory />} />
+            {/* <<-- ROTA PARA AdminReports -->> */}
+            <Route path="/admin/reports" element={<AdminReports />} />
+            <Route path="/painel" element={<Painel />} />
             <Route path="/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/gerenciar-cardapio" element={<AdminMenuManagement />} />
             <Route path="/admin/taxas-de-entrega" element={<TaxasDeEntrega />} />
             <Route path="/admin/gerenciar-estabelecimentos" element={<AdminEstablishmentManagement />} />
-            <Route path="/nossos-clientes" element={<NossosClientes />} /> {/* Sua rota para listar clientes */}
+            <Route path="/nossos-clientes" element={<NossosClientes />} />
             <Route path="/planos" element={<Planos />} />
-
-            {/* <<< NOVO: Rota para detalhes do cliente >>> */}
             <Route path="/admin/clientes/:clientId" element={<ClientDetails />} /> 
           </Route>
-
-          {/* Rota 404 (opcional - você pode criar um componente NotFoundPage) */}
-          {/* <Route path="*" element={<NotFoundPage />} /> */}
         </Routes>
       </Router>
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </AuthProvider>
   );
 }

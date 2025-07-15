@@ -5,6 +5,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { format, formatDistanceToNow, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function Painel() {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ function Painel() {
   useEffect(() => {
     if (!authLoading) {
       if (!currentUser || !isAdmin) {
-        alert('Acesso negado. Você precisa ser um administrador para acessar esta página.');
+        toast.error('Acesso negado. Você precisa ser um administrador para acessar esta página.'); // Substituição do alert()
         navigate('/');
       }
     }
@@ -122,6 +123,8 @@ function Painel() {
                 } else {
                     console.log("Notificações não disparadas. Condições (notificationsEnabled, permissão) não atendidas.");
                 }
+                // Adicione um toast para novos pedidos, mesmo se a notificação nativa não for disparada
+                toast.info(`🔔 Novo pedido recebido de ${newlyReceivedOrders[0].cliente.nome}! Total: R$ ${newlyReceivedOrders[0].totalFinal.toFixed(2).replace('.', ',')}`);
               } else {
                   console.log("Nenhum pedido VERDADEIRAMENTE novo detectado para notificação.");
               }
@@ -144,6 +147,7 @@ function Painel() {
 
           } else {
             setPainelError("Nenhum estabelecimento vinculado a este administrador.");
+            toast.error("Nenhum estabelecimento encontrado para este administrador."); // Adicionado toast de erro
             setEstabelecimentoInfo(null);
             setPedidosRecebidos([]);
             setPedidosEmPreparo(new Map());
@@ -153,6 +157,7 @@ function Painel() {
         } catch (error) {
           console.error("Erro ao carregar painel de pedidos:", error);
           setPainelError("Erro ao carregar o painel. Verifique os índices do Firestore e a conexão.");
+          toast.error("Erro ao carregar o painel. Verifique os índices do Firestore e a conexão."); // Adicionado toast de erro
         } finally {
           setLoadingPainel(false);
         }
@@ -176,7 +181,7 @@ function Painel() {
     if (notificationsEnabled) {
       setNotificationsEnabled(false);
       localStorage.setItem('notificationsEnabled', 'false');
-      console.log('Notificações desativadas.');
+      toast.info('Notificações desativadas.');
       if (audioRef.current && !audioRef.current.paused) {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
@@ -196,6 +201,7 @@ function Painel() {
         }
     } else {
         console.warn('API de Notificação de Desktop não suportada neste navegador.');
+        toast.warn('Seu navegador não suporta notificações pop-up nativas.');
     }
     
     setNotificationsEnabled(true);
@@ -218,12 +224,12 @@ function Painel() {
 
     if (permissionRequested) {
         if (permissionGranted) {
-            console.log('Notificações ativadas (incluindo pop-ups)!');
+            toast.success('Notificações ativadas (incluindo pop-ups)!');
         } else {
-            console.log('Notificações ativadas (apenas som e alertas internos, pop-ups bloqueados)!');
+            toast.warn('Notificações ativadas (apenas som e alertas internos, pop-ups bloqueados)!');
         }
     } else {
-        console.log('Notificações ativadas (apenas som e alertas internos, pop-ups não suportados)!');
+        toast.info('Notificações ativadas (apenas som e alertas internos, pop-ups não suportados)!');
     }
   };
 
@@ -241,7 +247,7 @@ function Painel() {
 const updateOrderStatus = async (pedidoId, newStatus) => {
     const pedidoToUpdate = getPedidoById(pedidoId);
     if (!pedidoToUpdate) {
-      alert("Erro: Pedido não encontrado para atualização de status.");
+      toast.error("Erro: Pedido não encontrado para atualização de status."); // Substituição do alert()
       return;
     }
 
@@ -249,18 +255,30 @@ const updateOrderStatus = async (pedidoId, newStatus) => {
     const nomeCliente = pedidoToUpdate.cliente?.nome || '';
     const estabelecimentoNome = estabelecimentoInfo?.nome || 'nosso estabelecimento';
     const totalPedido = pedidoToUpdate.totalFinal?.toFixed(2).replace('.', ',') || '0,00';
-    const itensPedido = pedidoToUpdate.itens?.map(item => `${item.nome} (${item.quantidade}x)`).join(', ') || '';
-    const criadoEmDate = pedidoToUpdate.criadoEm?.toDate?.();
-    const dataPedido = criadoEmDate ? format(criadoEmDate, 'dd/MM/yyyy') : 'Data não disponível';
-    const horaPedido = criadoEmDate ? format(criadoEmDate, 'HH:mm') : 'Hora não disponível';
-    const formaPagamento = pedidoToUpdate.formaPagamento || 'não informada';
+    const itensPedido = pedidoToUpdate.itens?.map(item => item.nome).join(', ') || ''; // Simplificado para a mensagem
 
     let mensagemWhatsApp = '';
 
     switch (newStatus) {
       case 'em_preparo':
-        mensagemWhatsApp = `Olá ${nomeCliente}, seu pedido #${pedidoId.substring(0, 5)} do ${estabelecimentoNome} está AGORA EM PREPARO! 🧑‍🍳\n\n📅 Data: ${dataPedido}\n⏰ Hora: ${horaPedido}\n🛍️ Itens: ${itensPedido}\n💰 Total: R$ ${totalPedido}\n💳 Pagamento: ${formaPagamento}\n\nFique atento às próximas atualizações. Agradecemos a preferência!`;
+        // Mensagem existente para "Em Preparo"
+        mensagemWhatsApp = `Olá ${nomeCliente}, seu pedido #${pedidoId.substring(0, 5)} do ${estabelecimentoNome} está AGORA EM PREPARO! 🧑‍🍳\n\nItens: ${itensPedido}\nTotal: R$ ${totalPedido}\n\nFique atento às próximas atualizações. Agradecemos a preferência!`;
+        toast.info(`Status do pedido ${pedidoId.substring(0, 5)} atualizado para EM PREPARO. Mensagem WhatsApp enviada.`);
         break;
+      case 'em_entrega':
+        // Nova mensagem para "Em Entrega"
+        mensagemWhatsApp = `Que beleza, ${nomeCliente}! Seu pedido do ${estabelecimentoNome} saiu para entrega! 🛵💨 Jájá chega aí! Bom apetite!`;
+        toast.info(`Status do pedido ${pedidoId.substring(0, 5)} atualizado para EM ENTREGA. Mensagem WhatsApp enviada.`);
+        break;
+      case 'finalizado':
+        // Nova mensagem para "Finalizado"
+        mensagemWhatsApp = `Muito obrigado, ${nomeCliente}! Seu pedido do ${estabelecimentoNome} foi finalizado com sucesso! ✅ Esperamos você em uma próxima!`;
+        toast.success(`Status do pedido ${pedidoId.substring(0, 5)} atualizado para FINALIZADO. Mensagem WhatsApp enviada.`);
+        break;
+      default:
+        // Caso um status desconhecido seja passado
+        toast.warn(`Status desconhecido para atualização do pedido ${pedidoId.substring(0, 5)}.`);
+        return; // Não prosseguir se o status não for tratado
     }
 
     const telefoneLimpo = telefoneCliente.replace(/\D/g, '');
@@ -272,25 +290,27 @@ const updateOrderStatus = async (pedidoId, newStatus) => {
       const pedidoRef = doc(db, 'pedidos', pedidoId);
       await updateDoc(pedidoRef, { status: newStatus });
 
-      alert(`Status do pedido ${pedidoId.substring(0, 5)} atualizado para ${newStatus.replace('_', ' ')}.`);
+      // O toast já foi dado dentro do switch, mas se quiser um feedback geral, pode colocar aqui.
+      // toast.success(`Status do pedido ${pedidoId.substring(0, 5)} atualizado para ${newStatus.replace('_', ' ')}.`); 
 
       window.open(whatsappUrl, '_blank');
 
     } catch (error) {
       console.error("Erro ao atualizar status ou enviar WhatsApp:", error);
-      alert('Erro ao atualizar status do pedido ou enviar mensagem. Por favor, tente novamente.');
+      toast.error('Erro ao atualizar status do pedido ou enviar mensagem. Por favor, tente novamente.'); // Substituição do alert()
     }
   };
 
   const deletePedido = async (pedidoId) => {
+    // window.confirm é mantido por ser uma ação destrutiva que precisa de confirmação
     if (window.confirm('Tem certeza que deseja excluir este pedido? Esta ação é irreversível.')) {
       try {
         const pedidoRef = doc(db, 'pedidos', pedidoId);
         await deleteDoc(pedidoRef);
-        alert('Pedido excluído com sucesso!');
+        toast.success('Pedido excluído com sucesso!'); // Substituição do alert()
       } catch (error) {
         console.error("Erro ao excluir pedido:", error);
-        alert('Erro ao excluir pedido.');
+        toast.error('Erro ao excluir pedido.'); // Substituição do alert()
       }
     }
   };

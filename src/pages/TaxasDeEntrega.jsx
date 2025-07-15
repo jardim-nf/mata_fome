@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase'; // Certifique-se de que o caminho para o seu firebase.js está correto
 import { Link } from 'react-router-dom';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function TaxasDeEntrega() {
     const [bairros, setBairros] = useState([]);
@@ -26,6 +27,7 @@ function TaxasDeEntrega() {
         } catch (err) {
             console.error("Erro ao buscar taxas de entrega:", err);
             setError("Erro ao carregar as taxas de entrega.");
+            toast.error("Erro ao carregar as taxas de entrega."); // Adicionado toast de erro
         } finally {
             setLoading(false);
         }
@@ -42,12 +44,14 @@ function TaxasDeEntrega() {
 
         if (!nomeBairro.trim() || valorTaxa === '') {
             setError("Por favor, preencha o nome do bairro e o valor da taxa.");
+            toast.warn("Por favor, preencha o nome do bairro e o valor da taxa."); // Adicionado toast de aviso
             return;
         }
 
         const valorNumerico = parseFloat(valorTaxa.replace(',', '.'));
         if (isNaN(valorNumerico) || valorNumerico < 0) {
             setError("Por favor, insira um valor numérico válido para a taxa.");
+            toast.warn("Por favor, insira um valor numérico válido para a taxa."); // Adicionado toast de aviso
             return;
         }
 
@@ -59,7 +63,7 @@ function TaxasDeEntrega() {
                     nomeBairro: nomeBairro.trim(),
                     valorTaxa: valorNumerico
                 });
-                alert("Taxa de entrega atualizada com sucesso!");
+                toast.success("Taxa de entrega atualizada com sucesso!"); // Substituição do alert()
                 setEditingId(null);
             } else {
                 // Adicionar
@@ -67,7 +71,7 @@ function TaxasDeEntrega() {
                     nomeBairro: nomeBairro.trim(),
                     valorTaxa: valorNumerico
                 });
-                alert("Taxa de entrega adicionada com sucesso!");
+                toast.success("Taxa de entrega adicionada com sucesso!"); // Substituição do alert()
             }
             setNomeBairro('');
             setValorTaxa('');
@@ -75,6 +79,7 @@ function TaxasDeEntrega() {
         } catch (err) {
             console.error("Erro ao salvar taxa de entrega:", err);
             setError("Erro ao salvar a taxa de entrega. Tente novamente.");
+            toast.error("Erro ao salvar a taxa de entrega. Tente novamente."); // Adicionado toast de erro
         }
     };
 
@@ -93,11 +98,12 @@ function TaxasDeEntrega() {
             try {
                 const bairroDoc = doc(db, 'taxasDeEntrega', id);
                 await deleteDoc(bairroDoc);
-                alert("Taxa de entrega excluída com sucesso!");
+                toast.success("Taxa de entrega excluída com sucesso!"); // Substituição do alert()
                 getTaxas(); // Recarrega a lista
             } catch (err) {
                 console.error("Erro ao excluir taxa de entrega:", err);
                 setError("Erro ao excluir a taxa de entrega. Tente novamente.");
+                toast.error("Erro ao excluir a taxa de entrega. Tente novamente."); // Adicionado toast de erro
             }
         }
     };

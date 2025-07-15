@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function ClientDetails() {
   const { clientId } = useParams(); // Pega o ID do cliente da URL
@@ -20,7 +21,7 @@ function ClientDetails() {
   // Efeito para redirecionar se não for admin
   useEffect(() => {
     if (!authLoading && (!currentUser || !isAdmin)) {
-      alert('Acesso negado. Você precisa ser um administrador para acessar esta página.');
+      toast.error('Acesso negado. Você precisa ser um administrador para acessar esta página.'); // Substituição do alert()
       navigate('/');
     }
   }, [currentUser, isAdmin, authLoading, navigate]);
@@ -38,6 +39,7 @@ function ClientDetails() {
             setClientData({ id: clientDocSnap.id, ...clientDocSnap.data() });
           } else {
             setError('Dados do cliente não encontrados.');
+            toast.error('Dados do cliente não encontrados.'); // Adicionado toast de erro
             setClientData(null);
           }
 
@@ -55,6 +57,7 @@ function ClientDetails() {
         } catch (err) {
           console.error("Erro ao carregar detalhes do cliente ou pedidos:", err);
           setError("Erro ao carregar os detalhes do cliente. Verifique a conexão e permissões.");
+          toast.error("Erro ao carregar os detalhes do cliente."); // Adicionado toast de erro
         } finally {
           setLoadingClient(false);
         }
@@ -64,6 +67,7 @@ function ClientDetails() {
       setLoadingClient(false); // Já foi redirecionado
     } else if (!clientId) {
       setError("ID do cliente não fornecido na URL.");
+      toast.error("ID do cliente não fornecido na URL."); // Adicionado toast de erro
       setLoadingClient(false);
     }
   }, [clientId, currentUser, isAdmin, authLoading]); // Dependências

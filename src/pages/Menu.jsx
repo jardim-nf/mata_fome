@@ -1,10 +1,12 @@
+// src/pages/Menu.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, onSnapshot, orderBy, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import CardapioItem from '../components/CardapioItem'; // Certifique-se de que este componente existe
+import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify'; 
 
 function Menu() {
   const { estabelecimentoSlug } = useParams();
@@ -18,7 +20,6 @@ function Menu() {
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
-  // CORREÇÃO CRÍTICA AQUI: Adicionado 'useState' para a declaração do estado
   const [complemento, setComplemento] = useState(''); 
 
   const [formaPagamento, setFormaPagamento] = useState('');
@@ -47,6 +48,36 @@ function Menu() {
   const [errorAuthModal, setErrorAuthModal] = useState('');
 
   const auth = getAuth();
+
+  // Estados para cupons
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  // Estados para busca e filtragem
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [availableCategories, setAvailableCategories] = useState([]);
+
+  // Cálculos no escopo principal
+  const subtotalCalculado = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+  const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada; 
+  const totalPedidoComTaxa = subtotalCalculado + taxaAplicada;
+  const finalOrderTotal = Math.max(0, totalPedidoComTaxa - discountAmount);
+
+
+  // Efeito para debouncing do termo de busca
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
 
   // Efeito para verificar status de login ao carregar o componente
   useEffect(() => {
@@ -109,6 +140,7 @@ function Menu() {
       setTaxasBairro(data);
     }, (error) => {
       console.error("Erro ao carregar taxas de entrega:", error);
+      toast.error("Erro ao carregar taxas de entrega.");
     });
 
     return () => unsubscribe();
@@ -141,7 +173,7 @@ function Menu() {
     }
   }, [bairro, taxasBairro, isRetirada]);
 
-  // Efeito para carregar informações do estabelecimento e cardápio (por SLUG)
+  // Efeito para carregar informações do estabelecimento e cardápio
   useEffect(() => {
     if (!estabelecimentoSlug || estabelecimentoSlug.trim() === '') {
       setNomeEstabelecimento("Nenhum estabelecimento selecionado.");
@@ -168,27 +200,48 @@ function Menu() {
           setActualEstabelecimentoId(idDoEstabelecimentoReal);
 
           const cardapioCollectionRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio');
-          const qCardapio = query(cardapioCollectionRef, orderBy('nome'));
+          
+          let qCardapio = query(cardapioCollectionRef);
+          if (selectedCategory && selectedCategory !== 'Todos') {
+            qCardapio = query(qCardapio, where('categoria', '==', selectedCategory));
+          }
+          qCardapio = query(qCardapio, orderBy('nome')); 
 
           unsubscribeCardapio = onSnapshot(qCardapio, (snapshot) => {
-            const produtosData = snapshot.docs.map(doc => ({
+            let produtosData = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
+
+            if (debouncedSearchTerm.trim() !== '') {
+                const lowerCaseSearchTerm = debouncedSearchTerm.trim().toLowerCase();
+                produtosData = produtosData.filter(item =>
+                    item.nome.toLowerCase().includes(lowerCaseSearchTerm) ||
+                    item.descricao.toLowerCase().includes(lowerCaseSearchTerm)
+                );
+            }
+
             setProdutos(produtosData);
+
+            const categoriesFromProducts = ['Todos', ...new Set(snapshot.docs.map(doc => doc.data().categoria).filter(Boolean))];
+            setAvailableCategories(categoriesFromProducts);
+
           }, (error) => {
             console.error("Erro ao carregar cardápio em tempo real:", error);
+            toast.error("Erro ao carregar cardápio. Tente novamente.");
             setProdutos([]);
           });
 
         } else {
           setNomeEstabelecimento("Estabelecimento não encontrado.");
+          toast.error("Estabelecimento não encontrado. Verifique o link.");
           setProdutos([]);
           setActualEstabelecimentoId(null);
         }
       } catch (error) {
         console.error("Erro ao carregar estabelecimento ou cardápio por slug:", error);
         setNomeEstabelecimento("Erro ao carregar cardápio.");
+        toast.error("Erro ao carregar cardápio. Tente novamente.");
         setProdutos([]);
         setActualEstabelecimentoId(null);
       }
@@ -201,10 +254,41 @@ function Menu() {
         unsubscribeCardapio();
       }
     };
-  }, [estabelecimentoSlug]);
-
+    
+  }, [estabelecimentoSlug, selectedCategory, debouncedSearchTerm]);
+// Dentro de src/pages/Menu.jsx, adicione este useEffect
+useEffect(() => {
+  const storedReorderItems = localStorage.getItem('reorderItems');
+  if (storedReorderItems) {
+    try {
+      const parsedItems = JSON.parse(storedReorderItems);
+      if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+        // Adiciona os itens ao carrinho. Se o carrinho já tiver itens, os novos serão mesclados.
+        setCarrinho(prevCarrinho => {
+          const newCarrinho = [...prevCarrinho];
+          parsedItems.forEach(reorderItem => {
+            const existing = newCarrinho.find(item => item.id === reorderItem.id);
+            if (existing) {
+              existing.qtd += reorderItem.qtd;
+            } else {
+              newCarrinho.push(reorderItem);
+            }
+          });
+          return newCarrinho;
+        });
+        toast.success('Seu pedido anterior foi carregado no carrinho!');
+      }
+    } catch (e) {
+      console.error("Erro ao parsear reorderItems do localStorage:", e);
+      toast.error('Erro ao carregar re-pedido do histórico.');
+    } finally {
+      localStorage.removeItem('reorderItems'); // Sempre limpa após tentar processar
+    }
+  }
+}, []); // Este useEffect roda apenas na montagem inicial do componente
   const adicionarAoCarrinho = (item) => {
     if (!currentUser || currentClientData === null) {
+      toast.warn('Para adicionar itens, por favor, faça login ou cadastre-se.');
       setShowLoginPrompt(true);
       return;
     }
@@ -215,6 +299,7 @@ function Menu() {
     } else {
       setCarrinho([...carrinho, { ...item, qtd: 1 }]);
     }
+    toast.success(`${item.nome} adicionado ao carrinho!`);
   };
 
   const removerDoCarrinho = (id) => {
@@ -223,26 +308,135 @@ function Menu() {
 
     if (produtoNoCarrinho.qtd === 1) {
       setCarrinho(carrinho.filter((p) => p.id !== id));
+      toast.info(`${produtoNoCarrinho.nome} removido do carrinho.`);
     } else {
       setCarrinho(carrinho.map((p) => (p.id === id ? { ...p, qtd: p.qtd - 1 } : p)));
+      toast.info(`Quantidade de ${produtoNoCarrinho.nome} reduzida.`);
     }
   };
 
+  // Função para aplicar cupom
+  const handleApplyCoupon = async () => {
+    if (!currentUser) {
+        toast.warn('Você precisa estar logado para aplicar um cupom.');
+        return;
+    }
+    if (!couponCodeInput.trim()) {
+        toast.warn('Por favor, digite o código do cupom.');
+        return;
+    }
+
+    setCouponLoading(true);
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+
+    // subtotalCalculado já está disponível no escopo principal
+    try {
+        const couponsRef = collection(db, 'cupons');
+        const q = query(couponsRef, where('codigo', '==', couponCodeInput.toUpperCase().trim()));
+        const couponSnap = await getDocs(q);
+
+        if (couponSnap.empty) {
+            toast.error('Cupom inválido ou não encontrado.');
+            setCouponLoading(false);
+            return;
+        }
+
+        const couponDoc = couponSnap.docs[0];
+        const couponData = { id: couponDoc.id, ...couponDoc.data() };
+        const now = Timestamp.now();
+
+        // Validações do Cupom
+        if (!couponData.ativo) {
+            toast.error('Cupom inativo.');
+            setCouponLoading(false);
+            return;
+        }
+        if (couponData.validadeInicio && couponData.validadeInicio.seconds > now.seconds) {
+            toast.error('Cupom ainda não válido.');
+            setCouponLoading(false);
+            return;
+        }
+        if (couponData.validadeFim && couponData.validadeFim.seconds < now.seconds) {
+            toast.error('Cupom expirado.');
+            setCouponLoading(false);
+            return;
+        }
+        if (couponData.usosMaximos !== null && couponData.usosAtuais >= couponData.usosMaximos) {
+            toast.error('Cupom atingiu o limite máximo de usos.');
+            setCouponLoading(false);
+            return;
+        }
+        if (couponData.minimoPedido !== null && subtotalCalculado < couponData.minimoPedido) {
+            toast.error(`Pedido mínimo de R$ ${couponData.minimoPedido.toFixed(2).replace('.', ',')} para usar este cupom.`);
+            setCouponLoading(false);
+            return;
+        }
+        if (couponData.estabelecimentosId && couponData.estabelecimentosId.length > 0 && !couponData.estabelecimentosId.includes(actualEstabelecimentoId)) {
+            toast.error('Este cupom não é válido para este estabelecimento.');
+            setCouponLoading(false);
+            return;
+        }
+
+        // Validação de usos por usuário
+        if (couponData.usosPorUsuario !== null) {
+            const userCouponUsageRef = doc(db, 'clientes', currentUser.uid, 'couponUsage', couponData.id);
+            const userCouponUsageSnap = await getDocFirestore(userCouponUsageRef);
+            if (userCouponUsageSnap.exists() && userCouponUsageSnap.data().count >= couponData.usosPorUsuario) {
+                toast.error('Você já usou este cupom o número máximo de vezes.');
+                setCouponLoading(false);
+                return;
+            }
+        }
+
+        let calculatedDiscount = 0;
+        if (couponData.tipoDesconto === 'percentual') {
+            calculatedDiscount = subtotalCalculado * (couponData.valorDesconto / 100);
+        } else if (couponData.tipoDesconto === 'valorFixo') {
+            calculatedDiscount = couponData.valorDesconto;
+            if (calculatedDiscount > subtotalCalculado) { // Desconto fixo não pode ser maior que o subtotal
+                calculatedDiscount = subtotalCalculado;
+            }
+        } else if (couponData.tipoDesconto === 'freteGratis') {
+            calculatedDiscount = taxaAplicada; // O desconto será o valor da taxa de entrega
+        }
+
+        setAppliedCoupon(couponData);
+        setDiscountAmount(calculatedDiscount);
+        toast.success(`Cupom ${couponData.codigo} aplicado! Desconto de R$ ${calculatedDiscount.toFixed(2).replace('.', ',')}.`);
+        setCouponLoading(false);
+
+    } catch (error) {
+        console.error("Erro ao aplicar cupom:", error);
+        toast.error('Erro ao aplicar cupom. Tente novamente.');
+        setCouponLoading(false);
+        setAppliedCoupon(null);
+        setDiscountAmount(0);
+    }
+  };
+
+  const removeAppliedCoupon = () => {
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+    setCouponCodeInput('');
+    toast.info('Cupom removido.');
+  };
+
+
   const enviarPedido = async () => {
-    if (!currentUser || currentClientData === null) {
-      alert('Você precisa estar logado e com o cadastro completo para enviar um pedido.');
+    if (!currentUser) {
+      toast.warn('Você precisa estar logado para enviar um pedido.');
       setShowLoginPrompt(true);
       return;
     }
 
     if (!actualEstabelecimentoId) {
-      alert('Erro: Estabelecimento não carregado corretamente. Por favor, recarregue a página.');
+      toast.error('Erro: Estabelecimento não carregado corretamente. Por favor, recarregue a página.');
       return;
     }
 
-    const subtotalCalculado = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
-    const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
-    const totalComTaxaCalculado = subtotalCalculado + taxaAplicada;
+    // Os cálculos de subtotal e total final estão no escopo principal
+    // subtotalCalculado, taxaAplicada, totalPedidoComTaxa, finalOrderTotal
 
     if (
       !nomeCliente.trim() ||
@@ -250,12 +444,12 @@ function Menu() {
       carrinho.length === 0 ||
       !formaPagamento
     ) {
-      alert('Por favor, preencha todos os seus dados (Nome, Telefone), adicione itens ao carrinho e selecione uma forma de pagamento.');
+      toast.warn('Por favor, preencha todos os seus dados (Nome, Telefone), adicione itens ao carrinho e selecione uma forma de pagamento.');
       return;
     }
 
     if (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) {
-      alert('Para entrega, por favor, preencha o endereço completo (Rua, Número, Bairro).');
+      toast.warn('Para entrega, por favor, preencha o endereço completo (Rua, Número, Bairro).');
       return;
     }
 
@@ -271,10 +465,10 @@ function Menu() {
     let valorTrocoPara = null;
     if (formaPagamento === 'dinheiro' && trocoPara.trim() !== '') {
       const trocoNum = Number(trocoPara);
-      if (trocoNum > totalComTaxaCalculado) {
+      if (trocoNum > finalOrderTotal) {
         valorTrocoPara = trocoNum;
       } else {
-        alert(`O valor para troco (R$ ${trocoNum.toFixed(2).replace('.', ',')}) deve ser maior que o total do pedido (R$ ${totalComTaxaCalculado.toFixed(2).replace('.', ',')}).`);
+        toast.warn(`O valor para troco (R$ ${trocoNum.toFixed(2).replace('.', ',')}) deve ser maior que o total do pedido (R$ ${finalOrderTotal.toFixed(2).replace('.', ',')}).`);
         return;
       }
     }
@@ -289,7 +483,7 @@ function Menu() {
           bairro: bairro.trim(),
           complemento: complemento.trim()
         },
-        userId: currentUser ? currentUser.uid : null
+        userId: currentUser.uid // Garante que o userId está sempre presente
       },
       estabelecimentoId: actualEstabelecimentoId,
       itens: carrinho.map(item => ({
@@ -303,14 +497,62 @@ function Menu() {
       formaPagamento: formaPagamento,
       trocoPara: valorTrocoPara,
       taxaEntrega: taxaAplicada,
-      totalFinal: totalComTaxaCalculado,
+      totalFinal: finalOrderTotal, // Use o total final aqui!
       tipoEntrega: isRetirada ? 'retirada' : 'delivery',
       ...(formaPagamento === 'pix' && {
         statusPagamentoPix: 'aguardando_pagamento',
+      }),
+      // Adiciona cupom ao pedido se aplicado
+      ...(appliedCoupon && {
+          cupomAplicado: {
+              id: appliedCoupon.id,
+              codigo: appliedCoupon.codigo,
+              tipoDesconto: appliedCoupon.tipoDesconto,
+              valorDesconto: appliedCoupon.valorDesconto,
+              descontoCalculado: discountAmount
+          }
       })
     };
 
     try {
+      // Transação para atualizar usos do cupom
+      if (appliedCoupon) {
+          await runTransaction(db, async (transaction) => {
+              const couponRef = doc(db, 'cupons', appliedCoupon.id);
+              const userCouponUsageRef = doc(db, 'clientes', currentUser.uid, 'couponUsage', appliedCoupon.id);
+
+              // Todas as leituras primeiro
+              const couponSnap = await transaction.get(couponRef);
+              const userCouponUsageSnap = await transaction.get(userCouponUsageRef);
+
+              // Validações baseadas nas leituras
+              if (!couponSnap.exists()) {
+                  throw new Error("Cupom não existe mais!");
+              }
+              const currentUsosAtuais = couponSnap.data().usosAtuais || 0;
+              
+              if (couponSnap.data().usosMaximos !== null && currentUsosAtuais >= couponSnap.data().usosMaximos) {
+                  throw new Error("Cupom já atingiu o limite total de usos.");
+              }
+
+              let currentUserUses = 0;
+              if (appliedCoupon.usosPorUsuario !== null) {
+                  if (userCouponUsageSnap.exists()) {
+                      currentUserUses = userCouponUsageSnap.data().count || 0;
+                  }
+                  if (currentUserUses >= appliedCoupon.usosPorUsuario) {
+                      throw new Error("Você já usou este cupom o número máximo de vezes.");
+                  }
+              }
+
+              // Todas as escritas depois das leituras e validações
+              transaction.update(couponRef, { usosAtuais: currentUsosAtuais + 1 });
+              if (appliedCoupon.usosPorUsuario !== null) {
+                  transaction.set(userCouponUsageRef, { count: currentUserUses + 1 }, { merge: true });
+              }
+          });
+      }
+
       const docRef = await addDoc(collection(db, 'pedidos'), pedido);
 
       setConfirmedOrderDetails({
@@ -319,27 +561,38 @@ function Menu() {
         itens: pedido.itens,
         subtotal: subtotalCalculado,
         taxaEntrega: taxaAplicada,
-        totalFinal: totalComTaxaCalculado,
+        totalFinal: finalOrderTotal, // Use o total final aqui!
         formaPagamento: formaPagamento,
         trocoPara: valorTrocoPara,
         tipoEntrega: pedido.tipoEntrega,
+        cupomAplicado: appliedCoupon ? { codigo: appliedCoupon.codigo, desconto: discountAmount } : null
       });
       setShowOrderConfirmationModal(true);
+      toast.success('Seu pedido foi enviado com sucesso! 🎉');
 
       setCarrinho([]);
       setFormaPagamento('');
       setTrocoPara('');
       setTaxaEntregaCalculada(0);
       setBairroNaoEncontrado(false);
+      setCouponCodeInput('');
+      setAppliedCoupon(null);
+      setDiscountAmount(0);
 
     } catch (error) {
-      console.error("Erro ao enviar pedido: ", error);
-      alert("❌ Ocorreu um erro ao enviar seu pedido. Por favor, tente novamente.");
+      console.error("Erro ao enviar pedido ou aplicar cupom (transação): ", error);
+      // Mensagens de erro específicas da transação
+      if (error.message && (error.message.includes("limite total de usos") || error.message.includes("máximo de vezes") || error.message.includes("Cupom não existe mais"))) {
+        toast.error(`❌ Erro no cupom: ${error.message}`);
+      } else {
+        toast.error(`❌ Ocorreu um erro ao enviar seu pedido. Por favor, tente novamente.`);
+      }
     }
   };
 
-  const subtotalPedido = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
-  const totalPedidoComTaxa = subtotalPedido + taxaEntregaCalculada;
+  // Os cálculos de subtotal e total final estão no escopo principal
+  // finalOrderTotal é o total que será exibido e salvo no pedido
+
 
   // Lida com o login diretamente dentro do modal
   const handleLoginModal = async (e) => {
@@ -347,7 +600,7 @@ function Menu() {
     setErrorAuthModal('');
     try {
       await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
-      alert('Login realizado com sucesso!');
+      toast.success('Login realizado com sucesso!');
       setShowLoginPrompt(false);
       setEmailAuthModal('');
       setPasswordAuthModal('');
@@ -357,6 +610,7 @@ function Menu() {
       else if (error.code === 'auth/wrong-password') msg = "Senha incorreta.";
       else if (error.code === 'auth/invalid-email') msg = "Email inválido.";
       setErrorAuthModal(msg);
+      toast.error(msg);
       console.error("Login error:", error);
     }
   };
@@ -377,7 +631,7 @@ function Menu() {
         criadoEm: Timestamp.now(),
       });
 
-      alert('Cadastro realizado com sucesso! Você está logado.');
+      toast.success('Cadastro realizado com sucesso! Você está logado.');
       setShowLoginPrompt(false);
       setIsRegisteringInModal(false);
       setEmailAuthModal('');
@@ -389,6 +643,7 @@ function Menu() {
       if (error.code === 'auth/email-already-in-use') msg = "Este email já está cadastrado.";
       else if (error.code === 'auth/weak-password') msg = "Senha muito fraca (mín. 6 caracteres).";
       setErrorAuthModal(msg);
+      toast.error(msg);
       console.error("Registration error:", error);
     }
   };
@@ -411,10 +666,50 @@ function Menu() {
         <p className="text-center text-[var(--cinza-texto)] mb-8">{estabelecimentoInfo.descricao}</p>
       )}
 
+      {/* SEÇÃO DE BUSCA E FILTRAGEM */}
+      <div className="mb-8 p-4 bg-white rounded-lg shadow-md border border-gray-200">
+        <div className="mb-4">
+          <label htmlFor="search" className="sr-only">Buscar no Cardápio</label>
+          <input
+            type="text"
+            id="search"
+            placeholder="Buscar por nome ou descrição..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {availableCategories.map((category) => (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors duration-200
+                ${selectedCategory === category
+                  ? 'bg-[var(--vermelho-principal)] text-white'
+                  : 'bg-gray-200 text-[var(--marrom-escuro)] hover:bg-gray-300'
+                }`}
+            >
+              {category}
+            </button>
+          ))}
+          {/* Botão para limpar filtros */}
+          {(searchTerm !== '' || selectedCategory !== 'Todos') && (
+            <button
+              onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
+              className="px-4 py-2 rounded-full text-sm font-semibold bg-gray-400 text-white hover:bg-gray-500 transition-colors duration-200"
+            >
+              Limpar Filtros
+            </button>
+          )}
+        </div>
+      </div>
+      {/* FIM SEÇÃO DE BUSCA E FILTRAGEM */}
+
       {produtos.length === 0 && nomeEstabelecimento === "Carregando Cardápio..." ? (
         <p className="text-center text-[var(--marrom-escuro)] italic mt-8">Carregando cardápio...</p>
       ) : produtos.length === 0 ? (
-        <p className="text-center text-gray-500 italic mt-8">Nenhum item disponível neste cardápio ou estabelecimento não encontrado.</p>
+        <p className="text-center text-gray-500 italic mt-8">Nenhum item disponível neste cardápio com os filtros selecionados.</p>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {produtos.map((item) => (
@@ -470,7 +765,7 @@ function Menu() {
             <div className="border-t border-gray-200 pt-4 mt-4 text-[var(--marrom-escuro)]">
               <div className="flex justify-between items-center text-lg mb-1">
                 <span>Subtotal:</span>
-                <span>R$ {subtotalPedido.toFixed(2).replace('.', ',')}</span>
+                <span>R$ {subtotalCalculado.toFixed(2).replace('.', ',')}</span>
               </div>
               {/* Exibe a taxa de entrega calculada se não for retirada */}
               {!isRetirada && taxaEntregaCalculada > 0 && (
@@ -485,9 +780,59 @@ function Menu() {
                   Atenção: O bairro digitado não foi encontrado na lista de taxas. Taxa de entrega pode ser reavaliada.
                 </p>
               )}
-              <div className="flex justify-between items-center text-2xl font-bold">
-                <span>Total:</span>
-                <span>R$ {totalPedidoComTaxa.toFixed(2).replace('.', ',')}</span>
+
+              {/* SEÇÃO DE CUPOM */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                {!appliedCoupon ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Código do Cupom"
+                      value={couponCodeInput}
+                      onChange={(e) => setCouponCodeInput(e.target.value)}
+                      className="flex-1 border border-gray-300 rounded-md px-3 py-2"
+                      disabled={couponLoading}
+                    />
+                    <button
+                      onClick={handleApplyCoupon}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-semibold"
+                      disabled={couponLoading || !couponCodeInput.trim()}
+                    >
+                      {couponLoading ? 'Aplicando...' : 'Aplicar'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center bg-green-50 p-2 rounded-md">
+                    <p className="text-green-800 font-semibold">Cupom Aplicado: {appliedCoupon.codigo}</p>
+                    <button
+                      onClick={removeAppliedCoupon}
+                      className="text-red-600 hover:underline text-sm"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                )}
+                {/* Exibe o desconto calculado se não for frete grátis */}
+                {discountAmount > 0 && appliedCoupon?.tipoDesconto !== 'freteGratis' && (
+                  <div className="flex justify-between items-center text-lg mt-2 text-green-700">
+                    <span>Desconto:</span>
+                    <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                )}
+                {/* Exibe o frete grátis se for o caso */}
+                {discountAmount > 0 && appliedCoupon?.tipoDesconto === 'freteGratis' && (
+                  <div className="flex justify-between items-center text-lg mt-2 text-green-700">
+                    <span>Frete Grátis:</span>
+                    <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                )}
+              </div>
+              {/* FIM SEÇÃO DE CUPOM */}
+
+
+              <div className="flex justify-between items-center text-2xl font-bold mt-4">
+                <span>TOTAL:</span>
+                <span>R$ {finalOrderTotal.toFixed(2).replace('.', ',')}</span> {/* Use o total final */}
               </div>
             </div>
           </>
@@ -657,7 +1002,7 @@ function Menu() {
                 value={trocoPara}
                 onChange={(e) => setTrocoPara(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-                placeholder={`Ex: R$ ${(totalPedidoComTaxa + 10).toFixed(2).replace('.', ',')}`}
+                placeholder={`Ex: R$ ${(finalOrderTotal + 10).toFixed(2).replace('.', ',')}`}
               />
             </div>
           )}
@@ -671,7 +1016,7 @@ function Menu() {
           <button
             onClick={enviarPedido}
             className={`px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg ${
-              (!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser || currentClientData === null)
+              (!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser)
                 ? 'bg-gray-200 text-gray-900 cursor-not-allowed'
                 : 'bg-green-300 text-white hover:bg-green-700'
             }`}
@@ -681,8 +1026,7 @@ function Menu() {
               (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) ||
               carrinho.length === 0 ||
               !formaPagamento ||
-              !currentUser ||
-              currentClientData === null
+              !currentUser
             }
           >
             Enviar Pedido Agora!
@@ -706,6 +1050,9 @@ function Menu() {
               <p><strong>Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
               <p><strong>Pagamento:</strong> {confirmedOrderDetails.formaPagamento.charAt(0).toUpperCase() + confirmedOrderDetails.formaPagamento.slice(1)}</p>
               <p><strong>Entrega:</strong> {confirmedOrderDetails.tipoEntrega === 'retirada' ? 'Retirada' : 'Delivery'}</p>
+              {confirmedOrderDetails.cupomAplicado && (
+                  <p className="text-green-700"><strong>Cupom:</strong> {confirmedOrderDetails.cupomAplicado.codigo} (- R$ {confirmedOrderDetails.cupomAplicado.desconto.toFixed(2).replace('.', ',')})</p>
+              )}
             </div>
 
             <button

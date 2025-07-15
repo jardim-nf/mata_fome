@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { collection, addDoc, Timestamp } from "firebase/firestore"; // Importe Timestamp aqui
 import { db } from "../firebase";
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function FormularioPedido() {
   const [nome, setNome] = useState("");
@@ -26,13 +27,13 @@ function FormularioPedido() {
     e.preventDefault();
 
     if (!nome.trim() || !telefone.trim()) {
-      alert("Preencha o nome e telefone do cliente.");
+      toast.warn("Preencha o nome e telefone do cliente."); // Substituição do alert()
       return;
     }
 
     // Verifica se todos os itens têm nome e quantidade válida
     if (itens.length === 0 || itens.some((item) => item.nome.trim() === "" || item.quantidade < 1 || item.preco < 0)) {
-      alert("Preencha todos os itens corretamente (nome, quantidade e preço positivo).");
+      toast.warn("Preencha todos os itens corretamente (nome, quantidade e preço positivo)."); // Substituição do alert()
       return;
     }
 
@@ -46,7 +47,7 @@ function FormularioPedido() {
     setNome("");
     setTelefone("");
     setItens([{ nome: "", quantidade: 1, preco: 0 }]);
-    alert("✅ Pedido cadastrado com sucesso!");
+    toast.success("✅ Pedido cadastrado com sucesso!"); // Substituição do alert()
   };
 
   return (

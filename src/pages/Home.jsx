@@ -1,3 +1,4 @@
+// src/pages/Home.jsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -5,13 +6,14 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } f
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import logo from '../assets/logo-deufome.png';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function Home() {
   const { authLoading, currentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const whatsappNumber = "5522999822324";
+  const whatsappNumber = "5522999822324"; // Este número precisa ser do seu negócio
   const messageSuporteAdmin = encodeURIComponent("Olá, estou com dificuldades para acessar/cadastrar como administrador no DeuFome. Poderiam me ajudar?");
 
   const [estabelecimentosDestaque, setEstabelecimentosDestaque] = useState([]);
@@ -44,6 +46,7 @@ function Home() {
       } catch (err) {
         console.error("Erro ao carregar estabelecimentos:", err);
         setErrorEstabelecimentos("Erro ao carregar estabelecimentos.");
+        toast.error("Erro ao carregar estabelecimentos em destaque. Tente novamente mais tarde."); // Adicione toast de erro
       } finally {
         setLoadingEstabelecimentos(false);
       }
@@ -77,7 +80,7 @@ function Home() {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
-      alert('Login Cliente realizado com sucesso!');
+      toast.success('Login Cliente realizado com sucesso!'); // Substituição do alert()
       setMostrarLoginCliente(false); // Fecha o modal
       setEmailLogin(''); // Limpa os campos do formulário
       setSenhaLogin('');
@@ -88,7 +91,15 @@ function Home() {
         navigate('/'); // Se não houver 'from' (login direto da Home), navega para a Home
       }
     } catch (error) {
-      alert("Erro ao fazer login. Verifique as credenciais.");
+      let errorMessage = "Erro ao fazer login. Verifique as credenciais.";
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'Usuário não encontrado. Crie uma conta.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Senha incorreta.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Email inválido.';
+      }
+      toast.error(errorMessage); // Substituição do alert()
       console.error("Erro no login do cliente:", error);
     }
   };
@@ -98,13 +109,21 @@ function Home() {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
-      alert('Login Administrador realizado com sucesso!');
+      toast.success('Login Administrador realizado com sucesso!'); // Substituição do alert()
       setMostrarLoginAdmin(false); // Fecha o modal
       setEmailLogin(''); // Limpa os campos do formulário
       setSenhaLogin('');
       navigate('/painel'); // Admin é redirecionado para o painel (comportamento desejado para admin)
     } catch (error) {
-      alert("Erro ao fazer login. Verifique as credenciais.");
+      let errorMessage = "Erro ao fazer login. Verifique as credenciais.";
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'Usuário não encontrado.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Senha incorreta.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Email inválido.';
+      }
+      toast.error(errorMessage); // Substituição do alert()
       console.error("Erro no login do admin:", error);
     }
   };
@@ -130,7 +149,7 @@ function Home() {
         criadoEm: new Date(),
       });
 
-      alert('Cadastro realizado com sucesso! Você está logado.');
+      toast.success('Cadastro realizado com sucesso! Você está logado.'); // Substituição do alert()
       setMostrarCadastroCliente(false); // Fecha o modal de cadastro
       setEmailCadastro('');
       setSenhaCadastro('');
@@ -150,7 +169,7 @@ function Home() {
       } else if (error.code === 'auth/weak-password') {
         errorMessage = 'A senha é muito fraca. Ela deve ter pelo menos 6 caracteres.';
       }
-      alert(`Erro: ${errorMessage}`);
+      toast.error(`Erro: ${errorMessage}`); // Substituição do alert()
     }
   };
 

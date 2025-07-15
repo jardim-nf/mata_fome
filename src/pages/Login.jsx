@@ -4,25 +4,25 @@ import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(''); // Manter setError para mensagens no formulário, se desejar
   const navigate = useNavigate();
   const auth = getAuth();
 
   const handleAuthAction = async (e) => {
     e.preventDefault();
-    setError('');
+    setError(''); // Limpa o erro do formulário antes de tentar
 
     try {
       let userCredential;
       if (isRegistering) {
-        // Lógica de Cadastro (mantida)
-        // ... (seu código de cadastro existente)
+        // Lógica de Cadastro
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
@@ -32,7 +32,8 @@ function Login() {
           isAdmin: false, 
           criadoEm: Timestamp.now() 
         });
-        alert('Cadastro realizado com sucesso! Você pode fazer login agora.');
+        
+        toast.success('🎉 Cadastro realizado com sucesso! Você pode fazer login agora.'); // Substituição do alert()
         setIsRegistering(false);
         setEmail('');
         setPassword('');
@@ -48,44 +49,46 @@ function Login() {
         const userDocSnap = await getDoc(userDocRef);
 
         if (userDocSnap.exists() && userDocSnap.data()?.isAdmin) {
-          // <<-- MUDANÇA AQUI: Redireciona para o Dashboard -->>
+          toast.success('Bem-vindo, Administrador! Redirecionando para o Dashboard.'); // Feedback de sucesso no login
           navigate('/dashboard'); 
         } else {
-          setError('Acesso negado. Você não tem permissões de administrador.');
-          await auth.signOut();
+          const errorMessage = 'Acesso negado. Você não tem permissões de administrador.';
+          setError(errorMessage); // Para exibir no formulário
+          toast.error(errorMessage); // Para exibir como toast
+          await auth.signOut(); // Desloga o usuário que não é admin
         }
       }
     } catch (error) {
-      // Tratamento de Erros (mantido)
-      // ...
+      // Tratamento de Erros de Autenticação
+      let errorMessage = 'Erro na operação. Verifique suas informações.';
       switch (error.code) {
         case 'auth/user-not-found':
-          setError('Usuário não encontrado. Verifique seu email.');
+          errorMessage = 'Usuário não encontrado. Verifique seu email.';
           break;
         case 'auth/wrong-password':
-          setError('Senha incorreta. Tente novamente.');
+          errorMessage = 'Senha incorreta. Tente novamente.';
           break;
         case 'auth/invalid-email':
-          setError('Email inválido.');
+          errorMessage = 'Email inválido.';
           break;
         case 'auth/email-already-in-use':
-          setError('Este email já está cadastrado.');
+          errorMessage = 'Este email já está cadastrado.';
           break;
         case 'auth/weak-password':
-          setError('Senha muito fraca. Deve ter pelo menos 6 caracteres.');
+          errorMessage = 'Senha muito fraca. Deve ter pelo menos 6 caracteres.';
           break;
         case 'auth/too-many-requests':
-          setError('Muitas tentativas. Tente novamente mais tarde.');
+          errorMessage = 'Muitas tentativas de login. Tente novamente mais tarde.';
           break;
         default:
-          setError('Erro na operação. Verifique suas informações.');
           console.error("Erro de autenticação:", error.message);
       }
+      setError(errorMessage); // Exibe no formulário
+      toast.error(errorMessage); // Exibe como toast
     }
   };
 
   return (
-    // ... (restante do seu componente Login.jsx)
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--bege-claro)] p-4">
       <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
         <h2 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-6">

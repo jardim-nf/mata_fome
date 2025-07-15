@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function Layout() {
   const { logout, currentUser, currentClientData, isAdmin } = useAuth();
@@ -9,11 +10,11 @@ function Layout() {
   const handleLogout = async () => {
     try {
       await logout();
-      alert('Você foi desconectado!');
+      toast.success('Você foi desconectado!'); // Substituição do alert()
       navigate('/'); // Redireciona para a tela inicial após o logout
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
-      alert('Erro ao sair. Tente novamente.');
+      toast.error('Erro ao sair. Tente novamente.'); // Substituição do alert()
     }
   };
 
@@ -46,6 +47,9 @@ function Layout() {
                 {displayName && ( // Exibe o nome se ele existir
                   <span className="text-sm text-gray-600 font-semibold">Olá, {displayName}!</span>
                 )}
+                    <Link to="/historico-pedidos" className="text-gray-700 hover:text-[var(--vermelho-principal)] px-2 py-1 rounded-md">
+      Meus Pedidos
+    </Link>
                 <button
                   onClick={handleLogout}
                   className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md font-semibold"

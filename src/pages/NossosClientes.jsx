@@ -12,7 +12,7 @@ function NossosClientes() {
   useEffect(() => {
     const fetchClientes = async () => {
       try {
-        const clientesCollection = collection(db, 'users'); // Nome da sua coleção de usuários/clientes
+        const clientesCollection = collection(db, 'clientes'); // <-- Linha corrigida!
         const clientesSnapshot = await getDocs(clientesCollection);
         const clientesList = clientesSnapshot.docs.map(doc => ({
           id: doc.id,

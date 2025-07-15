@@ -60,10 +60,15 @@ function ComandaView() {
     navigate('/painel');
   };
 
-  // --- Processamento dos dados para exibição (movemos para dentro do return principal) ---
+  // --- Processamento dos dados para exibição ---
   const totalPedido = pedido?.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0) : 0;
   const taxaEntregaExibida = pedido?.taxaEntrega || 0;
-  const totalFinalComTaxa = totalPedido + taxaEntregaExibida;
+  
+  // <<-- CALCULA O DESCONTO DO CUPOM PARA EXIBIÇÃO -->>
+  const descontoCupomExibido = pedido?.cupomAplicado?.descontoCalculado || 0;
+  // O total final na comanda deve refletir o total final já com o desconto
+  const totalFinalComDesconto = totalPedido + taxaEntregaExibida - descontoCupomExibido;
+
 
   const dataPedido = pedido?.criadoEm && typeof pedido.criadoEm.toDate === 'function' 
                          ? pedido.criadoEm.toDate().toLocaleString('pt-BR') 
@@ -189,8 +194,13 @@ function ComandaView() {
             <div className="text-right text-xl font-bold mb-2">
               <p>Subtotal: R$ {totalPedido.toFixed(2).replace('.', ',')}</p>
               {taxaEntregaExibida > 0 && <p>Taxa de Entrega: R$ {taxaEntregaExibida.toFixed(2).replace('.', ',')}</p>}
-              {pedido.desconto > 0 && <p>Desconto: R$ {pedido.desconto.toFixed(2).replace('.', ',')}</p>}
-              <p className="mt-2 text-2xl">TOTAL A PAGAR: R$ {totalFinalComTaxa.toFixed(2).replace('.', ',')}</p>
+              
+              {/* <<-- EXIBE O DESCONTO DO CUPOM SE EXISTIR -->> */}
+              {descontoCupomExibido > 0 && (
+                <p className="text-green-700">Desconto ({pedido.cupomAplicado.codigo}): - R$ {descontoCupomExibido.toFixed(2).replace('.', ',')}</p>
+              )}
+
+              <p className="mt-2 text-2xl">TOTAL A PAGAR: R$ {totalFinalComDesconto.toFixed(2).replace('.', ',')}</p>
             </div>
 
             <hr className="border-t border-gray-300 my-4" />

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
+import { toast } from 'react-toastify'; // Importe o toast aqui!
 
 function AdminEstablishmentManagement() {
     const [estabelecimentos, setEstabelecimentos] = useState([]);
@@ -44,6 +45,7 @@ function AdminEstablishmentManagement() {
         }, (err) => {
             console.error("Erro ao carregar estabelecimentos:", err);
             setError("Não foi possível carregar os estabelecimentos.");
+            toast.error("Erro ao carregar estabelecimentos."); // Adicionado toast de erro
             setLoading(false);
         });
         return () => unsub();
@@ -121,7 +123,7 @@ function AdminEstablishmentManagement() {
         } else if (editingEstablishment && nome.trim() !== '' && (slug.trim() === generateSlug(editingEstablishment.nome || '') || slug.trim() === '')) {
             setSlug(generateSlug(nome));
         }
-    }, [nome, editingEstablishment]);
+    }, [nome, editingEstablishment, slug]); // Adicione slug à dependência para evitar loop infinito na geração, se o slug for manual.
 
     // Função para salvar (adicionar ou atualizar) o estabelecimento
     const handleSaveEstablishment = async (e) => {
@@ -132,6 +134,7 @@ function AdminEstablishmentManagement() {
         // Validações básicas
         if (!nome.trim() || !whatsapp.trim() || !slug.trim()) {
             setFormError("Nome, WhatsApp e Slug são obrigatórios.");
+            toast.warn("Nome, WhatsApp e Slug são obrigatórios."); // Adicionado toast de aviso
             setFormLoading(false);
             return;
         }
@@ -143,8 +146,10 @@ function AdminEstablishmentManagement() {
 
             if (!querySnapshot.empty) {
                 if (editingEstablishment && querySnapshot.docs[0].id === editingEstablishment.id) {
+                    // OK, é o próprio estabelecimento sendo editado
                 } else {
                     setFormError("Este slug já está em uso por outro estabelecimento. Escolha outro.");
+                    toast.error("Este slug já está em uso por outro estabelecimento. Escolha outro."); // Adicionado toast de erro
                     setFormLoading(false);
                     return;
                 }
@@ -152,6 +157,7 @@ function AdminEstablishmentManagement() {
         } catch (err) {
             console.error("Erro na validação de slug:", err);
             setFormError("Erro ao validar slug. Tente novamente.");
+            toast.error("Erro ao validar slug. Tente novamente."); // Adicionado toast de erro
             setFormLoading(false);
             return;
         }
@@ -181,15 +187,16 @@ function AdminEstablishmentManagement() {
             if (editingEstablishment) {
                 const estabRef = doc(db, 'estabelecimentos', editingEstablishment.id);
                 await updateDoc(estabRef, establishmentData);
-                alert('Estabelecimento atualizado com sucesso!');
+                toast.success('Estabelecimento atualizado com sucesso!'); // Substituição do alert()
             } else {
                 await addDoc(collection(db, 'estabelecimentos'), establishmentData);
-                alert('Estabelecimento cadastrado com sucesso!');
+                toast.success('Estabelecimento cadastrado com sucesso!'); // Substituição do alert()
             }
             closeForm();
         } catch (err) {
             console.error("Erro ao salvar estabelecimento:", err);
             setFormError("Erro ao salvar estabelecimento. Verifique o console.");
+            toast.error("Erro ao salvar estabelecimento. Verifique o console."); // Adicionado toast de erro
         } finally {
             setFormLoading(false);
         }
@@ -200,10 +207,10 @@ function AdminEstablishmentManagement() {
         if (window.confirm(`Tem certeza que deseja excluir o estabelecimento "${nomeEstab}"? Esta ação é irreversível!`)) {
             try {
                 await deleteDoc(doc(db, 'estabelecimentos', id));
-                alert('Estabelecimento excluído com sucesso!');
+                toast.success('Estabelecimento excluído com sucesso!'); // Substituição do alert()
             } catch (err) {
                 console.error("Erro ao excluir estabelecimento:", err);
-                alert("Erro ao excluir estabelecimento. Verifique o console.");
+                toast.error("Erro ao excluir estabelecimento. Verifique o console."); // Substituição do alert()
             }
         }
     };
@@ -220,8 +227,8 @@ function AdminEstablishmentManagement() {
         <div className="min-h-screen bg-[var(--bege-claro)] p-6">
             <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-xl p-8">
                 <Link to="/dashboard" className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300 mb-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                        <path fillRule="evenodd" d="M15 19l-7-7 7-7"></path>
                     </svg>
                     Voltar para o Dashboard
                 </Link>
