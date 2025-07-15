@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Link } from 'react-router-dom';
-import { toast } from 'react-toastify'; // Importe o toast aqui!
+import { Link, useNavigate } from 'react-router-dom'; // Importe useNavigate aqui!
+import { toast } from 'react-toastify';
 
 function AdminEstablishmentManagement() {
     const [estabelecimentos, setEstabelecimentos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const navigate = useNavigate(); // Inicialize useNavigate aqui!
 
     // Estados para o formulário de cadastro/edição
     const [showForm, setShowForm] = useState(false);
@@ -45,7 +46,7 @@ function AdminEstablishmentManagement() {
         }, (err) => {
             console.error("Erro ao carregar estabelecimentos:", err);
             setError("Não foi possível carregar os estabelecimentos.");
-            toast.error("Erro ao carregar estabelecimentos."); // Adicionado toast de erro
+            toast.error("Erro ao carregar estabelecimentos.");
             setLoading(false);
         });
         return () => unsub();
@@ -123,7 +124,7 @@ function AdminEstablishmentManagement() {
         } else if (editingEstablishment && nome.trim() !== '' && (slug.trim() === generateSlug(editingEstablishment.nome || '') || slug.trim() === '')) {
             setSlug(generateSlug(nome));
         }
-    }, [nome, editingEstablishment, slug]); // Adicione slug à dependência para evitar loop infinito na geração, se o slug for manual.
+    }, [nome, editingEstablishment, slug]);
 
     // Função para salvar (adicionar ou atualizar) o estabelecimento
     const handleSaveEstablishment = async (e) => {
@@ -134,7 +135,7 @@ function AdminEstablishmentManagement() {
         // Validações básicas
         if (!nome.trim() || !whatsapp.trim() || !slug.trim()) {
             setFormError("Nome, WhatsApp e Slug são obrigatórios.");
-            toast.warn("Nome, WhatsApp e Slug são obrigatórios."); // Adicionado toast de aviso
+            toast.warn("Nome, WhatsApp e Slug são obrigatórios.");
             setFormLoading(false);
             return;
         }
@@ -149,7 +150,7 @@ function AdminEstablishmentManagement() {
                     // OK, é o próprio estabelecimento sendo editado
                 } else {
                     setFormError("Este slug já está em uso por outro estabelecimento. Escolha outro.");
-                    toast.error("Este slug já está em uso por outro estabelecimento. Escolha outro."); // Adicionado toast de erro
+                    toast.error("Este slug já está em uso por outro estabelecimento. Escolha outro.");
                     setFormLoading(false);
                     return;
                 }
@@ -157,7 +158,7 @@ function AdminEstablishmentManagement() {
         } catch (err) {
             console.error("Erro na validação de slug:", err);
             setFormError("Erro ao validar slug. Tente novamente.");
-            toast.error("Erro ao validar slug. Tente novamente."); // Adicionado toast de erro
+            toast.error("Erro ao validar slug. Tente novamente.");
             setFormLoading(false);
             return;
         }
@@ -187,16 +188,16 @@ function AdminEstablishmentManagement() {
             if (editingEstablishment) {
                 const estabRef = doc(db, 'estabelecimentos', editingEstablishment.id);
                 await updateDoc(estabRef, establishmentData);
-                toast.success('Estabelecimento atualizado com sucesso!'); // Substituição do alert()
+                toast.success('Estabelecimento atualizado com sucesso!');
             } else {
                 await addDoc(collection(db, 'estabelecimentos'), establishmentData);
-                toast.success('Estabelecimento cadastrado com sucesso!'); // Substituição do alert()
+                toast.success('Estabelecimento cadastrado com sucesso!');
             }
             closeForm();
         } catch (err) {
             console.error("Erro ao salvar estabelecimento:", err);
             setFormError("Erro ao salvar estabelecimento. Verifique o console.");
-            toast.error("Erro ao salvar estabelecimento. Verifique o console."); // Adicionado toast de erro
+            toast.error("Erro ao salvar estabelecimento.");
         } finally {
             setFormLoading(false);
         }
@@ -207,10 +208,10 @@ function AdminEstablishmentManagement() {
         if (window.confirm(`Tem certeza que deseja excluir o estabelecimento "${nomeEstab}"? Esta ação é irreversível!`)) {
             try {
                 await deleteDoc(doc(db, 'estabelecimentos', id));
-                toast.success('Estabelecimento excluído com sucesso!'); // Substituição do alert()
+                toast.success('Estabelecimento excluído com sucesso!');
             } catch (err) {
                 console.error("Erro ao excluir estabelecimento:", err);
-                toast.error("Erro ao excluir estabelecimento. Verifique o console."); // Substituição do alert()
+                toast.error("Erro ao excluir estabelecimento. Verifique o console.");
             }
         }
     };
@@ -226,17 +227,20 @@ function AdminEstablishmentManagement() {
     return (
         <div className="min-h-screen bg-[var(--bege-claro)] p-6">
             <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-xl p-8">
-                <Link to="/dashboard" className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300 mb-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                        <path fillRule="evenodd" d="M15 19l-7-7 7-7"></path>
+                {/* <<-- BOTÃO VOLTAR ALTERADO PARA navigate(-1) -->> */}
+                <button
+                    onClick={() => navigate(-1)}
+                    className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300 mb-6"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 0 010-1.414l4-4a1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
                     </svg>
-                    Voltar para o Dashboard
-                </Link>
+                    Voltar
+                </button>
 
                 <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-8">
                     Gerenciar Estabelecimentos
                 </h1>
-
                 {/* Botão para adicionar novo estabelecimento */}
                 <div className="text-right mb-6">
                     <button

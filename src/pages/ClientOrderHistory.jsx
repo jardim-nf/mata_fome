@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom'; // Importe useNavigate aqui!
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 
 function ClientOrderHistory() {
   const { currentUser, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // Inicialize useNavigate aqui!
 
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -77,10 +77,13 @@ function ClientOrderHistory() {
       // 3. Redireciona para o cardápio do estabelecimento
       // Certifique-se de que o pedido.estabelecimentoId está salvo e que o slug existe
       if (order.estabelecimentoId) {
-        const estabelecimentoDoc = await getDocs(query(collection(db, 'estabelecimentos'), where('__name__', '==', order.estabelecimentoId)));
-        if (!estabelecimentoDoc.empty && estabelecimentoDoc.docs[0].data().slug) {
+        // Para buscar o slug do estabelecimento pelo ID
+        const estabelecimentoDocRef = doc(db, 'estabelecimentos', order.estabelecimentoId);
+        const estabelecimentoSnap = await getDoc(estabelecimentoDocRef); // Usando getDoc Firestore
+
+        if (estabelecimentoSnap.exists() && estabelecimentoSnap.data().slug) {
           toast.info('Seu pedido anterior está sendo carregado no carrinho!');
-          navigate(`/cardapios/${estabelecimentoDoc.docs[0].data().slug}`);
+          navigate(`/cardapios/${estabelecimentoSnap.data().slug}`);
         } else {
           toast.error('Estabelecimento do pedido anterior não encontrado ou slug indisponível.');
           localStorage.removeItem('reorderItems'); // Limpa se não conseguir redirecionar
@@ -124,12 +127,16 @@ function ClientOrderHistory() {
   return (
     <div className="p-4 bg-gray-100 min-h-screen">
       <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-8">
-        <Link to="/" className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition duration-300 mb-6">
+        {/* <<-- BOTÃO VOLTAR ALTERADO PARA navigate(-1) -->> */}
+        <button
+          onClick={() => navigate(-1)} // Use navigate(-1) para voltar à tela anterior
+          className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition duration-300 mb-6"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 0 010 1.414z" clipRule="evenodd" />
           </svg>
-          Voltar para Home
-        </Link>
+          Voltar
+        </button>
 
         <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-8">
           Meu Histórico de Pedidos
