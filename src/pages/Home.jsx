@@ -6,7 +6,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } f
 import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import logo from '../assets/logo-deufome.png';
-import { toast } from 'react-toastify'; // Importe o toast aqui!
+import { toast } from 'react-toastify';
 
 function Home() {
   const { authLoading, currentUser } = useAuth();
@@ -28,10 +28,11 @@ function Home() {
   const [senhaCadastro, setSenhaCadastro] = useState('');
   const [nomeCadastro, setNomeCadastro] = useState('');
   const [telefoneCadastro, setTelefoneCadastro] = useState('');
-
-  // Estados para o formulário de login no modal
-  const [emailLogin, setEmailLogin] = useState('');
-  const [senhaLogin, setSenhaLogin] = useState('');
+  // <<-- NOVOS ESTADOS PARA ENDEREÇO NO CADASTRO -->>
+  const [ruaCadastro, setRuaCadastro] = useState('');
+  const [numeroCadastro, setNumeroCadastro] = useState('');
+  const [bairroCadastro, setBairroCadastro] = useState('');
+  const [complementoCadastro, setComplementoCadastro] = useState('');
 
 
   useEffect(() => {
@@ -46,7 +47,7 @@ function Home() {
       } catch (err) {
         console.error("Erro ao carregar estabelecimentos:", err);
         setErrorEstabelecimentos("Erro ao carregar estabelecimentos.");
-        toast.error("Erro ao carregar estabelecimentos em destaque. Tente novamente mais tarde."); // Adicione toast de erro
+        toast.error("Erro ao carregar estabelecimentos em destaque. Tente novamente mais tarde.");
       } finally {
         setLoadingEstabelecimentos(false);
       }
@@ -80,15 +81,15 @@ function Home() {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
-      toast.success('Login Cliente realizado com sucesso!'); // Substituição do alert()
-      setMostrarLoginCliente(false); // Fecha o modal
-      setEmailLogin(''); // Limpa os campos do formulário
+      toast.success('Login Cliente realizado com sucesso!');
+      setMostrarLoginCliente(false);
+      setEmailLogin('');
       setSenhaLogin('');
 
       if (location.state?.from) {
-        navigate(location.state.from, { replace: true }); // Redireciona para o caminho de origem
+        navigate(location.state.from, { replace: true });
       } else {
-        navigate('/'); // Se não houver 'from' (login direto da Home), navega para a Home
+        navigate('/');
       }
     } catch (error) {
       let errorMessage = "Erro ao fazer login. Verifique as credenciais.";
@@ -99,7 +100,7 @@ function Home() {
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = 'Email inválido.';
       }
-      toast.error(errorMessage); // Substituição do alert()
+      toast.error(errorMessage);
       console.error("Erro no login do cliente:", error);
     }
   };
@@ -109,11 +110,11 @@ function Home() {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
-      toast.success('Login Administrador realizado com sucesso!'); // Substituição do alert()
-      setMostrarLoginAdmin(false); // Fecha o modal
-      setEmailLogin(''); // Limpa os campos do formulário
+      toast.success('Login Administrador realizado com sucesso!');
+      setMostrarLoginAdmin(false);
+      setEmailLogin('');
       setSenhaLogin('');
-      navigate('/painel'); // Admin é redirecionado para o painel (comportamento desejado para admin)
+      navigate('/painel');
     } catch (error) {
       let errorMessage = "Erro ao fazer login. Verifique as credenciais.";
       if (error.code === 'auth/user-not-found') {
@@ -123,7 +124,7 @@ function Home() {
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = 'Email inválido.';
       }
-      toast.error(errorMessage); // Substituição do alert()
+      toast.error(errorMessage);
       console.error("Erro no login do admin:", error);
     }
   };
@@ -131,35 +132,45 @@ function Home() {
   // Função para lidar com o cadastro do cliente no modal
   const handleCadastroCliente = async (e) => {
     e.preventDefault();
+    // <<-- NOVA VALIDAÇÃO PARA CAMPOS DE ENDEREÇO -->>
+    if (!nomeCadastro.trim() || !telefoneCadastro.trim() || !ruaCadastro.trim() || !numeroCadastro.trim() || !bairroCadastro.trim()) {
+      toast.warn('Por favor, preencha todos os campos obrigatórios, incluindo o endereço completo.');
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, emailCadastro, senhaCadastro);
       const user = userCredential.user;
 
       // SALVAR DADOS ADICIONAIS DO CLIENTE NO FIRESTORE
       await setDoc(doc(db, 'clientes', user.uid), {
-        nome: nomeCadastro,
-        telefone: telefoneCadastro,
-        email: emailCadastro,
-        endereco: { // Endereço inicial vazio
-          rua: '',
-          numero: '',
-          bairro: '',
-          complemento: ''
+        nome: nomeCadastro.trim(),
+        telefone: telefoneCadastro.trim(),
+        email: emailCadastro.trim(),
+        endereco: { // <<-- SALVA OS DADOS DO ENDEREÇO COLETADOS -->>
+          rua: ruaCadastro.trim(),
+          numero: numeroCadastro.trim(),
+          bairro: bairroCadastro.trim(),
+          complemento: complementoCadastro.trim()
         },
         criadoEm: new Date(),
       });
 
-      toast.success('Cadastro realizado com sucesso! Você está logado.'); // Substituição do alert()
-      setMostrarCadastroCliente(false); // Fecha o modal de cadastro
+      toast.success('Cadastro realizado com sucesso! Você está logado.');
+      setMostrarCadastroCliente(false);
       setEmailCadastro('');
       setSenhaCadastro('');
       setNomeCadastro('');
       setTelefoneCadastro('');
+      setRuaCadastro(''); // Limpa campos de endereço
+      setNumeroCadastro('');
+      setBairroCadastro('');
+      setComplementoCadastro('');
 
       if (location.state?.from) {
-        navigate(location.state.from, { replace: true }); // Redireciona para o caminho de origem
+        navigate(location.state.from, { replace: true });
       } else {
-        navigate('/'); // Se não houver 'from' (cadastro direto da Home), navega para a Home
+        navigate('/');
       }
     } catch (error) {
       console.error("Erro no cadastro:", error);
@@ -169,7 +180,7 @@ function Home() {
       } else if (error.code === 'auth/weak-password') {
         errorMessage = 'A senha é muito fraca. Ela deve ter pelo menos 6 caracteres.';
       }
-      toast.error(`Erro: ${errorMessage}`); // Substituição do alert()
+      toast.error(`Erro: ${errorMessage}`);
     }
   };
 
@@ -196,10 +207,10 @@ function Home() {
           <div className="flex flex-col md:flex-row gap-4 mb-4">
             <button
               onClick={() => {
-                setMostrarLoginCliente(true); // Abre login cliente
+                setMostrarLoginCliente(true);
                 setMostrarLoginAdmin(false);
                 setMostrarCadastroCliente(false);
-                setEmailLogin(''); // Limpa campos ao abrir
+                setEmailLogin('');
                 setSenhaLogin('');
               }}
               className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-black font-bold py-3 px-6 rounded-full shadow-md"
@@ -208,10 +219,10 @@ function Home() {
             </button>
             <button
               onClick={() => {
-                setMostrarLoginAdmin(true); // Abre login admin
+                setMostrarLoginAdmin(true);
                 setMostrarLoginCliente(false);
                 setMostrarCadastroCliente(false);
-                setEmailLogin(''); // Limpa campos ao abrir
+                setEmailLogin('');
                 setSenhaLogin('');
               }}
               className="bg-gray-800 hover:bg-black text-white font-bold py-3 px-6 rounded-full shadow-md"
@@ -224,13 +235,18 @@ function Home() {
             Ainda não tem conta?{' '}
             <button
               onClick={() => {
-                setMostrarCadastroCliente(true); // Abre o modal de cadastro
+                setMostrarCadastroCliente(true);
                 setMostrarLoginCliente(false);
                 setMostrarLoginAdmin(false);
-                setEmailCadastro(''); // Limpa campos ao abrir
+                // Limpa os campos de cadastro ao abrir o modal
+                setEmailCadastro('');
                 setSenhaCadastro('');
                 setNomeCadastro('');
                 setTelefoneCadastro('');
+                setRuaCadastro('');
+                setNumeroCadastro('');
+                setBairroCadastro('');
+                setComplementoCadastro('');
               }}
               className="text-[var(--vermelho-principal)] underline focus:outline-none"
             >
@@ -295,7 +311,7 @@ function Home() {
                 <form onSubmit={handleCadastroCliente} className="space-y-4">
                   <input
                     type="text"
-                    placeholder="Seu Nome Completo"
+                    placeholder="Seu Nome Completo *"
                     className="w-full border rounded p-2"
                     value={nomeCadastro}
                     onChange={(e) => setNomeCadastro(e.target.value)}
@@ -303,15 +319,67 @@ function Home() {
                   />
                   <input
                     type="tel"
-                    placeholder="Seu Telefone (com DDD)"
+                    placeholder="Seu Telefone (com DDD) *"
                     className="w-full border rounded p-2"
                     value={telefoneCadastro}
                     onChange={(e) => setTelefoneCadastro(e.target.value)}
                     required
                   />
+                  {/* <<-- NOVOS CAMPOS DE ENDEREÇO NO FORMULÁRIO -->> */}
+                  <div>
+                    <label htmlFor="ruaCadastro" className="block text-sm font-medium text-gray-700 mb-1 sr-only">Rua *</label>
+                    <input
+                      type="text"
+                      id="ruaCadastro"
+                      placeholder="Rua *"
+                      value={ruaCadastro}
+                      onChange={(e) => setRuaCadastro(e.target.value)}
+                      className="w-full border rounded p-2"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <label htmlFor="numeroCadastro" className="block text-sm font-medium text-gray-700 mb-1 sr-only">Número *</label>
+                      <input
+                        type="text"
+                        id="numeroCadastro"
+                        placeholder="Número *"
+                        value={numeroCadastro}
+                        onChange={(e) => setNumeroCadastro(e.target.value)}
+                        className="w-full border rounded p-2"
+                        required
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label htmlFor="bairroCadastro" className="block text-sm font-medium text-gray-700 mb-1 sr-only">Bairro *</label>
+                      <input
+                        type="text"
+                        id="bairroCadastro"
+                        placeholder="Bairro *"
+                        value={bairroCadastro}
+                        onChange={(e) => setBairroCadastro(e.target.value)}
+                        className="w-full border rounded p-2"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="complementoCadastro" className="block text-sm font-medium text-gray-700 mb-1 sr-only">Complemento / Ponto de Referência</label>
+                    <input
+                      type="text"
+                      id="complementoCadastro"
+                      placeholder="Complemento / Ponto de Referência"
+                      value={complementoCadastro}
+                      onChange={(e) => setComplementoCadastro(e.target.value)}
+                      className="w-full border rounded p-2"
+                    />
+                  </div>
+                  {/* <<-- FIM DOS NOVOS CAMPOS DE ENDEREÇO -->> */}
+
                   <input
                     type="email"
-                    placeholder="Email"
+                    placeholder="Email *"
                     className="w-full border rounded p-2"
                     value={emailCadastro}
                     onChange={(e) => setEmailCadastro(e.target.value)}
@@ -319,7 +387,7 @@ function Home() {
                   />
                   <input
                     type="password"
-                    placeholder="Senha (mín. 6 caracteres)"
+                    placeholder="Senha (mín. 6 caracteres) *"
                     className="w-full border rounded p-2"
                     value={senhaCadastro}
                     onChange={(e) => setSenhaCadastro(e.target.value)}

@@ -20,6 +20,7 @@ function Menu() {
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
+  const [cidade, setCidade] = useState(''); // NOVO: Estado para cidade no formulário principal
   const [complemento, setComplemento] = useState(''); 
 
   const [formaPagamento, setFormaPagamento] = useState('');
@@ -41,10 +42,17 @@ function Menu() {
 
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
+  
+  // ESTADOS ESPECÍFICOS PARA OS CAMPOS DO MODAL DE AUTENTICAÇÃO/CADASTRO
   const [emailAuthModal, setEmailAuthModal] = useState('');
   const [passwordAuthModal, setPasswordAuthModal] = useState('');
   const [nomeAuthModal, setNomeAuthModal] = useState('');
   const [telefoneAuthModal, setTelefoneAuthModal] = useState('');
+  const [ruaAuthModal, setRuaAuthModal] = useState(''); // NOVO: Rua para o modal de cadastro
+  const [numeroAuthModal, setNumeroAuthModal] = useState(''); // NOVO: Número para o modal de cadastro
+  const [bairroAuthModal, setBairroAuthModal] = useState(''); // NOVO: Bairro para o modal de cadastro
+  const [cidadeAuthModal, setCidadeAuthModal] = useState(''); // NOVO: Cidade para o modal de cadastro
+  const [complementoAuthModal, setComplementoAuthModal] = useState(''); // NOVO: Complemento para o modal de cadastro
   const [errorAuthModal, setErrorAuthModal] = useState('');
 
   const auth = getAuth();
@@ -101,6 +109,7 @@ function Menu() {
           setRua(currentClientData.endereco.rua || '');
           setNumero(currentClientData.endereco.numero || '');
           setBairro(currentClientData.endereco.bairro || '');
+          setCidade(currentClientData.endereco.cidade || ''); // NOVO: Carregar cidade
           setComplemento(currentClientData.endereco.complemento || '');
           setIsRetirada(false);
         } else {
@@ -112,6 +121,7 @@ function Menu() {
         const storedRua = localStorage.getItem('rua') || '';
         const storedNumero = localStorage.getItem('numero') || '';
         const storedBairro = localStorage.getItem('bairro') || '';
+        const storedCidade = localStorage.getItem('cidade') || ''; // NOVO: Carregar cidade do localStorage
         const storedComplemento = localStorage.getItem('complemento') || '';
 
         setNomeCliente(storedNome);
@@ -119,9 +129,10 @@ function Menu() {
         setRua(storedRua);
         setNumero(storedNumero);
         setBairro(storedBairro);
+        setCidade(storedCidade); // NOVO: Setar cidade
         setComplemento(storedComplemento);
         
-        if (storedRua && storedNumero && storedBairro) {
+        if (storedRua && storedNumero && storedBairro && storedCidade) { // NOVO: Verificar cidade
           setIsRetirada(false);
         } else {
           setIsRetirada(true);
@@ -154,14 +165,18 @@ function Menu() {
       return;
     }
 
-    if (bairro.trim() === "") {
+    if (bairro.trim() === "" || cidade.trim() === "") { // NOVO: Verificar cidade no cálculo da taxa
       setTaxaEntregaCalculada(0);
       setBairroNaoEncontrado(false);
       return;
     }
 
+    // Adaptação: Se as taxas de entrega dependem também da cidade, a query deve ser mais específica.
+    // Por enquanto, a lógica assume que a taxa é apenas por bairro dentro da cidade atual do estabelecimento.
+    // Se precisar de taxas multi-cidades, a lógica aqui precisaria de uma busca mais complexa ou uma estrutura de dados diferente para taxas.
     const bairroEncontrado = taxasBairro.find(
       (taxa) => taxa.nomeBairro.toLowerCase() === bairro.trim().toLowerCase()
+      // && (taxa.nomeCidade ? taxa.nomeCidade.toLowerCase() === cidade.trim().toLowerCase() : true) // Exemplo se taxa for por cidade
     );
 
     if (bairroEncontrado) {
@@ -171,7 +186,7 @@ function Menu() {
       setTaxaEntregaCalculada(0);
       setBairroNaoEncontrado(true);
     }
-  }, [bairro, taxasBairro, isRetirada]);
+  }, [bairro, cidade, taxasBairro, isRetirada]); // Adicionado 'cidade' como dependência
 
   // Efeito para carregar informações do estabelecimento e cardápio
   useEffect(() => {
@@ -256,6 +271,7 @@ function Menu() {
     };
     
   }, [estabelecimentoSlug, selectedCategory, debouncedSearchTerm]);
+
 // Dentro de src/pages/Menu.jsx, adicione este useEffect
 useEffect(() => {
   const storedReorderItems = localStorage.getItem('reorderItems');
@@ -448,8 +464,8 @@ useEffect(() => {
       return;
     }
 
-    if (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) {
-      toast.warn('Para entrega, por favor, preencha o endereço completo (Rua, Número, Bairro).');
+    if (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) { // NOVO: Validar campo Cidade
+      toast.warn('Para entrega, por favor, preencha o endereço completo (Rua, Número, Bairro, Cidade).');
       return;
     }
 
@@ -481,6 +497,7 @@ useEffect(() => {
           rua: rua.trim(),
           numero: numero.trim(),
           bairro: bairro.trim(),
+          cidade: cidade.trim(), // NOVO: Incluir cidade no pedido
           complemento: complemento.trim()
         },
         userId: currentUser.uid // Garante que o userId está sempre presente
@@ -491,7 +508,7 @@ useEffect(() => {
         quantidade: item.qtd,
         preco: Number(item.preco),
         imageUrl: item.imageUrl
-      })),
+       })),
       status: 'recebido',
       criadoEm: Timestamp.now(),
       formaPagamento: formaPagamento,
@@ -604,6 +621,15 @@ useEffect(() => {
       setShowLoginPrompt(false);
       setEmailAuthModal('');
       setPasswordAuthModal('');
+      setErrorAuthModal(''); // Limpar erro ao fechar
+      // Limpar campos de cadastro para não aparecerem no próximo "Cadastre-se"
+      setNomeAuthModal('');
+      setTelefoneAuthModal('');
+      setRuaAuthModal('');
+      setNumeroAuthModal('');
+      setBairroAuthModal('');
+      setCidadeAuthModal('');
+      setComplementoAuthModal('');
     } catch (error) {
       let msg = "Erro no login. Verifique suas credenciais.";
       if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado. Crie uma conta.";
@@ -619,25 +645,47 @@ useEffect(() => {
   const handleRegisterModal = async (e) => {
     e.preventDefault();
     setErrorAuthModal('');
+
+    // Validações adicionais para os campos de endereço do modal
+    if (!nomeAuthModal.trim() || !telefoneAuthModal.trim() || !emailAuthModal.trim() || !passwordAuthModal.trim() ||
+        !ruaAuthModal.trim() || !numeroAuthModal.trim() || !bairroAuthModal.trim() || !cidadeAuthModal.trim()) {
+      setErrorAuthModal('Por favor, preencha todos os campos obrigatórios, incluindo o endereço completo.');
+      toast.error('Por favor, preencha todos os campos obrigatórios, incluindo o endereço completo.');
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
       const user = userCredential.user;
 
       await setDocFirestore(doc(db, 'clientes', user.uid), {
-        nome: nomeAuthModal,
-        telefone: telefoneAuthModal,
-        email: emailAuthModal,
-        endereco: { rua: '', numero: '', bairro: '', complemento: '' },
+        nome: nomeAuthModal.trim(),
+        telefone: telefoneAuthModal.trim(),
+        email: emailAuthModal.trim(),
+        endereco: {
+          rua: ruaAuthModal.trim(),
+          numero: numeroAuthModal.trim(),
+          bairro: bairroAuthModal.trim(),
+          cidade: cidadeAuthModal.trim(), // NOVO: Salvando a cidade
+          complemento: complementoAuthModal.trim() // Salvando o complemento (opcional)
+        },
         criadoEm: Timestamp.now(),
       });
 
       toast.success('Cadastro realizado com sucesso! Você está logado.');
       setShowLoginPrompt(false);
       setIsRegisteringInModal(false);
+      // Limpar todos os estados do modal após o sucesso
       setEmailAuthModal('');
       setPasswordAuthModal('');
       setNomeAuthModal('');
       setTelefoneAuthModal('');
+      setRuaAuthModal('');
+      setNumeroAuthModal('');
+      setBairroAuthModal('');
+      setCidadeAuthModal('');
+      setComplementoAuthModal('');
+      setErrorAuthModal(''); // Limpar erro
     } catch (error) {
       let msg = "Erro no cadastro. Tente novamente.";
       if (error.code === 'auth/email-already-in-use') msg = "Este email já está cadastrado.";
@@ -755,7 +803,7 @@ useEffect(() => {
                       aria-label={`Adicionar mais um ${item.nome}`}
                       disabled={!item.ativo}
                     >
-                     +
+                      +
                     </button>
                   </div>
                 </li>
@@ -844,7 +892,7 @@ useEffect(() => {
         <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Seus Dados</h3>
         <div className="mb-4">
           <label htmlFor="nomeCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Nome *</label>
-          <input
+            <input
             id="nomeCliente"
             value={nomeCliente}
             onChange={(e) => setNomeCliente(e.target.value)}
@@ -852,20 +900,20 @@ useEffect(() => {
             placeholder="Ex: Ana Silva"
             required
             disabled={!!currentUser}
-          />
+            />
         </div>
         <div className="mb-6">
           <label htmlFor="telefoneCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Telefone (com DDD) *</label>
-          <input
-            id="telefoneCliente"
-            value={telefoneCliente}
-            onChange={(e) => setTelefoneCliente(e.target.value)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-            placeholder="Ex: 22999999999"
-            type="tel"
-            required
-            disabled={!!currentUser}
-          />
+         <input
+  id="telefoneCliente"
+  value={telefoneCliente}
+  onChange={(e) => setTelefoneCliente(e.target.value)}
+  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+  placeholder="Ex: 22999999999"
+  type="tel"
+  required
+  disabled={!!currentUser} // Desabilitado se o usuário estiver logado, pois o telefone vem do perfil
+/>
         </div>
 
         {/* OPÇÕES DE TIPO DE ENTREGA (Retirada ou Entrega) */}
@@ -937,6 +985,19 @@ useEffect(() => {
                   disabled={!!currentUser && currentClientData?.endereco?.bairro}
                 />
               </div>
+            </div>
+            {/* NOVO CAMPO: CIDADE no formulário principal */}
+            <div className="mb-4">
+              <label htmlFor="cidade" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Cidade *</label>
+              <input
+                id="cidade"
+                value={cidade}
+                onChange={(e) => setCidade(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+                placeholder="Ex: Rio de Janeiro"
+                required={!isRetirada}
+                disabled={!!currentUser && currentClientData?.endereco?.cidade}
+              />
             </div>
             <div className="mb-6">
               <label htmlFor="complemento" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Complemento / Ponto de Referência</label>
@@ -1016,14 +1077,14 @@ useEffect(() => {
           <button
             onClick={enviarPedido}
             className={`px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg ${
-              (!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser)
+              (!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser) // NOVO: Validar cidade
                 ? 'bg-gray-200 text-gray-900 cursor-not-allowed'
                 : 'bg-green-300 text-white hover:bg-green-700'
             }`}
             disabled={
               !nomeCliente.trim() ||
               !telefoneCliente.trim() ||
-              (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) ||
+              (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) || // NOVO: Validar cidade
               carrinho.length === 0 ||
               !formaPagamento ||
               !currentUser
@@ -1065,7 +1126,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* NOVO MODAL: PROMPT DE LOGIN/CADASTRO */}
+      {/* NOVO MODAL: PROMPT DE LOGIN/CADASTRO (AGORA COM ENDEREÇO COMPLETO) */}
       {showLoginPrompt && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[1000]">
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative text-center">
@@ -1077,6 +1138,11 @@ useEffect(() => {
                 setPasswordAuthModal('');
                 setNomeAuthModal('');
                 setTelefoneAuthModal('');
+                setRuaAuthModal('');       // Limpar o estado do modal
+                setNumeroAuthModal('');    // Limpar o estado do modal
+                setBairroAuthModal('');    // Limpar o estado do modal
+                setCidadeAuthModal('');    // Limpar o estado do modal
+                setComplementoAuthModal(''); // Limpar o estado do modal
                 setIsRegisteringInModal(false);
               }}
               className="absolute top-2 right-3 text-gray-600 hover:text-red-600 text-xl"
@@ -1129,7 +1195,49 @@ useEffect(() => {
                   onChange={(e) => setPasswordAuthModal(e.target.value)}
                   required
                 />
-                <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">
+
+                {/* NOVOS CAMPOS DE ENDEREÇO AQUI */}
+                <input
+                  type="text"
+                  placeholder="Rua *"
+                  className="w-full border rounded p-2"
+                  value={ruaAuthModal}
+                  onChange={(e) => setRuaAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Número *"
+                  className="w-full border rounded p-2"
+                  value={numeroAuthModal}
+                  onChange={(e) => setNumeroAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Bairro *"
+                  className="w-full border rounded p-2"
+                  value={bairroAuthModal}
+                  onChange={(e) => setBairroAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Cidade *"
+                  className="w-full border rounded p-2"
+                  value={cidadeAuthModal}
+                  onChange={(e) => setCidadeAuthModal(e.target.value)}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Complemento (Opcional)"
+                  className="w-full border rounded p-2"
+                  value={complementoAuthModal}
+                  onChange={(e) => setComplementoAuthModal(e.target.value)}
+                />
+
+                <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-black py-2 rounded hover:bg-red-700">
                   Cadastrar e Entrar
                 </button>
                 <p className="text-sm text-gray-600">
@@ -1157,7 +1265,7 @@ useEffect(() => {
                   onChange={(e) => setPasswordAuthModal(e.target.value)}
                   required
                 />
-                <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">
+                <button type="submit" className="w-full bg-yellow-200 text-black py-2 rounded hover:bg-green-700">
                   Entrar
                 </button>
                 <p className="text-sm text-gray-600">
