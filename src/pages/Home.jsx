@@ -23,6 +23,10 @@ function Home() {
   const [mostrarLoginAdmin, setMostrarLoginAdmin] = useState(false);
   const [mostrarCadastroCliente, setMostrarCadastroCliente] = useState(false);
 
+  // ESTADOS PARA OS FORMULÁRIOS DE LOGIN NO MODAL (OS QUE ESTAVAM FALTANDO)
+  const [emailLogin, setEmailLogin] = useState(''); // <<-- ADICIONADO AQUI -->>
+  const [senhaLogin, setSenhaLogin] = useState(''); // <<-- ADICIONADO AQUI -->>
+
   // Estados para o formulário de cadastro no modal
   const [emailCadastro, setEmailCadastro] = useState('');
   const [senhaCadastro, setSenhaCadastro] = useState('');
@@ -109,12 +113,19 @@ function Home() {
   const handleLoginAdmin = async (e) => {
     e.preventDefault();
     try {
+      // Nota: Para segurança, a verificação de isAdmin deve ser feita no backend (Cloud Functions)
+      // ou em uma página protegida após o login, não apenas no frontend.
+      // Aqui, estamos assumindo que /painel é uma rota protegida que verificará a permissão.
       await signInWithEmailAndPassword(auth, emailLogin, senhaLogin);
+      
+      // O ideal seria verificar o 'isAdmin' após o login BEM SUCEDIDO e em um contexto SEGURO
+      // Por exemplo, após o redirect, ou usando um hook useAuth que carrega os dados do usuário.
+      // Se essa Home.jsx é a única porta de entrada, e o /painel valida a permissão, pode ser ok por enquanto.
       toast.success('Login Administrador realizado com sucesso!');
       setMostrarLoginAdmin(false);
       setEmailLogin('');
       setSenhaLogin('');
-      navigate('/painel');
+      navigate('/painel'); // Redireciona para o painel do administrador
     } catch (error) {
       let errorMessage = "Erro ao fazer login. Verifique as credenciais.";
       if (error.code === 'auth/user-not-found') {
@@ -210,10 +221,10 @@ function Home() {
                 setMostrarLoginCliente(true);
                 setMostrarLoginAdmin(false);
                 setMostrarCadastroCliente(false);
-                setEmailLogin('');
-                setSenhaLogin('');
+                setEmailLogin(''); // Limpa os campos de login ao abrir o modal
+                setSenhaLogin(''); // Limpa os campos de login ao abrir o modal
               }}
-              className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-black font-bold py-3 px-6 rounded-full shadow-md"
+              className="bg-yellow-200 text-black hover:bg-yellow-700 text-black font-bold py-3 px-6 rounded-full shadow-md"
             >
               Login Cliente
             </button>
@@ -222,8 +233,8 @@ function Home() {
                 setMostrarLoginAdmin(true);
                 setMostrarLoginCliente(false);
                 setMostrarCadastroCliente(false);
-                setEmailLogin('');
-                setSenhaLogin('');
+                setEmailLogin(''); // Limpa os campos de login ao abrir o modal
+                setSenhaLogin(''); // Limpa os campos de login ao abrir o modal
               }}
               className="bg-gray-800 hover:bg-black text-white font-bold py-3 px-6 rounded-full shadow-md"
             >
@@ -274,7 +285,7 @@ function Home() {
                     <form onSubmit={handleLoginCliente} className="space-y-4">
                       <input type="email" name="email" placeholder="Email" className="w-full border rounded p-2" value={emailLogin} onChange={(e) => setEmailLogin(e.target.value)} required />
                       <input type="password" name="senha" placeholder="Senha" className="w-full border rounded p-2" value={senhaLogin} onChange={(e) => setSenhaLogin(e.target.value)} required />
-                      <button type="submit" className="w-full bg-[var(--vermelho-principal)] py-2 rounded hover:bg-red-700">
+                      <button type="submit" className="w-full bg-[var(--vermelho-principal)] py-2 rounded hover:bg-red-700 text-white"> {/* Adicionei text-white aqui */}
                         Entrar
                       </button>
                     </form>
