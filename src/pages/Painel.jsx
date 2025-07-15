@@ -19,6 +19,7 @@ function Painel() {
   const [loadingPainel, setLoadingPainel] = useState(true);
   const [painelError, setPainelError] = useState('');
   
+  // Inicializa notificationsEnabled a partir do localStorage
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     const stored = localStorage.getItem('notificationsEnabled');
     return stored === 'true' ? true : false;
@@ -28,6 +29,7 @@ function Painel() {
   const audioRef = useRef(null); 
   const [audioBlockedMessage, setAudioBlockedMessage] = useState(''); 
 
+  // Inicializa o objeto Audio UMA VEZ quando o componente monta
   useEffect(() => {
     audioRef.current = new Audio('/campainha.mp3'); 
     audioRef.current.load();
@@ -49,6 +51,7 @@ function Painel() {
     };
   }, []);
 
+  // Efeito para redirecionar se não for admin
   useEffect(() => {
     if (!authLoading) {
       if (!currentUser || !isAdmin) {
@@ -58,6 +61,7 @@ function Painel() {
     }
   }, [currentUser, isAdmin, authLoading, navigate]);
 
+  // Efeito para carregar informações do estabelecimento e pedidos
   useEffect(() => {
     if (authLoading === false && currentUser && isAdmin) {
       setLoadingPainel(true);
@@ -88,6 +92,7 @@ function Painel() {
               orderBy('criadoEm', 'desc')
             );
 
+            // Listener para Pedidos Recebidos (com lógica de notificação)
             unsubscribeRecebidos = onSnapshot(createPedidoQuery('recebido'), (snapshot) => {
               const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
               
@@ -166,11 +171,12 @@ function Painel() {
     }
   }, [currentUser, isAdmin, authLoading, notificationsEnabled]);
 
+
   const toggleNotifications = async () => {
     if (notificationsEnabled) {
       setNotificationsEnabled(false);
       localStorage.setItem('notificationsEnabled', 'false');
-      alert('Notificações desativadas.');
+      console.log('Notificações desativadas.');
       if (audioRef.current && !audioRef.current.paused) {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
@@ -203,7 +209,7 @@ function Painel() {
       }).catch(e => {
         console.warn("Áudio pode ter sido bloqueado na primeira reprodução após permissão:", e);
         if (e.name === "NotAllowedError" || e.name === "AbortError") {
-          setAudioBlockedMessage("Som de notificação bloqueado. Clique no banner acima para ativá-lo!");
+          setAudioBlockedMessage("Som de notificação bloqueado. Clique para reativar!");
         }
       });
     } else {
@@ -212,23 +218,67 @@ function Painel() {
 
     if (permissionRequested) {
         if (permissionGranted) {
-            alert('Notificações ativadas (incluindo pop-ups)!');
+            console.log('Notificações ativadas (incluindo pop-ups)!');
         } else {
-            alert('Notificações ativadas (apenas som e alertas internos, pop-ups bloqueados)!');
+            console.log('Notificações ativadas (apenas som e alertas internos, pop-ups bloqueados)!');
         }
     } else {
-        alert('Notificações ativadas (apenas som e alertas internos, pop-ups não suportados)!');
+        console.log('Notificações ativadas (apenas som e alertas internos, pop-ups não suportados)!');
     }
   };
 
-  const updateOrderStatus = async (pedidoId, newStatus) => {
+  // NOVO: Função auxiliar para obter um pedido pelo ID (agora usa o Map)
+  const getPedidoById = (id) => {
+    // Procura o pedido em cada Map (Em Preparo, Em Entrega, Finalizados) ou no array de Recebidos
+    // A ordem de busca pode ser ajustada conforme a performance desejada ou probabilidade de encontrar o pedido
+    let pedido = pedidosRecebidos.find(p => p.id === id);
+    if (!pedido) pedido = pedidosEmPreparo.get(id);
+    if (!pedido) pedido = pedidosEmEntrega.get(id);
+    if (!pedido) pedido = pedidosFinalizados.get(id);
+    return pedido;
+  };
+
+const updateOrderStatus = async (pedidoId, newStatus) => {
+    const pedidoToUpdate = getPedidoById(pedidoId);
+    if (!pedidoToUpdate) {
+      alert("Erro: Pedido não encontrado para atualização de status.");
+      return;
+    }
+
+    const telefoneCliente = pedidoToUpdate.cliente?.telefone || '';
+    const nomeCliente = pedidoToUpdate.cliente?.nome || '';
+    const estabelecimentoNome = estabelecimentoInfo?.nome || 'nosso estabelecimento';
+    const totalPedido = pedidoToUpdate.totalFinal?.toFixed(2).replace('.', ',') || '0,00';
+    const itensPedido = pedidoToUpdate.itens?.map(item => `${item.nome} (${item.quantidade}x)`).join(', ') || '';
+    const criadoEmDate = pedidoToUpdate.criadoEm?.toDate?.();
+    const dataPedido = criadoEmDate ? format(criadoEmDate, 'dd/MM/yyyy') : 'Data não disponível';
+    const horaPedido = criadoEmDate ? format(criadoEmDate, 'HH:mm') : 'Hora não disponível';
+    const formaPagamento = pedidoToUpdate.formaPagamento || 'não informada';
+
+    let mensagemWhatsApp = '';
+
+    switch (newStatus) {
+      case 'em_preparo':
+        mensagemWhatsApp = `Olá ${nomeCliente}, seu pedido #${pedidoId.substring(0, 5)} do ${estabelecimentoNome} está AGORA EM PREPARO! 🧑‍🍳\n\n📅 Data: ${dataPedido}\n⏰ Hora: ${horaPedido}\n🛍️ Itens: ${itensPedido}\n💰 Total: R$ ${totalPedido}\n💳 Pagamento: ${formaPagamento}\n\nFique atento às próximas atualizações. Agradecemos a preferência!`;
+        break;
+    }
+
+    const telefoneLimpo = telefoneCliente.replace(/\D/g, '');
+    const telefoneWhatsApp = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`;
+
+    const whatsappUrl = `https://wa.me/${telefoneWhatsApp}?text=${encodeURIComponent(mensagemWhatsApp)}`;
+
     try {
       const pedidoRef = doc(db, 'pedidos', pedidoId);
       await updateDoc(pedidoRef, { status: newStatus });
-      alert(`Status do pedido ${pedidoId.substring(0, 5)}... atualizado para ${newStatus.replace('_', ' ')}.`);
+
+      alert(`Status do pedido ${pedidoId.substring(0, 5)} atualizado para ${newStatus.replace('_', ' ')}.`);
+
+      window.open(whatsappUrl, '_blank');
+
     } catch (error) {
-      console.error("Erro ao atualizar status:", error);
-      alert('Erro ao atualizar status do pedido.');
+      console.error("Erro ao atualizar status ou enviar WhatsApp:", error);
+      alert('Erro ao atualizar status do pedido ou enviar mensagem. Por favor, tente novamente.');
     }
   };
 
@@ -309,7 +359,7 @@ function Painel() {
         <div className="flex justify-between items-start mb-2">
           {/* Transformar o nome do cliente em um Link com ícone e cor clara */}
           <Link to={`/admin/clientes/${pedido.cliente.userId}`} className="flex items-center text-blue-600 hover:text-blue-800 hover:underline">
-            <span className="mr-1">👤</span> {/* Ícone de usuário */}
+            <span className="mr-1">👤</span>
             {pedido.cliente.nome}
           </Link>
           {criadoEmDate && isValid(criadoEmDate) ? (
@@ -433,12 +483,7 @@ function Painel() {
           <div className="flex gap-2">
             <button 
                 onClick={toggleNotifications}
-                className={`${notificationsEnabled && !audioBlockedMessage 
-                       ? 'bg-green-500 hover:bg-green-600'
-                       : notificationsEnabled && audioBlockedMessage 
-                         ? 'bg-yellow-500 hover:bg-yellow-600 text-black animate-pulse'
-                         : 'bg-gray-300 hover:bg-gray-400 text-gray-800'
-                    } text-white px-4 py-2 rounded-lg`}>
+                className={`${notificationsEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'} text-white px-4 py-2 rounded-lg`}>
                 {notificationsEnabled ? '🔔 Notificações Ativadas' :
                  notificationsEnabled && audioBlockedMessage ? '⚠️ Som Bloqueado! Ativar?' :
                  '🔕 Notificações Desativadas'}
@@ -507,8 +552,7 @@ function Painel() {
             )}
           </div>
 
-          {/* Coluna de Pedidos Finalizados */}
-          <div>
+    <div>
             <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-green-600 border-green-300">✅ Finalizados ({pedidosFinalizados.size})</h2>
             {[...pedidosFinalizados.values()].length === 0 ? (
               <p className="text-gray-500 italic">Nenhum pedido nesta coluna.</p>
@@ -527,6 +571,4 @@ function Painel() {
       </div>
     </div>
   );
-}
-
-export default Painel;
+}export default Painel;

@@ -84,6 +84,10 @@ function ClientDetails() {
         <button onClick={() => navigate('/painel')} className="mt-6 bg-blue-500 text-white px-4 py-2 rounded">
           Voltar para o Painel de Pedidos
         </button>
+        {/* Botão para ir para o Firebase Console para verificar regras, se necessário */}
+        <a href="https://console.firebase.google.com/project/YOUR_FIREBASE_PROJECT_ID/firestore/rules" target="_blank" rel="noopener noreferrer" className="mt-2 text-blue-500 hover:underline text-sm">
+          Verificar Regras do Firestore
+        </a>
       </div>
     );
   }
@@ -161,6 +165,5 @@ function ClientDetails() {
     </div>
   );
 }
-
 
 export default ClientDetails;
