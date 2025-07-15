@@ -183,7 +183,7 @@ function Home() {
                 setEmailLogin(''); // Limpa campos ao abrir
                 setSenhaLogin('');
               }}
-              className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-white font-bold py-3 px-6 rounded-full shadow-md"
+              className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-black font-bold py-3 px-6 rounded-full shadow-md"
             >
               Login Cliente
             </button>

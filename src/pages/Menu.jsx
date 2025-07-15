@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, onSnapshot, orderBy, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import CardapioItem from '../components/CardapioItem';
+import CardapioItem from '../components/CardapioItem'; // Certifique-se de que este componente existe
 import { useAuth } from '../context/AuthContext';
 
 function Menu() {
@@ -18,7 +18,8 @@ function Menu() {
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
-  const [complemento, setComplemento] = useState('');
+  // CORREÇÃO CRÍTICA AQUI: Adicionado 'useState' para a declaração do estado
+  const [complemento, setComplemento] = useState(''); 
 
   const [formaPagamento, setFormaPagamento] = useState('');
   const [trocoPara, setTrocoPara] = useState('');
@@ -37,7 +38,6 @@ function Menu() {
   const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
   const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
 
-  // Estados para o modal de login/cadastro dentro do Menu.jsx
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
   const [emailAuthModal, setEmailAuthModal] = useState('');
@@ -46,7 +46,7 @@ function Menu() {
   const [telefoneAuthModal, setTelefoneAuthModal] = useState('');
   const [errorAuthModal, setErrorAuthModal] = useState('');
 
-  const auth = getAuth(); // Instância de autenticação
+  const auth = getAuth();
 
   // Efeito para verificar status de login ao carregar o componente
   useEffect(() => {
@@ -57,7 +57,7 @@ function Menu() {
         setShowLoginPrompt(false);
       }
     }
-  }, [authLoading, currentUser, currentClientData]);
+  }, [authLoading, currentUser, currentClientData, showLoginPrompt]);
 
   // Efeito para carregar dados do cliente (logado ou localStorage)
   useEffect(() => {
@@ -89,7 +89,7 @@ function Menu() {
         setNumero(storedNumero);
         setBairro(storedBairro);
         setComplemento(storedComplemento);
-
+        
         if (storedRua && storedNumero && storedBairro) {
           setIsRetirada(false);
         } else {
@@ -348,11 +348,9 @@ function Menu() {
     try {
       await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
       alert('Login realizado com sucesso!');
-      setShowLoginPrompt(false); // Fecha o modal
+      setShowLoginPrompt(false);
       setEmailAuthModal('');
       setPasswordAuthModal('');
-      // O AuthContext vai atualizar currentUser, e Menu.jsx vai re-renderizar
-      // com currentUser definido, efetivamente "desbloqueando" a página.
     } catch (error) {
       let msg = "Erro no login. Verifique suas credenciais.";
       if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado. Crie uma conta.";
@@ -380,8 +378,8 @@ function Menu() {
       });
 
       alert('Cadastro realizado com sucesso! Você está logado.');
-      setShowLoginPrompt(false); // Fecha o modal
-      setIsRegisteringInModal(false); // Volta para a visualização de login, se necessário
+      setShowLoginPrompt(false);
+      setIsRegisteringInModal(false);
       setEmailAuthModal('');
       setPasswordAuthModal('');
       setNomeAuthModal('');
@@ -458,10 +456,11 @@ function Menu() {
                     <span className="font-semibold text-[var(--marrom-escuro)]">R$ {(item.preco * item.qtd).toFixed(2).replace('.', ',')}</span>
                     <button
                       onClick={() => adicionarAoCarrinho(item)}
-                      className="bg-green-500 hover:bg-green-700 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold"
+                      className="bg-green-500 hover:bg-green-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold"
                       aria-label={`Adicionar mais um ${item.nome}`}
+                      disabled={!item.ativo}
                     >
-                      +
+                     +
                     </button>
                   </div>
                 </li>
@@ -671,11 +670,10 @@ function Menu() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none">
           <button
             onClick={enviarPedido}
-            // Classes condicionais para o botão "Enviar Pedido Agora!"
             className={`px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg ${
               (!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser || currentClientData === null)
-                ? 'bg-gray-300 text-gray-900 cursor-not-allowed' // Desativado
-                : 'bg-green-600 text-white hover:bg-green-700' // Ativado
+                ? 'bg-gray-200 text-gray-900 cursor-not-allowed'
+                : 'bg-green-300 text-white hover:bg-green-700'
             }`}
             disabled={
               !nomeCliente.trim() ||
@@ -711,10 +709,10 @@ function Menu() {
             </div>
 
             <button
-              onClick={() => { setShowOrderConfirmationModal(false); navigate(`/cardapios/${estabelecimentoSlug}`); }} // Redireciona para a lista de estabelecimentos
+              onClick={() => { setShowOrderConfirmationModal(false); navigate(`/cardapios/${estabelecimentoSlug}`); }}
               className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold"
             >
-              Pedido Concluído! Voltar ao Menu!
+              Pedido Concluído! Voltar ao Cardápio
             </button>
           </div>
         </div>
@@ -727,12 +725,12 @@ function Menu() {
             <button
               onClick={() => {
                 setShowLoginPrompt(false);
-                setErrorAuthModal(''); // Limpa erros ao fechar
-                setEmailAuthModal(''); // Limpa campos
+                setErrorAuthModal('');
+                setEmailAuthModal('');
                 setPasswordAuthModal('');
                 setNomeAuthModal('');
                 setTelefoneAuthModal('');
-                setIsRegisteringInModal(false); // Volta para tela de login padrão ao fechar
+                setIsRegisteringInModal(false);
               }}
               className="absolute top-2 right-3 text-gray-600 hover:text-red-600 text-xl"
               aria-label="Fechar"
@@ -784,7 +782,7 @@ function Menu() {
                   onChange={(e) => setPasswordAuthModal(e.target.value)}
                   required
                 />
-                <button type="submit" className="bg-yellow-200 text-black w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">
+                <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">
                   Cadastrar e Entrar
                 </button>
                 <p className="text-sm text-gray-600">
@@ -812,7 +810,7 @@ function Menu() {
                   onChange={(e) => setPasswordAuthModal(e.target.value)}
                   required
                 />
-                <button type="submit" className="bg-yellow-200 text-black w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700 ">
+                <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">
                   Entrar
                 </button>
                 <p className="text-sm text-gray-600">

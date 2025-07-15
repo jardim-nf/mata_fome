@@ -4,7 +4,7 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDo
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { format, formatDistanceToNow, isValid } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { ptBR }  from 'date-fns/locale';
 
 function Painel() {
   const navigate = useNavigate();
@@ -18,17 +18,56 @@ function Painel() {
   const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
   const [loadingPainel, setLoadingPainel] = useState(true);
   const [painelError, setPainelError] = useState('');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  
+  // Inicializa notificationsEnabled a partir do localStorage
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    const stored = localStorage.getItem('notificationsEnabled');
+    return stored === 'true' ? true : false;
+  });
 
   const prevPedidosRecebidosRef = useRef([]);
-  // Inicializa a ref para um objeto Audio. Corrigido para garantir que sempre crie um novo.
   const audioRef = useRef(null); 
+  const [audioBlockedMessage, setAudioBlockedMessage] = useState(''); 
 
   // Inicializa o objeto Audio UMA VEZ quando o componente monta
   useEffect(() => {
     audioRef.current = new Audio('/campainha.mp3'); 
-    audioRef.current.load(); // Tenta carregar o áudio antecipadamente
+    audioRef.current.load();
+    
+    const handleCanPlay = () => {
+      console.log("Painel Audio Debug: Evento 'canplaythrough' disparado. Áudio está pronto.");
+    };
+    if (audioRef.current) {
+        audioRef.current.addEventListener('canplaythrough', handleCanPlay);
+    }
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.removeEventListener('canplaythrough', handleCanPlay);
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+    };
   }, []);
+
+  // Efeito para solicitar permissão de notificação ao carregar a página (se a preferência estiver ativada)
+  useEffect(() => {
+    if (notificationsEnabled) {
+      if ('Notification' in window && Notification.permission !== 'granted') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            console.log("Painel Audio Debug: Permissão de notificação concedida ao carregar a página.");
+          } else {
+            console.warn("Painel Audio Debug: Permissão de notificação negada ao carregar a página.");
+          }
+        });
+      } else if (!('Notification' in window)) {
+        console.warn("Painel Audio Debug: API de Notificação de Desktop não suportada neste navegador ao carregar.");
+      }
+    }
+  }, [notificationsEnabled]);
+
 
   // Efeito para redirecionar se não for admin
   useEffect(() => {
@@ -73,33 +112,54 @@ function Painel() {
 
             // Listener para Pedidos Recebidos (com lógica de notificação)
             unsubscribeRecebidos = onSnapshot(createPedidoQuery('recebido'), (snapshot) => {
-              const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
               
               const oldPedidosIds = new Set(prevPedidosRecebidosRef.current.map(p => p.id));
               const newlyReceivedOrders = newPedidos.filter(p => !oldPedidosIds.has(p.id));
 
+              console.log("Notif Debug: ----- START SNAPSHOT UPDATE -----");
+              console.log("Notif Debug: newPedidos (IDs do snapshot atual):", newPedidos.map(p => p.id));
+              console.log("Notif Debug: prevPedidosRecebidosRef.current (IDs do estado anterior):", prevPedidosRecebidosRef.current.map(p => p.id));
+              console.log("Notif Debug: newlyReceivedOrders (IDs de pedidos REALMENTE NOVOS):", newlyReceivedOrders.map(p => p.id));
+              console.log("Notif Debug: newlyReceivedOrders.length:", newlyReceivedOrders.length);
+              console.log("Notif Debug: notificationsEnabled state:", notificationsEnabled);
+              console.log("Notif Debug: Notification.permission:", Notification.permission);
+
               if (newlyReceivedOrders.length > 0) {
-                // Tocar som e mostrar notificação APENAS se houver novos pedidos e notificações ativadas
+                console.log("Notif Debug: --- ACIONANDO NOTIFICAÇÃO ---");
                 if (notificationsEnabled && Notification.permission === 'granted') {
                   newlyReceivedOrders.forEach(pedido => {
                     new Notification(`Novo Pedido - ${pedido.cliente.nome}`, {
                       body: `Total: R$ ${pedido.totalFinal.toFixed(2).replace('.', ',')}\nItens: ${pedido.itens.map(i => i.nome).join(', ')}`,
-                      icon: '/logo-deufome.png' // Use o caminho para o logo do seu app
+                      icon: '/logo-deufome.png'
                     });
                   });
                   
                   if (audioRef.current) {
-                    audioRef.current.currentTime = 0; // Reinicia o áudio para tocar se já estiver tocando
-                    audioRef.current.play().catch(e => {
-                      console.error("Erro ao tocar áudio (autoplay bloqueado?):", e);
-                      // Uma notificação interna ou visual para o admin caso o áudio seja bloqueado
-                      // alert("Som de notificação bloqueado pelo navegador. Por favor, clique na página para ativá-lo.");
+                    console.log("Notif Debug: audioRef.current existe. readyState:", audioRef.current.readyState, "paused:", audioRef.current.paused);
+                    audioRef.current.currentTime = 0; 
+                    audioRef.current.play().then(() => {
+                        console.log("Notif Debug: Áudio tocado com SUCESSO para novo pedido!");
+                        setAudioBlockedMessage(''); 
+                    }).catch(e => {
+                      console.error("Notif Debug: ERRO: Áudio bloqueado para novo pedido (promessa rejeitada):", e);
+                      if (e.name === "NotAllowedError" || e.name === "AbortError") {
+                        setAudioBlockedMessage("Som de notificação bloqueado. Clique no banner acima para ativá-lo!"); // Define a mensagem
+                      }
                     });
+                  } else {
+                      console.warn("Notif Debug: audioRef.current é null ao tentar tocar para novo pedido.");
                   }
+                } else {
+                    console.log("Notif Debug: Notificações não disparadas. Condições (notificationsEnabled, permissão) não atendidas.");
                 }
+              } else {
+                  console.log("Notif Debug: Nenhum pedido VERDADEIRAMENTE novo detectado para notificação.");
               }
-              setPedidosRecebidos(newPedidos); // Atualiza o estado APÓS a lógica de notificação
-              prevPedidosRecebidosRef.current = newPedidos; // Atualiza a ref para a próxima comparação
+              setPedidosRecebidos(newPedidos); // Atualiza o estado PRINCIPAL do componente
+              prevPedidosRecebidosRef.current = newPedidos; // Atualiza a referência para a PRÓXIMA comparação
+
+              console.log("Notif Debug: ----- FIM ATUALIZAÇÃO SNAPSHOT -----");
 
             }, (error) => console.error("Erro no listener de Recebidos:", error));
 
@@ -124,7 +184,7 @@ function Painel() {
             setPedidosFinalizados(new Map());
           }
         } catch (error) {
-          console.error("Erro ao carregar painel de pedidos:", error);
+          console.error("Painel Audio Debug: Erro ao carregar painel de pedidos (fetchEstabelecimentoAndPedidos):", error);
           setPainelError("Erro ao carregar o painel. Verifique os índices do Firestore e a conexão.");
         } finally {
           setLoadingPainel(false);
@@ -146,41 +206,67 @@ function Painel() {
 
 
   const toggleNotifications = async () => {
+    // Se as notificações já estão ativadas, este clique as desativa
     if (notificationsEnabled) {
       setNotificationsEnabled(false);
-      alert('Notificações desativadas.');
-      // Opcional: Se o áudio estiver tocando, pausar
+      localStorage.setItem('notificationsEnabled', 'false'); // Salva a preferência
+      console.log('Painel Audio Debug: Notificações desativadas.');
       if (audioRef.current && !audioRef.current.paused) {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
       }
+      setAudioBlockedMessage(''); // Garante que a mensagem de bloqueio seja limpa ao desativar
       return;
     }
 
-    if (!('Notification' in window)) {
-      alert('Este navegador não suporta notificações de desktop.');
-      return;
-    }
+    // Se as notificações estão desativadas, este clique tenta ativá-las
+    let permissionRequested = false;
+    let permissionGranted = false;
 
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      setNotificationsEnabled(true);
-      // Tentar tocar o som UMA VEZ após a ativação, para que o navegador "permita"
-      // e "desbloqueie" o contexto de áudio para futuras notificações automáticas.
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0; // Garante que comece do início
-        audioRef.current.play().catch(e => {
-            console.warn("Áudio pode ter sido bloqueado na primeira reprodução após permissão (autoplay policy):", e);
-            alert("O navegador pode ter bloqueado o som. Por favor, interaja com a página (clicando em algo) para ativá-lo.");
-        });
-      }
-      alert('Notificações ativadas com sucesso!');
+    if ('Notification' in window) {
+        permissionRequested = true;
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            permissionGranted = true;
+        }
     } else {
-      alert('Permissão de notificação negada. Não será possível receber alertas.');
-      setNotificationsEnabled(false);
+        console.warn('Painel Audio Debug: API de Notificação de Desktop não suportada neste navegador.');
+    }
+    
+    setNotificationsEnabled(true); // Ativa o estado de notificações
+    localStorage.setItem('notificationsEnabled', 'true'); // Salva a preferência
+    
+    console.log("Painel Audio Debug: Tentando tocar áudio no toggle (interação do usuário).");
+
+    // Tenta tocar o som. Se conseguir, limpa a mensagem de bloqueio.
+    // Se falhar (autoplay policy), define a mensagem de bloqueio.
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().then(() => {
+        console.log("Painel Audio Debug: Áudio tocado com SUCESSO no toggle (interação do usuário).");
+        setAudioBlockedMessage(''); // Limpa a mensagem se o áudio tocou com sucesso
+      }).catch(e => {
+        console.warn("Painel Audio Debug: Áudio pode ter sido bloqueado na primeira reprodução após permissão:", e);
+        if (e.name === "NotAllowedError" || e.name === "AbortError") {
+          setAudioBlockedMessage("Som de notificação bloqueado. Clique para reativar!"); // Define a mensagem para o botão
+        }
+      });
+    } else {
+        console.warn("Painel Audio Debug: audioRef.current é null quando tentou tocar no toggle.");
+        setAudioBlockedMessage("Som de notificação bloqueado (erro de inicialização)."); // Mensagem de erro genérica
+    }
+
+    // Alertas de feedback para o usuário (agora usando console.log para serem menos intrusivos)
+    if (permissionRequested) {
+        if (permissionGranted) {
+            console.log('Painel Audio Debug: Notificações ativadas (incluindo pop-ups)!');
+        } else {
+            console.log('Painel Audio Debug: Notificações ativadas (apenas som e alertas internos, pop-ups bloqueados)!');
+        }
+    } else {
+        console.log('Painel Audio Debug: Notificações ativadas (apenas som e alertas internos, pop-ups não suportados)!');
     }
   };
-
 
   const updateOrderStatus = async (pedidoId, newStatus) => {
     try {
@@ -388,14 +474,33 @@ function Painel() {
           </Link>
           <h1 className="text-3xl font-bold text-gray-800">Painel de Pedidos {estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}</h1>
           <div className="flex gap-2">
+            {/* BOTÃO CONSOLIDADO DE NOTIFICAÇÕES */}
             <button 
                 onClick={toggleNotifications}
-                className={`${notificationsEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'} text-white px-4 py-2 rounded-lg`}>
-                {notificationsEnabled ? '🔔 Notificações Ativadas' : '🔕 Notificações Desativadas'}
+                // Classes condicionais para o botão
+                className={`px-4 py-2 rounded-lg font-semibold transition duration-300
+                    ${notificationsEnabled && !audioBlockedMessage 
+                       ? 'bg-green-500 hover:bg-green-600 text-white' // Ativo e funcionando
+                       : notificationsEnabled && audioBlockedMessage 
+                         ? 'bg-yellow-500 hover:bg-yellow-600 text-black animate-pulse' // Ativo, mas com áudio bloqueado
+                         : 'bg-gray-300 hover:bg-gray-400 text-gray-800' // Desativado
+                    }`}
+            >
+                {notificationsEnabled && !audioBlockedMessage ? '🔔 Notificações Ativadas' :
+                 notificationsEnabled && audioBlockedMessage ? '⚠️ Som Bloqueado! Ativar?' :
+                 '🔕 Notificações Desativadas'}
             </button>
             <button className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg">Filtrar por Período Específico</button>
           </div>
         </div>
+
+        {/* REMOVIDO: O banner de mensagem de áudio bloqueado - a mensagem e a ação agora vão para o botão */}
+        {/* {audioBlockedMessage && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
+            <p className="font-bold">Atenção!</p>
+            <p>{audioBlockedMessage} <button onClick={() => { if(audioRef.current) audioRef.current.play().catch(() => {}); setAudioBlockedMessage(''); }} className="underline font-semibold">Tocar agora</button></p>
+          </div>
+        )} */}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Coluna de Pedidos Recebidos */}
