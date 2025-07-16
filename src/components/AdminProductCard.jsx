@@ -69,7 +69,7 @@ const AdminProductCard = ({ produto, estabelecimentoId, onEdit, onDelete }) => {
         <span className={`text-sm font-medium ${produto.ativo ? 'text-green-600' : 'text-red-600'}`}>
           Status: {produto.ativo ? 'Ativo' : 'Desativado'}
         </span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 justify-end"> {/* Adicionado flex-wrap e justify-end para melhor responsividade */}
           <button
             onClick={handleEdit}
             className="px-3 py-1 rounded-md text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors duration-200"

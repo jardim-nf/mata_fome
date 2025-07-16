@@ -459,7 +459,7 @@ const doc = new jsPDF();
                 </button>
                 <button
                     onClick={() => handleExport('pdf')}
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md shadow-sm w-full sm:w-auto"
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md shadow-sm w-full sm:w-auto" 
                 >
                     Exportar para PDF
                 </button>
