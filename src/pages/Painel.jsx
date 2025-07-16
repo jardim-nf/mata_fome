@@ -1,3 +1,4 @@
+// src/pages/Painel.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
@@ -499,8 +500,8 @@ const updateOrderStatus = async (pedidoId, newStatus) => {
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
             Voltar para o Dashboard
           </Link>
-          <h1 className="text-3xl font-bold text-gray-800">Painel de Pedidos {estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}</h1>
-          <div className="flex gap-2">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 text-center flex-grow">Painel de Pedidos {estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}</h1>
+          <div className="flex flex-wrap gap-2 justify-center sm:justify-end mt-4 sm:mt-0 w-full sm:w-auto"> {/* Adicionado flex-wrap e ajustes para mobile */}
             <button 
                 onClick={toggleNotifications}
                 className={`${notificationsEnabled ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'} text-white px-4 py-2 rounded-lg`}>
@@ -508,7 +509,7 @@ const updateOrderStatus = async (pedidoId, newStatus) => {
                  notificationsEnabled && audioBlockedMessage ? '⚠️ Som Bloqueado! Ativar?' :
                  '🔕 Notificações Desativadas'}
             </button>
-            <button className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg">Filtrar por Período Específico</button>
+            <button className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg w-full sm:w-auto">Filtrar por Período Específico</button> {/* Adicionado w-full para mobile */}
           </div>
         </div>
 
@@ -520,7 +521,7 @@ const updateOrderStatus = async (pedidoId, newStatus) => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6"> {/* Ajustado os breakpoints para melhorar a largura dos cards em telas menores */}
           {/* Coluna de Pedidos Recebidos */}
           <div>
             <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-red-600 border-red-300">🆕 Recebido ({pedidosRecebidos.length})</h2>
@@ -591,4 +592,5 @@ const updateOrderStatus = async (pedidoId, newStatus) => {
       </div>
     </div>
   );
-}export default Painel;
+}
+export default Painel;

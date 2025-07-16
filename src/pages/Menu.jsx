@@ -88,16 +88,20 @@ function Menu() {
   }, [searchTerm]);
 
   // Efeito para verificar status de login ao carregar o componente
-  useEffect(() => {
-    if (authLoading === false) {
+ useEffect(() => {
+    // Só executa se o status de autenticação já terminou de carregar
+    if (authLoading === false) { 
+      // Se não há usuário logado OU se há um usuário mas os dados específicos do cliente NÃO foram carregados,
+      // então mostra o prompt de login.
       if (currentUser === null || (currentUser !== null && currentClientData === null)) {
         setShowLoginPrompt(true);
       } else {
+        // Se há um usuário logado E os dados do cliente foram carregados,
+        // então esconde o prompt de login.
         setShowLoginPrompt(false);
       }
     }
-  }, [authLoading, currentUser, currentClientData, showLoginPrompt]);
-
+  }, [authLoading, currentUser, currentClientData]);
   // Efeito para carregar dados do cliente (logado ou localStorage)
   useEffect(() => {
     if (!authLoading) {
@@ -618,7 +622,8 @@ useEffect(() => {
     try {
       await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
       toast.success('Login realizado com sucesso!');
-      setShowLoginPrompt(false);
+     setShowLoginPrompt(false);
+     setIsRegisteringInModal(false);
       setEmailAuthModal('');
       setPasswordAuthModal('');
       setErrorAuthModal(''); // Limpar erro ao fechar
@@ -706,7 +711,7 @@ useEffect(() => {
   }
 
   return (
-    <div className="p-4 max-w-3xl mx-auto pb-40 md:pb-0">
+<div className="p-4 max-w-3xl mx-auto pb-48 md:pb-0">
       <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-4">
         Cardápio de {nomeEstabelecimento}
       </h1>

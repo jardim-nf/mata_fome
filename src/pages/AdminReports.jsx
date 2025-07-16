@@ -1,3 +1,4 @@
+// src/pages/AdminReports.jsx
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -308,7 +309,7 @@ const doc = new jsPDF();
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                     Voltar para o Dashboard
                 </Link>
-                <h1 className="text-3xl font-bold text-gray-800">Relatórios Avançados</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 text-center sm:text-left flex-grow">Relatórios Avançados</h1> {/* Ajustado tamanho para mobile */}
                 <div></div> {/* Espaçador */}
             </div>
 
@@ -368,24 +369,26 @@ const doc = new jsPDF();
             <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-700 mb-4">Faturamento Diário</h2>
                 {dailyRevenueData.length === 0 ? (
-                    <p className="text-gray-500 italic">Nenhum faturamento para o período selecionado.</p>
+                    <p className="text-gray-500 italic text-center py-4">Nenhum faturamento para o período selecionado.</p>
                 ) : (
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Faturamento</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {dailyRevenueData.map(([date, revenue]) => (
-                                <tr key={date}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{format(new Date(date), 'dd/MM/yyyy')}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">R$ {revenue.toFixed(2).replace('.', ',')}</td>
+                    <div className="overflow-x-auto"> {/* Adicionado para rolagem horizontal em telas pequenas */}
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Faturamento</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {dailyRevenueData.map(([date, revenue]) => (
+                                    <tr key={date}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{format(new Date(date), 'dd/MM/yyyy')}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">R$ {revenue.toFixed(2).replace('.', ',')}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 
@@ -393,24 +396,26 @@ const doc = new jsPDF();
             <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-700 mb-4">Top 10 Produtos Vendidos</h2>
                 {topProductsData.length === 0 ? (
-                    <p className="text-gray-500 italic">Nenhum produto vendido no período selecionado.</p>
+                    <p className="text-gray-500 italic text-center py-4">Nenhum produto vendido no período selecionado.</p>
                 ) : (
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {topProductsData.map(([productName, quantity]) => (
-                                <tr key={productName}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{productName}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{quantity} un.</td>
+                    <div className="overflow-x-auto"> {/* Adicionado para rolagem horizontal em telas pequenas */}
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {topProductsData.map(([productName, quantity]) => (
+                                    <tr key={productName}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{productName}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{quantity} un.</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
             
@@ -418,41 +423,43 @@ const doc = new jsPDF();
             <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-700 mb-4">Performance de Cupons</h2>
                 {couponPerformanceData.length === 0 ? (
-                    <p className="text-gray-500 italic">Nenhum cupom usado no período selecionado.</p>
+                    <p className="text-gray-500 italic text-center py-4">Nenhum cupom usado no período selecionado.</p>
                 ) : (
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código Cupom</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usos</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Desconto Total</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {couponPerformanceData.map(data => (
-                                <tr key={data.codigo}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{data.codigo}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{data.usos}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">R$ {data.descontoTotal.toFixed(2).replace('.', ',')}</td>
+                    <div className="overflow-x-auto"> {/* Adicionado para rolagem horizontal em telas pequenas */}
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código Cupom</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usos</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Desconto Total</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {couponPerformanceData.map(data => (
+                                    <tr key={data.codigo}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{data.codigo}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{data.usos}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">R$ {data.descontoTotal.toFixed(2).replace('.', ',')}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 
-            {/* Seção de Exportação */}
-            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 text-right">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Exportar Relatórios</h2>
+            {/* Seção de Exportação - Ajustada para flex-wrap */}
+            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 flex flex-col sm:flex-row justify-end items-center gap-2"> {/* Adicionado flex-col sm:flex-row para adaptar em mobile */}
+                <h2 className="text-xl font-semibold text-gray-700 mb-4 sm:mb-0 w-full sm:w-auto text-center sm:text-right">Exportar Relatórios</h2>
                 <button
                     onClick={() => handleExport('csv')}
-                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md shadow-sm mr-2"
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md shadow-sm w-full sm:w-auto" 
                 >
                     Exportar para CSV
                 </button>
                 <button
                     onClick={() => handleExport('pdf')}
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md shadow-sm"
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md shadow-sm w-full sm:w-auto"
                 >
                     Exportar para PDF
                 </button>

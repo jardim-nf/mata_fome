@@ -1,3 +1,4 @@
+// src/pages/AdminCouponManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from 'firebase/firestore'; // Adicionado 'where'
@@ -337,7 +338,7 @@ function AdminCouponManagement() {
                         <label htmlFor="ativo" className="ml-2 block text-sm font-medium text-gray-700">Ativo</label>
                     </div>
 
-                    <div className="flex gap-4 mt-6">
+                    <div className="flex flex-col sm:flex-row gap-4 mt-6"> {/* Adicionado flex-col sm:flex-row para empilhar em mobile */}
                         <button
                             type="submit"
                             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-sm transition-colors duration-200"
@@ -350,7 +351,7 @@ function AdminCouponManagement() {
                                 onClick={resetForm}
                                 className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md shadow-sm transition-colors duration-200"
                             >
-                                Cancelar Edição
+                                Cancelar
                             </button>
                         )}
                     </div>
@@ -363,7 +364,7 @@ function AdminCouponManagement() {
                 {cupons.length === 0 ? (
                     <p className="text-gray-500 italic text-center py-4">Nenhum cupom cadastrado ainda.</p>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto"> {/* Mantido para rolagem horizontal da tabela */}
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
@@ -392,34 +393,32 @@ function AdminCouponManagement() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                            {cupom.validadeInicio?.toDate?.().toLocaleDateString?.() || '-'} - {cupom.validadeFim?.toDate?.().toLocaleDateString?.() || '-'}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                            {cupom.usosAtuais || 0} / {cupom.usosMaximos || '∞'}
-                                            {cupom.usosPorUsuario && ` (Max ${cupom.usosPorUsuario}/usuário)`}
-                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${cupom.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                 {cupom.ativo ? 'Sim' : 'Não'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button
-                                                onClick={() => handleEditClick(cupom)}
-                                                className="text-indigo-600 hover:text-indigo-900 mr-3"
-                                            >
-                                                Editar
-                                            </button>
-                                            <button
-                                                onClick={() => handleToggleActive(cupom.id, cupom.ativo)}
-                                                className={`${cupom.ativo ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'} mr-3`}
-                                            >
-                                                {cupom.ativo ? 'Desativar' : 'Ativar'}
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteCoupon(cupom.id)}
-                                                className="text-red-600 hover:text-red-900"
-                                            >
-                                                Excluir
-                                            </button>
+                                        <td className="px-6 py-4 text-right text-sm font-medium"> {/* Removido whitespace-nowrap */}
+                                            <div className="flex flex-col sm:flex-row gap-2 justify-end"> {/* Adicionado flex-col sm:flex-row para empilhar em mobile */}
+                                                <button
+                                                    onClick={() => handleEditClick(cupom)}
+                                                    className="text-indigo-600 hover:text-indigo-900"
+                                                >
+                                                    Editar
+                                                </button>
+                                                <button
+                                                    onClick={() => handleToggleActive(cupom.id, cupom.ativo)}
+                                                    className={`${cupom.ativo ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}`}
+                                                >
+                                                    {cupom.ativo ? 'Desativar' : 'Ativar'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteCoupon(cupom.id)}
+                                                    className="text-red-600 hover:text-red-900"
+                                                >
+                                                    Excluir
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

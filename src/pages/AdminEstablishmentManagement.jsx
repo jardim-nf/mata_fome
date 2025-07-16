@@ -258,7 +258,7 @@ function AdminEstablishmentManagement() {
                         {formError && <p className="text-red-500 text-sm mb-4">{formError}</p>}
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
+                            <div className="md:col-span-1"> {/* Garante que o nome ocupe 1 coluna em telas médias+ */}
                                 <label htmlFor="nome" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Nome do Estabelecimento *</label>
                                 <input type="text" id="nome" value={nome} onChange={(e) => setNome(e.target.value)}
                                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" required />
@@ -367,7 +367,7 @@ function AdminEstablishmentManagement() {
                                 <li key={estab.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
                                     <div>
                                         <h3 className="text-lg font-semibold text-[var(--marrom-escuro)]">{estab.nome}</h3>
-                                        {estab.slug && (
+                                        {estab.slug && ( /* O link pode quebrar em várias linhas se for muito longo em telas pequenas */
                                             <p className="text-sm text-gray-600">
                                                 Link: <a href={`/loja/${estab.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                                                     /loja/{estab.slug}
@@ -376,7 +376,7 @@ function AdminEstablishmentManagement() {
                                         )}
                                         <p className="text-sm text-gray-500">WhatsApp: {estab.whatsapp}</p>
                                     </div>
-                                    <div className="flex gap-3">
+                                    <div className="flex flex-col sm:flex-row gap-2"> {/* Botões empilham em mobile, lado a lado em sm+ */}
                                         <button
                                             onClick={() => openForm(estab)}
                                             className="text-blue-600 hover:text-blue-800 transition duration-300 text-sm font-semibold"
