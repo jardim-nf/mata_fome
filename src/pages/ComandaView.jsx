@@ -1,16 +1,19 @@
 // src/pages/ComandaView.jsx
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { toast } from 'react-toastify';
 
 function ComandaView() {
   const { pedidoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [pedido, setPedido] = useState(null);
   const [estabelecimento, setEstabelecimento] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [autoPrintBlocked, setAutoPrintBlocked] = useState(false);
 
   useEffect(() => {
     if (!pedidoId) {
@@ -52,51 +55,73 @@ function ComandaView() {
     fetchPedidoAndEstabelecimento();
   }, [pedidoId]);
 
+  // NOVO useEffect para tentar a impressão automática
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const shouldAutoPrintFromURL = queryParams.get('print') === 'true'; // Verifica o parâmetro na URL
+    const autoPrintEnabledPref = localStorage.getItem('autoPrintEnabled') === 'true'; // Lê a preferência do localStorage
+
+    // Só tenta imprimir se o parâmetro estiver na URL E a preferência estiver ativada
+    if (shouldAutoPrintFromURL && autoPrintEnabledPref && !loading && !error && pedido) {
+      const timer = setTimeout(() => {
+        try {
+          window.print();
+          setAutoPrintBlocked(false);
+        } catch (printError) {
+          console.error("Erro ao tentar impressão automática:", printError);
+          setAutoPrintBlocked(true);
+          toast.warn("Impressão automática bloqueada. Por favor, clique no botão 'Imprimir Comanda'.");
+        }
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [loading, error, pedido, location.search]);
+
   const handlePrint = () => {
-    window.print();
+    try {
+      window.print();
+      setAutoPrintBlocked(false);
+    } catch (printError) {
+      console.error("Erro ao tentar impressão manual:", printError);
+      toast.error("Não foi possível iniciar a impressão. Verifique as configurações da sua impressora.");
+    }
   };
 
   const handleBackToPainel = () => {
     navigate('/painel');
   };
 
-  // --- Processamento dos dados para exibição ---
   const totalPedido = pedido?.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0) : 0;
   const taxaEntregaExibida = pedido?.taxaEntrega || 0;
-  
-  // <<-- CALCULA O DESCONTO DO CUPOM PARA EXIBIÇÃO -->>
   const descontoCupomExibido = pedido?.cupomAplicado?.descontoCalculado || 0;
-  // O total final na comanda deve refletir o total final já com o desconto
   const totalFinalComDesconto = totalPedido + taxaEntregaExibida - descontoCupomExibido;
 
-
-  const dataPedido = pedido?.criadoEm && typeof pedido.criadoEm.toDate === 'function' 
-                         ? pedido.criadoEm.toDate().toLocaleString('pt-BR') 
+  const dataPedido = pedido?.criadoEm && typeof pedido.criadoEm.toDate === 'function'
+                         ? pedido.criadoEm.toDate().toLocaleString('pt-BR')
                          : 'Data não disponível';
 
   const enderecoCliente = pedido?.cliente?.endereco;
-  const enderecoFormatado = enderecoCliente 
+  const enderecoFormatado = enderecoCliente
     ? `${enderecoCliente.rua || ''}, ${enderecoCliente.numero || ''}` +
       (enderecoCliente.complemento ? `, ${enderecoCliente.complemento}` : '') +
       (enderecoCliente.bairro ? `\n${enderecoCliente.bairro}` : '') +
       (enderecoCliente.cidade && enderecoCliente.estado ? `\n${enderecoCliente.cidade}, ${enderecoCliente.estado}` : '') +
       (enderecoCliente.cep ? ` - CEP: ${enderecoCliente.cep}` : '')
     : 'Endereço não disponível';
-  
+
   const numeroPedidoFormatado = pedido?.numeroSequencial ? String(pedido.numeroSequencial).padStart(3, '0') : (pedido?.id ? pedido.id.substring(0, 7).toUpperCase() : 'N/A');
 
   const enderecoEstabelecimento = estabelecimento?.endereco;
-  const enderecoEstabelecimentoFormatado = enderecoEstabelecimento 
+  const enderecoEstabelecimentoFormatado = enderecoEstabelecimento
     ? `${enderecoEstabelecimento.rua || ''}, ${enderecoEstabelecimento.numero || ''}` +
       (enderecoEstabelecimento.bairro ? `, ${enderecoEstabelecimento.bairro}` : '') +
       (enderecoEstabelecimento.cidade && enderecoEstabelecimento.estado ? ` - ${enderecoEstabelecimento.cidade}/${enderecoEstabelecimento.estado}` : '') +
       (enderecoEstabelecimento.cep ? ` - CEP: ${enderecoEstabelecimento.cep}` : '')
     : 'Endereço não disponível';
 
-
   return (
     <div className="bg-[var(--bege-claro)] min-h-screen p-4 flex flex-col items-center">
-      {/* Botões de Ação na parte superior da tela */}
       <div className="w-full max-w-sm mb-4 flex justify-between gap-2 no-print">
         <button
           onClick={handleBackToPainel}
@@ -112,12 +137,17 @@ function ComandaView() {
         </button>
       </div>
 
-      {/* Conteúdo da Comanda ou Mensagens de Estado */}
+      {autoPrintBlocked && (
+        <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-4 w-full max-w-sm" role="alert">
+          <p className="font-bold">Atenção!</p>
+          <p>A impressão automática foi bloqueada pelo navegador. **A comanda foi aberta em uma nova aba.** Por favor, clique no botão "Imprimir Comanda" acima para imprimir.</p>
+        </div>
+      )}
+
       <div className="comanda-print-area p-6 bg-white max-w-sm w-full border border-gray-300 rounded-lg shadow-lg text-gray-800 font-mono">
         {loading ? (
           <div className="text-center py-12">
             <p className="text-lg text-[var(--marrom-escuro)] mb-4">Carregando comanda...</p>
-            {/* Opcional: Adicione um spinner ou ícone de carregamento aqui */}
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--vermelho-principal)] mx-auto"></div>
           </div>
         ) : error ? (
@@ -132,7 +162,6 @@ function ComandaView() {
           </div>
         ) : (
           <>
-            {/* Cabeçalho do Estabelecimento */}
             <div className="text-center mb-4">
               <h1 className="text-2xl font-bold text-[var(--marrom-escuro)]">{estabelecimento?.nome || 'SEU ESTABELECIMENTO'}</h1>
               <p className="text-sm">{enderecoEstabelecimentoFormatado}</p>
@@ -141,7 +170,7 @@ function ComandaView() {
             <hr className="border-t-2 border-gray-400 mb-4" />
 
             <h2 className="text-2xl font-bold text-center mb-4">COMANDA DE PEDIDO</h2>
-            
+
             <hr className="border-t border-gray-300 mb-2" />
             <div className="flex justify-between text-sm mb-2">
               <p><strong>No. Pedido:</strong> {numeroPedidoFormatado}</p>
@@ -153,7 +182,6 @@ function ComandaView() {
               <h3 className="text-lg font-bold mb-2">DADOS DO CLIENTE</h3>
               <p className="text-base"><strong>Cliente:</strong> {pedido.cliente?.nome || 'N/A'}</p>
               <p className="text-base"><strong>Telefone:</strong> {pedido.cliente?.telefone ? `(${pedido.cliente.telefone.substring(0, 2)}) ${pedido.cliente.telefone.substring(2, 7)}-${pedido.cliente.telefone.substring(7)}` : 'N/A'}</p>
-              {/* Adiciona tipo de entrega */}
               <p className="text-base"><strong>Tipo de Entrega:</strong> {pedido.tipoEntrega === 'retirada' ? 'Retirada no Local' : 'Delivery'}</p>
               {pedido.tipoEntrega !== 'retirada' && (
                 <p className="text-base whitespace-pre-line"><strong>Endereço:</strong> {enderecoFormatado}</p>
@@ -194,8 +222,7 @@ function ComandaView() {
             <div className="text-right text-xl font-bold mb-2">
               <p>Subtotal: R$ {totalPedido.toFixed(2).replace('.', ',')}</p>
               {taxaEntregaExibida > 0 && <p>Taxa de Entrega: R$ {taxaEntregaExibida.toFixed(2).replace('.', ',')}</p>}
-              
-              {/* <<-- EXIBE O DESCONTO DO CUPOM SE EXISTIR -->> */}
+
               {descontoCupomExibido > 0 && (
                 <p className="text-green-700">Desconto ({pedido.cupomAplicado.codigo}): - R$ {descontoCupomExibido.toFixed(2).replace('.', ',')}</p>
               )}

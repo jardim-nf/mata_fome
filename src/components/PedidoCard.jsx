@@ -1,13 +1,18 @@
 // src/components/PedidoCard.jsx
 import React from "react";
 import { doc, updateDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, app } from "../firebase"; // Certifique-se de que 'app' é importado
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify'; // Importe o toast aqui!
+import { toast } from 'react-toastify';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
-// REMOVER 'navigate' das props
-function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey, estabelecimento }) { 
+// REMOVIDO 'estabelecimentoPixKey' das props.
+// ADICIONADO 'autoPrintEnabled'
+function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimento, autoPrintEnabled }) {
   const navigate = useNavigate();
+
+  const functions = getFunctions(app);
+  const getPixKeyCallable = httpsCallable(functions, 'getEstablishmentPixKey');
 
   const status = (pedido?.status || "recebido").toLowerCase();
   const formaPagamento = (pedido?.formaPagamento || "").toLowerCase();
@@ -24,58 +29,80 @@ function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimentoPixKey,
 
   const bgColor = coresPorStatus[status] || "bg-white border-gray-200";
 
+  // A função abrirComanda agora usa a prop autoPrintEnabled
   const abrirComanda = () => {
-    navigate(`/comanda/${pedido.id}`); 
+    const comandaUrl = `/comanda/${pedido.id}${autoPrintEnabled ? '?print=true' : ''}`;
+    window.open(comandaUrl, '_blank');
   };
 
   const showComandaButton = status === "recebido" || status === "entregando";
 
   const openWhatsAppLink = (message, phoneNumber, actionDescription = "mensagem") => {
     if (!phoneNumber) {
-      toast.error(`Erro: Telefone do cliente não disponível para enviar ${actionDescription}.`); // Substituição do alert()
+      toast.error(`Erro: Telefone do cliente não disponível para enviar ${actionDescription}.`);
       return false;
     }
     const numeroLimpo = phoneNumber.replace(/\D/g, "");
     if (!numeroLimpo) {
-        toast.error(`Erro: Número de telefone inválido para enviar ${actionDescription}.`); // Substituição do alert()
+        toast.error(`Erro: Número de telefone inválido para enviar ${actionDescription}.`);
         return false;
     }
 
     const texto = encodeURIComponent(message);
     const url = `https://wa.me/55${numeroLimpo}?text=${texto}`;
-    
+
     try {
       window.open(url, "_blank");
       console.log(`📤 Abrindo WhatsApp para ${actionDescription}:`, url);
       return true;
     } catch (error) {
       console.error(`❌ Erro ao abrir WhatsApp para ${actionDescription}:`, error);
-      toast.error(`Não foi possível abrir o WhatsApp para ${actionDescription}. Verifique as configurações do seu navegador ou tente novamente.`); // Substituição do alert()
+      toast.error(`Não foi possível abrir o WhatsApp para ${actionDescription}. Verifique as configurações do seu navegador ou tente novamente.`);
       return false;
     }
   };
 
   const enviarMensagemPixComChave = async () => {
-    if (!estabelecimentoPixKey) {
-      toast.error("Chave PIX do estabelecimento não configurada. Por favor, adicione a chave PIX nas informações do estabelecimento no Firestore."); // Substituição do alert()
-      return;
+    const estabelecimentoIdDoPedido = pedido.estabelecimentoId;
+    if (!estabelecimentoIdDoPedido) {
+        toast.error("Erro: ID do estabelecimento não encontrado no pedido.");
+        return;
     }
 
-    const nomeCliente = pedido.cliente?.nome || "Cliente";
-    const totalPedido = pedido.totalFinal ? pedido.totalFinal.toFixed(2).replace('.', ',') : (pedido.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0).toFixed(2).replace('.', ',') : 'N/A');
+    try {
+        const result = await getPixKeyCallable({ establishmentId: estabelecimentoIdDoPedido });
+        const chavePixSegura = result.data.chavePix;
 
-    const mensagem = `Olá ${nomeCliente}, seu pedido no ${estabelecimento} está aguardando pagamento via PIX!
-    
+        if (!chavePixSegura) {
+            toast.error("Chave PIX não configurada para este estabelecimento.");
+            return;
+        }
+
+        const nomeCliente = pedido.cliente?.nome || "Cliente";
+        const totalPedido = pedido.totalFinal ? pedido.totalFinal.toFixed(2).replace('.', ',') : (pedido.itens ? pedido.itens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0).toFixed(2).replace('.', ',') : 'N/A');
+
+        const mensagem = `Olá ${nomeCliente}, seu pedido no ${estabelecimento.nome} está aguardando pagamento via PIX!
+
 Valor total: R$ ${totalPedido}.
 
-*Chave PIX:* ${estabelecimentoPixKey}
+*Chave PIX:* ${chavePixSegura}
 
 Por favor, faça o pagamento para que possamos iniciar o preparo do seu pedido. 😊
 Obrigado!`;
 
-    const success = openWhatsAppLink(mensagem, pedido.cliente?.telefone, "mensagem PIX");
-    if (success) {
-        toast.info("Mensagem PIX solicitada. Verifique o WhatsApp do cliente."); // Adicionado toast de informação
+        const success = openWhatsAppLink(mensagem, pedido.cliente?.telefone, "mensagem PIX");
+        if (success) {
+            toast.info("Mensagem PIX solicitada. Verifique o WhatsApp do cliente.");
+        }
+    } catch (error) {
+        console.error("Erro ao enviar mensagem PIX segura:", error);
+        if (error.code === 'permission-denied') {
+            toast.error("Você não tem permissão para acessar esta chave PIX.");
+        } else if (error.code === 'not-found') {
+            toast.error("Chave PIX ou estabelecimento não encontrado.");
+        } else {
+            toast.error("Ocorreu um erro ao buscar a chave PIX. Tente novamente.");
+        }
     }
   };
 
@@ -88,19 +115,19 @@ Obrigado!`;
       const statusFormatado = novoStatus.toLowerCase();
 
       let mensagem = "";
-      let shouldOpenWhatsApp = true; 
+      let shouldOpenWhatsApp = true;
       const nomeCliente = _pedido.cliente?.nome || "Cliente";
       const nomeEstabelecimento = estabelecimento?.nome || "Mata Fome";
 
       const itensDoPedido = _pedido.itens
         ? _pedido.itens.map(item => `${item.quantidade}x ${item.nome}`).join('\n- ')
         : 'N/A';
-      const valorTotal = _pedido.totalFinal ? _pedido.totalFinal.toFixed(2).replace('.', ',') : 'N/A';
+      const valorTotal = _pedido.totalFinal ? pedido.totalFinal.toFixed(2).replace('.', ',') : 'N/A';
       const formaPgto = _pedido.formaPagamento ? _pedido.formaPagamento.charAt(0).toUpperCase() + _pedido.formaPagamento.slice(1) : 'N/A';
 
       if (statusFormatado === "preparo") {
-        mensagem = `Olá ${nomeCliente}, seu pedido no ${nomeEstabelecimento} acaba de entrar em preparo! 👨‍🍳
-        
+        mensagem = `Olá ${nomeCliente}, seu pedido #${pedido.id.substring(0, 5)} do ${nomeEstabelecimento} está AGORA EM PREPARO! 🧑‍🍳
+
 *Detalhes do Pedido:*
 ${itensDoPedido}
 
@@ -109,17 +136,10 @@ ${itensDoPedido}
 
 Logo mais ele estará pronto para você! Fique de olho nas próximas atualizações. #MataFome
 `;
-        toast.success(`Pedido em preparo: ${pedido.id.substring(0, 5)}...`); // Toast de sucesso
-      } else if (statusFormatado === "entregando") {
-        mensagem = `Oba! ${nomeCliente}, seu pedido saiu para a entrega! 🛵📦 Chega já! Bom Apetite! #DeuFome`;
-        toast.info(`Pedido em entrega: ${pedido.id.substring(0, 5)}...`); // Toast de informação
-      } else if (statusFormatado === "finalizado") {
-        mensagem = `Olá ${nomeCliente}, seu pedido foi finalizado com sucesso! ✅ Muito obrigado!`;
-        toast.success(`Pedido finalizado: ${pedido.id.substring(0, 5)}...`); // Toast de sucesso
+        toast.success(`Pedido em preparo: ${pedido.id.substring(0, 5)}...`);
       } else {
-        shouldOpenWhatsApp = false; 
+        shouldOpenWhatsApp = false;
       }
-
       if (mensagem && shouldOpenWhatsApp) {
         const success = openWhatsAppLink(mensagem, _pedido.cliente?.telefone, `mudança de status para ${novoStatus}`);
         if (success) {
@@ -129,8 +149,17 @@ Logo mais ele estará pronto para você! Fique de olho nas próximas atualizaç�
 
     } catch (error) {
       console.error("❌ Erro ao mudar status ou enviar mensagem:", error);
-      toast.error("Ocorreu um erro ao atualizar o status ou enviar a mensagem."); // Substituição do alert()
+      toast.error("Ocorreu um erro ao atualizar o status ou enviar a mensagem.");
     }
+  };
+
+  // Nova função para lidar com o botão "Preparar"
+  const handlePrepararPedidoCompleto = async () => {
+    // 1. Mudar o status do pedido para "preparo" e enviar a mensagem do WhatsApp
+    await handleMudarStatus(pedido.id, "preparo");
+
+    // 2. Abrir a comanda para impressão em uma nova aba, tentando auto-print se enabled
+    abrirComanda(); // Essa função já usa autoPrintEnabled
   };
 
   const showPixButton = formaPagamento === 'pix' && statusPagamentoPix === 'aguardando_pagamento';
@@ -170,14 +199,14 @@ Logo mais ele estará pronto para você! Fique de olho nas próximas atualizaç�
         )}
 
         <button
-          onClick={() => handleMudarStatus(pedido.id, "preparo")}
+          onClick={handlePrepararPedidoCompleto}
           className="bg-[var(--marrom-escuro)] hover:bg-[var(--vermelho-principal)] text-white px-3 py-1 rounded text-sm shadow transition duration-300"
         >
-          🔧 Preparo
+          🔧 Preparar
         </button>
 
         <button
-          onClick={() => handleMudarStatus(pedido.id, "entregando")}
+          onClick={() => handleMudarStatus(pedido.id, "em_entrega")}
           className="bg-[var(--vermelho-principal)] hover:bg-red-700 text-white px-3 py-1 rounded text-sm shadow transition duration-300"
         >
           🚚 Entregar
@@ -192,7 +221,7 @@ Logo mais ele estará pronto para você! Fique de olho nas próximas atualizaç�
 
         {showComandaButton && (
           <button
-            onClick={abrirComanda}
+            onClick={abrirComanda} // Essa função agora já usa autoPrintEnabled
             className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm shadow transition duration-300"
           >
             📄 Comanda
