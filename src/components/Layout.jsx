@@ -46,7 +46,7 @@ function Layout() {
             {currentUser && ( // Mostra o nome e o botão de Sair apenas se houver um usuário logado
               <div className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-4 w-full sm:w-auto"> {/* Garante que o nome e o botão Sair se ajustem */}
                 {displayName && ( // Exibe o nome se ele existir
-                  <span className="text-xs sm:text-sm text-gray-600 font-semibold truncate max-w-[150px] sm:max-w-none">Olá, {displayName}!</span> 
+                  <span className="text-xs sm:text-sm text-gray-600 font-semibold truncate max-w-[150px] sm:max-w-none">Olá, {displayName}!</span>
                 )}
                     <Link to="/historico-pedidos" className="text-gray-700 hover:text-[var(--vermelho-principal)] px-2 py-1 rounded-md">
                       Meus Pedidos
