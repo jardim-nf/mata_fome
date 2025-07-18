@@ -1,78 +1,81 @@
 // src/components/Layout.jsx
-import React from 'react';
-import { Outlet, useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-toastify'; // Importe o toast aqui!
+import React from "react";
+import { Outlet, useNavigate, Link, useLocation } from "react-router-dom"; // Importe useLocation
+import { useAuth } from "../context/AuthContext";
+import { toast } from 'react-toastify';
 
 function Layout() {
-  const { logout, currentUser, currentClientData, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // Obtenha o objeto location para verificar a rota atual
+  const { currentUser, currentClientData, isAdmin, isMasterAdmin, signOutUser } = useAuth(); 
+
+  // NOVO: Verifica se a rota atual é uma rota de cardápio
+  const isCardapioRoute = location.pathname.startsWith('/cardapios/');
+  const isGenericCardapiosList = location.pathname === '/cardapios';
 
   const handleLogout = async () => {
     try {
-      await logout();
-      toast.success('Você foi desconectado!'); // Substituição do alert()
-      navigate('/'); // Redireciona para a tela inicial após o logout
+      await signOutUser();
+      toast.info('Você foi desconectado.');
+      navigate(location.pathname); // Permanece na mesma página, mas deslogado
     } catch (error) {
-      console.error("Erro ao fazer logout:", error);
-      toast.error('Erro ao sair. Tente novamente.'); // Substituição do alert()
+      console.error("Erro ao deslogar:", error);
+      toast.error('Não foi possível fazer logout. Tente novamente.');
     }
   };
 
-  // Determine o nome a ser exibido: nome do cliente (se existir) ou email do usuário
-  const displayName = currentUser
-    ? (currentClientData?.nome || currentUser.email)
-    : '';
-
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Cabeçalho do seu layout */}
-      <header className="bg-white shadow-md py-4">
-        <nav className="container mx-auto flex justify-between items-center px-4">
-          <Link to="/" className="text-xl sm:text-2xl font-bold text-[var(--marrom-escuro)] flex-shrink-0">DeuFome</Link>
-          <div className="flex flex-col sm:flex-row items-center sm:space-x-4 space-y-2 sm:space-y-0 ml-4 sm:ml-0"> {/* Ajustes para responsividade do cabeçalho */}
-            {/* Outros links de navegação aqui */}
-            <Link to="/cardapios" className="text-sm sm:text-base text-gray-700 hover:text-[var(--vermelho-principal)] px-2 py-1 rounded-md">
-              Estabelecimentos
-            </Link>
-            
-            {/* Condicionalmente renderiza o link "Planos" apenas para admins */}
-            {isAdmin && (
-              <Link to="/planos" className="text-gray-700 hover:text-[var(--vermelho-principal)] px-2 py-1 rounded-md">
-                Planos
+      {/* Cabeçalho/Navegação */}
+      <header className="bg-gray-800 text-white p-4 flex justify-between items-center">
+        <Link to="/" className="text-xl font-bold">
+          DeuFome
+        </Link>
+        <nav>
+          {currentUser ? ( // Se há um usuário logado
+            <div className="flex items-center gap-4">
+              <span className="text-sm">Olá, {currentClientData?.nome || currentUser.email}!</span>
+              
+              {/* Links de navegação para usuários logados */}
+              {isMasterAdmin && (
+                <Link to="/master-dashboard" className="hover:text-gray-300">Master Dashboard</Link>
+              )}
+              {isAdmin && !isMasterAdmin && (
+                <Link to="/painel" className="hover:text-gray-300">Painel de Pedidos</Link>
+              )}
+              {/* Links comuns para usuários logados, mesmo se forem admins */}
+              {!isCardapioRoute && !isGenericCardapiosList && ( // Oculta "Cardápios" se já estiver na página de cardápio
+                <Link to="/cardapios" className="hover:text-gray-300">Cardápios</Link>
+              )}
+              
+              <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded">
+                Sair
+              </button>
+            </div>
+          ) : ( // Se NÃO há um usuário logado
+            // MUDANÇA AQUI: Oculta o botão "Login Admin" em páginas de cardápio
+            // Ou, se houver um login de cliente, ele apareceria aqui.
+            !isCardapioRoute && !isGenericCardapiosList && (
+              <Link to="/login-admin" className="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded">
+                Login Admin
               </Link>
-            )}
-
-            {currentUser && ( // Mostra o nome e o botão de Sair apenas se houver um usuário logado
-              <div className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-4 w-full sm:w-auto"> {/* Garante que o nome e o botão Sair se ajustem */}
-                {displayName && ( // Exibe o nome se ele existir
-                  <span className="text-xs sm:text-sm text-gray-600 font-semibold truncate max-w-[150px] sm:max-w-none">Olá, {displayName}!</span>
-                )}
-                    <Link to="/historico-pedidos" className="text-gray-700 hover:text-[var(--vermelho-principal)] px-2 py-1 rounded-md">
-                      Meus Pedidos
-    </Link>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md font-semibold"
-                >
-                  Sair
-                </button>
-              </div>
-            )}
-          </div>
+            )
+            // Se você tivesse um login para clientes comuns:
+            // <Link to="/login-cliente" className="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded">
+            //   Login/Cadastro
+            // </Link>
+          )}
         </nav>
       </header>
 
-      {/* Conteúdo principal renderizado pelas rotas filhas */}
+      {/* Conteúdo Principal (rotas aninhadas serão renderizadas aqui) */}
       <main className="flex-grow">
-        <Outlet /> 
+        <Outlet />
       </main>
 
-      {/* Rodapé do seu layout */}
-      <footer className="bg-[var(--marrom-escuro)] text-white py-6 text-center">
-        <div className="container mx-auto px-4">
-          © 2025 DeuFome. Todos os direitos reservados.
-        </div>
+      {/* Rodapé (opcional) */}
+      <footer className="bg-gray-800 text-white p-4 text-center">
+        &copy; {new Date().getFullYear()} DeuFome. Todos os direitos reservados.
       </footer>
     </div>
   );

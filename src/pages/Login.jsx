@@ -1,23 +1,48 @@
 // src/pages/Login.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Adicionado useEffect
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
-import { toast } from 'react-toastify'; // Importe o toast aqui!
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { toast } from 'react-toastify';
+import { useAuth } from '../context/AuthContext'; // NOVO: Importe useAuth
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
-  const [error, setError] = useState(''); // Manter setError para mensagens no formulário, se desejar
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const auth = getAuth();
 
+  // NOVO: Acessar os estados de autenticação do contexto
+  const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
+
+  // NOVO: Efeito para lidar com o redirecionamento após o login
+  useEffect(() => {
+    // Só age quando o AuthContext terminar de carregar os dados do usuário
+    if (!authLoading) {
+      if (currentUser) { // Se um usuário está logado (pode ser um login novo ou um usuário que já estava logado)
+        if (isMasterAdmin) {
+          toast.success('Login Master Admin realizado com sucesso! Bem-vindo ao seu painel global. 🚀');
+          navigate('/master-dashboard'); // Redireciona para o Dashboard Master
+        } else if (isAdmin) {
+          // Se não é Master Admin, mas é Admin de Estabelecimento
+          toast.success('Login Administrador de Estabelecimento realizado com sucesso! Redirecionando para o painel de pedidos.');
+          navigate('/painel'); // Redireciona para o Painel de Pedidos do estabelecimento
+        } else {
+          // Se não é nenhum tipo de administrador (usuário comum)
+          toast.info('Login realizado com sucesso! Você foi redirecionado para a página inicial.');
+          navigate('/'); // Redireciona para a home ou outra página de cliente
+        }
+      }
+    }
+  }, [currentUser, isAdmin, isMasterAdmin, authLoading, navigate]); // Dependências do useEffect
+
   const handleAuthAction = async (e) => {
     e.preventDefault();
-    setError(''); // Limpa o erro do formulário antes de tentar
+    setError('');
 
     try {
       let userCredential;
@@ -26,14 +51,16 @@ function Login() {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
+        // Ao cadastrar, o usuário é sempre comum por padrão. Permissões de admin são dadas manualmente.
         await setDoc(doc(db, 'usuarios', user.uid), {
           email: user.email,
           nome: nome,
-          isAdmin: false, 
-          criadoEm: Timestamp.now() 
+          isAdmin: false,       // Novo usuário é sempre COMUM por padrão
+          isMasterAdmin: false, // Novo usuário é sempre COMUM por padrão
+          criadoEm: Timestamp.now()
         });
         
-        toast.success('🎉 Cadastro realizado com sucesso! Você pode fazer login agora.'); // Substituição do alert()
+        toast.success('🎉 Cadastro realizado com sucesso! Por favor, faça login agora.');
         setIsRegistering(false);
         setEmail('');
         setPassword('');
@@ -42,21 +69,9 @@ function Login() {
       } else {
         // Lógica de Login
         userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-
-        // Verificação de Admin no Firestore
-        const userDocRef = doc(db, 'usuarios', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists() && userDocSnap.data()?.isAdmin) {
-          toast.success('Bem-vindo, Administrador! Redirecionando para o Dashboard.'); // Feedback de sucesso no login
-          navigate('/dashboard'); 
-        } else {
-          const errorMessage = 'Acesso negado. Você não tem permissões de administrador.';
-          setError(errorMessage); // Para exibir no formulário
-          toast.error(errorMessage); // Para exibir como toast
-          await auth.signOut(); // Desloga o usuário que não é admin
-        }
+        // O redirecionamento será tratado pelo useEffect acima,
+        // após o AuthContext atualizar o estado de currentUser, isAdmin, isMasterAdmin.
+        toast.info('Login em andamento...'); // Feedback imediato para o usuário
       }
     } catch (error) {
       // Tratamento de Erros de Autenticação
@@ -83,10 +98,19 @@ function Login() {
         default:
           console.error("Erro de autenticação:", error.message);
       }
-      setError(errorMessage); // Exibe no formulário
-      toast.error(errorMessage); // Exibe como toast
+      setError(errorMessage);
+      toast.error(errorMessage);
     }
   };
+
+  // Se o AuthContext ainda está carregando ou se o usuário já está logado
+  if (authLoading || currentUser) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-100">
+        <p className="text-[var(--marrom-escuro)]">Verificando status de login e permissões...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--bege-claro)] p-4">
