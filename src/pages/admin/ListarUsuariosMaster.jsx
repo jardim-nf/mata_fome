@@ -1,12 +1,28 @@
 // src/pages/admin/ListarUsuariosMaster.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, query, onSnapshot, orderBy, doc, updateDoc, setDoc } from 'firebase/firestore'; // Importe setDoc para criar usuário
-import { db } from '../../firebase';
+import { 
+  collection, 
+  query, 
+  onSnapshot, 
+  orderBy, 
+  doc, 
+  updateDoc, 
+  Timestamp // Certifique-se que Timestamp está importado para o criadoEm
+} from 'firebase/firestore';
+import { db, app } from '../../firebase'; // Importe 'app' para usar com getFunctions
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { format } from 'date-fns';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'; // Importe getAuth e createUserWithEmailAndPassword
+// Remova getAuth e createUserWithEmailAndPassword, pois a criação será via Cloud Function
+// import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'; // <-- REMOVA ESTA LINHA
+
+// Importe para chamar a Cloud Function
+import { getFunctions, httpsCallable } from 'firebase/functions'; // <-- ADICIONE ESTA LINHA
+
+// Inicialize as funções do Firebase aqui
+const functions = getFunctions(app);
+const createUserByMasterAdminCallable = httpsCallable(functions, 'createUserByMasterAdmin');
+
 
 function ListarUsuariosMaster() {
   const navigate = useNavigate();
@@ -15,15 +31,15 @@ function ListarUsuariosMaster() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Estados para o formulário de cadastro de novo usuário
+  // Estados para o formulário de cadastro de novo usuário (mantidos, mas manipulados de forma diferente)
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserIsAdmin, setNewUserIsAdmin] = useState(false);
   const [newUserIsMasterAdmin, setNewUserIsMasterAdmin] = useState(false);
-  const [newPhoneNumber, setNewPhoneNumber] = useState(''); // Telefone para o novo usuário
-  const [newAddressStreet, setNewAddressStreet] = useState(''); // Endereço para o novo usuário
+  const [newPhoneNumber, setNewPhoneNumber] = useState('');
+  const [newAddressStreet, setNewAddressStreet] = useState('');
   const [newAddressNumber, setNewAddressNumber] = useState('');
   const [newAddressNeighborhood, setNewAddressNeighborhood] = useState('');
   const [newAddressCity, setNewAddressCity] = useState('');
@@ -31,18 +47,24 @@ function ListarUsuariosMaster() {
   const [addingUser, setAddingUser] = useState(false);
   const [addUserError, setAddUserError] = useState('');
 
-  const auth = getAuth(); // Instância do Auth para criar usuários
+  // Remova a instância do Auth aqui, ela não será usada para criar usuário
+  // const auth = getAuth(); // <-- REMOVA ESTA LINHA
+
 
   useEffect(() => {
+    // Debug para verificar o estado de autenticação
+    console.log("MasterDashboard useEffect: authLoading=", authLoading, "isMasterAdmin=", isMasterAdmin, "currentUser=", currentUser);
+
     if (!authLoading) {
       if (!currentUser || !isMasterAdmin) {
         toast.error('Acesso negado. Esta página é exclusiva do Administrador Master.');
-        navigate('/master-dashboard');
+        navigate('/master-dashboard'); 
         setLoading(false);
         return;
       }
 
-      const q = query(collection(db, 'usuarios'), orderBy('criadoEm', 'desc')); // Buscar todos os usuários
+      // Se é Master Admin, inicia o listener para todos os usuários
+      const q = query(collection(db, 'usuarios'), orderBy('criadoEm', 'desc')); 
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const lista = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -57,7 +79,7 @@ function ListarUsuariosMaster() {
         toast.error("Erro ao carregar lista de usuários.");
       });
 
-      return () => unsubscribe();
+      return () => unsubscribe(); // Limpa o listener ao desmontar
     }
   }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
@@ -77,9 +99,6 @@ function ListarUsuariosMaster() {
       let updateData = {};
 
       if (currentIsMasterAdmin) {
-        // Se for Master Admin, não permitimos desativar direto aqui,
-        // mas podemos permitir tornar Admin Estabelecimento ou reverter.
-        // Por segurança, Master Admin só pode ser desativado por outro Master Admin ou via Firebase Console.
         toast.warn("Alterações de Master Admin devem ser feitas com cautela e, talvez, em um painel específico de segurança.");
         return;
       } else {
@@ -105,52 +124,58 @@ function ListarUsuariosMaster() {
     }
 
     try {
-      // 1. Criar usuário no Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
-      const user = userCredential.user;
-
-      // 2. Salvar perfil do usuário no Firestore na coleção 'usuarios'
-      await setDoc(doc(db, 'usuarios', user.uid), {
-        nome: newUserName.trim(),
+      // 1. CHAMA A CLOUD FUNCTION PARA CRIAR O USUÁRIO NO BACKEND
+      const result = await createUserByMasterAdminCallable({
         email: newUserEmail.trim(),
-        telefone: newPhoneNumber.trim() || null,
-        endereco: {
-          rua: newAddressStreet.trim() || null,
-          numero: newAddressNumber.trim() || null,
-          bairro: newAddressNeighborhood.trim() || null,
-          cidade: newAddressCity.trim() || null,
-          complemento: newAddressComplement.trim() || null,
-        },
+        password: newUserPassword.trim(),
+        name: newUserName.trim(),
+        phoneNumber: newPhoneNumber.trim(),
+        addressStreet: newAddressStreet.trim(),
+        addressNumber: newAddressNumber.trim(),
+        addressNeighborhood: newAddressNeighborhood.trim(),
+        addressCity: newAddressCity.trim(),
+        addressComplement: newAddressComplement.trim(),
         isAdmin: newUserIsAdmin,
-        isMasterAdmin: newUserIsMasterAdmin,
-        criadoEm: Timestamp.now(), // Adiciona timestamp de criação
+        isMasterAdmin: newUserIsMasterAdmin
       });
 
-      toast.success(`Usuário ${newUserName} cadastrado com sucesso!`);
-      setShowAddUserModal(false); // Fecha o modal
-      // Limpar formulário
-      setNewUserName('');
-      setNewUserEmail('');
-      setNewUserPassword('');
-      setNewUserIsAdmin(false);
-      setNewUserIsMasterAdmin(false);
-      setNewPhoneNumber('');
-      setNewAddressStreet('');
-      setNewAddressNumber('');
-      setNewAddressNeighborhood('');
-      setNewAddressCity('');
-      setNewAddressComplement('');
+      // Se a Cloud Function retornou sucesso
+      if (result.data.success) {
+        toast.success(`Usuário ${newUserName} cadastrado com sucesso! A lista será atualizada.`);
+        setShowAddUserModal(false); // Fecha o modal
+        // Limpar formulário
+        setNewUserName('');
+        setNewUserEmail('');
+        setNewUserPassword('');
+        setNewUserIsAdmin(false);
+        setNewUserIsMasterAdmin(false);
+        setNewPhoneNumber('');
+        setNewAddressStreet('');
+        setNewAddressNumber('');
+        setNewAddressNeighborhood('');
+        setNewAddressCity('');
+        setNewAddressComplement('');
+      } else {
+        // Tratar erros específicos retornados pela Cloud Function
+        setAddUserError(result.data.message || "Erro desconhecido ao cadastrar usuário.");
+        toast.error(result.data.message || "Erro desconhecido.");
+      }
 
     } catch (err) {
+      console.error("Erro ao cadastrar usuário via Cloud Function:", err);
       let msg = "Erro ao cadastrar usuário.";
-      if (err.code === 'auth/email-already-in-use') {
+      // Erros do HttpsError da Cloud Function
+      if (err.code === 'functions/email-already-in-use') {
         msg = "Este email já está cadastrado.";
-      } else if (err.code === 'auth/weak-password') {
+      } else if (err.code === 'functions/weak-password') {
         msg = "Senha muito fraca (mín. 6 caracteres).";
+      } else if (err.code === 'functions/permission-denied') {
+        msg = "Você não tem permissão para realizar esta ação (apenas Master Admin).";
+      } else {
+        msg = `Erro na Cloud Function: ${err.message}`;
       }
       setAddUserError(msg);
       toast.error(msg);
-      console.error("Erro ao cadastrar usuário:", err);
     } finally {
       setAddingUser(false);
     }

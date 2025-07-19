@@ -1,4 +1,4 @@
-// src/context/AuthContext.js
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
             const adminUserData = adminDocSnap.data();
             isAdminUser = adminUserData.isAdmin || false;
             isMasterAdminUser = adminUserData.isMasterAdmin || false;
-            console.log("AuthContext Debug: Perfil de USUÁRIO (admin/master) encontrado na coleção 'usuarios'.", "isAdmin:", isAdminUser, "isMasterAdmin:", isMasterAdminUser); //
+            console.log("AuthContext Debug: Perfil de USUÁRIO (admin/master) encontrado na coleção 'usuarios'.", "isAdmin:", isAdminUser, "isMasterAdmin:", isMasterAdminUser); 
 
             // Se for um Admin comum (não Master), verifica a ativação do estabelecimento
             if (isAdminUser && !isMasterAdminUser) {
@@ -51,9 +51,9 @@ export function AuthProvider({ children }) {
               if (!estabSnapshot.empty) {
                 const estabData = estabSnapshot.docs[0].data();
                 setIsEstabelecimentoAtivo(estabData.ativo || false);
-                console.log("AuthContext Debug: Estabelecimento vinculado ativo para admin:", estabData.ativo); //
+                console.log("AuthContext Debug: Estabelecimento vinculado ativo para admin:", estabData.ativo); 
               } else {
-                console.warn("AuthContext Warn: Admin comum sem estabelecimento vinculado."); //
+                console.warn("AuthContext Warn: Admin comum sem estabelecimento vinculado."); 
                 setIsEstabelecimentoAtivo(false);
               }
             } else {
@@ -61,7 +61,7 @@ export function AuthProvider({ children }) {
             }
 
           } else {
-            console.warn("AuthContext Debug: Documento do usuário (admin) NÃO encontrado na coleção 'usuarios'."); //
+            console.warn("AuthContext Debug: Documento do usuário (admin) NÃO encontrado na coleção 'usuarios'."); 
             // Se não encontrou em 'usuarios', presume-se que não é admin/master
             isAdminUser = false;
             isMasterAdminUser = false;
@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
 
           if (clientDocSnap.exists()) {
             clientProfileData = clientDocSnap.data();
-            console.log("AuthContext Debug: Perfil de CLIENTE encontrado na coleção 'clientes'."); //
+            console.log("AuthContext Debug: Perfil de CLIENTE encontrado na coleção 'clientes'."); 
           } else {
             console.warn("AuthContext Debug: Documento do usuário (cliente) NÃO encontrado na coleção 'clientes'.");
           }
@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
         } finally {
           // Garante que os estados são atualizados em qualquer caso
           setIsAdmin(isAdminUser);
-          setIsMasterAdmin(isMasterAdminUser); // <-- CORRIGIDO AQUI! Era 'isMasterAdmin(isMasterAdminUser);'
+          setIsMasterAdmin(isMasterAdminUser); // <-- CORRIGIDO AQUI! Antes era 'isMasterAdmin(isMasterAdminUser);'
           setCurrentClientData(clientProfileData);
         }
       } else { // Se não há usuário logado (logout ou sessão expirada)
