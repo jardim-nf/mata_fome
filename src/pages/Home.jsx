@@ -154,7 +154,7 @@ function Home() {
       const user = userCredential.user;
 
       // SALVAR DADOS ADICIONAIS DO CLIENTE NO FIRESTORE
-      await setDoc(doc(db, 'clientes', user.uid), {
+      await setDoc(doc(db, 'usuarios', user.uid), { // <-- ALTERADO PARA 'usuarios'
         nome: nomeCadastro.trim(),
         telefone: telefoneCadastro.trim(),
         email: emailCadastro.trim(),
@@ -164,6 +164,8 @@ function Home() {
           bairro: bairroCadastro.trim(),
           complemento: complementoCadastro.trim()
         },
+        isAdmin: false,       // Adicionado para definir o papel como cliente
+        isMasterAdmin: false, // Adicionado para definir o papel como cliente
         criadoEm: new Date(),
       });
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { toast } from 'react-toastify'; // Certifique-se de que toast está importado
 
 function ClienteLogin() {
   const [email, setEmail] = useState('');
@@ -38,8 +39,8 @@ function ClienteLogin() {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Salvar informações adicionais do cliente no Firestore na coleção 'clientes'
-        await setDoc(doc(db, 'clientes', user.uid), {
+        // Salvar informações adicionais do cliente no Firestore na coleção 'usuarios'
+        await setDoc(doc(db, 'usuarios', user.uid), { // <-- ALTERADO PARA 'usuarios'
           email: user.email,
           nome: nome.trim(),
           telefone: telefone.trim(),
@@ -50,9 +51,11 @@ function ClienteLogin() {
             bairro: bairro.trim(),
             complemento: complemento.trim()
           },
+          isAdmin: false,       // Adicionado para definir o papel como cliente
+          isMasterAdmin: false, // Adicionado para definir o papel como cliente
           criadoEm: Timestamp.now()
         });
-        alert('✅ Cadastro de cliente realizado com sucesso! Faça login agora.');
+        toast.success('✅ Cadastro de cliente realizado com sucesso! Faça login agora.'); // Use toast
         setIsRegistering(false); // Volta para a tela de login
         setEmail('');
         setPassword('');
@@ -179,7 +182,7 @@ function ClienteLogin() {
                 />
               </div>
             </>
-          )} {/* <--- CORREÇÃO: REMOVIDO UM ')' EXTRA AQUI */}
+          )} 
           {/* Fim dos novos campos de endereço */}
 
           <div>
