@@ -17,16 +17,15 @@ function Login() {
   const auth = getAuth();
 
   // NOVO: Acessar os estados de autenticação do contexto
-  const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
 
+  const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth(); // Pega isMasterAdmin
   // NOVO: Efeito para lidar com o redirecionamento após o login
   useEffect(() => {
-    // Só age quando o AuthContext terminar de carregar os dados do usuário
-    if (!authLoading) {
-      if (currentUser) { // Se um usuário está logado (pode ser um login novo ou um usuário que já estava logado)
+    if (!authLoading) { // Espera o AuthContext carregar
+      if (currentUser) { // Se já há um usuário logado
         if (isMasterAdmin) {
           toast.success('Login Master Admin realizado com sucesso! Bem-vindo ao seu painel global. 🚀');
-          navigate('/master-dashboard'); // Redireciona para o Dashboard Master
+          navigate('/master-dashboard'); // Redireciona para o Dashboard Master (PRIORIDADE)
         } else if (isAdmin) {
           // Se não é Master Admin, mas é Admin de Estabelecimento
           toast.success('Login Administrador de Estabelecimento realizado com sucesso! Redirecionando para o painel de pedidos.');
@@ -34,11 +33,11 @@ function Login() {
         } else {
           // Se não é nenhum tipo de administrador (usuário comum)
           toast.info('Login realizado com sucesso! Você foi redirecionado para a página inicial.');
-          navigate('/'); // Redireciona para a home ou outra página de cliente
+          navigate('/'); // Ou para uma página de perfil de cliente
         }
       }
     }
-  }, [currentUser, isAdmin, isMasterAdmin, authLoading, navigate]); // Dependências do useEffect
+  }, [currentUser, isAdmin, isMasterAdmin, authLoading, navigate]); // Dependências
 
   const handleAuthAction = async (e) => {
     e.preventDefault();
@@ -104,12 +103,9 @@ function Login() {
   };
 
   // Se o AuthContext ainda está carregando ou se o usuário já está logado
-  if (authLoading || currentUser) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gray-100">
-        <p className="text-[var(--marrom-escuro)]">Verificando status de login e permissões...</p>
-      </div>
-    );
+  if (authLoading) { /* ... */ }
+  if (!currentUser || !isAdmin || isMasterAdmin) { // Também aqui para renderização inicial
+      return null; // ou um componente de acesso negado
   }
 
   return (

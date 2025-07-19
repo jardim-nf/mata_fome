@@ -7,7 +7,9 @@ import { toast } from 'react-toastify';
 function Layout() {
   const navigate = useNavigate();
   const location = useLocation(); // Obtenha o objeto location para verificar a rota atual
-  const { currentUser, currentClientData, isAdmin, isMasterAdmin, signOutUser } = useAuth(); 
+
+  // === ALTERAÇÃO AQUI: Troquei 'signOutUser' por 'logout' ===
+  const { currentUser, currentClientData, isAdmin, isMasterAdmin, logout } = useAuth();
 
   // NOVO: Verifica se a rota atual é uma rota de cardápio
   const isCardapioRoute = location.pathname.startsWith('/cardapios/');
@@ -15,7 +17,8 @@ function Layout() {
 
   const handleLogout = async () => {
     try {
-      await signOutUser();
+      // === ALTERAÇÃO AQUI: Chamei 'logout()' em vez de 'signOutUser()' ===
+      await logout();
       toast.info('Você foi desconectado.');
       navigate(location.pathname); // Permanece na mesma página, mas deslogado
     } catch (error) {

@@ -19,14 +19,14 @@ const formatDateForInput = (date) => {
 };
 
 function AdminReports() {
-    const { currentUser, isAdmin, loading: authLoading } = useAuth();
+    const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth(); // Pegar isMasterAdmin
     const navigate = useNavigate();
 
     const [loadingReports, setLoadingReports] = useState(true);
     const [reportError, setReportError] = useState('');
     const [pedidos, setPedidos] = useState([]); // Dados brutos dos pedidos para relatórios
     const [cupons, setCupons] = useState([]); // Dados brutos dos cupons
-    const [clientes, setClientes] = useState([]); // Dados brutos dos clientes
+    const [usuarios, setUsuarios] = useState([]); // Dados brutos dos usuários (clientes e admins) - MUDOU DE 'clientes' para 'usuarios'
 
     // Filtros de data
     const [startDate, setStartDate] = useState(formatDateForInput(new Date())); // Padrão: hoje
@@ -34,14 +34,17 @@ function AdminReports() {
 
     useEffect(() => {
         if (!authLoading) {
-            if (!currentUser || !isAdmin) {
-                toast.error('Acesso negado. Você precisa ser um administrador para acessar esta página de relatórios.');
-                navigate('/dashboard');
+            // Condição de acesso: Apenas Master Admin pode acessar esta página
+            if (!currentUser || !isMasterAdmin) { // Verifica se é Master Admin
+                toast.error('Acesso negado. Você precisa ser o Administrador Master para acessar esta página de relatórios.');
+                navigate('/master-dashboard'); // Redireciona para o Dashboard Master se não for Master Admin
+                setLoadingReports(false);
+                return;
             } else {
-                fetchReportData();
+                fetchReportData(); // Se tiver permissão, busca os dados
             }
         }
-    }, [currentUser, isAdmin, authLoading, navigate, startDate, endDate]); // Recarrega dados ao mudar filtros de data
+    }, [currentUser, isMasterAdmin, authLoading, navigate, startDate, endDate]); // Recarrega dados ao mudar filtros de data
 
     const fetchReportData = async () => {
         setLoadingReports(true);
@@ -66,15 +69,15 @@ function AdminReports() {
             const fetchedCupons = cuponsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCupons(fetchedCupons);
 
-            // 3. Buscar Clientes (todos, para análise de aquisição) - pode ser filtrado por período no frontend
-            const clientesSnapshot = await getDocs(collection(db, 'clientes'));
-            const fetchedClientes = clientesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setClientes(fetchedClientes);
+            // 3. Buscar Clientes (todos, para análise de aquisição) - MUDOU DE 'clientes' para 'usuarios'
+            const usuariosSnapshot = await getDocs(collection(db, 'usuarios'));
+            const fetchedUsuarios = usuariosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setUsuarios(fetchedUsuarios); // Atualiza o estado para 'usuarios'
 
             toast.success('Dados de relatório carregados com sucesso!');
 
         } catch (err) {
-            console.error("Erro ao carregar dados de relatório:", err);
+            console.error("Erro ao carregar dados de relatório:", err); // Log do erro completo
             setReportError("Erro ao carregar dados de relatório. Verifique sua conexão e permissões.");
             toast.error("Erro ao carregar dados de relatório.");
         } finally {
@@ -82,20 +85,18 @@ function AdminReports() {
         }
     };
 
-    // <<-- LÓGICAS DE AGREGAÇÃO PARA OS RELATÓRIOS AQUI -->>
-    // Exemplo: Faturamento por dia
+    // Lógicas de Agregação para os Relatórios
     const getDailyRevenue = () => {
         const dailyRevenue = {};
         pedidos.forEach(pedido => {
             const date = format(pedido.criadoEm.toDate(), 'yyyy-MM-dd');
             dailyRevenue[date] = (dailyRevenue[date] || 0) + pedido.totalFinal;
         });
-        return Object.entries(dailyRevenue).sort(); // Retorna array de [data, faturamento] ordenado
+        return Object.entries(dailyRevenue).sort();
     };
 
-    const dailyRevenueData = getDailyRevenue(); // Exemplo de uso
+    const dailyRevenueData = getDailyRevenue();
 
-    // Exemplo: Top Produtos Vendidos
     const getTopSellingProducts = () => {
         const productSales = {};
         pedidos.forEach(pedido => {
@@ -105,12 +106,11 @@ function AdminReports() {
         });
         return Object.entries(productSales)
             .sort(([, a], [, b]) => b - a)
-            .slice(0, 10); // Top 10 produtos
+            .slice(0, 10);
     };
 
     const topProductsData = getTopSellingProducts();
 
-    // Exemplo: Análise de Cupons
     const getCouponPerformance = () => {
         const couponUsage = {};
         pedidos.forEach(pedido => {
@@ -126,11 +126,16 @@ function AdminReports() {
     const couponPerformanceData = getCouponPerformance();
 
 
-    // <<-- FUNÇÃO PARA EXPORTAR PARA PDF/CSV -->>
+    // Função para Exportar para PDF/CSV
     const handleExport = (formatType) => {
+        if (pedidos.length === 0) {
+            toast.warn('Não há dados de pedidos para exportar no período selecionado.');
+            return;
+        }
+
         if (formatType === 'pdf') {
             toast.info('Gerando PDF...');
-const doc = new jsPDF();
+            const doc = new jsPDF();
             let yPos = 10;
             const margin = 10;
             const lineHeight = 7;
@@ -160,7 +165,7 @@ const doc = new jsPDF();
                 const colWidthDate = 30;
                 const colWidthRevenue = 40;
                 let xPos = margin + 5;
-                const headerY = yPos; // Guarda a posição Y do header
+                const headerY = yPos;
 
                 doc.setFont('helvetica', 'bold');
                 doc.text('Data', xPos, yPos);
@@ -168,7 +173,7 @@ const doc = new jsPDF();
                 doc.text('Faturamento', xPos, yPos);
                 doc.setFont('helvetica', 'normal');
                 yPos += lineHeight;
-                doc.line(margin + 5, headerY + 2, margin + 5 + colWidthDate + colWidthRevenue + 10, headerY + 2); // Linha abaixo do header
+                doc.line(margin + 5, headerY + 2, margin + 5 + colWidthDate + colWidthRevenue + 10, headerY + 2);
 
                 dailyRevenueData.forEach(([date, revenue]) => {
                     xPos = margin + 5;
@@ -192,7 +197,7 @@ const doc = new jsPDF();
                 const colWidthProduct = 70;
                 const colWidthQty = 20;
                 let xPos = margin + 5;
-                const headerY = yPos; // Guarda a posição Y do header
+                const headerY = yPos;
 
                 doc.setFont('helvetica', 'bold');
                 doc.text('Produto', xPos, yPos);
@@ -200,7 +205,7 @@ const doc = new jsPDF();
                 doc.text('Quantidade', xPos, yPos);
                 doc.setFont('helvetica', 'normal');
                 yPos += lineHeight;
-                doc.line(margin + 5, headerY + 2, margin + 5 + colWidthProduct + colWidthQty + 10, headerY + 2); // Linha abaixo do header
+                doc.line(margin + 5, headerY + 2, margin + 5 + colWidthProduct + colWidthQty + 10, headerY + 2);
 
                 topProductsData.forEach(([productName, quantity]) => {
                     xPos = margin + 5;
@@ -212,7 +217,7 @@ const doc = new jsPDF();
                 yPos += 5;
             }
 
-            // Tabela de Performance de Cupons (adicione lógica similar)
+            // Tabela de Performance de Cupons
             doc.setFontSize(14);
             doc.text('Performance de Cupons:', margin, yPos);
             yPos += 8;
@@ -225,7 +230,7 @@ const doc = new jsPDF();
                 const colWidthUsos = 20;
                 const colWidthDesconto = 40;
                 let xPos = margin + 5;
-                const headerY = yPos; // Guarda a posição Y do header
+                const headerY = yPos;
 
                 doc.setFont('helvetica', 'bold');
                 doc.text('Código Cupom', xPos, yPos);
@@ -235,7 +240,7 @@ const doc = new jsPDF();
                 doc.text('Desconto Total', xPos, yPos);
                 doc.setFont('helvetica', 'normal');
                 yPos += lineHeight;
-                doc.line(margin + 5, headerY + 2, margin + 5 + colWidthCode + colWidthUsos + colWidthDesconto + 10, headerY + 2); // Linha abaixo do header
+                doc.line(margin + 5, headerY + 2, margin + 5 + colWidthCode + colWidthUsos + colWidthDesconto + 10, headerY + 2);
 
                 couponPerformanceData.forEach(data => {
                     xPos = margin + 5;
@@ -286,8 +291,11 @@ const doc = new jsPDF();
         );
     }
 
-    if (!currentUser || !isAdmin) {
-        return null; // Redirecionamento já feito no useEffect
+    // Condição de acesso: Apenas Master Admin pode acessar esta página
+    if (!currentUser || !isMasterAdmin) { // Verifica se é Master Admin
+        toast.error('Acesso negado. Você precisa ser o Administrador Master para acessar esta página de relatórios.');
+        navigate('/master-dashboard'); // Redireciona para o Dashboard Master se não for Master Admin
+        return null; // Não renderiza nada antes do redirecionamento
     }
 
     if (reportError) {
@@ -305,9 +313,10 @@ const doc = new jsPDF();
     return (
         <div className="p-4 max-w-6xl mx-auto bg-gray-50 min-h-screen">
             <div className="flex justify-between items-center mb-6">
-                <Link to="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
+                {/* Botão Voltar - MUDANÇA AQUI */}
+                <Link to="/master-dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                    Voltar para o Dashboard
+                    Voltar ao Dashboard Master
                 </Link>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 text-center sm:text-left flex-grow">Relatórios Avançados</h1> {/* Ajustado tamanho para mobile */}
                 <div></div> {/* Espaçador */}
@@ -448,8 +457,8 @@ const doc = new jsPDF();
                 )}
             </div>
 
-            {/* Seção de Exportação - Ajustada para flex-wrap */}
-            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 flex flex-col sm:flex-row justify-end items-center gap-2"> {/* Adicionado flex-col sm:flex-row para adaptar em mobile */}
+            {/* Seção de Exportação */}
+            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 flex flex-col sm:flex-row justify-end items-center gap-2">
                 <h2 className="text-xl font-semibold text-gray-700 mb-4 sm:mb-0 w-full sm:w-auto text-center sm:text-right">Exportar Relatórios</h2>
                 <button
                     onClick={() => handleExport('csv')}
