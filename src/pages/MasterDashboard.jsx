@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 import { format, subDays } from 'date-fns';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-
+import ImageDisplay from '../components/ImageDisplay';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 function MasterDashboard() {
@@ -172,6 +172,7 @@ function MasterDashboard() {
             </div>
         </div>
     );
+    
 }
 
 export default MasterDashboard;
