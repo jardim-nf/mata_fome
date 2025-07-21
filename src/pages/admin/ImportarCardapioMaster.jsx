@@ -1,11 +1,12 @@
 // src/pages/admin/ImportarCardapioMaster.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-// Importações do Firestore atualizadas para incluir o que precisamos
 import { collection, getDocs, doc, setDoc, addDoc, writeBatch } from 'firebase/firestore'; 
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
+// Importe httpsCallable se você usa Cloud Functions para a importação pesada
+// import { getFunctions, httpsCallable } from 'firebase/functions';
 
 function ImportarCardapioMaster() {
   const navigate = useNavigate();
@@ -17,6 +18,9 @@ function ImportarCardapioMaster() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState(0); // Novo estado para progresso
+
+  // const functions = getFunctions(); // Se estiver usando Cloud Functions
 
   useEffect(() => {
     if (!authLoading) {
@@ -51,10 +55,10 @@ function ImportarCardapioMaster() {
     }
   }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
-  // ▼▼▼ FUNÇÃO DE IMPORTAÇÃO TOTALMENTE CORRIGIDA ▼▼▼
   const handleImport = async (e) => {
     e.preventDefault();
     setImporting(true);
+    setProgress(0); // Reseta o progresso ao iniciar
     setError('');
 
     if (!selectedEstabelecimentoId) {
@@ -77,37 +81,50 @@ function ImportarCardapioMaster() {
         return;
       }
 
-      // --- INÍCIO DA LÓGICA CORRIGIDA ---
+      // --- INÍCIO DA LÓGICA DE IMPORTAÇÃO COM FEEDBACK ---
+
+      // Simulação de leitura de arquivo (se fosse um upload) ou início da operação
+      toast.info('Iniciando importação do cardápio...');
+      // Para simular progresso de uma operação de backend, você precisaria
+      // de uma Cloud Function que reportasse o progresso via Firestore ou Pub/Sub.
+      // Aqui, vamos apenas atualizar o estado de progresso para 50% antes da operação real
+      // e 100% no sucesso.
+
+      setProgress(25); // Indica que a validação inicial foi feita
 
       // 1. ATUALIZAR INFORMAÇÕES DE CONTATO NO DOCUMENTO PRINCIPAL
       const estabRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId);
       await setDoc(estabRef, { informacoes_contato: parsedCardapio.informacoes_contato }, { merge: true });
       console.log("Informações de contato atualizadas.");
+      setProgress(50); // Progresso após atualização de contato
 
       // 2. DELETAR O CARDÁPIO ANTIGO DA SUBCOLEÇÃO (PARA NÃO DUPLICAR)
       const subcolecaoRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, 'cardapio');
       const cardapioAntigoSnapshot = await getDocs(subcolecaoRef);
       
       if (!cardapioAntigoSnapshot.empty) {
-        const batch = writeBatch(db); // Usar batch para deletar em massa é mais eficiente
+        const batch = writeBatch(db);
         cardapioAntigoSnapshot.docs.forEach(documento => {
           batch.delete(documento.ref);
         });
-        await batch.commit(); // Deleta todos os itens antigos de uma vez
+        await batch.commit();
         console.log("Cardápio antigo da subcoleção deletado.");
       }
-      
+      setProgress(75); // Progresso após deletar antigos
+
       // 3. ADICIONAR OS NOVOS ITENS NA SUBCOLEÇÃO
       const novosItens = parsedCardapio.cardapio;
+      const batch = writeBatch(db); // Novo batch para adicionar
       for (const item of novosItens) {
-        // addDoc cria um NOVO DOCUMENTO na subcoleção para cada item
-        await addDoc(subcolecaoRef, item); 
+        batch.add(subcolecaoRef, item); // addDoc em um batch
       }
+      await batch.commit();
       console.log(`${novosItens.length} novos itens adicionados à subcoleção 'cardapio'.`);
       
-      // --- FIM DA LÓGICA CORRIGIDA ---
+      // --- FIM DA LÓGICA DE IMPORTAÇÃO COM FEEDBACK ---
 
       toast.success('Cardápio importado e subcoleção criada/atualizada com sucesso!');
+      setProgress(100); // Finaliza com 100%
       setCardapioJson(''); // Limpa o campo JSON
     } catch (err) {
       console.error("Erro ao importar cardápio:", err);
@@ -117,11 +134,11 @@ function ImportarCardapioMaster() {
         setError('Erro ao importar cardápio. Verifique o console para mais detalhes.');
       }
       toast.error('Erro ao importar cardápio.');
+      setProgress(0); // Reseta progresso em caso de erro
     } finally {
       setImporting(false); // Finaliza o estado de importação
     }
   };
-  // ▲▲▲ FIM DA FUNÇÃO CORRIGIDA ▲▲▲
 
   if (loading) {
     return <div className="text-center p-4">Carregando ferramenta de importação...</div>;
@@ -182,7 +199,19 @@ function ImportarCardapioMaster() {
         </div>
         
         {error && <p className="text-red-500 text-center">{error}</p>}
-        {importing && <p className="text-center text-blue-600 mt-2">Importando, por favor aguarde...</p>}
+        
+        {/* Indicador de progresso */}
+        {importing && (
+          <div className="mt-4">
+            <p className="text-center text-blue-600 mb-2">Importando... Progresso: {progress}%</p>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
 
         <button type="submit" disabled={importing || !selectedEstabelecimentoId || !cardapioJson.trim()}
           className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400"

@@ -74,9 +74,9 @@ function App() {
             <Route path="/admin/cadastrar-estabelecimento" element={<AdminEstabelecimentoCadastro />} /> {/* Cadastro de NOVOS estabelecimentos */}
             <Route path="/admin/reports" element={<AdminReports />} /> {/* Relatórios gerais */}
             <Route path="/master/estabelecimentos" element={<ListarEstabelecimentosMaster />} /> {/* Lista de estabelecimentos para Master */}
-            <Route path="/master/estabelecimentos/:id/editar" element={<EditarEstabelecimentoMaster />} /> {/* Edição de estabelecimento para Master */}
             <Route path="/master/pedidos" element={<ListarPedidosMaster />} /> {/* Lista de pedidos para Master */}
             <Route path="/master/usuarios" element={<ListarUsuariosMaster />} /> {/* Lista de usuários para Master */}
+            <Route path="/master/estabelecimentos/:id/editar" element={<EditarEstabelecimentoMaster />} /> {/* Edição de estabelecimento para Master */}
             <Route path="/master/importar-cardapio" element={<ImportarCardapioMaster />} />
       
             {/* Rota de redirecionamento padrão para a home se a rota não for encontrada */}

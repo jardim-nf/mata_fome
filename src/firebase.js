@@ -1,6 +1,6 @@
 // src/firebase.js
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth'; // Importe as funções de autenticação
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
@@ -18,14 +18,23 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// NENHUM connect*Emulator AQUI PARA PRODUÇÃO
-// APENAS as inicializações normais:
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const analytics = getAnalytics(app);
-export const functions = getFunctions(app); // Assumindo us-central1
-// Se fosse outra região (ex: southamerica-east1):
-// export const functions = getFunctions(app, 'southamerica-east1');
+export const functions = getFunctions(app);
+
+// Adicione e exporte as funções de autenticação
+export const doCreateUserWithEmailAndPassword = (email, password) => {
+  return createUserWithEmailAndPassword(auth, email, password);
+};
+
+export const doSignInWithEmailAndPassword = (email, password) => {
+  return signInWithEmailAndPassword(auth, email, password);
+};
+
+export const doSignOut = () => {
+  return signOut(auth);
+};
 
 export { app };

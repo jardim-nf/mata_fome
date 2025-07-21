@@ -22,11 +22,12 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   };
 
-  // ▼▼▼ USEEFFECT COM A LÓGICA DE BUSCA UNIFICADA ▼▼▼
+  // ▼▼▼ USEEFFECT COM A LÓGICA DE BUSCA UNIFICADA E LOGS DE DEBUG ▼▼▼
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      
+      console.log("AuthContext Debug: onAuthStateChanged - user:", user); // Log para ver o objeto 'user'
+
       if (user) {
         try {
           let userProfileData = null;
@@ -71,6 +72,7 @@ export function AuthProvider({ children }) {
           setCurrentClientData(userProfileData);
           setIsAdmin(isAdminUser);
           setIsMasterAdmin(isMasterAdminUser);
+          console.log("AuthContext Debug: currentClientData setado para:", userProfileData); // Log para ver o currentClientData setado
 
         } catch (error) {
           console.error("AuthContext Error: Falha ao buscar dados do usuário.", error);
@@ -82,6 +84,7 @@ export function AuthProvider({ children }) {
         }
 
       } else { // Se não há usuário logado
+        console.log("AuthContext Debug: user is null (deslogado).");
         setCurrentClientData(null);
         setIsAdmin(false);
         setIsMasterAdmin(false);
