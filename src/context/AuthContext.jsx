@@ -12,100 +12,87 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentClientData, setCurrentClientData] = useState(null); // Dados do cliente (nome, end, tel)
-  const [isAdmin, setIsAdmin] = useState(false); // Flag se é admin de estabelecimento
-  const [isMasterAdmin, setIsMasterAdmin] = useState(false); // Flag se é master admin
-  const [isEstabelecimentoAtivo, setIsEstabelecimentoAtivo] = useState(true); // Se o estabelecimento do admin está ativo
+  const [currentClientData, setCurrentClientData] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isMasterAdmin, setIsMasterAdmin] = useState(false);
+  const [isEstabelecimentoAtivo, setIsEstabelecimentoAtivo] = useState(true);
   const [loading, setLoading] = useState(true);
 
   const logout = () => {
     return signOut(auth);
   };
 
+  // ▼▼▼ USEEFFECT COM A LÓGICA DE BUSCA UNIFICADA ▼▼▼
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      setLoading(true); // Inicia o loading para cada mudança de estado de autenticação
-
+      
       if (user) {
-        let isAdminUser = false;
-        let isMasterAdminUser = false;
-        let clientProfileData = null; // Para armazenar os dados do perfil do cliente
-
         try {
-          // 1. Tenta buscar o perfil na coleção 'usuarios' (onde estão as flags de admin)
-          // Esta é a fonte de verdade para isAdmin/isMasterAdmin
-          const adminDocRef = doc(db, 'usuarios', user.uid);
-          const adminDocSnap = await getDoc(adminDocRef);
+          let userProfileData = null;
+          let isAdminUser = false;
+          let isMasterAdminUser = false;
 
-          if (adminDocSnap.exists()) {
-            const adminUserData = adminDocSnap.data();
-            isAdminUser = adminUserData.isAdmin || false;
-            isMasterAdminUser = adminUserData.isMasterAdmin || false;
-            console.log("AuthContext Debug: Perfil de USUÁRIO (admin/master) encontrado na coleção 'usuarios'.", "isAdmin:", isAdminUser, "isMasterAdmin:", isMasterAdminUser); 
+          // 1. Busca em 'usuarios' - Esta é a fonte principal para permissões e dados base
+          const userDocRef = doc(db, 'usuarios', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
 
-            // Se for um Admin comum (não Master), verifica a ativação do estabelecimento
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            isAdminUser = userData.isAdmin || false;
+            isMasterAdminUser = userData.isMasterAdmin || false;
+            userProfileData = userData; // Define os dados base do perfil
+
+            // Se for um Admin comum, verifica se seu estabelecimento está ativo
             if (isAdminUser && !isMasterAdminUser) {
               const estabQuery = query(collection(db, 'estabelecimentos'), where('adminUID', '==', user.uid));
               const estabSnapshot = await getDocs(estabQuery);
               if (!estabSnapshot.empty) {
-                const estabData = estabSnapshot.docs[0].data();
-                setIsEstabelecimentoAtivo(estabData.ativo || false);
-                console.log("AuthContext Debug: Estabelecimento vinculado ativo para admin:", estabData.ativo); 
+                setIsEstabelecimentoAtivo(estabSnapshot.docs[0].data().ativo || false);
               } else {
-                console.warn("AuthContext Warn: Admin comum sem estabelecimento vinculado."); 
-                setIsEstabelecimentoAtivo(false);
+                setIsEstabelecimentoAtivo(false); // Admin sem estabelecimento vinculado é inativo
               }
             } else {
-              setIsEstabelecimentoAtivo(true); // Master admin ou usuário sem adminUID não dependem de um estabelecimento específico
+              setIsEstabelecimentoAtivo(true); // Master Admins estão sempre ativos
             }
-
-          } else {
-            console.warn("AuthContext Debug: Documento do usuário (admin) NÃO encontrado na coleção 'usuarios'."); 
-            // Se não encontrou em 'usuarios', presume-se que não é admin/master
-            isAdminUser = false;
-            isMasterAdminUser = false;
-            setIsEstabelecimentoAtivo(false); // Não tem estabelecimento para verificar
           }
 
-          // 2. Tenta buscar o perfil na coleção 'clientes' (onde estão os dados do cliente para o cardápio)
-          // Esta é a fonte de verdade para currentClientData
+          // 2. Busca em 'clientes' - Para mesclar dados específicos de cliente (como endereço)
           const clientDocRef = doc(db, 'clientes', user.uid);
           const clientDocSnap = await getDoc(clientDocRef);
 
           if (clientDocSnap.exists()) {
-            clientProfileData = clientDocSnap.data();
-            console.log("AuthContext Debug: Perfil de CLIENTE encontrado na coleção 'clientes'."); 
-          } else {
-            console.warn("AuthContext Debug: Documento do usuário (cliente) NÃO encontrado na coleção 'clientes'.");
+            // ▼▼▼ LÓGICA DE MERGE ▼▼▼
+            // Mescla os dados, dando preferência aos dados de 'clientes' se houver conflito
+            userProfileData = { ...userProfileData, ...clientDocSnap.data() };
           }
+          
+          // 3. Atualiza os estados com os dados consolidados
+          setCurrentClientData(userProfileData);
+          setIsAdmin(isAdminUser);
+          setIsMasterAdmin(isMasterAdminUser);
 
         } catch (error) {
-          console.error("AuthContext Error ao buscar dados do usuário ou cliente:", error);
-          // Em caso de erro na busca, defina todos os estados relacionados a falso/nulo
-          isAdminUser = false;
-          isMasterAdminUser = false;
+          console.error("AuthContext Error: Falha ao buscar dados do usuário.", error);
+          // Zera os estados em caso de erro
+          setCurrentClientData(null);
+          setIsAdmin(false);
+          setIsMasterAdmin(false);
           setIsEstabelecimentoAtivo(false);
-          clientProfileData = null;
-        } finally {
-          // Garante que os estados são atualizados em qualquer caso
-          setIsAdmin(isAdminUser);
-          setIsMasterAdmin(isMasterAdminUser); // <-- CORRIGIDO AQUI! Antes era 'isMasterAdmin(isMasterAdminUser);'
-          setCurrentClientData(clientProfileData);
         }
-      } else { // Se não há usuário logado (logout ou sessão expirada)
-        setCurrentUser(null);
+
+      } else { // Se não há usuário logado
         setCurrentClientData(null);
         setIsAdmin(false);
         setIsMasterAdmin(false);
         setIsEstabelecimentoAtivo(false);
       }
 
-      setLoading(false); // Finaliza o estado de carregamento
+      setLoading(false); // Finaliza o carregamento
     });
 
     return unsubscribe;
-  }, []); // [] significa que executa apenas uma vez após a montagem
+  }, []);
 
   const value = {
     currentUser,

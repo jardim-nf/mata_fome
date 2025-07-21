@@ -15,6 +15,7 @@ theme: {
       run: 'run 0.4s ease-in-out infinite',
     },
   },
+  
 },
   plugins: [],
 }

@@ -1,353 +1,264 @@
-import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
+// src/pages/admin/AdminMenuManagement.jsx
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Link } from 'react-router-dom';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-toastify'; // Importe o toast aqui!
-
-// <<< LINHA DE IMPORTAÇÃO CORRIGIDA >>>
-import AdminProductCard from '../components/AdminProductCard'; 
+import { toast } from 'react-toastify';
 
 function AdminMenuManagement() {
-    const { currentUser, isAdmin, loading: authLoading } = useAuth();
+    const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
 
-    const [estabelecimentos, setEstabelecimentos] = useState([]); // Este estado não é mais diretamente usado para seleção de estabelecimento por adminUID, mas a lista pode ser usada se um admin puder ver vários
-    const [loadingEstabelecimentos, setLoadingEstabelecimentos] = useState(true);
-    const [selectedEstablishmentId, setSelectedEstablishmentId] = useState(null);
-    const [selectedEstablishmentName, setSelectedEstablishmentName] = useState('');
+    const [establishmentId, setEstablishmentId] = useState(null);
+    const [establishmentName, setEstablishmentName] = useState('');
     const [menuItems, setMenuItems] = useState([]);
-    const [loadingMenuItems, setLoadingMenuItems] = useState(false);
-    const [adminError, setAdminError] = useState('');
-
-    // Estados para o formulário de cadastro/edição de item do cardápio
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('Todos');
+    
     const [showItemForm, setShowItemForm] = useState(false);
-    const [editingItem, setEditingItem] = useState(null); // Item do cardápio que está sendo editado
-
-    const [itemName, setItemName] = useState('');
-    const [itemDescription, setItemDescription] = useState('');
-    const [itemPrice, setItemPrice] = useState('');
-    const [itemCategory, setItemCategory] = useState('');
-    const [itemImageUrl, setItemImageUrl] = useState(''); 
-    const [selectedImageFile, setSelectedImageFile] = useState(null);
-    const [uploadingImage, setUploadingImage] = useState(false);
-    const [imagePreviewUrl, setImagePreviewUrl] = useState('');
-    const [uploadComplete, setUploadComplete] = useState(false);
-
-    const [formError, setFormError] = useState('');
+    const [editingItem, setEditingItem] = useState(null);
+    const [formData, setFormData] = useState({ nome: '', descricao: '', preco: '', categoria: '', imageUrl: '', ativo: true });
     const [formLoading, setFormLoading] = useState(false);
 
-    const [itemAtivo, setItemAtivo] = useState(true); // Estado para o status 'ativo' do item no formulário
-
-    // Efeito para carregar o ID do estabelecimento vinculado ao admin logado
     useEffect(() => {
-        if (!authLoading && currentUser && isAdmin) {
-            const fetchEstablishmentData = async () => {
+        if (authLoading) return;
+        if (!currentUser || !isAdmin) {
+            toast.error('Acesso negado.');
+            navigate('/');
+            return;
+        }
+
+        const fetchEstablishmentData = async () => {
+            if (isAdmin && !isMasterAdmin) {
                 try {
                     const q = query(collection(db, 'estabelecimentos'), where('adminUID', '==', currentUser.uid));
                     const querySnapshot = await getDocs(q);
-
                     if (!querySnapshot.empty) {
                         const estabDoc = querySnapshot.docs[0];
-                        setSelectedEstablishmentId(estabDoc.id);
-                        setSelectedEstablishmentName(estabDoc.data().nome);
+                        setEstablishmentId(estabDoc.id);
+                        setEstablishmentName(estabDoc.data().nome);
                     } else {
-                        setAdminError("Nenhum estabelecimento encontrado para este administrador. Certifique-se de que o campo 'adminUID' está configurado no Firestore.");
-                        toast.error("Nenhum estabelecimento encontrado para este administrador."); // Adicionado toast de erro
+                        setError("Nenhum estabelecimento encontrado para este administrador.");
+                        setLoading(false);
                     }
-                } catch (err) {
-                    console.error("Erro ao buscar informações do estabelecimento:", err);
-                    setAdminError("Erro ao carregar informações do estabelecimento. Verifique sua conexão.");
-                    toast.error("Erro ao carregar informações do estabelecimento."); // Adicionado toast de erro
-                } finally {
-                    setLoadingEstabelecimentos(false); // Indica que a parte inicial de carregamento está feita
+                } catch(err) {
+                    setError("Erro ao buscar seu estabelecimento.");
+                    setLoading(false);
                 }
-            };
-            fetchEstablishmentData();
-        } else if (!authLoading && (!currentUser || !isAdmin)) {
-            setAdminError("Acesso negado. Você não tem permissões de administrador para gerenciar o cardápio.");
-            toast.error("Acesso negado. Você não tem permissões de administrador para gerenciar o cardápio."); // Adicionado toast de erro
-            setLoadingEstabelecimentos(false);
-        }
-    }, [currentUser, isAdmin, authLoading]);
+            } else {
+                setLoading(false);
+            }
+        };
+        fetchEstablishmentData();
+    }, [currentUser, isAdmin, isMasterAdmin, authLoading, navigate]);
 
-    // Efeito para carregar os itens do cardápio do estabelecimento selecionado (em tempo real)
     useEffect(() => {
-        if (!selectedEstablishmentId) {
-            setMenuItems([]);
-            return;
-        }
-        setLoadingMenuItems(true); // Redefine o loading ao selecionar um estabelecimento
-        const unsub = onSnapshot(collection(db, 'estabelecimentos', selectedEstablishmentId, 'cardapio'), (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setMenuItems(data);
-            setLoadingMenuItems(false);
-        }, (error) => {
-            console.error("Erro ao carregar itens do cardápio:", error);
-            setLoadingMenuItems(false);
-            setAdminError("Erro ao carregar itens do cardápio.");
-            toast.error("Erro ao carregar itens do cardápio."); // Adicionado toast de erro
+        if (!establishmentId) return;
+        setLoading(true);
+        const q = query(collection(db, 'estabelecimentos', establishmentId, 'cardapio'), orderBy('categoria'), orderBy('nome'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setMenuItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setLoading(false);
+        }, (err) => {
+            setError("Erro ao carregar itens do cardápio. Verifique o índice do Firestore.");
+            setLoading(false);
         });
-        return () => unsub();
-    }, [selectedEstablishmentId]);
+        return () => unsubscribe();
+    }, [establishmentId]);
 
-    // Função para abrir o formulário (para adicionar ou editar um item do cardápio)
-    const openItemForm = (itemToEdit = null) => {
-        setEditingItem(itemToEdit);
-        if (itemToEdit) {
-            setItemName(itemToEdit.nome || '');
-            setItemDescription(itemToEdit.descricao || '');
-            setItemPrice(itemToEdit.preco || '');
-            setItemCategory(itemToEdit.categoria || '');
-            setItemImageUrl(itemToEdit.imageUrl || '');
-            setImagePreviewUrl(itemToEdit.imageUrl || '');
-            setSelectedImageFile(null); // Limpa arquivo de upload se estiver editando uma URL
-            setItemAtivo(itemToEdit.ativo !== undefined ? itemToEdit.ativo : true); // Carrega o status ativo existente
-        } else {
-            setItemName(''); setItemDescription(''); setItemPrice(''); setItemCategory(''); setItemImageUrl('');
-            setImagePreviewUrl(''); setSelectedImageFile(null);
-            setItemAtivo(true); // Novo item é ativo por padrão
-        }
-        setFormError(''); setShowItemForm(true); setUploadingImage(false); setUploadComplete(false);
+    const openItemForm = (item = null) => {
+        setEditingItem(item);
+        setFormData(item ? { ...item } : { nome: '', descricao: '', preco: '', categoria: '', imageUrl: '', ativo: true });
+        setShowItemForm(true);
     };
 
-    // Função para fechar o formulário
     const closeItemForm = () => {
-        setShowItemForm(false); setEditingItem(null); setFormError('');
-        setItemName(''); setItemDescription(''); setItemPrice(''); setItemCategory(''); setItemImageUrl('');
-        setImagePreviewUrl(''); setSelectedImageFile(null); setUploadingImage(false); setUploadComplete(false);
-        setItemAtivo(true); // Reseta o estado ativo para o padrão de um novo item
+        setShowItemForm(false);
+        setEditingItem(null);
     };
 
-    // Lógica para upload de imagem (se for usado)
-    const handleFileChange = (e) => {
-        if (e.target.files[0]) {
-            setSelectedImageFile(e.target.files[0]);
-            setImagePreviewUrl(URL.createObjectURL(e.target.files[0]));
-            setUploadComplete(false);
-        } else {
-            setSelectedImageFile(null);
-            setImagePreviewUrl('');
-        }
+    const handleFormChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
-    // Função para salvar (adicionar ou atualizar) o item do cardápio
     const handleSaveItem = async (e) => {
         e.preventDefault();
-        if (!selectedEstablishmentId) {
-            setFormError("ID do estabelecimento não selecionado. Não foi possível salvar o item."); // Este erro não deve ocorrer com adminUID
-            toast.error("ID do estabelecimento não selecionado. Não foi possível salvar o item."); // Adicionado toast de erro
+        const { nome, preco, categoria } = formData;
+        if (!nome.trim() || !preco || !categoria.trim()) {
+            toast.warn("Nome, Preço e Categoria são obrigatórios.");
             return;
         }
-        if (!itemName.trim() || !itemPrice || !itemCategory.trim()) {
-            setFormError("Nome, Preço e Categoria são obrigatórios.");
-            toast.warn("Nome, Preço e Categoria são obrigatórios."); // Adicionado toast de aviso
-            return;
-        }
-        if (isNaN(Number(itemPrice)) || Number(itemPrice) < 0) {
-            setFormError("Preço deve ser um número positivo.");
-            toast.warn("Preço deve ser um número positivo."); // Adicionado toast de aviso
-            return;
-        }
-
         setFormLoading(true);
-        setFormError('');
+        const dataToSave = { ...formData, preco: Number(formData.preco) };
         
-        let finalImageUrl = itemImageUrl.trim(); 
-
-        if (selectedImageFile) {
-            setUploadingImage(true);
-            const storage = getStorage();
-            const storageRef = ref(storage, `cardapio_images/${selectedEstablishmentId}/${selectedImageFile.name}_${Date.now()}`);
-            try {
-                const uploadTask = await uploadBytes(storageRef, selectedImageFile);
-                finalImageUrl = await getDownloadURL(uploadTask.ref);
-                console.log("Imagem carregada:", finalImageUrl);
-                toast.success("Imagem carregada com sucesso!"); // Feedback de upload da imagem
-                setUploadComplete(true);
-            } catch (error) {
-                console.error("Erro ao fazer upload da imagem:", error);
-                setFormError("Erro ao fazer upload da imagem. Verifique as regras de Storage e o plano Firebase.");
-                toast.error("Erro ao fazer upload da imagem. Verifique as regras de Storage e o plano Firebase."); // Adicionado toast de erro
-                setUploadingImage(false);
-                setFormLoading(false);
-                return;
-            } finally {
-                setUploadingImage(false);
-            }
-        }
-        
-        const itemData = {
-            nome: itemName.trim(),
-            descricao: itemDescription.trim(),
-            preco: Number(itemPrice),
-            categoria: itemCategory.trim(),
-            imageUrl: finalImageUrl,
-            ativo: itemAtivo // Incluir o status 'ativo'
-        };
-
         try {
             if (editingItem) {
-                const itemRef = doc(db, 'estabelecimentos', selectedEstablishmentId, 'cardapio', editingItem.id);
-                await updateDoc(itemRef, itemData);
-                toast.success("Item atualizado com sucesso!"); // Substituição do alert()
+                await updateDoc(doc(db, 'estabelecimentos', establishmentId, 'cardapio', editingItem.id), dataToSave);
+                toast.success("Item atualizado com sucesso!");
             } else {
-                await addDoc(collection(db, 'estabelecimentos', selectedEstablishmentId, 'cardapio'), itemData);
-                toast.success("Item cadastrado com sucesso!"); // Substituição do alert()
+                await addDoc(collection(db, 'estabelecimentos', establishmentId, 'cardapio'), dataToSave);
+                toast.success("Item cadastrado com sucesso!");
             }
-            closeItemForm(); 
+            closeItemForm();
         } catch (error) {
-            console.error("Erro ao salvar item:", error);
-            setFormError("Erro ao salvar item. Verifique o console.");
-            toast.error("Erro ao salvar item. Verifique o console."); // Adicionado toast de erro
+            toast.error("Erro ao salvar o item.");
         } finally {
             setFormLoading(false);
         }
     };
-
-    // Função para excluir item do cardápio
-    const handleDeleteItem = async (itemId) => {
-        if (window.confirm("Tem certeza que deseja excluir este item? Esta ação é irreversível.")) {
+    
+    const handleDeleteItem = async (itemId, itemName) => {
+        if (window.confirm(`Tem certeza que deseja excluir o item "${itemName}"?`)) {
             try {
-                const itemRef = doc(db, 'estabelecimentos', selectedEstablishmentId, 'cardapio', itemId);
-                await deleteDoc(itemRef);
-                toast.success("Item excluído com sucesso!"); // Substituição do alert()
+                await deleteDoc(doc(db, 'estabelecimentos', establishmentId, 'cardapio', itemId));
+                toast.success("Item excluído com sucesso!");
             } catch (error) {
-                console.error("Erro ao excluir item:", error);
-                toast.error("Erro ao excluir item. Verifique o console."); // Substituição do alert()
+                toast.error("Erro ao excluir o item.");
             }
         }
     };
+    
+    const toggleItemStatus = async (item) => {
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', establishmentId, 'cardapio', item.id), { ativo: !item.ativo });
+            toast.success(`Status de "${item.nome}" alterado!`);
+        } catch(error) {
+            toast.error("Erro ao alterar o status.");
+        }
+    };
 
+    const categories = useMemo(() => ['Todos', ...new Set(menuItems.map(item => item.categoria))], [menuItems]);
+    
+    const filteredItems = useMemo(() => {
+        return menuItems.filter(item => {
+            const matchesCategory = selectedCategory === 'Todos' || item.categoria === selectedCategory;
+            const matchesSearch = item.nome.toLowerCase().includes(searchTerm.toLowerCase());
+            return matchesCategory && matchesSearch;
+        });
+    }, [menuItems, searchTerm, selectedCategory]);
 
-    // Renderização do componente
-    if (authLoading || loadingMenuItems || loadingEstabelecimentos) { // Carrega enquanto autentica ou busca dados
-        return <div className="flex justify-center items-center h-screen"><p className="text-xl text-gray-700">Carregando gerenciamento de cardápio...</p></div>;
-    }
-
-    if (adminError) {
-        return <div className="flex justify-center items-center h-screen"><p className="text-xl text-red-600">{adminError}</p></div>;
-    }
-
-    if (!selectedEstablishmentId) {
-        return (
-            <div className="flex justify-center items-center h-screen">
-                <p className="text-xl text-gray-700">Nenhum estabelecimento encontrado ou vinculado a este administrador.</p>
-                <Link to="/dashboard" className="mt-4 px-4 py-2 bg-blue-500 text-white rounded">Voltar para o Dashboard</Link>
-            </div>
-        );
-    }
+    if (authLoading || loading) return <div className="text-center p-8">Carregando...</div>;
+    if (error) return <div className="text-center p-8 text-red-600">{error}</div>;
 
     return (
-        <div className="min-h-screen bg-[var(--bege-claro)] p-6">
-            <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-xl p-8">
-                <Link to="/dashboard" className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300 mb-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-                    </svg>
-                    Voltar para o Dashboard
-                </Link>
-
-                <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-8">
-                    Gerenciar Cardápio de {selectedEstablishmentName}
-                </h1>
-
-                {/* Seção de Gerenciamento de Itens do Cardápio */}
-                <div className="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-bold text-[var(--marrom-escuro)]">Itens do Cardápio</h3>
-                        <button
-                            onClick={() => openItemForm()}
-                            className="bg-green-700 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300"
-                        >
-                            + Cadastrar Novo Item
-                        </button>
+        <div className="bg-slate-50 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
+            <div className="max-w-7xl mx-auto">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                    <div>
+                        <Link to="/painel" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 flex items-center mb-1">
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                            Voltar ao Painel
+                        </Link>
+                        <h1 className="text-3xl font-bold text-slate-800">Gerenciar Cardápio</h1>
+                        <p className="text-md text-slate-600 mt-1">{establishmentName}</p>
                     </div>
+                    <button onClick={() => openItemForm()} className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 flex items-center gap-2 justify-center transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                        Cadastrar Novo Item
+                    </button>
+                </div>
+                
+                <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-col sm:flex-row gap-4">
+                    <input type="text" placeholder="Buscar por nome..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full sm:w-1/3 rounded-lg border-slate-300"/>
+                    <div className="flex-1 flex items-center gap-2 overflow-x-auto pb-2">
+                        {categories.map(cat => (
+                            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-3 py-1 text-sm font-semibold rounded-full whitespace-nowrap ${selectedCategory === cat ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
-                    {/* Formulário de Cadastro/Edição de Item (Condicional) */}
-                    {showItemForm && (
-                        <form onSubmit={handleSaveItem} className="mb-8 p-4 bg-white rounded-lg shadow-inner border border-gray-100">
-                            <h4 className="text-lg font-bold text-[var(--marrom-escuro)] mb-4">{editingItem ? 'Editar Item' : 'Novo Item do Cardápio'}</h4>
-                            {formError && <p className="text-red-500 text-sm mb-4">{formError}</p>}
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label htmlFor="itemName" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Nome do Item *</label>
-                                    <input type="text" id="itemName" value={itemName} onChange={(e) => setItemName(e.target.value)}
-                                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" required />
-                                </div>
-                                <div>
-                                    <label htmlFor="itemPrice" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Preço *</label>
-                                    <input type="number" id="itemPrice" value={itemPrice} onChange={(e) => setItemPrice(e.target.value)}
-                                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" required min="0" step="0.01" />
-                                </div>
-                                <div>
-                                    <label htmlFor="itemCategory" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Categoria *</label>
-                                    <input type="text" id="itemCategory" value={itemCategory} onChange={(e) => setItemCategory(e.target.value)}
-                                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Hambúrgueres, Bebidas" required />
-                                </div>
-                                {/* Campo para URL da Imagem OU Upload de Arquivo */}
-                                <div>
-                                    <label htmlFor="itemImageUrl" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">URL da Imagem (Opcional)</label>
-                                    <input type="text" id="itemImageUrl" value={itemImageUrl} onChange={(e) => setItemImageUrl(e.target.value)}
-                                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: https://minhaimagem.com/foto.jpg ou /images/x-burger.jpg" />
-                                </div>
-                                <div>
-                                    <label htmlFor="imageUpload" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Ou Fazer Upload da Imagem</label>
-                                    <input type="file" id="imageUpload" accept="image/*" onChange={handleFileChange}
-                                        className="w-full border border-gray-300 rounded-md p-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
-                                    {selectedImageFile && <p className="text-sm text-gray-500 mt-1">Arquivo selecionado: {selectedImageFile.name}</p>}
-                                    {imagePreviewUrl && !uploadingImage && (
-                                        <img src={imagePreviewUrl} alt="Pré-visualização" className="w-20 h-20 object-cover rounded-md mt-2" />
-                                    )}
-                                    {uploadingImage && <p className="text-sm text-blue-600 mt-1">Carregando imagem...</p>}
-                                    {uploadComplete && <p className="text-sm text-green-600 mt-1">Upload concluído!</p>}
-                                </div>
-                                {/* Campo para Status Ativo/Inativo */}
-                                <div>
-                                    <label htmlFor="itemAtivo" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Status do Item</label>
-                                    <select id="itemAtivo" value={itemAtivo} onChange={(e) => setItemAtivo(e.target.value === 'true')}
-                                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]">
-                                        <option value="true">Ativo</option>
-                                        <option value="false">Desativado</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="mb-4">
-                                <label htmlFor="itemDescription" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Descrição (Opcional)</label>
-                                <textarea id="itemDescription" value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} rows="3"
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Uma breve descrição do item..."></textarea>
-                            </div>
-                            
-                            <div className="flex gap-4 justify-end">
-                                <button type="button" onClick={closeItemForm} className="bg-gray-300 text-[var(--marrom-escuro)] px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition duration-300">Cancelar</button>
-                                <button type="submit" disabled={formLoading || uploadingImage} className="bg-green-700 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition duration-300">
-                                    {formLoading || uploadingImage ? 'Salvando...' : (editingItem ? 'Salvar Edição' : 'Cadastrar Item')}
-                                </button>
-                            </div>
-                        </form>
-                    )}
-
-                    {/* Lista de Itens do Cardápio (visão do administrador) */}
-                    {loadingMenuItems ? (
-                        <p className="text-center text-[var(--cinza-texto)]">Carregando itens do cardápio...</p>
-                    ) : menuItems.length === 0 ? (
-                        <p className="text-center text-[var(--cinza-texto)] italic">Nenhum item cadastrado para este estabelecimento.</p>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {menuItems.map(item => (
-                                <AdminProductCard // AGORA USANDO AdminProductCard
-                                    key={item.id} 
-                                    produto={item} 
-                                    estabelecimentoId={selectedEstablishmentId}
-                                    onEdit={openItemForm}
-                                    onDelete={handleDeleteItem}
-                                />
-                            ))}
+                <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                    {menuItems.length === 0 && !loading ? (
+                        <div className="text-center p-16">
+                            <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum item cadastrado</h3>
+                            <p className="mt-1 text-sm text-gray-500">Comece a cadastrar itens no seu cardápio.</p>
                         </div>
+                    ) : (
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Item</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Categoria</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Preço</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Ações</th>
+                                </tr>
+                            </thead>
+<tbody className="bg-white divide-y divide-slate-200">
+  {filteredItems.map(item => (
+    <tr key={item.id}>
+      {/* Célula do Item (Nome e Imagem) */}
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="flex items-center">
+          <div className="flex-shrink-0 h-10 w-10">
+            <img className="h-10 w-10 rounded-full object-cover" src={item.imageUrl || 'https://via.placeholder.com/40'} alt={item.nome} />
+          </div>
+          <div className="ml-4">
+            <div className="text-sm font-medium text-slate-900">{item.nome}</div>
+          </div>
+        </div>
+      </td>
+      
+      {/* Célula da Categoria */}
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{item.categoria}</td>
+      
+      {/* Célula do Preço */}
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-800 font-semibold">R$ {item.preco?.toFixed(2).replace('.', ',')}</td>
+      
+      {/* Célula do Status */}
+      <td className="px-6 py-4 whitespace-nowrap">
+        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          {item.ativo ? 'Ativo' : 'Inativo'}
+        </span>
+      </td>
+
+      {/* ▼▼▼ ESTA É A CÉLULA COM AS OPÇÕES QUE ESTÁ FALTANDO ▼▼▼ */}
+      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
+          <button onClick={() => toggleItemStatus(item)} className={item.ativo ? 'text-yellow-600 hover:text-yellow-900' : 'text-green-600 hover:text-green-900'}>{item.ativo ? 'Desativar' : 'Ativar'}</button>
+          <button onClick={() => openItemForm(item)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
+          <button onClick={() => handleDeleteItem(item.id, item.nome)} className="text-red-600 hover:text-red-900">Excluir</button>
+      </td>
+    </tr>
+  ))}
+</tbody>
+                        </table>
                     )}
                 </div>
+
+                {/* Modal de Adicionar/Editar Item */}
+                {showItemForm && (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+                        <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
+                            <h2 className="text-xl font-bold text-slate-800 mb-6">{editingItem ? 'Editar Item' : 'Cadastrar Novo Item'}</h2>
+                            <form onSubmit={handleSaveItem} className="space-y-4">
+                                <input name="nome" value={formData.nome} onChange={handleFormChange} placeholder="Nome do Item *" className="w-full border-slate-300 rounded-lg"/>
+                                <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} placeholder="Descrição do Item" className="w-full border-slate-300 rounded-lg" rows="3"></textarea>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input name="preco" type="number" step="0.01" value={formData.preco} onChange={handleFormChange} placeholder="Preço *" className="w-full border-slate-300 rounded-lg"/>
+                                    <input name="categoria" value={formData.categoria} onChange={handleFormChange} placeholder="Categoria *" className="w-full border-slate-300 rounded-lg"/>
+                                </div>
+                                <input name="imageUrl" value={formData.imageUrl} onChange={handleFormChange} placeholder="URL da Imagem (Opcional)" className="w-full border-slate-300 rounded-lg"/>
+                                <div className="flex items-center">
+                                    <input type="checkbox" name="ativo" checked={formData.ativo} onChange={handleFormChange} id="itemAtivo" className="h-4 w-4 text-indigo-600 border-slate-300 rounded"/>
+                                    <label htmlFor="itemAtivo" className="ml-2 text-sm text-slate-600">Item Ativo</label>
+                                </div>
+                                <div className="flex justify-end gap-4 pt-4">
+                                    <button type="button" onClick={closeItemForm} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg font-semibold hover:bg-slate-300">Cancelar</button>
+                                    <button type="submit" disabled={formLoading} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
+                                        {formLoading ? 'Salvando...' : (editingItem ? 'Salvar Alterações' : 'Adicionar Item')}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

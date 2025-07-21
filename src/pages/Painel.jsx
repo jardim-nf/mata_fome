@@ -13,6 +13,7 @@ function Painel() {
   const navigate = useNavigate();
   // NOVO: Pegar isEstabelecimentoAtivo do useAuth
   const { currentUser, isAdmin, isMasterAdmin, isEstabelecimentoAtivo, loading: authLoading } = useAuth();
+    const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
   const [pedidosRecebidos, setPedidosRecebidos] = useState([]);
   const [pedidosEmPreparo, setPedidosEmPreparo] = useState([]);

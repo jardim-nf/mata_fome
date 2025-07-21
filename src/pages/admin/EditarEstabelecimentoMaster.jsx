@@ -1,268 +1,200 @@
 // src/pages/admin/EditarEstabelecimentoMaster.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase'; // Caminho relativo correto para firebase.js
-import { useAuth } from '../../context/AuthContext'; // Caminho relativo correto para AuthContext.js
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 
+// Componente para Inputs, para manter o código do formulário limpo
+function FormInput({ label, name, value, onChange, helpText = '', ...props }) {
+    return (
+        <div>
+            <label htmlFor={name} className="block text-sm font-medium text-slate-600">{label}</label>
+            <input
+                id={name}
+                name={name}
+                value={value || ''}
+                onChange={onChange}
+                {...props}
+                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+            />
+            {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
+        </div>
+    );
+}
+
 function EditarEstabelecimentoMaster() {
-  const { id } = useParams(); // Pega o ID do estabelecimento da URL
-  const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const { isMasterAdmin, loading: authLoading } = useAuth();
+    
+    const [formData, setFormData] = useState(null);
+    const [availableAdmins, setAvailableAdmins] = useState([]);
+    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
-  const [estabelecimento, setEstabelecimento] = useState(null);
-  const [nome, setNome] = useState('');
-  const [slug, setSlug] = useState('');
-  const [chavePix, setChavePix] = useState('');
-  const [rua, setRua] = useState('');
-  const [numero, setNumero] = useState('');
-  const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [complemento, setComplemento] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [rating, setRating] = useState(0);
-  const [horarioFuncionamento, setHorarioFuncionamento] = useState('');
-  const [telefoneWhatsApp, setTelefoneWhatsApp] = useState('');
-  const [instagram, setInstagram] = useState('');
-  const [adminUidVinculado, setAdminUidVinculado] = useState('');
-  const [ativo, setAtivo] = useState(true); // NOVO ESTADO: para o status 'ativo'
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  // Efeito para carregar dados do estabelecimento
-  useEffect(() => {
-    if (!authLoading && (!currentUser || !isMasterAdmin)) {
-      toast.error('Acesso negado. Esta página é exclusiva do Administrador Master.');
-      navigate('/master-dashboard');
-      setLoading(false);
-      return;
-    }
-
-    const fetchEstabelecimento = async () => {
-      try {
-        const docRef = doc(db, 'estabelecimentos', id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setEstabelecimento(data);
-          setNome(data.nome || '');
-          setSlug(data.slug || '');
-          setChavePix(data.chavePix || '');
-          setImageUrl(data.imageUrl || '');
-          setRating(data.rating || 0);
-          setAdminUidVinculado(data.adminUID || '');
-          setAtivo(data.ativo !== undefined ? data.ativo : true); // Define 'ativo' ou padrão para true
-
-          if (data.endereco) {
-            setRua(data.endereco.rua || '');
-            setNumero(data.endereco.numero || '');
-            setBairro(data.endereco.bairro || '');
-            setCidade(data.endereco.cidade || '');
-            setComplemento(data.endereco.complemento || '');
-          }
-          if (data.informacoes_contato) {
-            setHorarioFuncionamento(data.informacoes_contato.horario_funcionamento || '');
-            setTelefoneWhatsApp(data.informacoes_contato.telefone_whatsapp || '');
-            setInstagram(data.informacoes_contato.instagram || '');
-          }
-        } else {
-          setError('Estabelecimento não encontrado.');
-          toast.error('Estabelecimento não encontrado.');
-          navigate('/master/estabelecimentos'); // Volta para a lista se não encontrar
+    useEffect(() => {
+        if (authLoading) return;
+        if (!isMasterAdmin) {
+            toast.error('Acesso negado.');
+            navigate('/master-dashboard');
+            return;
         }
-      } catch (err) {
-        console.error("Erro ao carregar estabelecimento:", err);
-        setError('Erro ao carregar detalhes do estabelecimento.');
-        toast.error('Erro ao carregar detalhes do estabelecimento.');
-      } finally {
-        setLoading(false);
-      }
+
+        const fetchData = async () => {
+            try {
+                const docRef = doc(db, 'estabelecimentos', id);
+                const docSnap = await getDoc(docRef);
+                if (!docSnap.exists()) throw new Error('Estabelecimento não encontrado.');
+                
+                const data = docSnap.data();
+                setFormData({
+                    nome: data.nome || '', slug: data.slug || '', chavePix: data.chavePix || '',
+                    imageUrl: data.imageUrl || '', rating: data.rating || 0, adminUID: data.adminUID || '',
+                    ativo: data.ativo !== undefined ? data.ativo : true,
+                    endereco: data.endereco || {}, informacoes_contato: data.informacoes_contato || {}
+                });
+
+                const adminsQuery = query(collection(db, 'usuarios'), where('isAdmin', '==', true));
+                const adminsSnapshot = await getDocs(adminsQuery);
+                setAvailableAdmins(adminsSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome, email: doc.data().email })));
+            } catch (err) {
+                setError(err.message);
+                toast.error(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [id, isMasterAdmin, authLoading, navigate]);
+
+    const slugify = useCallback((text) => text.toString().toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^\w-]+/g, '').replace(/--+/g, '-'), []);
+
+    useEffect(() => {
+        if (formData && !slugManuallyEdited && formData.nome) {
+            setFormData(prev => ({...prev, slug: slugify(prev.nome)}));
+        }
+    }, [formData?.nome, slugManuallyEdited, slugify]);
+
+    const handleInputChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        const val = type === 'checkbox' ? checked : value;
+        if (name === 'slug') setSlugManuallyEdited(true);
+
+        if (name.includes('.')) {
+            const [parent, child] = name.split('.');
+            setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [child]: val } }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: val }));
+        }
+    };
+    
+    const handleUpdate = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const estabRef = doc(db, 'estabelecimentos', id);
+            await updateDoc(estabRef, formData);
+            toast.success('Estabelecimento atualizado com sucesso!');
+            navigate('/master/estabelecimentos');
+        } catch (err) {
+            toast.error('Erro ao atualizar o estabelecimento.');
+            setLoading(false);
+        }
     };
 
-    if (!authLoading && currentUser && isMasterAdmin) {
-        fetchEstabelecimento();
-    }
-  }, [id, currentUser, isMasterAdmin, authLoading, navigate]);
+    if (authLoading || loading) return <div className="text-center p-8">Carregando...</div>;
+    if (error) return <div className="text-center p-8 text-red-600">Erro: {error}</div>;
 
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    setLoading(true); // Reutiliza o estado de loading para o update
-    setError('');
+    return (
+        <div className="bg-slate-50 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
+            <div className="max-w-6xl mx-auto">
+                <form onSubmit={handleUpdate}>
+                    {/* Cabeçalho com Ações */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                        <div>
+                            <Link to="/master/estabelecimentos" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 flex items-center mb-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                Voltar para a Lista
+                            </Link>
+                            <h1 className="text-3xl font-bold text-slate-800">Editar Estabelecimento</h1>
+                        </div>
+                        <div className="flex items-center gap-4 w-full sm:w-auto">
+                            <button type="submit" disabled={loading} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
+                                {loading ? 'Salvando...' : 'Salvar Alterações'}
+                            </button>
+                        </div>
+                    </div>
 
-    try {
-      const estabRef = doc(db, 'estabelecimentos', id);
-      const updatedData = {
-        nome: nome.trim(),
-        slug: slug.trim(),
-        chavePix: chavePix.trim(),
-        imageUrl: imageUrl.trim(),
-        rating: Number(rating),
-        adminUID: adminUidVinculado.trim(),
-        ativo: ativo, // NOVO: Salva o status 'ativo'
-        endereco: {
-          rua: rua.trim(),
-          numero: numero.trim(),
-          bairro: bairro.trim(),
-          cidade: cidade.trim(),
-          complemento: complemento.trim(),
-        },
-        informacoes_contato: {
-          horario_funcionamento: horarioFuncionamento.trim(),
-          telefone_whatsapp: telefoneWhatsApp.trim(),
-          instagram: instagram.trim(),
-        },
-        // Não atualizamos o 'cardapio' aqui, pois ele tem sua própria ferramenta
-      };
+                    {/* Layout Principal em Duas Colunas */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Coluna Esquerda */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm">
+                                <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Dados Principais</h2>
+                                <div className="space-y-4">
+                                    <FormInput label="Nome do Estabelecimento" name="nome" value={formData.nome} onChange={handleInputChange} required />
+                                    <FormInput label="Slug (URL)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Gerado do nome, mas pode ser editado."/>
+                                    <div>
+                                        <label htmlFor="adminUID" className="block text-sm font-medium text-slate-600">Admin Vinculado *</label>
+                                        <select id="adminUID" name="adminUID" value={formData.adminUID} onChange={handleInputChange} required className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5">
+                                            <option value="">Selecione um administrador</option>
+                                            {availableAdmins.map(admin => <option key={admin.id} value={admin.id}>{admin.nome} ({admin.email})</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
-      await updateDoc(estabRef, updatedData);
-      toast.success('Estabelecimento atualizado com sucesso!');
-      navigate('/master/estabelecimentos'); // Volta para a lista após a atualização
-    } catch (err) {
-      console.error("Erro ao atualizar estabelecimento:", err);
-      setError('Erro ao atualizar estabelecimento. Tente novamente.');
-      toast.error('Erro ao atualizar estabelecimento.');
-    } finally {
-      setLoading(false);
-    }
-  };
+                            <div className="bg-white p-6 rounded-xl shadow-sm">
+                                <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Contato e Horários</h2>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <FormInput label="Telefone/WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} />
+                                    <FormInput label="Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} placeholder="@usuario" />
+                                </div>
+                                <div className="mt-4">
+                                    <FormInput label="Horário de Funcionamento" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter - Dom: 18h às 23h"/>
+                                </div>
+                            </div>
+                        </div>
 
-  if (authLoading || loading) {
-    return <div className="text-center p-4">Carregando formulário...</div>;
-  }
-  if (error) {
-    return <div className="text-center p-4 text-red-600">Erro: {error}</div>;
-  }
-  if (!currentUser || !isMasterAdmin) {
-    return null; // Acesso negado já é tratado pelo useEffect
-  }
-  if (!estabelecimento) {
-    return <div className="text-center p-4">Estabelecimento não encontrado.</div>; // Mensagem se o ID for inválido antes de erro
-  }
-
-
-  return (
-    <div className="p-6 max-w-2xl mx-auto bg-white shadow-lg rounded-lg my-8">
-      <Link to="/master/estabelecimentos" className="text-blue-600 hover:underline mb-4 inline-block">
-        ← Voltar para a Lista de Estabelecimentos
-      </Link>
-      <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Editar Estabelecimento: {estabelecimento.nome}</h1>
-      
-      <form onSubmit={handleUpdate} className="space-y-4">
-        {/* Campo para Ativar/Desativar */}
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="ativo"
-            checked={ativo}
-            onChange={(e) => setAtivo(e.target.checked)}
-            className="h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-          />
-          <label htmlFor="ativo" className="text-lg font-medium text-gray-800">
-            {ativo ? 'Estabelecimento Ativo (Pagamento em Dia)' : 'Estabelecimento INATIVO (Acesso Bloqueado)'}
-          </label>
-          {ativo ? (
-              <span className="ml-2 text-green-600">✅</span>
-          ) : (
-              <span className="ml-2 text-red-600">🚫</span>
-          )}
+                        {/* Coluna Direita */}
+                        <div className="space-y-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Status</h2>
+                                <label className="flex items-center cursor-pointer">
+                                    <div className="relative">
+                                        <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
+                                        <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
+                                        <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${formData.ativo ? 'transform translate-x-full' : ''}`}></div>
+                                    </div>
+                                    <div className="ml-3 text-base font-semibold text-slate-700">{formData.ativo ? 'Ativo' : 'Inativo'}</div>
+                                </label>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Configurações</h2>
+                                <div className="space-y-4">
+                                    <FormInput label="URL da Imagem/Logo" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} />
+                                    <FormInput label="Chave PIX" name="chavePix" value={formData.chavePix} onChange={handleInputChange} />
+                                    <FormInput label="Avaliação (1-5)" name="rating" type="number" min="0" max="5" step="0.1" value={formData.rating} onChange={handleInputChange} />
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Endereço</h2>
+                                <div className="space-y-4">
+                                    <FormInput label="Rua" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} />
+                                    <FormInput label="Número" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} />
+                                    <FormInput label="Bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} />
+                                    <FormInput label="Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
-        <hr className="my-4 border-gray-200" />
-
-        {/* Campos de Edição - Repetição dos campos de cadastro */}
-        {/* Dados Básicos */}
-        <div>
-          <label htmlFor="nome" className="block text-sm font-medium text-gray-700">Nome do Estabelecimento *</label>
-          <input type="text" id="nome" value={nome} onChange={(e) => setNome(e.target.value)} required 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="slug" className="block text-sm font-medium text-gray-700">Slug (URL amigável) *</label>
-          <input type="text" id="slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))} required 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-          <p className="mt-1 text-xs text-gray-500">Será a parte final da URL do cardápio (ex: /cardapios/seunome).</p>
-        </div>
-        <div>
-          <label htmlFor="chavePix" className="block text-sm font-medium text-gray-700">Chave PIX (Para Receber Pagamentos)</label>
-          <input type="text" id="chavePix" value={chavePix} onChange={(e) => setChavePix(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">URL da Imagem/Logo (Opcional)</label>
-          <input type="text" id="imageUrl" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="rating" className="block text-sm font-medium text-gray-700">Avaliação Inicial (1-5, Opcional)</label>
-          <input type="number" id="rating" value={rating} onChange={(e) => setRating(e.target.value)} min="1" max="5"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-
-        {/* Informações de Contato */}
-        <h2 className="text-xl font-bold mt-8 mb-4">Informações de Contato</h2>
-        <div>
-          <label htmlFor="horarioFuncionamento" className="block text-sm font-medium text-gray-700">Horário de Funcionamento</label>
-          <input type="text" id="horarioFuncionamento" value={horarioFuncionamento} onChange={(e) => setHorarioFuncionamento(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="telefoneWhatsApp" className="block text-sm font-medium text-gray-700">Telefone/WhatsApp</label>
-          <input type="tel" id="telefoneWhatsApp" value={telefoneWhatsApp} onChange={(e) => setTelefoneWhatsApp(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="instagram" className="block text-sm font-medium text-gray-700">Instagram (@usuario)</label>
-          <input type="text" id="instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-
-        {/* Endereço */}
-        <h2 className="text-xl font-bold mt-8 mb-4">Endereço do Estabelecimento</h2>
-        <div>
-          <label htmlFor="rua" className="block text-sm font-medium text-gray-700">Rua</label>
-          <input type="text" id="rua" value={rua} onChange={(e) => setRua(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="numero" className="block text-sm font-medium text-gray-700">Número</label>
-          <input type="text" id="numero" value={numero} onChange={(e) => setNumero(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="bairro" className="block text-sm font-medium text-gray-700">Bairro</label>
-          <input type="text" id="bairro" value={bairro} onChange={(e) => setBairro(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="cidade" className="block text-sm font-medium text-gray-700">Cidade</label>
-          <input type="text" id="cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="complemento" className="block text-sm font-medium text-gray-700">Complemento</label>
-          <input type="text" id="complemento" value={complemento} onChange={(e) => setComplemento(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-
-        {/* Vinculação de Administrador */}
-        <h2 className="text-xl font-bold mt-8 mb-4">Vincular Administrador</h2>
-        <div>
-          <label htmlFor="adminUid" className="block text-sm font-medium text-gray-700">UID do Administrador Vinculado *</label>
-          <input type="text" id="adminUid" value={adminUidVinculado} onChange={(e) => setAdminUidVinculado(e.target.value)} required 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-          <p className="mt-1 text-xs text-gray-500">Este é o UID do usuário que será o administrador principal deste estabelecimento.</p>
-        </div>
-        
-        <button type="submit" disabled={loading}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-        >
-          {loading ? 'Atualizando...' : 'Salvar Alterações'}
-        </button>
-      </form>
-    </div>
-  );
+    );
 }
 
 export default EditarEstabelecimentoMaster;

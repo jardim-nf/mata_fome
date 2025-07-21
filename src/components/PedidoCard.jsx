@@ -1,4 +1,5 @@
-import React from "react";
+// PedidoCard.jsx atualizado com lógica de "ver mais" para itens longos
+import React, { useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db, app } from "../firebase";
 import { useNavigate } from 'react-router-dom';
@@ -7,21 +8,18 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 function PedidoCard({ pedido, mudarStatus, excluirPedido, estabelecimento, autoPrintEnabled }) {
   const navigate = useNavigate();
-
   const functions = getFunctions(app);
   const getPixKeyCallable = httpsCallable(functions, 'getEstablishmentPixKey');
-
   const status = (pedido?.status || "recebido").toLowerCase();
   const formaPagamento = (pedido?.formaPagamento || "").toLowerCase();
   const statusPagamentoPix = (pedido?.statusPagamentoPix || "").toLowerCase();
-
+  const [mostrarTodosItens, setMostrarTodosItens] = useState(false);
   const coresPorStatus = {
     recebido: "bg-gray-50 border-gray-300",
     preparo: "bg-yellow-50 border-yellow-300",
-    "em_entrega": "bg-blue-50 border-blue-300",
+    em_entrega: "bg-blue-50 border-blue-300",
     finalizado: "bg-green-50 border-green-300",
   };
-
   const bgColor = coresPorStatus[status] || "bg-white border-gray-200";
 
   const abrirComanda = () => {

@@ -4,15 +4,9 @@ import { Link } from 'react-router-dom';
 import { collection, query, where, onSnapshot, orderBy, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 
-// Função auxiliar para formatar a data de hoje no formato 'YYYY-MM-DD'
-const getTodayFormattedDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+const getTodayFormattedDate = () => new Date().toISOString().split('T')[0];
 
 function AdminDashboard() {
     const { currentUser, authLoading } = useAuth();
@@ -22,266 +16,146 @@ function AdminDashboard() {
     const [topSellingProducts, setTopSellingProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [dashboardError, setDashboardError] = useState(null);
-
     const [startDate, setStartDate] = useState(getTodayFormattedDate());
     const [endDate, setEndDate] = useState(getTodayFormattedDate());
-
     const [showPeriodFilter, setShowPeriodFilter] = useState(false);
 
     useEffect(() => {
-        // 1. Espera o contexto de autenticação carregar
-        if (authLoading) {
-            setLoading(true);
-            setDashboardError(null);
-            return;
-        }
-
-        // 2. Se não há usuário logado, exibe erro e para
+        if (authLoading) return;
         if (!currentUser) {
-            setDashboardError("Você precisa estar logado para acessar o dashboard administrativo.");
+            setDashboardError("Você precisa estar logado.");
             setLoading(false);
             return;
         }
 
-        // 3. Verifica o papel do usuário no Firestore
-        const checkAdminStatusAndFetchData = async () => {
+        const fetchData = async () => {
             try {
-                setLoading(true);
-                setDashboardError(null);
-
                 const userDocRef = doc(db, 'usuarios', currentUser.uid);
                 const userDocSnap = await getDoc(userDocRef);
-
                 if (!userDocSnap.exists() || !userDocSnap.data()?.isAdmin) {
-                    setDashboardError("Seu usuário não tem permissões de administrador para acessar este painel.");
-                    setLoading(false);
-                    return;
+                    throw new Error("Seu usuário não tem permissões de administrador.");
                 }
 
-                // --- SE CHEGOU ATÉ AQUI, O USUÁRIO ESTÁ LOGADO E É UM ADMIN ---
-                console.log("AdminDashboard: Usuário logado e verificado como admin. Iniciando busca de dados.");
-
-                let pedidosQueryRef = collection(db, 'pedidos');
-                let q = query(
-                    pedidosQueryRef,
+                const { estabelecimentoId } = userDocSnap.data();
+                if (!estabelecimentoId) {
+                    throw new Error("Administrador não vinculado a um estabelecimento.");
+                }
+                
+                let pedidosQuery = query(
+                    collection(db, 'pedidos'),
+                    where('estabelecimentoId', '==', estabelecimentoId),
                     where('status', '==', 'finalizado'),
                     orderBy('criadoEm', 'desc')
                 );
-
-                if (startDate) {
-                    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
-                    const startOfDay = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
-                    const startTimestamp = Timestamp.fromDate(startOfDay);
-                    q = query(q, where('criadoEm', '>=', startTimestamp));
-                }
-                if (endDate) {
-                    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
-                    const endOfDay = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
-                    const endTimestamp = Timestamp.fromDate(endOfDay);
-                    q = query(q, where('criadoEm', '<=', endTimestamp));
-                }
-
-                const unsubscribe = onSnapshot(q, (snapshot) => {
-                    console.log("AdminDashboard: onSnapshot recebeu dados.");
+                
+                const unsubscribe = onSnapshot(pedidosQuery, (snapshot) => {
                     let vendasCount = 0;
                     let faturamentoSum = 0;
-                    const produtosVendidosMap = {};
+                    const produtosMap = {};
 
                     snapshot.forEach((doc) => {
                         const pedido = doc.data();
-                        if (pedido.itens && Array.isArray(pedido.itens)) {
-                            vendasCount++;
-
-                            const totalDoPedido = pedido.itens.reduce((acc, itemIndividual) => {
-                                const itemPrecoNumerico = Number(itemIndividual.preco);
-                                const itemQuantidadeNumerica = Number(itemIndividual.quantidade);
-
-                                if (!isNaN(itemPrecoNumerico) && !isNaN(itemQuantidadeNumerica)) {
-                                    produtosVendidosMap[itemIndividual.nome] =
-                                        (produtosVendidosMap[itemIndividual.nome] || 0) + itemQuantidadeNumerica;
-
-                                    return acc + (itemPrecoNumerico * itemQuantidadeNumerica);
-                                }
-                                return acc;
-                            }, 0);
-                            faturamentoSum += totalDoPedido;
+                        vendasCount++;
+                        faturamentoSum += pedido.totalFinal || 0;
+                        if (Array.isArray(pedido.itens)) {
+                           pedido.itens.forEach(item => {
+                               produtosMap[item.nome] = (produtosMap[item.nome] || 0) + item.quantidade;
+                           });
                         }
                     });
 
-                    const sortedTopSellingProducts = Object.keys(produtosVendidosMap)
-                        .map(nome => ({ nome, quantidade: produtosVendidosMap[nome] }))
-                        .sort((a, b) => b.quantidade - a.quantidade)
-                        .slice(0, 5);
+                    const sortedTopProducts = Object.entries(produtosMap)
+                        .sort(([, a], [, b]) => b - a).slice(0, 5)
+                        .map(([nome, quantidade]) => ({ nome, quantidade }));
 
                     setTotalVendas(vendasCount);
                     setFaturamentoTotal(faturamentoSum);
-                    setTopSellingProducts(sortedTopSellingProducts);
+                    setTopSellingProducts(sortedTopProducts);
                     setLoading(false);
-                    console.log("AdminDashboard: Dados carregados, loading set to false.");
                 }, (error) => {
-                    console.error("AdminDashboard: Erro ao carregar dados do dashboard:", error);
-                    setDashboardError("Erro ao carregar dados. Verifique suas permissões ou conexão.");
+                    console.error("Erro no listener:", error);
+                    setDashboardError("Erro ao carregar dados. Verifique suas permissões.");
                     setLoading(false);
                 });
-
-                return () => {
-                    unsubscribe();
-                    console.log("AdminDashboard: useEffect desmontado. Listener do Firestore desinscrito.");
-                };
-
+                
+                return unsubscribe;
             } catch (err) {
-                console.error("AdminDashboard: Erro na verificação de admin ou na busca inicial:", err);
-                if (err.code === 'permission-denied') {
-                    setDashboardError("Permissão negada. Verifique suas regras do Firebase ou se o usuário tem privilégios de admin.");
-                } else {
-                    setDashboardError("Não foi possível verificar seu status de administrador ou carregar dados iniciais.");
-                }
+                setDashboardError(err.message);
                 setLoading(false);
             }
         };
 
-        checkAdminStatusAndFetchData();
-
+        const unsubPromise = fetchData();
+        return () => {
+            unsubPromise.then(unsub => unsub && unsub());
+        };
     }, [currentUser, authLoading, startDate, endDate]);
 
-    const handleApplyFilter = () => {
-        // Ao clicar em 'Aplicar Filtro', o useEffect já será acionado pela mudança de startDate/endDate.
-    };
+    if (loading || authLoading) {
+        return <div className="text-center p-8">Carregando Dashboard...</div>;
+    }
 
     return (
-        <div className="min-h-screen bg-[var(--bege-claro)] p-6">
-            <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-8">
-                <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-8">
+        <div className="p-6 bg-slate-50 min-h-screen">
+            <div className="max-w-5xl mx-auto">
+                <h1 className="text-3xl font-bold text-center text-slate-800 mb-8">
                     Dashboard Administrativo
                 </h1>
-
-                {/* Botão para mostrar/esconder o filtro de período */}
-                <div className="text-center mb-6">
-                    <button
-                        onClick={() => setShowPeriodFilter(!showPeriodFilter)}
-                        className="bg-gray-200 text-[var(--marrom-escuro)] px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
-                    >
-                        {showPeriodFilter ? 'Esconder Filtro de Período' : 'Filtrar por Período Específico'}
-                    </button>
-                </div>
-
-                {/* Seção de Filtro por Período (condicionalmente visível) */}
-                {showPeriodFilter && (
-                    <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <label htmlFor="startDate" className="text-[var(--marrom-escuro)] font-medium">De:</label>
-                        <input
-                            type="date"
-                            id="startDate"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-                        />
-
-                        <label htmlFor="endDate" className="text-[var(--marrom-escuro)] font-medium">Até:</label>
-                        <input
-                            type="date"
-                            id="endDate"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-                        />
-
-                        <button
-                            onClick={handleApplyFilter}
-                            className="bg-[var(--vermelho-principal)] px-5 py-2 rounded-lg font-semibold hover:bg-red-700 transition duration-300"
-                        >
-                            Aplicar Filtro
-                        </button>
-                    </div>
-                )}
-
-
-                {/* Renderização Condicional do Dashboard */}
-                {loading ? (
-                    <p className="text-center text-[var(--cinza-texto)] text-lg mt-8">Carregando dados...</p>
-                ) : dashboardError ? (
-                    <p className="text-center text-red-500 text-lg mt-8">{dashboardError}</p>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                        {/* Card de Vendas Finalizadas */}
-                        <div className="bg-blue-50 p-6 rounded-lg shadow-md border border-blue-200">
-                            <h2 className="text-xl font-semibold text-blue-800 mb-2">Vendas Finalizadas</h2>
-                            <p className="text-5xl font-extrabold text-blue-600">{totalVendas}</p>
-                            <p className="text-gray-600 mt-2">Pedidos concluídos com sucesso.</p>
-                        </div>
-
-                        {/* Card de Faturamento Total */}
-                        <div className="bg-green-50 p-6 rounded-lg shadow-md border border-green-200">
-                            <h2 className="text-xl font-semibold text-green-800 mb-2">Faturamento Total</h2>
-                            <p className="text-5xl font-extrabold text-green-600">R$ {faturamentoTotal.toFixed(2)}</p>
-                            <p className="text-gray-600 mt-2">Receita total dos pedidos finalizados.</p>
-                        </div>
-
-                        {/* Botão/Card: PAINEL DE PEDIDOS */}
-                        <Link
-                            to={`/painel?startDate=${getTodayFormattedDate()}&endDate=${getTodayFormattedDate()}`}
-                            className="bg-red-300 p-6 rounded-lg shadow-md border border-red-200 flex flex-col justify-between items-center text-center transform transition duration-300 hover:scale-105 hover:shadow-lg"
-                            style={{ minHeight: '180px' }}
-                        >
-                            <h2 className="text-xl font-semibold mb-2">Painel de Pedidos</h2>
-                            <p className="text-5xl font-extrabold">📋</p>
-                            <p className="text-opacity-90 mt-2">Gerenciar todos os pedidos.</p>
-                        </Link>
-
-                        {/* Nova Seção: Gerenciar Cardápio */}
-                        <Link
-                            to="/admin/gerenciar-cardapio"
-                            className="bg-yellow-500 p-6 rounded-lg shadow-md border border-yellow-200 flex flex-col justify-between items-center text-center transform transition duration-300 hover:scale-105 hover:shadow-lg"
-                            style={{ minHeight: '180px' }}
-                        >
-                            <h2 className="text-whitetext-xl font-semibold  mb-2">Gerenciar Cardápio</h2>
-                            <p className="text-5xl font-extrabold ">🍔</p>
-                            <p className="text-opacity-90 mt-2">Adicionar e editar itens do menu.</p>
-                        </Link>
-
-                        {/* NOVO BOTÃO: Gerenciar Taxas de Entrega */}
-                        <Link
-                            to="/admin/taxas-de-entrega"
-                            className="bg-blue-600 p-6 rounded-lg shadow-md border border-blue-200 flex flex-col justify-between items-center text-center transform transition duration-300 hover:scale-105 hover:shadow-lg"
-                            style={{ minHeight: '180px' }}
-                        >
-                            <h2 className="text-xl font-semibold text-white mb-2">Gerenciar Taxas de Entrega</h2>
-                            <p className="text-5xl font-extrabold text-white ">💲</p>
-                            <p className=" text-opacity-90 mt-2 text-white">Definir valores de entrega por bairro.</p>
-                        </Link>
-
-                        <Link to="/admin/cupons" className="bg-green-700 p-6 rounded-lg shadow-md border  flex flex-col justify-between items-center text-center transform transition duration-300 text-white hover:scale-105 hover:shadow-lg">
-
-                            <h3 className="text-white text-xl font-semibold text-gray-800">Gerenciar Cupons</h3>
-                            <span className="text-4xl mb-2">💰</span>
-                            <p className="text-white text-gray-600 text-sm">Crie e edite códigos de desconto.</p>
-                        </Link>
-                        <Link
-                            to="/admin/reports"
-                            className="bg-blue-400 p-6 rounded-lg shadow-md border border-blue-200 flex flex-col justify-between items-center text-center transform transition duration-300 hover:scale-105 hover:shadow-lg"
-                            style={{ minHeight: '180px' }}
-                        >
-                            <h2 className="text-xl font-semibold text-white mb-2">Relatórios Avançados</h2>
-                            <p className="text-5xl font-extrabold text-white ">📈</p>
-                            <p className="text-opacity-90 mt-2 text-white">Análise de dados de vendas e cupons.</p>
-                        </Link>
-                    </div>
-                )}
-
-                {loading || dashboardError ? null : topSellingProducts.length > 0 ? (
-                    <div className="mt-8 bg-white p-6 rounded-lg shadow-xl border border-gray-200">
-                        <h2 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-6 text-center">Produtos Mais Vendidos</h2>
-                        <ul className="space-y-3">
-                            {topSellingProducts.map((product, index) => (
-                                <li key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-md border border-gray-100">
-                                    <span className="text-lg font-medium text-[var(--marrom-escuro)]">{index + 1}. {product.nome}</span>
-                                    <span className="text-lg font-bold text-[var(--verde-destaque)]">{product.quantidade} un.</span>
-                                </li>
-                            ))}
-                        </ul>
+                
+                {dashboardError ? (
+                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 text-center">
+                        <p className="font-bold">Erro ao carregar dados</p>
+                        <p>{dashboardError}</p>
                     </div>
                 ) : (
-                    <p className="text-center text-[var(--cinza-texto)] italic mt-8">Nenhum produto vendido no período selecionado.</p>
+                    <div className="space-y-8">
+                        {/* Seção de Métricas Principais */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+                                <h2 className="text-lg font-semibold text-slate-600">Vendas Finalizadas (Período)</h2>
+                                <p className="text-4xl font-extrabold text-slate-800">{totalVendas}</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
+                                <h2 className="text-lg font-semibold text-slate-600">Faturamento Total (Período)</h2>
+                                <p className="text-4xl font-extrabold text-slate-800">R$ {faturamentoTotal.toFixed(2).replace('.', ',')}</p>
+                            </div>
+                        </div>
+
+                        {/* Seção de Atalhos e Ações */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <Link to="/painel" className="bg-indigo-500 text-white p-6 rounded-xl flex flex-col justify-center items-center text-center transform hover:-translate-y-1 transition">
+                                <h2 className="text-xl font-bold">Painel de Pedidos 📋</h2>
+                                <p className="mt-1 text-sm opacity-90">Gerenciar pedidos em tempo real.</p>
+                            </Link>
+                            <Link to="/admin/gerenciar-cardapio" className="bg-amber-500 text-white p-6 rounded-xl flex flex-col justify-center items-center text-center transform hover:-translate-y-1 transition">
+                                <h2 className="text-xl font-bold">Gerenciar Cardápio 🍔</h2>
+                                <p className="mt-1 text-sm opacity-90">Adicionar e editar produtos.</p>
+                            </Link>
+                            <Link to="/admin/taxas-de-entrega" className="bg-sky-500 text-white p-6 rounded-xl flex flex-col justify-center items-center text-center transform hover:-translate-y-1 transition">
+                                <h2 className="text-xl font-bold">Taxas de Entrega 💲</h2>
+                                <p className="mt-1 text-sm opacity-90">Definir valores por bairro.</p>
+                            </Link>
+                             <Link to="/admin/cupons" className="bg-rose-500 text-white p-6 rounded-xl flex flex-col justify-center items-center text-center transform hover:-translate-y-1 transition">
+                                <h2 className="text-xl font-bold">Gerenciar Cupons 💰</h2>
+                                <p className="mt-1 text-sm opacity-90">Criar códigos de desconto.</p>
+                            </Link>
+                        </div>
+                        
+                        {/* Seção de Produtos Mais Vendidos */}
+                        {topSellingProducts.length > 0 && (
+                             <div className="bg-white p-6 rounded-xl shadow-sm">
+                                <h2 className="text-2xl font-bold text-slate-700 mb-4 text-center">Produtos Mais Vendidos</h2>
+                                <ul className="space-y-3">
+                                    {topSellingProducts.map((p, i) => (
+                                        <li key={i} className="flex justify-between p-3 bg-slate-50 rounded-md">
+                                            <span className="font-medium text-slate-800">{i + 1}. {p.nome}</span>
+                                            <span className="font-bold text-indigo-600">{p.quantidade} un.</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                             </div>
+                        )}
+                    </div>
                 )}
             </div>
         </div>

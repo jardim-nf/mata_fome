@@ -1,7 +1,8 @@
 // src/pages/admin/ImportarCardapioMaster.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore'; // Importe setDoc
+// Importações do Firestore atualizadas para incluir o que precisamos
+import { collection, getDocs, doc, setDoc, addDoc, writeBatch } from 'firebase/firestore'; 
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -14,12 +15,11 @@ function ImportarCardapioMaster() {
   const [selectedEstabelecimentoId, setSelectedEstabelecimentoId] = useState('');
   const [cardapioJson, setCardapioJson] = useState('');
   const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false); // Estado para indicar que a importação está em andamento
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!authLoading) {
-      // Bloqueio de acesso se não for Master Admin
       if (!currentUser || !isMasterAdmin) {
         toast.error('Acesso negado. Esta página é exclusiva do Administrador Master.');
         navigate('/master-dashboard');
@@ -27,7 +27,6 @@ function ImportarCardapioMaster() {
         return;
       }
 
-      // Carregar lista de estabelecimentos para o dropdown
       const fetchEstabelecimentos = async () => {
         try {
           const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
@@ -37,7 +36,7 @@ function ImportarCardapioMaster() {
           }));
           setEstabelecimentos(listaEstab);
           if (listaEstab.length > 0) {
-            setSelectedEstabelecimentoId(listaEstab[0].id); // Seleciona o primeiro por padrão
+            setSelectedEstabelecimentoId(listaEstab[0].id);
           }
         } catch (err) {
           console.error("Erro ao carregar lista de estabelecimentos:", err);
@@ -52,10 +51,11 @@ function ImportarCardapioMaster() {
     }
   }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
+  // ▼▼▼ FUNÇÃO DE IMPORTAÇÃO TOTALMENTE CORRIGIDA ▼▼▼
   const handleImport = async (e) => {
     e.preventDefault();
-    setImporting(true); // Inicia o estado de importação
-    setError(''); // Limpa erros anteriores
+    setImporting(true);
+    setError('');
 
     if (!selectedEstabelecimentoId) {
       setError('Por favor, selecione um estabelecimento.');
@@ -69,52 +69,66 @@ function ImportarCardapioMaster() {
     }
 
     try {
-      const parsedCardapio = JSON.parse(cardapioJson); // Tenta parsear o JSON
+      const parsedCardapio = JSON.parse(cardapioJson);
 
-      // Valida que o JSON tem as chaves esperadas 'cardapio' e 'informacoes_contato'
       if (!parsedCardapio.cardapio || !Array.isArray(parsedCardapio.cardapio) || !parsedCardapio.informacoes_contato) {
-          setError('JSON inválido. Certifique-se de que ele contém as chaves "cardapio" (array) e "informacoes_contato" (objeto) no nível superior.');
-          setImporting(false);
-          return;
+        setError('JSON inválido. Certifique-se de que ele contém as chaves "cardapio" (array) e "informacoes_contato" (objeto).');
+        setImporting(false);
+        return;
+      }
+
+      // --- INÍCIO DA LÓGICA CORRIGIDA ---
+
+      // 1. ATUALIZAR INFORMAÇÕES DE CONTATO NO DOCUMENTO PRINCIPAL
+      const estabRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId);
+      await setDoc(estabRef, { informacoes_contato: parsedCardapio.informacoes_contato }, { merge: true });
+      console.log("Informações de contato atualizadas.");
+
+      // 2. DELETAR O CARDÁPIO ANTIGO DA SUBCOLEÇÃO (PARA NÃO DUPLICAR)
+      const subcolecaoRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, 'cardapio');
+      const cardapioAntigoSnapshot = await getDocs(subcolecaoRef);
+      
+      if (!cardapioAntigoSnapshot.empty) {
+        const batch = writeBatch(db); // Usar batch para deletar em massa é mais eficiente
+        cardapioAntigoSnapshot.docs.forEach(documento => {
+          batch.delete(documento.ref);
+        });
+        await batch.commit(); // Deleta todos os itens antigos de uma vez
+        console.log("Cardápio antigo da subcoleção deletado.");
       }
       
-      // Objeto com os dados do cardápio e informações de contato para atualizar
-      const dataToUpdate = {
-        cardapio: parsedCardapio.cardapio,
-        informacoes_contato: parsedCardapio.informacoes_contato
-      };
+      // 3. ADICIONAR OS NOVOS ITENS NA SUBCOLEÇÃO
+      const novosItens = parsedCardapio.cardapio;
+      for (const item of novosItens) {
+        // addDoc cria um NOVO DOCUMENTO na subcoleção para cada item
+        await addDoc(subcolecaoRef, item); 
+      }
+      console.log(`${novosItens.length} novos itens adicionados à subcoleção 'cardapio'.`);
+      
+      // --- FIM DA LÓGICA CORRIGIDA ---
 
-      const estabRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId);
-      // Usa set com merge: true para atualizar apenas os campos fornecidos,
-      // sem apagar outros campos existentes no documento do estabelecimento.
-      await setDoc(estabRef, dataToUpdate, { merge: true });
-
-      toast.success('Cardápio importado/atualizado com sucesso!');
-      setCardapioJson(''); // Limpa o campo JSON após o sucesso
+      toast.success('Cardápio importado e subcoleção criada/atualizada com sucesso!');
+      setCardapioJson(''); // Limpa o campo JSON
     } catch (err) {
       console.error("Erro ao importar cardápio:", err);
-      // Mensagem de erro mais específica se o JSON for inválido
       if (err instanceof SyntaxError) {
-          setError('Erro de JSON: Verifique a sintaxe do JSON (vírgulas, aspas, chaves).');
+        setError('Erro de JSON: Verifique a sintaxe do JSON (vírgulas, aspas, chaves).');
       } else {
-          setError('Erro ao importar cardápio. Tente novamente.');
+        setError('Erro ao importar cardápio. Verifique o console para mais detalhes.');
       }
-      toast.error('Erro ao importar cardápio. JSON inválido ou erro no envio.');
+      toast.error('Erro ao importar cardápio.');
     } finally {
       setImporting(false); // Finaliza o estado de importação
     }
   };
+  // ▲▲▲ FIM DA FUNÇÃO CORRIGIDA ▲▲▲
 
-  // Mensagens de carregamento e erro para a página
   if (loading) {
     return <div className="text-center p-4">Carregando ferramenta de importação...</div>;
   }
-  if (error) { // Exibe erros relacionados ao carregamento inicial ou seleção
-    return <div className="text-center p-4 text-red-600">Erro: {error}</div>;
-  }
-  // Bloqueio de acesso se usuário não for Master Admin (já é tratado no useEffect)
+  
   if (!currentUser || !isMasterAdmin) {
-    return null;
+    return null; // A lógica de redirecionamento já cuida disso
   }
 
   return (
@@ -135,7 +149,7 @@ function ImportarCardapioMaster() {
             onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
             required
-            disabled={importing || estabelecimentos.length === 0} // Desabilita se estiver importando ou não houver estab.
+            disabled={importing || estabelecimentos.length === 0}
           >
             {estabelecimentos.length === 0 ? (
               <option value="">Carregando estabelecimentos...</option>
@@ -160,18 +174,18 @@ function ImportarCardapioMaster() {
             value={cardapioJson}
             onChange={(e) => setCardapioJson(e.target.value)}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm font-mono text-sm p-2"
-            placeholder={`Exemplo: \n{\n  "cardapio": [\n    {\n      "categoria": "Hambúrgueres",\n      "itens": [\n        { "nome": "X-Burguer", "preco": 25.00 }\n      ]\n    }\n  ],\n  "informacoes_contato": {\n    "telefone_whatsapp": "11999999999"\n  }\n}`}
+            placeholder={`Cole o objeto JSON completo aqui...`}
             required
             disabled={importing}
           ></textarea>
-          <p className="mt-1 text-xs text-gray-500">Cole o objeto JSON completo que contém os campos "cardapio" (array de categorias) e "informacoes_contato" (objeto) no nível superior.</p>
+           <p className="mt-1 text-xs text-gray-500">Cole o objeto JSON completo que contém os campos "cardapio" (array) e "informacoes_contato" (objeto).</p>
         </div>
         
-        {error && <p className="text-red-500 text-center">{error}</p>} {/* Erros do formulário */}
+        {error && <p className="text-red-500 text-center">{error}</p>}
         {importing && <p className="text-center text-blue-600 mt-2">Importando, por favor aguarde...</p>}
 
         <button type="submit" disabled={importing || !selectedEstabelecimentoId || !cardapioJson.trim()}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400"
         >
           {importing ? 'Importando...' : 'Importar/Atualizar Cardápio'}
         </button>
