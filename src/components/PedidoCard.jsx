@@ -117,7 +117,7 @@ Obrigado!`;
 
       switch (statusFormatado) {
         case "preparo":
-          mensagem = `Olá ${nomeCliente}, seu pedido #${_pedido.id.substring(0, 5)} do ${nomeEstabelecimento} está AGORA EM PREPARO! 🧑‍🍳
+          mensagem = `Olá ${nomeCliente}, seu pedido #${_pedido.i} do ${nomeEstabelecimento} está AGORA EM PREPARO! 🧑‍🍳
 
 *Detalhes do Pedido:*
 - ${itensDoPedido}
@@ -132,7 +132,7 @@ Logo mais ele estará pronto para você! Fique de olho nas próximas atualizaç�
           abrirComanda();
           break;
         case "em_entrega":
-          mensagem = `Olá ${nomeCliente}, seu pedido #${_pedido.id.substring(0, 5)} do ${nomeEstabelecimento} está SAINDO PARA ENTREGA! 🚗💨
+          mensagem = `Olá ${nomeCliente}, seu pedido #${_pedido.id.substring(0, 5)} do ${nomeEstabelecimento} está SAINDO PARA ENTREGA!
 
 *Detalhes do Pedido:*
 - ${itensDoPedido}

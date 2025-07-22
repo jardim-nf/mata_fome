@@ -27,17 +27,14 @@ function Painel() {
     return stored === 'true';
   });
 
-  // useRef to store previous received orders for notification comparison
   const prevPedidosRecebidosRef = useRef([]);
-  // useRef for the audio element
   const audioRef = useRef(null);
-  // State to show message if audio autoplay is blocked
   const [audioBlockedMessage, setAudioBlockedMessage] = useState('');
 
-  // Effect for initializing and cleaning up audio
+  // Efeito para inicializar e limpar o áudio
   useEffect(() => {
     audioRef.current = new Audio('/campainha.mp3');
-    audioRef.current.load(); // Preload the audio file
+    audioRef.current.load(); // Pré-carrega o arquivo de áudio
 
     const handleCanPlay = () => {
       console.log("Painel Audio Debug: Evento 'canplaythrough' disparado. Áudio está pronto.");
@@ -50,16 +47,16 @@ function Painel() {
       if (audioRef.current) {
         audioRef.current.removeEventListener('canplaythrough', handleCanPlay);
         audioRef.current.pause();
-        audioRef.current.src = ''; // Clear src to release resource
+        audioRef.current.src = ''; // Limpa o src para liberar o recurso
         audioRef.current = null;
       }
     };
-  }, []); // Run once on component mount
+  }, []); // Executa uma vez ao montar o componente
 
-  // Main effect for authentication, data fetching, and real-time listeners + polling
+  // Efeito principal para autenticação, busca de dados e listeners em tempo real + polling
   useEffect(() => {
     if (!authLoading) {
-      // Access control and redirection
+      // Controle de acesso e redirecionamento
       if (!currentUser || !isAdmin || isMasterAdmin || !isEstabelecimentoAtivo) {
         let errorMessage = 'Acesso negado.';
         if (!isEstabelecimentoAtivo && isAdmin && !isMasterAdmin) {
@@ -86,12 +83,12 @@ function Painel() {
       setLoadingPainel(true);
       setPainelError('');
 
-      // Unsubscribe functions for Firebase listeners
+      // Funções de unsubscribe para listeners do Firebase
       let unsubscribeRecebidos = () => {};
       let unsubscribeEmPreparo = () => {};
       let unsubscribeEmEntrega = () => {};
       let unsubscribeFinalizados = () => {};
-      let pollingInterval = null; // To store the interval ID for polling
+      let pollingInterval = null; // Para armazenar o ID do intervalo para polling
 
       const fetchEstabelecimentoAndPedidos = async () => {
         try {
@@ -115,7 +112,7 @@ function Painel() {
             setActualEstabelecimentoId(realEstabelecimentoId);
 
             const pedidosCollectionRef = collection(db, 'pedidos');
-            // Helper function to create query for different statuses
+            // Função auxiliar para criar query para diferentes status
             const createPedidoQuery = (status) => query(
               pedidosCollectionRef,
               where('estabelecimentoId', '==', realEstabelecimentoId),
@@ -123,64 +120,65 @@ function Painel() {
               orderBy('criadoEm', 'desc')
             );
 
-            // Function to handle fetching and notifying for 'recebido' orders
-const handleRecebidosUpdate = async (snapshot) => {
-    const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    const oldPedidosIds = new Set(prevPedidosRecebidosRef.current.map(p => p.id));
-    const newlyReceivedOrders = newPedidos.filter(p => !oldPedidosIds.has(p.id));
+            // Função para lidar com a busca e notificação de pedidos 'recebidos'
+            const handleRecebidosUpdate = async (snapshot) => {
+              const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              const oldPedidosIds = new Set(prevPedidosRecebidosRef.current.map(p => p.id));
+              // Filtra por pedidos realmente novos (não apenas atualizações de existentes)
+              const newlyReceivedOrders = newPedidos.filter(p => !oldPedidosIds.has(p.id));
 
-    if (newlyReceivedOrders.length > 0) {
-        console.log(`Detectado(s) ${newlyReceivedOrders.length} novo(s) pedido(s) como 'recebido'.`);
-        if (notificationsEnabled) {
-            // Desktop Notifications (will be blocked on iOS browsers, but good for other platforms)
-            if (Notification.permission === 'granted') {
-                newlyReceivedOrders.forEach(pedido => {
-                    new Notification(`Novo Pedido - ${pedido.cliente.nome}`, {
+              if (newlyReceivedOrders.length > 0) {
+                console.log(`Detectado(s) ${newlyReceivedOrders.length} novo(s) pedido(s) como 'recebido'.`);
+                if (notificationsEnabled) {
+                  // Notificações de Desktop
+                  if (Notification.permission === 'granted') {
+                    newlyReceivedOrders.forEach(pedido => {
+                      new Notification(`Novo Pedido - ${pedido.cliente.nome}`, {
                         body: `Total: R$ ${pedido.totalFinal.toFixed(2).replace('.', ',')}\nItens: ${pedido.itens.map(i => i.nome).join(', ')}`,
-                        icon: '/logo-deufome.png'
+                        icon: '/logo-deufome.png' // Garanta que este caminho está correto
+                      });
                     });
-                });
-            }
+                  }
 
-            // Audio Notification
-            if (audioRef.current) {
-                audioRef.current.currentTime = 0;
-                audioRef.current.play().then(() => {
-                    console.log("Áudio de novo pedido tocado com sucesso.");
-                    setAudioBlockedMessage('');
-                }).catch(e => {
-                    console.error("Erro ao tocar áudio (autoplay pode estar bloqueado):", e);
-                    if (e.name === "NotAllowedError" || e.name === "AbortError") {
+                  // Notificação Sonora
+                  if (audioRef.current) {
+                    audioRef.current.currentTime = 0; // Volta para o início
+                    audioRef.current.play().then(() => {
+                      console.log("Áudio de novo pedido tocado com sucesso.");
+                      setAudioBlockedMessage(''); // Limpa a mensagem de bloqueio se a reprodução for bem-sucedida
+                    }).catch(e => {
+                      console.error("Erro ao tocar áudio (autoplay pode estar bloqueado):", e);
+                      if (e.name === "NotAllowedError" || e.name === "AbortError") {
                         setAudioBlockedMessage("Som de notificação bloqueado. Clique no banner acima para ativá-lo!");
-                    }
-                });
-            } else {
-                console.warn("audioRef.current é null ao tentar tocar áudio para novo pedido.");
-            }
-            toast.info(`🔔 Novo pedido recebido de ${newlyReceivedOrders[0].cliente.nome}! Total: R$ ${newlyReceivedOrders[0].totalFinal.toFixed(2).replace('.', ',')}`);
-        } else {
-            console.log("Notificações desativadas pelo usuário, apenas toast info.");
-            toast.info(`🔔 Novo pedido (notificações desativadas): ${newlyReceivedOrders[0].cliente.nome}`);
-        }
+                      }
+                    });
+                  } else {
+                    console.warn("audioRef.current é null ao tentar tocar áudio para novo pedido.");
+                  }
+                  toast.info(`🔔 Novo pedido recebido de ${newlyReceivedOrders[0].cliente.nome}! Total: R$ ${newlyReceivedOrders[0].totalFinal.toFixed(2).replace('.', ',')}`);
+                } else {
+                  console.log("Notificações desativadas pelo usuário, apenas toast info.");
+                  toast.info(`🔔 Novo pedido (notificações desativadas): ${newlyReceivedOrders[0].cliente.nome}`);
+                }
 
-        // --- INÍCIO DA ADIÇÃO DO CÓDIGO PARA O TÍTULO DA ABA ---
-        // Altera o título da aba para indicar novos pedidos
-        document.title = `(${newlyReceivedOrders.length}) NOVO PEDIDO! - ${estabelecimentoInfo?.nome || 'Painel'}`;
-        // --- FIM DA ADIÇÃO ---
+                // --- INÍCIO: ADIÇÃO PARA O TÍTULO DA ABA ---
+                // Altera o título da aba para indicar novos pedidos
+                document.title = `(${newlyReceivedOrders.length}) NOVO PEDIDO! - ${estabelecimentoInfo?.nome || 'Painel'}`;
+                // --- FIM: ADIÇÃO PARA O TÍTULO DA ABA ---
 
-    } else {
-        console.log("Nenhum pedido VERDADEIRAMENTE novo detectado para notificação. Apenas atualização de lista.");
+              } else {
+                console.log("Nenhum pedido VERDADEIRAMENTE novo detectado para notificação. Apenas atualização de lista.");
 
-        // --- INÍCIO DA ADIÇÃO DO CÓDIGO PARA O TÍTULO DA ABA (RESET) ---
-        // Se não há novos pedidos, ou se a lista se estabilizou, volta ao título normal
-        document.title = `Painel de Pedidos ${estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}`;
-        // --- FIM DA ADIÇÃO ---
-    }
-    setPedidosRecebidos(newPedidos);
-    prevPedidosRecebidosRef.current = newPedidos;
-};
+                // --- INÍCIO: REINICIA O TÍTULO DA ABA ---
+                // Se não há novos pedidos, ou se a lista se estabilizou, volta ao título normal
+                document.title = `Painel de Pedidos ${estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}`;
+                // --- FIM: REINICIA O TÍTULO DA ABA ---
+              }
+              setPedidosRecebidos(newPedidos);
+              prevPedidosRecebidosRef.current = newPedidos; // Atualiza a ref para a próxima comparação
+            };
 
-            // Firebase Realtime Listeners
+            // Listeners em tempo real do Firebase
             unsubscribeRecebidos = onSnapshot(createPedidoQuery('recebido'), handleRecebidosUpdate, (error) => console.error("Erro no listener de Recebidos:", error));
 
             unsubscribeEmPreparo = onSnapshot(createPedidoQuery('preparo'), (snapshot) => {
@@ -195,16 +193,16 @@ const handleRecebidosUpdate = async (snapshot) => {
               setPedidosFinalizados(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }, (error) => console.error("Erro no listener de Finalizados:", error));
 
-            // Polling mechanism for 'recebido' orders as a fallback for mobile background
+            // Mecanismo de Polling para pedidos 'recebidos' como fallback para background em mobile
             pollingInterval = setInterval(async () => {
               console.log("Polling: Verificando novos pedidos 'recebido'...");
               try {
-                const snapshot = await getDocs(createPedidoQuery('recebido')); // One-time fetch
-                handleRecebidosUpdate(snapshot); // Use the same update logic
+                const snapshot = await getDocs(createPedidoQuery('recebido')); // Busca única
+                handleRecebidosUpdate(snapshot); // Usa a mesma lógica de atualização
               } catch (error) {
                 console.error("Erro no polling de Pedidos Recebidos:", error);
               }
-            }, 30000); // Poll every 30 seconds
+            }, 30000); // Polling a cada 30 segundos
 
           } else {
             setPainelError("Nenhum estabelecimento vinculado a este administrador.");
@@ -226,23 +224,41 @@ const handleRecebidosUpdate = async (snapshot) => {
 
       fetchEstabelecimentoAndPedidos();
 
-      // Cleanup function for useEffect
+      // Função de limpeza para useEffect
       return () => {
         unsubscribeRecebidos();
         unsubscribeEmPreparo();
         unsubscribeEmEntrega();
         unsubscribeFinalizados();
         if (pollingInterval) {
-          clearInterval(pollingInterval); // Clear the polling interval
+          clearInterval(pollingInterval); // Limpa o intervalo do polling
         }
       };
     }
-  }, [currentUser, isAdmin, isMasterAdmin, isEstabelecimentoAtivo, authLoading, navigate, notificationsEnabled]); // Depend on notificationsEnabled to re-evaluate effects
+  }, [currentUser, isAdmin, isMasterAdmin, isEstabelecimentoAtivo, authLoading, navigate, notificationsEnabled, estabelecimentoInfo]); // Adicionado estabelecimentoInfo nas dependências para atualizações de título
 
-  // Function to toggle notification settings
+  // Função para lidar com a exclusão de um pedido
+  const handleDeletePedido = async (pedidoId) => {
+    // Confirmação antes de excluir
+    if (!window.confirm("Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.")) {
+      return; // Para a função se o usuário cancelar
+    }
+
+    try {
+      await deleteDoc(doc(db, 'pedidos', pedidoId));
+      toast.success('Pedido excluído com sucesso!');
+      // Os listeners do Firestore (onSnapshot) automaticamente atualizarão a UI,
+      // então não é necessário atualizar o estado manualmente aqui.
+    } catch (error) {
+      console.error("Erro ao excluir pedido:", error);
+      toast.error("Erro ao excluir pedido. Tente novamente.");
+    }
+  };
+
+  // Função para alternar as configurações de notificação
   const toggleNotifications = async () => {
     if (notificationsEnabled) {
-      // If currently enabled, disable them
+      // Se estiverem ativadas, desativa
       setNotificationsEnabled(false);
       localStorage.setItem('notificationsEnabled', 'false');
       toast.info('Notificações desativadas.');
@@ -250,24 +266,24 @@ const handleRecebidosUpdate = async (snapshot) => {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
-      setAudioBlockedMessage(''); // Clear audio blocked message if notifications are turned off
+      setAudioBlockedMessage(''); // Limpa a mensagem de bloqueio de áudio se as notificações forem desativadas
       return;
     }
 
-    // If currently disabled, enable them
+    // Se estiverem desativadas, ativa
     let permissionRequested = false;
     let permissionGranted = false;
 
     if ('Notification' in window) {
       permissionRequested = true;
       if (Notification.permission === 'default') {
-        // Request permission if it hasn't been granted or denied yet
+        // Solicita permissão se ainda não foi concedida ou negada
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
           permissionGranted = true;
         }
       } else if (Notification.permission === 'granted') {
-        permissionGranted = true; // Already granted
+        permissionGranted = true; // Já concedida
       }
     } else {
       console.warn('API de Notificação de Desktop não suportada neste navegador.');
@@ -277,12 +293,12 @@ const handleRecebidosUpdate = async (snapshot) => {
     setNotificationsEnabled(true);
     localStorage.setItem('notificationsEnabled', 'true');
 
-    // Attempt to play audio immediately after user interaction
+    // Tenta tocar o áudio imediatamente após a interação do usuário
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.play().then(() => {
         console.log("Áudio tocado com SUCESSO no toggle (interação do usuário).");
-        setAudioBlockedMessage(''); // Clear message if successful
+        setAudioBlockedMessage(''); // Limpa a mensagem se for bem-sucedido
       }).catch(e => {
         console.warn("Áudio pode ter sido bloqueado na primeira reprodução após permissão:", e);
         if (e.name === "NotAllowedError" || e.name === "AbortError") {
@@ -293,7 +309,7 @@ const handleRecebidosUpdate = async (snapshot) => {
       console.warn("audioRef.current é null quando tentou tocar no toggle.");
     }
 
-    // Provide feedback to the user based on notification permission status
+    // Fornece feedback ao usuário com base no status da permissão de notificação
     if (permissionRequested) {
       if (permissionGranted) {
         toast.success('Notificações ativadas (incluindo pop-ups)!');
@@ -305,7 +321,7 @@ const handleRecebidosUpdate = async (snapshot) => {
     }
   };
 
-  // Loading state render
+  // Renderização do estado de carregamento
   if (authLoading || loadingPainel) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
@@ -314,9 +330,9 @@ const handleRecebidosUpdate = async (snapshot) => {
     );
   }
 
-  // Early exit for unauthorized users
+  // Saída antecipada para usuários não autorizados
   if (!currentUser || !isAdmin || isMasterAdmin || !isEstabelecimentoAtivo) {
-    return null; // Redirect handled by useEffect
+    return null; // O redirecionamento é tratado pelo useEffect
   }
 
   return (
@@ -356,12 +372,12 @@ const handleRecebidosUpdate = async (snapshot) => {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {/* Recebido Column */}
+          {/* Coluna Recebidos */}
           <div className="bg-white rounded-lg shadow-lg p-4 border border-red-200">
             <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-red-600 border-red-300 flex items-center gap-2">
               📦 Recebido ({pedidosRecebidos.length})
             </h2>
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar"> {/* Added custom-scrollbar for styling */}
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar"> {/* Adicionado custom-scrollbar para estilização */}
               {pedidosRecebidos.length === 0 ? (
                 <p className="text-gray-500 italic text-center py-4">Nenhum pedido nesta coluna.</p>
               ) : (
@@ -370,14 +386,15 @@ const handleRecebidosUpdate = async (snapshot) => {
                     key={pedido.id}
                     pedido={pedido}
                     estabelecimento={estabelecimentoInfo}
-                    autoPrintEnabled={false} // Assuming auto-print is handled elsewhere or not desired here
+                    autoPrintEnabled={false} // Assumindo que a impressão automática é tratada em outro lugar ou não é desejada aqui
+                    onDeletePedido={handleDeletePedido} // Passa a função de exclusão para o PedidoCard
                   />
                 ))
               )}
             </div>
           </div>
 
-          {/* Em Preparo Column */}
+          {/* Coluna Em Preparo */}
           <div className="bg-white rounded-lg shadow-lg p-4 border border-blue-200">
             <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-blue-600 border-blue-300 flex items-center gap-2">
               🧑‍🍳 Em Preparo ({pedidosEmPreparo.length})
@@ -392,13 +409,14 @@ const handleRecebidosUpdate = async (snapshot) => {
                     pedido={pedido}
                     estabelecimento={estabelecimentoInfo}
                     autoPrintEnabled={false}
+                    onDeletePedido={handleDeletePedido} // Passa a função de exclusão para o PedidoCard
                   />
                 ))
               )}
             </div>
           </div>
 
-          {/* Em Entrega Column */}
+          {/* Coluna Em Entrega */}
           <div className="bg-white rounded-lg shadow-lg p-4 border border-orange-200">
             <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-orange-600 border-orange-300 flex items-center gap-2">
               🛵 Em Entrega ({pedidosEmEntrega.length})
@@ -413,13 +431,14 @@ const handleRecebidosUpdate = async (snapshot) => {
                     pedido={pedido}
                     estabelecimento={estabelecimentoInfo}
                     autoPrintEnabled={false}
+                    onDeletePedido={handleDeletePedido} // Passa a função de exclusão para o PedidoCard
                   />
                 ))
               )}
             </div>
           </div>
 
-          {/* Finalizados Column */}
+          {/* Coluna Finalizados */}
           <div className="bg-white rounded-lg shadow-lg p-4 border border-green-200">
             <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 text-green-600 border-green-300 flex items-center gap-2">
               ✅ Finalizados ({pedidosFinalizados.length})
@@ -434,6 +453,7 @@ const handleRecebidosUpdate = async (snapshot) => {
                     pedido={pedido}
                     estabelecimento={estabelecimentoInfo}
                     autoPrintEnabled={false}
+                    onDeletePedido={handleDeletePedido} // Passa a função de exclusão para o PedidoCard
                   />
                 ))
               )}
