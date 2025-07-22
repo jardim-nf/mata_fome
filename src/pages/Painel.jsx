@@ -124,51 +124,61 @@ function Painel() {
             );
 
             // Function to handle fetching and notifying for 'recebido' orders
-            const handleRecebidosUpdate = async (snapshot) => {
-              const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              const oldPedidosIds = new Set(prevPedidosRecebidosRef.current.map(p => p.id));
-              // Filter for truly new orders (not just updated existing ones)
-              const newlyReceivedOrders = newPedidos.filter(p => !oldPedidosIds.has(p.id));
+const handleRecebidosUpdate = async (snapshot) => {
+    const newPedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const oldPedidosIds = new Set(prevPedidosRecebidosRef.current.map(p => p.id));
+    const newlyReceivedOrders = newPedidos.filter(p => !oldPedidosIds.has(p.id));
 
-              if (newlyReceivedOrders.length > 0) {
-                console.log(`Detectado(s) ${newlyReceivedOrders.length} novo(s) pedido(s) como 'recebido'.`);
-                if (notificationsEnabled) {
-                  // Desktop Notifications
-                  if (Notification.permission === 'granted') {
-                    newlyReceivedOrders.forEach(pedido => {
-                      new Notification(`Novo Pedido - ${pedido.cliente.nome}`, {
+    if (newlyReceivedOrders.length > 0) {
+        console.log(`Detectado(s) ${newlyReceivedOrders.length} novo(s) pedido(s) como 'recebido'.`);
+        if (notificationsEnabled) {
+            // Desktop Notifications (will be blocked on iOS browsers, but good for other platforms)
+            if (Notification.permission === 'granted') {
+                newlyReceivedOrders.forEach(pedido => {
+                    new Notification(`Novo Pedido - ${pedido.cliente.nome}`, {
                         body: `Total: R$ ${pedido.totalFinal.toFixed(2).replace('.', ',')}\nItens: ${pedido.itens.map(i => i.nome).join(', ')}`,
-                        icon: '/logo-deufome.png' // Ensure this path is correct
-                      });
+                        icon: '/logo-deufome.png'
                     });
-                  }
+                });
+            }
 
-                  // Audio Notification
-                  if (audioRef.current) {
-                    audioRef.current.currentTime = 0; // Rewind to start
-                    audioRef.current.play().then(() => {
-                      console.log("Áudio de novo pedido tocado com sucesso.");
-                      setAudioBlockedMessage(''); // Clear any blocked message if playback is successful
-                    }).catch(e => {
-                      console.error("Erro ao tocar áudio (autoplay pode estar bloqueado):", e);
-                      if (e.name === "NotAllowedError" || e.name === "AbortError") {
+            // Audio Notification
+            if (audioRef.current) {
+                audioRef.current.currentTime = 0;
+                audioRef.current.play().then(() => {
+                    console.log("Áudio de novo pedido tocado com sucesso.");
+                    setAudioBlockedMessage('');
+                }).catch(e => {
+                    console.error("Erro ao tocar áudio (autoplay pode estar bloqueado):", e);
+                    if (e.name === "NotAllowedError" || e.name === "AbortError") {
                         setAudioBlockedMessage("Som de notificação bloqueado. Clique no banner acima para ativá-lo!");
-                      }
-                    });
-                  } else {
-                    console.warn("audioRef.current é null ao tentar tocar áudio para novo pedido.");
-                  }
-                  toast.info(`🔔 Novo pedido recebido de ${newlyReceivedOrders[0].cliente.nome}! Total: R$ ${newlyReceivedOrders[0].totalFinal.toFixed(2).replace('.', ',')}`);
-                } else {
-                  console.log("Notificações desativadas pelo usuário, apenas toast info.");
-                  toast.info(`🔔 Novo pedido (notificações desativadas): ${newlyReceivedOrders[0].cliente.nome}`);
-                }
-              } else {
-                console.log("Nenhum pedido VERDADEIRAMENTE novo detectado para notificação. Apenas atualização de lista.");
-              }
-              setPedidosRecebidos(newPedidos);
-              prevPedidosRecebidosRef.current = newPedidos; // Update ref for the next comparison
-            };
+                    }
+                });
+            } else {
+                console.warn("audioRef.current é null ao tentar tocar áudio para novo pedido.");
+            }
+            toast.info(`🔔 Novo pedido recebido de ${newlyReceivedOrders[0].cliente.nome}! Total: R$ ${newlyReceivedOrders[0].totalFinal.toFixed(2).replace('.', ',')}`);
+        } else {
+            console.log("Notificações desativadas pelo usuário, apenas toast info.");
+            toast.info(`🔔 Novo pedido (notificações desativadas): ${newlyReceivedOrders[0].cliente.nome}`);
+        }
+
+        // --- INÍCIO DA ADIÇÃO DO CÓDIGO PARA O TÍTULO DA ABA ---
+        // Altera o título da aba para indicar novos pedidos
+        document.title = `(${newlyReceivedOrders.length}) NOVO PEDIDO! - ${estabelecimentoInfo?.nome || 'Painel'}`;
+        // --- FIM DA ADIÇÃO ---
+
+    } else {
+        console.log("Nenhum pedido VERDADEIRAMENTE novo detectado para notificação. Apenas atualização de lista.");
+
+        // --- INÍCIO DA ADIÇÃO DO CÓDIGO PARA O TÍTULO DA ABA (RESET) ---
+        // Se não há novos pedidos, ou se a lista se estabilizou, volta ao título normal
+        document.title = `Painel de Pedidos ${estabelecimentoInfo ? `(${estabelecimentoInfo.nome})` : ''}`;
+        // --- FIM DA ADIÇÃO ---
+    }
+    setPedidosRecebidos(newPedidos);
+    prevPedidosRecebidosRef.current = newPedidos;
+};
 
             // Firebase Realtime Listeners
             unsubscribeRecebidos = onSnapshot(createPedidoQuery('recebido'), handleRecebidosUpdate, (error) => console.error("Erro no listener de Recebidos:", error));
