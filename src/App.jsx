@@ -1,40 +1,47 @@
-// src/App.jsx
+// src/App.jsx (Este é o seu código atual, APENAS CONFIRME as importações)
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from './context/AuthContext'; // Contexto de Autenticação
-import { ToastContainer } from 'react-toastify'; // Notificações Toast
-import 'react-toastify/dist/ReactToastify.css'; // CSS das notificações Toast
+import { AuthProvider } from './context/AuthContext';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-// Componentes de Layout e Páginas Comuns/Clientes
-import Layout from "./components/Layout"; // Layout da aplicação
-import Home from "./pages/Home"; // Página inicial
-import Login from "./pages/Login"; // Página de Login (para admins)
-import Menu from "./pages/Menu"; // Página de cardápio do cliente (por slug)
-import ListaEstabelecimentos from "./pages/ListaEstabelecimentos"; // Lista genérica de estabelecimentos
-import ComandaView from "./pages/ComandaView"; // Visualização de comanda (tela cheia)
-import Planos from "./pages/Planos"; // Página de planos
-import HistoricoCliente from './pages/HistoricoCliente'; // Histórico de pedidos de um cliente específico
-import ClientOrderHistory from './pages/ClientOrderHistory'; // Histórico GERAL de pedidos do cliente logado
+import Layout from "./components/Layout";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Menu from "./pages/Menu";
+import ListaEstabelecimentos from "./pages/ListaEstabelecimentos";
+import ComandaView from "./pages/ComandaView";
+import Planos from "./pages/Planos";
+import HistoricoCliente from './pages/HistoricoCliente';
+import ClientOrderHistory from './pages/ClientOrderHistory';
 
-// Componentes para Administradores de Estabelecimento
-import Painel from "./pages/Painel"; // Painel de pedidos em tempo real de um estabelecimento
-import AdminDashboard from "./pages/AdminDashboard"; // Dashboard padrão de admin de estabelecimento
-import AdminMenuManagement from "./pages/AdminMenuManagement"; // Gerenciar cardápio do estabelecimento
-import TaxasDeEntrega from "./pages/TaxasDeEntrega"; // Gerenciar taxas de entrega
-import AdminEstablishmentManagement from "./pages/AdminEstablishmentManagement"; // Gerenciar configurações do próprio estabelecimento
-import NossosClientes from './pages/NossosClientes'; // Listar clientes do estabelecimento
-import ClientDetails from "./pages/ClientDetails"; // Detalhes de um cliente específico
+import Painel from "./pages/Painel";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminMenuManagement from "./pages/AdminMenuManagement";
+import TaxasDeEntrega from "./pages/TaxasDeEntrega";
+import AdminEstablishmentManagement from "./pages/AdminEstablishmentManagement";
+import NossosClientes from './pages/NossosClientes';
+import ClientDetails from "./pages/ClientDetails";
 
-// Componentes para Administrador Master (Você)
-import MasterDashboard from './pages/MasterDashboard'; // Dashboard Master centralizado
-import AdminEstabelecimentoCadastro from './pages/admin/AdminEstabelecimentoCadastro'; // Cadastro de NOVOS estabelecimentos
-import AdminCouponManagement from './pages/AdminCouponManagement'; // Gerenciar cupons
-import AdminReports from './pages/AdminReports'; // Relatórios gerais
-import ListarEstabelecimentosMaster from './pages/admin/ListarEstabelecimentosMaster'; // Lista de estabelecimentos para Master
-import ListarPedidosMaster from './pages/admin/ListarPedidosMaster'; // Lista de pedidos para Master
-import ListarUsuariosMaster from './pages/admin/ListarUsuariosMaster'; // Lista de usuários para Master
-import EditarEstabelecimentoMaster from './pages/admin/EditarEstabelecimentoMaster'; // Editar estabelecimento para Master
-import ImportarCardapioMaster from './pages/admin/ImportarCardapioMaster'; // NOVO IMPORT
+// Importações dos componentes Master Admin (CONFIRA O CAMINHO DE CADA UM)
+import MasterDashboard from './pages/MasterDashboard'; // <--- Se o MasterDashboard.jsx está em src/pages/MasterDashboard.jsx
+// Se MasterDashboard.jsx estivesse em src/pages/admin/MasterDashboard.jsx, seria:
+// import MasterDashboard from './pages/admin/MasterDashboard';
+
+import AdminEstabelecimentoCadastro from './pages/admin/AdminEstabelecimentoCadastro';
+import AdminCouponManagement from './pages/AdminCouponManagement'; // Verifique se este e os próximos estão em pages/admin ou pages
+import AdminReports from './pages/AdminReports'; // Verifique
+import ListarEstabelecimentosMaster from './pages/admin/ListarEstabelecimentosMaster';
+import ListarPedidosMaster from './pages/admin/ListarPedidosMaster';
+import ListarUsuariosMaster from './pages/admin/ListarUsuariosMaster';
+import EditarEstabelecimentoMaster from './pages/admin/EditarEstabelecimentoMaster';
+import ImportarCardapioMaster from './pages/admin/ImportarCardapioMaster';
+import PedidoDetalhesMaster from './pages/admin/PedidoDetalhesMaster'; // Novo componente para detalhes de pedido master (você precisa criar)
+import CriarUsuarioMaster from './pages/admin/CriarUsuarioMaster';
+import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
+import AuditLogs from './pages/admin/AuditLogs';
+import AdminPlansManagement from './pages/admin/AdminPlansManagement';
+
 
 
 function App() {
@@ -42,13 +49,12 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Rotas que NÃO usam o Layout (tela cheia, sem cabeçalho/rodapé do layout) */}
+          {/* Rotas que NÃO usam o Layout */}
           <Route path="/" element={<Home />} />
           <Route path="/login-admin" element={<Login />} />
           <Route path="/comanda/:pedidoId" element={<ComandaView />} />
 
           {/* GRUPO DE ROTAS QUE USAM O LAYOUT */}
-          {/* Todas as rotas dentro deste Route 'element={<Layout />}' terão o cabeçalho e rodapé */}
           <Route element={<Layout />}>
             {/* Rotas Públicas/Clientes */}
             <Route path="/cardapios" element={<ListaEstabelecimentos />} />
@@ -57,12 +63,12 @@ function App() {
             <Route path="/planos" element={<Planos />} />
 
             {/* Rotas de Detalhamento para Master Admin (ou admins que acessam históricos) */}
-            <Route path="/historico-cliente/:telefone" element={<HistoricoCliente />} /> {/* Usado pelo PedidoCard */}
-            <Route path="/admin/clientes/:clientId" element={<ClientDetails />} /> {/* Detalhes de cliente específico do estabelecimento */}
+            <Route path="/historico-cliente/:telefone" element={<HistoricoCliente />} />
+            <Route path="/admin/clientes/:clientId" element={<ClientDetails />} />
             
             {/* Rotas para Administradores de Estabelecimento (Gerenciam SEU estabelecimento) */}
-            <Route path="/painel" element={<Painel />} /> {/* Dashboard de pedidos em tempo real */}
-            <Route path="/dashboard" element={<AdminDashboard />} /> {/* Dashboard padrão de admin de estabelecimento (se ainda em uso) */}
+            <Route path="/painel" element={<Painel />} />
+            <Route path="/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/gerenciar-cardapio" element={<AdminMenuManagement />} />
             <Route path="/admin/taxas-de-entrega" element={<TaxasDeEntrega />} />
             <Route path="/admin/gerenciar-estabelecimentos" element={<AdminEstablishmentManagement />} />
@@ -70,19 +76,25 @@ function App() {
             <Route path="/nossos-clientes" element={<NossosClientes />} />
             
             {/* Rotas EXCLUSIVAS para o Administrador Master (Você) */}
-            <Route path="/master-dashboard" element={<MasterDashboard />} /> {/* Dashboard Master centralizado */}
-            <Route path="/admin/cadastrar-estabelecimento" element={<AdminEstabelecimentoCadastro />} /> {/* Cadastro de NOVOS estabelecimentos */}
-            <Route path="/admin/reports" element={<AdminReports />} /> {/* Relatórios gerais */}
-            <Route path="/master/estabelecimentos" element={<ListarEstabelecimentosMaster />} /> {/* Lista de estabelecimentos para Master */}
-            <Route path="/master/pedidos" element={<ListarPedidosMaster />} /> {/* Lista de pedidos para Master */}
-            <Route path="/master/usuarios" element={<ListarUsuariosMaster />} /> {/* Lista de usuários para Master */}
-            <Route path="/master/estabelecimentos/:id/editar" element={<EditarEstabelecimentoMaster />} /> {/* Edição de estabelecimento para Master */}
-            <Route path="/master/importar-cardapio" element={<ImportarCardapioMaster />} />
-      
-            {/* Rota de redirecionamento padrão para a home se a rota não for encontrada */}
-            {/* Cuidado ao usar Navigate para / se você tiver rotas específicas que não usam layout */}
-            <Route path="*" element={<Navigate to="/" replace />} /> 
+            <Route path="/master-dashboard" element={<MasterDashboard />} />
+            <Route path="/admin/cadastrar-estabelecimento" element={<AdminEstabelecimentoCadastro />} />
+            <Route path="/admin/reports" element={<AdminReports />} />
+<Route path="/admin/audit-logs" element={<AuditLogs />} />
 
+            <Route path="/master/estabelecimentos" element={<ListarEstabelecimentosMaster />} />
+            <Route path="/master/pedidos" element={<ListarPedidosMaster />} />
+            <Route path="/master/usuarios" element={<ListarUsuariosMaster />} />
+            <Route path="/master/estabelecimentos/:id/editar" element={<EditarEstabelecimentoMaster />} />
+            <Route path="/master/importar-cardapio" element={<ImportarCardapioMaster />} />
+<Route path="/master/usuarios/:id/editar" element={<EditarUsuarioMaster/>} />
+<Route path="/master/plans" element={<AdminPlansManagement />} />
+
+          
+            {/* NOVA ROTA para Detalhes do Pedido Master */}
+            <Route path="/master/pedidos/:id" element={<PedidoDetalhesMaster />} /> 
+<Route path="/master/usuarios/criar" element={<CriarUsuarioMaster />} />
+            
+            <Route path="*" element={<Navigate to="/" replace />} /> 
           </Route>
         </Routes>
         <ToastContainer

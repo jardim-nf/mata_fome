@@ -1,206 +1,383 @@
-// src/pages/AdminEstabelecimentoCadastro.jsx (Exemplo)
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore'; // Importe getDocs para buscar usuários
-import { db } from "../../firebase";
-
+// src/pages/admin/AdminEstabelecimentoCadastro.jsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { collection, addDoc, query, where, getDocs, orderBy, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { useAuth } from "../../context/AuthContext"; // Corrigido para subir duas pastas // Esta linha está com o caminho incorreto/ Se precisar verificar admin aqui
+import { auditLogger } from '../../utils/auditLogger';
+
+// Componente FormInput (reutilizável para campos de texto)
+function FormInput({ label, name, value, onChange, type = 'text', helpText = '', ...props }) {
+    return (
+        <div>
+            <label htmlFor={name} className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
+            <input
+                id={name}
+                name={name}
+                value={value || ''}
+                onChange={onChange}
+                type={type}
+                {...props}
+                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+            />
+            {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
+        </div>
+    );
+}
 
 function AdminEstabelecimentoCadastro() {
-  const navigate = useNavigate();
-  const { currentUser, isAdmin, loading: authLoading } = useAuth(); // Para controle de acesso
+    const navigate = useNavigate();
+    const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
 
-  const [nome, setNome] = useState('');
-  const [slug, setSlug] = useState('');
-  const [chavePix, setChavePix] = useState('');
-  const [rua, setRua] = useState('');
-  const [numero, setNumero] = useState('');
-  const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [complemento, setComplemento] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [rating, setRating] = useState(4); // Valor padrão
-  const [horarioFuncionamento, setHorarioFuncionamento] = useState('');
-  const [telefoneWhatsApp, setTelefoneWhatsApp] = useState('');
-  const [instagram, setInstagram] = useState('');
-  const [adminUidVinculado, setAdminUidVinculado] = useState(''); // Estado para o UID do admin a ser vinculado
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    // Redireciona se não for admin
-    if (!authLoading && (!currentUser || !isAdmin)) {
-      toast.error('Acesso negado. Você precisa ser um administrador para acessar esta página.');
-      navigate('/');
-    }
-  }, [currentUser, isAdmin, authLoading, navigate]);
-
-
-  const handleCadastro = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    // Validações básicas
-    if (!nome.trim() || !slug.trim() || !adminUidVinculado.trim()) {
-      setError('Nome, Slug e UID do Administrador são campos obrigatórios.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // Opcional: Verificar se o slug já existe
-      const qSlug = query(collection(db, 'estabelecimentos'), where('slug', '==', slug.trim()));
-      const slugSnapshot = await getDocs(qSlug);
-      if (!slugSnapshot.empty) {
-        setError('Este "slug" já está em uso por outro estabelecimento. Por favor, escolha outro.');
-        setLoading(false);
-        return;
-      }
-
-      // Opcional: Verificar se o adminUID vinculado existe e é válido (se você tiver uma coleção de usuários admin)
-      // Por enquanto, vamos assumir que o UID é válido.
-
-      const novoEstabelecimento = {
-        nome: nome.trim(),
-        slug: slug.trim(),
-        chavePix: chavePix.trim(),
-        imageUrl: imageUrl.trim(),
-        rating: Number(rating),
-        adminUID: adminUidVinculado.trim(), // Vincula o UID do administrador
+    const [formData, setFormData] = useState({
+        nome: '',
+        slug: '',
+        chavePix: '',
+        imageUrl: '',
+        rating: 0,
+        adminUID: '',
+        ativo: true,
+        currentPlanId: '', // NOVO: ID do plano atual
+        nextBillingDate: null, // NOVO: Próxima data de cobrança
         endereco: {
-          rua: rua.trim(),
-          numero: numero.trim(),
-          bairro: bairro.trim(),
-          cidade: cidade.trim(),
-          complemento: complemento.trim(),
+            rua: '',
+            numero: '',
+            bairro: '',
+            cidade: ''
         },
         informacoes_contato: {
-          horario_funcionamento: horarioFuncionamento.trim(),
-          telefone_whatsapp: telefoneWhatsApp.trim(),
-          instagram: instagram.trim(),
-        },
-        // O cardápio será adicionado posteriormente, como você fez.
-        // cardapio: [], // Poderia iniciar vazio aqui
-      };
+            telefone_whatsapp: '',
+            instagram: '',
+            horario_funcionamento: ''
+        }
+    });
 
-      await addDoc(collection(db, 'estabelecimentos'), novoEstabelecimento);
-      toast.success('Estabelecimento cadastrado com sucesso!');
-      navigate('/admin/dashboard'); // Redireciona após o cadastro
-    } catch (err) {
-      console.error("Erro ao cadastrar estabelecimento:", err);
-      setError('Erro ao cadastrar estabelecimento. Tente novamente.');
-      toast.error('Erro ao cadastrar estabelecimento.');
-    } finally {
-      setLoading(false);
+    const [availableAdmins, setAvailableAdmins] = useState([]);
+    const [availablePlans, setAvailablePlans] = useState([]); // NOVO: Lista de planos disponíveis
+    const [loadingForm, setLoadingForm] = useState(false);
+    const [loadingAdmins, setLoadingAdmins] = useState(true);
+    const [loadingPlans, setLoadingPlans] = useState(true); // NOVO: Estado de carregamento dos planos
+    const [formError, setFormError] = useState('');
+
+    const slugify = useCallback((text) => 
+        text.toString().toLowerCase().trim()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/[^\w-]+/g, '')
+            .replace(/--+/g, '-'),
+    []);
+
+    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
+    // Efeito para controle de acesso
+    useEffect(() => {
+        if (!authLoading) {
+            if (!currentUser || !isMasterAdmin) {
+                toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
+                navigate('/master-dashboard');
+                return;
+            }
+        }
+    }, [currentUser, isMasterAdmin, authLoading, navigate]);
+
+    // Efeito para carregar admins disponíveis
+    useEffect(() => {
+        if (!isMasterAdmin || !currentUser) return;
+
+        const fetchAdmins = async () => {
+            try {
+                const q = query(collection(db, 'usuarios'), where('isAdmin', '==', true), orderBy('nome', 'asc'));
+                const querySnapshot = await getDocs(q);
+                const admins = querySnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome, email: doc.data().email }));
+                setAvailableAdmins(admins);
+            } catch (err) {
+                console.error("Erro ao carregar administradores disponíveis:", err);
+                setFormError("Erro ao carregar lista de administradores. Crie o índice no Firebase Firestore (Collection: 'usuarios', Fields: 'isAdmin' Asc, 'nome' Asc).");
+                toast.error("Erro ao carregar lista de administradores.");
+            } finally {
+                setLoadingAdmins(false);
+            }
+        };
+        fetchAdmins();
+    }, [isMasterAdmin, currentUser]);
+
+    // NOVO EFEITO: Carregar planos disponíveis
+    useEffect(() => {
+        if (!isMasterAdmin || !currentUser) return;
+
+        const fetchPlans = async () => {
+            try {
+                const q = query(collection(db, 'plans'), where('isActive', '==', true), orderBy('price', 'asc'));
+                const querySnapshot = await getDocs(q);
+                const plans = querySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+                setAvailablePlans(plans);
+            } catch (err) {
+                console.error("Erro ao carregar planos disponíveis:", err);
+                setFormError("Erro ao carregar lista de planos. Verifique a coleção 'plans' e permissões.");
+                toast.error("Erro ao carregar lista de planos.");
+            } finally {
+                setLoadingPlans(false);
+            }
+        };
+        fetchPlans();
+    }, [isMasterAdmin, currentUser]);
+
+    // Efeito para gerar slug automaticamente
+    useEffect(() => {
+        if (formData.nome && !slugManuallyEdited) {
+            setFormData(prev => ({ ...prev, slug: slugify(prev.nome) }));
+        }
+    }, [formData.nome, slugManuallyEdited, slugify]);
+
+    const handleInputChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        const val = type === 'checkbox' ? checked : value;
+
+        if (name === 'slug') setSlugManuallyEdited(true);
+
+        if (name.includes('.')) {
+            const [parent, child] = name.split('.');
+            setFormData(prev => ({
+                ...prev,
+                [parent]: { ...prev[parent], [child]: val }
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: val }));
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoadingForm(true);
+        setFormError('');
+
+        if (formData.adminUID === '') {
+            setFormError('Por favor, selecione um administrador para o estabelecimento.');
+            setLoadingForm(false);
+            return;
+        }
+        if (formData.currentPlanId === '') { // NOVA VALIDAÇÃO
+            setFormError('Por favor, selecione um plano para o estabelecimento.');
+            setLoadingForm(false);
+            return;
+        }
+
+
+        try {
+            const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
+            const slugSnapshot = await getDocs(slugQuery);
+            if (!slugSnapshot.empty) {
+                setFormError('Este slug (URL) já está em uso. Por favor, escolha outro.');
+                setLoadingForm(false);
+                return;
+            }
+
+            const newEstabRef = doc(collection(db, 'estabelecimentos'));
+            const newEstabId = newEstabRef.id;
+
+            // Define a próxima data de cobrança para daqui a um mês da criação
+            const nextBilling = new Date();
+            nextBilling.setMonth(nextBilling.getMonth() + 1);
+
+            await setDoc(newEstabRef, {
+                ...formData,
+                id: newEstabId,
+                criadoEm: new Date(),
+                rating: Number(formData.rating),
+                nextBillingDate: nextBilling, // SALVANDO NOVA DATA DE COBRANÇA
+            });
+
+            if (formData.adminUID) {
+                const adminRef = doc(db, 'usuarios', formData.adminUID);
+                const adminSnap = await getDoc(adminRef);
+                if (adminSnap.exists()) {
+                    const adminData = adminSnap.data();
+                    const currentManagedEstabs = adminData.estabelecimentosGerenciados || [];
+                    if (!currentManagedEstabs.includes(newEstabId)) {
+                        await updateDoc(adminRef, {
+                            estabelecimentosGerenciados: [...currentManagedEstabs, newEstabId]
+                        });
+                        toast.info('Vínculo de estabelecimento com admin atualizado.');
+                    }
+                }
+            }
+            
+            auditLogger(
+                'ESTABELECIMENTO_CRIADO',
+                { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
+                { type: 'estabelecimento', id: newEstabId, name: formData.nome },
+                { ...formData, rating: Number(formData.rating) }
+            );
+
+            toast.success('Estabelecimento cadastrado com sucesso!');
+            navigate('/master/estabelecimentos');
+        } catch (err) {
+            console.error("Erro ao cadastrar estabelecimento:", err);
+            setFormError(`Erro ao cadastrar: ${err.message}`);
+            toast.error(`Erro ao cadastrar: ${err.message}`);
+        } finally {
+            setLoadingForm(false);
+        }
+    };
+
+    if (authLoading || loadingAdmins || loadingPlans) { // Inclui loadingPlans
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+                <p className="text-xl text-gray-700">Carregando formulário...</p>
+            </div>
+        );
     }
-  };
 
-  if (authLoading || loading) {
-    return <div className="text-center p-4">Carregando...</div>;
-  }
-  if (!currentUser || !isAdmin) {
-    return null; // ou um componente de "Acesso negado"
-  }
+    if (!isMasterAdmin) return null;
 
-  return (
-    <div className="p-6 max-w-2xl mx-auto bg-white shadow-lg rounded-lg my-8">
-      <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Cadastrar Novo Estabelecimento</h1>
-      {error && <p className="text-red-500 text-center mb-4">{error}</p>}
-      
-      <form onSubmit={handleCadastro} className="space-y-4">
-        {/* Dados Básicos */}
-        <div>
-          <label htmlFor="nome" className="block text-sm font-medium text-gray-700">Nome do Estabelecimento *</label>
-          <input type="text" id="nome" value={nome} onChange={(e) => setNome(e.target.value)} required 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="slug" className="block text-sm font-medium text-gray-700">Slug (URL amigável) *</label>
-          <input type="text" id="slug" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))} required 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-          <p className="mt-1 text-xs text-gray-500">Será a parte final da URL do cardápio (ex: /cardapios/seunome).</p>
-        </div>
-        <div>
-          <label htmlFor="chavePix" className="block text-sm font-medium text-gray-700">Chave PIX (Para Receber Pagamentos)</label>
-          <input type="text" id="chavePix" value={chavePix} onChange={(e) => setChavePix(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">URL da Imagem/Logo (Opcional)</label>
-          <input type="text" id="imageUrl" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="rating" className="block text-sm font-medium text-gray-700">Avaliação Inicial (1-5, Opcional)</label>
-          <input type="number" id="rating" value={rating} onChange={(e) => setRating(e.target.value)} min="1" max="5"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
+    return (
+        <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
+            <div className="max-w-4xl mx-auto">
+                <form onSubmit={handleSubmit} className="space-y-8">
+                    {/* Cabeçalho com Ações */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                        <div>
+                            <Link 
+                                to="/master-dashboard" 
+                                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 flex items-center gap-1 mb-4"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                                Voltar ao Dashboard Master
+                            </Link>
+                            <h1 className="text-3xl font-bold text-slate-800">Cadastrar Novo Estabelecimento</h1>
+                        </div>
+                        <button type="submit" disabled={loadingForm} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
+                            {loadingForm ? 'Salvando...' : 'Cadastrar Estabelecimento'}
+                        </button>
+                    </div>
 
-        {/* Informações de Contato */}
-        <h2 className="text-xl font-bold mt-8 mb-4">Informações de Contato</h2>
-        <div>
-          <label htmlFor="horarioFuncionamento" className="block text-sm font-medium text-gray-700">Horário de Funcionamento</label>
-          <input type="text" id="horarioFuncionamento" value={horarioFuncionamento} onChange={(e) => setHorarioFuncionamento(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="telefoneWhatsApp" className="block text-sm font-medium text-gray-700">Telefone/WhatsApp</label>
-          <input type="tel" id="telefoneWhatsApp" value={telefoneWhatsApp} onChange={(e) => setTelefoneWhatsApp(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="instagram" className="block text-sm font-medium text-gray-700">Instagram (@usuario)</label>
-          <input type="text" id="instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
+                    {formError && (
+                        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                            <p className="font-bold">Erro de Cadastro:</p>
+                            <p>{formError}</p>
+                        </div>
+                    )}
 
-        {/* Endereço */}
-        <h2 className="text-xl font-bold mt-8 mb-4">Endereço do Estabelecimento</h2>
-        <div>
-          <label htmlFor="rua" className="block text-sm font-medium text-gray-700">Rua</label>
-          <input type="text" id="rua" value={rua} onChange={(e) => setRua(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="numero" className="block text-sm font-medium text-gray-700">Número</label>
-          <input type="text" id="numero" value={numero} onChange={(e) => setNumero(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="bairro" className="block text-sm font-medium text-gray-700">Bairro</label>
-          <input type="text" id="bairro" value={bairro} onChange={(e) => setBairro(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="cidade" className="block text-sm font-medium text-gray-700">Cidade</label>
-          <input type="text" id="cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
-        <div>
-          <label htmlFor="complemento" className="block text-sm font-medium text-gray-700">Complemento</label>
-          <input type="text" id="complemento" value={complemento} onChange={(e) => setComplemento(e.target.value)} 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-        </div>
+                    {/* Dados Principais */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Informações Gerais</h2>
+                        <div className="space-y-4">
+                            <FormInput label="Nome do Estabelecimento" name="nome" value={formData.nome} onChange={handleInputChange} required />
+                            <FormInput label="Slug (URL amigável)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Será a parte final da URL do cardápio (ex: /cardapios/seunome). Gerado automaticamente, mas pode ser editado."/>
+                            <FormInput label="Chave PIX (Para Receber Pagamentos)" name="chavePix" value={formData.chavePix} onChange={handleInputChange} helpText="Chave PIX para pagamentos diretos."/>
+                            <FormInput label="URL da Imagem/Logo (Opcional)" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} type="url" placeholder="https://exemplo.com/logo.png" helpText="URL da imagem da logo do estabelecimento."/>
+                            <FormInput label="Avaliação Inicial (1-5, Opcional)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" helpText="Avaliação média do estabelecimento."/>
 
-        {/* Vinculação de Administrador */}
-        <h2 className="text-xl font-bold mt-8 mb-4">Vincular Administrador</h2>
-        <div>
-          <label htmlFor="adminUid" className="block text-sm font-medium text-gray-700">UID do Administrador Vinculado *</label>
-          <input type="text" id="adminUid" value={adminUidVinculado} onChange={(e) => setAdminUidVinculado(e.target.value)} required 
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
-          <p className="mt-1 text-xs text-gray-500">Este é o UID do usuário que será o administrador principal deste estabelecimento.</p>
+                            {/* Seleção do Administrador */}
+                            <div>
+                                <label htmlFor="adminUID" className="block text-sm font-medium text-slate-600 mb-1">Admin Responsável *</label>
+                                <select 
+                                    id="adminUID" 
+                                    name="adminUID" 
+                                    value={formData.adminUID} 
+                                    onChange={handleInputChange} 
+                                    required 
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                >
+                                    <option value="">Selecione um administrador...</option>
+                                    {loadingAdmins ? (
+                                        <option value="" disabled>Carregando administradores...</option>
+                                    ) : availableAdmins.length === 0 ? (
+                                        <option value="" disabled>Nenhum admin disponível (crie um admin primeiro)</option>
+                                    ) : (
+                                        availableAdmins.map(admin => (
+                                            <option key={admin.id} value={admin.id}>
+                                                {admin.nome} ({admin.email})
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                                <p className="mt-1 text-xs text-slate-500">Vincule este estabelecimento a um administrador já existente. Apenas usuários com a permissão 'Admin Estabelecimento' aparecem aqui.</p>
+                                <Link to="/master/usuarios/criar" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2 block">
+                                    Criar novo administrador
+                                </Link>
+                            </div>
+
+                            {/* NOVO: Seleção do Plano */}
+                            <div>
+                                <label htmlFor="currentPlanId" className="block text-sm font-medium text-slate-600 mb-1">Plano de Assinatura *</label>
+                                <select 
+                                    id="currentPlanId" 
+                                    name="currentPlanId" 
+                                    value={formData.currentPlanId} 
+                                    onChange={handleInputChange} 
+                                    required 
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                >
+                                    <option value="">Selecione um plano...</option>
+                                    {loadingPlans ? (
+                                        <option value="" disabled>Carregando planos...</option>
+                                    ) : availablePlans.length === 0 ? (
+                                        <option value="" disabled>Nenhum plano ativo disponível (crie um plano primeiro)</option>
+                                    ) : (
+                                        availablePlans.map(plan => (
+                                            <option key={plan.id} value={plan.id}>
+                                                {plan.name}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                                <p className="mt-1 text-xs text-slate-500">Selecione o plano de assinatura que este estabelecimento utilizará.</p>
+                                <Link to="/master/plans" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2 block">
+                                    Gerenciar planos
+                                </Link>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Informações de Contato */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Informações de Contato</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormInput label="Telefone/WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} type="tel" placeholder="(XX) XXXXX-XXXX"/>
+                            <FormInput label="Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} placeholder="@usuario_do_estabelecimento"/>
+                        </div>
+                        <div className="mt-4">
+                            <FormInput label="Horário de Funcionamento" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter - Dom: 18h às 23h"/>
+                        </div>
+                    </div>
+
+                    {/* Endereço */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Endereço Principal</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormInput label="Rua" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} />
+                            <FormInput label="Número" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} />
+                            <FormInput label="Bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} />
+                            <FormInput label="Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} />
+                        </div>
+                    </div>
+
+                    {/* Status Ativo/Inativo */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Status</h2>
+                        <label className="flex items-center cursor-pointer">
+                            <div className="relative">
+                                <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
+                                <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
+                                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${formData.ativo ? 'transform translate-x-full' : ''}`}></div>
+                            </div>
+                            <div className="ml-3 text-base font-semibold text-slate-700">{formData.ativo ? 'Ativo' : 'Inativo'}</div>
+                        </label>
+                        <p className="mt-2 text-xs text-slate-500">Estabelecimentos inativos não aparecerão para os clientes e não receberão pedidos.</p>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                        <button type="submit" disabled={loadingForm} className="px-8 py-3 bg-indigo-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
+                            {loadingForm ? 'Cadastrando...' : 'Cadastrar Estabelecimento'}
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-        
-        <button type="submit" disabled={loading}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-        >
-          {loading ? 'Cadastrando...' : 'Cadastrar Estabelecimento'}
-        </button>
-      </form>
-    </div>
-  );
+    );
 }
 
 export default AdminEstabelecimentoCadastro;

@@ -1,257 +1,383 @@
 // src/pages/admin/ListarUsuariosMaster.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import {
-    collection,
-    query,
-    onSnapshot,
-    orderBy,
-    doc,
-    updateDoc,
-    getDocs
-} from 'firebase/firestore';
-import { db, functions } from '../../firebase';
+// Importe 'limit' e 'startAfter' aqui:
+import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, getDocs, limit, startAfter, orderBy } from 'firebase/firestore'; 
+import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { httpsCallable } from 'firebase/functions';
-import { getAuth } from 'firebase/auth';
+import { auditLogger } from '../../utils/auditLogger'; 
 
-const createUserByMasterAdminCallable = httpsCallable(functions, 'createUserByMasterAdmin');
+const ITEMS_PER_PAGE = 10; // Definir quantos itens por página você quer
+
+// Se você tiver um componente Layout, descomente a linha abaixo e as tags <Layout>
+// import Layout from '../../Layout'; // Verifique o caminho exato!
 
 function ListarUsuariosMaster() {
-    const navigate = useNavigate();
-    const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
-    const auth = getAuth();
+  const navigate = useNavigate();
+  const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
 
-    const [usuarios, setUsuarios] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+  const [usuarios, setUsuarios] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [error, setError] = useState('');
+  const [estabelecimentosMap, setEstabelecimentosMap] = useState({});
 
-    const [estabelecimentos, setEstabelecimentos] = useState([]);
-    const [selectedEstabelecimentoId, setSelectedEstabelecimentoId] = useState('');
-    const [showAddUserModal, setShowAddUserModal] = useState(false);
-    const [newUserName, setNewUserName] = useState('');
-    const [newUserEmail, setNewUserEmail] = useState('');
-    const [newUserPassword, setNewUserPassword] = useState('');
-    const [newUserIsAdmin, setNewUserIsAdmin] = useState(false);
-    const [newUserIsMasterAdmin, setNewUserIsMasterAdmin] = useState(false);
-    const [addingUser, setAddingUser] = useState(false);
-    const [addUserError, setAddUserError] = useState('');
+  // Estados para busca e filtro
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState('todos');
+  const [filterStatus, setFilterStatus] = useState('todos');
 
-    useEffect(() => {
-        if (authLoading) {
-            return;
-        }
-        if (!isMasterAdmin) {
-            toast.error('Acesso negado.');
-            navigate('/master-dashboard');
-            return;
-        }
+  // ESTADOS DE PAGINAÇÃO
+  const [lastVisible, setLastVisible] = useState(null);
+  const [firstVisible, setFirstVisible] = useState(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [hasPrevious, setHasPrevious] = useState(false);
 
-        const fetchEstabelecimentos = async () => {
-            try {
-                const estabRef = collection(db, 'estabelecimentos');
-                const estabSnapshot = await getDocs(estabRef);
-                const listaEstab = estabSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome }));
-                setEstabelecimentos(listaEstab);
-            } catch (err) {
-                toast.error("Não foi possível carregar os estabelecimentos.");
-            }
-        };
-        fetchEstabelecimentos();
+  useEffect(() => {
+    if (!authLoading) {
+      if (!currentUser || !isMasterAdmin) {
+        toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
+        navigate('/master-dashboard');
+        return;
+      }
+      setLoadingUsers(false);
+    }
+  }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
-        const q = query(collection(db, 'usuarios'), orderBy('criadoEm', 'desc'));
-        const unsubscribeUsers = onSnapshot(q, (snapshot) => {
-            const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setUsuarios(lista);
-            setLoading(false);
-        }, (err) => {
-            setError("Erro ao carregar lista de usuários.");
-            setLoading(false);
+  useEffect(() => {
+    const fetchEstabelecimentos = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
+        const map = {};
+        querySnapshot.forEach(doc => {
+          map[doc.id] = doc.data().nome;
         });
-
-        return () => {
-            unsubscribeUsers();
-        };
-    }, [authLoading, isMasterAdmin, navigate]);
-
-    const resetForm = () => {
-        setNewUserName('');
-        setNewUserEmail('');
-        setNewUserPassword('');
-        setNewUserIsAdmin(false);
-        setNewUserIsMasterAdmin(false);
-        setSelectedEstabelecimentoId('');
+        setEstabelecimentosMap(map);
+      } catch (err) {
+        console.error("Erro ao carregar nomes de estabelecimentos:", err);
+      }
     };
+    fetchEstabelecimentos();
+  }, []);
 
-    const handleAddUser = async (e) => {
-        e.preventDefault();
-        setAddingUser(true);
-        setAddUserError('');
-        if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim() || newUserPassword.length < 6) {
-            setAddUserError('Nome, Email e Senha (mín. 6 caracteres) são obrigatórios.');
-            setAddingUser(false);
-            return;
-        }
-        if (newUserIsAdmin && !newUserIsMasterAdmin && !selectedEstabelecimentoId) {
-            setAddUserError('Por favor, selecione um estabelecimento para vincular a este administrador.');
-            setAddingUser(false);
-            return;
-        }
-        if (!auth.currentUser) {
-            toast.error("Sua sessão expirou. Por favor, faça login novamente.");
-            setAddingUser(false);
-            return;
-        }
-        try {
-            await auth.currentUser.getIdToken(true);
-            const result = await createUserByMasterAdminCallable({
-                email: newUserEmail.trim(),
-                password: newUserPassword.trim(),
-                name: newUserName.trim(),
-                isAdmin: newUserIsAdmin,
-                isMasterAdmin: newUserIsMasterAdmin,
-                estabelecimentoId: newUserIsAdmin && !newUserIsMasterAdmin ? selectedEstabelecimentoId : null,
-            });
-            if (result.data && result.data.success) {
-                toast.success(`Usuário ${newUserName} cadastrado com sucesso!`);
-                setShowAddUserModal(false);
-                resetForm();
-            } else {
-                setAddUserError(result.data?.message || "Erro desconhecido.");
-                toast.error(result.data?.message || "Erro desconhecido.");
-            }
-        } catch (err) {
-            const msg = err.message || "Erro ao cadastrar usuário.";
-            setAddUserError(msg);
-            toast.error(msg);
-        } finally {
-            setAddingUser(false);
-        }
-    };
+  // Função para carregar usuários com paginação e filtros
+  const fetchUsuarios = useCallback(async (direction = 'next', startDoc = null) => {
+    if (!isMasterAdmin || !currentUser) return;
 
-    const toggleAdminStatus = async (userId, currentIsAdmin, currentIsMasterAdmin) => {
-        // Implementar lógica se necessário
-    };
+    setLoadingUsers(true);
+    setError('');
 
-    if (authLoading || loading) {
-        return <div className="text-center p-4">Carregando dados...</div>;
+    let baseQuery = collection(db, 'usuarios');
+    let queryConstraints = [];
+
+    // Filtros de Role e Status (aplicados na query do Firestore)
+    if (filterRole === 'isAdmin') {
+      queryConstraints.push(where('isAdmin', '==', true));
+    } else if (filterRole === 'isMasterAdmin') {
+      queryConstraints.push(where('isMasterAdmin', '==', true));
     }
-    if (error) {
-        return <div className="text-center p-4 text-red-600">Erro: {error}</div>;
+    
+    if (filterStatus === 'ativo') {
+      queryConstraints.push(where('ativo', '==', true));
+    } else if (filterStatus === 'inativo') {
+      queryConstraints.push(where('ativo', '==', false));
     }
 
+    // A paginação sempre precisa de uma ordenação consistente
+    // Assumimos que 'nome' existe em todos os documentos de usuário
+    queryConstraints.push(orderBy('nome', 'asc')); 
+
+    let q;
+    if (direction === 'next' && startDoc) {
+      q = query(baseQuery, ...queryConstraints, startAfter(startDoc), limit(ITEMS_PER_PAGE));
+    } else if (direction === 'prev' && startDoc) {
+      // Implementação simplificada de "anterior"
+      q = query(baseQuery, ...queryConstraints, limit(ITEMS_PER_PAGE)); 
+    } else { // Primeira carga
+      q = query(baseQuery, ...queryConstraints, limit(ITEMS_PER_PAGE));
+    }
+
+    try {
+      const documentSnapshots = await getDocs(q);
+      let fetchedUsers = [];
+
+      if (direction === 'prev') {
+        fetchedUsers = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse();
+      } else {
+        fetchedUsers = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+      
+      setUsuarios(fetchedUsers);
+      
+      if (documentSnapshots.docs.length > 0) {
+        setFirstVisible(documentSnapshots.docs[0]);
+        setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+        const nextQueryCheck = query(baseQuery, ...queryConstraints, startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), limit(1));
+        const nextSnapshotCheck = await getDocs(nextQueryCheck);
+        setHasMore(!nextSnapshotCheck.empty);
+      } else {
+        setFirstVisible(null);
+        setLastVisible(null);
+        setHasMore(false);
+      }
+      setHasPrevious(currentPage > 0);
+      
+    } catch (err) {
+      console.error("Erro ao carregar usuários:", err);
+      setError("Erro ao carregar a lista de usuários.");
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, [isMasterAdmin, currentUser, filterRole, filterStatus, currentPage]); // Adicionado currentPage
+
+  // Efeito para recarregar quando filtros mudam
+  useEffect(() => {
+    setLastVisible(null);
+    setFirstVisible(null);
+    setCurrentPage(0);
+    setHasMore(true);
+    setHasPrevious(false);
+    fetchUsuarios('next', null);
+  }, [filterRole, filterStatus, searchTerm, fetchUsuarios]); // searchTerm aqui para re-filtrar no frontend
+
+  const handleNextPage = () => {
+    if (hasMore) {
+      setCurrentPage(prev => prev + 1);
+      fetchUsuarios('next', lastVisible);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(prev => prev - 1);
+      fetchUsuarios('next', null); // Simplificado: recarrega do início
+    }
+  };
+
+  // Filtragem por termo de busca no frontend
+  const filteredUsuariosBySearchTerm = usuarios.filter(user => {
+    const term = searchTerm.toLowerCase();
+    const matchesName = (user.nome && user.nome.toLowerCase().includes(term));
+    const matchesEmail = (user.email && user.email.toLowerCase().includes(term));
+    return matchesName || matchesEmail;
+  });
+
+
+  if (authLoading || loadingUsers) {
     return (
-        <div className="p-6">
-            <Link to="/master-dashboard" className="text-blue-600 hover:underline mb-4 inline-block">
-                ← Voltar ao Dashboard Master
-            </Link>
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Todos os Usuários ({usuarios.length})</h1>
-            
-            <button onClick={() => setShowAddUserModal(true)} className="mb-6 px-4 py-2 bg-green-600 text-white rounded-md shadow-sm hover:bg-green-700 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5 mr-2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Adicionar Novo Usuário
-            </button>
-            
-            {/* ▼▼▼ CONTEÚDO DO MODAL RESTAURADO ▼▼▼ */}
-            {showAddUserModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full relative">
-                        <button onClick={() => { setShowAddUserModal(false); setAddUserError(''); setAddingUser(false); resetForm(); }}
-                            className="absolute top-2 right-3 text-gray-600 hover:text-red-600 text-2xl">
-                            &times;
-                        </button>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Cadastrar Novo Usuário</h2>
-                        {addUserError && <p className="text-red-500 text-sm text-center mb-4">{addUserError}</p>}
-                        
-                        <form onSubmit={handleAddUser} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Nome *</label>
-                                <input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Email *</label>
-                                <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Senha * (mín. 6 caracteres)</label>
-                                <input type="password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-700 pt-4 border-t">Permissões:</h3>
-                            <div className="flex items-center space-x-4">
-                                <input type="checkbox" id="newUserIsAdmin" checked={newUserIsAdmin} onChange={(e) => setNewUserIsAdmin(e.target.checked)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded" />
-                                <label htmlFor="newUserIsAdmin">Administrador de Estabelecimento</label>
-                            </div>
-                            
-                            {newUserIsAdmin && !newUserIsMasterAdmin && (
-                                <div className="pl-6 pt-2">
-                                    <label htmlFor="estabelecimentoSelect" className="block text-sm font-medium text-gray-700">Vincular ao Estabelecimento *</label>
-                                    <select
-                                        id="estabelecimentoSelect"
-                                        value={selectedEstabelecimentoId}
-                                        onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
-                                        required
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" >
-                                        <option value="">Selecione um estabelecimento</option>
-                                        {estabelecimentos.map(estab => (
-                                            <option key={estab.id} value={estab.id}>{estab.nome}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div className="flex items-center space-x-4">
-                                <input type="checkbox" id="newUserIsMasterAdmin" checked={newUserIsMasterAdmin} onChange={(e) => setNewUserIsMasterAdmin(e.target.checked)} className="h-4 w-4 text-purple-600 border-gray-300 rounded" />
-                                <label htmlFor="newUserIsMasterAdmin">Master Admin (Acesso Total)</label>
-                            </div>
-                            
-                            <button type="submit" disabled={addingUser} className="w-full py-3 px-4 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 font-semibold text-lg">
-                                {addingUser ? 'Cadastrando...' : 'Cadastrar Usuário'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
-            
-            <div className="overflow-x-auto bg-white rounded-lg shadow-md">
-                <table className="min-w-full leading-normal">
-                    <thead>
-                        <tr>
-                            <th className="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Nome</th>
-                            <th className="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
-                            <th className="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Permissões</th>
-                            <th className="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {usuarios.map(usuario => (
-                            <tr key={usuario.id}>
-                                <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">
-                                    <p className="text-gray-900 whitespace-no-wrap">{usuario.nome || 'N/A'}</p>
-                                </td>
-                                <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">
-                                    <p className="text-gray-900 whitespace-no-wrap">{usuario.email || 'N/A'}</p>
-                                </td>
-                                <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">
-                                    <span className={`relative inline-block px-3 py-1 font-semibold leading-tight ${usuario.isMasterAdmin ? 'text-purple-900 bg-purple-200' : usuario.isAdmin ? 'text-blue-900 bg-blue-200' : 'text-gray-900 bg-gray-200'} rounded-full`}>
-                                        {usuario.isMasterAdmin ? 'Master Admin' : usuario.isAdmin ? 'Admin Estab.' : 'Cliente'}
-                                    </span>
-                                </td>
-                                <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm flex gap-2">
-                                    <Link to={`/admin/clientes/${usuario.id}`} className="text-indigo-600 hover:text-indigo-900 font-medium">
-                                        Ver Detalhes
-                                    </Link>
-                                    {/* Adicione o botão de toggle admin se necessário */}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+      // <Layout>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+          <p className="text-xl text-gray-700">Carregando usuários...</p>
         </div>
+      // </Layout>
     );
+  }
+
+  if (!currentUser || !isMasterAdmin) {
+    return null;
+  }
+
+  return (
+    // <Layout>
+      <div className="p-4 bg-gray-100 min-h-screen">
+        <div className="max-w-7xl mx-auto bg-white rounded-lg shadow-lg p-6">
+          {/* Cabeçalho */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+              Gerenciar Usuários
+            </h1>
+            <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
+              {/* BOTÃO "VOLTAR" PADRONIZADO AQUI */}
+              <Link 
+                to="/master-dashboard" 
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 flex items-center gap-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"></path></svg>
+                Voltar
+              </Link>
+              <Link to="/master/usuarios/criar" className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                Criar Novo Usuário
+              </Link>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-md" role="alert">
+              <p className="font-bold">Erro:</p>
+              <p>{error}</p>
+            </div>
+          )}
+
+          {/* Seção de Filtro e Busca */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Filtrar Usuários</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="searchTerm" className="block text-sm font-medium text-gray-700 mb-1">Buscar por Nome/E-mail:</label>
+                <input
+                  type="text"
+                  id="searchTerm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                  placeholder="Pesquisar usuários..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="filterRole" className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Papel:</label>
+                <select
+                  id="filterRole"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                >
+                  <option value="todos">Todos os Papéis</option>
+                  <option value="isAdmin">Administradores Estabelecimento</option>
+                  <option value="isMasterAdmin">Master Administradores</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="filterStatus" className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Status:</label>
+                <select
+                  id="filterStatus"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  <option value="todos">Todos os Status</option>
+                  <option value="ativo">Ativo</option>
+                  <option value="inativo">Inativo</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela de Usuários */}
+          <div className="overflow-x-auto mt-8">
+            {filteredUsuariosBySearchTerm.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">Nenhum usuário encontrado com os critérios de busca/filtro.</p>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Nome
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      E-mail
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Admin Estab.
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Master Admin
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Estabelecimentos Gerenciados
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredUsuariosBySearchTerm.map((user) => (
+                    <tr key={user.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {user.nome || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.email || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {user.isAdmin ? 'Sim' : 'Não'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.isMasterAdmin ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {user.isMasterAdmin ? 'Sim' : 'Não'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 max-w-xs">
+                          {user.isAdmin && user.estabelecimentosGerenciados && user.estabelecimentosGerenciados.length > 0 ? (
+                              user.estabelecimentosGerenciados.map((estabId, index) => (
+                                  <span key={estabId} className="block text-xs text-gray-600">
+                                      {estabelecimentosMap[estabId] || `ID: ${estabId}`}
+                                      {index < user.estabelecimentosGerenciados.length - 1 ? ',' : ''}
+                                  </span>
+                              ))
+                          ) : user.isAdmin ? 'Nenhum' : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {user.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
+                        <Link
+                          to={`/master/usuarios/${user.id}/editar`}
+                          className="px-3 py-1 rounded-md bg-blue-500 hover:bg-blue-600 text-white"
+                        >
+                          Editar
+                        </Link>
+                        <button
+                          onClick={() => toggleUserAtivo(user.id, user.ativo, user.nome)}
+                          className={`px-3 py-1 rounded-md text-white ${
+                            user.ativo ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+                          }`}
+                          disabled={currentUser.uid === user.id}
+                        >
+                          {user.ativo ? 'Desativar' : 'Ativar'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user.id, user.nome)}
+                          className="px-3 py-1 rounded-md bg-gray-500 hover:bg-gray-600 text-white"
+                          disabled={currentUser.uid === user.id}
+                        >
+                          Deletar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* CONTROLES DE PAGINAÇÃO */}
+          <div className="flex justify-center items-center mt-8 space-x-4">
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 0 || loadingUsers}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md font-semibold hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Anterior
+            </button>
+            <span className="text-gray-700">Página {currentPage + 1}</span>
+            <button
+              onClick={handleNextPage}
+              disabled={!hasMore || loadingUsers}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      </div>
+    // </Layout>
+  );
 }
 
 export default ListarUsuariosMaster;
