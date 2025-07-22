@@ -2,9 +2,9 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth'; // Importe as funções de autenticação
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 import { getFunctions } from 'firebase/functions';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Adicione estas importações
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_API_KEY,

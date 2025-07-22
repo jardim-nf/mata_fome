@@ -1,15 +1,15 @@
 // src/pages/admin/EditarEstabelecimentoMaster.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore'; // Importe orderBy
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-// ... other imports
 import { toast } from 'react-toastify';
+import { uploadFile, deleteFileByUrl } from '../../utils/firebaseStorageService'; //
 import { auditLogger } from '../../utils/auditLogger';
-import { format } from 'date-fns'; // Importe format para exibir a data
 
-// Componente para Inputs
+
+// Componente FormInput (reutilizável para campos de texto)
 function FormInput({ label, name, value, onChange, type = 'text', helpText = '', ...props }) {
     return (
         <div>
@@ -29,308 +29,446 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
 }
 
 function EditarEstabelecimentoMaster() {
-    const { id } = useParams();
+    const { id } = useParams(); // ID do estabelecimento da URL
     const navigate = useNavigate();
     const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
-    
-    const [formData, setFormData] = useState(null);
-    const [availableAdmins, setAvailableAdmins] = useState([]);
-    const [availablePlans, setAvailablePlans] = useState([]); // NOVO: Lista de planos disponíveis
-    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
+    const [formData, setFormData] = useState({
+        nome: '',
+        endereco: { rua: '', numero: '', bairro: '', cidade: '' },
+        informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
+        chavePix: '',
+        slug: '',
+        imageUrl: '', // Campo para a URL do logo
+        rating: 0,
+        adminUID: '',
+        ativo: true,
+        currentPlanId: '',
+        nextBillingDate: null,
+    });
+    const [logoImage, setLogoImage] = useState(null); // Estado para o novo arquivo de logo
+    const [logoPreview, setLogoPreview] = useState(''); // Estado para pré-visualização do logo
     const [loading, setLoading] = useState(true);
+    const [formLoading, setFormLoading] = useState(false);
     const [error, setError] = useState('');
+    const [availableAdmins, setAvailableAdmins] = useState([]);
+    const [availablePlans, setAvailablePlans] = useState([]);
+    const [loadingAdmins, setLoadingAdmins] = useState(true);
+    const [loadingPlans, setLoadingPlans] = useState(true);
 
-    const slugify = useCallback((text) => text.toString().toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^\w-]+/g, '').replace(/--+/g, '-'), []);
+    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-    // Efeito para controle de acesso e carregamento de dados
+    // Efeito para controle de acesso e carregamento inicial do estabelecimento
     useEffect(() => {
         if (authLoading) return;
         if (!isMasterAdmin) {
-            toast.error('Acesso negado.');
-            navigate('/master-dashboard');
+            toast.error('Acesso negado. Apenas Master Admin pode editar estabelecimentos.');
+            navigate('/painel');
             return;
         }
 
-        const fetchData = async () => {
+        const fetchEstablishment = async () => {
             try {
-                // Carregar dados do estabelecimento
                 const docRef = doc(db, 'estabelecimentos', id);
                 const docSnap = await getDoc(docRef);
-                if (!docSnap.exists()) throw new Error('Estabelecimento não encontrado.');
-                
-                const data = docSnap.data();
-                setFormData({
-                    nome: data.nome || '', slug: data.slug || '', chavePix: data.chavePix || '',
-                    imageUrl: data.imageUrl || '', rating: data.rating || 0, adminUID: data.adminUID || '',
-                    ativo: data.ativo !== undefined ? data.ativo : true,
-                    currentPlanId: data.currentPlanId || '', // Carrega o plano existente
-                    nextBillingDate: data.nextBillingDate || null, // Carrega a data de cobrança
-                    endereco: data.endereco || {}, informacoes_contato: data.informacoes_contato || {}
-                });
 
-                // Carregar admins
-                const adminsQuery = query(collection(db, 'usuarios'), where('isAdmin', '==', true), orderBy('nome', 'asc'));
-                const adminsSnapshot = await getDocs(adminsQuery);
-                setAvailableAdmins(adminsSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome, email: doc.data().email })));
-
-                // Carregar planos
-                const plansQuery = query(collection(db, 'plans'), where('isActive', '==', true), orderBy('price', 'asc'));
-                const plansSnapshot = await getDocs(plansQuery);
-                setAvailablePlans(plansSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
-
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setFormData(prev => ({
+                        ...prev,
+                        ...data,
+                        // Garante que sub-objetos existam para evitar erros ao acessar
+                        endereco: data.endereco || { rua: '', numero: '', bairro: '', cidade: '' },
+                        informacoes_contato: data.informacoes_contato || { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
+                        // Converte Timestamp para Date se necessário (para nextBillingDate)
+                        nextBillingDate: data.nextBillingDate?.toDate ? data.nextBillingDate.toDate() : null,
+                    }));
+                    setLogoPreview(data.imageUrl || ''); // Define a pré-visualização com a URL existente
+                    // Se o slug já existe, consideramos que ele não foi editado manualmente
+                    setSlugManuallyEdited(!!data.slug);
+                } else {
+                    setError("Estabelecimento não encontrado.");
+                }
             } catch (err) {
-                setError(err.message);
-                toast.error(err.message);
+                console.error("Erro ao buscar estabelecimento:", err);
+                setError("Erro ao carregar dados do estabelecimento.");
             } finally {
                 setLoading(false);
             }
         };
-        fetchData();
+
+        fetchEstablishment();
     }, [id, isMasterAdmin, authLoading, navigate]);
 
-    // Efeito para gerar slug automaticamente
-    useEffect(() => {
-        if (formData && !slugManuallyEdited && formData.nome) {
-            setFormData(prev => ({...prev, slug: slugify(prev.nome)}));
-        }
-    }, [formData?.nome, slugManuallyEdited, slugify]);
 
-    const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        const val = type === 'checkbox' ? checked : value;
+    // Efeito para carregar admins disponíveis
+    useEffect(() => {
+        if (!isMasterAdmin || !currentUser) return;
+
+        const fetchAdmins = async () => {
+            try {
+                const q = query(collection(db, 'usuarios'), where('isAdmin', '==', true), orderBy('nome', 'asc'));
+                const querySnapshot = await getDocs(q);
+                const admins = querySnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome, email: doc.data().email }));
+                setAvailableAdmins(admins);
+            } catch (err) {
+                console.error("Erro ao carregar administradores disponíveis:", err);
+                setError("Erro ao carregar lista de administradores.");
+            } finally {
+                setLoadingAdmins(false);
+            }
+        };
+        fetchAdmins();
+    }, [isMasterAdmin, currentUser]);
+
+    // Efeito para carregar planos disponíveis
+    useEffect(() => {
+        if (!isMasterAdmin || !currentUser) return;
+
+        const fetchPlans = async () => {
+            try {
+                const q = query(collection(db, 'plans'), where('isActive', '==', true), orderBy('price', 'asc'));
+                const querySnapshot = await getDocs(q);
+                const plans = querySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+                setAvailablePlans(plans);
+            } catch (err) {
+                console.error("Erro ao carregar planos disponíveis:", err);
+                setError("Erro ao carregar lista de planos.");
+            } finally {
+                setLoadingPlans(false);
+            }
+        };
+        fetchPlans();
+    }, [isMasterAdmin, currentUser]);
+
+const handleInputChange = (e) => {
+
+        const { name, value, type, checked, files } = e.target; // Adiciona 'files'
+
         if (name === 'slug') setSlugManuallyEdited(true);
 
-        if (name.includes('.')) {
+        if (type === 'file') { // Novo tratamento para input de arquivo
+            const file = files[0];
+            setLogoImage(file);
+            if (file) {
+                setLogoPreview(URL.createObjectURL(file)); // Pré-visualização local
+            } else {
+                // Se o usuário limpar a seleção de arquivo, volta para a URL existente ou limpa
+                setLogoPreview(formData.imageUrl || '');
+            }
+        } else if (name.includes('.')) {
             const [parent, child] = name.split('.');
-            setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [child]: val } }));
+            setFormData(prev => ({
+                ...prev,
+                [parent]: { ...prev[parent], [child]: type === 'checkbox' ? checked : value }
+            }));
         } else {
-            setFormData(prev => ({ ...prev, [name]: val }));
+            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
         }
     };
-    
-    const handleUpdate = async (e) => {
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
+        setFormLoading(true);
         setError('');
 
-        if (formData.adminUID === '') { // VALIDAÇÃO DO ADMIN
-            setError('Por favor, selecione um administrador para o estabelecimento.');
-            setLoading(false);
+        const { nome, endereco, informacoes_contato, slug, adminUID, currentPlanId } = formData;
+        if (!nome.trim() || !endereco.rua.trim() || !informacoes_contato.telefone_whatsapp.trim() || !slug.trim() || !adminUID.trim() || !currentPlanId.trim()) {
+            toast.warn("Por favor, preencha todos os campos obrigatórios (Nome, Endereço, Telefone, Slug, Admin, Plano).");
+            setFormLoading(false);
             return;
         }
-        if (formData.currentPlanId === '') { // VALIDAÇÃO DO PLANO
-            setError('Por favor, selecione um plano para o estabelecimento.');
-            setLoading(false);
-            return;
-        }
+
+        let finalLogoUrl = formData.imageUrl; // Inicia com a URL existente
 
         try {
-            // Verificar se o slug já existe e pertence a outro estabelecimento
-            const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
-            const slugSnapshot = await getDocs(slugQuery);
-            if (!slugSnapshot.empty && slugSnapshot.docs[0].id !== id) {
-                setError('Este slug (URL) já está em uso por outro estabelecimento. Por favor, escolha outro.');
-                setLoading(false);
-                return;
+            // Se um novo arquivo de logo foi selecionado
+            if (logoImage) {
+                const logoName = `establishment_logos/${formData.slug || id}_${Date.now()}_${logoImage.name}`;
+                finalLogoUrl = await uploadFile(logoImage, logoName); //
+                toast.success('Novo logo enviado com sucesso!');
+
+                // Se havia um logo antigo e foi substituído, delete o antigo do Storage
+                if (formData.imageUrl && formData.imageUrl !== finalLogoUrl) {
+                    // await deleteFileByUrl(formData.imageUrl); // // Descomente para ativar a exclusão da imagem antiga
+                    // console.log("Logo antigo deletado (se aplicável):", formData.imageUrl);
+                }
+            } else if (formData.imageUrl && !logoPreview && !logoImage) {
+                 // Se não selecionou nova imagem e a pré-visualização está vazia (indicando que o usuário removeu a imagem)
+                 // E havia uma URL no formData, significa que o usuário quer remover o logo existente.
+                // await deleteFileByUrl(formData.imageUrl); // // Descomente para ativar a exclusão da imagem antiga
+                finalLogoUrl = ''; // Limpa a URL no Firestore
             }
 
-            const estabRef = doc(db, 'estabelecimentos', id);
-            const oldData = (await getDoc(estabRef)).data(); // Pega os dados antigos para o log
-            
-            // Remove o ID do formData para não sobrescrever o ID do documento no Firestore
-            const { id: _, ...dataToUpdate } = formData; 
+            // Verificar se o slug já existe para outro estabelecimento (se o slug foi alterado)
+            if (formData.slug !== (await getDoc(doc(db, 'estabelecimentos', id))).data().slug) {
+                const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
+                const slugSnapshot = await getDocs(slugQuery);
+                if (!slugSnapshot.empty) {
+                    // Verifica se o slug encontrado pertence ao próprio estabelecimento que está sendo editado
+                    const existingSlugDoc = slugSnapshot.docs[0];
+                    if (existingSlugDoc.id !== id) {
+                        setError('Este slug (URL) já está em uso por outro estabelecimento. Por favor, escolha outro.');
+                        setFormLoading(false);
+                        return;
+                    }
+                }
+            }
 
-            await updateDoc(estabRef, {
-                ...dataToUpdate,
-                rating: Number(dataToUpdate.rating), // Garante que rating é número
-                // nextBillingDate não é alterado aqui, pode ser em uma página de faturamento
-            });
+            // Tratar o nextBillingDate como um Timestamp do Firebase, se necessário.
+            // Aqui estamos assumindo que formData.nextBillingDate já é um Date ou null
+            const dataToUpdate = {
+                ...formData,
+                imageUrl: finalLogoUrl, // Atualiza a URL final do logo
+                rating: Number(formData.rating),
+                updatedAt: new Date(),
+                nextBillingDate: formData.nextBillingDate, // Já deve ser um Date ou null
+            };
 
-            // Opcional: Atualizar o vínculo de administrador se ele mudou
-            if (oldData.adminUID !== formData.adminUID) {
-                // Remover o vínculo antigo (opcional, mas bom para limpeza)
-                if (oldData.adminUID) {
-                    const oldAdminRef = doc(db, 'usuarios', oldData.adminUID);
+            const docRef = doc(db, 'estabelecimentos', id);
+            await updateDoc(docRef, dataToUpdate);
+
+            // Atualizar o vínculo do administrador (se o adminUID mudou)
+            const oldEstabData = (await getDoc(docRef)).data();
+            if (oldEstabData.adminUID !== formData.adminUID) {
+                // Remover o estabelecimento do admin antigo
+                if (oldEstabData.adminUID) {
+                    const oldAdminRef = doc(db, 'usuarios', oldEstabData.adminUID);
                     const oldAdminSnap = await getDoc(oldAdminRef);
                     if (oldAdminSnap.exists()) {
                         const oldAdminData = oldAdminSnap.data();
-                        const updatedManagedEstabs = (oldAdminData.estabelecimentosGerenciados || []).filter(estabId => estabId !== id);
-                        await updateDoc(oldAdminRef, { estabelecimentosGerenciados: updatedManagedEstabs });
+                        const updatedEstabs = (oldAdminData.estabelecimentosGerenciados || []).filter(estabId => estabId !== id);
+                        await updateDoc(oldAdminRef, { estabelecimentosGerenciados: updatedEstabs });
                     }
                 }
-                // Adicionar o novo vínculo
+                // Adicionar o estabelecimento ao novo admin
                 if (formData.adminUID) {
                     const newAdminRef = doc(db, 'usuarios', formData.adminUID);
                     const newAdminSnap = await getDoc(newAdminRef);
                     if (newAdminSnap.exists()) {
                         const newAdminData = newAdminSnap.data();
-                        const updatedManagedEstabs = [...(newAdminData.estabelecimentosGerenciados || []), id];
-                        await updateDoc(newAdminRef, { estabelecimentosGerenciados: updatedManagedEstabs });
+                        const currentManagedEstabs = newAdminData.estabelecimentosGerenciados || [];
+                        if (!currentManagedEstabs.includes(id)) {
+                            await updateDoc(newAdminRef, {
+                                estabelecimentosGerenciados: [...currentManagedEstabs, id]
+                            });
+                        }
                     }
                 }
                 toast.info('Vínculo de administrador atualizado.');
             }
 
+            auditLogger(
+                'ESTABELECIMENTO_ATUALIZADO',
+                { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
+                { type: 'estabelecimento', id: id, name: formData.nome },
+                { ...dataToUpdate, rating: Number(formData.rating) } // Inclua imageUrl no log
+            );
 
-            // Log de auditoria
-            const changedFields = {};
-            for (const key in dataToUpdate) {
-                if (JSON.stringify(oldData[key]) !== JSON.stringify(dataToUpdate[key])) {
-                    changedFields[key] = { oldValue: oldData[key], newValue: dataToUpdate[key] };
-                }
-            }
-            if (Object.keys(changedFields).length > 0) {
-                auditLogger(
-                    'ESTABELECIMENTO_EDITADO',
-                    { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
-                    { type: 'estabelecimento', id: id, name: formData.nome },
-                    { changes: changedFields }
-                );
-            }
-
-            toast.success('Estabelecimento atualizado com sucesso!');
+            toast.success("Estabelecimento atualizado com sucesso!");
             navigate('/master/estabelecimentos');
         } catch (err) {
-            console.error("Erro ao atualizar o estabelecimento:", err);
-            setError(`Erro ao atualizar o estabelecimento: ${err.message}`);
-            toast.error('Erro ao atualizar o estabelecimento.');
+            console.error("Erro ao atualizar estabelecimento:", err);
+            setError("Erro ao atualizar estabelecimento: " + err.message);
+            toast.error("Erro ao atualizar estabelecimento.");
         } finally {
-            setLoading(false);
+            setFormLoading(false);
         }
     };
 
-    if (authLoading || loading || formData === null) return <div className="text-center p-8">Carregando...</div>;
-    if (error && !loading) return <div className="text-center p-8 text-red-600">Erro: {error}</div>;
+
+    if (loading || authLoading || loadingAdmins || loadingPlans) return <div className="text-center p-8">Carregando...</div>;
+    if (error) return <div className="text-center p-8 text-red-600">{error}</div>;
 
     return (
-        <div className="bg-slate-50 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
-            <div className="max-w-6xl mx-auto">
-                <form onSubmit={handleUpdate}>
+        <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
+            <div className="max-w-4xl mx-auto">
+                <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Cabeçalho com Ações */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                         <div>
-                            {/* BOTÃO "VOLTAR" PADRONIZADO AQUI */}
-                            <Link 
-                                to="/master/estabelecimentos" 
+                            <Link
+                                to="/master/estabelecimentos"
                                 className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 flex items-center gap-1 mb-4"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                                Voltar para a Lista
+                                Voltar para Estabelecimentos
                             </Link>
                             <h1 className="text-3xl font-bold text-slate-800">Editar Estabelecimento</h1>
-                            <p className="text-sm text-gray-600 mt-1">ID: {id}</p>
                         </div>
-                        <div className="flex items-center gap-4 w-full sm:w-auto">
-                            <button type="submit" disabled={loading} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
-                                {loading ? 'Salvando...' : 'Salvar Alterações'}
-                            </button>
-                        </div>
+                        <button type="submit" disabled={formLoading} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
+                            {formLoading ? 'Salvando...' : 'Salvar Alterações'}
+                        </button>
                     </div>
 
                     {error && (
-                        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-md" role="alert">
-                            <p className="font-bold">Erro de Edição:</p>
+                        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                            <p className="font-bold">Erro de Atualização:</p>
                             <p>{error}</p>
                         </div>
                     )}
 
-                    {/* Layout Principal em Duas Colunas */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Coluna Esquerda */}
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm">
-                                <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Dados Principais</h2>
-                                <div className="space-y-4">
-                                    <FormInput label="Nome do Estabelecimento" name="nome" value={formData.nome} onChange={handleInputChange} required />
-                                    <FormInput label="Slug (URL)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Gerado do nome, mas pode ser editado."/>
-                                    <FormInput label="Chave PIX (Para Receber Pagamentos)" name="chavePix" value={formData.chavePix} onChange={handleInputChange} />
-                                    <FormInput label="URL da Imagem/Logo" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} />
-                                    <FormInput label="Avaliação (1-5)" name="rating" type="number" min="0" max="5" step="0.1" value={formData.rating} onChange={handleInputChange} />
-                                    
-                                    <div>
-                                        <label htmlFor="adminUID" className="block text-sm font-medium text-slate-600 mb-1">Admin Vinculado *</label>
-                                        <select id="adminUID" name="adminUID" value={formData.adminUID} onChange={handleInputChange} required className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5">
-                                            <option value="">Selecione um administrador</option>
-                                            {availableAdmins.map(admin => <option key={admin.id} value={admin.id}>{admin.nome} ({admin.email})</option>)}
-                                        </select>
-                                    </div>
+                    {/* Dados Principais */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Informações Gerais</h2>
+                        <div className="space-y-4">
+                            <FormInput label="Nome do Estabelecimento" name="nome" value={formData.nome} onChange={handleInputChange} required />
+                            <FormInput label="Slug (URL amigável)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Será a parte final da URL do cardápio (ex: /cardapios/seunome). Gerado automaticamente, mas pode ser editado."/>
+                            <FormInput label="Chave PIX (Para Receber Pagamentos)" name="chavePix" value={formData.chavePix} onChange={handleInputChange} helpText="Chave PIX para pagamentos diretos."/>
 
-                                    {/* NOVO: Seleção do Plano */}
-                                    <div>
-                                        <label htmlFor="currentPlanId" className="block text-sm font-medium text-slate-600 mb-1">Plano de Assinatura *</label>
-                                        <select 
-                                            id="currentPlanId" 
-                                            name="currentPlanId" 
-                                            value={formData.currentPlanId} 
-                                            onChange={handleInputChange} 
-                                            required 
-                                            className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
-                                        >
-                                            <option value="">Selecione um plano...</option>
-                                            {availablePlans.length === 0 ? (
-                                                <option value="" disabled>Nenhum plano ativo disponível</option>
-                                            ) : (
-                                                availablePlans.map(plan => (
-                                                    <option key={plan.id} value={plan.id}>
-                                                        {plan.name}
-                                                    </option>
-                                                ))
-                                            )}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-white p-6 rounded-xl shadow-sm">
-                                <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Contato e Horários</h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <FormInput label="Telefone/WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} />
-                                    <FormInput label="Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} placeholder="@usuario" />
-                                </div>
-                                <div className="mt-4">
-                                    <FormInput label="Horário de Funcionamento" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter - Dom: 18h às 23h"/>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Coluna Direita */}
-                        <div className="space-y-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm">
-                                <h2 className="text-lg font-bold text-slate-800 mb-4">Status</h2>
-                                <label className="flex items-center cursor-pointer">
-                                    <div className="relative">
-                                        <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
-                                        <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
-                                        <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${formData.ativo ? 'transform translate-x-full' : ''}`}></div>
-                                    </div>
-                                    <div className="ml-3 text-base font-semibold text-slate-700">{formData.ativo ? 'Ativo' : 'Inativo'}</div>
+                            {/* Campo de Upload de Imagem para o Logo */}
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="logoUpload" className="block text-sm font-medium text-slate-700">
+                                    Logo do Estabelecimento (Opcional):
                                 </label>
+                                <input
+                                    type="file"
+                                    id="logoUpload"
+                                    name="logoUpload"
+                                    accept="image/*"
+                                    onChange={handleInputChange}
+                                    className="w-full border-slate-300 rounded-lg p-1"
+                                />
+                                {(logoPreview || formData.imageUrl) && ( // Exibe pré-visualização ou URL existente
+                                    <div className="mt-2 flex items-center gap-4">
+                                        <p className="text-sm text-slate-600">Pré-visualização:</p>
+                                        <img
+                                            src={logoPreview || formData.imageUrl}
+                                            alt="Pré-visualização do Logo"
+                                            className="w-24 h-24 object-cover rounded-lg shadow"
+                                        />
+                                    </div>
+                                )}
+                                {/* Campo URL do logo original (escondido ou somente leitura) */}
+                                <input
+                                    name="imageUrl"
+                                    value={formData.imageUrl}
+                                    readOnly
+                                    hidden // Opcional: Esconder se o upload é a única forma de gerenciar
+                                />
                             </div>
-                            {/* NOVO: Informações de Cobrança */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm">
-                                <h2 className="text-lg font-bold text-slate-800 mb-4">Informações de Cobrança</h2>
-                                <p className="text-sm text-gray-700 mb-2">
-                                    <strong>Próxima Cobrança:</strong>{' '}
-                                    {formData.nextBillingDate && formData.nextBillingDate.toDate ? 
-                                        format(formData.nextBillingDate.toDate(), 'dd/MM/yyyy', { locale: ptBR }) : 
-                                        'N/A'}
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                    A data de cobrança é definida automaticamente na criação e pode ser ajustada via sistema de faturamento.
-                                </p>
-                                {/* Botão para forçar renovação ou ver detalhes da fatura aqui, se aplicável */}
+                            {/* FIM CAMPO DE UPLOAD DE LOGO */}
+
+                            <FormInput label="Avaliação (1-5)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" helpText="Avaliação média do estabelecimento."/>
+
+                            {/* Seleção do Administrador */}
+                            <div>
+                                <label htmlFor="adminUID" className="block text-sm font-medium text-slate-600 mb-1">Admin Responsável *</label>
+                                <select
+                                    id="adminUID"
+                                    name="adminUID"
+                                    value={formData.adminUID}
+                                    onChange={handleInputChange}
+                                    required
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                >
+                                    <option value="">Selecione um administrador...</option>
+                                    {loadingAdmins ? (
+                                        <option value="" disabled>Carregando administradores...</option>
+                                    ) : availableAdmins.length === 0 ? (
+                                        <option value="" disabled>Nenhum admin disponível (crie um admin primeiro)</option>
+                                    ) : (
+                                        availableAdmins.map(admin => (
+                                            <option key={admin.id} value={admin.id}>
+                                                {admin.nome} ({admin.email})
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                                <p className="mt-1 text-xs text-slate-500">Vincule este estabelecimento a um administrador já existente. Apenas usuários com a permissão 'Admin Estabelecimento' aparecem aqui.</p>
+                                <Link to="/master/usuarios/criar" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2 block">
+                                    Criar novo administrador
+                                </Link>
                             </div>
 
-                            <div className="bg-white p-6 rounded-xl shadow-sm">
-                                <h2 className="text-lg font-bold text-slate-800 mb-4">Endereço</h2>
-                                <div className="space-y-4">
-                                    <FormInput label="Rua" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} />
-                                    <FormInput label="Número" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} />
-                                    <FormInput label="Bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} />
-                                    <FormInput label="Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} />
-                                </div>
+                            {/* Seleção do Plano */}
+                            <div>
+                                <label htmlFor="currentPlanId" className="block text-sm font-medium text-slate-600 mb-1">Plano de Assinatura *</label>
+                                <select
+                                    id="currentPlanId"
+                                    name="currentPlanId"
+                                    value={formData.currentPlanId}
+                                    onChange={handleInputChange}
+                                    required
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                >
+                                    <option value="">Selecione um plano...</option>
+                                    {loadingPlans ? (
+                                        <option value="" disabled>Carregando planos...</option>
+                                    ) : availablePlans.length === 0 ? (
+                                        <option value="" disabled>Nenhum plano ativo disponível (crie um plano primeiro)</option>
+                                    ) : (
+                                        availablePlans.map(plan => (
+                                            <option key={plan.id} value={plan.id}>
+                                                {plan.name}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                                <p className="mt-1 text-xs text-slate-500">Selecione o plano de assinatura que este estabelecimento utilizará.</p>
+                                <Link to="/master/plans" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2 block">
+                                    Gerenciar planos
+                                </Link>
                             </div>
+
+                            {/* Próxima Data de Cobrança */}
+                            <div>
+                                <label htmlFor="nextBillingDate" className="block text-sm font-medium text-slate-600 mb-1">Próxima Data de Cobrança:</label>
+                                <input
+                                    type="date"
+                                    id="nextBillingDate"
+                                    name="nextBillingDate"
+                                    value={formData.nextBillingDate ? formData.nextBillingDate.toISOString().split('T')[0] : ''}
+                                    onChange={handleInputChange}
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                />
+                                <p className="mt-1 text-xs text-slate-500">Define a data da próxima cobrança de assinatura. Deixe vazio para não definir.</p>
+                            </div>
+
                         </div>
+                    </div>
+
+                    {/* Informações de Contato */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Informações de Contato</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormInput label="Telefone/WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} type="tel" placeholder="(XX) XXXXX-XXXX"/>
+                            <FormInput label="Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} placeholder="@usuario_do_estabelecimento"/>
+                        </div>
+                        <div className="mt-4">
+                            <FormInput label="Horário de Funcionamento" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter - Dom: 18h às 23h"/>
+                        </div>
+                    </div>
+
+                    {/* Endereço */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Endereço Principal</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormInput label="Rua" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} />
+                            <FormInput label="Número" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} />
+                            <FormInput label="Bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} />
+                            <FormInput label="Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} />
+                        </div>
+                    </div>
+
+                    {/* Status Ativo/Inativo */}
+                    <div className="bg-white p-6 rounded-xl shadow-md">
+                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Status</h2>
+                        <label className="flex items-center cursor-pointer">
+                            <div className="relative">
+                                <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
+                                <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
+                                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${formData.ativo ? 'transform translate-x-full' : ''}`}></div>
+                            </div>
+                            <div className="ml-3 text-base font-semibold text-slate-700">{formData.ativo ? 'Ativo' : 'Inativo'}</div>
+                        </label>
+                        <p className="mt-2 text-xs text-slate-500">Estabelecimentos inativos não aparecerão para os clientes e não receberão pedidos.</p>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                        <button type="submit" disabled={formLoading} className="px-8 py-3 bg-indigo-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
+                            {formLoading ? 'Atualizando...' : 'Salvar Alterações'}
+                        </button>
                     </div>
                 </form>
             </div>

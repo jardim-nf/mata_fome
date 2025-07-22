@@ -4,12 +4,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import nodemailer from 'nodemailer';
-// CORRECTED IMPORTS for Firestore triggers in v2
-import {
-  onDocumentCreated,
-  onDocumentUpdated,
-  onDocumentDeleted
-} from 'firebase-functions/v2/firestore';
+// CORREÇÃO: Importando o gatilho 'onDocumentWritten' que lida com create, update e delete.
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 
 // --- INICIALIZAÇÃO DO FIREBASE ADMIN SDK ---
 if (!getApps().length) {
@@ -31,7 +27,7 @@ const mailTransport = nodemailer.createTransport({
 });
 
 const APP_NAME = 'DeuFome Admin';
-const MASTER_ADMIN_EMAIL = 'seu_email_master_admin@exemplo.com'; // ALtere para o seu e-mail
+const MASTER_ADMIN_EMAIL = 'seu_email_master_admin@exemplo.com'; // Altere para o seu e-mail
 
 // =========================================================================
 // Cloud Function: getEstablishmentPixKey
@@ -130,7 +126,7 @@ export const checkLatePayments = onSchedule('0 2 * * *', async (context) => {
         for (const doc of querySnapshot.docs) {
             const estabData = doc.data(); latePayments.push(estabData);
             const estabDocRef = db.collection('estabelecimentos').doc(doc.id);
-            batch.update(estabDocRef, { ativo: false, desativadoEm: FieldValue.serverTimestamp() }); // 'ativo' (corrigido)
+            batch.update(estabDocRef, { ativo: false, desativadoEm: FieldValue.serverTimestamp() });
             const auditLogRef = db.collection('auditLogs').doc();
             batch.set(auditLogRef, {
                 timestamp: FieldValue.serverTimestamp(), actionType: 'PAGAMENTO_ATRASADO_E_DESATIVADO',
@@ -203,6 +199,10 @@ export const deleteUserByMasterAdmin = onCall(async (data, context) => {
     if (targetUid === callerUid) throw new HttpsError('permission-denied', 'Você não pode deletar sua própria conta.');
 
     try {
+        // <-- CORREÇÃO: Lê os dados do usuário ANTES de deletar o documento -->
+        const targetUserDoc = await db.collection('usuarios').doc(targetUid).get();
+        const targetUserName = targetUserDoc.exists ? targetUserDoc.data().nome : 'UID Desconhecido';
+
         await auth.deleteUser(targetUid);
         console.log(`Usuário ${targetUid} deletado do Firebase Authentication.`);
 
@@ -217,9 +217,6 @@ export const deleteUserByMasterAdmin = onCall(async (data, context) => {
         });
         await estabBatch.commit();
         
-        const targetUserDoc = await db.collection('usuarios').doc(targetUid).get();
-        const targetUserName = targetUserDoc.exists ? targetUserDoc.data().nome : 'UID Desconhecido';
-
         const auditLogRef = db.collection('auditLogs').doc();
         await auditLogRef.set({
             timestamp: FieldValue.serverTimestamp(), actionType: 'USUARIO_DELETADO_COMPLETO',
@@ -237,66 +234,54 @@ export const deleteUserByMasterAdmin = onCall(async (data, context) => {
 });
 
 
-// =========================================================================
-// Cloud Function: updateUserCustomClaims
-// =========================================================================
-export const updateUserCustomClaims = onDocumentUpdated('usuarios/{userId}', async (event) => { // Usando onDocumentUpdated
-    const userId = event.params.userId;
-    const userData = event.data.after.data();
-    const previousUserData = event.data.before.data();
+// <-- SUBSTITUÍDO: As duas funções antigas foram removidas -->
 
-    const rolesChanged = previousUserData.isAdmin !== userData.isAdmin ||
-                         previousUserData.isMasterAdmin !== userData.isMasterAdmin;
-    
-    if (previousUserData.ativo === true && userData.ativo === false) {
-        await auth.updateUser(userId, { disabled: true });
-        console.log(`Usuário ${userId} desabilitado no Firebase Authentication devido à inatividade.`);
-        const auditLogRef = db.collection('auditLogs').doc();
-        await auditLogRef.set({
-            timestamp: FieldValue.serverTimestamp(), actionType: 'USUARIO_AUTHDISABLED',
-            actor: { uid: 'system', email: 'system@example.com', role: 'system_trigger' },
-            target: { type: 'usuario', id: userId, name: userData.nome || 'N/A' },
-            details: { newStatus: 'disabled_by_system' }
-        });
-    } else if (previousUserData.ativo === false && userData.ativo === true) {
-        await auth.updateUser(userId, { disabled: false });
-        console.log(`Usuário ${userId} habilitado no Firebase Authentication devido à reativação.`);
-        const auditLogRef = db.collection('auditLogs').doc();
-        await auditLogRef.set({
-            timestamp: FieldValue.serverTimestamp(), actionType: 'USUARIO_AUTHENABLED',
-            actor: { uid: 'system', email: 'system@example.com', role: 'system_trigger' },
-            target: { type: 'usuario', id: userId, name: userData.nome || 'N/A' },
-            details: { newStatus: 'enabled_by_system' }
-        });
+
+// =========================================================================
+// Cloud Function: Sincroniza Documento do Usuário com Auth Claims (CORRIGIDA E UNIFICADA)
+// Gatilho único para criação, atualização e exclusão de usuários no Firestore.
+// =========================================================================
+export const syncUserClaimsOnWrite = onDocumentWritten('usuarios/{userId}', async (event) => {
+    const userId = event.params.userId;
+    const userDocAfter = event.data?.after.data();
+    const userDocBefore = event.data?.before.data();
+
+    // CASO 1: Documento do usuário foi DELETADO no Firestore
+    if (!event.data?.after.exists) {
+        console.log(`Documento do usuário ${userId} deletado. Removendo todas as claims.`);
+        await auth.setCustomUserClaims(userId, null);
+        return;
     }
 
-    if (rolesChanged || previousUserData.ativo !== userData.ativo) {
-        const customClaims = {
-            isAdmin: userData.isAdmin || false,
-            isMasterAdmin: userData.isMasterAdmin || false,
-        };
-        await auth.setCustomUserClaims(userId, customClaims);
-        console.log(`Custom claims para o usuário ${userId} atualizados para:`, customClaims);
+    // CASO 2: Documento foi CRIADO ou ATUALIZADO
+    const claimsChanged = (
+        userDocBefore?.isAdmin !== userDocAfter.isAdmin ||
+        userDocBefore?.isMasterAdmin !== userDocAfter.isMasterAdmin ||
+        JSON.stringify(userDocBefore?.estabelecimentosGerenciados) !== JSON.stringify(userDocAfter.estabelecimentosGerenciados)
+    );
+
+    const activeStatusChanged = userDocBefore?.ativo !== userDocAfter.ativo;
+
+    if (activeStatusChanged) {
+        await auth.updateUser(userId, { disabled: !userDocAfter.ativo });
+        console.log(`Usuário ${userId} teve o status de autenticação atualizado para: ${userDocAfter.ativo ? 'Habilitado' : 'Desabilitado'}`);
     }
-    
-    return null;
-});
 
-// Gatilho para quando um usuário é criado no Firestore (para definir claims iniciais)
-export const onUserCreatedSetClaims = onDocumentCreated('usuarios/{userId}', async (event) => { // Usando onDocumentCreated
-    const userId = event.params.userId;
-    const userData = event.data.data();
-
-    try {
+    // Na criação do documento (before não existe) ou se as claims mudaram, atualiza o token.
+    if (!event.data?.before.exists || claimsChanged) {
         const customClaims = {
-            isAdmin: userData.isAdmin || false,
-            isMasterAdmin: userData.isMasterAdmin || false,
+            isAdmin: userDocAfter.isAdmin || false,
+            isMasterAdmin: userDocAfter.isMasterAdmin || false,
+            estabelecimentosGerenciados: userDocAfter.estabelecimentosGerenciados || [],
         };
-        await auth.setCustomUserClaims(userId, customClaims);
-        console.log(`Claims iniciais para o novo usuário ${userId} definidos:`, customClaims);
-        return null;
-    } catch (error) {
-        console.error(`Erro ao definir claims iniciais para o usuário ${userId}:`, error);
-        return null;
+
+        try {
+            await auth.setCustomUserClaims(userId, customClaims);
+            console.log(`Sucesso! Claims para o usuário ${userId} atualizadas para:`, customClaims);
+        } catch (error) {
+            console.error(`Erro ao definir claims para o usuário ${userId}:`, error);
+        }
+    } else {
+        console.log(`Nenhuma mudança de permissão detectada para ${userId}. Claims não serão atualizadas.`);
     }
 });

@@ -1,4 +1,3 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -26,7 +25,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      console.log("AuthContext Debug: onAuthStateChanged - user:", user); // Log para ver o objeto 'user'
+      console.log("AuthContext Debug: onAuthStateChanged - user:", user);
 
       if (user) {
         try {
@@ -34,7 +33,6 @@ export function AuthProvider({ children }) {
           let isAdminUser = false;
           let isMasterAdminUser = false;
 
-          // 1. Busca em 'usuarios' - Esta é a fonte principal para permissões e dados base
           const userDocRef = doc(db, 'usuarios', user.uid);
           const userDocSnap = await getDoc(userDocRef);
 
@@ -42,48 +40,42 @@ export function AuthProvider({ children }) {
             const userData = userDocSnap.data();
             isAdminUser = userData.isAdmin || false;
             isMasterAdminUser = userData.isMasterAdmin || false;
-            userProfileData = userData; // Define os dados base do perfil
+            userProfileData = userData;
 
-            // Se for um Admin comum, verifica se seu estabelecimento está ativo
             if (isAdminUser && !isMasterAdminUser) {
               const estabQuery = query(collection(db, 'estabelecimentos'), where('adminUID', '==', user.uid));
               const estabSnapshot = await getDocs(estabQuery);
               if (!estabSnapshot.empty) {
                 setIsEstabelecimentoAtivo(estabSnapshot.docs[0].data().ativo || false);
               } else {
-                setIsEstabelecimentoAtivo(false); // Admin sem estabelecimento vinculado é inativo
+                setIsEstabelecimentoAtivo(false);
               }
             } else {
-              setIsEstabelecimentoAtivo(true); // Master Admins estão sempre ativos
+              setIsEstabelecimentoAtivo(true);
             }
           }
 
-          // 2. Busca em 'clientes' - Para mesclar dados específicos de cliente (como endereço)
           const clientDocRef = doc(db, 'clientes', user.uid);
           const clientDocSnap = await getDoc(clientDocRef);
 
           if (clientDocSnap.exists()) {
-            // ▼▼▼ LÓGICA DE MERGE ▼▼▼
-            // Mescla os dados, dando preferência aos dados de 'clientes' se houver conflito
             userProfileData = { ...userProfileData, ...clientDocSnap.data() };
           }
           
-          // 3. Atualiza os estados com os dados consolidados
           setCurrentClientData(userProfileData);
           setIsAdmin(isAdminUser);
           setIsMasterAdmin(isMasterAdminUser);
-          console.log("AuthContext Debug: currentClientData setado para:", userProfileData); // Log para ver o currentClientData setado
+          console.log("AuthContext Debug: currentClientData setado para:", userProfileData);
 
         } catch (error) {
           console.error("AuthContext Error: Falha ao buscar dados do usuário.", error);
-          // Zera os estados em caso de erro
           setCurrentClientData(null);
           setIsAdmin(false);
           setIsMasterAdmin(false);
           setIsEstabelecimentoAtivo(false);
         }
 
-      } else { // Se não há usuário logado
+      } else {
         console.log("AuthContext Debug: user is null (deslogado).");
         setCurrentClientData(null);
         setIsAdmin(false);
@@ -91,11 +83,32 @@ export function AuthProvider({ children }) {
         setIsEstabelecimentoAtivo(false);
       }
 
-      setLoading(false); // Finaliza o carregamento
+      setLoading(false);
     });
 
     return unsubscribe;
   }, []);
+
+  // ▼▼▼ CÓDIGO DE DEBUG TEMPORÁRIO ADICIONADO AQUI ▼▼▼
+  // Este código vai ler as 'claims' do token assim que o usuário logar.
+  useEffect(() => {
+    if (currentUser) {
+      console.log("INICIANDO DEBUG DO TOKEN...");
+      
+      // Força a atualização do token e busca as claims
+      currentUser.getIdTokenResult(true) 
+        .then((idTokenResult) => {
+          // Imprime as claims no console para vermos as permissões
+          console.log("!!!!!!!!!! CLAIMS DO TOKEN ATUAL !!!!!!!!!!");
+          console.log(idTokenResult.claims);
+          console.log("!!!!!!!!!! FIM DO DEBUG !!!!!!!!!!");
+        })
+        .catch((error) => {
+          console.error("Erro ao obter o token e as claims:", error);
+        });
+    }
+  }, [currentUser]); // Isso vai rodar sempre que o currentUser for definido ou mudar
+  // ▲▲▲ FIM DO CÓDIGO DE DEBUG ▲▲▲
 
   const value = {
     currentUser,

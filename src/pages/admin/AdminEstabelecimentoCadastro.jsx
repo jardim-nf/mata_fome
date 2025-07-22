@@ -6,6 +6,7 @@ import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { auditLogger } from '../../utils/auditLogger';
+import { uploadFile } from '../../utils/firebaseStorageService'; //
 
 // Componente FormInput (reutilizável para campos de texto)
 function FormInput({ label, name, value, onChange, type = 'text', helpText = '', ...props }) {
@@ -34,12 +35,12 @@ function AdminEstabelecimentoCadastro() {
         nome: '',
         slug: '',
         chavePix: '',
-        imageUrl: '',
+        imageUrl: '', // Campo para a URL do logo no Firestore
         rating: 0,
         adminUID: '',
         ativo: true,
-        currentPlanId: '', // NOVO: ID do plano atual
-        nextBillingDate: null, // NOVO: Próxima data de cobrança
+        currentPlanId: '',
+        nextBillingDate: null,
         endereco: {
             rua: '',
             numero: '',
@@ -53,14 +54,17 @@ function AdminEstabelecimentoCadastro() {
         }
     });
 
+    const [logoImage, setLogoImage] = useState(null); // Estado para o arquivo de logo selecionado
+    const [logoPreview, setLogoPreview] = useState(''); // Estado para pré-visualização do logo
+
     const [availableAdmins, setAvailableAdmins] = useState([]);
-    const [availablePlans, setAvailablePlans] = useState([]); // NOVO: Lista de planos disponíveis
+    const [availablePlans, setAvailablePlans] = useState([]);
     const [loadingForm, setLoadingForm] = useState(false);
     const [loadingAdmins, setLoadingAdmins] = useState(true);
-    const [loadingPlans, setLoadingPlans] = useState(true); // NOVO: Estado de carregamento dos planos
+    const [loadingPlans, setLoadingPlans] = useState(true);
     const [formError, setFormError] = useState('');
 
-    const slugify = useCallback((text) => 
+    const slugify = useCallback((text) =>
         text.toString().toLowerCase().trim()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/\s+/g, '-')
@@ -131,19 +135,26 @@ function AdminEstabelecimentoCadastro() {
     }, [formData.nome, slugManuallyEdited, slugify]);
 
     const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        const val = type === 'checkbox' ? checked : value;
+        const { name, value, type, checked, files } = e.target; // Adiciona 'files'
 
         if (name === 'slug') setSlugManuallyEdited(true);
 
-        if (name.includes('.')) {
+        if (type === 'file') { // Novo tratamento para input de arquivo
+            const file = files[0];
+            setLogoImage(file);
+            if (file) {
+                setLogoPreview(URL.createObjectURL(file)); // Pré-visualização local
+            } else {
+                setLogoPreview('');
+            }
+        } else if (name.includes('.')) {
             const [parent, child] = name.split('.');
             setFormData(prev => ({
                 ...prev,
-                [parent]: { ...prev[parent], [child]: val }
+                [parent]: { ...prev[parent], [child]: type === 'checkbox' ? checked : value }
             }));
         } else {
-            setFormData(prev => ({ ...prev, [name]: val }));
+            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
         }
     };
 
@@ -157,14 +168,22 @@ function AdminEstabelecimentoCadastro() {
             setLoadingForm(false);
             return;
         }
-        if (formData.currentPlanId === '') { // NOVA VALIDAÇÃO
+        if (formData.currentPlanId === '') {
             setFormError('Por favor, selecione um plano para o estabelecimento.');
             setLoadingForm(false);
             return;
         }
 
+        let finalLogoUrl = formData.imageUrl; // Começa com a URL existente ou vazia
 
         try {
+            // Se um logo foi selecionado para upload
+            if (logoImage) {
+                const logoName = `establishment_logos/${formData.slug || Date.now()}_${logoImage.name}`;
+                finalLogoUrl = await uploadFile(logoImage, logoName); //
+                toast.success('Logo enviado com sucesso!');
+            }
+
             const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
             const slugSnapshot = await getDocs(slugQuery);
             if (!slugSnapshot.empty) {
@@ -176,16 +195,16 @@ function AdminEstabelecimentoCadastro() {
             const newEstabRef = doc(collection(db, 'estabelecimentos'));
             const newEstabId = newEstabRef.id;
 
-            // Define a próxima data de cobrança para daqui a um mês da criação
             const nextBilling = new Date();
             nextBilling.setMonth(nextBilling.getMonth() + 1);
 
             await setDoc(newEstabRef, {
                 ...formData,
                 id: newEstabId,
+                imageUrl: finalLogoUrl, // Salva a URL final do logo
                 criadoEm: new Date(),
                 rating: Number(formData.rating),
-                nextBillingDate: nextBilling, // SALVANDO NOVA DATA DE COBRANÇA
+                nextBillingDate: nextBilling,
             });
 
             if (formData.adminUID) {
@@ -202,15 +221,18 @@ function AdminEstabelecimentoCadastro() {
                     }
                 }
             }
-            
+
             auditLogger(
                 'ESTABELECIMENTO_CRIADO',
                 { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
                 { type: 'estabelecimento', id: newEstabId, name: formData.nome },
-                { ...formData, rating: Number(formData.rating) }
+                { ...formData, rating: Number(formData.rating), imageUrl: finalLogoUrl } // Inclua a imageUrl no log
             );
 
             toast.success('Estabelecimento cadastrado com sucesso!');
+            setFormData({ nome: '', slug: '', chavePix: '', imageUrl: '', rating: 0, adminUID: '', ativo: true, currentPlanId: '', nextBillingDate: null, endereco: { rua: '', numero: '', bairro: '', cidade: '' }, informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' } });
+            setLogoImage(null); // Limpa o arquivo selecionado
+            setLogoPreview(''); // Limpa a pré-visualização
             navigate('/master/estabelecimentos');
         } catch (err) {
             console.error("Erro ao cadastrar estabelecimento:", err);
@@ -221,7 +243,7 @@ function AdminEstabelecimentoCadastro() {
         }
     };
 
-    if (authLoading || loadingAdmins || loadingPlans) { // Inclui loadingPlans
+    if (authLoading || loadingAdmins || loadingPlans) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
                 <p className="text-xl text-gray-700">Carregando formulário...</p>
@@ -238,8 +260,8 @@ function AdminEstabelecimentoCadastro() {
                     {/* Cabeçalho com Ações */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                         <div>
-                            <Link 
-                                to="/master-dashboard" 
+                            <Link
+                                to="/master-dashboard"
                                 className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 flex items-center gap-1 mb-4"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -266,18 +288,51 @@ function AdminEstabelecimentoCadastro() {
                             <FormInput label="Nome do Estabelecimento" name="nome" value={formData.nome} onChange={handleInputChange} required />
                             <FormInput label="Slug (URL amigável)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Será a parte final da URL do cardápio (ex: /cardapios/seunome). Gerado automaticamente, mas pode ser editado."/>
                             <FormInput label="Chave PIX (Para Receber Pagamentos)" name="chavePix" value={formData.chavePix} onChange={handleInputChange} helpText="Chave PIX para pagamentos diretos."/>
-                            <FormInput label="URL da Imagem/Logo (Opcional)" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} type="url" placeholder="https://exemplo.com/logo.png" helpText="URL da imagem da logo do estabelecimento."/>
+
+                            {/* Campo de Upload de Imagem para o Logo */}
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="logoUpload" className="block text-sm font-medium text-slate-700">
+                                    Logo do Estabelecimento (Opcional):
+                                </label>
+                                <input
+                                    type="file"
+                                    id="logoUpload"
+                                    name="logoUpload"
+                                    accept="image/*"
+                                    onChange={handleInputChange}
+                                    className="w-full border-slate-300 rounded-lg p-1"
+                                />
+                                {logoPreview && (
+                                    <div className="mt-2 flex items-center gap-4">
+                                        <p className="text-sm text-slate-600">Pré-visualização:</p>
+                                        <img
+                                            src={logoPreview}
+                                            alt="Pré-visualização do Logo"
+                                            className="w-24 h-24 object-cover rounded-lg shadow"
+                                        />
+                                    </div>
+                                )}
+                                {/* Campo URL do logo original (escondido) */}
+                                <input
+                                    name="imageUrl"
+                                    value={formData.imageUrl}
+                                    readOnly
+                                    hidden
+                                />
+                            </div>
+                            {/* Fim Campo de Upload de Imagem */}
+
                             <FormInput label="Avaliação Inicial (1-5, Opcional)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" helpText="Avaliação média do estabelecimento."/>
 
                             {/* Seleção do Administrador */}
                             <div>
                                 <label htmlFor="adminUID" className="block text-sm font-medium text-slate-600 mb-1">Admin Responsável *</label>
-                                <select 
-                                    id="adminUID" 
-                                    name="adminUID" 
-                                    value={formData.adminUID} 
-                                    onChange={handleInputChange} 
-                                    required 
+                                <select
+                                    id="adminUID"
+                                    name="adminUID"
+                                    value={formData.adminUID}
+                                    onChange={handleInputChange}
+                                    required
                                     className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
                                 >
                                     <option value="">Selecione um administrador...</option>
@@ -302,12 +357,12 @@ function AdminEstabelecimentoCadastro() {
                             {/* NOVO: Seleção do Plano */}
                             <div>
                                 <label htmlFor="currentPlanId" className="block text-sm font-medium text-slate-600 mb-1">Plano de Assinatura *</label>
-                                <select 
-                                    id="currentPlanId" 
-                                    name="currentPlanId" 
-                                    value={formData.currentPlanId} 
-                                    onChange={handleInputChange} 
-                                    required 
+                                <select
+                                    id="currentPlanId"
+                                    name="currentPlanId"
+                                    value={formData.currentPlanId}
+                                    onChange={handleInputChange}
+                                    required
                                     className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
                                 >
                                     <option value="">Selecione um plano...</option>

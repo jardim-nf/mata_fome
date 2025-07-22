@@ -1,4 +1,4 @@
-// src/App.jsx (Este é o seu código atual, APENAS CONFIRME as importações)
+// src/App.jsx
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from './context/AuthContext';
@@ -23,26 +23,24 @@ import AdminEstablishmentManagement from "./pages/AdminEstablishmentManagement";
 import NossosClientes from './pages/NossosClientes';
 import ClientDetails from "./pages/ClientDetails";
 
-// Importações dos componentes Master Admin (CONFIRA O CAMINHO DE CADA UM)
-import MasterDashboard from './pages/MasterDashboard'; // <--- Se o MasterDashboard.jsx está em src/pages/MasterDashboard.jsx
-// Se MasterDashboard.jsx estivesse em src/pages/admin/MasterDashboard.jsx, seria:
-// import MasterDashboard from './pages/admin/MasterDashboard';
-
+// Importações dos componentes Master Admin
+import MasterDashboard from './pages/MasterDashboard'; 
 import AdminEstabelecimentoCadastro from './pages/admin/AdminEstabelecimentoCadastro';
-import AdminCouponManagement from './pages/AdminCouponManagement'; // Verifique se este e os próximos estão em pages/admin ou pages
-import AdminReports from './pages/AdminReports'; // Verifique
+import AdminCouponManagement from './pages/AdminCouponManagement';
+import AdminReports from './pages/AdminReports';
 import ListarEstabelecimentosMaster from './pages/admin/ListarEstabelecimentosMaster';
 import ListarPedidosMaster from './pages/admin/ListarPedidosMaster';
 import ListarUsuariosMaster from './pages/admin/ListarUsuariosMaster';
 import EditarEstabelecimentoMaster from './pages/admin/EditarEstabelecimentoMaster';
 import ImportarCardapioMaster from './pages/admin/ImportarCardapioMaster';
-import PedidoDetalhesMaster from './pages/admin/PedidoDetalhesMaster'; // Novo componente para detalhes de pedido master (você precisa criar)
+import PedidoDetalhesMaster from './pages/admin/PedidoDetalhesMaster';
 import CriarUsuarioMaster from './pages/admin/CriarUsuarioMaster';
 import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
 
-
+// NOVO: Importando o nosso componente "Porteiro" de redirecionamento
+import HomeRedirector from './pages/HomeRedirector';
 
 function App() {
   return (
@@ -66,9 +64,12 @@ function App() {
             <Route path="/historico-cliente/:telefone" element={<HistoricoCliente />} />
             <Route path="/admin/clientes/:clientId" element={<ClientDetails />} />
             
+            {/* NOVO: Rota do nosso "porteiro" inteligente. O login deve apontar para cá. */}
+            <Route path="/painel-inicial" element={<HomeRedirector />} />
+
             {/* Rotas para Administradores de Estabelecimento (Gerenciam SEU estabelecimento) */}
             <Route path="/painel" element={<Painel />} />
-            <Route path="/dashboard" element={<AdminDashboard />} />
+            <Route path="/dashboard" element={<AdminDashboard />} /> {/* Esta rota leva para o painel antigo do admin comum */}
             <Route path="/admin/gerenciar-cardapio" element={<AdminMenuManagement />} />
             <Route path="/admin/taxas-de-entrega" element={<TaxasDeEntrega />} />
             <Route path="/admin/gerenciar-estabelecimentos" element={<AdminEstablishmentManagement />} />
@@ -79,20 +80,18 @@ function App() {
             <Route path="/master-dashboard" element={<MasterDashboard />} />
             <Route path="/admin/cadastrar-estabelecimento" element={<AdminEstabelecimentoCadastro />} />
             <Route path="/admin/reports" element={<AdminReports />} />
-<Route path="/admin/audit-logs" element={<AuditLogs />} />
-
+            <Route path="/admin/audit-logs" element={<AuditLogs />} />
             <Route path="/master/estabelecimentos" element={<ListarEstabelecimentosMaster />} />
             <Route path="/master/pedidos" element={<ListarPedidosMaster />} />
             <Route path="/master/usuarios" element={<ListarUsuariosMaster />} />
             <Route path="/master/estabelecimentos/:id/editar" element={<EditarEstabelecimentoMaster />} />
             <Route path="/master/importar-cardapio" element={<ImportarCardapioMaster />} />
-<Route path="/master/usuarios/:id/editar" element={<EditarUsuarioMaster/>} />
-<Route path="/master/plans" element={<AdminPlansManagement />} />
-
+            <Route path="/master/usuarios/:id/editar" element={<EditarUsuarioMaster/>} />
+            <Route path="/master/plans" element={<AdminPlansManagement />} />
           
-            {/* NOVA ROTA para Detalhes do Pedido Master */}
+            {/* ROTA para Detalhes do Pedido Master */}
             <Route path="/master/pedidos/:id" element={<PedidoDetalhesMaster />} /> 
-<Route path="/master/usuarios/criar" element={<CriarUsuarioMaster />} />
+            <Route path="/master/usuarios/criar" element={<CriarUsuarioMaster />} />
             
             <Route path="*" element={<Navigate to="/" replace />} /> 
           </Route>

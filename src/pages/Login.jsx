@@ -29,7 +29,7 @@ function Login() {
         } else if (isAdmin) {
           // Se não é Master Admin, mas é Admin de Estabelecimento
           toast.success('Login Administrador de Estabelecimento realizado com sucesso! Redirecionando para o painel de pedidos.');
-          navigate('/painel'); // Redireciona para o Painel de Pedidos do estabelecimento
+          navigate('/painel-inicial'); // Redireciona para o Painel de Pedidos do estabelecimento
         } else {
           // Se não é nenhum tipo de administrador (usuário comum)
           toast.info('Login realizado com sucesso! Você foi redirecionado para a página inicial.');
