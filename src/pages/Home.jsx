@@ -105,7 +105,7 @@ function HeroSectionModern({ onExploreClick }) {
           {/* Sua Imagem da Pizza - Centralizada sobre o fundo amarelo */}
           <img
             // SUBSTITUA ESTE URL PELA SUA IMAGEM DA PIZZA!
-            src="https://images.unsplash.com/photo-1594007654729-407edc388ed9?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" 
+            src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/pizza.png?alt=media&token=aac1a9a6-5381-41df-b728-c394fba7b762" 
             alt="Pizza Deliciosa"
             className="relative z-10 w-full max-w-md md:max-w-lg lg:max-w-none lg:w-auto h-auto rounded-xl shadow-2xl transform translate-y-8 lg:translate-y-0 rotate-3 transition-transform duration-500 ease-in-out hover:rotate-0"
           />
