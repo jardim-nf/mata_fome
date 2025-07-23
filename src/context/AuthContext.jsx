@@ -1,12 +1,37 @@
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { Navigate } from 'react-router-dom'; // Certifique-se de importar Navigate se PrivateRoute for um componente interno
 
 const AuthContext = createContext();
 
 export function useAuth() {
   return useContext(AuthContext);
+}
+
+// Componente PrivateRoute para proteger rotas - AGORA EXPORTADO
+export function PrivateRoute({ children, allowedRoles }) { // Mudado para export function
+  const { currentUser, isAdmin, isMasterAdmin, loading } = useAuth();
+
+  if (loading) {
+    return <div className="text-center p-8">Carregando...</div>;
+  }
+
+  if (!currentUser) {
+    return <Navigate to="/login-admin" />;
+  }
+
+  // Lógica de permissão mais flexível
+  if (allowedRoles.includes('admin') && isAdmin && !isMasterAdmin) {
+    return children;
+  }
+  if (allowedRoles.includes('masterAdmin') && isMasterAdmin) {
+    return children;
+  }
+  // Se nenhuma permissão for concedida e o usuário estiver logado, redireciona para a home ou exibe erro
+  return <Navigate to="/" />; // Ou uma página de "Acesso Negado"
 }
 
 export function AuthProvider({ children }) {

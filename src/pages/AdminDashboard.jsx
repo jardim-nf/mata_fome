@@ -8,6 +8,18 @@ import { toast } from 'react-toastify';
 
 const getTodayFormattedDate = () => new Date().toISOString().split('T')[0];
 
+// Função auxiliar para converter string de data (YYYY-MM-DD) para Timestamp do Firestore
+const dateToFirestoreTimestamp = (dateString, endOfDay = false) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    if (endOfDay) {
+        date.setHours(23, 59, 59, 999);
+    } else {
+        date.setHours(0, 0, 0, 0);
+    }
+    return Timestamp.fromDate(date);
+};
+
 function AdminDashboard() {
     const { currentUser, authLoading } = useAuth();
 
@@ -18,7 +30,7 @@ function AdminDashboard() {
     const [dashboardError, setDashboardError] = useState(null);
     const [startDate, setStartDate] = useState(getTodayFormattedDate());
     const [endDate, setEndDate] = useState(getTodayFormattedDate());
-    const [showPeriodFilter, setShowPeriodFilter] = useState(false);
+    const [showPeriodFilter, setShowPeriodFilter] = useState(false); // Mantido para controle de visibilidade da UI
 
     useEffect(() => {
         if (authLoading) return;
@@ -41,12 +53,28 @@ function AdminDashboard() {
                     throw new Error("Administrador não vinculado a um estabelecimento.");
                 }
                 
+                // Converter as datas para Timestamps do Firestore
+                const startTimestamp = dateToFirestoreTimestamp(startDate, false);
+                const endTimestamp = dateToFirestoreTimestamp(endDate, true);
+
                 let pedidosQuery = query(
                     collection(db, 'pedidos'),
                     where('estabelecimentoId', '==', estabelecimentoId),
                     where('status', '==', 'finalizado'),
                     orderBy('criadoEm', 'desc')
                 );
+
+                // Adicionar filtros de período se as datas forem válidas
+                if (startTimestamp && endTimestamp) {
+                    pedidosQuery = query(
+                        collection(db, 'pedidos'),
+                        where('estabelecimentoId', '==', estabelecimentoId),
+                        where('status', '==', 'finalizado'),
+                        where('criadoEm', '>=', startTimestamp),
+                        where('criadoEm', '<=', endTimestamp),
+                        orderBy('criadoEm', 'desc')
+                    );
+                }
                 
                 const unsubscribe = onSnapshot(pedidosQuery, (snapshot) => {
                     let vendasCount = 0;
@@ -89,7 +117,7 @@ function AdminDashboard() {
         return () => {
             unsubPromise.then(unsub => unsub && unsub());
         };
-    }, [currentUser, authLoading, startDate, endDate]);
+    }, [currentUser, authLoading, startDate, endDate]); // Dependências para re-executar ao mudar datas
 
     if (loading || authLoading) {
         return <div className="text-center p-8">Carregando Dashboard...</div>;
@@ -109,6 +137,38 @@ function AdminDashboard() {
                     </div>
                 ) : (
                     <div className="space-y-8">
+                        {/* Seção de Filtro de Período (NOVO) */}
+                        <div className="bg-white p-6 rounded-xl shadow-sm">
+                            <h2 className="text-xl font-bold text-slate-700 mb-4">Filtrar por Período</h2>
+                            <div className="flex flex-col sm:flex-row gap-4 items-center">
+                                <label className="flex flex-col flex-grow w-full sm:w-auto">
+                                    <span className="text-sm font-medium text-slate-600 mb-1">Data Início:</span>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="p-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </label>
+                                <label className="flex flex-col flex-grow w-full sm:w-auto">
+                                    <span className="text-sm font-medium text-slate-600 mb-1">Data Fim:</span>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="p-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </label>
+                                {/* O botão showPeriodFilter é mais para UX se você quiser esconder/mostrar os inputs */}
+                                {/* <button
+                                    onClick={() => setShowPeriodFilter(!showPeriodFilter)}
+                                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition"
+                                >
+                                    {showPeriodFilter ? 'Esconder Filtros' : 'Mostrar Filtros'}
+                                </button> */}
+                            </div>
+                        </div>
+
                         {/* Seção de Métricas Principais */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
@@ -135,9 +195,14 @@ function AdminDashboard() {
                                 <h2 className="text-xl font-bold">Taxas de Entrega 💲</h2>
                                 <p className="mt-1 text-sm opacity-90">Definir valores por bairro.</p>
                             </Link>
-                             <Link to="/admin/cupons" className="bg-rose-500 text-white p-6 rounded-xl flex flex-col justify-center items-center text-center transform hover:-translate-y-1 transition">
+                            <Link to="/admin/cupons" className="bg-rose-500 text-white p-6 rounded-xl flex flex-col justify-center items-center text-center transform hover:-translate-y-1 transition">
                                 <h2 className="text-xl font-bold">Gerenciar Cupons 💰</h2>
                                 <p className="mt-1 text-sm opacity-90">Criar códigos de desconto.</p>
+                            </Link>
+                            {/* NOVO: Link para a página de Relatórios */}
+                            <Link to="/admin/reports" className="bg-purple-500 text-white p-6 rounded-xl flex flex-col justify-center items-center text-center transform hover:-translate-y-1 transition">
+                                <h2 className="text-xl font-bold">Relatórios 📊</h2>
+                                <p className="mt-1 text-sm opacity-90">Acessar dados e estatísticas.</p>
                             </Link>
                         </div>
                         

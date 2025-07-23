@@ -1,3 +1,26 @@
+/* 1) importar fonte Poppins */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+/* 2) variáveis CSS (opcional, mas ajuda no @apply) */
+:root {
+  --color-primary: #FFD400;
+  --color-secondary: #000000;
+  --color-accent: #FFFFFF;
+}
+
+/* 3) Tailwind directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 4) custom base styles */
+@layer base {
+  body {
+    @apply font-sans bg-accent text-secondary;
+    font-family: 'Poppins', sans-serif;
+    line-height: 1.6;
+  }
+  h1, h2, h3, h4 {
+    @apply font-heading font-semibold;
+  }
+}
