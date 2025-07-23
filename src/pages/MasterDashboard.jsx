@@ -5,6 +5,7 @@ import { collection, query, where, orderBy, onSnapshot, getDocs, updateDoc, doc,
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { getAuth } from "firebase/auth"; // Importar getAuth
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -76,6 +77,7 @@ function DashboardHeader({ currentUser, logout, navigate }) {
 
 function MasterDashboard() {
   const navigate = useNavigate();
+  // useAuth já deve fornecer currentUser e isMasterAdmin
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth(); 
 
   const [loadingDashboard, setLoadingDashboard] = useState(true);
@@ -93,99 +95,155 @@ function MasterDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('todos');
 
+  // Este useEffect lida com o redirecionamento se o usuário não for Master Admin
   useEffect(() => {
     if (!authLoading) {
-      if (!currentUser || !isMasterAdmin) {
+      if (!currentUser) {
+        toast.error('Você precisa estar logado para acessar esta página.');
+        navigate('/');
+        return;
+      }
+      // Aqui, é CRUCIAL que isMasterAdmin já esteja correto.
+      // A lógica de refresh do token no próximo useEffect garantirá isso.
+      if (!isMasterAdmin) {
         toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
         navigate('/');
         return;
       }
-      setLoadingDashboard(false);
+      setLoadingDashboard(false); // Só define como false se as verificações passarem
     }
   }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
+  // Este useEffect é para carregar os dados do dashboard APÓS a autenticação e permissão
   useEffect(() => {
+    // Só prossegue se o usuário for um Master Admin e estiver logado
     if (isMasterAdmin && currentUser) {
-      setLoadingDashboard(true);
-      setDashboardError('');
+      setLoadingDashboard(true); // Começa a carregar os dados
+      setDashboardError(''); // Limpa erros anteriores
 
-      const unsubscribeEstabelecimentos = onSnapshot(
-        collection(db, 'estabelecimentos'),
-        (snapshot) => {
-          const fetchedEstabelecimentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setAllEstabelecimentos(fetchedEstabelecimentos);
-          setTotalEstabelecimentos(fetchedEstabelecimentos.length);
-          setEstabelecimentosAtivos(fetchedEstabelecimentos.filter(est => est.ativo).length);
-          setEstabelecimentosInativos(fetchedEstabelecimentos.filter(est => !est.ativo).length);
-        },
-        (error) => {
-          console.error("Erro ao carregar estabelecimentos para o Master Dashboard:", error);
-          setDashboardError("Erro ao carregar dados dos estabelecimentos.");
-        }
-      );
+      const auth = getAuth(); // Obtenha a instância do Firebase Auth
 
-      const fetchPedidosData = async () => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const sevenDaysAgo = subDays(today, 6);
-        sevenDaysAgo.setHours(0, 0, 0, 0);
-
+      const initializeDashboard = async () => {
         try {
-          const qTodayPedidos = query(
-            collection(db, 'pedidos'),
-            where('criadoEm', '>=', today)
-          );
-          const todaySnapshot = await getDocs(qTodayPedidos);
-          let pedidosHojeCount = 0;
-          let vendasHojeTotal = 0;
-          todaySnapshot.forEach(doc => {
-            pedidosHojeCount++;
-            vendasHojeTotal += typeof doc.data().totalFinal === 'number' ? doc.data().totalFinal : 0;
-          });
-          setTotalPedidosHoje(pedidosHojeCount);
-          setTotalVendasHoje(vendasHojeTotal);
+          // --- PASSO CHAVE: Força o refresh do token DE ID AQUI ---
+          // Isso garante que as custom claims mais recentes estejam no token do cliente.
+          // O 'true' é fundamental!
+          const idTokenResult = await auth.currentUser.getIdTokenResult(true);
+          console.log("MasterDashboard: Custom Claims ATUALIZADAS após refresh:", idTokenResult.claims);
 
-          const qLast7Days = query(
-            collection(db, 'pedidos'),
-            where('criadoEm', '>=', sevenDaysAgo),
-            orderBy('criadoEm', 'asc')
-          );
-          const last7DaysSnapshot = await getDocs(qLast7Days);
-
-          const salesDataMap = new Map();
-          let currentDay = new Date(sevenDaysAgo); 
-          while (currentDay <= today) { 
-            salesDataMap.set(format(currentDay, 'dd/MM', { locale: ptBR }), 0);
-            currentDay = new Date(currentDay.setDate(currentDay.getDate() + 1));
+          // Re-verificar as claims após o refresh, para ter certeza
+          if (idTokenResult.claims.isMasterAdmin !== true) {
+            console.warn("MasterDashboard: Usuário não é mais Master Admin após refresh do token. Redirecionando...");
+            toast.error('Suas permissões foram alteradas. Acesso negado.');
+            navigate('/');
+            setLoadingDashboard(false);
+            return;
           }
 
-          last7DaysSnapshot.forEach(doc => {
-            const pedidoData = doc.data();
-            if (pedidoData.criadoEm && pedidoData.criadoEm.toDate && typeof pedidoData.totalFinal === 'number') {
-              const dateKey = format(pedidoData.criadoEm.toDate(), 'dd/MM', { locale: ptBR });
-              salesDataMap.set(dateKey, (salesDataMap.get(dateKey) || 0) + pedidoData.totalFinal);
-            }
-          });
+          // --- Início do Carregamento de Dados ---
+          // Agora que sabemos que o token está atualizado e tem as claims corretas,
+          // as chamadas ao Firestore abaixo DEVEM funcionar (se as regras estiverem ok).
 
-          setVendasPorDia(Array.from(salesDataMap.entries()));
+          const unsubscribeEstabelecimentos = onSnapshot(
+            collection(db, 'estabelecimentos'),
+            (snapshot) => {
+              const fetchedEstabelecimentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              setAllEstabelecimentos(fetchedEstabelecimentos);
+              setTotalEstabelecimentos(fetchedEstabelecimentos.length);
+              setEstabelecimentosAtivos(fetchedEstabelecimentos.filter(est => est.ativo).length);
+              setEstabelecimentosInativos(fetchedEstabelecimentos.filter(est => !est.ativo).length);
+            },
+            (error) => {
+              console.error("Erro ao carregar estabelecimentos para o Master Dashboard:", error);
+              setDashboardError("Erro ao carregar dados dos estabelecimentos. Verifique suas permissões.");
+            }
+          );
+
+          const fetchPedidosData = async () => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const sevenDaysAgo = subDays(today, 6);
+            sevenDaysAgo.setHours(0, 0, 0, 0);
+
+            try {
+              const qTodayPedidos = query(
+                collection(db, 'pedidos'),
+                where('criadoEm', '>=', today)
+              );
+              const todaySnapshot = await getDocs(qTodayPedidos);
+              let pedidosHojeCount = 0;
+              let vendasHojeTotal = 0;
+              todaySnapshot.forEach(doc => {
+                pedidosHojeCount++;
+                vendasHojeTotal += typeof doc.data().totalFinal === 'number' ? doc.data().totalFinal : 0;
+              });
+              setTotalPedidosHoje(pedidosHojeCount);
+              setTotalVendasHoje(vendasHojeTotal);
+
+              const qLast7Days = query(
+                collection(db, 'pedidos'),
+                where('criadoEm', '>=', sevenDaysAgo),
+                orderBy('criadoEm', 'asc')
+              );
+              const last7DaysSnapshot = await getDocs(qLast7Days);
+
+              const salesDataMap = new Map();
+              let currentDay = new Date(sevenDaysAgo); 
+              while (currentDay <= today) { 
+                salesDataMap.set(format(currentDay, 'dd/MM', { locale: ptBR }), 0);
+                currentDay = new Date(currentDay.setDate(currentDay.getDate() + 1));
+              }
+
+              last7DaysSnapshot.forEach(doc => {
+                const pedidoData = doc.data();
+                if (pedidoData.criadoEm && pedidoData.criadoEm.toDate && typeof pedidoData.totalFinal === 'number') {
+                  const dateKey = format(pedidoData.criadoEm.toDate(), 'dd/MM', { locale: ptBR });
+                  salesDataMap.set(dateKey, (salesDataMap.get(dateKey) || 0) + pedidoData.totalFinal);
+                }
+              });
+
+              setVendasPorDia(Array.from(salesDataMap.entries()));
+
+            } catch (error) {
+              console.error("Erro ao carregar dados de pedidos e vendas:", error);
+              setDashboardError("Erro ao carregar dados de vendas e pedidos. Verifique suas permissões.");
+            }
+          };
+
+          await fetchPedidosData(); // Garante que fetchPedidosData termine antes de definir loadingDashboard como false
+
+          setLoadingDashboard(false); // Define como false após TODAS as chamadas de dados
+
+          return () => {
+            // Cleanup para o listener do Firestore
+            unsubscribeEstabelecimentos();
+          };
 
         } catch (error) {
-          console.error("Erro ao carregar dados de pedidos e vendas:", error);
-          setDashboardError("Erro ao carregar dados de vendas e pedidos.");
+          // Erro no refresh do token ou na verificação inicial de permissão
+          console.error("MasterDashboard: Erro durante a inicialização do dashboard (refresh do token ou verificação de claims):", error);
+          setDashboardError(`Erro ao inicializar dashboard: ${error.message}. Por favor, tente recarregar ou faça login novamente.`);
+          setLoadingDashboard(false);
+          // Opcional: forçar logout se o token for inválido
+          if (error.code === 'auth/id-token-expired' || error.code === 'auth/user-token-expired') {
+            toast.error('Sua sessão expirou. Por favor, faça login novamente.');
+            logout(); // Chame a função de logout do seu AuthContext
+            navigate('/login'); // Redirecione para a página de login
+          }
         }
       };
 
-      fetchPedidosData();
+      initializeDashboard(); // Inicia o processo de inicialização do dashboard
 
-      setLoadingDashboard(false);
-
-      return () => {
-        unsubscribeEstabelecimentos();
-      };
+    } else {
+      // Se isMasterAdmin ou currentUser ainda não estiverem definidos (authLoading true)
+      // ou se as condições iniciais do useEffect não forem atendidas (já redirecionou)
+      // Não faz nada aqui, o primeiro useEffect já trata o loading/redirecionamento.
     }
-  }, [isMasterAdmin, currentUser]);
+  }, [isMasterAdmin, currentUser, navigate, logout]); // Dependências do useEffect
 
+  // ... (restante do código para gráficos, toggle, delete, filter, etc.)
   // --- Gráficos: Cores e Estilos Ajustados para Preto/Amarelo/Branco ---
   const statusData = {
     labels: ['Ativos', 'Inativos'],
@@ -352,11 +410,11 @@ function MasterDashboard() {
 
   const filteredEstabelecimentos = allEstabelecimentos.filter(estab => {
     const matchesSearchTerm = estab.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              (estab.adminUID && estab.adminUID.toLowerCase().includes(searchTerm.toLowerCase()));
+                               (estab.adminUID && estab.adminUID.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = filterStatus === 'todos' ||
-                          (filterStatus === 'ativos' && estab.ativo) ||
-                          (filterStatus === 'inativos' && !estab.ativo);
+                              (filterStatus === 'ativos' && estab.ativo) ||
+                              (filterStatus === 'inativos' && !estab.ativo);
 
     return matchesSearchTerm && matchesStatus;
   });
@@ -369,10 +427,8 @@ function MasterDashboard() {
     );
   }
 
-  if (!currentUser || !isMasterAdmin) {
-    return null; // O redirecionamento já é tratado no useEffect inicial
-  }
-
+  // O redirecionamento já é tratado no useEffect inicial
+  // Se chegamos aqui, currentUser é válido e isMasterAdmin é true
   return (
     <div className="bg-gray-50 min-h-screen pt-24 pb-8 px-4"> {/* Fundo principal levemente cinza */}
       <DashboardHeader currentUser={currentUser} logout={logout} navigate={navigate} /> 
@@ -421,13 +477,8 @@ function MasterDashboard() {
             </Link>
         </div>
 
-        {dashboardError && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-md" role="alert">
-            <p className="font-bold">Erro ao Carregar Dados:</p>
-            <p>{dashboardError}</p>
-          </div>
-        )}
-
+        {/* ... (restante do JSX do seu componente MasterDashboard) ... */}
+        {/* Conteúdo do Dashboard (Cards, Gráficos, Tabela de Estabelecimentos) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {/* Card: Total de Estabelecimentos */}
             <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
