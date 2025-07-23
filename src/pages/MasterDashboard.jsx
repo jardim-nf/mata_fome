@@ -36,12 +36,47 @@ ChartJS.register(
   LineElement
 );
 
-// Se você tiver um componente Layout, descomente a linha abaixo e as tags <Layout>
-// import Layout from './components/Layout'; // Se Layout está em src/components/Layout.jsx
+// --- Componente de Header Master Dashboard ---
+function DashboardHeader({ currentUser, logout, navigate }) {
+  const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Você foi desconectado com sucesso!');
+      navigate('/');
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      toast.error('Ocorreu um erro ao tentar desconectar.');
+    }
+  };
+
+  return (
+    <header className="fixed top-0 left-0 right-0 z-20 p-6 flex justify-between items-center bg-white shadow-sm border-b border-gray-100">
+      <div className="font-extrabold text-2xl text-black cursor-pointer hover:text-gray-800 transition-colors duration-300" onClick={() => navigate('/')}>
+        DEU FOME <span className="text-yellow-500">.</span>
+      </div>
+      <div className="flex items-center space-x-4">
+        <span className="text-black text-md font-medium">Olá, {userEmailPrefix}!</span>
+        <Link to="/master-dashboard" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
+            Dashboard
+        </Link>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-full text-black border border-gray-300 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-100 hover:border-gray-400"
+        >
+          Sair
+        </button>
+      </div>
+    </header>
+  );
+}
+// --- Fim DashboardHeader ---
+
 
 function MasterDashboard() {
   const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
+  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth(); 
 
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [dashboardError, setDashboardError] = useState('');
@@ -119,8 +154,8 @@ function MasterDashboard() {
           const last7DaysSnapshot = await getDocs(qLast7Days);
 
           const salesDataMap = new Map();
-          let currentDay = new Date(sevenDaysAgo); // Começa do dia mais antigo
-          while (currentDay <= today) { // Vai até hoje
+          let currentDay = new Date(sevenDaysAgo); 
+          while (currentDay <= today) { 
             salesDataMap.set(format(currentDay, 'dd/MM', { locale: ptBR }), 0);
             currentDay = new Date(currentDay.setDate(currentDay.getDate() + 1));
           }
@@ -151,14 +186,15 @@ function MasterDashboard() {
     }
   }, [isMasterAdmin, currentUser]);
 
+  // --- Gráficos: Cores e Estilos Ajustados para Preto/Amarelo/Branco ---
   const statusData = {
     labels: ['Ativos', 'Inativos'],
     datasets: [
       {
         data: [estabelecimentosAtivos, estabelecimentosInativos],
-        backgroundColor: ['#4CAF50', '#F44336'],
-        borderColor: ['#ffffff', '#ffffff'],
-        borderWidth: 1,
+        backgroundColor: ['#FFC107', '#212529'], // Amarelo vibrante para ativos, preto para inativos
+        borderColor: ['#ffffff', '#ffffff'], 
+        borderWidth: 2, // Borda um pouco mais grossa para separar
       },
     ],
   };
@@ -168,13 +204,27 @@ function MasterDashboard() {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'top',
+        position: 'right', 
+        labels: {
+            color: '#212529', // Preto
+            font: {
+                size: 14,
+                weight: 'bold'
+            }
+        }
       },
       title: {
-        display: true,
-        text: 'Status dos Estabelecimentos',
+        display: false, 
       },
     },
+    layout: {
+        padding: { // Aumentar um pouco o padding interno
+            left: 10,
+            right: 10,
+            top: 20,
+            bottom: 10
+        }
+    }
   };
 
   const salesLabels = vendasPorDia.map(data => data[0]);
@@ -186,10 +236,16 @@ function MasterDashboard() {
       {
         label: 'Vendas Diárias (R$)',
         data: salesValues,
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-        tension: 0.1,
-        fill: false,
+        borderColor: '#FFC107', // Amarelo vibrante
+        backgroundColor: 'rgba(255, 193, 7, 0.1)', // Amarelo com transparência para o preenchimento
+        tension: 0.4, // Curva mais suave
+        fill: true, // Preenche a área abaixo da linha
+        pointBackgroundColor: '#FFC107',
+        pointBorderColor: '#fff',
+        pointRadius: 5, // Aumenta o tamanho dos pontos
+        pointHoverRadius: 7, // Aumenta o tamanho dos pontos no hover
+        pointHoverBackgroundColor: '#212529', // Ponto preto no hover
+        pointHoverBorderColor: '#FFC107', // Borda amarela no hover
       },
     ],
   };
@@ -200,10 +256,16 @@ function MasterDashboard() {
     plugins: {
       legend: {
         position: 'top',
+        labels: {
+            color: '#212529', // Preto
+            font: {
+                size: 14,
+                weight: 'bold'
+            }
+        }
       },
       title: {
-        display: true,
-        text: 'Vendas Consolidadas (Últimos 7 Dias)',
+        display: false,
       },
       tooltip: {
         callbacks: {
@@ -217,16 +279,35 @@ function MasterDashboard() {
             }
             return label;
           }
-        }
+        },
+        backgroundColor: '#212529', // Fundo preto para tooltip
+        titleColor: '#FFC107', // Amarelo para título do tooltip
+        bodyColor: '#FFFFFF', // Branco para corpo do tooltip
+        borderColor: '#FFC107', // Borda amarela
+        borderWidth: 1,
+        cornerRadius: 4,
+        displayColors: false, 
       }
     },
     scales: {
+      x: {
+        ticks: {
+          color: '#212529' // Preto
+        },
+        grid: {
+          color: 'rgba(0,0,0,0.05)' // Linhas de grade mais suaves
+        }
+      },
       y: {
         beginAtZero: true,
         ticks: {
           callback: function(value) {
             return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-          }
+          },
+          color: '#212529' // Preto
+        },
+        grid: {
+          color: 'rgba(0,0,0,0.05)' // Linhas de grade mais suaves
         }
       }
     }
@@ -237,7 +318,7 @@ function MasterDashboard() {
       const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
       await updateDoc(estabRef, {
         ativo: !currentStatus,
-        desativadoEm: !currentStatus ? new Date() : null // Registra a data de desativação se for desativado
+        desativadoEm: !currentStatus ? new Date() : null 
       });
       auditLogger(
           currentStatus ? 'ESTABELECIMENTO_DESATIVADO' : 'ESTABELECIMENTO_ATIVADO',
@@ -282,193 +363,211 @@ function MasterDashboard() {
 
   if (authLoading || loadingDashboard) {
     return (
-      // <Layout>
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-          <p className="text-xl text-gray-700">Carregando Master Dashboard...</p>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+          <p className="text-xl text-black">Carregando Master Dashboard...</p>
         </div>
-      // </Layout>
     );
   }
 
   if (!currentUser || !isMasterAdmin) {
-    return null;
+    return null; // O redirecionamento já é tratado no useEffect inicial
   }
 
   return (
-    // <Layout>
-      <div className="p-4 bg-gray-100 min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto">
-          {/* Cabeçalho do Dashboard com Título e Botões de Navegação Rápida */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 text-center sm:text-left">
-              🚀 Master Dashboard
-            </h1>
-            <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
-              <Link to="/admin/cadastrar-estabelecimento" className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                Novo Estabelecimento
-              </Link>
-              <Link to="/master/usuarios" className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.435-.14-.852-.413-1.2C6.287 16.48 5.768 16 5 16s-1.287.48-1.587.8c-.273.348-.413.765-.413 1.2v2h3.5"></path></svg>
-                Gerenciar Usuários
-              </Link>
-              <Link to="/master/pedidos" className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                Ver Todos os Pedidos
-              </Link>
-              <Link to="/master/estabelecimentos" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
-                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                 Listar Estabelecimentos
-              </Link>
-              <Link to="/master/importar-cardapio" className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Importar Cardápio
-              </Link>
-              <Link to="/master/plans" className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.28-.172.505-.388.675-.626z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                Gerenciar Planos
-              </Link>
-              <Link to="/admin/audit-logs" className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg shadow-md flex items-center gap-1">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2z"></path></svg>
-                Logs de Auditoria
-              </Link>
-            </div>
+    <div className="bg-gray-50 min-h-screen pt-24 pb-8 px-4"> {/* Fundo principal levemente cinza */}
+      <DashboardHeader currentUser={currentUser} logout={logout} navigate={navigate} /> 
+      <div className="max-w-7xl mx-auto">
+        {dashboardError && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-md" role="alert">
+            <p className="font-bold">Erro ao Carregar Dados:</p>
+            <p>{dashboardError}</p>
           </div>
+        )}
 
-          {dashboardError && (
-            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-md" role="alert">
-              <p className="font-bold">Erro ao Carregar Dados:</p>
-              <p>{dashboardError}</p>
-            </div>
-          )}
+        <h1 className="text-3xl font-extrabold text-black mb-8 text-center md:text-left">
+          🚀 Master Dashboard
+          <div className="w-24 h-1 bg-yellow-500 mx-auto md:mx-0 mt-2 rounded-full"></div>
+        </h1>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
-              <div className="text-blue-600 mb-2">
-                <svg className="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m7 0V5a2 2 0 012-2h2a2 2 0 012 2v6m-6 0h-2"></path></svg>
-              </div>
-              <h2 className="text-lg font-semibold text-gray-700">Total de Estabelecimentos</h2>
-              <p className="text-4xl font-bold text-blue-800">{totalEstabelecimentos}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
-              <div className="text-green-600 mb-2">
-                <svg className="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              </div>
-              <h2 className="text-lg font-semibold text-gray-700">Estabelecimentos Ativos</h2>
-              <p className="text-4xl font-bold text-green-800">{estabelecimentosAtivos}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
-              <div className="text-red-600 mb-2">
-                <svg className="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              </div>
-              <h2 className="text-lg font-semibold text-gray-700">Estabelecimentos Inativos</h2>
-              <p className="text-4xl font-bold text-red-800">{estabelecimentosInativos}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
-              <div className="text-orange-600 mb-2">
-                <svg className="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c1.657 0 3 .895 3 2s-1.343 2-3 2m0 0V5m0 0c1.115 1.488 2 2.798 2 4c0 1.202-.885 2.512-2 4m0-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              </div>
-              <h2 className="text-lg font-semibold text-gray-700">Vendas Hoje</h2>
-              <p className="text-4xl font-bold text-orange-800">R$ {totalVendasHoje.toFixed(2).replace('.', ',')}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow-md p-6 h-96 flex flex-col">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">Vendas Consolidadas (Últimos 7 Dias)</h2>
-              <div className="flex-grow">
-                <Line data={salesData} options={salesOptions} />
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6 h-96 flex flex-col">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">Status dos Estabelecimentos</h2>
-              <div className="flex-grow flex items-center justify-center">
-                <Pie data={statusData} options={statusOptions} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Filtrar Estabelecimentos</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">Buscar por Nome/Admin UID:</label>
-                <input
-                  type="text"
-                  id="search"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
-                  placeholder="Pesquisar estabelecimentos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Status:</label>
-                <select
-                  id="statusFilter"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                  <option value="todos">Todos</option>
-                  <option value="ativos">Ativos</option>
-                  <option value="inativos">Inativos</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEstabelecimentos.length === 0 ? (
-              <p className="text-gray-500 text-center py-8 col-span-full">Nenhum estabelecimento encontrado com os critérios de busca/filtro.</p>
-            ) : (
-              filteredEstabelecimentos.map(estab => (
-                <div key={estab.id} className="bg-white rounded-lg shadow-md p-6 flex flex-col justify-between hover:shadow-lg transition-shadow duration-300">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-800 mb-2 flex items-center justify-between">
-                      {estab.nome}
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        estab.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {estab.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </h2>
-                    <p className="text-sm text-gray-600 mb-1">
-                      <span className="font-medium">Slug:</span> {estab.slug}
-                    </p>
-                    <p className="text-sm text-gray-600 mb-4">
-                      <span className="font-medium">Admin UID:</span> {estab.adminUID ? estab.adminUID.substring(0, 10) + '...' : 'N/A'}
-                    </p>
-                  </div>
-                  <div className="flex justify-end space-x-2 mt-4">
-                    <Link
-                      to={`/master/estabelecimentos/${estab.id}/editar`}
-                      className="px-3 py-1 rounded-md bg-blue-500 hover:bg-blue-600 text-white"
-                    >
-                      Editar
-                    </Link>
-                    <button
-                      onClick={() => toggleEstabelecimentoAtivo(estab.id, estab.ativo, estab.nome)}
-                      className={`px-3 py-1 rounded-md text-white ${
-                        estab.ativo ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-                      }`}
-                    >
-                      {estab.ativo ? 'Desativar' : 'Ativar'}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteEstabelecimento(estab.id, estab.nome)}
-                      className="px-3 py-1 rounded-md bg-gray-500 hover:bg-gray-600 text-white"
-                    >
-                      Deletar
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+        {/* Botões de Navegação Rápida */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-10">
+            <Link to="/admin/cadastrar-estabelecimento" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd"></path></svg>
+                <span>Novo Estab.</span>
+            </Link>
+            <Link to="/master/usuarios" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12 10a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a4 4 0 014-4h4a4 4 0 014 4v2z" /></svg>
+                <span>Gerenciar Usuários</span>
+            </Link>
+            <Link to="/master/pedidos" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2V1a1 1 0 010 2h2V1a1 1 0 011-1h2a1 1 0 011 1v2h2a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 0h6v3H7V5zm6 4H7v7h6V9z" clipRule="evenodd"></path></svg>
+                <span>Ver Pedidos</span>
+            </Link>
+            <Link to="/master/estabelecimentos" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"></path></svg>
+                <span>Listar Estab.</span>
+            </Link>
+            <Link to="/master/importar-cardapio" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-3.232l-1.664-1.664A1.998 1.998 0 0010 2H7a2 2 0 00-2 2v1z" /></svg>
+                <span>Importar Cardápio</span>
+            </Link>
+            <Link to="/master/plans" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /></svg>
+                <span>Gerenciar Planos</span>
+            </Link>
+            <Link to="/admin/audit-logs" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2z" /></svg>
+                <span>Logs Auditoria</span>
+            </Link>
         </div>
+
+        {dashboardError && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-md" role="alert">
+            <p className="font-bold">Erro ao Carregar Dados:</p>
+            <p>{dashboardError}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Card: Total de Estabelecimentos */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2"> {/* Ícone em preto */}
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a6 6 0 00-6 6v3.586l1.707 1.707A1 1 0 006.707 14H13.293a1 1 0 00.707-.293l1.707-1.707V8a6 6 0 00-6-6zM14 17a1 1 0 100-2H6a1 1 0 100 2h8z" /></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Total de Estabelecimentos</h2>
+                <p className="text-4xl font-extrabold text-yellow-500 mt-2">{totalEstabelecimentos}</p> {/* Número em amarelo */}
+            </div>
+            {/* Card: Estabelecimentos Ativos */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2"> {/* Ícone em preto */}
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Estabelecimentos Ativos</h2>
+                <p className="text-4xl font-extrabold text-black mt-2">{estabelecimentosAtivos}</p> {/* Número em preto */}
+            </div>
+            {/* Card: Estabelecimentos Inativos */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2"> {/* Ícone em preto */}
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Estabelecimentos Inativos</h2>
+                <p className="text-4xl font-extrabold text-black mt-2">{estabelecimentosInativos}</p> {/* Número em preto */}
+            </div>
+            {/* Card: Vendas Hoje */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2"> {/* Ícone em preto */}
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l3 3a1 1 0 001.414-1.414L11 9.586V6z" clipRule="evenodd"></path></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Vendas Hoje</h2>
+                <p className="text-4xl font-extrabold text-yellow-500 mt-2">R$ {totalVendasHoje.toFixed(2).replace('.', ',')}</p> {/* Número em amarelo */}
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Gráfico de Vendas Consolidadas */}
+            <div className="bg-white rounded-lg shadow-md p-6 h-96 flex flex-col">
+                <h2 className="text-xl font-semibold mb-4 text-black">Vendas Consolidadas (Últimos 7 Dias)</h2>
+                <div className="flex-grow">
+                    <Line data={salesData} options={salesOptions} />
+                </div>
+            </div>
+            {/* Gráfico de Status dos Estabelecimentos */}
+            <div className="bg-white rounded-lg shadow-md p-6 h-96 flex flex-col">
+                <h2 className="text-xl font-semibold mb-4 text-black">Status dos Estabelecimentos</h2>
+                <div className="flex-grow flex items-center justify-center">
+                    <Pie data={statusData} options={statusOptions} />
+                </div>
+            </div>
+        </div>
+
+        {/* Seção de Gerenciamento de Estabelecimentos */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-6 text-black">Gerenciar Estabelecimentos</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">Buscar por Nome/Admin UID:</label>
+                    <input
+                        type="text"
+                        id="search"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-2"
+                        placeholder="Pesquisar estabelecimentos..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div>
+                    <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Status:</label>
+                    <select
+                        id="statusFilter"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-2 bg-white"
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                    >
+                        <option value="todos">Todos</option>
+                        <option value="ativos">Ativos</option>
+                        <option value="inativos">Inativos</option>
+                    </select>
+                </div>
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Nome</th> {/* Texto em preto */}
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Slug</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Admin UID</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Status</th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-black uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredEstabelecimentos.length === 0 ? (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Nenhum estabelecimento encontrado com os critérios de busca/filtro.</td>
+                            </tr>
+                        ) : (
+                            filteredEstabelecimentos.map(estab => (
+                                <tr key={estab.id}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{estab.nome}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{estab.slug}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{estab.adminUID ? estab.adminUID.substring(0, 10) + '...' : 'N/A'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            estab.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        }`}>
+                                            {estab.ativo ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <Link to={`/master/estabelecimentos/${estab.id}/editar`} className="text-blue-600 hover:text-blue-900 mr-4">
+                                            Editar
+                                        </Link>
+                                        <button
+                                            onClick={() => toggleEstabelecimentoAtivo(estab.id, estab.ativo, estab.nome)}
+                                            className={`font-medium ${estab.ativo ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'} mr-4`}
+                                        >
+                                            {estab.ativo ? 'Desativar' : 'Ativar'}
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteEstabelecimento(estab.id, estab.nome)}
+                                            className="text-gray-600 hover:text-gray-900"
+                                        >
+                                            Deletar
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {/* Componente de Notificações Master (se estiver usando) */}
+        {/* <MasterNotifications /> */} 
       </div>
-    // </Layout>
+    </div>
   );
 }
 

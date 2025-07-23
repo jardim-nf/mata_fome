@@ -1,19 +1,57 @@
 // src/pages/admin/CriarUsuarioMaster.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore'; // Removido 'auth' e 'setDoc'
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { auditLogger } from '../../utils/auditLogger';
-// NOVO: Importar para chamar Cloud Functions
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-// Componente para Inputs (mantido o mesmo)
+// --- Componente de Header Master Dashboard (reutilizado) ---
+// Normalmente, isso estaria em um Layout.jsx ou componente separado.
+function DashboardHeader({ currentUser, logout, navigate }) {
+  const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Você foi desconectado com sucesso!');
+      navigate('/');
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      toast.error('Ocorreu um erro ao tentar desconectar.');
+    }
+  };
+
+  return (
+    <header className="fixed top-0 left-0 right-0 z-20 p-6 flex justify-between items-center bg-black shadow-md border-b border-gray-800">
+      <div className="font-extrabold text-2xl text-white cursor-pointer hover:text-gray-200 transition-colors duration-300" onClick={() => navigate('/')}>
+        DEU FOME <span className="text-yellow-500">.</span>
+      </div>
+      <div className="flex items-center space-x-4">
+        <span className="text-white text-md font-medium">Olá, {userEmailPrefix}!</span>
+        <Link to="/master-dashboard" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
+            Dashboard
+        </Link>
+
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-full text-white border border-gray-600 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-800 hover:border-gray-500"
+        >
+          Sair
+        </button>
+      </div>
+    </header>
+  );
+}
+// --- Fim DashboardHeader ---
+
+// Componente para Inputs (melhorado com sua paleta)
 function FormInput({ label, name, value, onChange, type = 'text', helpText = '', ...props }) {
     return (
         <div>
-            <label htmlFor={name} className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
+            <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
             <input
                 id={name}
                 name={name}
@@ -21,16 +59,16 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
                 onChange={onChange}
                 type={type}
                 {...props}
-                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 transition-colors duration-300"
             />
-            {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
+            {helpText && <p className="mt-1 text-xs text-gray-500">{helpText}</p>}
         </div>
     );
 }
 
 function CriarUsuarioMaster() {
     const navigate = useNavigate();
-    const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
+    const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth(); // Importa logout para o header
 
     const [formData, setFormData] = useState({
         nome: '',
@@ -38,7 +76,7 @@ function CriarUsuarioMaster() {
         senha: '',
         isAdmin: false,
         isMasterAdmin: false,
-        ativo: true,
+        ativo: true, // Default para ativo
         estabelecimentosGerenciados: [],
     });
     const [loadingForm, setLoadingForm] = useState(false);
@@ -46,10 +84,9 @@ function CriarUsuarioMaster() {
     const [estabelecimentosList, setEstabelecimentosList] = useState([]);
     const [loadingEstabelecimentos, setLoadingEstabelecimentos] = useState(true);
 
-    // Inicializa Cloud Functions
     const functions = getFunctions();
 
-    // Controle de acesso (mantido o mesmo)
+    // Controle de acesso
     useEffect(() => {
         if (!authLoading) {
             if (!currentUser || !isMasterAdmin) {
@@ -60,7 +97,7 @@ function CriarUsuarioMaster() {
         }
     }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
-    // Carregar lista de estabelecimentos (mantido o mesmo)
+    // Carregar lista de estabelecimentos
     useEffect(() => {
         if (!isMasterAdmin || !currentUser) return;
 
@@ -80,7 +117,7 @@ function CriarUsuarioMaster() {
         fetchEstabelecimentos();
     }, [isMasterAdmin, currentUser]);
 
-    // Handlers (mantidos os mesmos, exceto handleSubmit)
+    // Handlers
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({
@@ -110,31 +147,25 @@ function CriarUsuarioMaster() {
         setFormError('');
 
         try {
-            // Prepara os dados para enviar para a Cloud Function
             const userDataForCF = {
                 email: formData.email,
                 password: formData.senha,
                 name: formData.nome,
                 isAdmin: formData.isAdmin,
                 isMasterAdmin: formData.isMasterAdmin,
+                ativo: formData.ativo, // Passando o status ativo
                 estabelecimentosGerenciados: formData.estabelecimentosGerenciados,
-                // Adicione outros campos de endereço/telefone se o createUserByMasterAdmin da CF precisar
-                // phoneNumber, addressStreet, etc.
             };
 
-            // Obtenha a função HTTP Callable
             const createUserCallable = httpsCallable(functions, 'createUserByMasterAdmin');
-            
-            // Chame a Cloud Function
             const result = await createUserCallable(userDataForCF);
             
-            console.log('Resultado da Cloud Function:', result.data); // result.data contém o que a CF retorna
+            console.log('Resultado da Cloud Function:', result.data); 
             
-            // Log de auditoria para a ação de criação via CF
             auditLogger(
                 'USUARIO_CRIADO_VIA_CF',
                 { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
-                { type: 'usuario', id: result.data.uid, name: formData.nome }, // Usa o UID retornado pela CF
+                { type: 'usuario', id: result.data.uid, name: formData.nome }, 
                 { ...userDataForCF, success: result.data.success }
             );
 
@@ -143,10 +174,10 @@ function CriarUsuarioMaster() {
         } catch (error) {
             console.error("Erro ao criar usuário via Cloud Function:", error);
             let errorMessage = 'Erro ao criar usuário.';
-            if (error.code === 'already-exists' || error.code === 'email-already-in-use') { // Códigos de erro da CF
+            if (error.code === 'already-exists' || error.code === 'email-already-in-use') {
                 errorMessage = 'Este e-mail já está em uso.';
             } else if (error.code === 'invalid-argument') {
-                errorMessage = 'Dados inválidos: ' + error.message;
+                errorMessage = 'Dados inválidos: ' + (error.details?.message || error.message); // Acessa details.message se disponível
             } else if (error.code === 'permission-denied') {
                 errorMessage = 'Permissão negada: Você não é um Master Admin válido.';
             } else if (error.message) {
@@ -159,34 +190,45 @@ function CriarUsuarioMaster() {
         }
     };
 
-    // ... (restante do componente permanece o mesmo) ...
     if (authLoading || loadingForm || loadingEstabelecimentos) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-                <p className="text-xl text-gray-700">Carregando...</p>
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+                <p className="text-xl text-black">Carregando...</p>
             </div>
         );
     }
 
-    if (!isMasterAdmin) return null;
+    if (!isMasterAdmin) return null; // O redirecionamento já é tratado no useEffect
 
     return (
-        <div className="bg-slate-50 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
-            <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg p-6">
-                <Link to="/master/usuarios" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 flex items-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                    Voltar para Gerenciar Usuários
-                </Link>
-                <h1 className="text-2xl font-bold text-slate-800 mb-6">Criar Novo Usuário</h1>
+        <div className="bg-gray-50 min-h-screen pt-24 pb-8 px-4 font-sans"> {/* Adiciona pt-24 para compensar o header fixo */}
+            {/* Header (reutilizado do MasterDashboard) */}
+            <DashboardHeader currentUser={currentUser} logout={logout} navigate={navigate} />
+
+            <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8 border border-gray-100">
+                {/* Título da Página e Botão Voltar */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                    <h1 className="text-3xl font-extrabold text-black text-center sm:text-left">
+                        Criar Novo Usuário
+                        <div className="w-24 h-1 bg-yellow-500 mx-auto sm:mx-0 mt-2 rounded-full"></div>
+                    </h1>
+                    <Link
+                        to="/master/usuarios"
+                        className="bg-gray-200 text-gray-700 font-semibold px-5 py-2 rounded-lg hover:bg-gray-300 transition-colors duration-300 flex items-center gap-2 shadow-md"
+                    >
+                        <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"></path></svg>
+                        Voltar para Gerenciar Usuários
+                    </Link>
+                </div>
 
                 {formError && (
-                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-md" role="alert">
+                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md" role="alert">
                         <p className="font-bold">Erro ao Criar Usuário:</p>
                         <p>{formError}</p>
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form onSubmit={handleSubmit} className="space-y-6"> {/* Aumentei o espaçamento */}
                     <FormInput
                         label="Nome Completo"
                         name="nome"
@@ -212,32 +254,34 @@ function CriarUsuarioMaster() {
                         helpText="Mínimo de 6 caracteres. O usuário deve alterá-la após o primeiro login."
                     />
 
-                    <div className="flex items-center space-x-4">
-                        <label className="flex items-center cursor-pointer">
+                    {/* Checkboxes para Papéis */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-8 mt-5">
+                        <label className="flex items-center cursor-pointer group">
                             <input
                                 type="checkbox"
                                 name="isAdmin"
                                 checked={formData.isAdmin}
                                 onChange={handleInputChange}
-                                className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-5 w-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500 transition-colors duration-200" // Cor amarela
                             />
-                            <span className="ml-2 text-sm font-medium text-gray-700">Administrador de Estabelecimento</span>
+                            <span className="ml-2 text-sm font-medium text-gray-700 group-hover:text-black transition-colors duration-200">Administrador de Estabelecimento</span>
                         </label>
-                        <label className="flex items-center cursor-pointer">
+                        <label className="flex items-center cursor-pointer group">
                             <input
                                 type="checkbox"
                                 name="isMasterAdmin"
                                 checked={formData.isMasterAdmin}
                                 onChange={handleInputChange}
-                                className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-5 w-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500 transition-colors duration-200" // Cor amarela
                             />
-                            <span className="ml-2 text-sm font-medium text-gray-700">Master Administrador</span>
+                            <span className="ml-2 text-sm font-medium text-gray-700 group-hover:text-black transition-colors duration-200">Master Administrador</span>
                         </label>
                     </div>
 
+                    {/* Seleção de Estabelecimentos Gerenciados */}
                     {formData.isAdmin && (
                         <div>
-                            <label htmlFor="estabelecimentos" className="block text-sm font-medium text-slate-600">
+                            <label htmlFor="estabelecimentos" className="block text-sm font-medium text-gray-700 mb-2">
                                 Estabelecimentos Gerenciados:
                             </label>
                             <select
@@ -246,39 +290,51 @@ function CriarUsuarioMaster() {
                                 multiple
                                 value={formData.estabelecimentosGerenciados}
                                 onChange={handleEstabelecimentoChange}
-                                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500 h-48"
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 h-48 transition-colors duration-300"
                             >
-                                {estabelecimentosList.map(estab => (
-                                    <option key={estab.id} value={estab.id}>
-                                        {estab.nome}
-                                    </option>
-                                ))}
+                                {loadingEstabelecimentos ? (
+                                    <option disabled>Carregando estabelecimentos...</option>
+                                ) : estabelecimentosList.length === 0 ? (
+                                    <option disabled>Nenhum estabelecimento disponível</option>
+                                ) : (
+                                    estabelecimentosList.map(estab => (
+                                        <option key={estab.id} value={estab.id}>
+                                            {estab.nome}
+                                        </option>
+                                    ))
+                                )}
                             </select>
-                            <p className="mt-1 text-xs text-slate-500">Mantenha 'Ctrl' (Windows) ou 'Cmd' (Mac) para selecionar múltiplos.</p>
+                            <p className="mt-1 text-xs text-gray-500">Mantenha 'Ctrl' (Windows) ou 'Cmd' (Mac) para selecionar múltiplos.</p>
                         </div>
                     )}
 
-                    <div className="flex items-center">
-                        <label className="flex items-center cursor-pointer">
+                    {/* Toggle de Usuário Ativo */}
+                    <div className="flex items-center mt-5">
+                        <label htmlFor="user-active-toggle" className="flex items-center cursor-pointer">
                             <div className="relative">
                                 <input
                                     type="checkbox"
+                                    id="user-active-toggle"
                                     name="ativo"
                                     className="sr-only"
                                     checked={formData.ativo}
                                     onChange={handleInputChange}
                                 />
-                                <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-green-600' : 'bg-gray-300'}`}></div>
-                                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${formData.ativo ? 'transform translate-x-full' : ''}`}></div>
+                                {/* Pista do toggle: bg-yellow-500 para ativo, bg-gray-300 para inativo */}
+                                <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-yellow-500' : 'bg-gray-300'} transition-colors duration-300`}></div>
+                                {/* Ponto do toggle: bg-black para ativo, bg-white para inativo */}
+                                <div className={`dot absolute left-1 top-1 w-6 h-6 rounded-full transition-transform duration-300 ${formData.ativo ? 'transform translate-x-full bg-black' : 'bg-white'}`}></div>
                             </div>
-                            <span className="ml-3 text-base font-semibold text-gray-700">{formData.ativo ? 'Usuário Ativo' : 'Usuário Inativo'}</span>
+                            <span className="ml-3 text-base font-semibold text-gray-800">
+                                {formData.ativo ? 'Usuário Ativo' : 'Usuário Inativo'}
+                            </span>
                         </label>
                     </div>
 
                     <button
                         type="submit"
                         disabled={loadingForm}
-                        className="w-full px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors duration-300"
+                        className="w-full px-6 py-3 bg-black text-white text-lg font-bold rounded-lg shadow-md hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-300 mt-8"
                     >
                         {loadingForm ? 'Criando Usuário...' : 'Criar Usuário'}
                     </button>

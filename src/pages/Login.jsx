@@ -1,11 +1,11 @@
 // src/pages/Login.jsx
-import React, { useState, useEffect } from 'react'; // Adicionado useEffect
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import { useAuth } from '../context/AuthContext'; // NOVO: Importe useAuth
+import { useAuth } from '../context/AuthContext';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -13,28 +13,27 @@ function Login() {
   const [nome, setNome] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
+  const [isAuthProcessing, setIsAuthProcessing] = useState(false); // Novo estado para controlar o processamento do login/cadastro
+
   const navigate = useNavigate();
   const auth = getAuth();
 
-  // NOVO: Acessar os estados de autenticação do contexto
+  const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
 
-  const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth(); // Pega isMasterAdmin
-  // NOVO: Efeito para lidar com o redirecionamento após o login
+  // Efeito para lidar com o redirecionamento após o login/autenticação
   useEffect(() => {
-    if (!authLoading) { // Espera o AuthContext carregar
-      if (currentUser) { // Se já há um usuário logado
-        if (isMasterAdmin) {
-          toast.success('Login Master Admin realizado com sucesso! Bem-vindo ao seu painel global. 🚀');
-          navigate('/master-dashboard'); // Redireciona para o Dashboard Master (PRIORIDADE)
-        } else if (isAdmin) {
-          // Se não é Master Admin, mas é Admin de Estabelecimento
-          toast.success('Login Administrador de Estabelecimento realizado com sucesso! Redirecionando para o painel de pedidos.');
-          navigate('/painel-inicial'); // Redireciona para o Painel de Pedidos do estabelecimento
-        } else {
-          // Se não é nenhum tipo de administrador (usuário comum)
-          toast.info('Login realizado com sucesso! Você foi redirecionado para a página inicial.');
-          navigate('/'); // Ou para uma página de perfil de cliente
-        }
+    // Só age se o AuthContext terminou de carregar (não está mais "loading")
+    // e se o currentUser já foi definido pelo AuthContext (ou seja, logou ou já estava logado)
+    if (!authLoading && currentUser) {
+      if (isMasterAdmin) {
+        toast.success('Login Master Admin realizado com sucesso! Bem-vindo ao seu painel global. 🚀');
+        navigate('/master-dashboard');
+      } else if (isAdmin) {
+        toast.success('Login Administrador de Estabelecimento realizado com sucesso! Redirecionando para o painel de pedidos.');
+        navigate('/painel-inicial');
+      } else {
+        toast.info('Login realizado com sucesso! Você foi redirecionado para a página inicial.');
+        navigate('/');
       }
     }
   }, [currentUser, isAdmin, isMasterAdmin, authLoading, navigate]); // Dependências
@@ -42,38 +41,35 @@ function Login() {
   const handleAuthAction = async (e) => {
     e.preventDefault();
     setError('');
+    setIsAuthProcessing(true); // Inicia o estado de processamento
 
     try {
-      let userCredential;
       if (isRegistering) {
         // Lógica de Cadastro
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Ao cadastrar, o usuário é sempre comum por padrão. Permissões de admin são dadas manualmente.
         await setDoc(doc(db, 'usuarios', user.uid), {
           email: user.email,
           nome: nome,
-          isAdmin: false,       // Novo usuário é sempre COMUM por padrão
-          isMasterAdmin: false, // Novo usuário é sempre COMUM por padrão
+          isAdmin: false,
+          isMasterAdmin: false,
           criadoEm: Timestamp.now()
         });
-        
+
         toast.success('🎉 Cadastro realizado com sucesso! Por favor, faça login agora.');
-        setIsRegistering(false);
+        setIsRegistering(false); // Volta para a tela de login
         setEmail('');
         setPassword('');
         setNome('');
 
       } else {
         // Lógica de Login
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
-        // O redirecionamento será tratado pelo useEffect acima,
-        // após o AuthContext atualizar o estado de currentUser, isAdmin, isMasterAdmin.
-        toast.info('Login em andamento...'); // Feedback imediato para o usuário
+        await signInWithEmailAndPassword(auth, email, password);
+        // O redirecionamento e a toast de sucesso serão tratados pelo useEffect
+        // após o AuthContext atualizar o estado.
       }
     } catch (error) {
-      // Tratamento de Erros de Autenticação
       let errorMessage = 'Erro na operação. Verifique suas informações.';
       switch (error.code) {
         case 'auth/user-not-found':
@@ -99,20 +95,35 @@ function Login() {
       }
       setError(errorMessage);
       toast.error(errorMessage);
+    } finally {
+      setIsAuthProcessing(false); // Finaliza o estado de processamento
     }
   };
 
-  // Se o AuthContext ainda está carregando ou se o usuário já está logado
-  if (authLoading) { /* ... */ }
-  if (!currentUser || !isAdmin || isMasterAdmin) { // Também aqui para renderização inicial
-      return null; // ou um componente de acesso negado
+  // Se o AuthContext ainda está carregando o estado inicial (primeira vez que a página carrega)
+  // OU se o usuário já está logado e o useEffect já está prestes a redirecionar
+  // Não renderiza o formulário de login/cadastro, exibe uma mensagem de carregamento ou nada.
+  if (authLoading || (currentUser && !isAuthProcessing)) { // Adicionei !isAuthProcessing aqui para não esconder o form enquanto o submit ainda está rolando
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-[var(--bege-claro)]">
+            <div className="text-center text-xl text-[var(--marrom-escuro)]">
+                {authLoading ? "Verificando sessão..." : "Redirecionando..."}
+            </div>
+        </div>
+    );
   }
+
+  // Se chegou aqui, significa que:
+  // 1. authLoading é false (AuthContext já processou)
+  // 2. currentUser é null (não há ninguém logado)
+  // OU 3. currentUser é true, mas está no meio de um processo de login/cadastro (isAuthProcessing)
+  // Portanto, é o momento certo para exibir o formulário.
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--bege-claro)] p-4">
       <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
         <h2 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-6">
-          {isRegistering ? 'Cadastro de Usuário' : 'Login Admin 🔐'}
+          {isRegistering ? 'Cadastro de Usuário' : 'Acesse Sua Conta'} {/* Título mais genérico */}
         </h2>
         <form onSubmit={handleAuthAction} className="space-y-5">
           {isRegistering && (
@@ -157,8 +168,9 @@ function Login() {
           <button
             type="submit"
             className="w-full bg-[var(--vermelho-principal)] hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold text-lg transition duration-300 shadow-md"
+            disabled={isAuthProcessing} // Desabilita o botão durante o processamento
           >
-            {isRegistering ? 'Cadastrar' : 'Entrar'}
+            {isAuthProcessing ? (isRegistering ? 'Cadastrando...' : 'Entrando...') : (isRegistering ? 'Cadastrar' : 'Entrar')}
           </button>
         </form>
 

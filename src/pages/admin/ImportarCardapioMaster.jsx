@@ -7,12 +7,48 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { auditLogger } from '../../utils/auditLogger';
 
-// Se você tiver um componente Layout, descomente a linha abaixo e as tags <Layout>
-// import Layout from '../../Layout'; // Verifique o caminho exato!
+// --- Componente de Header Master Dashboard (reutilizado) ---
+// Normalmente, isso estaria em um Layout.jsx ou componente separado.
+function DashboardHeader({ currentUser, logout, navigate }) {
+  const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Você foi desconectado com sucesso!');
+      navigate('/');
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      toast.error('Ocorreu um erro ao tentar desconectar.');
+    }
+  };
+
+  return (
+    <header className="fixed top-0 left-0 right-0 z-20 p-6 flex justify-between items-center bg-black shadow-md border-b border-gray-800">
+      <div className="font-extrabold text-2xl text-white cursor-pointer hover:text-gray-200 transition-colors duration-300" onClick={() => navigate('/')}>
+        DEU FOME <span className="text-yellow-500">.</span>
+      </div>
+      <div className="flex items-center space-x-4">
+        <span className="text-white text-md font-medium">Olá, {userEmailPrefix}!</span>
+        <Link to="/master-dashboard" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
+            Dashboard
+        </Link>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-full text-white border border-gray-600 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-800 hover:border-gray-500"
+        >
+          Sair
+        </button>
+      </div>
+    </header>
+  );
+}
+// --- Fim DashboardHeader ---
+
 
 function ImportarCardapioMaster() {
   const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
+  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth(); // Importa logout para o Header
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -88,13 +124,30 @@ function ImportarCardapioMaster() {
           const batch = writeBatch(db);
           const cardapioCollectionRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, 'cardapio');
           
+          // Primeiramente, vamos DELETAR todas as categorias e itens existentes para evitar duplicidade
+          // NOTA: Isso pode ser demorado para cardápios grandes e pode atingir limites do batch.
+          // Uma abordagem mais robusta seria primeiro deletar categorias, depois itens, ou
+          // usar Cloud Functions para lidar com isso no backend.
+          const existingCategoriesSnapshot = await getDocs(cardapioCollectionRef);
+          for (const catDoc of existingCategoriesSnapshot.docs) {
+              const itemsCollectionRef = collection(catDoc.ref, 'itens');
+              const existingItemsSnapshot = await getDocs(itemsCollectionRef);
+              for (const itemDoc of existingItemsSnapshot.docs) {
+                  batch.delete(itemDoc.ref); // Deleta itens
+              }
+              batch.delete(catDoc.ref); // Deleta categoria
+          }
+
+
           dataToImport.categorias.forEach(categoria => {
-            const categoriaRef = doc(cardapioCollectionRef, categoria.id || categoria.nome.toLowerCase().replace(/\s/g, '-'));
+            const categoriaId = categoria.id || categoria.nome.toLowerCase().replace(/\s/g, '-');
+            const categoriaRef = doc(cardapioCollectionRef, categoriaId);
             batch.set(categoriaRef, { nome: categoria.nome, ordem: categoria.ordem || 0 });
 
             if (categoria.itens && Array.isArray(categoria.itens)) {
               categoria.itens.forEach(item => {
-                const itemRef = doc(categoriaRef, 'itens', item.id || item.nome.toLowerCase().replace(/\s/g, '-'));
+                const itemId = item.id || item.nome.toLowerCase().replace(/\s/g, '-');
+                const itemRef = doc(categoriaRef, 'itens', itemId);
                 batch.set(itemRef, item);
               });
             }
@@ -131,11 +184,9 @@ function ImportarCardapioMaster() {
 
   if (authLoading || loading) {
     return (
-      // <Layout>
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-          <p className="text-xl text-gray-700">Carregando...</p>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+          <p className="text-xl text-black">Carregando...</p>
         </div>
-      // </Layout>
     );
   }
 
@@ -144,94 +195,133 @@ function ImportarCardapioMaster() {
   }
 
   return (
-    // <Layout>
-      <div className="p-4 bg-gray-100 min-h-screen">
-        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
-          {/* Cabeçalho */}
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">
-              Importar Cardápio para Estabelecimento
-            </h1>
-            {/* BOTÃO "VOLTAR" PADRONIZADO AQUI */}
-            <Link 
-              to="/master-dashboard" 
-              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 flex items-center gap-1"
+    <div className="bg-gray-50 min-h-screen pt-24 pb-8 px-4"> {/* Adiciona pt-24 para compensar o header fixo */}
+      {/* Header (reutilizado do MasterDashboard) */}
+      <DashboardHeader currentUser={currentUser} logout={logout} navigate={navigate} /> 
+      
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8 border border-gray-100">
+        {/* Título da Página e Botão Voltar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+          <h1 className="text-3xl font-extrabold text-black text-center sm:text-left">
+            Importar Cardápio
+            <div className="w-24 h-1 bg-yellow-500 mx-auto sm:mx-0 mt-2 rounded-full"></div>
+          </h1>
+          <Link 
+            to="/master-dashboard" 
+            className="bg-gray-200 text-gray-700 font-semibold px-5 py-2 rounded-lg hover:bg-gray-300 transition-colors duration-300 flex items-center gap-2 shadow-md"
+          >
+            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"></path></svg>
+            Voltar
+          </Link>
+        </div>
+
+        {error && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md" role="alert">
+            <p className="font-bold">Erro na Importação:</p>
+            <p>{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleImport} className="space-y-6">
+          {/* Seleção do Estabelecimento */}
+          <div>
+            <label htmlFor="estabelecimentoSelect" className="block text-sm font-medium text-gray-700 mb-2">
+              Selecione o Estabelecimento:
+            </label>
+            <select
+              id="estabelecimentoSelect"
+              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 transition-colors duration-300"
+              value={selectedEstabelecimentoId}
+              onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
+              required
+              disabled={importing}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-              Voltar
-            </Link>
+              <option value="">-- Selecione --</option>
+              {estabelecimentosList.map(estab => (
+                <option key={estab.id} value={estab.id}>{estab.nome}</option>
+              ))}
+            </select>
           </div>
 
-          {error && (
-            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded-md" role="alert">
-              <p className="font-bold">Erro:</p>
-              <p>{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleImport} className="space-y-6">
-            <div>
-              <label htmlFor="estabelecimentoSelect" className="block text-sm font-medium text-gray-700 mb-1">
-                Selecione o Estabelecimento:
-              </label>
-              <select
-                id="estabelecimentoSelect"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
-                value={selectedEstabelecimentoId}
-                onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
+          {/* Seleção do Arquivo de Cardápio (JSON) */}
+          <div>
+            <label htmlFor="cardapioFile" className="block text-sm font-medium text-gray-700 mb-2">
+              Arquivo do Cardápio (JSON):
+            </label>
+            <div className="flex items-center space-x-3"> {/* Aumentei o espaçamento */}
+              <input
+                type="file"
+                id="cardapioFile"
+                accept=".json" // Aceita apenas arquivos JSON
+                onChange={handleFileChange}
+                className="hidden" // Esconde o input de arquivo padrão
                 required
                 disabled={importing}
+              />
+              <label 
+                htmlFor="cardapioFile" 
+                className="cursor-pointer bg-yellow-500 hover:bg-yellow-600 text-black px-5 py-2.5 rounded-lg font-bold shadow-md transition-colors duration-300 flex-shrink-0" // Botão mais robusto
               >
-                <option value="">-- Selecione --</option>
-                {estabelecimentosList.map(estab => (
-                  <option key={estab.id} value={estab.id}>{estab.nome}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="cardapioFile" className="block text-sm font-medium text-gray-700 mb-1">
-                Arquivo do Cardápio (JSON):
+                Escolher arquivo
               </label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="file"
-                  id="cardapioFile"
-                  accept=".json" // Aceita apenas arquivos JSON
-                  onChange={handleFileChange}
-                  className="hidden" // Esconde o input de arquivo padrão
-                  required
-                  disabled={importing}
-                />
-                <label 
-                  htmlFor="cardapioFile" 
-                  className="cursor-pointer bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-semibold shadow-sm transition-colors duration-200"
-                >
-                  Escolher arquivo
-                </label>
-                <span className="text-sm text-gray-600">
-                  {file ? file.name : "Nenhum arquivo selecionado"}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-gray-500">
-                Formato esperado: Arquivo JSON contendo uma estrutura de cardápio com "categorias" e "itens".
-              </p>
+              <span className="text-sm text-gray-700 truncate"> {/* Adicionado truncate */}
+                {file ? file.name : "Nenhum arquivo selecionado"}
+              </span>
             </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Formato esperado: Arquivo JSON contendo uma estrutura de cardápio com "categorias" e "itens".
+            </p>
+          </div>
 
+          {/* Botão de Importar */}
+          <button
+            type="submit"
+            disabled={importing}
+            className="w-full px-6 py-3 bg-black text-white text-lg font-bold rounded-lg shadow-md hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-300 mt-8"
+          >
+            {importing ? 'Importando...' : 'Importar Cardápio'}
+          </button>
+        </form>
+
+        {/* Seção da Estrutura JSON Esperada - Melhor Visibilidade e Estilo */}
+        <div className="mt-8 p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-inner"> {/* Sombra interna */}
+          <h3 className="text-xl font-bold text-black mb-4 flex items-center gap-2">
+            <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            Estrutura JSON Esperada
+          </h3>
+          <pre className="bg-gray-800 p-4 rounded-lg text-sm text-yellow-100 overflow-x-auto leading-relaxed font-mono relative"> {/* Fundo escuro, texto claro */}
             <button
-              type="submit"
-              disabled={importing}
-              className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors duration-200"
+                onClick={() => navigator.clipboard.writeText(`{
+  "categorias": [
+    {
+      "id": "lanches", // Opcional, se não houver, usará o nome para o ID
+      "nome": "Lanches",
+      "ordem": 1,
+      "itens": [
+        {
+          "id": "x-tudo",
+          "nome": "X-Tudo",
+          "descricao": "Pão, bife, queijo, presunto, ovo, bacon, alface, tomate, milho, batata palha",
+          "preco": 25.00,
+          "disponivel": true,
+          "imageUrl": "https://example.com/x-tudo.jpg",
+          "adicionais": [
+            {
+              "id": "bacon-extra",
+              "nome": "Bacon Extra",
+              "preco": 5.00
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}`)}
+                className="absolute top-2 right-2 bg-gray-700 text-gray-300 px-3 py-1 rounded-md text-xs hover:bg-gray-600 transition-colors duration-200"
             >
-              {importing ? 'Importando...' : 'Importar Cardápio'}
+                Copiar
             </button>
-          </form>
-
-          {/* Seção da Estrutura JSON Esperada - Melhor Visibilidade */}
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">Estrutura JSON Esperada:</h3>
-            <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto text-gray-800 leading-normal">
-              <code>
+            <code>
 {`{
   "categorias": [
     {
@@ -280,12 +370,11 @@ function ImportarCardapioMaster() {
     }
   ]
 }`}
-              </code>
-            </pre>
-          </div>
+            </code>
+          </pre>
         </div>
       </div>
-    // </Layout>
+    </div>
   );
 }
 
