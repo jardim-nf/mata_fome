@@ -1,11 +1,11 @@
 // src/components/PedidoCard.jsx
 import React, { useState, useCallback, memo } from "react";
 import { doc, updateDoc } from "firebase/firestore";
-import { db, app } from "../firebase";
+import { db, app } from "../firebase"; // Certifique-se que 'app' está exportado do seu firebase.js
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-// import de ícones removido: usando emojis inline nos botões
+import { getAuth } from 'firebase/auth'; // Import para obter a instância de autenticação
 
 // Botão de ação comum
 const ActionButton = memo(({ onClick, children, className = '' }) => (
@@ -20,8 +20,13 @@ const ActionButton = memo(({ onClick, children, className = '' }) => (
 function PedidoCard({ pedido, onDeletePedido, estabelecimento, autoPrintEnabled }) {
   const navigate = useNavigate();
   const [mostrarTodosItens, setMostrarTodosItens] = useState(false);
-  const functions = getFunctions(app);
+  const functions = getFunctions(app); // Obtém a instância das Cloud Functions
+  const authInstance = getAuth(app); // Obtém a instância de autenticação para uso interno
+
+  // Callable para a função PIX (já existe)
   const getPixKeyCallable = httpsCallable(functions, 'getEstablishmentPixKey');
+  // Callable para a função de envio de mensagem WhatsApp
+  const sendWhatsappMessageCallable = httpsCallable(functions, 'sendWhatsappMessage');
 
   const status = (pedido?.status || 'recebido').toLowerCase();
   const formaPagamento = (pedido?.formaPagamento || '').toLowerCase();
@@ -37,19 +42,23 @@ function PedidoCard({ pedido, onDeletePedido, estabelecimento, autoPrintEnabled 
 
   // Abre a comanda
   const abrirComanda = useCallback(() => {
+    console.log("PedidoCard Debug: Abrindo comanda para pedido ID:", pedido.id);
     const url = `/comanda/${pedido.id}${autoPrintEnabled ? '?print=true' : ''}`;
     window.open(url, '_blank');
   }, [pedido.id, autoPrintEnabled]);
 
-  // Abre link do WhatsApp
+  // Função para abrir o WhatsApp no navegador (para mensagens manuais como PIX ou quando a CF falhar)
   const openWhatsAppLink = useCallback((message, phone, desc) => {
+    console.log("PedidoCard Debug: Tentando abrir link WhatsApp para:", desc, "Telefone:", phone);
     if (!phone) {
       toast.error(`Erro: telefone não disponível para ${desc}.`);
+      console.error(`PedidoCard Debug: openWhatsAppLink: Telefone não disponível para ${desc}.`);
       return false;
     }
     const num = phone.replace(/\D/g, '');
     if (!num) {
       toast.error(`Número inválido para ${desc}.`);
+      console.error(`PedidoCard Debug: openWhatsAppLink: Número inválido para ${desc}.`);
       return false;
     }
     const url = `https://wa.me/55${num}?text=${encodeURIComponent(message)}`;
@@ -57,27 +66,29 @@ function PedidoCard({ pedido, onDeletePedido, estabelecimento, autoPrintEnabled 
       window.open(url, '_blank');
       return true;
     } catch (e) {
-      console.error(e);
+      console.error("PedidoCard Debug: openWhatsAppLink: Erro ao tentar abrir WhatsApp:", e);
       toast.error('Não foi possível abrir WhatsApp.');
       return false;
     }
   }, []);
 
-  // Envia mensagem PIX
+  // Envia mensagem PIX (mantém a lógica atual pois é um link direto)
   const enviarMensagemPixComChave = useCallback(async () => {
+    console.log("PedidoCard Debug: Iniciando envio de mensagem PIX com chave.");
     try {
       const { data } = await getPixKeyCallable({ establishmentId: pedido.estabelecimentoId });
       const chave = data.chavePix;
       if (!chave) {
         toast.error('Chave PIX não configurada.');
+        console.error("PedidoCard Debug: Chave PIX não configurada.");
         return;
       }
       const nome = pedido.cliente?.nome || 'Cliente';
       const total = pedido.totalFinal
         ? pedido.totalFinal.toFixed(2).replace('.', ',')
         : pedido.itens?.reduce((acc, item) => acc + item.preco * item.quantidade, 0)
-            .toFixed(2)
-            .replace('.', ',');
+          .toFixed(2)
+          .replace('.', ',');
       const msg = `🎉 Oi ${nome}! Seu pedido no ${estabelecimento.nome} está quase lá! 🚀
 
 Para garantir tudo certinho, faça o pagamento de R$ ${total} via PIX:
@@ -87,79 +98,110 @@ Para garantir tudo certinho, faça o pagamento de R$ ${total} via PIX:
 Assim que recebermos o pagamento, colocamos a mão na massa e deixamos tudo delicioso para você! 😋🍴`;
       if (openWhatsAppLink(msg, pedido.cliente?.telefone, 'mensagem PIX')) {
         toast.info('Mensagem PIX enviada.');
+        console.log("PedidoCard Debug: Mensagem PIX enviada (via openWhatsAppLink).");
       }
     } catch (e) {
-      console.error(e);
+      console.error("PedidoCard Debug: enviarMensagemPixComChave: Erro ao solicitar PIX:", e);
       toast.error('Erro ao solicitar PIX.');
     }
   }, [pedido, estabelecimento.nome, openWhatsAppLink, getPixKeyCallable]);
 
-  // Muda status e envia mensagem
+
+  // Função unificada para mudar status E ENVIAR WHATSAPP via Cloud Function
   const handleMudarStatus = useCallback(async (novoStatus) => {
+    console.log(`PedidoCard Debug: Tentando mudar status do pedido ${pedido.id} para: ${novoStatus}`);
     try {
+      // 1. Atualizar status no Firestore
       await updateDoc(doc(db, 'pedidos', pedido.id), { status: novoStatus });
       toast.success(`Status alterado para ${novoStatus}.`);
+      console.log(`PedidoCard Debug: Status do pedido ${pedido.id} atualizado para ${novoStatus} no Firestore.`);
+
+      // 2. Preparar dados para a Cloud Function de WhatsApp
       const nomeCliente = pedido.cliente?.nome || 'Cliente';
-      const itensLista = pedido.itens
-        ?.map(i => `${i.quantidade}x ${i.nome}`)
-        .join('\n- ') || '';
-      const valor = (pedido.totalFinal ||
+      const valorTotal = (pedido.totalFinal ||
         pedido.itens?.reduce((a, i) => a + i.preco * i.quantidade, 0))
-        .toFixed(2)
-        .replace('.', ',');
-      let mensagem = '';
-      switch (novoStatus) {
-        case 'preparo':
-          mensagem = `👨‍🍳 Ei ${nomeCliente}! Seu pedido #${pedido.id.substring(0,5)} está agora entrando na cozinha!🔥
+        .toFixed(2); // Deixa como ponto para a Cloud Function formatar
 
-- ${itensLista}
+      const now = new Date();
+      const formattedDateTime = now.toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+      });
 
-Total: R$ ${valor}
+      // Chamada da Cloud Function para enviar mensagem WhatsApp
+      if (pedido.cliente?.telefone) { // Verifica se há telefone para enviar
+        // --- INÍCIO: DEBUG DE AUTENTICAÇÃO ANTES DA CF ---
+        console.log("PedidoCard Debug: Verificando status de autenticação antes de chamar CF.");
+        if (authInstance.currentUser) {
+            const token = await authInstance.currentUser.getIdToken(true); // Força um novo token
+            console.log("PedidoCard Debug: Token de ID forçado a ser atualizado. UID:", authInstance.currentUser.uid);
+            // O token não precisa ser passado explicitamente para httpsCallable,
+            // mas forçar o refresh garante que o SDK use o mais recente.
+        } else {
+            console.warn("PedidoCard Debug: Sem currentUser no authInstance. Isso é inesperado para esta ação.");
+            toast.error("Erro de autenticação local. Tente logar novamente.");
+            return; // Interrompe a chamada se não houver usuário autenticado
+        }
+        // --- FIM: DEBUG DE AUTENTICAÇÃO ---
 
-Fique de olho, vamos caprichar em cada detalhe! ✨`;
-          break;
-          break;
-        case 'em_entrega':
-          mensagem = `🛵 Olá ${nomeCliente}! Seu pedido #${pedido.id.substring(0,5)} saiu para entrega e está a caminho! 🌟
+        const whatsappData = {
+          to: pedido.cliente.telefone, // Número de telefone do cliente
+          messageType: novoStatus,   // Tipo da mensagem (ex: 'preparo', 'em_entrega')
+          clientName: nomeCliente,
+          orderValue: parseFloat(valorTotal), // Envia como número, CF formata
+          orderIdShort: pedido.id.substring(0, 5), // ID curto do pedido
+          orderDateTime: formattedDateTime,
+          estabelecimentoName: estabelecimento?.nome // Nome do estabelecimento
+        };
+        console.log("PedidoCard Debug: Dados preparados para a Cloud Function de WhatsApp:", whatsappData);
 
-- ${itensLista}
+        try {
+          console.log(`PedidoCard Debug: Chamando Cloud Function 'sendWhatsappMessage' para o status '${novoStatus}'.`);
+          const result = await sendWhatsappMessageCallable(whatsappData);
 
-Total: R$ ${valor}
-
-Prepare-se, vai ser uma explosão de sabor! 💥`;
-          break;
-          break;
-        case 'finalizado':
-          mensagem = `🎊 Parabéns ${nomeCliente}! Seu pedido #${pedido.id.substring(0,5)} foi entregue e está prontinho para você! 🎁
-
-Esperamos que adore cada mordida! Obrigado pela preferência! ❤️`;
-          break;
-          break;
-        default:
-          break;
+          if (result.data.success) {
+            toast.info(`Mensagem de ${novoStatus} enviada via WhatsApp!`);
+            console.log("PedidoCard Debug: Resposta da Cloud Function de WhatsApp - SUCESSO:", result.data.message);
+          } else {
+            toast.error(`Falha ao enviar mensagem WhatsApp: ${result.data.error || 'Erro desconhecido.'}`);
+            console.error("PedidoCard Debug: Cloud Function 'sendWhatsappMessage' falhou (retorno 'success: false'):", result.data.error);
+          }
+        } catch (whatsappFnError) {
+          console.error("PedidoCard Debug: Erro ao chamar Cloud Function 'sendWhatsappMessage' (catch externo):", whatsappFnError);
+          // Verificar se o erro é do tipo HttpsError para extrair mensagem mais específica
+          if (whatsappFnError.code && whatsappFnError.message) {
+            toast.error(`Erro CF (${whatsappFnError.code}): ${whatsappFnError.message}`);
+          } else {
+            toast.error(`Erro desconhecido ao chamar CF. Verifique o console.`);
+          }
+        }
+      } else {
+        toast.warn('Telefone do cliente não disponível para enviar mensagem.');
+        console.warn('PedidoCard Debug: Telefone do cliente não disponível, mensagem WhatsApp não enviada.');
       }
-      if (mensagem) {
-        openWhatsAppLink(mensagem, pedido.cliente?.telefone, `mudança de status para ${novoStatus}`);
-      }
+
     } catch (e) {
-      console.error(e);
-      toast.error('Erro ao atualizar status.');
+      console.error("PedidoCard Debug: handleMudarStatus: Erro ao atualizar status do pedido no Firestore (catch principal):", e);
+      toast.error('Erro ao atualizar status do pedido.');
     }
-  }, [pedido, openWhatsAppLink]);
+  }, [pedido, estabelecimento, sendWhatsappMessageCallable, authInstance]); // Adicionada 'authInstance' nas dependências
 
   // Histórico do cliente
   const handleViewClientHistory = useCallback(() => {
+    console.log("PedidoCard Debug: Visualizando histórico do cliente.");
     const tel = pedido.cliente?.telefone;
     const num = tel?.replace(/\D/g, '');
     if (num) navigate(`/historico-cliente/${num}`);
     else toast.error('Telefone inválido para histórico.');
   }, [pedido, navigate]);
 
-  // Total do pedido
-  const totalValor = (pedido.totalFinal ||
+  // Total do pedido para exibição
+  const totalValorFormatado = (pedido.totalFinal ||
     pedido.itens?.reduce((a, i) => a + i.preco * i.quantidade, 0))
     .toFixed(2)
     .replace('.', ',');
+
+  console.log(`PedidoCard Debug: Renderizando PedidoCard para pedido ID: ${pedido.id}, Status: ${status}`);
 
   return (
     <div className={containerClasses}>
@@ -189,35 +231,35 @@ Esperamos que adore cada mordida! Obrigado pela preferência! ❤️`;
       )}
       {/* Footer */}
       <div className="mt-4 flex flex-col sm:flex-row sm:justify-between items-center gap-3">
-        <p className="font-bold text-secondary text-lg">Total: R$ {totalValor}</p>
+        <p className="font-bold text-secondary text-lg">Total: R$ {totalValorFormatado}</p>
         <div className="flex flex-wrap gap-2">
           {formaPagamento === 'pix' && status === 'recebido' && (
             <ActionButton onClick={enviarMensagemPixComChave} className="bg-primary text-secondary hover:opacity-90">
-  ⚡ PIX
-</ActionButton>
+              ⚡ PIX
+            </ActionButton>
           )}
           {status === 'recebido' && (
             <>
               <ActionButton onClick={abrirComanda} className="bg-blue-300 text-secondary hover:opacity-90">
-  📄 Comanda
-</ActionButton>
+                📄 Comanda
+              </ActionButton>
               <ActionButton onClick={() => handleMudarStatus('preparo')} className="bg-primary text-secondary hover:opacity-90">
-  ☕ Enviar para Preparo
-</ActionButton>
+                ☕ Enviar para Preparo
+              </ActionButton>
               <ActionButton onClick={() => onDeletePedido(pedido.id)} className="bg-red-500 text-white hover:opacity-90">
-  🗑️ Excluir
-</ActionButton>
+                🗑️ Excluir
+              </ActionButton>
             </>
           )}
           {status === 'preparo' && (
             <ActionButton onClick={() => handleMudarStatus('em_entrega')} className="bg-black text-white hover:opacity-90">
-  🚚 Entregar
-</ActionButton>
+              🚚 Entregar
+            </ActionButton>
           )}
           {status === 'em_entrega' && (
             <ActionButton onClick={() => handleMudarStatus('finalizado')} className="bg-primary text-secondary hover:opacity-90">
-  ✔️ Finalizar
-</ActionButton>
+              ✔️ Finalizar
+            </ActionButton>
           )}
           {status === 'finalizado' && (
             <span className="text-lg font-bold text-green-700">Pedido Finalizado!</span>

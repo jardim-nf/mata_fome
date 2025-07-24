@@ -50,13 +50,14 @@ function App() {
           {/* Rotas que NÃO usam o Layout */}
           <Route path="/" element={<Home />} />
           <Route path="/login-admin" element={<Login />} />
+                  <Route path="/cardapio/:estabelecimentoId" element={<Menu />} />
           <Route path="/comanda/:pedidoId" element={<ComandaView />} />
 
           {/* GRUPO DE ROTAS QUE USAM O LAYOUT */}
           <Route element={<Layout />}>
             {/* Rotas Públicas/Clientes */}
-            <Route path="/cardapios" element={<ListaEstabelecimentos />} />
-            <Route path="/cardapios/:estabelecimentoSlug" element={<Menu />} />
+            <Route path="/cardapio" element={<ListaEstabelecimentos />} />
+            <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
             <Route path="/historico-pedidos" element={<ClientOrderHistory />} />
             <Route path="/planos" element={<Planos />} />
 

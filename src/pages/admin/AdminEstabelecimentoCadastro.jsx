@@ -286,7 +286,7 @@ function AdminEstabelecimentoCadastro() {
                         <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Informações Gerais</h2>
                         <div className="space-y-4">
                             <FormInput label="Nome do Estabelecimento" name="nome" value={formData.nome} onChange={handleInputChange} required />
-                            <FormInput label="Slug (URL amigável)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Será a parte final da URL do cardápio (ex: /cardapios/seunome). Gerado automaticamente, mas pode ser editado."/>
+                            <FormInput label="Slug (URL amigável)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Será a parte final da URL do cardápio (ex: /cardapio/seunome). Gerado automaticamente, mas pode ser editado."/>
                             <FormInput label="Chave PIX (Para Receber Pagamentos)" name="chavePix" value={formData.chavePix} onChange={handleInputChange} helpText="Chave PIX para pagamentos diretos."/>
 
                             {/* Campo de Upload de Imagem para o Logo */}

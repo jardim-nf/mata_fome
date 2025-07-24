@@ -83,7 +83,7 @@ function ClientOrderHistory() {
 
         if (estabelecimentoSnap.exists() && estabelecimentoSnap.data().slug) {
           toast.info('Seu pedido anterior está sendo carregado no carrinho!');
-          navigate(`/cardapios/${estabelecimentoSnap.data().slug}`);
+          navigate(`/cardapio/${estabelecimentoSnap.data().slug}`);
         } else {
           toast.error('Estabelecimento do pedido anterior não encontrado ou slug indisponível.');
           localStorage.removeItem('reorderItems'); // Limpa se não conseguir redirecionar

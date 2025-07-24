@@ -12,8 +12,8 @@ function Layout() {
   const { currentUser, currentClientData, isAdmin, isMasterAdmin, logout } = useAuth();
 
   // NOVO: Verifica se a rota atual é uma rota de cardápio
-  const isCardapioRoute = location.pathname.startsWith('/cardapios/');
-  const isGenericCardapiosList = location.pathname === '/cardapios';
+  const isCardapioRoute = location.pathname.startsWith('/cardapio/');
+  const isGenericCardapiosList = location.pathname === '/cardapio';
 
   const handleLogout = async () => {
     try {

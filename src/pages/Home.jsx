@@ -4,13 +4,13 @@ import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Importa o contexto de autenticação
+import { useAuth } from '../context/AuthContext';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 
 // --- AuthButtonElegant (Header/Navegação) - AGORA COM BOTÃO DE LOGOUT ---
 function AuthButtonElegant({ onLoginClick }) {
-  const { currentUser, loading, isAdmin, isMasterAdmin, logout } = useAuth(); // Importa a função logout
+  const { currentUser, loading, isAdmin, isMasterAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
   if (loading) {
@@ -35,9 +35,9 @@ function AuthButtonElegant({ onLoginClick }) {
 
     const handleLogout = async () => {
       try {
-        await logout(); // Chama a função de logout do AuthContext
+        await logout();
         toast.success('Você foi desconectado com sucesso!');
-        navigate('/'); // Redireciona para a home após o logout
+        navigate('/');
       } catch (error) {
         console.error("Erro ao fazer logout:", error);
         toast.error('Ocorreu um erro ao tentar desconectar.');
@@ -45,18 +45,18 @@ function AuthButtonElegant({ onLoginClick }) {
     };
 
     return (
-      <div className="flex items-center space-x-3"> {/* Contêiner para os dois botões */}
+      <div className="flex items-center space-x-3">
         <button
           onClick={handleProfileClick}
           className="px-4 py-2 rounded-full text-black bg-yellow-400 font-semibold text-sm transition-all duration-300 ease-in-out
-                     hover:bg-yellow-500 hover:shadow-md"
+                      hover:bg-yellow-500 hover:shadow-md"
         >
           Olá, {userEmailPrefix}!
         </button>
         <button
-          onClick={handleLogout} // Novo botão de logout
+          onClick={handleLogout}
           className="px-4 py-2 rounded-full text-gray-700 border border-gray-400 font-semibold text-sm transition-all duration-300 ease-in-out
-                     hover:bg-gray-100 hover:text-black hover:border-gray-500"
+                      hover:bg-gray-100 hover:text-black hover:border-gray-500"
         >
           Logout
         </button>
@@ -68,7 +68,7 @@ function AuthButtonElegant({ onLoginClick }) {
     <button
       onClick={onLoginClick}
       className="px-5 py-2 rounded-full text-black bg-yellow-400 font-semibold text-sm transition-all duration-300 ease-in-out
-                 hover:bg-yellow-500 hover:shadow-md"
+                hover:bg-yellow-500 hover:shadow-md"
     >
       Login / Cadastre-se
     </button>
@@ -78,7 +78,7 @@ function AuthButtonElegant({ onLoginClick }) {
 // --- Hero Section - Inspirada no "Delivery Direto" com suas cores e imagem ---
 function HeroSectionModern({ onExploreClick }) {
   return (
-    <section className="relative w-full overflow-hidden bg-white pt-24 md:pt-32"> {/* Adicionado padding top para o header fixo */}
+    <section className="relative w-full overflow-hidden bg-white pt-24 md:pt-32">
       <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between py-12 md:py-20 px-4">
         {/* Lado Esquerdo: Conteúdo de Texto */}
         <div className="w-full lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0 z-10">
@@ -91,7 +91,7 @@ function HeroSectionModern({ onExploreClick }) {
           <button
             onClick={onExploreClick}
             className="bg-yellow-500 text-black font-bold py-3 px-8 rounded-full text-lg shadow-lg
-                       transition-all duration-300 transform hover:scale-105 hover:bg-yellow-600"
+                        transition-all duration-300 transform hover:scale-105 hover:bg-yellow-600"
           >
             Ver Estabelecimentos
           </button>
@@ -104,7 +104,6 @@ function HeroSectionModern({ onExploreClick }) {
           
           {/* Sua Imagem da Pizza - Centralizada sobre o fundo amarelo */}
           <img
-            // SUBSTITUA ESTE URL PELA SUA IMAGEM DA PIZZA!
             src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/pizza.png?alt=media&token=aac1a9a6-5381-41df-b728-c394fba7b762" 
             alt="Pizza Deliciosa"
             className="relative z-10 w-full max-w-md md:max-w-lg lg:max-w-none lg:w-auto h-auto rounded-xl shadow-2xl transform translate-y-8 lg:translate-y-0 rotate-3 transition-transform duration-500 ease-in-out hover:rotate-0"
@@ -183,7 +182,7 @@ function LoginModal({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white p-8 md:p-10 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 animate-scale-in"> {/* Fundo branco, borda sutil */}
+      <div className="bg-white p-8 md:p-10 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 animate-scale-in">
         <div className="flex justify-end mb-4">
           <button onClick={onClose} className="text-gray-500 hover:text-black text-2xl transition-colors duration-300">&times;</button>
         </div>
@@ -466,12 +465,19 @@ function Home() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {estabelecimentos.map(estabelecimento => (
+              // >>>>> CORREÇÃO AQUI: USANDO estab.slug PARA O LINK <<<<<
               <div
                 key={estabelecimento.id}
                 className="group bg-white rounded-xl shadow-lg overflow-hidden transform transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl cursor-pointer flex flex-col border border-gray-200 hover:border-yellow-500"
+                // O onClick no div pai para navegacao (melhor usar o Link diretamente para SEO/Acessibilidade)
                 onClick={() => {
-                  navigate(`/cardapio/${estabelecimento.id}`);
-                  toast.info(`Explorando o cardápio de ${estabelecimento.nome}.`);
+                  if (estabelecimento.slug) { // Verifica se o slug existe
+                    navigate(`/cardapio/${estabelecimento.slug}`);
+                    toast.info(`Aguarde enquanto carregamos o cardápio de ${estabelecimento.nome}.`);
+                  } else {
+                    toast.error(`Slug do estabelecimento "${estabelecimento.nome}" não encontrado.`);
+                    console.error("Home Debug: Estabelecimento sem slug:", estabelecimento.nome, estabelecimento.id);
+                  }
                 }}
               >
                 {estabelecimento.imageUrl ? (
@@ -501,9 +507,14 @@ function Home() {
                 <div className="p-4 border-t border-gray-100 group-hover:border-yellow-200 transition-colors duration-300">
                   <button
                     onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/cardapio/${estabelecimento.id}`);
-                      toast.info(`Aguarde enquanto carregamos o cardápio de ${estabelecimento.nome}.`);
+                      e.stopPropagation(); // Previne o clique do div pai (se houver um Link ou onClick nele)
+                      if (estabelecimento.slug) {
+                        navigate(`/cardapio/${estabelecimento.slug}`);
+                        toast.info(`Aguarde enquanto carregamos o cardápio de ${estabelecimento.nome}.`);
+                      } else {
+                        toast.error(`Slug do estabelecimento "${estabelecimento.nome}" não encontrado.`);
+                        console.error("Home Debug: Botão 'Ver Cardápio' clicado, mas estabelecimento sem slug:", estabelecimento.nome, estabelecimento.id);
+                      }
                     }}
                     className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 rounded-md text-lg transition-colors duration-300 shadow-md hover:shadow-lg"
                   >
