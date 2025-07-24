@@ -3,20 +3,17 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 function EstabelecimentoCard({ estabelecimento }) {
-  // Garantir que o estabelecimento e o SLUG (agora) existam
-  // É fundamental que o seu Firestore tenha o campo 'slug' para cada estabelecimento
   if (!estabelecimento || !estabelecimento.slug) { 
     console.warn("EstabelecimentoCard: Estabelecimento ou slug não encontrado.", estabelecimento);
-    return null; // Ou um placeholder, se preferir
+    return null;
   }
 
-  // Define um caminho de imagem padrão caso não haja imageUrl no Firestore
   const defaultImageUrl = '/images/placeholder-restaurant.jpg'; 
 
   return (
-    // ATUALIZADO: Usando o slug do estabelecimento na URL
+    // CORREÇÃO AQUI: USANDO '/cardapio/' (ou '/cardapios/', dependendo da sua rota em App.jsx)
     <Link 
-      to={`/loja/${estabelecimento.slug}`} // <-- MUDANÇA AQUI: de /cardapio/${id} para /loja/${slug}
+      to={`/cardapio/${estabelecimento.slug}`} // <-- MUDANÇA AQUI: de /loja/ para /cardapio/
       className="bg-white rounded-lg shadow-md hover:shadow-xl transition duration-300 transform hover:scale-105 flex flex-col overflow-hidden border border-gray-100"
     >
       <div className="w-full h-40 overflow-hidden">

@@ -50,7 +50,6 @@ function App() {
           {/* Rotas que NÃO usam o Layout */}
           <Route path="/" element={<Home />} />
           <Route path="/login-admin" element={<Login />} />
-                  <Route path="/cardapio/:estabelecimentoId" element={<Menu />} />
           <Route path="/comanda/:pedidoId" element={<ComandaView />} />
 
           {/* GRUPO DE ROTAS QUE USAM O LAYOUT */}
