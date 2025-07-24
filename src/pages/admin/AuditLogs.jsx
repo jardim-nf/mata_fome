@@ -1,17 +1,16 @@
 // src/pages/admin/AuditLogs.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, query, orderBy, where, onSnapshot, getDocs, limit, startAfter, endBefore, limitToLast } from 'firebase/firestore'; 
+import { collection, query, orderBy, where, getDocs, limit, startAfter } from 'firebase/firestore'; 
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { format, startOfDay, endOfDay, parseISO } from 'date-fns'; // Adicionado parseISO
-import { ptBR } from 'date-fns/locale';
+import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale'; 
+import { getAuth } from 'firebase/auth'; 
 
-const ITEMS_PER_PAGE = 15; // Ajuste para o número de logs por página
+const ITEMS_PER_PAGE = 15;
 
-// --- Componente de Header Master Dashboard (reutilizado) ---
-// Normalmente, isso estaria em um Layout.jsx ou componente separado.
 function DashboardHeader({ currentUser, logout, navigate }) {
   const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
 
@@ -36,7 +35,7 @@ function DashboardHeader({ currentUser, logout, navigate }) {
         <Link to="/master-dashboard" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
             Dashboard
         </Link>
-        <Link to="/cardapios" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
+        <Link to="/cardapios" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-100 hover:border-gray-400">
             Cardápios
         </Link>
         <button
@@ -49,209 +48,294 @@ function DashboardHeader({ currentUser, logout, navigate }) {
     </header>
   );
 }
-// --- Fim DashboardHeader ---
 
 function AuditLogs() {
   const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth(); // Importa logout
+  const { currentUser, loading: authLoading, logout } = useAuth(); // Removido isMasterAdmin daqui
 
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [error, setError] = useState('');
 
-  // Estados dos filtros
-  const [filterActionType, setFilterActionType] = useState('todos');
-  const [filterActorEmail, setFilterActorEmail] = useState('');
-  const [filterTargetType, setFilterTargetType] = useState('todos');
-  const [filterTargetId, setFilterTargetId] = useState('');
-  const [filterStartDate, setFilterStartDate] = useState(''); // Formato 'YYYY-MM-DD' para input type="date"
-  const [filterEndDate, setFilterEndDate] = useState('');     // Formato 'YYYY-MM-DD' para input type="date"
+  // Estados dos filtros (agora como useRef para estabilidade)
+  const filterActionTypeRef = useRef('todos');
+  const filterActorEmailRef = useRef('');
+  const filterTargetTypeRef = useRef('todos');
+  const filterTargetIdRef = useRef('');
+  const filterStartDateRef = useRef('');
+  const filterEndDateRef = useRef('');
 
+  // Estados para popular os dropdowns de filtro (ainda como useState)
   const [allActionTypes, setAllActionTypes] = useState([]);
   const [allActorEmails, setAllActorEmails] = useState([]);
 
-  // ESTADOS DE PAGINAÇÃO
-  const [lastVisible, setLastVisible] = useState(null);
-  const [firstVisible, setFirstVisible] = useState(null);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [hasPrevious, setHasPrevious] = useState(false);
-  const [pageMarkers, setPageMarkers] = useState([{ page: 0, startDoc: null, endDoc: null }]); // Para paginação robusta
+  // ESTADOS DE PAGINAÇÃO (agora como useRef para estabilidade)
+  const lastVisibleDocRef = useRef(null); 
+  const pageHistoryRef = useRef([null]); 
+  const currentPageIndexRef = useRef(0); 
+  const hasMorePagesRef = useRef(true); 
+  const hasPreviousPageRef = useRef(false); 
 
-  // Controle de acesso
-  useEffect(() => {
-    if (!authLoading) {
-      if (!currentUser || !isMasterAdmin) {
-        toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
-        navigate('/master-dashboard');
+
+  // Ref para controlar se a carga inicial de logs já foi disparada
+  const auditLogsComponentInitialLoadRef = useRef(false);
+  // Ref para guardar o status do MasterAdmin após a checagem inicial de permissão
+  const masterAdminStatusRef = useRef(false); // <--- DECLARAÇÃO CORRETA E NOME PADRONIZADO
+
+
+  // fetchLogs: Função principal de busca de logs
+  const fetchLogs = useCallback(async (direction = 'next', resetPagination = false) => {
+    // Pega os valores mais recentes dos estados via .current dos refs
+    const currentFilterActionType = filterActionTypeRef.current;
+    const currentFilterActorEmail = filterActorEmailRef.current;
+    const currentFilterTargetType = filterTargetTypeRef.current;
+    const currentFilterTargetId = filterTargetIdRef.current;
+    const currentFilterStartDate = filterStartDateRef.current;
+    const currentFilterEndDate = filterEndDateRef.current;
+    
+    const currentLastVisibleDoc = lastVisibleDocRef.current;
+    const currentPageHistory = pageHistoryRef.current;
+    const currentPageIdx = currentPageIndexRef.current;
+
+
+    // Acesso direto ao estado atualizado para currentUser, authLoading, etc.
+    const authInstance = getAuth();
+    const user = authInstance.currentUser; 
+    const currentAuthLoading = authLoading;
+    const currentIsMasterAdminStatus = masterAdminStatusRef.current; // <--- USO DO NOME PADRONIZADO
+
+
+    // Verifica permissão e autenticação no INÍCIO
+    if (!user || currentAuthLoading || !currentIsMasterAdminStatus) { 
+        setLoadingLogs(false);
+        if (!currentIsMasterAdminStatus && !currentAuthLoading) { 
+            setError('Acesso negado. Você não tem permissões de Master Administrador.');
+            setTimeout(() => navigate('/master-dashboard'), 0); 
+            toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
+        }
         return;
-      }
     }
-  }, [currentUser, isMasterAdmin, authLoading, navigate]);
-
-  // Função para carregar os logs com filtros e paginação
-  const fetchLogs = useCallback(async (direction = 'next') => {
-    if (!isMasterAdmin || !currentUser) return;
 
     setLoadingLogs(true);
     setError('');
-    let baseQuery = collection(db, 'auditLogs');
-    let queryConstraints = [];
-
-    if (filterActionType !== 'todos') {
-      queryConstraints.push(where('actionType', '==', filterActionType));
-    }
-    if (filterActorEmail) {
-      queryConstraints.push(where('actor.email', '==', filterActorEmail));
-    }
-    if (filterTargetType !== 'todos') {
-      queryConstraints.push(where('target.type', '==', filterTargetType));
-    }
-    if (filterTargetId) {
-      queryConstraints.push(where('target.id', '==', filterTargetId));
-    }
-
-    let startDateObj = null;
-    if (filterStartDate) {
-        try {
-            startDateObj = startOfDay(parseISO(filterStartDate));
-            queryConstraints.push(where('timestamp', '>=', startDateObj));
-        } catch (e) {
-            console.error("Invalid start date format:", e);
-            toast.error("Formato de Data Início inválido.");
-            setLoadingLogs(false);
-            return;
-        }
-    }
-    let endDateObj = null;
-    if (filterEndDate) {
-        try {
-            endDateObj = endOfDay(parseISO(filterEndDate));
-            queryConstraints.push(where('timestamp', '<=', endDateObj));
-        } catch (e) {
-            console.error("Invalid end date format:", e);
-            toast.error("Formato de Data Fim inválido.");
-            setLoadingLogs(false);
-            return;
-        }
-    }
-
-    queryConstraints.push(orderBy('timestamp', 'desc')); // Ordenação por data/hora mais recente
-
-    let q;
-    let currentStartDoc = null;
-
-    if (direction === 'next' && lastVisible) {
-        currentStartDoc = lastVisible;
-        q = query(baseQuery, ...queryConstraints, startAfter(currentStartDoc), limit(ITEMS_PER_PAGE));
-    } else if (direction === 'prev' && firstVisible && currentPage > 0) {
-        // Para ir para a página anterior, pegamos o marcador da página anterior à atual
-        const prevPageMarker = pageMarkers[currentPage - 1];
-        if (prevPageMarker && prevPageMarker.startDoc) {
-             currentStartDoc = prevPageMarker.startDoc;
-             // Firestore does not support `startBefore` directly with `orderBy('desc')` easily.
-             // We need to reverse the order for endBefore with orderBy('desc')
-             q = query(baseQuery, ...queryConstraints.filter(c => c.fieldPath !== 'timestamp' || c.direction !== 'desc'), 
-                       orderBy('timestamp', 'asc'), // Temporarily order ascending
-                       startAfter(prevPageMarker.endDoc), // Start after the end of the previous page
-                       limit(ITEMS_PER_PAGE));
-        } else { // Se não tem marcador ou é a primeira página, reinicia
-             q = query(baseQuery, ...queryConstraints, limit(ITEMS_PER_PAGE));
-             setCurrentPage(0); // Garante que volta para a página 0
-        }
-    } else { // Primeira carga ou reset de filtros
-      q = query(baseQuery, ...queryConstraints, limit(ITEMS_PER_PAGE));
-    }
 
     try {
-      const documentSnapshots = await getDocs(q);
-      let fetchedLogs = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Se for navegação "anterior" usando endBefore/limitToLast, a ordem vem invertida
-      if (direction === 'prev' && documentSnapshots.docs.length > 0) {
-        fetchedLogs.reverse(); // Reverte para a ordem correta
-      }
+        let currentQueryRef = collection(db, 'auditLogs');
+        let queryConstraints = [];
 
-      setLogs(fetchedLogs);
-
-      // Popular opções de filtro dinamicamente a partir dos logs
-      // ATENÇÃO: Para ambientes de produção com muitos logs, esta abordagem pode ser ineficiente.
-      // Seria melhor ter coleções separadas para `actionTypes` e `actorEmails`
-      // ou limitar a busca para popular estes dropdowns.
-      const allLogsSnapshot = await getDocs(query(collection(db, 'auditLogs'))); // Busca todos os logs para filtros
-      const actionTypes = new Set();
-      const actorEmails = new Set();
-      allLogsSnapshot.docs.forEach(doc => {
-        const logData = doc.data();
-        actionTypes.add(logData.actionType);
-        if (logData.actor && logData.actor.email) {
-          actorEmails.add(logData.actor.email);
+        if (currentFilterActionType !== 'todos') {
+          queryConstraints.push(where('actionType', '==', currentFilterActionType));
         }
-      });
-      setAllActionTypes(Array.from(actionTypes).sort());
-      setAllActorEmails(Array.from(actorEmails).sort());
+        if (currentFilterActorEmail) {
+          queryConstraints.push(where('actor.email', '==', currentFilterActorEmail));
+        }
+        if (currentFilterTargetType !== 'todos') {
+          queryConstraints.push(where('target.type', '==', currentFilterTargetType));
+        }
+        if (currentFilterTargetId) {
+          queryConstraints.push(where('target.id', '==', currentFilterTargetId));
+        }
 
+        let startDateObj = null;
+        if (currentFilterStartDate) {
+            startDateObj = startOfDay(parseISO(currentFilterStartDate));
+            queryConstraints.push(where('timestamp', '>=', startDateObj));
+        }
+        let endDateObj = null;
+        if (currentFilterEndDate) {
+            endDateObj = endOfDay(parseISO(currentFilterEndDate));
+            queryConstraints.push(where('timestamp', '<=', endDateObj));
+        }
 
-      if (documentSnapshots.docs.length > 0) {
-        const newFirstVisible = documentSnapshots.docs[0];
-        const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-        setFirstVisible(newFirstVisible);
-        setLastVisible(newLastVisible);
+        queryConstraints.push(orderBy('timestamp', 'desc'));
 
-        // Atualizar marcadores de página
-        if (direction === 'next' && currentPage === pageMarkers.length -1) {
-            setPageMarkers(prev => [...prev, { page: currentPage + 1, startDoc: newFirstVisible, endDoc: newLastVisible }]);
-        } else if (direction === 'prev' && currentPage > 0) {
-            setPageMarkers(prev => prev.slice(0, currentPage)); // Remove o marcador da página atual ao voltar
+        let q;
+        let newPageIndex = currentPageIdx;
+
+        if (resetPagination) { 
+            q = query(currentQueryRef, ...queryConstraints, limit(ITEMS_PER_PAGE));
+            newPageIndex = 0;
+        } else if (direction === 'next') {
+            q = query(currentQueryRef, ...queryConstraints, startAfter(currentLastVisibleDoc), limit(ITEMS_PER_PAGE));
+            newPageIndex = currentPageIdx + 1;
+        } else if (direction === 'prev' && currentPageIdx > 0) {
+            const prevPageStartDoc = currentPageHistory[currentPageIdx - 1];
+            q = query(currentQueryRef, ...queryConstraints, startAfter(prevPageStartDoc), limit(ITEMS_PER_PAGE));
+            newPageIndex = currentPageIdx - 1;
+        } else { 
+            q = query(currentQueryRef, ...queryConstraints, limit(ITEMS_PER_PAGE));
+            newPageIndex = 0;
         }
         
-        // Verificar se há mais páginas à frente
-        const nextQueryCheck = query(baseQuery, ...queryConstraints, startAfter(newLastVisible), limit(1));
-        const nextSnapshotCheck = await getDocs(nextQueryCheck);
-        setHasMore(!nextSnapshotCheck.empty);
+        const documentSnapshots = await getDocs(q);
+        const fetchedLogs = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Verificar se há páginas anteriores (se não for a primeira página)
-        setHasPrevious(currentPage > 0);
+        setLogs(fetchedLogs);
 
-      } else {
-        setFirstVisible(null);
-        setLastVisible(null);
-        setHasMore(false);
-        setHasPrevious(false);
-      }
-      
+        if (fetchedLogs.length > 0) {
+          const newFirstVisible = documentSnapshots.docs[0];
+          const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+          lastVisibleDocRef.current = newLastVisible; // Atualiza o ref
+          
+          if (resetPagination) {
+            pageHistoryRef.current = [null, newFirstVisible];
+          } else if (direction === 'next' && newPageIndex >= currentPageHistory.length) { 
+              pageHistoryRef.current = [...currentPageHistory, newFirstVisible]; 
+          } else if (direction === 'prev' && newPageIndex < currentPageHistory.length - 1) { 
+              pageHistoryRef.current = currentPageHistory.slice(0, currentPageIdx + 1); 
+          }
+          currentPageIndexRef.current = newPageIndex; // Atualiza o ref
+
+          const nextQueryCheck = query(currentQueryRef, ...queryConstraints, startAfter(newLastVisible), limit(1));
+          const nextSnapshotCheck = await getDocs(nextQueryCheck);
+          hasMorePagesRef.current = !nextSnapshotCheck.empty; // Atualiza o ref
+          
+          hasPreviousPageRef.current = newPageIndex > 0; // Atualiza o ref
+
+          // ATUALIZAÇÃO DOS ESTADOS LOCAIS PARA GATILHAR A RE-RENDERIZAÇÃO
+          setLastVisibleDoc(lastVisibleDocRef.current);
+          setPageHistory(pageHistoryRef.current);
+          setCurrentPageIndex(currentPageIndexRef.current);
+          setHasMorePages(hasMorePagesRef.current);
+          setHasPreviousPage(hasPreviousPageRef.current);
+
+        } else {
+          setLogs([]);
+          lastVisibleDocRef.current = null;
+          hasMorePagesRef.current = false;
+          hasPreviousPageRef.current = newPageIndex > 0;
+          currentPageIndexRef.current = newPageIndex;
+          pageHistoryRef.current = [null]; // Reseta o ref
+          
+          setLastVisibleDoc(lastVisibleDocRef.current);
+          setHasMorePages(hasMorePagesRef.current);
+          setHasPreviousPage(hasPreviousPageRef.current);
+          setCurrentPageIndex(currentPageIndexRef.current);
+          setPageHistory(pageHistoryRef.current); 
+        }
     } catch (err) {
       console.error("Erro ao carregar logs de auditoria:", err);
-      setError("Erro ao carregar logs de auditoria. Verifique suas permissões ou filtros.");
+      if (err.code === 'auth/quota-exceeded') {
+        setError('Cota de autenticação excedida. Por favor, aguarde e tente novamente.');
+        toast.error('Cota de autenticação excedida. Tente novamente mais tarde.');
+        setTimeout(() => { logout(); navigate('/'); }, 1000); 
+      } else if (err.code === 'permission-denied') {
+        setError('Permissão negada ao carregar logs. Verifique seu papel de Master Administrador.');
+        toast.error('Permissão negada.');
+        setTimeout(() => navigate('/master-dashboard'), 0);
+      } else {
+        setError(`Erro ao carregar logs: ${err.message}.`);
+      }
     } finally {
       setLoadingLogs(false);
     }
-  }, [isMasterAdmin, currentUser, filterActionType, filterActorEmail, filterTargetType, filterTargetId, filterStartDate, filterEndDate, currentPage, pageMarkers]);
+  }, [filterActionType, filterActorEmail, filterTargetType, filterTargetId, filterStartDate, filterEndDate, navigate, logout, authLoading, currentUser]);
 
-  // Efeito para recarregar quando filtros mudam
+
+  // useEffect PRINCIPAL: Lida com autenticação e permissões.
   useEffect(() => {
-    // Resetar paginação ao mudar filtros
-    setLastVisible(null);
-    setFirstVisible(null);
-    setCurrentPage(0);
-    setHasMore(true);
-    setHasPrevious(false);
-    setPageMarkers([{ page: 0, startDoc: null, endDoc: null }]); // Resetar marcadores
-    fetchLogs('next');
-  }, [filterActionType, filterActorEmail, filterTargetType, filterTargetId, filterStartDate, filterEndDate, fetchLogs]);
+    if (authLoading) {
+      setLoadingLogs(true); 
+      return;
+    }
+
+    if (!currentUser) {
+        toast.error('Você precisa estar logado para acessar esta página.');
+        navigate('/');
+        setLoadingLogs(false);
+        return;
+    }
+    
+    if (!auditLogsComponentInitialLoadRef.current) { 
+      async function handleAuthAndLoad() {
+          const authInstance = getAuth();
+          try {
+              const idTokenResult = await authInstance.currentUser.getIdTokenResult(true);
+              const currentIsMasterAdmin = idTokenResult.claims.isMasterAdmin === true;
+              
+              console.log("AuditLogs.jsx: Custom Claims ATUALIZADAS após refresh (Auth useEffect):", idTokenResult.claims);
+
+              masterAdminStatusRef.current = currentIsMasterAdmin; // <--- USO DO NOME PADRONIZADO
+
+              if (!currentIsMasterAdmin) { 
+                  toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
+                  navigate('/master-dashboard');
+                  setLoadingLogs(false);
+                  return;
+              }
+              
+              fetchLogs('next', true); 
+              auditLogsComponentInitialLoadRef.current = true; 
+
+          } catch (err) {
+              console.error("AuditLogs.jsx: Erro na verificação de permissões (Auth useEffect):", err);
+              if (err.code === 'auth/quota-exceeded' || err.code === 'auth/user-token-expired' || err.code === 'auth/invalid-user-token') {
+                  setError('Sessão expirou ou cota de autenticação excedida. Por favor, faça login novamente.');
+                  toast.error('Sessão expirou. Faça login novamente.');
+                  setTimeout(() => { logout(); navigate('/'); }, 1000); 
+              } else if (err.code === 'permission-denied') {
+                  setError('Permissão negada ao iniciar. Verifique seu papel.');
+                  navigate('/master-dashboard');
+              } else {
+                  setError(`Erro inesperado ao verificar autenticação: ${err.message}.`);
+              }
+              setLoadingLogs(false);
+              auditLogsComponentInitialLoadRef.current = true; 
+          }
+      }
+      handleAuthAndLoad();
+    } else { 
+      setLoadingLogs(false); 
+    }
+  }, [currentUser, authLoading, navigate, logout, fetchLogs]);
 
 
+  // Efeito para popular os dropdowns de filtro
+  useEffect(() => {
+    if (currentUser && masterAdminStatusRef.current) { // <--- USO DO NOME PADRONIZADO
+      const fetchFilterOptions = async () => {
+        try {
+          const limitedLogsQuery = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(1000));
+          const snapshot = await getDocs(limitedLogsQuery);
+
+          const actionTypes = new Set();
+          const actorEmails = new Set();
+          snapshot.docs.forEach(doc => {
+            const logData = doc.data();
+            if (logData.actionType) actionTypes.add(logData.actionType);
+            if (logData.actor && logData.actor.email) actorEmails.add(logData.actor.email);
+          });
+          setAllActionTypes(Array.from(actionTypes).sort());
+          setAllActorEmails(Array.from(actorEmails).sort());
+        } catch (err) {
+          console.error("Erro ao carregar opções de filtro de logs:", err);
+          if (err.code === 'permission-denied') {
+            setError('Permissão negada para carregar opções de filtro de logs.');
+            toast.error('Permissão negada para opções de filtro.');
+          }
+        }
+      };
+      fetchFilterOptions();
+    }
+  }, [currentUser, masterAdminStatusRef]); 
+
+  // Efeito para acionar nova busca quando filtros mudam
+  useEffect(() => {
+    if (!authLoading && currentUser && masterAdminStatusRef.current && auditLogsComponentInitialLoadRef.current) { // <--- USO DOS NOMES PADRONIZADOS
+      fetchLogs('next', true); 
+    }
+  }, [filterActionType, filterActorEmail, filterTargetType, filterTargetId, filterStartDate, filterEndDate, fetchLogs, currentUser, authLoading]);
+
+  // Handlers para os botões de paginação
   const handleNextPage = () => {
-    if (hasMore) {
-      setCurrentPage(prev => prev + 1);
-      fetchLogs('next');
+    if (hasMorePages && !loadingLogs) {
+      fetchLogs('next', false); 
     }
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(prev => prev - 1);
-      fetchLogs('prev');
+    if (hasPreviousPage && !loadingLogs) {
+      fetchLogs('prev', false); 
     }
   };
 
@@ -264,8 +348,8 @@ function AuditLogs() {
     );
   }
 
-  if (!currentUser || !isMasterAdmin) {
-    return null;
+  if (!currentUser || !masterAdminStatusRef.current) { // <--- USO DO NOME PADRONIZADO
+    return null; 
   }
 
   return (
@@ -277,7 +361,7 @@ function AuditLogs() {
         {/* Título da Página e Botão Voltar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <h1 className="text-3xl font-extrabold text-black text-center sm:text-left">
-            Logs de Auditoria 🕵️‍♀️
+            Registros de Auditoria 🕵️‍♀️
             <div className="w-24 h-1 bg-yellow-500 mx-auto sm:mx-0 mt-2 rounded-full"></div>
           </h1>
           <Link
@@ -310,7 +394,7 @@ function AuditLogs() {
               >
                 <option value="todos">Todos os Tipos</option>
                 {allActionTypes.map(type => (
-                  <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
+                  <option key={type} value={type}>{type?.replace(/_/g, ' ')}</option>
                 ))}
               </select>
             </div>
@@ -341,7 +425,7 @@ function AuditLogs() {
                 <option value="usuario">Usuário</option>
                 <option value="pedido">Pedido</option>
                 <option value="cardapio">Cardápio</option>
-                <option value="plano">Plano</option> {/* Adicionado tipo "plano" */}
+                <option value="plano">Plano</option>
               </select>
             </div>
             <div>
@@ -382,7 +466,7 @@ function AuditLogs() {
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
           <h2 className="text-xl font-bold mb-6 text-black">
             Registros de Auditoria ({logs.length})
-            <div className="w-16 h-0.5 bg-yellow-500 mt-2 rounded-full"></div> {/* Pequena linha decorativa */}
+            <div className="w-16 h-0.5 bg-yellow-500 mt-2 rounded-full"></div>
           </h2>
           {logs.length === 0 ? (
             <p className="text-gray-500 text-center py-8">Nenhum log de auditoria encontrado com os filtros selecionados.</p>
@@ -405,7 +489,7 @@ function AuditLogs() {
                         {log.timestamp && log.timestamp.toDate ? format(log.timestamp.toDate(), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR }) : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className="font-semibold text-blue-700">{log.actionType.replace(/_/g, ' ')}</span> {/* Ação em azul para destaque */}
+                        <span className="font-semibold text-blue-700">{log.actionType?.replace(/_/g, ' ')}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         {log.actor?.email} (<span className="font-medium text-gray-800">{log.actor?.role}</span>)
@@ -437,15 +521,15 @@ function AuditLogs() {
         <div className="flex justify-center items-center mt-8 space-x-4">
           <button
             onClick={handlePreviousPage}
-            disabled={!hasPrevious || loadingLogs}
+            disabled={!hasPreviousPage || loadingLogs}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md font-semibold hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
           >
             Anterior
           </button>
-          <span className="text-gray-700 font-medium">Página {currentPage + 1}</span>
+          <span className="text-gray-700 font-medium">Página {currentPageIndex + 1}</span>
           <button
             onClick={handleNextPage}
-            disabled={!hasMore || loadingLogs}
+            disabled={!hasMorePages || loadingLogs}
             className="px-4 py-2 bg-yellow-500 text-black rounded-md font-semibold hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
           >
             Próxima

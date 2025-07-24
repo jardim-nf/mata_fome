@@ -1,12 +1,12 @@
 // src/pages/MasterDashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, orderBy, onSnapshot, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { getAuth } from "firebase/auth"; // Importar getAuth para forçar o refresh do token
-import { // Importações do Chart.js
+import { getAuth } from "firebase/auth"; 
+import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
@@ -18,11 +18,10 @@ import { // Importações do Chart.js
   PointElement,
   LineElement,
 } from 'chart.js';
-import { Bar, Pie, Line } from 'react-chartjs-2'; // Componentes de gráfico
-import { format, subDays } from 'date-fns'; // Funções de data
-import { ptBR } from 'date-fns/locale'; // Localização para datas
-import { auditLogger } from '../utils/auditLogger'; // Utilitário de log de auditoria
-import MasterNotifications from '../components/MasterNotifications'; // Componente de notificações
+import { Bar, Pie, Line } from 'react-chartjs-2';
+import { format, subDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { auditLogger } from '../utils/auditLogger'; 
 
 // Registra os componentes do Chart.js que você vai usar
 ChartJS.register(
@@ -39,35 +38,32 @@ ChartJS.register(
 
 // --- Componente de Header Master Dashboard ---
 function DashboardHeader({ currentUser, logout, navigate }) {
-  // Extrai o prefixo do email do usuário para exibir na saudação
   const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
 
-  // Função para lidar com o logout do usuário
   const handleLogout = async () => {
     try {
-      await logout(); // Chama a função de logout do contexto de autenticação
-      toast.success('Você foi desconectado com sucesso!'); // Notificação de sucesso
-      navigate('/'); // Redireciona para a página inicial
+      await logout();
+      toast.success('Você foi desconectado com sucesso!');
+      navigate('/');
     } catch (error) {
-      console.error("Erro ao fazer logout:", error); // Loga o erro no console
-      toast.error('Ocorreu um erro ao tentar desconectar.'); // Notificação de erro
+      console.error("Erro ao fazer logout:", error);
+      toast.error('Ocorreu um erro ao tentar desconectar.');
     }
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-20 p-6 flex justify-between items-center bg-white shadow-sm border-b border-gray-100">
-      <div className="font-extrabold text-2xl text-black cursor-pointer hover:text-gray-800 transition-colors duration-300" onClick={() => navigate('/')}>
+    <header className="fixed top-0 left-0 right-0 z-20 p-6 flex justify-between items-center bg-black shadow-lg border-b border-gray-800"> {/* Sombra mais forte */}
+      <div className="font-extrabold text-2xl text-white cursor-pointer hover:text-yellow-500 transition-colors duration-300" onClick={() => navigate('/')}> {/* Efeito hover no logo */}
         DEU FOME <span className="text-yellow-500">.</span>
       </div>
       <div className="flex items-center space-x-4">
-        <span className="text-black text-md font-medium">Olá, {userEmailPrefix}!</span>
-        {/* Links de navegação rápida dentro do header */}
+        <span className="text-white text-md font-medium">Olá, {userEmailPrefix}!</span>
         <Link to="/master-dashboard" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
             Dashboard
         </Link>
         <button
-          onClick={handleLogout} // Ação de logout
-          className="px-4 py-2 rounded-full text-black border border-gray-300 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-100 hover:border-gray-400"
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-full text-white border border-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-500 hover:text-black" // Botão Sair com borda amarela
         >
           Sair
         </button>
@@ -78,231 +74,157 @@ function DashboardHeader({ currentUser, logout, navigate }) {
 // --- Fim DashboardHeader ---
 
 
-// --- Componente Principal MasterDashboard ---
 function MasterDashboard() {
-  const navigate = useNavigate(); // Hook para navegação
-  // Hook useAuth fornece currentUser (usuário logado), isMasterAdmin (claim), e loading (status da autenticação)
-  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth(); 
+  const navigate = useNavigate();
+  const { currentUser, loading: authLoading, logout } = useAuth(); 
 
-  // Estados para controlar o carregamento e erros do dashboard
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [dashboardError, setDashboardError] = useState('');
 
-  // Estados para dados de estabelecimentos
+  // ESTADOS PARA DADOS DO DASHBOARD
   const [totalEstabelecimentos, setTotalEstabelecimentos] = useState(0);
   const [estabelecimentosAtivos, setEstabelecimentosAtivos] = useState(0);
   const [estabelecimentosInativos, setEstabelecimentosInativos] = useState(0);
 
-  // Estados para dados de pedidos e vendas
   const [totalPedidosHoje, setTotalPedidosHoje] = useState(0);
   const [totalVendasHoje, setTotalVendasHoje] = useState(0);
   const [vendasPorDia, setVendasPorDia] = useState([]);
 
-  // Estados para gerenciamento de estabelecimentos na tabela
+  // ESTADOS PARA A TABELA DE ESTABELECIMENTOS
   const [allEstabelecimentos, setAllEstabelecimentos] = useState([]); 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('todos');
 
-  // PRIMEIRO useEffect: Lida com o redirecionamento inicial e verificação básica de permissão
+  // isMasterAdmin real, obtido do token após o refresh
+  const [isMasterAdminLocal, setIsMasterAdminLocal] = useState(false); 
+
+
+  // useEffect 1: Lida com a autenticação, permissões e o disparo da carga inicial do dashboard
   useEffect(() => {
-    // Só age quando o status de autenticação (authLoading) é finalizado
-    if (!authLoading) {
-      if (!currentUser) {
-        // Se não há usuário logado, redireciona para a página inicial e mostra erro
-        toast.error('Você precisa estar logado para acessar esta página.');
-        navigate('/');
-        return; // Sai do useEffect
-      }
-      // Se não é Master Admin, redireciona. isMasterAdmin é verificado pelo AuthContext.
-      // O próximo useEffect fará a verificação mais granular com o refresh do token.
-      if (!isMasterAdmin && (!currentUser.claims || !currentUser.claims.isAdmin)) { // Adicionado verificação para isAdmin no currentUser.claims
-        toast.error('Acesso negado. Você não tem permissões de Administrador.');
-        navigate('/');
-        return; // Sai do useEffect
-      }
-      // Se passou pelas verificações básicas, o dashboard não está mais no "loadingAuth"
-      // O loadingDashboard será controlado pelo segundo useEffect.
+    if (authLoading) { 
+      setLoadingDashboard(true);
+      return;
     }
-  }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
-  // SEGUNDO useEffect: Lida com o carregamento de dados e verificação de permissões avançada (com refresh do token)
+    if (!currentUser) { 
+      toast.error('Você precisa estar logado para acessar esta página.');
+      navigate('/');
+      setLoadingDashboard(false);
+      return;
+    }
+
+    async function checkMasterAdminStatus() {
+      try {
+        const authInstance = getAuth();
+        const idTokenResult = await authInstance.currentUser.getIdTokenResult(true); 
+        const masterAdminStatus = idTokenResult.claims.isMasterAdmin === true;
+        setIsMasterAdminLocal(masterAdminStatus); 
+
+        if (!masterAdminStatus) { 
+          toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
+          navigate('/');
+          setLoadingDashboard(false);
+          return;
+        }
+
+        setLoadingDashboard(false); 
+      } catch (error) {
+        console.error("MasterDashboard: Erro ao verificar permissões:", error);
+        toast.error(`Erro ao verificar permissões: ${error.message}. Por favor, faça login novamente.`);
+        logout(); 
+        navigate('/');
+        setLoadingDashboard(false);
+      }
+    }
+    checkMasterAdminStatus();
+  }, [currentUser, authLoading, navigate, logout]);
+
+
+  // useEffect 2: Carrega os dados do dashboard APENAS se o usuário for Master Admin (confirmado localmente)
   useEffect(() => {
-    // Só tenta carregar dados se o AuthContext já terminou de carregar (authLoading é false)
-    // E se há um currentUser
-    // E se o usuário é Master Admin OU um Admin de Estabelecimento (com o estabelecimentoId na claim)
-    if (!authLoading && currentUser) {
-      setLoadingDashboard(true); // Ativa o estado de carregamento do dashboard
-      setDashboardError(''); // Limpa mensagens de erro anteriores
+    if (isMasterAdminLocal && currentUser) {
+      // Listener para estabelecimentos (contagem total, ativos, inativos)
+      const unsubscribeEstabelecimentos = onSnapshot(
+        collection(db, 'estabelecimentos'), 
+        (snapshot) => {
+          const fetchedEstabelecimentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setAllEstabelecimentos(fetchedEstabelecimentos);
+          setTotalEstabelecimentos(fetchedEstabelecimentos.length);
+          setEstabelecimentosAtivos(fetchedEstabelecimentos.filter(est => est.ativo).length);
+          setEstabelecimentosInativos(fetchedEstabelecimentos.filter(est => !est.ativo).length);
+        },
+        (error) => {
+          console.error("Erro ao carregar estabelecimentos para o Master Dashboard:", error);
+          setDashboardError("Erro ao carregar dados dos estabelecimentos.");
+          if (error.code === 'permission-denied') {
+            toast.error('Permissão negada ao carregar estabelecimentos. Verifique as regras do Firestore.');
+          }
+        }
+      );
 
-      const auth = getAuth(); // Obtém a instância do Firebase Auth para o refresh do token
+      const fetchPedidosData = async () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      // Função assíncrona para inicializar o dashboard, incluindo o refresh do token e carregamento de dados
-      const initializeDashboard = async () => {
+        const sevenDaysAgo = subDays(today, 6);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
         try {
-          // --- PASSO CHAVE: Força o refresh do token DE ID AQUI ---
-          // O 'true' garante que as custom claims mais recentes do backend (definidas pelas Cloud Functions)
-          // sejam buscadas e atualizadas no token do cliente.
-          const idTokenResult = await auth.currentUser.getIdTokenResult(true);
-          console.log("MasterDashboard: Custom Claims ATUALIZADAS após refresh:", idTokenResult.claims);
-
-          // Pega os status de admin e o ID do estabelecimento das custom claims atualizadas
-          const isMaster = idTokenResult.claims.isMasterAdmin === true;
-          const isEstAdmin = idTokenResult.claims.isAdmin === true;
-          const adminEstId = idTokenResult.claims.estabelecimentoId; // Este campo é CRUCIAL para admins de estabelecimento
-
-          // Re-verifica as permissões após o refresh do token
-          // Se não é Master Admin E (não é Admin de Estabelecimento OU não tem estabelecimentoId), então nega acesso
-          if (!isMaster && (!isEstAdmin || !adminEstId)) {
-            console.warn("MasterDashboard: Usuário logado mas sem as custom claims de admin/master admin necessárias ou incompletas. Redirecionando...");
-            toast.error('Suas permissões foram alteradas ou estão incompletas. Acesso negado. Por favor, contate o suporte.');
-            navigate('/'); // Redireciona para fora do dashboard
-            setLoadingDashboard(false); // Desativa o carregamento
-            return; // Sai da função
-          }
-
-          // --- Início do Carregamento de Dados do Firestore ---
-          // As queries abaixo são ajustadas com base no papel do usuário (Master Admin vs. Admin de Estabelecimento)
-
-          // 1. Carregamento de Estabelecimentos
-          let estabelecimentosQueryRef;
-          if (isMaster) {
-            // Master Admin pode ver todos os estabelecimentos
-            estabelecimentosQueryRef = collection(db, 'estabelecimentos');
-          } else if (isEstAdmin && adminEstId) {
-            // Admin de Estabelecimento vê APENAS o seu próprio estabelecimento na listagem
-            // Adapte 'adminUID' ou 'id' conforme o campo que liga o estabelecimento ao admin.
-            // Se o documento do estabelecimento tem um campo 'adminUID' com o UID do usuário:
-            estabelecimentosQueryRef = query(collection(db, 'estabelecimentos'), where('adminUID', '==', currentUser.uid));
-            // Ou se o ID do documento do estabelecimento é o adminEstId:
-            // estabelecimentosQueryRef = query(collection(db, 'estabelecimentos'), where(documentId(), '==', adminEstId));
-            console.log(`MasterDashboard: Admin de Estabelecimento (${currentUser.email}) filtrando estabelecimentos por adminUID: ${currentUser.uid}`);
-          } else {
-             // Caso de erro que já deveria ter sido pego acima, mas para segurança.
-             setDashboardError("Permissões insuficientes ou perfil de admin incompleto para carregar estabelecimentos.");
-             setLoadingDashboard(false);
-             return;
-          }
-
-          const unsubscribeEstabelecimentos = onSnapshot(
-            estabelecimentosQueryRef, // Usa a query ajustada para estabelecimentos
-            (snapshot) => {
-              const fetchedEstabelecimentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              setAllEstabelecimentos(fetchedEstabelecimentos);
-              setTotalEstabelecimentos(fetchedEstabelecimentos.length);
-              setEstabelecimentosAtivos(fetchedEstabelecimentos.filter(est => est.ativo).length);
-              setEstabelecimentosInativos(fetchedEstabelecimentos.filter(est => !est.ativo).length);
-            },
-            (error) => {
-              console.error("Erro ao carregar estabelecimentos para o Master Dashboard:", error);
-              setDashboardError(`Erro ao carregar dados dos estabelecimentos: ${error.message}.`);
-            }
+          const qTodayPedidos = query(
+            collection(db, 'pedidos'),
+            where('criadoEm', '>=', today)
           );
+          const todaySnapshot = await getDocs(qTodayPedidos);
+          let pedidosHojeCount = 0;
+          let vendasHojeTotal = 0;
+          todaySnapshot.forEach(doc => {
+            pedidosHojeCount++;
+            vendasHojeTotal += typeof doc.data().totalFinal === 'number' ? doc.data().totalFinal : 0;
+          });
+          setTotalPedidosHoje(pedidosHojeCount);
+          setTotalVendasHoje(vendasHojeTotal);
 
-          // 2. Carregamento de Pedidos e Vendas (Dados para Gráficos e Cards)
-          const fetchPedidosData = async () => {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+          const qLast7Days = query(
+            collection(db, 'pedidos'),
+            where('criadoEm', '>=', sevenDaysAgo),
+            orderBy('criadoEm', 'asc')
+          );
+          const last7DaysSnapshot = await getDocs(qLast7Days);
 
-            const sevenDaysAgo = subDays(today, 6);
-            sevenDaysAgo.setHours(0, 0, 0, 0);
+          const salesDataMap = new Map();
+          let currentDay = new Date(sevenDaysAgo); 
+          while (currentDay <= today) { 
+            salesDataMap.set(format(currentDay, 'dd/MM', { locale: ptBR }), 0);
+            currentDay = new Date(currentDay.setDate(currentDay.getDate() + 1));
+          }
 
-            try {
-              let pedidosBaseRef = collection(db, 'pedidos'); // Referência base para a coleção de pedidos
-              let qTodayPedidos; // Query para pedidos de hoje
-              let qLast7Days;    // Query para pedidos dos últimos 7 dias
-
-              // --- AQUI ESTÁ A LÓGICA CRÍTICA DE FILTRAGEM DE PEDIDOS ---
-              if (isMaster) {
-                // Master Admin vê todos os pedidos (sem filtro de estabelecimentoId)
-                qTodayPedidos = query(pedidosBaseRef, where('criadoEm', '>=', today));
-                qLast7Days = query(pedidosBaseRef, where('criadoEm', '>=', sevenDaysAgo), orderBy('criadoEm', 'asc'));
-                console.log("MasterDashboard: Master Admin carregando todos os pedidos.");
-              } else if (isEstAdmin && adminEstId) {
-                // Admin de Estabelecimento vê APENAS pedidos do seu estabelecimento
-                qTodayPedidos = query(pedidosBaseRef,
-                                      where('estabelecimentoId', '==', adminEstId), // FILTRO ESSENCIAL para o estabelecimento
-                                      where('criadoEm', '>=', today));
-                qLast7Days = query(pedidosBaseRef,
-                                   where('estabelecimentoId', '==', adminEstId), // FILTRO ESSENCIAL para o estabelecimento
-                                   where('criadoEm', '>=', sevenDaysAgo),
-                                   orderBy('criadoEm', 'asc'));
-                console.log(`MasterDashboard: Admin de Estabelecimento (${currentUser.email}) filtrando pedidos por estabelecimentoId: ${adminEstId}`);
-              } else {
-                // Cenário de erro: Se chegou aqui, as permissões são insuficientes ou incompletas
-                setDashboardError("Não foi possível determinar as permissões de pedidos. Acesso restrito.");
-                setLoadingDashboard(false);
-                return; // Sai da função de fetch de pedidos
-              }
-
-              // Executa a query para pedidos de hoje
-              const todaySnapshot = await getDocs(qTodayPedidos);
-              let pedidosHojeCount = 0;
-              let vendasHojeTotal = 0;
-              todaySnapshot.forEach(doc => {
-                pedidosHojeCount++;
-                vendasHojeTotal += typeof doc.data().totalFinal === 'number' ? doc.data().totalFinal : 0;
-              });
-              setTotalPedidosHoje(pedidosHojeCount);
-              setTotalVendasHoje(vendasHojeTotal);
-
-              // Executa a query para os últimos 7 dias
-              const last7DaysSnapshot = await getDocs(qLast7Days);
-
-              // Lógica para calcular vendas por dia (sem alterações)
-              const salesDataMap = new Map();
-              let currentDay = new Date(sevenDaysAgo); 
-              while (currentDay <= today) { 
-                salesDataMap.set(format(currentDay, 'dd/MM', { locale: ptBR }), 0);
-                currentDay = new Date(currentDay.setDate(currentDay.getDate() + 1));
-              }
-
-              last7DaysSnapshot.forEach(doc => {
-                const pedidoData = doc.data();
-                if (pedidoData.criadoEm && pedidoData.criadoEm.toDate && typeof pedidoData.totalFinal === 'number') {
-                  const dateKey = format(pedidoData.criadoEm.toDate(), 'dd/MM', { locale: ptBR });
-                  salesDataMap.set(dateKey, (salesDataMap.get(dateKey) || 0) + pedidoData.totalFinal);
-                }
-              });
-              setVendasPorDia(Array.from(salesDataMap.entries()));
-
-              console.log("Dados de pedidos e vendas carregados com sucesso.");
-
-            } catch (error) {
-              console.error("Erro ao carregar dados de pedidos e vendas:", error);
-              setDashboardError(`Erro ao carregar dados de vendas e pedidos: ${error.message}.`);
+          last7DaysSnapshot.forEach(doc => {
+            const pedidoData = doc.data();
+            if (pedidoData.criadoEm && pedidoData.criadoEm.toDate && typeof pedidoData.totalFinal === 'number') {
+              const dateKey = format(pedidoData.criadoEm.toDate(), 'dd/MM', { locale: ptBR });
+              salesDataMap.set(dateKey, (salesDataMap.get(dateKey) || 0) + pedidoData.totalFinal);
             }
-          };
-
-          await fetchPedidosData(); // Garante que o carregamento de pedidos termine
-          setLoadingDashboard(false); // Desativa o estado de carregamento do dashboard
-
-          return () => {
-            // Função de cleanup para desinscrever do listener do Firestore (estabelecimentos)
-            unsubscribeEstabelecimentos();
-          };
+          });
+          setVendasPorDia(Array.from(salesDataMap.entries()));
 
         } catch (error) {
-          // Captura erros durante o refresh do token ou a verificação inicial de claims
-          console.error("MasterDashboard: Erro durante a inicialização do dashboard (refresh do token ou verificação de claims):", error);
-          setDashboardError(`Erro ao inicializar dashboard: ${error.message}. Por favor, tente recarregar ou faça login novamente.`);
-          setLoadingDashboard(false); // Garante que o estado de carregamento seja desativado
-          
-          // Trata erros específicos de token expirado ou inválido
-          if (error.code === 'auth/id-token-expired' || error.code === 'auth/user-token-expired') {
-            toast.error('Sua sessão expirou. Por favor, faça login novamente.');
-            logout(); // Força o logout através do contexto de autenticação
-            navigate('/login'); // Redireciona para a página de login
+          console.error("Erro ao carregar dados de pedidos e vendas:", error);
+          setDashboardError("Erro ao carregar dados de vendas e pedidos.");
+          if (error.code === 'permission-denied') {
+            toast.error('Permissão negada ao carregar pedidos. Verifique as regras do Firestore.');
           }
         }
       };
 
-      initializeDashboard(); // Inicia o processo de inicialização do dashboard
+      fetchPedidosData(); 
 
-    } else {
-      // Se authLoading ainda é true ou currentUser é nulo, o primeiro useEffect já lidará com isso
-      // ou o componente estará no estado de carregamento inicial.
+      return () => {
+        unsubscribeEstabelecimentos(); 
+      };
+    } else if (!authLoading && !isMasterAdminLocal) {
+      setLoadingDashboard(false);
     }
-  }, [authLoading, currentUser, isMasterAdmin, navigate, logout]); // Dependências do useEffect
+  }, [isMasterAdminLocal, currentUser, authLoading]);
 
 
   // --- Gráficos: Cores e Estilos Ajustados para Preto/Amarelo/Branco ---
@@ -310,10 +232,10 @@ function MasterDashboard() {
     labels: ['Ativos', 'Inativos'],
     datasets: [
       {
-        data: [totalEstabelecimentos, estabelecimentosInativos], // Corrigido para usar totalEstabelecimentos
-        backgroundColor: ['#FFC107', '#212529'], // Amarelo vibrante para ativos, preto para inativos
+        data: [estabelecimentosAtivos, estabelecimentosInativos],
+        backgroundColor: ['#FFC107', '#212529'], 
         borderColor: ['#ffffff', '#ffffff'], 
-        borderWidth: 2, // Borda um pouco mais grossa para separar
+        borderWidth: 2,
       },
     ],
   };
@@ -325,7 +247,7 @@ function MasterDashboard() {
       legend: {
         position: 'right', 
         labels: {
-            color: '#212529', // Preto
+            color: '#212529', 
             font: {
                 size: 14,
                 weight: 'bold'
@@ -337,7 +259,7 @@ function MasterDashboard() {
       },
     },
     layout: {
-        padding: { // Aumentar um pouco o padding interno
+        padding: { 
             left: 10,
             right: 10,
             top: 20,
@@ -355,16 +277,16 @@ function MasterDashboard() {
       {
         label: 'Vendas Diárias (R$)',
         data: salesValues,
-        borderColor: '#FFC107', // Amarelo vibrante
-        backgroundColor: 'rgba(255, 193, 7, 0.1)', // Amarelo com transparência para o preenchimento
-        tension: 0.4, // Curva mais suave
-        fill: true, // Preenche a área abaixo da linha
+        borderColor: '#FFC107', 
+        backgroundColor: 'rgba(255, 193, 7, 0.1)', 
+        tension: 0.4, 
+        fill: true, 
         pointBackgroundColor: '#FFC107',
         pointBorderColor: '#fff',
-        pointRadius: 5, // Aumenta o tamanho dos pontos
-        pointHoverRadius: 7, // Aumenta o tamanho dos pontos no hover
-        pointHoverBackgroundColor: '#212529', // Ponto preto no hover
-        pointHoverBorderColor: '#FFC107', // Borda amarela no hover
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointHoverBackgroundColor: '#212529', 
+        pointHoverBorderColor: '#FFC107',
       },
     ],
   };
@@ -376,7 +298,7 @@ function MasterDashboard() {
       legend: {
         position: 'top',
         labels: {
-            color: '#212529', // Preto
+            color: '#212529', 
             font: {
                 size: 14,
                 weight: 'bold'
@@ -399,10 +321,10 @@ function MasterDashboard() {
             return label;
           }
         },
-        backgroundColor: '#212529', // Fundo preto para tooltip
-        titleColor: '#FFC107', // Amarelo para título do tooltip
-        bodyColor: '#FFFFFF', // Branco para corpo do tooltip
-        borderColor: '#FFC107', // Borda amarela
+        backgroundColor: '#212529',
+        titleColor: '#FFC107',
+        bodyColor: '#FFFFFF',
+        borderColor: '#FFC107',
         borderWidth: 1,
         cornerRadius: 4,
         displayColors: false, 
@@ -411,10 +333,10 @@ function MasterDashboard() {
     scales: {
       x: {
         ticks: {
-          color: '#212529' // Preto
+          color: '#212529'
         },
         grid: {
-          color: 'rgba(0,0,0,0.05)' // Linhas de grade mais suaves
+          color: 'rgba(0,0,0,0.05)'
         }
       },
       y: {
@@ -423,10 +345,10 @@ function MasterDashboard() {
           callback: function(value) {
             return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
           },
-          color: '#212529' // Preto
+          color: '#212529'
         },
         grid: {
-          color: 'rgba(0,0,0,0.05)' // Linhas de grade mais suaves
+          color: 'rgba(0,0,0,0.05)'
         }
       }
     }
@@ -434,6 +356,13 @@ function MasterDashboard() {
 
   const toggleEstabelecimentoAtivo = async (estabelecimentoId, currentStatus, estabelecimentoNome) => {
     try {
+      const authInstance = getAuth();
+      const idTokenResult = await authInstance.currentUser.getIdTokenResult();
+      if (idTokenResult.claims.isMasterAdmin !== true) {
+        toast.error('Apenas o Master Administrador pode alterar o status de estabelecimentos.');
+        return;
+      }
+
       const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
       await updateDoc(estabRef, {
         ativo: !currentStatus,
@@ -441,7 +370,7 @@ function MasterDashboard() {
       });
       auditLogger(
           currentStatus ? 'ESTABELECIMENTO_DESATIVADO' : 'ESTABELECIMENTO_ATIVADO',
-          { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, // Role aqui é fixo como masterAdmin, revisar se é master ou admin
+          { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
           { type: 'estabelecimento', id: estabelecimentoId, name: estabelecimentoNome },
           { oldValue: currentStatus, newValue: !currentStatus }
       );
@@ -449,49 +378,67 @@ function MasterDashboard() {
     } catch (error) {
       console.error("Erro ao alternar status do estabelecimento:", error);
       toast.error("Erro ao alternar status do estabelecimento.");
+      if (error.code === 'permission-denied') {
+        toast.error('Permissão negada ao alterar status do estabelecimento.');
+      }
     }
   };
 
   const handleDeleteEstabelecimento = async (estabelecimentoId, estabelecimentoNome) => {
     if (window.confirm(`Tem certeza que deseja DELETAR o estabelecimento "${estabelecimentoNome}"? Esta ação é irreversível.`)) {
       try {
-        await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId));
+        const authInstance = getAuth();
+        const idTokenResult = await authInstance.currentUser.getIdTokenResult();
+        if (idTokenResult.claims.isMasterAdmin !== true) {
+          toast.error('Apenas o Master Administrador pode deletar estabelecimentos.');
+          return;
+        }
+
+        await deleteDoc(doc(db, 'estabelecimentos', establishmentId));
         auditLogger(
             'ESTABELECIMENTO_DELETADO',
-            { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, // Role aqui é fixo como masterAdmin, revisar se é master ou admin
-            { type: 'estabelecimento', id: estabelecimentoId, name: estabelecimentoNome }
+            { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
+            { type: 'estabelecimento', id: establishmentId, name: estabelecimentoNome }
         );
         toast.success(`Estabelecimento "${estabelecimentoNome}" deletado com sucesso!`);
       } catch (error) {
         console.error("Erro ao deletar estabelecimento:", error);
         toast.error(`Erro ao deletar o estabelecimento "${estabelecimentoNome}".`);
+        if (error.code === 'permission-denied') {
+          toast.error('Permissão negada ao deletar estabelecimento.');
+        }
       }
     }
   };
 
+  // Filtragem da tabela de estabelecimentos
   const filteredEstabelecimentos = allEstabelecimentos.filter(estab => {
     const matchesSearchTerm = estab.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                               (estab.adminUID && estab.adminUID.toLowerCase().includes(searchTerm.toLowerCase()));
+                              (estab.adminUID && estab.adminUID.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = filterStatus === 'todos' ||
-                              (filterStatus === 'ativos' && estab.ativo) ||
-                              (filterStatus === 'inativos' && !estab.ativo);
+                          (filterStatus === 'ativos' && estab.ativo) ||
+                          (filterStatus === 'inativos' && !estab.ativo);
 
     return matchesSearchTerm && matchesStatus;
   });
 
+  // Renderização condicional para loading e erros
   if (authLoading || loadingDashboard) {
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-white">
-          <p className="text-xl text-black">Carregando Master Dashboard...</p>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+          <p className="text-xl text-black">Carregando Dashboard Master...</p>
         </div>
     );
   }
 
-  // Acesso negado e redirecionamento são tratados no primeiro useEffect.
-  // Se chegou aqui, as permissões básicas estão OK.
+  // Se não é Master Admin, ou não está logado, já foi redirecionado pelo useEffect 1
+  if (!currentUser || !isMasterAdminLocal) { 
+    return null; 
+  }
+
   return (
-    <div className="bg-gray-50 min-h-screen pt-24 pb-8 px-4"> {/* Fundo principal levemente cinza */}
+    <div className="bg-gray-50 min-h-screen pt-24 pb-8 px-4">
       <DashboardHeader currentUser={currentUser} logout={logout} navigate={navigate} /> 
       <div className="max-w-7xl mx-auto">
         {dashboardError && (
@@ -502,77 +449,179 @@ function MasterDashboard() {
         )}
 
         <h1 className="text-3xl font-extrabold text-black mb-8 text-center md:text-left">
-          🚀 Painel (Blackburger Barra Alegre) {/* Título mais específico do estabelecimento */}
+          🚀 Dashboard Master
           <div className="w-24 h-1 bg-yellow-500 mx-auto md:mx-0 mt-2 rounded-full"></div>
         </h1>
 
-        {/* Botões de Navegação Rápida (Manter, mas talvez alguns sejam apenas para MasterAdmin) */}
-        {/* Você pode adicionar uma condição aqui: {isMasterAdmin && ( ... seus botões MasterAdmin ... )} */}
+        {/* Botões de Navegação Rápida */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-10">
-             {/* Exemplo de botão condicional para MasterAdmin */}
-             {isMasterAdmin && ( // Botões que só Master Admin pode ver
-                 <>
-                    <Link to="/admin/cadastrar-estabelecimento" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd"></path></svg>
-                        <span>Novo Estab.</span>
-                    </Link>
-                    <Link to="/master/usuarios" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12 10a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a4 4 0 014-4h4a4 4 0 014 4v2z" /></svg>
-                        <span>Gerenciar Usuários</span>
-                    </Link>
-                    <Link to="/master/pedidos" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2V1a1 1 0 010 2h2V1a1 1 0 011-1h2a1 1 0 011 1v2h2a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 0h6v3H7V5zm6 4H7v7h6V9z" clipRule="evenodd"></path></svg>
-                        <span>Ver Pedidos (Geral)</span>
-                    </Link>
-                    <Link to="/master/estabelecimentos" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"></path></svg>
-                        <span>Listar Estab. (Geral)</span>
-                    </Link>
-                    <Link to="/master/importar-cardapio" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-3.232l-1.664-1.664A1.998 1.998 0 0010 2H7a2 2 0 00-2 2v1z" /></svg>
-                        <span>Importar Cardápio (Geral)</span>
-                    </Link>
-                    <Link to="/master/plans" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /></svg>
-                        <span>Gerenciar Planos</span>
-                    </Link>
-                    <Link to="/admin/audit-logs" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2z" /></svg>
-                        <span>Logs Auditoria</span>
-                    </Link>
-                 </>
-             )}
-
-            {/* Botões específicos para Admin de Estabelecimento (se for essa a intenção) */}
-            {currentUser && currentUser.claims?.isAdmin && (
-                <>
-                    {/* Exemplo: Um link para "Meu Cardápio" para o admin do estabelecimento */}
-                    <Link to={`/admin/meu-cardapio/${currentUser.claims.estabelecimentoId}`} className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2V1a1 1 0 010 2h2V1a1 1 0 011-1h2a1 1 0 011 1v2h2a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 0h6v3H7V5zm6 4H7v7h6V9z" clipRule="evenodd"></path></svg>
-                        <span>Meu Cardápio</span>
-                    </Link>
-                    {/* Outros botões específicos do estabelecimento */}
-                </>
-            )}
+            <Link to="/admin/cadastrar-estabelecimento" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd"></path></svg>
+                <span>Novo Estab.</span>
+            </Link>
+            <Link to="/master/usuarios" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12 10a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a4 4 0 014-4h4a4 4 0 014 4v2z" /></svg>
+                <span>Gerenciar Usuários</span>
+            </Link>
+            <Link to="/master/pedidos" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2V1a1 1 0 010 2h2V1a1 1 0 011-1h2a1 1 0 011 1v2h2a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 0h6v3H7V5zm6 4H7v7h6V9z" clipRule="evenodd"></path></svg>
+                <span>Ver Pedidos (Geral)</span>
+            </Link>
+            <Link to="/master/estabelecimentos" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"></path></svg>
+                <span>Listar Estab. (Geral)</span>
+            </Link>
+            <Link to="/master/importar-cardapio" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-3.232l-1.664-1.664A1.998 1.998 0 0010 2H7a2 2 0 00-2 2v1z" /></svg>
+                <span>Importar Cardápio</span>
+            </Link>
+            <Link to="/master/plans" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /></svg>
+                <span>Gerenciar Planos</span>
+            </Link>
+            <Link to="/admin/audit-logs" className="bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-yellow-600 transition-colors duration-300 flex items-center justify-center gap-2 text-center">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2z" /></svg>
+                <span>Logs Auditoria</span>
+            </Link>
         </div>
 
-        {/* ... (cards, gráficos, tabela de gerenciamento de estabelecimentos) ... */}
+        {/* Cards de Visão Geral */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Card: Total de Estabelecimentos */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2">
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a6 6 0 00-6 6v3.586l1.707 1.707A1 1 0 006.707 14H13.293a1 1 0 00.707-.293l1.707-1.707V8a6 6 0 00-6-6zM14 17a1 1 0 100-2H6a1 1 0 100 2h8z" /></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Total de Estabelecimentos</h2>
+                <p className="text-4xl font-extrabold text-yellow-500 mt-2">{totalEstabelecimentos}</p>
+            </div>
+            {/* Card: Estabelecimentos Ativos */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2">
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Estabelecimentos Ativos</h2>
+                <p className="text-4xl font-extrabold text-black mt-2">{estabelecimentosAtivos}</p>
+            </div>
+            {/* Card: Estabelecimentos Inativos */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2">
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Estabelecimentos Inativos</h2>
+                <p className="text-4xl font-extrabold text-black mt-2">{estabelecimentosInativos}</p>
+            </div>
+            {/* Card: Vendas Hoje */}
+            <div className="bg-white rounded-lg shadow-md p-6 text-center hover:shadow-lg transition-shadow duration-300 flex flex-col items-center justify-center">
+                <div className="text-black mb-2">
+                    <svg className="w-10 h-10 mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l3 3a1 1 0 001.414-1.414L11 9.586V6z" clipRule="evenodd"></path></svg>
+                </div>
+                <h2 className="text-lg font-medium text-gray-700">Vendas Hoje</h2>
+                <p className="text-4xl font-extrabold text-yellow-500 mt-2">R$ {totalVendasHoje.toFixed(2).replace('.', ',')}</p>
+            </div>
+        </div>
 
-        {/* Aqui seria a seção do painel de pedidos do estabelecimento, que atualmente está vazia */}
-        {/* Você precisaria criar um novo componente para "Painel de Pedidos por Estabelecimento"
-            e passar o estabelecimentoId para ele.
-            As consultas dentro desse novo componente usariam onSnapshot com o filtro de estabelecimentoId.
-        */}
+        {/* Gráficos */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Gráfico de Vendas Consolidadas */}
+            <div className="bg-white rounded-lg shadow-md p-6 h-96 flex flex-col">
+                <h2 className="text-xl font-semibold mb-4 text-black">Vendas Consolidadas (Últimos 7 Dias)</h2>
+                <div className="flex-grow">
+                    <Line data={salesData} options={salesOptions} />
+                </div>
+            </div>
+            {/* Gráfico de Status dos Estabelecimentos */}
+            <div className="bg-white rounded-lg shadow-md p-6 h-96 flex flex-col">
+                <h2 className="text-xl font-semibold mb-4 text-black">Status dos Estabelecimentos</h2>
+                <div className="flex-grow flex items-center justify-center">
+                    <Pie data={statusData} options={statusOptions} />
+                </div>
+            </div>
+        </div>
+
+        {/* Seção de Gerenciamento de Estabelecimentos */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-xl font-semibold mb-6 text-black">Painel de Pedidos do Estabelecimento</h2>
-            {/* Este é um exemplo de onde você integraria o painel de pedidos específico do estabelecimento */}
-            {currentUser && currentUser.claims?.isAdmin && currentUser.claims?.estabelecimentoId ? (
-                <PedidosEstabelecimentoPanel estabelecimentoId={currentUser.claims.estabelecimentoId} />
-            ) : (
-                <p className="text-gray-600">Carregando pedidos ou sem permissão para visualizá-los neste painel.</p>
-            )}
-        </div>
+            <h2 className="text-xl font-semibold mb-6 text-black">Gerenciar Estabelecimentos</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">Buscar por Nome/Admin UID:</label>
+                    <input
+                        type="text"
+                        id="search"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-2"
+                        placeholder="Pesquisar estabelecimentos..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div>
+                    <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-1">Filtrar por Status:</label>
+                    <select
+                        id="statusFilter"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-2 bg-white"
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                    >
+                        <option value="todos">Todos</option>
+                        <option value="ativos">Ativos</option>
+                        <option value="inativos">Inativos</option>
+                    </select>
+                </div>
+            </div>
 
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Nome</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Slug</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Admin UID</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Status</th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-black uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredEstabelecimentos.length === 0 ? (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Nenhum estabelecimento encontrado com os critérios de busca/filtro.</td>
+                            </tr>
+                        ) : (
+                            filteredEstabelecimentos.map(estab => (
+                                <tr key={estab.id}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{estab.nome}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{estab.slug}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{estab.adminUID ? estab.adminUID.substring(0, 10) + '...' : 'N/A'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            estab.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        }`}>
+                                            {estab.ativo ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <Link to={`/master/estabelecimentos/${estab.id}/editar`} className="text-blue-600 hover:text-blue-900 mr-4">
+                                            Editar
+                                        </Link>
+                                        <button
+                                            onClick={() => toggleEstabelecimentoAtivo(estab.id, estab.ativo, estab.nome)}
+                                            className={`font-medium ${estab.ativo ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'} mr-4`}
+                                        >
+                                            {estab.ativo ? 'Desativar' : 'Ativar'}
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteEstabelecimento(estab.id, estab.nome)}
+                                            className="text-gray-600 hover:text-gray-900"
+                                        >
+                                            Deletar
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
       </div>
     </div>
   );
