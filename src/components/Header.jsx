@@ -9,9 +9,6 @@ const Header = () => {
         DeuFome
       </Link>
       <nav className="space-x-6">
-        <Link to="/cardapios" className="text-black hover:text-red-600">
-          Estabelecimentos
-        </Link>
         <Link to="/planos" className="text-black hover:text-red-600">
           Planos
         </Link>

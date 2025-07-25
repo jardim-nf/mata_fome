@@ -190,7 +190,6 @@ export default function Painel() {
                 <div className="flex items-center space-x-4">
                     <span className="text-black text-md font-medium">Olá, {currentUser?.email?.split('@')[0]}!</span>
                     <Link to="/painel" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm hover:bg-yellow-600">Painel de Pedidos</Link>
-                    <Link to={estabelecimentoInfo?.cardapioSlug ? `/cardapio/${estabelecimentoInfo.cardapioSlug}` : '#'} className="px-4 py-2 rounded-full text-black border border-gray-300 font-semibold text-sm hover:bg-gray-100">Cardápios</Link>
                     <button onClick={() => { logout(); navigate('/'); }} className="px-4 py-2 rounded-full text-black border border-gray-300 font-semibold text-sm hover:bg-gray-100">Sair</button>
                 </div>
             </header>

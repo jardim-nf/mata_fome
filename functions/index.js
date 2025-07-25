@@ -134,8 +134,8 @@ export const sendWhatsappMessage = onCall(async (data, context) => {
 
   try {
     // ⚠️ Substitua abaixo com seu endpoint e token da Z-API:
-    const ZAPI_INSTANCE_ID = "SUA_INSTANCIA"; // Ex: 123456
-    const ZAPI_TOKEN = "SEU_TOKEN"; // Ex: abc123xyz
+    const ZAPI_INSTANCE_ID = "3E485BC00D46A19BB9178A98E8AD8DA9"; // Ex: 123456
+    const ZAPI_TOKEN = "C1F0C279B3B2E538E07A4E06"; // Ex: abc123xyz
 
     const zapiUrl = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
 
@@ -144,7 +144,7 @@ export const sendWhatsappMessage = onCall(async (data, context) => {
       message: messageText
     });
 
-    logger.info("Mensagem enviada com sucesso via Z-API:", response.data);
+    logger.info("Mensagem enviada com sucesso via Z-APnpkm runI:", response.data);
     return { success: true, message: "Mensagem enviada com sucesso." };
 
   } catch (error) {
