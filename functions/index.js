@@ -10,7 +10,9 @@ import { getAuth } from 'firebase-admin/auth';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import nodemailer from 'nodemailer'; // Para envio de e-mails
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'; // Gatilho para Firestore
-
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions";
+import axios from "axios";
 // >>>>> NOVO IMPORT NECESSÁRIO PARA A FUNÇÃO DE WHATSAPP (se for usar API externa como Axios/Twilio) <<<<<
 // import axios from 'axios'; // Exemplo: se usar axios para outras APIs de WhatsApp
 // const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN); // Exemplo para Twilio (se estiver usando CommonJS ou Babel)
@@ -51,9 +53,9 @@ const MASTER_ADMIN_EMAIL = 'seu_email_master_admin@exemplo.com';
 // =========================================================================
 export const getEstablishmentPixKey = onCall(async (data, context) => {
     // Apenas usuários autenticados podem chamar esta função
-    if (!context.auth) {
-        throw new HttpsError('unauthenticated', 'Apenas usuários autenticados podem acessar esta função.');
-    }
+if (!context.auth) {
+  throw new functions.https.HttpsError('unauthenticated', 'Apenas usuários autenticados podem enviar mensagens.');
+}
 
     const callerClaims = context.auth.token;
     const isCallerAdmin = callerClaims.isAdmin === true;
@@ -93,104 +95,64 @@ export const getEstablishmentPixKey = onCall(async (data, context) => {
 // >>>>> NOVA CLOUD FUNCTION: sendWhatsappMessage <<<<<
 // Descrição: Envia uma mensagem via WhatsApp ao cliente quando o pedido muda de status.
 // =========================================================================
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions";
+import axios from "axios";
+
 export const sendWhatsappMessage = onCall(async (data, context) => {
-    // --- LOGS DE DEBUG NO INÍCIO (corrigido: callerClaims declarado uma única vez) ---
-    console.log("sendWhatsappMessage: [DEBUG START]");
-    console.log("sendWhatsappMessage: context.auth:", context.auth ? { uid: context.auth.uid, token: context.auth.token } : "null/undefined");
-    
-    // DECLARE callerClaims APENAS UMA VEZ AQUI PARA SER USADO PELOS LOGS E PELO RESTO DA FUNÇÃO
-    const callerClaims = context.auth?.token; // Use optional chaining para segurança
+  logger.info("sendWhatsappMessage: [DEBUG START]");
+  logger.info("context.auth:", context.auth ? { uid: context.auth.uid } : "null/undefined");
 
-    if (callerClaims) {
-        console.log("sendWhatsappMessage: callerClaims.isAdmin:", callerClaims.isAdmin);
-        console.log("sendWhatsappMessage: callerClaims.isMasterAdmin:", callerClaims.isMasterAdmin);
-    }
-    // --- FIM DOS LOGS DE DEBUG ADICIONADOS ---
+  const callerClaims = context.auth?.token;
+  if (!context.auth) throw new HttpsError("unauthenticated", "Usuário não autenticado.");
 
-    // 1. Verificação de Autenticação e Permissão (essencial para funções callable)
-    if (!context.auth) {
-        console.log("sendWhatsappMessage: Acesso negado: Usuário não autenticado."); // Adicionado log
-        throw new HttpsError('unauthenticated', 'Apenas usuários autenticados podem enviar mensagens.');
-    }
-    // NÃO DECLARE 'callerClaims' NOVAMENTE AQUI. JÁ FOI DECLARADO ACIMA.
-    // const callerClaims = context.auth.token; // <--- REMOVA OU COMENTE ESTA LINHA SE DUPLICADA NA SUA VERSÃO!
+  if (!callerClaims?.isAdmin && !callerClaims?.isMasterAdmin) {
+    throw new HttpsError("permission-denied", "Apenas administradores podem enviar mensagens.");
+  }
 
-    // Permita apenas admins ou master admins de estabelecimento chamarem isso
-    if (callerClaims.isAdmin !== true && callerClaims.isMasterAdmin !== true) {
-        console.log("sendWhatsappMessage: Acesso negado: Não é admin nem master admin."); // Adicionado log
-        throw new HttpsError('permission-denied', 'Apenas administradores podem enviar mensagens de status de pedido.');
-    }
+  const { to, messageType, clientName, orderValue, orderDateTime, estabelecimentoName, orderIdShort } = data;
+  if (!to || !messageType || !clientName || orderValue === undefined || !orderDateTime || !estabelecimentoName || !orderIdShort) {
+    throw new HttpsError("invalid-argument", "Dados incompletos para enviar a mensagem.");
+  }
 
-    // 2. Validação dos Dados Recebidos
-    const { to, messageType, clientName, orderValue, orderDateTime, estabelecimentoName, orderIdShort } = data; // Adicione orderIdShort aqui
+  const formattedTo = to.replace(/\D/g, "");
+  let messageText = "";
 
-    if (!to || !messageType || !clientName || orderValue === undefined || !orderDateTime || !estabelecimentoName || !orderIdShort) {
-        throw new HttpsError('invalid-argument', 'Dados incompletos para enviar a mensagem.');
-    }
+  switch (messageType) {
+    case "preparo":
+      messageText = `✨ Oi ${clientName}! Seu pedido #${orderIdShort} no *${estabelecimentoName}* (R$ ${orderValue.toFixed(2).replace('.', ',')}) está em preparo. Logo chega! 🚀\n${orderDateTime}`;
+      break;
+    case "em_entrega":
+      messageText = `🚚 ${clientName}, seu pedido #${orderIdShort} no *${estabelecimentoName}* (R$ ${orderValue.toFixed(2).replace('.', ',')}) saiu para entrega!\n${orderDateTime}`;
+      break;
+    case "finalizado":
+      messageText = `🎉 ${clientName}, seu pedido #${orderIdShort} do *${estabelecimentoName}* foi entregue! Obrigado pela preferência! ❤️`;
+      break;
+    default:
+      throw new HttpsError("invalid-argument", "Tipo de mensagem inválido.");
+  }
 
-    const formattedTo = to.startsWith('+') ? to : `+55${to.replace(/\D/g, '')}`; // Exemplo básico para Brasil (ajuste se precisar de DDD dinâmico)
-    let messageText = '';
+  try {
+    // ⚠️ Substitua abaixo com seu endpoint e token da Z-API:
+    const ZAPI_INSTANCE_ID = "SUA_INSTANCIA"; // Ex: 123456
+    const ZAPI_TOKEN = "SEU_TOKEN"; // Ex: abc123xyz
 
-    // 3. Montar a Mensagem Empolgante Baseada no Tipo
-    switch (messageType) {
-        case 'preparo':
-            messageText = `✨ A boa notícia chegou, ${clientName}! ✨\n\n` +
-                          `Seu pedido #${orderIdShort} no *${estabelecimentoName}* no valor de R$ ${orderValue.toFixed(2).replace('.', ',')} já está na cozinha sendo preparado com muito carinho e sabor para você!\n\n` +
-                          `Previsão de sabor: logo mais! 🚀\n\n` +
-                          `Data e Hora: ${orderDateTime}\n` +
-                          `Prepare-se para uma explosão de sabor! 😋`;
-            break;
-        case 'em_entrega':
-            messageText = `🛵 Olá ${clientName}! Seu pedido #${orderIdShort} no *${estabelecimentoName}* saiu para entrega AGORA e está a caminho! 🌟\n\n` +
-                          `No valor de R$ ${orderValue.toFixed(2).replace('.', ',')}.\n\n` +
-                          `Data e Hora: ${orderDateTime}\n` +
-                          `Prepare-se para a chegada da felicidade! 🛵💨`;
-            break;
-        case 'finalizado':
-            messageText = `🎊 Parabéns ${clientName}! Seu pedido #${orderIdShort} no *${estabelecimentoName}* foi entregue e está prontinho para você! 🎁\n\n` +
-                          `Esperamos que adore cada mordida! Obrigado pela preferência! ❤️`;
-            break;
-        default:
-            throw new HttpsError('invalid-argument', 'Tipo de mensagem inválido.');
-    }
+    const zapiUrl = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
 
-    console.log(`sendWhatsappMessage: Tentando enviar mensagem para ${formattedTo}: "${messageText}"`);
+    const response = await axios.post(zapiUrl, {
+      phone: `55${formattedTo}`, // DDD + número, sem + ou traços
+      message: messageText
+    });
 
-    try {
-        // --- 4. Lógica de Envio Real da Mensagem via API de WhatsApp ---
-        // ESTA É A PARTE QUE VOCÊ PRECISA SUBSTITUIR PELA SUA INTEGRAÇÃO REAL COM WHATSAPP
-        // EXEMPLO COM NODEMAILER (para email, se você quiser um fallback ou notificação de teste):
-        // const mailOptions = {
-        //     from: 'suporte@seuservico.com',
-        //     to: 'seu_email_para_testes@example.com',
-        //     subject: `WHATSAPP SIMULADO PARA ${formattedTo} - ${messageType}`,
-        //     text: messageText,
-        // };
-        // await mailTransport.sendMail(mailOptions);
-        // console.log("sendWhatsappMessage: E-mail de simulação enviado.");
+    logger.info("Mensagem enviada com sucesso via Z-API:", response.data);
+    return { success: true, message: "Mensagem enviada com sucesso." };
 
-        // Ou seu código real da API de WhatsApp (ex: Twilio, Axios para API de provedor):
-        // Ex: const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        // await client.messages.create({
-        //     from: 'whatsapp:+1yourTwilioNumber', // Seu número Twilio com WhatsApp
-        //     to: `whatsapp:${formattedTo}`,
-        //     body: messageText,
-        // });
-
-        // Placeholder para simular sucesso (REMOVA ISSO QUANDO TIVER A API REAL)
-        console.log("sendWhatsappMessage: SIMULANDO ENVIO DE WHATSAPP. (Remova este placeholder!)");
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simula delay de 1 segundo
-
-        // --- FIM DA LÓGICA DE ENVIO REAL ---
-
-        console.log('sendWhatsappMessage: Mensagem processada com sucesso para:', formattedTo);
-        return { success: true, message: 'Mensagem WhatsApp processada!' }; // Retorne uma mensagem de sucesso
-    } catch (error) {
-        console.error('sendWhatsappMessage: Erro ao tentar processar ou enviar mensagem WhatsApp:', error);
-        // Retorne um erro que o frontend possa entender
-        throw new HttpsError('internal', `Falha no serviço de envio de WhatsApp: ${error.message}`);
-    }
+  } catch (error) {
+    logger.error("Erro ao enviar mensagem via Z-API:", error.response?.data || error.message);
+    throw new HttpsError("internal", "Erro ao enviar mensagem via Z-API.");
+  }
 });
+
 // =========================================================================
 
 

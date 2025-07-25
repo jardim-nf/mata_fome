@@ -8,7 +8,7 @@ import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid'; // Para gerar IDs únicos para itens no carrinho
 
 function Menu() {
   const { estabelecimentoSlug } = useParams();
@@ -107,6 +107,8 @@ function Menu() {
     if (!authLoading) {
       if (currentUser && currentClientData) {
         console.log("Menu Debug: Preenchendo dados do cliente logado.");
+        console.log("Menu Debug: Conteúdo de currentClientData:", currentClientData); // Log para ver o conteúdo
+        
         setNomeCliente(currentClientData.nome || '');
         setTelefoneCliente(currentClientData.telefone || '');
         if (currentClientData.endereco) {
@@ -274,7 +276,7 @@ function Menu() {
       }
     };
     fetchEstabelecimentoAndCardapio();
-  }, [estabelecimentoSlug, selectedCategory, debouncedSearchTerm]); // Adicionado selectedCategory e debouncedSearchTerm como dependências
+  }, [estabelecimentoSlug, selectedCategory, debouncedSearchTerm]);
 
 
   useEffect(() => {
@@ -323,26 +325,53 @@ function Menu() {
   };
   const adicionarItemSimplesAoCarrinho = (item) => {
     console.log("Menu Debug: Adicionando item simples ao carrinho:", item.nome);
+    console.log("Menu Debug: Status de currentUser para adicionar ao carrinho:", currentUser ? `Logado (${currentUser.uid})` : "NÃO LOGADO"); 
+    
     if (!currentUser) {
-      toast.warn('Para adicionar itens, por favor, faça login ou cadastre-se.');
-      setShowLoginPrompt(true);
-      return;
+        toast.warn('Para adicionar itens, por favor, faça login ou cadastre-se.');
+        setShowLoginPrompt(true);
+        console.log("Menu Debug: Não há currentUser, interrompendo adição ao carrinho."); 
+        return;
     }
+
     const itemExistente = carrinho.find(p => p.id === item.id && (!p.adicionais || p.adicionais.length === 0));
+    console.log("Menu Debug: Item existente no carrinho (se encontrado):", itemExistente); 
+
     if (itemExistente) {
-      setCarrinho(carrinho.map(p => p.cartItemId === itemExistente.cartItemId ? { ...p, qtd: p.qtd + 1 } : p));
+        setCarrinho(prevCarrinho => { 
+            const newCarrinho = prevCarrinho.map(p => 
+                p.cartItemId === itemExistente.cartItemId ? { ...p, qtd: p.qtd + 1 } : p
+            );
+            console.log("Menu Debug: Quantidade de item existente aumentada. Novo carrinho:", newCarrinho); 
+            return newCarrinho;
+        });
     } else {
-      const novoItemNoCarrinho = { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: item.preco, adicionais: [] };
-      setCarrinho([...carrinho, novoItemNoCarrinho]);
+        const novoItemNoCarrinho = { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: item.preco, adicionais: [] };
+        setCarrinho(prevCarrinho => { 
+            const newCarrinho = [...prevCarrinho, novoItemNoCarrinho];
+            console.log("Menu Debug: Novo item adicionado ao carrinho. Novo carrinho:", newCarrinho); 
+            return newCarrinho;
+        });
     }
     toast.success(`${item.nome} adicionado ao carrinho!`);
+    console.log("Menu Debug: Toast de sucesso exibido para adição ao carrinho."); 
   };
   const handleConfirmarAdicionais = (itemConfigurado) => {
     console.log("Menu Debug: Adicionais confirmados para item:", itemConfigurado.nome);
+    console.log("Menu Debug: Status de currentUser para confirmar adicionais:", currentUser ? `Logado (${currentUser.uid})` : "NÃO LOGADO"); 
+
+    if (!currentUser) { // Adicionado check de currentUser aqui também
+        toast.warn('Para adicionar itens com adicionais, por favor, faça login ou cadastre-se.');
+        setShowLoginPrompt(true);
+        console.log("Menu Debug: Não há currentUser para confirmar adicionais, interrompendo.");
+        return;
+    }
+
     const novoItemNoCarrinho = { ...itemConfigurado, qtd: 1, cartItemId: uuidv4() };
     setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
     toast.success(`${itemConfigurado.nome} foi adicionado ao carrinho!`);
     handleFecharModal();
+    console.log("Menu Debug: Item com adicionais adicionado ao carrinho. Novo carrinho:", carrinho); // Note: carrinho aqui pode ser o valor antigo devido ao closure
   };
   const removerDoCarrinho = (cartItemId) => {
     console.log("Menu Debug: Tentando remover item do carrinho com ID:", cartItemId);
@@ -519,7 +548,7 @@ function Menu() {
   
   if (authLoading) {
     console.log("Menu Debug: authLoading TRUE, mostrando mensagem de verificação de login.");
-    return (<div className="flex justify-center items-center h-screen bg-white"> <p className="text-[var(--marrom-escuro)]">Verificando status de login...</p> </div>);
+    return (<div className="flex justify-center items-center h-screen bg-black"> <p className="text-[var(--marrom-escuro)]">Verificando status de login...</p> </div>);
   }
   if (isAdmin || isMasterAdmin) {
     console.log("Menu Debug: Usuário é admin ou master admin. Redirecionando da página de cardápio.");
@@ -552,8 +581,8 @@ function Menu() {
           <input type="text" id="search" placeholder="Buscar por nome ou descrição..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
         </div>
         <div className="flex flex-wrap gap-2 justify-center">
-          {availableCategories.map((category) => (<button key={category} onClick={() => setSelectedCategory(category)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors duration-200 ${selectedCategory === category ? 'bg-[var(--vermelho-principal)] text-white' : 'bg-gray-200 text-[var(--marrom-escuro)] hover:bg-gray-300'}`} > {category} </button>))}
-          {(searchTerm !== '' || selectedCategory !== 'Todos') && (<button onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }} className="px-4 py-2 rounded-full text-sm font-semibold bg-gray-400 text-white hover:bg-gray-500 transition-colors duration-200" > Limpar Filtros </button>)}
+          {availableCategories.map((category) => (<button key={category} onClick={() => setSelectedCategory(category)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors duration-200 ${selectedCategory === category ? 'bg-[var(--vermelho-principal)] text-black' : 'bg-gray-200 text-[var(--marrom-escuro)] hover:bg-gray-300'}`} > {category} </button>))}
+          {(searchTerm !== '' || selectedCategory !== 'Todos') && (<button onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }} className="px-4 py-2 rounded-full text-sm font-semibold bg-gray-400 text-black hover:bg-gray-500 transition-colors duration-200" > Limpar Filtros </button>)}
         </div>
       </div>
 
@@ -576,7 +605,10 @@ function Menu() {
                   <CardapioItem
                     key={item.id}
                     item={item}
-                    cartItem={carrinho.find(p => p.id === item.id)}
+                    // Certifique-se que cartItem realmente reflete o item no carrinho
+                    cartItem={carrinho.find(p => p.id === item.id && 
+                      JSON.stringify(p.adicionais || []) === JSON.stringify(item.adicionais || [])
+                    )} 
                     onAddItem={handleAbrirModalAdicionais}
                     removeFromCart={removerDoCarrinho}
                   />
@@ -610,19 +642,96 @@ function Menu() {
       <div className="bg-white p-6 mt-10 rounded-lg shadow-xl border border-gray-200">
         <h2 className="font-bold text-2xl mb-4 text-[var(--marrom-escuro)]">Seu Pedido</h2>
         {carrinho.length === 0 ? ( <p className="text-gray-500 italic text-center py-4">🛒 Nenhum item adicionado ainda. Comece a escolher!</p> ) : ( <> <ul className="mb-4 space-y-3"> {carrinho.map((item) => ( <li key={item.cartItemId} className="bg-gray-50 p-3 rounded-md border border-gray-100"> <div className="flex justify-between items-start"> <div className="flex-1 mr-2"> <span className="font-medium text-[var(--cinza-texto)]"> {item.nome} <span className="text-sm text-gray-500">({item.qtd}x)</span> </span> {item.adicionais && item.adicionais.length > 0 && ( <div className="text-xs text-gray-500 pl-2 mt-1"> {item.adicionais.map(ad => `+ ${ad.nome}`).join(', ')} </div> )} </div> <div className="flex items-center gap-3"> <button onClick={() => removerDoCarrinho(item.cartItemId)} className="bg-red-500 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold" aria-label={`Remover um ${item.nome}`}>-</button> <span className="font-semibold text-[var(--marrom-escuro)]">R$ {(item.precoFinal * item.qtd).toFixed(2).replace('.', ',')}</span> <button onClick={() => adicionarItemSimplesAoCarrinho(item)} className="bg-green-500 hover:bg-green-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold" aria-label={`Adicionar mais um ${item.nome}`} disabled={!item.ativo}>+</button> </div> </div> </li> ))} </ul> <div className="border-t border-gray-200 pt-4 mt-4 text-[var(--marrom-escuro)]"> <div className="flex justify-between items-center text-lg mb-1"><span>Subtotal:</span><span>R$ {subtotalCalculado.toFixed(2).replace('.', ',')}</span></div> {!isRetirada && taxaEntregaCalculada > 0 && (<div className="flex justify-between items-center text-lg mb-2"><span>Taxa de Entrega ({bairro.trim() || 'Não Informado'}):</span><span>R$ {taxaEntregaCalculada.toFixed(2).replace('.', ',')}</span></div>)} {!isRetirada && bairroNaoEncontrado && taxaEntregaCalculada === 0 && (<p className="text-sm text-orange-600 mb-2">Atenção: O bairro digitado não foi encontrado na lista de taxas. Taxa de entrega pode ser reavaliada.</p>)} <div className="mt-4 pt-4 border-t border-gray-200"> {!appliedCoupon ? (<div className="flex items-center gap-2"> <input type="text" placeholder="Código do Cupom" value={couponCodeInput} onChange={(e) => setCouponCodeInput(e.target.value)} className="flex-1 border border-gray-300 rounded-md px-3 py-2" disabled={couponLoading} /> <button onClick={handleApplyCoupon} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-semibold" disabled={couponLoading || !couponCodeInput.trim()} > {couponLoading ? 'Aplicando...' : 'Aplicar'} </button> </div>) : (<div className="flex justify-between items-center bg-green-50 p-2 rounded-md"> <p className="text-green-800 font-semibold">Cupom Aplicado: {appliedCoupon.codigo}</p> <button onClick={removeAppliedCoupon} className="text-red-600 hover:underline text-sm" > Remover </button> </div>)} {discountAmount > 0 && appliedCoupon?.tipoDesconto !== 'freteGratis' && (<div className="flex justify-between items-center text-lg mt-2 text-green-700"><span>Desconto:</span><span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span></div>)} {discountAmount > 0 && appliedCoupon?.tipoDesconto === 'freteGratis' && (<div className="flex justify-between items-center text-lg mt-2 text-green-700"><span>Frete Grátis:</span><span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span></div>)} </div> <div className="flex justify-between items-center text-2xl font-bold mt-4"><span>TOTAL:</span><span>R$ {finalOrderTotal.toFixed(2).replace('.', ',')}</span></div> </div> </> )} </div>
-      <div className="bg-white p-6 mt-6 rounded-lg shadow-xl border border-gray-200"> <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Seus Dados</h3> <div className="mb-4"> <label htmlFor="nomeCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Nome *</label> <input id="nomeCliente" value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Ana Silva" required disabled={!!currentUser} /> </div> <div className="mb-6"> <label htmlFor="telefoneCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Telefone (com DDD) *</label> <input id="telefoneCliente" value={telefoneCliente} onChange={(e) => setTelefoneCliente(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: 22999999999" type="tel" required disabled={!!currentUser} /> </div> <div className="mb-6 pt-4 border-t border-gray-200"> <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Tipo de Entrega *</h3> <div className="space-y-3"> <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer"> <input type="radio" name="deliveryType" value="retirada" checked={isRetirada === true} onChange={() => setIsRetirada(true)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Retirada no Estabelecimento </label> <label className="flex items-center text-base text-[var(--cinho-principal)] cursor-pointer"> <input type="radio" name="deliveryType" value="entrega" checked={isRetirada === false} onChange={() => setIsRetirada(false)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Entrega no meu Endereço </label> </div> </div> {!isRetirada && (<> <div className="mb-4"> <label htmlFor="rua" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Rua *</label> <input id="rua" value={rua} onChange={(e) => setRua(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Rua das Flores" required={!isRetirada} disabled={!!currentUser && currentClientData?.endereco?.rua} /> </div> <div className="mb-4 flex gap-4"> <div className="flex-1"> <label htmlFor="numero" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Número *</label> <input id="numero" value={numero} onChange={(e) => setNumero(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: 123" required={!isRetirada} disabled={!!currentUser && currentClientData?.endereco?.numero} /> </div> <div className="flex-1"> <label htmlFor="bairro" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Bairro *</label> <input id="bairro" value={bairro} onChange={(e) => setBairro(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Centro" required={!isRetirada} disabled={!!currentUser && currentClientData?.endereco?.bairro} /> </div> </div> <div className="mb-4"> <label htmlFor="cidade" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Cidade *</label> <input id="cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Rio de Janeiro" required={!isRetirada} disabled={!!currentUser && currentClientData?.endereco?.cidade} /> </div> <div className="mb-6"> <label htmlFor="complemento" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Complemento / Ponto de Referência</label> <input id="complemento" value={complemento} onChange={(e) => setComplemento(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Apt 101, Próximo à praça" disabled={!!currentUser && currentClientData?.endereco?.complemento} /> </div> </>)} <div className="pt-6 mt-6 border-t border-gray-200"> <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Forma de Pagamento *</h3> <div className="space-y-3"> <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer"> <input type="radio" name="paymentMethod" value="pix" checked={formaPagamento === 'pix'} onChange={(e) => setFormaPagamento(e.target.value)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> PIX </label> <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer"> <input type="radio" name="paymentMethod" value="cartao" checked={formaPagamento === 'cartao'} onChange={(e) => setFormaPagamento(e.target.value)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Cartão (Crédito/Débito na entrega) </label> <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer"> <input type="radio" name="paymentMethod" value="dinheiro" checked={formaPagamento === 'dinheiro'} onChange={(e) => setFormaPagamento(e.target.value)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Dinheiro </label> </div> {formaPagamento === 'dinheiro' && (<div className="mt-4"> <label htmlFor="troco" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1"> Precisa de troco para? (Opcional) </label> <input id="troco" type="number" value={trocoPara} onChange={(e) => setTrocoPara(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder={`Ex: R$ ${(finalOrderTotal + 10).toFixed(2).replace('.', ',')}`} /> </div>)} </div> </div>
-      {carrinho.length > 0 && ( <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none"> <button onClick={enviarPedido} className={`px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg ${(!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser) ? 'bg-gray-400 text-gray-700 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`} disabled={!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser} > Enviar Pedido Agora! </button> </div> )}
-      {showOrderConfirmationModal && confirmedOrderDetails && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]"> <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative"> <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4 text-center">Pedido Enviado! 🎉</h2> <p className="text-gray-700 text-center mb-6"> Seu pedido foi registrado com sucesso! O estabelecimento está processando sua solicitação. Você receberá atualizações em breve. </p> <div className="mb-6 border-t border-b border-gray-200 py-4"> <p className="font-semibold text-lg text-[var(--marrom-escuro)] mb-2">Resumo do Pedido:</p> <p><strong>ID do Pedido:</strong> {confirmedOrderDetails.id.substring(0, 8)}...</p> <p><strong>Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p> <p><strong>Pagamento:</strong> {confirmedOrderDetails.formaPagamento.charAt(0).toUpperCase() + confirmedOrderDetails.formaPagamento.slice(1)}</p> <p><strong>Entrega:</strong> {confirmedOrderDetails.tipoEntrega === 'retirada' ? 'Retirada' : 'Delivery'}</p> {confirmedOrderDetails.cupomAplicado && (<p className="text-green-700"><strong>Cupom:</strong> {confirmedOrderDetails.cupomAplicado.codigo} (- R$ {confirmedOrderDetails.cupomAplicado.desconto.toFixed(2).replace('.', ',')})</p>)} </div> <button onClick={() => { setShowOrderConfirmationModal(false); navigate(`/cardapio/${estabelecimentoSlug}`); }} className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold" > Pedido Concluído! Voltar ao Cardápio </button> </div> </div>)}
-      {showLoginPrompt && (<div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[1000]"> <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative text-center"> <button onClick={() => { setShowLoginPrompt(false); setErrorAuthModal(''); setEmailAuthModal(''); setPasswordAuthModal(''); setNomeAuthModal(''); setTelefoneAuthModal(''); setRuaAuthModal(''); setNumeroAuthModal(''); setBairroAuthModal(''); setCidadeAuthModal(''); setComplementoAuthModal(''); setIsRegisteringInModal(false); }} className="absolute top-2 right-3 text-gray-600 hover:text-red-600 text-xl" aria-label="Fechar" > &times; </button> <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4">{isRegisteringInModal ? 'Cadastre-se' : 'Faça Login'}</h2> <p className="text-gray-700 mb-6">{isRegisteringInModal ? 'Preencha seus dados para criar uma conta.' : 'Para acessar o cardápio e fazer pedidos, você precisa estar logado.'}</p> {errorAuthModal && <p className="text-red-500 text-sm mb-4">{errorAuthModal}</p>} {isRegisteringInModal ? (<form onSubmit={handleRegisterModal} className="space-y-4"> <input type="text" placeholder="Seu Nome Completo" className="w-full border rounded p-2" value={nomeAuthModal} onChange={(e) => setNomeAuthModal(e.target.value)} required /> <input type="tel" placeholder="Seu Telefone (com DDD)" className="w-full border rounded p-2" value={telefoneAuthModal} onChange={(e) => setTelefoneAuthModal(e.target.value)} required /> <input type="email" placeholder="Email" className="w-full border rounded p-2" value={emailAuthModal} onChange={(e) => setEmailAuthModal(e.target.value)} required /> <input type="password" placeholder="Senha (mín. 6 caracteres)" className="w-full border rounded p-2" value={passwordAuthModal} onChange={(e) => setPasswordAuthModal(e.target.value)} required /> <input type="text" placeholder="Rua *" className="w-full border rounded p-2" value={ruaAuthModal} onChange={(e) => setRuaAuthModal(e.target.value)} required /> <input type="text" placeholder="Número *" className="w-full border rounded p-2" value={numeroAuthModal} onChange={(e) => setNumeroAuthModal(e.target.value)} required /> <input type="text" placeholder="Bairro *" className="w-full border rounded p-2" value={bairroAuthModal} onChange={(e) => setBairroAuthModal(e.target.value)} required /> <input type="text" placeholder="Cidade *" className="w-full border rounded p-2" value={cidadeAuthModal} onChange={(e) => setCidadeAuthModal(e.target.value)} required /> <input type="text" placeholder="Complemento (Opcional)" className="w-full border rounded p-2" value={complementoAuthModal} onChange={(e) => setComplementoAuthModal(e.target.value)} /> <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">Cadastrar e Entrar</button> <p className="text-sm text-gray-600">Já tem uma conta?{' '}<button type="button" onClick={() => setIsRegisteringInModal(false)} className="text-[var(--vermelho-principal)] underline">Fazer Login</button></p> </form>) : (<form onSubmit={handleLoginModal} className="space-y-4"> <input type="email" placeholder="Email" className="w-full border rounded p-2" value={emailAuthModal} onChange={(e) => setEmailAuthModal(e.target.value)} required /> <input type="password" placeholder="Senha" className="w-full border rounded p-2" value={passwordAuthModal} onChange={(e) => setPasswordAuthModal(e.target.value)} required /> <button type="submit" className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-700">Entrar</button> <p className="text-sm text-gray-600">Não tem uma conta?{' '}<button type="button" onClick={() => setIsRegisteringInModal(true)} className="text-[var(--vermelho-principal)] underline">Cadastre-se</button></p> </form>)} </div> </div>)}
-      {itemParaAdicionais && (
-        <AdicionaisModal
-          item={itemParaAdicionais}
-          onConfirm={handleConfirmarAdicionais}
-          onClose={handleFecharModal}
-        />
-      )}
-    </div>
-  );
+      <div className="bg-white p-6 mt-6 rounded-lg shadow-xl border border-gray-200"> {/* Div principal de "Seus Dados" */}
+        <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Seus Dados</h3>
+        <div className="mb-4">
+          <label htmlFor="nomeCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Nome *</label>
+          <input
+            id="nomeCliente"
+            value={nomeCliente}
+            onChange={(e) => setNomeCliente(e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+            placeholder="Ex: Ana Silva"
+            required
+          />
+        </div>
+        <div className="mb-6">
+          <label htmlFor="telefoneCliente" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Seu Telefone (com DDD) *</label>
+          <input
+            id="telefoneCliente"
+            value={telefoneCliente}
+            onChange={(e) => setTelefoneCliente(e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
+            placeholder="Ex: 22999999999"
+            type="tel"
+            required
+          />
+        </div>
+        <div className="mb-6 pt-4 border-t border-gray-200">
+          <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Tipo de Entrega *</h3>
+          <div className="space-y-3">
+            <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+              <input type="radio" name="deliveryType" value="retirada" checked={isRetirada === true} onChange={() => setIsRetirada(true)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Retirada no Estabelecimento
+            </label>
+            <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer"> {/* Corrigido: 'cinho' para 'cinza' */}
+              <input type="radio" name="deliveryType" value="entrega" checked={isRetirada === false} onChange={() => setIsRetirada(false)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Entrega no meu Endereço
+            </label>
+          </div> {/* Fecha div.space-y-3 */}
+        </div> {/* Fecha div.mb-6 pt-4 border-t */}
+        {!isRetirada && (
+          <>
+            <div className="mb-4">
+              <label htmlFor="rua" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Rua *</label>
+              <input id="rua" value={rua} onChange={(e) => setRua(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Rua das Flores" required={!isRetirada} readOnly={!!currentUser && currentClientData?.endereco?.rua} />
+            </div>
+            <div className="mb-4 flex gap-4">
+              <div className="flex-1">
+                <label htmlFor="numero" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Número *</label>
+                <input id="numero" value={numero} onChange={(e) => setNumero(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: 123" required={!isRetirada} readOnly={!!currentUser && currentClientData?.endereco?.numero} />
+              </div>
+              <div className="flex-1">
+                <label htmlFor="bairro" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Bairro *</label>
+                <input id="bairro" value={bairro} onChange={(e) => setBairro(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Centro" required={!isRetirada} readOnly={!!currentUser && currentClientData?.endereco?.bairro} />
+              </div>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="cidade" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Cidade *</label>
+              <input id="cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Rio de Janeiro" required={!isRetirada} readOnly={!!currentUser && currentClientData?.endereco?.cidade} />
+            </div>
+            <div className="mb-6">
+              <label htmlFor="complemento" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1">Complemento / Ponto de Referência</label>
+              <input id="complemento" value={complemento} onChange={(e) => setComplemento(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="Ex: Apt 101, Próximo à praça" readOnly={!!currentUser && currentClientData?.endereco?.complemento} />
+            </div>
+          </>
+        )}
+        <div className="pt-6 mt-6 border-t border-gray-200">
+          <h3 className="font-bold text-xl mb-3 text-[var(--marrom-escuro)]">Forma de Pagamento *</h3>
+          <div className="space-y-3">
+            <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+              <input type="radio" name="paymentMethod" value="pix" checked={formaPagamento === 'pix'} onChange={(e) => setFormaPagamento(e.target.value)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> PIX
+            </label>
+            <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+              <input type="radio" name="paymentMethod" value="cartao" checked={formaPagamento === 'cartao'} onChange={(e) => setFormaPagamento(e.target.value)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Cartão (Crédito/Débito na entrega)
+            </label>
+            <label className="flex items-center text-base text-[var(--cinza-texto)] cursor-pointer">
+              <input type="radio" name="paymentMethod" value="dinheiro" checked={formaPagamento === 'dinheiro'} onChange={(e) => setFormaPagamento(e.target.value)} className="mr-2 h-4 w-4 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]" /> Dinheiro
+            </label>
+          </div>
+          {formaPagamento === 'dinheiro' && (<div className="mt-4"> <label htmlFor="troco" className="block text-sm font-medium text-[var(--cinza-texto)] mb-1"> Precisa de troco para? (Opcional) </label> <input id="troco" type="number" value={trocoPara} onChange={(e) => setTrocoPara(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder={`Ex: R$ ${(finalOrderTotal + 10).toFixed(2).replace('.', ',')}`} /> </div>)}
+        </div>
+      </div> {/* FECHA div principal de "Seus Dados" (linha 645) */}
+      {carrinho.length > 0 && ( <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-300 p-4 shadow-lg z-50 md:relative md:p-0 md:mt-8 md:border-none md:shadow-none"> <button onClick={enviarPedido} className={`px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold shadow-lg ${(!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser) ? 'bg-gray-400 text-gray-700 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`} disabled={!nomeCliente.trim() || !telefoneCliente.trim() || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) || carrinho.length === 0 || !formaPagamento || !currentUser} > Enviar Pedido Agora! </button> </div> )}
+      {showOrderConfirmationModal && confirmedOrderDetails && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]"> <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative"> <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4 text-center">Pedido Enviado! 🎉</h2> <p className="text-gray-700 text-center mb-6"> Seu pedido foi registrado com sucesso! O estabelecimento está processando sua solicitação. Você receberá atualizações em breve. </p> <div className="mb-6 border-t border-b border-gray-200 py-4"> <p className="font-semibold text-lg text-[var(--marrom-escuro)] mb-2">Resumo do Pedido:</p> <p><strong>ID do Pedido:</strong> {confirmedOrderDetails.id.substring(0, 8)}...</p> <p><strong>Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p> <p><strong>Pagamento:</strong> {confirmedOrderDetails.formaPagamento.charAt(0).toUpperCase() + confirmedOrderDetails.formaPagamento.slice(1)}</p> <p><strong>Entrega:</strong> {confirmedOrderDetails.tipoEntrega === 'retirada' ? 'Retirada' : 'Delivery'}</p> {confirmedOrderDetails.cupomAplicado && (<p className="text-green-700"><strong>Cupom:</strong> {confirmedOrderDetails.cupomAplicado.codigo} (- R$ {confirmedOrderDetails.cupomAplicado.desconto.toFixed(2).replace('.', ',')})</p>)} </div> <button onClick={() => { setShowOrderConfirmationModal(false); navigate(`/cardapio/${estabelecimentoSlug}`); }} className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg transition duration-300 ease-in-out w-full text-lg font-semibold" > Pedido Concluído! Voltar ao Cardápio </button> </div> </div>)}
+      {showLoginPrompt && (<div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[1000]"> <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative text-center"> <button onClick={() => { setShowLoginPrompt(false); setErrorAuthModal(''); setEmailAuthModal(''); setPasswordAuthModal(''); setNomeAuthModal(''); setTelefoneAuthModal(''); setRuaAuthModal(''); setNumeroAuthModal(''); setBairroAuthModal(''); setCidadeAuthModal(''); setComplementoAuthModal(''); setIsRegisteringInModal(false); }} className="absolute top-2 right-3 text-gray-600 hover:text-red-600 text-xl" aria-label="Fechar" > &times; </button> <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-4">{isRegisteringInModal ? 'Cadastre-se' : 'Faça Login'}</h2> <p className="text-gray-700 mb-6">{isRegisteringInModal ? 'Preencha seus dados para criar uma conta.' : 'Para acessar o cardápio e fazer pedidos, você precisa estar logado.'}</p> {errorAuthModal && <p className="text-red-500 text-sm mb-4">{errorAuthModal}</p>} {isRegisteringInModal ? (<form onSubmit={handleRegisterModal} className="space-y-4"> <input type="text" placeholder="Seu Nome Completo" className="w-full border rounded p-2" value={nomeAuthModal} onChange={(e) => setNomeAuthModal(e.target.value)} required /> <input type="tel" placeholder="Seu Telefone (com DDD)" className="w-full border rounded p-2" value={telefoneAuthModal} onChange={(e) => setTelefoneAuthModal(e.target.value)} required /> <input type="email" placeholder="Email" className="w-full border rounded p-2" value={emailAuthModal} onChange={(e) => setEmailAuthModal(e.target.value)} required /> <input type="password" placeholder="Senha (mín. 6 caracteres)" className="w-full border rounded p-2" value={passwordAuthModal} onChange={(e) => setPasswordAuthModal(e.target.value)} required /> <input type="text" placeholder="Rua *" className="w-full border rounded p-2" value={ruaAuthModal} onChange={(e) => setRuaAuthModal(e.target.value)} required /> <input type="text" placeholder="Número *" className="w-full border rounded p-2" value={numeroAuthModal} onChange={(e) => setNumeroAuthModal(e.target.value)} required /> <input type="text" placeholder="Bairro *" className="w-full border rounded p-2" value={bairroAuthModal} onChange={(e) => setBairroAuthModal(e.target.value)} required /> <input type="text" placeholder="Cidade *" className="w-full border rounded p-2" value={cidadeAuthModal} onChange={(e) => setCidadeAuthModal(e.target.value)} required /> <input type="text" placeholder="Complemento (Opcional)" className="w-full border rounded p-2" value={complementoAuthModal} onChange={(e) => setComplementoAuthModal(e.target.value)} /> <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-white py-2 rounded hover:bg-red-700">Cadastrar e Entrar</button> <p className="text-sm text-gray-600">Já tem uma conta?{' '}<button type="button" onClick={() => setIsRegisteringInModal(false)} className="text-[var(--vermelho-principal)] underline">Fazer Login</button></p> </form>) : (<form onSubmit={handleLoginModal} className="space-y-4"> <input type="email" placeholder="Email" className="w-full border rounded p-2" value={emailAuthModal} onChange={(e) => setEmailAuthModal(e.target.value)} required /> <input type="password" placeholder="Senha" className="w-full border rounded p-2" value={passwordAuthModal} onChange={(e) => setPasswordAuthModal(e.target.value)} required /> <button type="submit" className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-700">Entrar</button> <p className="text-sm text-gray-600">Não tem uma conta?{' '}<button type="button" onClick={() => setIsRegisteringInModal(true)} className="text-[var(--vermelho-principal)] underline">Cadastre-se</button></p> </form>)} </div> </div>)}
+      {itemParaAdicionais && (
+        <AdicionaisModal
+          item={itemParaAdicionais}
+          onConfirm={handleConfirmarAdicionais}
+          onClose={handleFecharModal}
+        />
+      )}
+    </div>
+  );
 }
 
 export default Menu;
