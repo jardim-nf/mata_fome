@@ -356,7 +356,7 @@ function Home() {
             {/* Card 1: Venda Mais */}
             <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-md border border-gray-100 transition-transform duration-300 hover:scale-105 hover:shadow-lg">
               {/* Substitua pela URL da sua ilustração */}
-              <img src="https://assets.website-files.com/5f8c292193b2160d70425785/5f8c379a95ec6048d2a63273_feature-01.svg" alt="Venda Mais" className="h-28 w-28 mb-6" />
+              <img src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/1.png?alt=media&token=56c2e224-e525-4e66-b72c-db7e42fa9674" alt="Venda Mais" className="h-28 w-28 mb-6" />
               <h3 className="text-xl font-bold text-black mb-3">Venda mais e aumente sua receita</h3>
               <p className="text-gray-700 text-base leading-relaxed">
                 Crie cupons, programas de fidelidade, campanhas de email e push para fidelizar seus clientes.
@@ -366,7 +366,7 @@ function Home() {
             {/* Card 2: Organize Sua Operação */}
             <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-md border border-gray-100 transition-transform duration-300 hover:scale-105 hover:shadow-lg">
               {/* Substitua pela URL da sua ilustração */}
-              <img src="https://assets.website-files.com/5f8c292193b2160d70425785/5f8c379a1f73440e532a8138_feature-02.svg" alt="Organize Operação" className="h-28 w-28 mb-6" />
+              <img src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/2.png?alt=media&token=fa144b1b-5f1d-43f9-9bdd-0ab1bc37cfa6" alt="Organize Operação" className="h-28 w-28 mb-6" />
               <h3 className="text-xl font-bold text-black mb-3">Organize sua operação de delivery</h3>
               <p className="text-gray-700 text-base leading-relaxed">
                 Centralize seus pedidos em uma só plataforma e organize suas operações de forma eficiente.
@@ -376,7 +376,7 @@ function Home() {
             {/* Card 3: Economize Dinheiro */}
             <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-md border border-gray-100 transition-transform duration-300 hover:scale-105 hover:shadow-lg">
               {/* Substitua pela URL da sua ilustração */}
-              <img src="https://assets.website-files.com/5f8c292193b2160d70425785/5f8c379a0b1273390c9b0e91_feature-03.svg" alt="Economize Dinheiro" className="h-28 w-28 mb-6" />
+              <img src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/3.png?alt=media&token=9ff37620-c64f-4eda-9f5b-848b1ec9359b" alt="Economize Dinheiro" className="h-28 w-28 mb-6" />
               <h3 className="text-xl font-bold text-black mb-3">Economize dinheiro com comissões</h3>
               <p className="text-gray-700 text-base leading-relaxed">
                 Com seu canal próprio você não paga mais comissões altas e não fica dependente de marketplaces.
@@ -399,7 +399,7 @@ function Home() {
             <div className="flex flex-col items-center text-center p-8 bg-gray-50 rounded-xl shadow-lg border border-gray-200 transition-transform duration-300 hover:scale-105 hover:shadow-xl">
               <h3 className="text-2xl font-bold text-yellow-600 mb-4">Plano Essencial</h3>
               <p className="text-black text-4xl font-extrabold mb-4">
-                R$99<span className="text-xl text-gray-700">/mês</span>
+                R$49,90<span className="text-xl text-gray-700">/mês</span>
               </p>
               <p className="text-gray-700 text-base mb-6">Ideal para pequenos negócios que estão começando.</p>
               <ul className="text-gray-800 text-left mb-8 space-y-2">
@@ -416,7 +416,7 @@ function Home() {
             <div className="flex flex-col items-center text-center p-8 bg-black text-white rounded-xl shadow-2xl border-2 border-yellow-500 transition-transform duration-300 hover:scale-105 hover:shadow-yellow-500/50">
               <h3 className="text-2xl font-bold text-yellow-500 mb-4">Plano Profissional</h3>
               <p className="text-white text-4xl font-extrabold mb-4">
-                R$199<span className="text-xl text-gray-400">/mês</span>
+                R$149,90<span className="text-xl text-gray-400">/mês</span>
               </p>
               <p className="text-gray-300 text-base mb-6">Para negócios que buscam crescer e otimizar.</p>
               <ul className="text-gray-200 text-left mb-8 space-y-2">

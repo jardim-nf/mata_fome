@@ -1,4 +1,3 @@
-// src/pages/Painel.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -12,11 +11,17 @@ import {
     deleteDoc,
     getDoc
 } from 'firebase/firestore';
-import { db } from '../firebase';
-import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-toastify';
-import PedidoCard from '../components/PedidoCard';
 
+import { toast } from 'react-toastify';
+// Importe 'app' do seu arquivo firebase.js para usar com getFunctions, se necessário
+import { db, app } from '../firebase'; // <--- CORRIGIDO: Importando 'app'
+import { useAuth } from '../context/AuthContext';
+import PedidoCard from "../components/PedidoCard";
+// Importar Firebase Functions e httpsCallable
+// Mantenha getFunctions se usar para outras Cloud Functions. Remova httpsCallable.
+import { getFunctions } from 'firebase/functions'; // <--- CORRIGIDO: Removido httpsCallable daqui, se não precisar mais
+
+// Componente Spinner para carregamento
 function Spinner() {
     return (
         <div className="flex flex-col items-center justify-center p-8">
@@ -38,6 +43,11 @@ export default function Painel() {
         estabelecimentoId: authContextEstabelecimentoId,
         isEstabelecimentoAtivo: authContextIsEstabelecimentoAtivo,
     } = useAuth();
+
+    // NOVO: Inicializar Firebase Functions e a função callable
+    // Se você não usa mais NENHUMA Cloud Function neste componente, pode remover as 2 linhas abaixo
+    // const firebaseFunctions = getFunctions(app); // Manter se usar outras functions
+    // const sendWhatsAppMessageCallable = httpsCallable(firebaseFunctions, 'sendWhatsAppMessage'); // Removido para WhatsApp direto
 
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({
@@ -150,7 +160,7 @@ export default function Painel() {
         init();
 
         return () => unsub.forEach(fn => fn());
-    }, [authLoading, currentUser]);
+    }, [authLoading, currentUser, navigate, logout, notificationsEnabled]); // Adicionei 'notificationsEnabled' nas deps
 
     const toggleNotifications = () => {
         const enable = !notificationsEnabled;
@@ -179,6 +189,63 @@ export default function Painel() {
             toast.error('Erro ao excluir pedido.');
         }
     };
+
+    // FUNÇÃO MODIFICADA: para atualizar status do pedido E abrir WhatsApp via link
+    const handleUpdatePedidoStatusAndWhatsApp = async (pedidoId, newStatus, pedidoData) => {
+        try {
+            const pedidoRef = doc(db, 'pedidos', pedidoId);
+            await updateDoc(pedidoRef, { status: newStatus });
+            toast.success(`Status alterado para ${newStatus.replace('_', ' ')}!`);
+
+            // Se o status for 'preparo' ou 'em_entrega' e notificações ativadas
+            if ((newStatus === 'preparo' || newStatus === 'em_entrega') && notificationsEnabled) {
+                const numeroCliente = pedidoData.cliente?.telefone; // <--- ATENÇÃO AQUI: Verifique o caminho real do telefone
+                let mensagemCliente = '';
+
+                if (newStatus === 'preparo') {
+                    mensagemCliente = `Olá ${pedidoData.cliente?.nome?.split(' ')[0] || 'cliente'}! Seu pedido #${pedidoData.id.slice(0, 5).toUpperCase()} no ${estabelecimentoInfo?.nome || 'nosso estabelecimento'} agora está EM PREPARO. Em breve estará a caminho!`;
+                } else if (newStatus === 'em_entrega') {
+                    mensagemCliente = `Ótimas notícias, ${pedidoData.cliente?.nome?.split(' ')[0] || 'cliente'}! Seu pedido #${pedidoData.id.slice(0, 5).toUpperCase()} do ${estabelecimentoInfo?.nome || 'nosso estabelecimento'} já saiu para entrega e logo chegará!`;
+                }
+
+                if (numeroCliente) {
+                    try {
+                        // Remove todos os caracteres não numéricos do telefone (ex: parênteses, traços, espaços)
+                        const formattedNumero = numeroCliente.replace(/\D/g, ''); 
+                        
+                        // --- DEBUG LOGS ADICIONADOS AQUI ---
+                        console.log("DEBUG: Número Cliente Original:", numeroCliente);
+                        console.log("DEBUG: Número Formatado (DDI+DDD+Num):", formattedNumero);
+                        console.log("DEBUG: Mensagem a ser enviada:", mensagemCliente);
+                        console.log("DEBUG: Mensagem Codificada (para URL):", encodeURIComponent(mensagemCliente));
+                        // --- FIM DOS DEBUG LOGS ---
+
+                        // Constrói o link wa.me para abrir o WhatsApp Web/App
+                        const whatsappLink = `https://wa.me/${formattedNumero}?text=${encodeURIComponent(mensagemCliente)}`;
+                        
+                        console.log("DEBUG: Link do WhatsApp Gerado:", whatsappLink); // Log final do link
+
+                        // Abre o link em uma nova aba do navegador
+                        // ATENÇÃO: Navegadores podem bloquear pop-ups. Verifique a barra de endereço.
+                        window.open(whatsappLink, '_blank');
+                        
+                        toast.info('Link do WhatsApp aberto. Por favor, envie a mensagem manualmente.');
+                    } catch (error) {
+                        toast.error(`Erro ao abrir WhatsApp: ${error.message}`);
+                        console.error('Erro ao abrir link do WhatsApp:', error);
+                    }
+                } else {
+                    // Esta mensagem aparecerá se pedidoData.cliente?.telefone for nulo ou undefined
+                    toast.warn('Número de telefone do cliente não encontrado para abrir WhatsApp.');
+                    console.warn("WARN: Telefone do cliente não encontrado para o pedido:", pedidoData);
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar status ou preparar WhatsApp:', error);
+            toast.error(`Erro ao atualizar status do pedido: ${error.message}`);
+        }
+    };
+
 
     if (loading) return <Spinner />;
     if (error) return <div className="p-6 bg-red-100 text-red-700 rounded-lg"><p className="font-bold">Erro:</p><p>{error}</p></div>;
@@ -228,6 +295,8 @@ export default function Painel() {
                                         estabelecimento={estabelecimentoInfo}
                                         autoPrintEnabled={true}
                                         onDeletePedido={handleDelete}
+                                        // NOVO: Passar a nova função de update para o PedidoCard
+                                        onUpdateStatus={handleUpdatePedidoStatusAndWhatsApp}
                                     />
                                 ))}
                             </div>

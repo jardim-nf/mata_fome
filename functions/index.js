@@ -1,21 +1,16 @@
 // functions/index.js
 
 // Imports necessários para as Cloud Functions (usando sintaxe ES Modules)
-// Certifique-se de que seu package.json na pasta 'functions' tem "type": "module",
-// ou use a sintaxe 'require()' se estiver em CommonJS.
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+// Certifique-se de que seu package.json na pasta 'functions' tem "type": "module".
+import { onCall, HttpsError } from 'firebase-functions/v2/https'; // Importação principal
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import nodemailer from 'nodemailer'; // Para envio de e-mails
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'; // Gatilho para Firestore
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { logger } from "firebase-functions";
-import axios from "axios";
-// >>>>> NOVO IMPORT NECESSÁRIO PARA A FUNÇÃO DE WHATSAPP (se for usar API externa como Axios/Twilio) <<<<<
-// import axios from 'axios'; // Exemplo: se usar axios para outras APIs de WhatsApp
-// const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN); // Exemplo para Twilio (se estiver usando CommonJS ou Babel)
+import { logger } from "firebase-functions"; // Logger para as funções
+import axios from "axios"; // Para fazer requisições HTTP (Z-API)
 
 // --- INICIALIZAÇÃO DO FIREBASE ADMIN SDK ---
 // Garante que o aplicativo Admin SDK é inicializado uma única vez.
@@ -34,11 +29,15 @@ const auth = getAuth();
 // =========================================================================
 // **Lembre-se de configurar estas variáveis de ambiente no Firebase:**
 // firebase functions:config:set mail.user="seu_email@gmail.com" mail.pass="sua_senha_app_gerada_do_gmail"
+// Nota: com ES Modules, `process.env` nem sempre é a forma preferida para variáveis de ambiente do Functions.
+// É mais comum usar `functions.config()`. Se `mail.user` e `mail.pass` forem configurados como `mail.user` e `mail.pass`
+// no `functions:config:set`, você os acessaria como `functions.config().mail.user`.
+// Por enquanto, mantenho `process.env` como estava no seu código para evitar quebrar a parte de e-mail.
 const mailTransport = nodemailer.createTransport({
     service: 'gmail', // Ou 'smtp.seuservidor.com' para outros serviços
     auth: {
-        user: process.env.MAIL_USER, 
-        pass: process.env.MAIL_PASS, 
+        user: process.env.MAIL_USER, // Acessado via process.env se configurado diretamente ou via .env local
+        pass: process.env.MAIL_PASS, // Acessado via process.env se configurado diretamente ou via .env local
     },
 });
 
@@ -53,9 +52,9 @@ const MASTER_ADMIN_EMAIL = 'seu_email_master_admin@exemplo.com';
 // =========================================================================
 export const getEstablishmentPixKey = onCall(async (data, context) => {
     // Apenas usuários autenticados podem chamar esta função
-if (!context.auth) {
-  throw new functions.https.HttpsError('unauthenticated', 'Apenas usuários autenticados podem enviar mensagens.');
-}
+    if (!context.auth) {
+        throw new HttpsError('unauthenticated', 'Apenas usuários autenticados podem acessar esta função.');
+    }
 
     const callerClaims = context.auth.token;
     const isCallerAdmin = callerClaims.isAdmin === true;
@@ -92,65 +91,125 @@ if (!context.auth) {
 });
 
 // =========================================================================
-// >>>>> NOVA CLOUD FUNCTION: sendWhatsappMessage <<<<<
+// >>>>> NOVA CLOUD FUNCTION: sendWhatsappMessage (REVISADA) <<<<<
 // Descrição: Envia uma mensagem via WhatsApp ao cliente quando o pedido muda de status.
 // =========================================================================
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { logger } from "firebase-functions";
-import axios from "axios";
+// Nota: Removi a importação duplicada de onCall, HttpsError e axios aqui,
+// pois já estão no topo do arquivo.
+// import { onCall, HttpsError } from "firebase-functions/v2/https";
+// import { logger } from "firebase-functions"; // Já importado acima
+// import axios from "axios"; // Já importado acima
 
 export const sendWhatsappMessage = onCall(async (data, context) => {
-  logger.info("sendWhatsappMessage: [DEBUG START]");
-  logger.info("context.auth:", context.auth ? { uid: context.auth.uid } : "null/undefined");
+    logger.info("sendWhatsappMessage: [DEBUG START]");
+    logger.info("context.auth:", context.auth ? { uid: context.auth.uid } : "null/undefined");
 
-  const callerClaims = context.auth?.token;
-  if (!context.auth) throw new HttpsError("unauthenticated", "Usuário não autenticado.");
+    // --- 1. Validação de Autenticação e Permissão ---
+    const callerClaims = context.auth?.token;
+    if (!context.auth) {
+        throw new HttpsError("unauthenticated", "Usuário não autenticado.");
+    }
+    if (!callerClaims?.isAdmin && !callerClaims?.isMasterAdmin) {
+        throw new HttpsError("permission-denied", "Apenas administradores podem enviar mensagens de WhatsApp.");
+    }
 
-  if (!callerClaims?.isAdmin && !callerClaims?.isMasterAdmin) {
-    throw new HttpsError("permission-denied", "Apenas administradores podem enviar mensagens.");
-  }
+    // --- 2. Acessar as Credenciais da Z-API (Variáveis de Ambiente!) ---
+    // Este é o método CORRETO para acessar variáveis de ambiente configuradas via `firebase functions:config:set`
+    const ZAPI_INSTANCE_ID = functions.config().zapi?.instance_id;
+    const ZAPI_TOKEN = functions.config().zapi?.token;
 
-  const { to, messageType, clientName, orderValue, orderDateTime, estabelecimentoName, orderIdShort } = data;
-  if (!to || !messageType || !clientName || orderValue === undefined || !orderDateTime || !estabelecimentoName || !orderIdShort) {
-    throw new HttpsError("invalid-argument", "Dados incompletos para enviar a mensagem.");
-  }
+    // Verificação básica se as credenciais estão configuradas
+    if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN) {
+        logger.error("Credenciais da Z-API não configuradas! Verifique firebase functions:config:set zapi.instance_id e zapi.token");
+        throw new HttpsError(
+            'failed-precondition',
+            'As credenciais da Z-API (instance_id e token) não estão configuradas nas variáveis de ambiente do Firebase Functions.'
+        );
+    }
 
-  const formattedTo = to.replace(/\D/g, "");
-  let messageText = "";
+    // --- 3. Extrair Dados da Requisição do Frontend ---
+    const { to, messageType, clientName, orderValue, orderDateTime, estabelecimentoName, orderIdShort } = data;
 
-  switch (messageType) {
-    case "preparo":
-      messageText = `✨ Oi ${clientName}! Seu pedido #${orderIdShort} no *${estabelecimentoName}* (R$ ${orderValue.toFixed(2).replace('.', ',')}) está em preparo. Logo chega! 🚀\n${orderDateTime}`;
-      break;
-    case "em_entrega":
-      messageText = `🚚 ${clientName}, seu pedido #${orderIdShort} no *${estabelecimentoName}* (R$ ${orderValue.toFixed(2).replace('.', ',')}) saiu para entrega!\n${orderDateTime}`;
-      break;
-    case "finalizado":
-      messageText = `🎉 ${clientName}, seu pedido #${orderIdShort} do *${estabelecimentoName}* foi entregue! Obrigado pela preferência! ❤️`;
-      break;
-    default:
-      throw new HttpsError("invalid-argument", "Tipo de mensagem inválido.");
-  }
+    // --- 4. Validação dos Dados Recebidos ---
+    if (!to || !messageType || !clientName || orderValue === undefined || !orderDateTime || !estabelecimentoName || !orderIdShort) {
+        logger.error("Dados incompletos recebidos para enviar mensagem Z-API:", { to, messageType, clientName, orderValue, orderDateTime, estabelecimentoName, orderIdShort });
+        throw new HttpsError("invalid-argument", "Dados incompletos para enviar a mensagem. Verifique os campos obrigatórios.");
+    }
 
-  try {
-    // ⚠️ Substitua abaixo com seu endpoint e token da Z-API:
-    const ZAPI_INSTANCE_ID = "3E485BC00D46A19BB9178A98E8AD8DA9"; // Ex: 123456
-    const ZAPI_TOKEN = "C1F0C279B3B2E538E07A4E06"; // Ex: abc123xyz
+    // --- 5. Formatar o Número de Telefone para a Z-API ---
+    // Remove todos os caracteres não-numéricos e adiciona o DDI 55 se não estiver presente
+    let formattedTo = String(to).replace(/\D/g, '');
+    if (!formattedTo.startsWith('55')) {
+        // Assume Brasil (DDI 55). Se o número já tem um DDD brasileiro válido (ex: 11, 21),
+        // ele será 11 dígitos para celular ou 10 para fixo.
+        // Se for 9 digitos, é celular sem DDD. Se for 8, fixo sem DDD.
+        // É importante que o 'to' que vem do frontend já seja DDD+NUMERO.
+        // Se o seu `to` do frontend já vem com o DDD (ex: "11999999999"), esta lógica está ok.
+        // Se ele vem puro (ex: "999999999"), você precisará de uma forma de adicionar o DDD aqui.
+        // Por enquanto, presumo que 'to' já tem o DDD (ex: "11987654321").
+        formattedTo = `55${formattedTo}`;
+    }
 
+    // --- 6. Construir a Mensagem de Texto com base no messageType ---
+    let messageText = "";
+    const nomeCliente = clientName || 'Cliente';
+    const nomeEstabelecimento = estabelecimentoName || 'nosso estabelecimento';
+    const idPedidoCurto = orderIdShort ? `#${orderIdShort.toUpperCase()}` : 'do seu pedido';
+    const valorPedido = orderValue !== undefined ? `R$ ${orderValue.toFixed(2).replace('.', ',')}` : 'o valor total';
+
+
+    switch (messageType) {
+        case "preparo":
+            messageText = `✨ Oi ${nomeCliente}! Seu pedido ${idPedidoCurto} no *${nomeEstabelecimento}* (${valorPedido}) está em preparo. Logo chega! 🚀\nData/Hora do Pedido: ${orderDateTime}`;
+            break;
+        case "em_entrega":
+            messageText = `🚚 ${nomeCliente}, seu pedido ${idPedidoCurto} no *${nomeEstabelecimento}* (${valorPedido}) saiu para entrega!\nData/Hora do Pedido: ${orderDateTime}`;
+            break;
+        case "finalizado":
+            messageText = `🎉 ${nomeCliente}, seu pedido ${idPedidoCurto} do *${nomeEstabelecimento}* (${valorPedido}) foi entregue! Obrigado pela preferência! ❤️`;
+            break;
+        // Adicione outros cases se houverem outros tipos de mensagem (como 'pagamento_pix_pendente' se o frontend enviar)
+        default:
+            logger.error(`Tipo de mensagem inválido ou não suportado: ${messageType}`);
+            throw new HttpsError("invalid-argument", "Tipo de mensagem inválido ou não suportado.");
+    }
+
+    // --- 7. Construir a URL da Z-API ---
     const zapiUrl = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
 
-    const response = await axios.post(zapiUrl, {
-      phone: `55${formattedTo}`, // DDD + número, sem + ou traços
-      message: messageText
-    });
+    // --- 8. Logar Dados para Depuração (MUITO IMPORTANTE!) ---
+    logger.info(`[Z-API Debug] Tentando enviar mensagem via Z-API:`);
+    logger.info(`  - Instância ID: ${ZAPI_INSTANCE_ID}`);
+    logger.info(`  - URL: ${zapiUrl}`);
+    logger.info(`  - Telefone Formatado (para Z-API): ${formattedTo}`);
+    logger.info(`  - Mensagem Final (para Z-API): "${messageText}"`);
+    logger.info(`  - Dados Originais Recebidos do Frontend:`, data); // Útil para ver o que veio do frontend
 
-    logger.info("Mensagem enviada com sucesso via Z-APnpkm runI:", response.data);
-    return { success: true, message: "Mensagem enviada com sucesso." };
+    // --- 9. Fazer a Requisição POST para a Z-API ---
+    try {
+        const response = await axios.post(zapiUrl, {
+            phone: formattedTo,
+            message: messageText
+        });
 
-  } catch (error) {
-    logger.error("Erro ao enviar mensagem via Z-API:", error.response?.data || error.message);
-    throw new HttpsError("internal", "Erro ao enviar mensagem via Z-API.");
-  }
+        // --- 10. Logar Sucesso e Retornar Resposta ---
+        logger.info("Mensagem enviada com sucesso via Z-API:", response.data);
+        return { success: true, message: "Mensagem enviada com sucesso.", zapiResponse: response.data };
+
+    } catch (error) {
+        // --- 11. Logar Erro Detalhado e Lançar HttpsError ---
+        const errorMessage = error.response?.data?.message || error.message || 'Erro desconhecido ao chamar Z-API.';
+        const errorDetails = error.response?.data || error.message;
+
+        logger.error(`[Z-API Error] Erro ao enviar mensagem para ${formattedTo}:`, errorMessage);
+        logger.error(`[Z-API Error] Detalhes completos do erro da Z-API:`, errorDetails);
+
+        throw new HttpsError(
+            "internal",
+            "Erro ao enviar mensagem via Z-API. Verifique os logs do Firebase Functions para mais detalhes.",
+            errorDetails // Passa os detalhes do erro para o frontend
+        );
+    }
 });
 
 // =========================================================================
@@ -162,7 +221,7 @@ export const sendWhatsappMessage = onCall(async (data, context) => {
 // atribuindo papéis (claims) no momento da criação.
 // =========================================================================
 export const createUserByMasterAdmin = onCall(async (data, context) => {
-    console.log("Cloud Function 'createUserByMasterAdmin' chamada.");
+    logger.info("Cloud Function 'createUserByMasterAdmin' chamada.");
 
     // 1. Verificação de Permissão: Apenas quem já é Master Admin (via claim) pode criar.
     if (!context.auth || context.auth.token.isMasterAdmin !== true) {
@@ -190,7 +249,7 @@ export const createUserByMasterAdmin = onCall(async (data, context) => {
         const customClaims = {
             isMasterAdmin: isMasterAdmin === true, // Garante que é booleano
             isAdmin: isAdmin === true,             // Garante que é booleano
-            isEstabelecimentoAtivo: ativo === true, // <--- ADICIONADO AQUI! Sincroniza 'ativo' do Firestore/Input com a claim
+            isEstabelecimentoAtivo: ativo === true, // Sincroniza 'ativo' do Firestore/Input com a claim
             // Adiciona 'estabelecimentoId' como claim APENAS SE for Admin e gerenciar UM ÚNICO estabelecimento.
             ...(isAdmin === true && estabelecimentosGerenciados && estabelecimentosGerenciados.length > 0
                 ? { estabelecimentoId: estabelecimentosGerenciados[0] } // Pega o primeiro ID do array
@@ -284,13 +343,13 @@ export const deleteUserByMasterAdmin = onCall(async (data, context) => {
 
         // 1. Deletar usuário do Firebase Authentication
         await auth.deleteUser(targetUid);
-        console.log(`Usuário ${targetUid} deletado do Firebase Authentication.`);
+        logger.info(`Usuário ${targetUid} deletado do Firebase Authentication.`); // Use logger.info
 
         // 2. Deletar documento(s) do Firestore (usuarios e clientes)
         await db.collection('usuarios').doc(targetUid).delete();
-        // Tenta deletar da coleção 'clientes', mas não faPausa a função se o documento não existir
-        await db.collection('clientes').doc(targetUid).delete().catch(e => console.log("Documento de cliente não existia para deletar: ", e.message)); 
-        console.log(`Documento(s) do usuário ${targetUid} deletado(s) do Firestore.`);
+        // Tenta deletar da coleção 'clientes', mas não pausa a função se o documento não existir
+        await db.collection('clientes').doc(targetUid).delete().catch(e => logger.warn(`Documento de cliente não existia para deletar: ${e.message}`)); // Use logger.warn
+        logger.info(`Documento(s) do usuário ${targetUid} deletado(s) do Firestore.`);
 
         // 3. Desvincular estabelecimentos (se o usuário era admin de algum)
         // Atualiza 'adminUID' para null nos estabelecimentos que eram gerenciados por este usuário.
@@ -298,7 +357,7 @@ export const deleteUserByMasterAdmin = onCall(async (data, context) => {
         const estabBatch = db.batch();
         estabQuery.forEach(doc => {
             estabBatch.update(doc.ref, { adminUID: null }); 
-            console.log(`Estabelecimento ${doc.id} desvinculado de ${targetUid}.`);
+            logger.info(`Estabelecimento ${doc.id} desvinculado de ${targetUid}.`); // Use logger.info
         });
         await estabBatch.commit();
         
@@ -319,7 +378,7 @@ export const deleteUserByMasterAdmin = onCall(async (data, context) => {
         return { success: true, message: `Usuário ${targetUid} deletado completamente.` };
 
     } catch (error) {
-        console.error(`Erro na Cloud Function deleteUserByMasterAdmin para ${targetUid}:`, error);
+        logger.error(`Erro na Cloud Function deleteUserByMasterAdmin para ${targetUid}:`, error); // Use logger.error
         // Lança um HttpsError para o frontend
         throw new HttpsError('internal', `Falha ao deletar usuário: ${error.message}`);
     }
@@ -331,7 +390,7 @@ export const deleteUserByMasterAdmin = onCall(async (data, context) => {
 // Se atrasado, desativa o estabelecimento e envia um e-mail de alerta ao Master Admin.
 // =========================================================================
 export const checkLatePayments = onSchedule('0 2 * * *', async (context) => { // Executa toda noite às 02:00 (GMT)
-    console.log("Executando checkLatePayments agendado...");
+    logger.info("Executando checkLatePayments agendado..."); // Use logger.info
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas a data
 
@@ -343,7 +402,7 @@ export const checkLatePayments = onSchedule('0 2 * * *', async (context) => { //
             .get();
 
         if (querySnapshot.empty) {
-            console.log('Nenhum estabelecimento com pagamento atrasado encontrado hoje.');
+            logger.info('Nenhum estabelecimento com pagamento atrasado encontrado hoje.'); // Use logger.info
             return null; // Nenhuma ação necessária
         }
 
@@ -401,11 +460,11 @@ export const checkLatePayments = onSchedule('0 2 * * *', async (context) => { //
                     <p>Atenciosamente,<br>Equipe ${APP_NAME}</p>`,
         };
         await mailTransport.sendMail(mailOptions);
-        console.log(`Alerta de pagamento atrasado enviado para ${MASTER_ADMIN_EMAIL}.`);
+        logger.info(`Alerta de pagamento atrasado enviado para ${MASTER_ADMIN_EMAIL}.`); // Use logger.info
         return null; // Indica sucesso (não retorna dados para o chamador HTTP)
 
     } catch (error) {
-        console.error('Erro na Cloud Function checkLatePayments:', error);
+        logger.error('Erro na Cloud Function checkLatePayments:', error); // Use logger.error
         // Envia um e-mail de erro para o Master Admin se a função falhar
         const errorMailOptions = {
             from: `${APP_NAME} <${process.env.MAIL_USER}>`,
@@ -423,7 +482,7 @@ export const checkLatePayments = onSchedule('0 2 * * *', async (context) => { //
 // Descrição: Alerta o Master Admin sobre estabelecimentos que estão inativos há mais de um período (ex: 60 dias).
 // =========================================================================
 export const alertLongInactiveEstablishments = onSchedule('0 3 * * 1', async (context) => { // Executa toda segunda-feira às 03:00 (GMT)
-    console.log("Executando alertLongInactiveEstablishments agendado...");
+    logger.info("Executando alertLongInactiveEstablishments agendado..."); // Use logger.info
     const thresholdDays = 60; // Limite de 60 dias para inatividade
     const sixtyDaysAgo = new Date();
     sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - thresholdDays);
@@ -436,7 +495,7 @@ export const alertLongInactiveEstablishments = onSchedule('0 3 * * 1', async (co
             .get();
 
         if (querySnapshot.empty) {
-            console.log('Nenhum estabelecimento inativo por mais de 60 dias encontrado.');
+            logger.info('Nenhum estabelecimento inativo por mais de 60 dias encontrado.'); // Use logger.info
             return null; // Nenhuma ação necessária
         }
 
@@ -461,11 +520,11 @@ export const alertLongInactiveEstablishments = onSchedule('0 3 * * 1', async (co
                     <p>Atenciosamente,<br>Equipe ${APP_NAME}</p>`,
         };
         await mailTransport.sendMail(mailOptions);
-        console.log(`Alerta de inatividade longa enviado para ${MASTER_ADMIN_EMAIL}.`);
+        logger.info(`Alerta de inatividade longa enviado para ${MASTER_ADMIN_EMAIL}.`); // Use logger.info
         return null;
 
     } catch (error) {
-        console.error('Erro ao verificar estabelecimentos inativos por muito tempo:', error);
+        logger.error('Erro ao verificar estabelecimentos inativos por muito tempo:', error); // Use logger.error
         return null;
     }
 });
@@ -484,10 +543,10 @@ export const syncUserClaimsOnWrite = onDocumentWritten('usuarios/{userId}', asyn
     // CASO 1: Documento do usuário foi DELETADO no Firestore
     // Remove as claims e desabilita o usuário no Auth se o documento Firestore sumir.
     if (!event.data?.after.exists) {
-        console.log(`[syncUserClaimsOnWrite] Documento do usuário ${userId} deletado no Firestore. Removendo claims e desabilitando no Auth.`);
+        logger.info(`[syncUserClaimsOnWrite] Documento do usuário ${userId} deletado no Firestore. Removendo claims e desabilitando no Auth.`); // Use logger.info
         await auth.setCustomUserClaims(userId, null); // Remove todas as custom claims
         await auth.updateUser(userId, { disabled: true }) // Desabilita o usuário no Auth
-            .catch(e => console.warn(`[syncUserClaimsOnWrite] Falha ao desabilitar usuário ${userId} no Auth (talvez já desabilitado ou não exista):`, e.message));
+            .catch(e => logger.warn(`[syncUserClaimsOnWrite] Falha ao desabilitar usuário ${userId} no Auth (talvez já desabilitado ou não exista): ${e.message}`)); // Use logger.warn
         return;
     }
 
@@ -497,16 +556,16 @@ export const syncUserClaimsOnWrite = onDocumentWritten('usuarios/{userId}', asyn
     const newEstabelecimentoIdFromDoc = userDocAfter.estabelecimentoId || null;
     const newAtivo = userDocAfter.ativo === true; // Pega o status 'ativo' do documento 'usuarios'
 
-    console.log(`[syncUserClaimsOnWrite] Processing user ${userId}. New data: isAdmin=${newIsAdmin}, isMasterAdmin=${newIsMasterAdmin}, estabId=${newEstabelecimentoIdFromDoc}, ativo=${newAtivo}`);
+    logger.info(`[syncUserClaimsOnWrite] Processing user ${userId}. New data: isAdmin=${newIsAdmin}, isMasterAdmin=${newIsMasterAdmin}, estabId=${newEstabelecimentoIdFromDoc}, ativo=${newAtivo}`); // Use logger.info
 
     // Tenta obter as custom claims ATUAIS do usuário no Firebase Authentication.
     let currentClaims;
     try {
         currentClaims = (await auth.getUser(userId)).customClaims || {};
-        console.log(`[syncUserClaimsOnWrite] Current Auth Claims for ${userId}:`, currentClaims);
+        logger.info(`[syncUserClaimsOnWrite] Current Auth Claims for ${userId}:`, currentClaims); // Use logger.info
     } catch (e) {
         // Se o usuário não existe no Auth (raro, mas pode acontecer se foi deletado por fora), encerra.
-        console.warn(`[syncUserClaimsOnWrite] Usuário ${userId} não encontrado no Firebase Auth. Não é possível sincronizar claims.`, e.message);
+        logger.warn(`[syncUserClaimsOnWrite] Usuário ${userId} não encontrado no Firebase Auth. Não é possível sincronizar claims: ${e.message}`); // Use logger.warn
         return; 
     }
 
@@ -514,14 +573,14 @@ export const syncUserClaimsOnWrite = onDocumentWritten('usuarios/{userId}', asyn
     const activeStatusChanged = userDocBefore?.ativo !== newAtivo;
     if (activeStatusChanged) {
         await auth.updateUser(userId, { disabled: !newAtivo });
-        console.log(`[syncUserClaimsOnWrite] User ${userId} auth disabled status updated to: ${!newAtivo}`);
+        logger.info(`[syncUserClaimsOnWrite] User ${userId} auth disabled status updated to: ${!newAtivo}`); // Use logger.info
     }
 
     // B) Prepara as novas custom claims a serem setadas no token.
     const customClaimsToSet = {
         isAdmin: newIsAdmin,
         isMasterAdmin: newIsMasterAdmin,
-        isEstabelecimentoAtivo: newAtivo, // <--- ADICIONADO: A claim 'isEstabelecimentoAtivo' agora é definida aqui!
+        isEstabelecimentoAtivo: newAtivo, // A claim 'isEstabelecimentoAtivo' agora é definida aqui!
     };
 
     // Adiciona 'estabelecimentoId' à claim se for admin de estabelecimento e houver um ID válido
@@ -550,21 +609,21 @@ export const syncUserClaimsOnWrite = onDocumentWritten('usuarios/{userId}', asyn
     // C) Verifica se as custom claims *relevantes* mudaram para evitar writes desnecessárias no Auth.
     const claimsRolesChanged = currentClaims.isAdmin !== newIsAdmin || currentClaims.isMasterAdmin !== newIsMasterAdmin;
     const claimsEstabIdChanged = currentClaims.estabelecimentoId !== customClaimsToSet.estabelecimentoId; // Compara com o que será definido
-    const claimsEstabAtivoChanged = currentClaims.isEstabelecimentoAtivo !== newAtivo; // <--- Nova verificação de mudança
+    const claimsEstabAtivoChanged = currentClaims.isEstabelecimentoAtivo !== newAtivo; // Nova verificação de mudança
 
     // Atualiza as custom claims no token APENAS SE houver mudança nos papéis, no estabelecimentoId da claim,
     // OU no status 'ativo' do estabelecimento, OU se o documento do usuário foi recém-criado no Firestore.
     if (!event.data?.before.exists || claimsRolesChanged || claimsEstabIdChanged || claimsEstabAtivoChanged) {
         try {
             await auth.setCustomUserClaims(userId, customClaimsToSet);
-            console.log(`[syncUserClaimsOnWrite] Sucesso! Claims para o usuário ${userId} atualizadas para:`, customClaimsToSet);
+            logger.info(`[syncUserClaimsOnWrite] Sucesso! Claims para o usuário ${userId} atualizadas para:`, customClaimsToSet); // Use logger.info
             // IMPORTANTE: Revogar o token para que o usuário obtenha o novo token imediatamente
             await auth.revokeRefreshTokens(userId);
-            console.log(`[syncUserClaimsOnWrite] Tokens de refresh revogados para ${userId}. O usuário precisará fazer login novamente.`);
+            logger.info(`[syncUserClaimsOnWrite] Tokens de refresh revogados para ${userId}. O usuário precisará fazer login novamente.`); // Use logger.info
         } catch (error) {
-            console.error(`[syncUserClaimsOnWrite] Erro ao definir claims para o usuário ${userId}:`, error);
+            logger.error(`[syncUserClaimsOnWrite] Erro ao definir claims para o usuário ${userId}:`, error); // Use logger.error
         }
     } else {
-        console.log(`[syncUserClaimsOnWrite] Nenhuma mudança de permissão relevante detectada para ${userId}. Claims não serão atualizadas.`);
+        logger.info(`[syncUserClaimsOnWrite] Nenhuma mudança de permissão relevante detectada para ${userId}. Claims não serão atualizadas.`); // Use logger.info
     }
 });
