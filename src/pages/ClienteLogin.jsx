@@ -212,7 +212,7 @@ function ClienteLogin() {
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-[var(--vermelho-principal)] hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold text-lg transition duration-300 shadow-md"
+            className="w-full bg-[var(--vermelho-principal)] hover:bg-red-700 text-black px-4 py-2 rounded-lg font-semibold text-lg transition duration-300 shadow-md"
           >
             {isRegistering ? 'Cadastrar' : 'Entrar'}
           </button>

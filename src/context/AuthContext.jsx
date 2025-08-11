@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
     const [isMasterAdmin, setIsMasterAdmin] = useState(false); // Permissão: true/false (vem das claims)
     const [estabelecimentoId, setEstabelecimentoId] = useState(null); // ID do estabelecimento (vem das claims)
     // isEstabelecimentoAtivo pode vir das claims ou do documento do estabelecimento
-    const [isEstabelecimentoAtivo, setIsEstabelecimentoAtivo] = useState(false); 
+    const [isEstabelecimentoAtivo, setIsEstabelecimentoAtivo] = useState(false);
     const [loading, setLoading] = useState(true); // Controla o carregamento inicial do AuthContext
 
     // Função de logout
@@ -79,7 +79,7 @@ export function AuthProvider({ children }) {
                 try {
                     // --- 1. Obtém as Custom Claims do Token (FONTE PRINCIPAL DE PERMISSÕES) ---
                     // Força o refresh para garantir que as claims mais recentes sejam carregadas
-                    const idTokenResult = await user.getIdTokenResult(true); 
+                    const idTokenResult = await user.getIdTokenResult(true);
                     console.log("AuthContext Debug: [onAuthStateChanged] - Fetched ID Token Result. Claims:", idTokenResult.claims);
 
                     // Extrai as claims e define os estados de permissão no contexto
@@ -175,14 +175,14 @@ export function AuthProvider({ children }) {
 
     // Objeto de valor do contexto que será fornecido aos componentes filhos
     const value = {
-        currentUser,        // Objeto de usuário do Firebase Auth
-        profileData,        // Dados adicionais do perfil do Firestore
-        isAdmin,            // Permissão: é admin de estabelecimento? (das claims)
-        isMasterAdmin,      // Permissão: é master admin? (das claims)
-        estabelecimentoId,  // ID do estabelecimento associado (das claims)
-        isEstabelecimentoAtivo, // Status de ativação do estabelecimento (das claims ou Firestore)
-        loading,            // Indica se o AuthContext ainda está carregando
-        logout,             // Função de logout
+        currentUser,
+        currentClientData: profileData, // CORREÇÃO: Renomeado para 'currentClientData' para corresponder ao uso em outros componentes
+        isAdmin,
+        isMasterAdmin,
+        estabelecimentoId,
+        isEstabelecimentoAtivo,
+        loading,
+        logout,
     };
 
     // Renderiza os filhos apenas quando o carregamento inicial do AuthContext estiver completo
