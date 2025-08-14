@@ -395,22 +395,7 @@ function Home() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
-            {/* Plano Básico */}
-            <div className="flex flex-col items-center text-center p-8 bg-gray-50 rounded-xl shadow-lg border border-gray-200 transition-transform duration-300 hover:scale-105 hover:shadow-xl">
-              <h3 className="text-2xl font-bold text-yellow-600 mb-4">Plano Essencial</h3>
-              <p className="text-black text-4xl font-extrabold mb-4">
-                R$49,90<span className="text-xl text-gray-700">/mês</span>
-              </p>
-              <p className="text-gray-700 text-base mb-6">Ideal para pequenos negócios que estão começando.</p>
-              <ul className="text-gray-800 text-left mb-8 space-y-2">
-                <li className="flex items-center"><svg className="w-5 h-5 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>Pedidos ilimitados</li>
-                <li className="flex items-center"><svg className="w-5 h-5 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>Cardápio online</li>
-                <li className="flex items-center"><svg className="w-5 h-5 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>Suporte básico</li>
-              </ul>
-              <button className="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors duration-300 shadow-md">
-                Assinar Plano
-              </button>
-            </div>
+
 
             {/* Plano Premium - Destaque */}
             <div className="flex flex-col items-center text-center p-8 bg-black text-white rounded-xl shadow-2xl border-2 border-yellow-500 transition-transform duration-300 hover:scale-105 hover:shadow-yellow-500/50">
