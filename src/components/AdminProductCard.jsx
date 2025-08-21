@@ -1,98 +1,51 @@
 // src/components/AdminProductCard.jsx
-
 import React from 'react';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase'; // Certifique-se de que o caminho para o seu db está correto
-import { toast } from 'react-toastify'; // Importe o toast aqui!
 
-// Este componente é EXCLUSIVAMENTE para a visão e gerenciamento do ADMINISTRADOR
-// Ele recebe o item do produto e o ID do estabelecimento para operações no Firestore
-// e funções de callback para Edição e Exclusão.
-const AdminProductCard = ({ produto, estabelecimentoId, onEdit, onDelete }) => {
+// O componente recebe todas as funções como props da página principal
+export default function AdminProductCard({ produto, onEdit, onDelete, onToggleStatus }) {
 
-  // Lógica para ativar/desativar produto
-  const toggleAtivo = async () => {
-    if (!estabelecimentoId || !produto || !produto.id) {
-      toast.error("Operação inválida. ID do estabelecimento ou produto ausente."); // Substituição do alert()
-      return;
-    }
-
-    const confirmAction = window.confirm(
-      `Tem certeza que deseja ${produto.ativo ? 'DESATIVAR' : 'ATIVAR'} o produto "${produto.nome}"?`
-    );
-
-    if (!confirmAction) return;
-
-    try {
-      const produtoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', produto.id);
-      await updateDoc(produtoRef, {
-        ativo: !produto.ativo // Inverte o valor atual (true vira false, false vira true)
-      });
-      toast.success(`Produto "${produto.nome}" foi ${produto.ativo ? 'desativado' : 'ativado'} com sucesso!`); // Substituição do alert()
-    } catch (error) {
-      console.error("Erro ao atualizar status do produto:", error);
-      toast.error("Erro ao atualizar status do produto. Por favor, tente novamente."); // Substituição do alert()
-    }
-  };
-
-  // Lógica para exclusão
-  const handleDelete = () => {
-    if (onDelete && produto.id) {
-      onDelete(produto.id); // Chama a função onDelete passada como prop do AdminMenuManagement
-    } else {
-      toast.error("Operação de exclusão inválida."); // Substituição do alert()
-    }
-  };
-
-  // Lógica para edição
-  const handleEdit = () => {
-    if (onEdit) {
-      onEdit(produto); // Chama a função onEdit passada como prop do AdminMenuManagement
-    } else {
-      toast.error("Operação de edição inválida."); // Substituição do alert()
-    }
-  };
+  const precoFormatado = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(produto.preco || 0);
 
   return (
-    // Aplica um estilo visual para produtos desativados (opacidade e borda vermelha)
-    <div className={`bg-white p-4 rounded-lg shadow-md mb-4 ${!produto.ativo ? 'opacity-50 border-red-400 border-2' : ''}`}>
-      <h3 className="text-xl font-semibold text-gray-800 mb-2">{produto.nome}</h3>
-      <p className="text-gray-600 mb-2">{produto.descricao}</p>
-      <p className="text-lg font-bold text-gray-900 mb-3">R$ {produto.preco ? produto.preco.toFixed(2).replace('.', ',') : '0,00'}</p>
+    <div 
+        onClick={onEdit} // Clicar no card inteiro abre o modal de edição
+        className="bg-accent rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:ring-2 hover:ring-primary flex items-center p-4 cursor-pointer"
+    >
+      <img
+        className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+        src={produto.imageUrl || 'https://via.placeholder.com/150'}
+        alt={produto.nome}
+      />
+
+      <div className="flex-grow px-5">
+        <h3 className="text-lg font-bold text-secondary truncate">{produto.nome}</h3>
+        <p className="text-gray-500 text-sm mt-1">{precoFormatado}</p>
+      </div>
       
-      {produto.imageUrl && (
-        <img src={produto.imageUrl} alt={produto.nome} className="w-full h-32 object-cover rounded-md mb-3" />
-      )}
-      
-      <div className="flex justify-between items-center mt-4">
-        {/* VISÃO DO ADMINISTRADOR: Mostra status e botões de gerenciamento */}
-        <span className={`text-sm font-medium ${produto.ativo ? 'text-green-600' : 'text-red-600'}`}>
-          Status: {produto.ativo ? 'Ativo' : 'Desativado'}
+      <div className="flex items-center gap-4">
+        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+            produto.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        }`}>
+            {produto.ativo ? 'Ativo' : 'Inativo'}
         </span>
-        <div className="flex flex-wrap gap-2 justify-end"> {/* Adicionado flex-wrap e justify-end para melhor responsividade */}
-          <button
-            onClick={handleEdit}
-            className="px-3 py-1 rounded-md text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors duration-200"
-          >
-            Editar
-          </button>
-          <button
-            onClick={toggleAtivo}
-            className={`px-3 py-1 rounded-md text-white text-sm font-medium transition-colors duration-200 
-              ${produto.ativo ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
-          >
-            {produto.ativo ? 'Desativar' : 'Ativar'}
-          </button>
-          <button
-            onClick={handleDelete}
-            className="px-3 py-1 rounded-md text-red-500 hover:text-red-700 text-sm font-medium transition-colors duration-200"
-          >
-            Excluir
-          </button>
-        </div>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onToggleStatus(); }} 
+          className="p-2 text-gray-400 hover:text-secondary hover:bg-gray-200 rounded-full transition-colors"
+          title={produto.ativo ? 'Desativar' : 'Ativar'}
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-10.293a1 1 0 00-1.414-1.414L9 9.586 7.707 8.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors"
+          title="Excluir item"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+        </button>
       </div>
     </div>
   );
-};
-
-export default AdminProductCard;
+}

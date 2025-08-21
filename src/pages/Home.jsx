@@ -396,7 +396,6 @@ function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
 
-
             {/* Plano Premium - Destaque */}
             <div className="flex flex-col items-center text-center p-8 bg-black text-white rounded-xl shadow-2xl border-2 border-yellow-500 transition-transform duration-300 hover:scale-105 hover:shadow-yellow-500/50">
               <h3 className="text-2xl font-bold text-yellow-500 mb-4">Plano Profissional</h3>

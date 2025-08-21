@@ -10,7 +10,8 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Menu from "./pages/Menu";
 import ListaEstabelecimentos from "./pages/ListaEstabelecimentos";
-import ComandaView from "./pages/ComandaView";
+// ▼▼▼ CORREÇÃO: Importando o ComandaView para ser usado na rota ▼▼▼
+import ComandaParaImpressao from "./components/ComandaParaImpressao"; 
 import Planos from "./pages/Planos";
 import HistoricoCliente from './pages/HistoricoCliente';
 import ClientOrderHistory from './pages/ClientOrderHistory';
@@ -39,7 +40,6 @@ import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
 
-// NOVO: Importando o nosso componente "Porteiro" de redirecionamento
 import HomeRedirector from './pages/HomeRedirector';
 
 function App() {
@@ -50,7 +50,8 @@ function App() {
           {/* Rotas que NÃO usam o Layout */}
           <Route path="/" element={<Home />} />
           <Route path="/login-admin" element={<Login />} />
-          <Route path="/comanda/:pedidoId" element={<ComandaView />} />
+          {/* ▼▼▼ CORREÇÃO: Usando ComandaView para a rota da comanda ▼▼▼ */}
+          <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao/>} />
 
           {/* GRUPO DE ROTAS QUE USAM O LAYOUT */}
           <Route element={<Layout />}>
@@ -64,12 +65,11 @@ function App() {
             <Route path="/historico-cliente/:telefone" element={<HistoricoCliente />} />
             <Route path="/admin/clientes/:clientId" element={<ClientDetails />} />
             
-            {/* NOVO: Rota do nosso "porteiro" inteligente. O login deve apontar para cá. */}
             <Route path="/painel-inicial" element={<HomeRedirector />} />
 
-            {/* Rotas para Administradores de Estabelecimento (Gerenciam SEU estabelecimento) */}
+            {/* Rotas para Administradores de Estabelecimento */}
             <Route path="/painel" element={<Painel />} />
-            <Route path="/dashboard" element={<AdminDashboard />} /> {/* Esta rota leva para o painel antigo do admin comum */}
+            <Route path="/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/gerenciar-cardapio" element={<AdminMenuManagement />} />
             <Route path="/admin/taxas-de-entrega" element={<TaxasDeEntrega />} />
             <Route path="/admin/gerenciar-estabelecimentos" element={<AdminEstablishmentManagement />} />

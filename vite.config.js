@@ -1,9 +1,14 @@
 // vite.config.js
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  // Confirme que esta linha existe e está assim:
-  base: '/',
-})
+  resolve: {
+    alias: {
+      // A forma correta de resolver o caminho no Vite
+      '@': path.resolve(new URL('.', import.meta.url).pathname, './src'),
+    },
+  },
+});

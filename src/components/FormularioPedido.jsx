@@ -1,163 +1,160 @@
 // src/components/FormularioPedido.jsx
-import React, { useState } from "react";
-import { collection, addDoc, Timestamp } from "firebase/firestore"; // Importe Timestamp aqui
-import { db } from "../firebase";
-import { toast } from 'react-toastify'; // Importe o toast aqui!
+import React, { useState, useEffect } from 'react';
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useNavigate } from 'react-router-dom';
 
-function FormularioPedido() {
-  const [nome, setNome] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [itens, setItens] = useState([{ nome: "", quantidade: 1, preco: 0 }]); // Adicione preço para consistência
+const FormularioPedido = ({ itensDoPedido, estabelecimentoId, valorTotal, limparCarrinho, taxas, estabelecimentoInfo }) => {
+    const { currentUser, currentClientData, cashbackBalance, setCashbackBalance } = useAuth();
+    const navigate = useNavigate();
 
-  const adicionarItem = () => {
-    setItens([...itens, { nome: "", quantidade: 1, preco: 0 }]);
-  };
+    const [nome, setNome] = useState('');
+    const [telefone, setTelefone] = useState('');
+    const [endereco, setEndereco] = useState('');
+    const [metodoPagamento, setMetodoPagamento] = useState('PIX');
+    const [trocoPara, setTrocoPara] = useState('');
+    const [observacoes, setObservacoes] = useState('');
+    const [bairro, setBairro] = useState('');
+    const [taxaEntrega, setTaxaEntrega] = useState(0);
+    const [valorCashbackUsar, setValorCashbackUsar] = useState('');
+    const [cashbackAplicado, setCashbackAplicado] = useState(0);
+    const [valorFinal, setValorFinal] = useState(valorTotal);
 
-  const atualizarItem = (index, campo, valor) => {
-    const novosItens = [...itens];
-    novosItens[index][campo] = valor;
-    setItens(novosItens);
-  };
+    useEffect(() => {
+        if (currentClientData) {
+            setNome(currentClientData.nome || '');
+            setTelefone(currentClientData.telefone || '');
+            const end = currentClientData.endereco;
+            if (end) {
+                setEndereco(`${end.rua || ''}, ${end.numero || ''} - ${end.complemento || ''}`);
+                setBairro(end.bairro || '');
+            }
+        }
+    }, [currentClientData]);
 
-  const removerItem = (index) => {
-    setItens(itens.filter((_, i) => i !== index));
-  };
+    useEffect(() => {
+        const taxaEncontrada = taxas.find(t => t.bairro.toLowerCase() === bairro.toLowerCase());
+        const novaTaxa = taxaEncontrada ? taxaEncontrada.taxa : 0;
+        setTaxaEntrega(novaTaxa);
+    }, [bairro, taxas]);
 
-  const handleSalvar = async (e) => {
-    e.preventDefault();
+    useEffect(() => {
+        const total = valorTotal + taxaEntrega - cashbackAplicado;
+        setValorFinal(total < 0 ? 0 : total);
+    }, [valorTotal, taxaEntrega, cashbackAplicado]);
 
-    if (!nome.trim() || !telefone.trim()) {
-      toast.warn("Preencha o nome e telefone do cliente."); // Substituição do alert()
-      return;
-    }
+    const handleAplicarCashback = () => {
+        const valorAUsar = parseFloat(valorCashbackUsar);
+        if (isNaN(valorAUsar) || valorAUsar < 0) return alert("Valor inválido.");
+        if (valorAUsar > cashbackBalance) return alert("Saldo de cashback insuficiente.");
+        
+        const maxAplicavel = valorTotal + taxaEntrega;
+        if (valorAUsar > maxAplicavel) {
+            alert(`O valor máximo de cashback aplicável é R$ ${maxAplicavel.toFixed(2)}.`);
+            setCashbackAplicado(maxAplicavel);
+            setValorCashbackUsar(maxAplicavel.toString());
+            return;
+        }
+        setCashbackAplicado(valorAUsar);
+        alert(`R$ ${valorAUsar.toFixed(2)} de cashback aplicado!`);
+    };
 
-    // Verifica se todos os itens têm nome e quantidade válida
-    if (itens.length === 0 || itens.some((item) => item.nome.trim() === "" || item.quantidade < 1 || item.preco < 0)) {
-      toast.warn("Preencha todos os itens corretamente (nome, quantidade e preço positivo)."); // Substituição do alert()
-      return;
-    }
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (itensDoPedido.length === 0) return alert('O seu carrinho está vazio!');
 
-    await addDoc(collection(db, "pedidos"), {
-      cliente: { nome: nome.trim(), telefone: telefone.trim() },
-      status: "recebido", // Pedidos criados manualmente começam como "recebido"
-      itens: itens.map(item => ({ nome: item.nome.trim(), quantidade: Number(item.quantidade), preco: Number(item.preco) })),
-      criadoEm: Timestamp.now(), // Use Timestamp para consistência
-    });
+        const pedidoData = {
+            clienteId: currentUser.uid,
+            nomeCliente: nome,
+            telefoneCliente: telefone,
+            enderecoCliente: endereco,
+            bairroCliente: bairro,
+            itens: itensDoPedido,
+            valorSubTotal: valorTotal,
+            taxaEntrega: taxaEntrega,
+            desconto: cashbackAplicado,
+            valorTotal: valorFinal,
+            metodoPagamento,
+            trocoPara: metodoPagamento === 'Dinheiro' ? trocoPara : '',
+            observacoes,
+            estabelecimentoId,
+            estabelecimentoNome: estabelecimentoInfo.nome,
+            cashbackUsado: cashbackAplicado
+        };
+        
+        try {
+            const functions = getFunctions();
+            const criarPedido = httpsCallable(functions, 'createOrderWithCashback');
+            const result = await criarPedido(pedidoData);
 
-    setNome("");
-    setTelefone("");
-    setItens([{ nome: "", quantidade: 1, preco: 0 }]);
-    toast.success("✅ Pedido cadastrado com sucesso!"); // Substituição do alert()
-  };
+            alert(`Pedido #${result.data.orderIdShort.toUpperCase()} enviado com sucesso!`);
+            
+            if (cashbackAplicado > 0) {
+                setCashbackBalance(saldoAtual => saldoAtual - cashbackAplicado);
+            }
+            
+            limparCarrinho();
+            navigate('/meus-pedidos');
+        } catch (error) {
+            console.error('Erro ao enviar pedido:', error);
+            alert(`Houve um erro: ${error.message}`);
+        }
+    };
 
-  return (
-    <form
-      onSubmit={handleSalvar}
-      className="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto border border-gray-200"
-    >
-      <h2 className="text-2xl font-bold text-[var(--vermelho-principal)] mb-6 text-center">
-        Novo Pedido Manual
-      </h2>
+    return (
+        <div className="p-4 border rounded-lg shadow-lg bg-white mt-6">
+            <h2 className="text-2xl font-bold mb-4 text-center">Finalizar Pedido</h2>
+            <form onSubmit={handleSubmit}>
+                <div className="mb-4">
+                    <label className="block text-gray-700">Nome</label>
+                    <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className="w-full p-2 border rounded" required />
+                </div>
+                <div className="mb-4">
+                    <label className="block text-gray-700">Bairro</label>
+                    <input type="text" value={bairro} onChange={(e) => setBairro(e.target.value)} className="w-full p-2 border rounded" required />
+                </div>
 
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">
-          Nome do Cliente *
-        </label>
-        <input
-          type="text"
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-          placeholder="Ex: João da Silva"
-          required
-        />
-      </div>
+                {/* AQUI ESTÁ A OPÇÃO PARA USAR O SEU CASHBACK */}
+                {cashbackBalance > 0 && (
+                    <div className="my-4 p-4 bg-green-100 border-l-4 border-green-500 rounded">
+                        <p className="font-semibold text-green-800">
+                            Você tem R$ {cashbackBalance.toFixed(2).replace('.', ',')} de cashback!
+                        </p>
+                        <div className="flex items-center mt-2">
+                            <input
+                                type="number"
+                                value={valorCashbackUsar}
+                                onChange={(e) => setValorCashbackUsar(e.target.value)}
+                                className="p-2 border rounded w-full"
+                                placeholder="0.00"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAplicarCashback}
+                                className="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                            >
+                                Usar
+                            </button>
+                        </div>
+                    </div>
+                )}
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">
-          Telefone (com DDD) *
-        </label>
-        <input
-          type="tel" // Alterado para 'tel' para melhor UX
-          value={telefone}
-          onChange={(e) => setTelefone(e.target.value)}
-          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-          placeholder="Ex: 22999999999"
-          required
-        />
-      </div>
+                <div className="text-lg font-semibold my-4 space-y-1">
+                    <p className="flex justify-between"><span>Subtotal:</span> <span>R$ {valorTotal.toFixed(2)}</span></p>
+                    <p className="flex justify-between"><span>Taxa de Entrega:</span> <span>R$ {taxaEntrega.toFixed(2)}</span></p>
+                    {cashbackAplicado > 0 && (
+                        <p className="flex justify-between text-green-600"><span>Cashback Aplicado:</span> <span>- R$ {cashbackAplicado.toFixed(2)}</span></p>
+                    )}
+                    <p className="text-xl font-bold border-t pt-2 mt-2 flex justify-between"><span>Total a Pagar:</span> <span>R$ {valorFinal.toFixed(2)}</span></p>
+                </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-[var(--marrom-escuro)] mb-2">
-          Itens do Pedido *
-        </label>
-
-        {itens.map((item, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-3 mb-3 bg-gray-50 p-3 rounded border border-gray-100"
-          >
-            <input
-              type="text"
-              placeholder="Nome do Item"
-              value={item.nome}
-              onChange={(e) => atualizarItem(i, "nome", e.target.value)}
-              className="flex-1 border rounded px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <input
-              type="number"
-              min="1"
-              placeholder="Qtd"
-              value={item.quantidade}
-              onChange={(e) =>
-                atualizarItem(i, "quantidade", Number(e.target.value))
-              }
-              className="w-16 border rounded px-2 py-1 text-center focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Preço"
-              value={item.preco}
-              onChange={(e) =>
-                atualizarItem(i, "preco", Number(e.target.value))
-              }
-              className="w-24 border rounded px-2 py-1 text-right focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => removerItem(i)}
-              className="bg-red-500 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-lg"
-              aria-label="Remover item"
-            >
-              -
-            </button>
-          </div>
-        ))}
-
-        <button
-          type="button"
-          onClick={adicionarItem}
-          className="text-[var(--marrom-escuro)] hover:underline mt-2 text-sm flex items-center gap-1"
-        >
-          <span className="text-lg">+</span> Adicionar Outro Item
-        </button>
-      </div>
-
-      <div className="text-center">
-        <button
-          type="submit"
-          className="bg-[var(--vermelho-principal)] text-white px-6 py-3 rounded-lg hover:bg-red-700 transition font-semibold shadow-md text-lg"
-        >
-          Salvar Pedido Manualmente
-        </button>
-      </div>
-    </form>
-  );
-}
+                <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700">
+                    Finalizar Pedido
+                </button>
+            </form>
+        </div>
+    );
+};
 
 export default FormularioPedido;

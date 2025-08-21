@@ -627,3 +627,188 @@ export const syncUserClaimsOnWrite = onDocumentWritten('usuarios/{userId}', asyn
         logger.info(`[syncUserClaimsOnWrite] Nenhuma mudança de permissão relevante detectada para ${userId}. Claims não serão atualizadas.`); // Use logger.info
     }
 });
+
+//=========================================================================
+// >>>>> NOVA CLOUD FUNCTION: calculateCashbackOnOrderFinalized (Gatilho Firestore) <<<<<
+// Descrição: Concede cashback ao cliente quando um pedido é marcado como 'finalizado'.
+//=========================================================================
+export const calculateCashbackOnOrderFinalized = onDocumentWritten('pedidos/{pedidoId}', async (event) => {
+    const pedidoDepois = event.data?.after.data();
+    const pedidoAntes = event.data?.before.data();
+
+    // A função só executa se o status mudou para 'finalizado'
+    if (pedidoDepois?.status === 'finalizado' && pedidoAntes?.status !== 'finalizado') {
+        const clienteId = pedidoDepois.clienteId;
+        const valorTotal = pedidoDepois.valorTotal;
+        const estabelecimentoId = pedidoDepois.estabelecimentoId;
+
+        if (!clienteId || !valorTotal || !estabelecimentoId) {
+            logger.error('Pedido finalizado sem clienteId, valorTotal ou estabelecimentoId.', { pedidoId: event.params.pedidoId });
+            return;
+        }
+
+        try {
+            // Pega a porcentagem de cashback do estabelecimento
+            const estabDoc = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
+            const cashbackPercent = estabDoc.data()?.cashbackPercent || 0; // Ex: 5 para 5%
+
+            if (cashbackPercent <= 0) {
+                logger.info(`Cashback não ativado para o estabelecimento ${estabelecimentoId}.`);
+                return;
+            }
+
+            const cashbackAmount = (valorTotal * cashbackPercent) / 100;
+
+            const clienteRef = db.collection('clientes').doc(clienteId);
+
+            // Adiciona o cashback ao saldo do cliente
+            await clienteRef.update({
+                cashbackBalance: FieldValue.increment(cashbackAmount),
+                lastCashbackEarned: FieldValue.serverTimestamp()
+            });
+
+            logger.info(`Cashback de R$${cashbackAmount.toFixed(2)} concedido ao cliente ${clienteId} pelo pedido ${event.params.pedidoId}.`);
+
+        } catch (error) {
+            logger.error(`Erro ao conceder cashback para o cliente ${clienteId}:`, error);
+        }
+    }
+});
+
+
+// =========================================================================
+// >>>>> NOVA CLOUD FUNCTION: useCashbackOnNewOrder (Chamável) <<<<<
+// Descrição: Permite que um cliente autenticado use seu saldo de cashback em um novo pedido.
+// =========================================================================
+export const useCashbackOnNewOrder = onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new HttpsError('unauthenticated', 'Apenas clientes autenticados podem usar cashback.');
+    }
+
+    const { orderId, amountToUse } = data;
+    const clienteId = context.auth.uid;
+
+    if (!orderId || typeof amountToUse !== 'number' || amountToUse <= 0) {
+        throw new HttpsError('invalid-argument', 'ID do pedido e valor a ser usado são obrigatórios.');
+    }
+
+    const clienteRef = db.collection('clientes').doc(clienteId);
+    const pedidoRef = db.collection('pedidos').doc(orderId);
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            const clienteDoc = await transaction.get(clienteRef);
+            const pedidoDoc = await transaction.get(pedidoRef);
+
+            if (!clienteDoc.exists) {
+                throw new HttpsError('not-found', 'Cliente não encontrado.');
+            }
+            if (!pedidoDoc.exists) {
+                throw new HttpsError('not-found', 'Pedido não encontrado.');
+            }
+
+            const cashbackBalance = clienteDoc.data().cashbackBalance || 0;
+            const valorTotalPedido = pedidoDoc.data().valorTotal || 0;
+
+            if (amountToUse > cashbackBalance) {
+                throw new HttpsError('failed-precondition', 'Saldo de cashback insuficiente.');
+            }
+
+            if (amountToUse > valorTotalPedido) {
+                throw new HttpsError('failed-precondition', 'O valor do cashback não pode ser maior que o valor do pedido.');
+            }
+
+            // Subtrai o cashback do saldo do cliente
+            transaction.update(clienteRef, {
+                cashbackBalance: FieldValue.increment(-amountToUse)
+            });
+
+            // Aplica o desconto no pedido e registra o uso do cashback
+            transaction.update(pedidoRef, {
+                valorTotal: FieldValue.increment(-amountToUse),
+                cashbackUsed: amountToUse,
+                desconto: FieldValue.increment(amountToUse)
+            });
+        });
+
+        logger.info(`Cliente ${clienteId} usou R$${amountToUse.toFixed(2)} de cashback no pedido ${orderId}.`);
+        return { success: true, message: 'Cashback aplicado com sucesso!' };
+
+    } catch (error) {
+        logger.error(`Erro ao aplicar cashback para o cliente ${clienteId} no pedido ${orderId}:`, error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', 'Ocorreu um erro ao tentar aplicar o cashback.');
+    }
+});
+
+// functions/index.js
+
+// ... (todas as suas outras importações e funções)
+
+
+// =========================================================================
+// >>>>> NOVA FUNÇÃO OTIMIZADA: createOrderWithCashback (Chamável) <<<<<
+// Descrição: Cria o pedido e debita o cashback do cliente em uma única operação (transação).
+// =========================================================================
+export const createOrderWithCashback = onCall(async (data, context) => {
+    // 1. Validação de Autenticação
+    if (!context.auth) {
+        throw new HttpsError('unauthenticated', 'Apenas usuários autenticados podem criar pedidos.');
+    }
+    const clienteId = context.auth.uid;
+    const { cashbackUsado, ...pedidoData } = data; // Separa o cashback do resto dos dados
+
+    try {
+        let newOrderId;
+        let newOrderIdShort;
+
+        // 2. Executa uma Transação do Firestore
+        // Isso garante que ou TUDO funciona, ou NADA é salvo.
+        await db.runTransaction(async (transaction) => {
+            const clienteRef = db.collection('clientes').doc(clienteId);
+            const clienteDoc = await transaction.get(clienteRef);
+
+            if (!clienteDoc.exists) {
+                throw new HttpsError('not-found', 'Dados do cliente não encontrados.');
+            }
+
+            // 3. Verifica o saldo de cashback (se for usar)
+            if (cashbackUsado > 0) {
+                const cashbackBalance = clienteDoc.data().cashbackBalance || 0;
+                if (cashbackUsado > cashbackBalance) {
+                    throw new HttpsError('failed-precondition', 'Saldo de cashback insuficiente.');
+                }
+                // Debita o cashback do saldo do cliente
+                transaction.update(clienteRef, {
+                    cashbackBalance: FieldValue.increment(-cashbackUsado)
+                });
+            }
+
+            // 4. Cria o novo pedido
+            const pedidoRef = db.collection('pedidos').doc(); // Cria uma referência com ID automático
+            newOrderId = pedidoRef.id;
+            newOrderIdShort = newOrderId.substring(0, 5); // ID curto para o cliente
+
+            transaction.set(pedidoRef, {
+                ...pedidoData, // Todos os dados do pedido vindos do frontend
+                clienteId: clienteId, // Garante o ID do usuário autenticado
+                status: 'pendente',
+                timestamp: FieldValue.serverTimestamp(),
+                orderIdShort: newOrderIdShort
+            });
+        });
+
+        // 5. Retorna sucesso
+        logger.info(`Pedido ${newOrderId} criado com sucesso para o cliente ${clienteId}, usando ${cashbackUsado} de cashback.`);
+        return { success: true, orderId: newOrderId, orderIdShort: newOrderIdShort };
+
+    } catch (error) {
+        logger.error(`Erro na transação createOrderWithCashback para o cliente ${clienteId}:`, error);
+        if (error instanceof HttpsError) {
+            throw error; // Re-lança o erro específico para o frontend
+        }
+        throw new HttpsError('internal', 'Ocorreu um erro ao criar seu pedido. Tente novamente.');
+    }
+});
