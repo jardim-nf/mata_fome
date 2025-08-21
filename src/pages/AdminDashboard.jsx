@@ -23,10 +23,6 @@ function DashboardHeader({ currentUser, logout }) {
             <Link to="/" className="font-extrabold text-2xl text-white cursor-pointer hover:text-yellow-400 transition-colors">DEUFOME<span className="text-yellow-400">.</span></Link>
             <div className="flex items-center space-x-6">
                 <span className="text-white font-semibold text-sm hidden sm:block">Olá, {userEmailPrefix}</span>
-                <nav className="hidden md:flex items-center space-x-4">
-                    <Link to="/painel" className="text-gray-300 hover:text-yellow-400 font-medium">Painel de Pedidos</Link>
-                    <Link to="/admin/gerenciar-cardapio" className="text-gray-300 hover:text-yellow-400 font-medium">Cardápios</Link>
-                </nav>
                 <button onClick={handleLogout} className="px-5 py-2 rounded-md text-black bg-yellow-400 font-bold text-sm hover:bg-yellow-500 transition-all transform hover:scale-105">Sair</button>
             </div>
         </header>
