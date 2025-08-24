@@ -1,33 +1,32 @@
-// src/pages/TaxasDeEntrega.jsx
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { db } from '../firebase'; // Certifique-se de que o caminho para o seu firebase.js está correto
+import { db } from '../firebase';
 import { Link } from 'react-router-dom';
-import { toast } from 'react-toastify'; // Importe o toast aqui!
+import { toast } from 'react-toastify';
+
+// Ícones para a nova interface
+import { IoArrowBack, IoAddCircleOutline, IoPencil, IoTrash, IoCloseCircleOutline } from 'react-icons/io5';
 
 function TaxasDeEntrega() {
     const [bairros, setBairros] = useState([]);
     const [nomeBairro, setNomeBairro] = useState('');
     const [valorTaxa, setValorTaxa] = useState('');
-    const [editingId, setEditingId] = useState(null); // Para controlar qual bairro está sendo editado
+    const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
     const taxasCollectionRef = collection(db, 'taxasDeEntrega');
 
     // Função para buscar as taxas de entrega
     const getTaxas = async () => {
         setLoading(true);
-        setError(null);
         try {
             const q = query(taxasCollectionRef, orderBy('nomeBairro'));
             const data = await getDocs(q);
             const fetchedBairros = data.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             setBairros(fetchedBairros);
         } catch (err) {
-            console.error("Erro ao buscar taxas de entrega:", err);
-            setError("Erro ao carregar as taxas de entrega.");
-            toast.error("Erro ao carregar as taxas de entrega."); // Adicionado toast de erro
+            console.error("Erro ao buscar taxas:", err);
+            toast.error("Erro ao carregar as taxas de entrega.");
         } finally {
             setLoading(false);
         }
@@ -37,24 +36,25 @@ function TaxasDeEntrega() {
         getTaxas();
     }, []);
 
+    // Função para limpar o formulário e o estado de edição
+    const clearForm = () => {
+        setEditingId(null);
+        setNomeBairro('');
+        setValorTaxa('');
+    };
+
     // Função para adicionar ou atualizar uma taxa
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError(null);
-
         if (!nomeBairro.trim() || valorTaxa === '') {
-            setError("Por favor, preencha o nome do bairro e o valor da taxa.");
-            toast.warn("Por favor, preencha o nome do bairro e o valor da taxa."); // Adicionado toast de aviso
+            toast.warn("Por favor, preencha todos os campos.");
             return;
         }
-
         const valorNumerico = parseFloat(valorTaxa.replace(',', '.'));
         if (isNaN(valorNumerico) || valorNumerico < 0) {
-            setError("Por favor, insira um valor numérico válido para a taxa.");
-            toast.warn("Por favor, insira um valor numérico válido para a taxa."); // Adicionado toast de aviso
+            toast.warn("Por favor, insira um valor de taxa válido.");
             return;
         }
-
         try {
             if (editingId) {
                 // Atualizar
@@ -63,23 +63,20 @@ function TaxasDeEntrega() {
                     nomeBairro: nomeBairro.trim(),
                     valorTaxa: valorNumerico
                 });
-                toast.success("Taxa de entrega atualizada com sucesso!"); // Substituição do alert()
-                setEditingId(null);
+                toast.success("Taxa atualizada com sucesso!");
             } else {
                 // Adicionar
                 await addDoc(taxasCollectionRef, {
                     nomeBairro: nomeBairro.trim(),
                     valorTaxa: valorNumerico
                 });
-                toast.success("Taxa de entrega adicionada com sucesso!"); // Substituição do alert()
+                toast.success("Nova taxa adicionada com sucesso!");
             }
-            setNomeBairro('');
-            setValorTaxa('');
+            clearForm();
             getTaxas(); // Recarrega a lista
         } catch (err) {
-            console.error("Erro ao salvar taxa de entrega:", err);
-            setError("Erro ao salvar a taxa de entrega. Tente novamente.");
-            toast.error("Erro ao salvar a taxa de entrega. Tente novamente."); // Adicionado toast de erro
+            console.error("Erro ao salvar taxa:", err);
+            toast.error("Erro ao salvar a taxa.");
         }
     };
 
@@ -87,141 +84,143 @@ function TaxasDeEntrega() {
     const handleEdit = (bairro) => {
         setEditingId(bairro.id);
         setNomeBairro(bairro.nomeBairro);
-        setValorTaxa(bairro.valorTaxa.toFixed(2).replace('.', ',')); // Formata para exibição
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Rola para o topo do formulário
+        setValorTaxa(bairro.valorTaxa.toFixed(2).replace('.', ','));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Função para excluir uma taxa
-    const handleDelete = async (id) => {
-        if (window.confirm("Tem certeza que deseja excluir esta taxa de entrega?")) {
-            setError(null);
-            try {
-                const bairroDoc = doc(db, 'taxasDeEntrega', id);
-                await deleteDoc(bairroDoc);
-                toast.success("Taxa de entrega excluída com sucesso!"); // Substituição do alert()
-                getTaxas(); // Recarrega a lista
-            } catch (err) {
-                console.error("Erro ao excluir taxa de entrega:", err);
-                setError("Erro ao excluir a taxa de entrega. Tente novamente.");
-                toast.error("Erro ao excluir a taxa de entrega. Tente novamente."); // Adicionado toast de erro
+    // Função para excluir uma taxa com confirmação toast
+    const handleDelete = (id, nome) => {
+        const confirmDelete = () => {
+            deleteDoc(doc(db, 'taxasDeEntrega', id))
+                .then(() => {
+                    toast.success(`Taxa para "${nome}" foi excluída.`);
+                    getTaxas();
+                })
+                .catch(err => {
+                    console.error("Erro ao excluir taxa:", err);
+                    toast.error("Erro ao excluir a taxa.");
+                });
+        };
+
+        toast.warning(
+            ({ closeToast }) => (
+                <div>
+                    <p className="font-semibold">Confirmar exclusão?</p>
+                    <p className="text-sm">Deseja realmente excluir a taxa para "{nome}"?</p>
+                    <div className="flex justify-end mt-2 space-x-2">
+                        <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
+                        <button onClick={() => { confirmDelete(); closeToast(); }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                    </div>
+                </div>
+            ), {
+                position: "top-center",
+                autoClose: false,
+                closeOnClick: false,
+                draggable: false
             }
-        }
+        );
     };
+
+    if (loading) {
+        return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando Taxas de Entrega...</div>;
+    }
 
     return (
-        <div className="min-h-screen bg-[var(--bege-claro)] p-4">
+        <div className="bg-gray-900 min-h-screen p-4 sm:p-6 text-white">
             <div className="max-w-4xl mx-auto">
-                <div className="mb-6 text-left">
-                    <Link
-                        to="/dashboard"
-                        className="inline-flex items-center px-4 py-2 bg-gray-200 text-[var(--marrom-escuro)] rounded-lg font-semibold hover:bg-gray-300 transition duration-300"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 0 010-1.414l4-4a1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 0 010 1.414z" clipRule="evenodd" />
-                        </svg>
-                        Voltar para o Dashboard
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold text-amber-400">Taxas de Entrega</h1>
+                    <Link to="/dashboard" className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                        <IoArrowBack />
+                        <span>Voltar ao Dashboard</span>
                     </Link>
                 </div>
 
-                <h1 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-8">
-                    Gerenciar Taxas de Entrega
-                </h1>
-
-                <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-                    <h2 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-4">
-                        {editingId ? 'Editar Taxa de Entrega' : 'Adicionar Nova Taxa de Entrega'}
+                {/* Formulário de Adicionar/Editar */}
+                <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
+                    <h2 className="text-xl font-semibold text-amber-400 mb-4 flex items-center">
+                        {editingId ? <IoPencil className="mr-2" /> : <IoAddCircleOutline className="mr-2" />}
+                        {editingId ? 'Editar Taxa' : 'Adicionar Nova Taxa'}
                     </h2>
-                    {error && <p className="text-red-600 mb-4">{error}</p>}
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <label htmlFor="nomeBairro" className="block text-sm font-medium text-gray-700">Nome do Bairro</label>
-                            <input
-                                type="text"
-                                id="nomeBairro"
-                                value={nomeBairro}
-                                onChange={(e) => setNomeBairro(e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-                                placeholder="Ex: Centro, Vila Nova"
-                                required
-                            />
+                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="nomeBairro" className="block text-sm font-medium text-gray-300">Nome do Bairro</label>
+                                <input
+                                    type="text"
+                                    id="nomeBairro"
+                                    value={nomeBairro}
+                                    onChange={(e) => setNomeBairro(e.target.value)}
+                                    className="mt-1 bg-gray-700 text-white block w-full rounded-md border-gray-600 shadow-sm p-2"
+                                    placeholder="Ex: Centro"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="valorTaxa" className="block text-sm font-medium text-gray-300">Valor da Taxa (R$)</label>
+                                <input
+                                    type="text"
+                                    id="valorTaxa"
+                                    value={valorTaxa}
+                                    onChange={(e) => setValorTaxa(e.target.value.replace(/[^0-9,]/g, ''))}
+                                    className="mt-1 bg-gray-700 text-white block w-full rounded-md border-gray-600 shadow-sm p-2"
+                                    placeholder="Ex: 5,00"
+                                    required
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label htmlFor="valorTaxa" className="block text-sm font-medium text-gray-700">Valor da Taxa (R$)</label>
-                            <input
-                                type="text" // Usar text para permitir formatação de moeda
-                                id="valorTaxa"
-                                value={valorTaxa}
-                                onChange={(e) => {
-                                    const rawValue = e.target.value.replace(/[^0-9,.]/g, ''); // Remove tudo exceto números, vírgula e ponto
-                                    const parts = rawValue.split(',');
-                                    if (parts.length > 2) { // Permite apenas uma vírgula
-                                        setValorTaxa(parts[0] + ',' + parts.slice(1).join(''));
-                                    } else {
-                                        setValorTaxa(rawValue);
-                                    }
-                                }}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"
-                                placeholder="Ex: 5,00 ou 7.50"
-                                required
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            className="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-red-700 transition duration-300 font-semibold"
-                        >
-                            {editingId ? 'Salvar Edição' : 'Adicionar Taxa'}
-                        </button>
-                        {editingId && (
+                        <div className="flex flex-col space-y-2">
                             <button
-                                type="button"
-                                onClick={() => {
-                                    setEditingId(null);
-                                    setNomeBairro('');
-                                    setValorTaxa('');
-                                    setError(null);
-                                }}
-                                className="w-full mt-2 bg-red-500 text-white py-2 px-4 rounded-md hover:bg-gray-500 transition duration-300 font-semibold"
+                                type="submit"
+                                className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors"
                             >
-                                Cancelar Edição
+                                {editingId ? 'Salvar Alterações' : 'Adicionar Taxa'}
                             </button>
-                        )}
+                            {editingId && (
+                                <button
+                                    type="button"
+                                    onClick={clearForm}
+                                    className="w-full bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <IoCloseCircleOutline />
+                                    Cancelar Edição
+                                </button>
+                            )}
+                        </div>
                     </form>
                 </div>
 
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold text-[var(--marrom-escuro)] mb-4">
-                        Taxas de Entrega Cadastradas
-                    </h2>
-                    {loading ? (
-                        <p className="text-center text-gray-500">Carregando taxas...</p>
-                    ) : bairros.length === 0 ? (
-                        <p className="text-center text-gray-500 italic">Nenhuma taxa de entrega cadastrada ainda.</p>
-                    ) : (
-                        <ul className="divide-y divide-gray-200">
-                            {bairros.map((bairro) => (
-                                <li key={bairro.id} className="py-3 flex justify-between items-center">
-                                    <div>
-                                        <p className="text-lg font-medium text-[var(--marrom-escuro)]">{bairro.nomeBairro}</p>
-                                        <p className="text-sm text-gray-600">R$ {bairro.valorTaxa.toFixed(2).replace('.', ',')}</p>
-                                    </div>
-                                    <div className="flex space-x-2">
-                                        <button
-                                            onClick={() => handleEdit(bairro)}
-                                            className="bg-blue-500 text-white px-3 py-1 rounded-md text-sm hover:bg-blue-600 transition duration-300"
-                                        >
-                                            Editar
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(bairro.id)}
-                                            className="bg-red-500 text-white px-3 py-1 rounded-md text-sm hover:bg-red-600 transition duration-300"
-                                        >
-                                            Excluir
-                                        </button>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                {/* Lista de Taxas Cadastradas */}
+                <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 className="text-xl font-bold text-amber-400 mb-4">Taxas Cadastradas</h2>
+                    <ul className="divide-y divide-gray-700">
+                        {bairros.length > 0 ? bairros.map((bairro) => (
+                            <li key={bairro.id} className="py-3 flex justify-between items-center">
+                                <div>
+                                    <p className="text-lg font-medium text-gray-200">{bairro.nomeBairro}</p>
+                                    <p className="text-sm text-green-400">{bairro.valorTaxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                </div>
+                                <div className="flex space-x-2">
+                                    <button
+                                        onClick={() => handleEdit(bairro)}
+                                        className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+                                        aria-label="Editar"
+                                    >
+                                        <IoPencil />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(bairro.id, bairro.nomeBairro)}
+                                        className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                                        aria-label="Excluir"
+                                    >
+                                        <IoTrash />
+                                    </button>
+                                </div>
+                            </li>
+                        )) : (
+                            <p className="text-center text-gray-500 py-10">Nenhuma taxa de entrega cadastrada ainda.</p>
+                        )}
+                    </ul>
                 </div>
             </div>
         </div>

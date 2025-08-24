@@ -1,63 +1,60 @@
-// src/pages/AdminCouponManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from 'firebase/firestore'; // Adicionado 'where'
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import { IoArrowBack, IoAddCircleOutline, IoPencil, IoTrash, IoCloseCircleOutline, IoTicketOutline } from 'react-icons/io5';
 
 function AdminCouponManagement() {
-    const { currentUser, isAdmin, loading: authLoading } = useAuth();
+    const { currentUser, isAdmin, loading: authLoading, estabelecimentoId } = useAuth();
     const navigate = useNavigate();
 
     const [cupons, setCupons] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
 
-    // Estados para o formulário de novo/editar cupom
     const [codigo, setCodigo] = useState('');
-    const [tipoDesconto, setTipoDesconto] = useState('percentual'); // 'percentual', 'valorFixo', 'freteGratis'
+    const [tipoDesconto, setTipoDesconto] = useState('percentual');
     const [valorDesconto, setValorDesconto] = useState('');
     const [minimoPedido, setMinimoPedido] = useState('');
     const [validadeInicio, setValidadeInicio] = useState('');
     const [validadeFim, setValidadeFim] = useState('');
     const [usosMaximos, setUsosMaximos] = useState('');
-    const [usosPorUsuario, setUsosPorUsuario] = useState('');
     const [ativo, setAtivo] = useState(true);
-    const [estabelecimentosId, setEstabelecimentosId] = useState(''); // String separada por vírgulas
-    const [editingCouponId, setEditingCouponId] = useState(null); // ID do cupom sendo editado
+    const [editingCouponId, setEditingCouponId] = useState(null);
 
+    // Controle de acesso
     useEffect(() => {
-        if (!authLoading) {
-            if (!currentUser || !isAdmin) {
-                toast.error('Acesso negado. Você precisa ser um administrador para acessar esta página.');
-                navigate('/dashboard'); // Ou para a home, dependendo da sua rota
-            } else {
-                fetchCupons();
-            }
+        if (!authLoading && (!currentUser || !isAdmin)) {
+            toast.error('Acesso negado.');
+            navigate('/login-admin');
         }
     }, [currentUser, isAdmin, authLoading, navigate]);
-
+    
+    // Busca os cupons do estabelecimento
     const fetchCupons = async () => {
+        if (!estabelecimentoId) return;
         setLoading(true);
-        setError('');
         try {
-            const cuponsCollectionRef = collection(db, 'cupons');
-            const q = query(cuponsCollectionRef, orderBy('codigo'));
+            const q = query(
+                collection(db, 'cupons'),
+                where('estabelecimentoId', '==', estabelecimentoId),
+                orderBy('codigo')
+            );
             const querySnapshot = await getDocs(q);
-            const cuponsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const cuponsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCupons(cuponsData);
         } catch (err) {
             console.error("Erro ao buscar cupons:", err);
-            setError("Erro ao carregar cupons.");
             toast.error("Erro ao carregar cupons.");
         } finally {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        fetchCupons();
+    }, [estabelecimentoId]);
 
     const resetForm = () => {
         setCodigo('');
@@ -67,57 +64,48 @@ function AdminCouponManagement() {
         setValidadeInicio('');
         setValidadeFim('');
         setUsosMaximos('');
-        setUsosPorUsuario('');
         setAtivo(true);
-        setEstabelecimentosId('');
         setEditingCouponId(null);
     };
 
     const handleSaveCoupon = async (e) => {
         e.preventDefault();
-        setError('');
-
         if (!codigo || !valorDesconto || !validadeInicio || !validadeFim) {
-            toast.error('Por favor, preencha todos os campos obrigatórios (Código, Valor, Validade Início e Fim).');
+            toast.warn('Preencha os campos obrigatórios.');
             return;
         }
 
         try {
             const newCouponData = {
                 codigo: codigo.toUpperCase().trim(),
-                tipoDesconto: tipoDesconto,
+                tipoDesconto,
                 valorDesconto: Number(valorDesconto),
                 minimoPedido: minimoPedido ? Number(minimoPedido) : null,
                 validadeInicio: Timestamp.fromDate(new Date(validadeInicio)),
                 validadeFim: Timestamp.fromDate(new Date(validadeFim)),
                 usosMaximos: usosMaximos ? Number(usosMaximos) : null,
-                usosAtuais: 0, // Sempre inicializa em 0 para novos cupons
-                usosPorUsuario: usosPorUsuario ? Number(usosPorUsuario) : null,
-                ativo: ativo,
-                estabelecimentosId: estabelecimentosId.split(',').map(id => id.trim()).filter(Boolean),
+                usosAtuais: editingCouponId ? cupons.find(c => c.id === editingCouponId).usosAtuais : 0,
+                ativo,
+                estabelecimentoId,
             };
 
             if (editingCouponId) {
-                // Edição de cupom existente
                 const couponRef = doc(db, 'cupons', editingCouponId);
                 await updateDoc(couponRef, newCouponData);
                 toast.success('Cupom atualizado com sucesso!');
             } else {
-                // Criação de novo cupom
-                // Verificar se o código já existe
-                const existingCupons = await getDocs(query(collection(db, 'cupons'), where('codigo', '==', newCouponData.codigo)));
-                if (!existingCupons.empty) {
-                    toast.error('Já existe um cupom com este código. Por favor, use um código diferente.');
+                const q = query(collection(db, 'cupons'), where('codigo', '==', newCouponData.codigo), where('estabelecimentoId', '==', estabelecimentoId));
+                if (!(await getDocs(q)).empty) {
+                    toast.error('Já existe um cupom com este código.');
                     return;
                 }
                 await addDoc(collection(db, 'cupons'), newCouponData);
                 toast.success('Cupom criado com sucesso!');
             }
-            fetchCupons(); // Recarrega a lista de cupons
-            resetForm(); // Limpa o formulário
+            fetchCupons();
+            resetForm();
         } catch (err) {
             console.error("Erro ao salvar cupom:", err);
-            setError("Erro ao salvar cupom. Verifique os dados.");
             toast.error("Erro ao salvar cupom.");
         }
     };
@@ -131,301 +119,133 @@ function AdminCouponManagement() {
         setValidadeInicio(coupon.validadeInicio ? coupon.validadeInicio.toDate().toISOString().slice(0, 16) : '');
         setValidadeFim(coupon.validadeFim ? coupon.validadeFim.toDate().toISOString().slice(0, 16) : '');
         setUsosMaximos(coupon.usosMaximos || '');
-        setUsosPorUsuario(coupon.usosPorUsuario || '');
         setAtivo(coupon.ativo);
-        setEstabelecimentosId(coupon.estabelecimentosId ? coupon.estabelecimentosId.join(', ') : '');
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Rola para o topo para o formulário
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDeleteCoupon = async (id) => {
-        if (window.confirm('Tem certeza que deseja excluir este cupom? Esta ação é irreversível.')) {
-            try {
-                await deleteDoc(doc(db, 'cupons', id));
-                toast.success('Cupom excluído com sucesso!');
-                fetchCupons();
-            } catch (err) {
-                console.error("Erro ao excluir cupom:", err);
-                toast.error("Erro ao excluir cupom.");
-            }
-        }
+    const handleDeleteCoupon = (id, codigo) => {
+        toast.warning(
+            ({ closeToast }) => (
+                <div>
+                    <p className="font-semibold">Confirmar exclusão?</p>
+                    <p className="text-sm">Deseja realmente excluir o cupom "{codigo}"?</p>
+                    <div className="flex justify-end mt-2 space-x-2">
+                        <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
+                        <button onClick={async () => {
+                            try {
+                                await deleteDoc(doc(db, 'cupons', id));
+                                toast.success('Cupom excluído com sucesso!');
+                                fetchCupons();
+                            } catch (err) {
+                                toast.error("Erro ao excluir cupom.");
+                            }
+                            closeToast();
+                        }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                    </div>
+                </div>
+            ), { autoClose: false, closeOnClick: false }
+        );
     };
 
-    const handleToggleActive = async (couponId, currentStatus) => {
-        try {
-            const couponRef = doc(db, 'cupons', couponId);
-            await updateDoc(couponRef, { ativo: !currentStatus });
-            toast.success(`Cupom ${!currentStatus ? 'ativado' : 'desativado'} com sucesso!`);
-            fetchCupons();
-        } catch (err) {
-            console.error("Erro ao mudar status do cupom:", err);
-            toast.error("Erro ao mudar status do cupom.");
-        }
-    };
 
     if (authLoading || loading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-                <p className="text-xl text-gray-700">Carregando gerenciamento de cupons...</p>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-red-100 text-red-700 p-4 text-center">
-                <p className="text-xl font-semibold">Erro:</p>
-                <p className="mt-2">{error}</p>
-                <button onClick={fetchCupons} className="mt-4 bg-red-500 text-white px-4 py-2 rounded">
-                    Tentar Novamente
-                </button>
-            </div>
-        );
-    }
-
-    if (!currentUser || !isAdmin) {
-        return null; // Redirecionamento já feito no useEffect
+        return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando...</div>;
     }
 
     return (
-        <div className="p-4 max-w-4xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-                <Link to="/dashboard" className="flex items-center text-gray-600 hover:text-gray-900">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                    Voltar para o Dashboard
-                </Link>
-                <h1 className="text-3xl font-bold text-gray-800">Gerenciamento de Cupons</h1>
-                <div></div> {/* Espaçador */}
-            </div>
+        <div className="bg-gray-900 min-h-screen p-4 sm:p-6 text-white">
+            <div className="max-w-5xl mx-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold text-amber-400">Gerenciar Cupons</h1>
+                    <Link to="/dashboard" className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                        <IoArrowBack />
+                        <span>Voltar ao Dashboard</span>
+                    </Link>
+                </div>
 
-            {/* Formulário de Criação/Edição de Cupom */}
-            <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-4">{editingCouponId ? 'Editar Cupom' : 'Criar Novo Cupom'}</h2>
-                <form onSubmit={handleSaveCoupon} className="space-y-4">
-                    <div>
-                        <label htmlFor="codigo" className="block text-sm font-medium text-gray-700">Código do Cupom *</label>
-                        <input
-                            type="text"
-                            id="codigo"
-                            value={codigo}
-                            onChange={(e) => setCodigo(e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                            placeholder="EX: DESCONTO10"
-                            required
-                            disabled={!!editingCouponId}
-                        />
-                        {editingCouponId && <p className="text-sm text-gray-500 mt-1">O código de um cupom existente não pode ser alterado.</p>}
-                    </div>
+                {/* Formulário */}
+                <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
+                    <h2 className="text-xl font-semibold text-amber-400 mb-4 flex items-center">
+                        {editingCouponId ? <IoPencil className="mr-2" /> : <IoAddCircleOutline className="mr-2" />}
+                        {editingCouponId ? 'Editar Cupom' : 'Adicionar Novo Cupom'}
+                    </h2>
+                    <form onSubmit={handleSaveCoupon} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {/* Código, Tipo, Valor */}
+                            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código (Ex: DEZEMBRO10)" disabled={!!editingCouponId} required className="bg-gray-700 p-2 rounded-md border-gray-600" />
+                            <select value={tipoDesconto} onChange={(e) => setTipoDesconto(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600">
+                                <option value="percentual">Percentual (%)</option>
+                                <option value="valorFixo">Valor Fixo (R$)</option>
+                                <option value="freteGratis">Frete Grátis</option>
+                            </select>
+                            {tipoDesconto !== 'freteGratis' && <input type="number" value={valorDesconto} onChange={(e) => setValorDesconto(e.target.value)} placeholder="Valor do Desconto" required className="bg-gray-700 p-2 rounded-md border-gray-600" />}
+                            
+                            {/* Validade */}
+                            <input type="datetime-local" value={validadeInicio} onChange={(e) => setValidadeInicio(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600" title="Data de Início" />
+                            <input type="datetime-local" value={validadeFim} onChange={(e) => setValidadeFim(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600" title="Data de Fim" />
 
-                    <div>
-                        <label htmlFor="tipoDesconto" className="block text-sm font-medium text-gray-700">Tipo de Desconto *</label>
-                        <select
-                            id="tipoDesconto"
-                            value={tipoDesconto}
-                            onChange={(e) => setTipoDesconto(e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                            required
-                        >
-                            <option value="percentual">Percentual (%)</option>
-                            <option value="valorFixo">Valor Fixo (R$)</option>
-                            <option value="freteGratis">Frete Grátis</option>
-                        </select>
-                    </div>
-
-                    {tipoDesconto !== 'freteGratis' && (
-                        <div>
-                            <label htmlFor="valorDesconto" className="block text-sm font-medium text-gray-700">
-                                Valor do Desconto ({tipoDesconto === 'percentual' ? '%' : 'R$'}) *
-                            </label>
-                            <input
-                                type="number"
-                                id="valorDesconto"
-                                value={valorDesconto}
-                                onChange={(e) => setValorDesconto(e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                                placeholder={tipoDesconto === 'percentual' ? 'Ex: 10 (para 10%)' : 'Ex: 5.00 (para R$5,00)'}
-                                step="0.01"
-                                required
-                            />
+                            {/* Opcionais */}
+                            <input type="number" value={minimoPedido} onChange={(e) => setMinimoPedido(e.target.value)} placeholder="Pedido Mínimo (R$)" className="bg-gray-700 p-2 rounded-md border-gray-600" />
+                            <input type="number" value={usosMaximos} onChange={(e) => setUsosMaximos(e.target.value)} placeholder="Usos Máximos Totais" className="bg-gray-700 p-2 rounded-md border-gray-600" />
+                            
+                            <div className="flex items-center space-x-2 bg-gray-700 p-2 rounded-md">
+                                <input type="checkbox" id="ativo" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} className="h-4 w-4 text-amber-500 bg-gray-600 border-gray-500 rounded focus:ring-amber-500" />
+                                <label htmlFor="ativo" className="font-medium text-gray-300">Ativo</label>
+                            </div>
                         </div>
-                    )}
-
-                    <div>
-                        <label htmlFor="minimoPedido" className="block text-sm font-medium text-gray-700">Valor Mínimo do Pedido (Opcional)</label>
-                        <input
-                            type="number"
-                            id="minimoPedido"
-                            value={minimoPedido}
-                            onChange={(e) => setMinimoPedido(e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                            placeholder="Ex: 50.00"
-                            step="0.01"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="validadeInicio" className="block text-sm font-medium text-gray-700">Validade Início *</label>
-                            <input
-                                type="datetime-local"
-                                id="validadeInicio"
-                                value={validadeInicio}
-                                onChange={(e) => setValidadeInicio(e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="validadeFim" className="block text-sm font-medium text-gray-700">Validade Fim *</label>
-                            <input
-                                type="datetime-local"
-                                id="validadeFim"
-                                value={validadeFim}
-                                onChange={(e) => setValidadeFim(e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="usosMaximos" className="block text-sm font-medium text-gray-700">Usos Máximos Totais (Opcional)</label>
-                            <input
-                                type="number"
-                                id="usosMaximos"
-                                value={usosMaximos}
-                                onChange={(e) => setUsosMaximos(e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                                placeholder="Ex: 100"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Número total de vezes que este cupom pode ser usado por todos os usuários.</p>
-                        </div>
-                        <div>
-                            <label htmlFor="usosPorUsuario" className="block text-sm font-medium text-gray-700">Usos por Usuário (Opcional)</label>
-                            <input
-                                type="number"
-                                id="usosPorUsuario"
-                                value={usosPorUsuario}
-                                onChange={(e) => setUsosPorUsuario(e.target.value)}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                                placeholder="Ex: 1"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Número de vezes que cada usuário pode usar este cupom.</p>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label htmlFor="estabelecimentosId" className="block text-sm font-medium text-gray-700">IDs dos Estabelecimentos (Separar por vírgula, Opcional)</label>
-                        <input
-                            type="text"
-                            id="estabelecimentosId"
-                            value={estabelecimentosId}
-                            onChange={(e) => setEstabelecimentosId(e.target.value)}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                            placeholder="Ex: id1, id2, id3 (Deixe vazio para todos)"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">IDs dos estabelecimentos aos quais este cupom se aplica. Deixe vazio para aplicar a todos.</p>
-                    </div>
-
-                    <div className="flex items-center">
-                        <input
-                            type="checkbox"
-                            id="ativo"
-                            checked={ativo}
-                            onChange={(e) => setAtivo(e.target.checked)}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <label htmlFor="ativo" className="ml-2 block text-sm font-medium text-gray-700">Ativo</label>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-4 mt-6"> {/* Adicionado flex-col sm:flex-row para empilhar em mobile */}
-                        <button
-                            type="submit"
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-sm transition-colors duration-200"
-                        >
-                            {editingCouponId ? 'Atualizar Cupom' : 'Criar Cupom'}
-                        </button>
-                        {editingCouponId && (
-                            <button
-                                type="button"
-                                onClick={resetForm}
-                                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md shadow-sm transition-colors duration-200"
-                            >
-                                Cancelar
+                        <div className="flex items-center gap-4 pt-4">
+                            <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors">
+                                {editingCouponId ? 'Salvar Alterações' : 'Criar Cupom'}
                             </button>
-                        )}
-                    </div>
-                </form>
-            </div>
+                            {editingCouponId && (
+                                <button type="button" onClick={resetForm} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                                    Cancelar Edição
+                                </button>
+                            )}
+                        </div>
+                    </form>
+                </div>
 
-            {/* Lista de Cupons Existentes */}
-            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-4">Cupons Existentes ({cupons.length})</h2>
-                {cupons.length === 0 ? (
-                    <p className="text-gray-500 italic text-center py-4">Nenhum cupom cadastrado ainda.</p>
-                ) : (
-                    <div className="overflow-x-auto"> {/* Mantido para rolagem horizontal da tabela */}
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                {/* Lista de Cupons */}
+                <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 className="text-xl font-bold text-amber-400 mb-4">Cupons Cadastrados</h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="border-b border-gray-700">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Validade</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usos (Atual/Max)</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ativo</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Código</th>
+                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Desconto</th>
+                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Validade</th>
+                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Usos</th>
+                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Status</th>
+                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400 text-right">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {cupons.map((cupom) => (
-                                    <tr key={cupom.id} className={!cupom.ativo ? 'bg-gray-100 text-gray-500' : ''}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{cupom.codigo}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                            {cupom.tipoDesconto === 'percentual' ? 'Percentual' :
-                                             cupom.tipoDesconto === 'valorFixo' ? 'Valor Fixo' : 'Frete Grátis'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                            {cupom.tipoDesconto === 'freteGratis' ? 'N/A' :
-                                             cupom.tipoDesconto === 'percentual' ? `${cupom.valorDesconto}%` :
-                                             `R$ ${cupom.valorDesconto.toFixed(2).replace('.', ',')}`}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                           {cupom.validadeInicio?.toDate?.().toLocaleDateString?.() || '-'} - {cupom.validadeFim?.toDate?.().toLocaleDateString?.() || '-'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${cupom.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                {cupom.ativo ? 'Sim' : 'Não'}
+                            <tbody>
+                                {cupons.map(cupom => (
+                                    <tr key={cupom.id} className="border-b border-gray-700 hover:bg-gray-700/50">
+                                        <td className="p-3 font-medium">{cupom.codigo}</td>
+                                        <td className="p-3">{cupom.tipoDesconto === 'freteGratis' ? 'Frete Grátis' : `${cupom.valorDesconto}${cupom.tipoDesconto === 'percentual' ? '%' : ' R$'}`}</td>
+                                        <td className="p-3 text-sm text-gray-400">{cupom.validadeFim?.toDate().toLocaleDateString('pt-BR')}</td>
+                                        <td className="p-3 text-sm text-gray-400">{cupom.usosAtuais} / {cupom.usosMaximos || '∞'}</td>
+                                        <td className="p-3">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${cupom.ativo ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                {cupom.ativo ? 'Ativo' : 'Inativo'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-right text-sm font-medium"> {/* Removido whitespace-nowrap */}
-                                            <div className="flex flex-col sm:flex-row gap-2 justify-end"> {/* Adicionado flex-col sm:flex-row para empilhar em mobile */}
-                                                <button
-                                                    onClick={() => handleEditClick(cupom)}
-                                                    className="text-indigo-600 hover:text-indigo-900"
-                                                >
-                                                    Editar
-                                                </button>
-                                                <button
-                                                    onClick={() => handleToggleActive(cupom.id, cupom.ativo)}
-                                                    className={`${cupom.ativo ? 'text-orange-600 hover:text-orange-900' : 'text-green-600 hover:text-green-900'}`}
-                                                >
-                                                    {cupom.ativo ? 'Desativar' : 'Ativar'}
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteCoupon(cupom.id)}
-                                                    className="text-red-600 hover:text-red-900"
-                                                >
-                                                    Excluir
-                                                </button>
+                                        <td className="p-3 text-right">
+                                            <div className="flex justify-end space-x-2">
+                                                <button onClick={() => handleEditClick(cupom)} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700"><IoPencil /></button>
+                                                <button onClick={() => handleDeleteCoupon(cupom.id, cupom.codigo)} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"><IoTrash /></button>
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        {cupons.length === 0 && <p className="text-center text-gray-500 py-10">Nenhum cupom cadastrado para este estabelecimento.</p>}
                     </div>
-                )}
+                </div>
             </div>
         </div>
     );
