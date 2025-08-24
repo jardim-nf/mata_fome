@@ -43,7 +43,7 @@ function LoginPage() {
                 navigate('/master-dashboard');
             } else if (isAdminEst && estabelecimentoId) {
                 console.log(`AVISO: Redirecionando para PAINEL DO ESTABELECIMENTO ${estabelecimentoId}.`);
-                navigate(`/painel`);
+                navigate(`/dashboard`);
             } else {
                 console.log("AVISO: Redirecionando para HOME (usuário comum/sem role).");
                 navigate('/home');
