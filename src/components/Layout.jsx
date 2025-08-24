@@ -1,21 +1,19 @@
 // src/components/Layout.jsx
 import React from "react";
-import { Outlet, useLocation, Link, useNavigate } from "react-router-dom";
-import Header from './Header'; // Supondo que o Header esteja em um arquivo separado
-import Footer from './Footer'; // Supondo que o Footer esteja em um arquivo separado
-import { useAuth } from "../context/AuthContext";
-import { toast } from 'react-toastify';
+import { Outlet, useLocation } from "react-router-dom";
+import Header from './Header'; // Supondo que seu Header esteja em um arquivo separado
+import Footer from './Footer'; // Supondo que seu Footer esteja em um arquivo separado
 
 function Layout() {
     const location = useLocation();
-    const { currentUser } = useAuth(); // Apenas para o exemplo do Header
 
     // Lista de rotas que terão o menu superior e rodapé removidos
     const rotasSemLayout = [
-        '/admin/reports', 
+        '/admin/reports',
         '/dashboard',
-        '/admin/gerenciar-cardapio',
+        '/admin-menu',
         '/admin/taxas-de-entrega',
+        '/admin/gerenciar-cardapio',
         '/admin/cupons',
         '/painel' // ADICIONAMOS A PÁGINA DO PAINEL À LISTA
     ]; 
@@ -23,13 +21,11 @@ function Layout() {
     // Verifica se a rota atual está na lista
     const exibirLayoutCompleto = !rotasSemLayout.includes(location.pathname);
 
-    // Se o código do seu Header/Footer estiver diretamente aqui, não tem problema.
-    // A lógica abaixo vai funcionar da mesma forma.
     return (
         <div className="flex flex-col min-h-screen">
             {exibirLayoutCompleto && <Header />}
             
-            <main className="flex-grow">
+            <main className="flex-grow bg-gray-900"> {/* Fundo escuro padrão para o main */}
                 <Outlet />
             </main>
             
