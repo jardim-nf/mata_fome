@@ -29,9 +29,7 @@ function Header() {
 
     return (
         <header className="bg-gray-800 text-white p-4 flex justify-between items-center shadow-lg relative">
-            <Link to={homeLink} className="text-xl font-bold z-20">
                 DeuFome
-            </Link>
 
             {/* Menu para Telas Grandes (Desktop) */}
             <nav className="hidden md:flex items-center gap-4">
