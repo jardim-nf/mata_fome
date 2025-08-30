@@ -25,7 +25,7 @@ function Layout() {
         <div className="flex flex-col min-h-screen">
             {exibirLayoutCompleto && <Header />}
             
-            <main className="flex-grow bg-gray-900"> {/* Fundo escuro padrão para o main */}
+            <main className="flex-grow bg-white"> {/* Fundo escuro padrão para o main */}
                 <Outlet />
             </main>
             

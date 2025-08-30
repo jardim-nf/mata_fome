@@ -1,8 +1,41 @@
-import React from 'react';
-// import { useAuth } from '../context/AuthContext'; // Não é mais necessário aqui
+// src/components/CardapioItem.jsx
+import React, { useState, useEffect } from 'react';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase'; // Importe a instância do Storage
 
 function CardapioItem({ item, onAddItem }) {
-  // const { currentUser } = useAuth(); // Removido, pois o botão não precisa de login para adicionar ao carrinho
+  // NOVO ESTADO PARA GUARDAR O LINK PÚBLICO DA IMAGEM
+  const [publicImageUrl, setPublicImageUrl] = useState('');
+  const [isLoadingImage, setIsLoadingImage] = useState(true);
+
+  const placeholderImage = "https://via.placeholder.com/400x300.png?text=Sem+Foto";
+
+  // NOVA LÓGICA PARA BUSCAR O LINK PÚBLICO DA IMAGEM
+  useEffect(() => {
+    // Se o item tem um imageUrl (que é o caminho no Storage)
+    if (item.imageUrl) {
+      setIsLoadingImage(true);
+      const imageRef = ref(storage, item.imageUrl); // Cria a referência para o arquivo
+
+      getDownloadURL(imageRef)
+        .then((url) => {
+          // Se encontrou o link, guarda no nosso estado
+          setPublicImageUrl(url);
+        })
+        .catch((error) => {
+          // Se deu erro, mostra a imagem de recurso
+          console.error("Erro ao buscar imagem:", item.nome, error);
+          setPublicImageUrl(placeholderImage);
+        })
+        .finally(() => {
+          setIsLoadingImage(false);
+        });
+    } else {
+      // Se o produto não tem um caminho de imagem, usa a imagem de recurso
+      setPublicImageUrl(placeholderImage);
+      setIsLoadingImage(false);
+    }
+  }, [item.imageUrl]); // Este código executa sempre que a imagem do item mudar
 
   const handleAddItemClick = () => {
     if (item.ativo) {
@@ -14,49 +47,48 @@ function CardapioItem({ item, onAddItem }) {
     ? 'Selecionar Opções'
     : 'Adicionar';
 
-  const placeholderImage = "https://via.placeholder.com/400x300.png?text=Sem+Foto";
-
   return (
+    // O restante do seu componente continua igual, apenas mudamos o 'src' da tag <img>
     <div
-      className={`bg-white rounded-2xl shadow-lg flex flex-col transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 overflow-hidden ${!item.ativo ? 'opacity-60' : ''}`}
+      className={`bg-cinza-card rounded-2xl shadow-lg flex flex-col transition-all duration-300 hover:shadow-yellow-400/20 hover:-translate-y-1 overflow-hidden border border-gray-800 ${!item.ativo ? 'opacity-50' : ''}`}
     >
       <div className="relative">
+        {/* Usamos o novo estado 'publicImageUrl' para a imagem */}
         <img
-          src={item.imageUrl || placeholderImage}
+          src={publicImageUrl || placeholderImage}
           alt={item.nome}
           className="w-full h-48 object-cover"
         />
-        <div className="absolute inset-0 ring-4 ring-[var(--vermelho-principal)] ring-opacity-20 rounded-t-2xl"></div>
+        {/* Efeito de loading enquanto a imagem carrega */}
+        {isLoadingImage && <div className="absolute inset-0 bg-cinza-card animate-pulse"></div>}
       </div>
 
       <div className="p-4 flex flex-col flex-grow">
-        <h3 className="text-lg font-extrabold text-[var(--marrom-escuro)] line-clamp-2" title={item.nome}>
+        <h3 className="text-lg font-extrabold text-amarelo-principal line-clamp-2" title={item.nome}>
           {item.nome}
         </h3>
         
-        <p className="text-gray-500 text-sm my-3 flex-grow line-clamp-3">
+        <p className="text-gray-400 text-sm my-3 flex-grow line-clamp-3">
           {item.descricao || 'Sem descrição.'}
         </p>
 
         <div className="mt-auto pt-3 flex justify-between items-center">
-          
           <div className="flex flex-col">
             {item.adicionais && item.adicionais.length > 0 && (
-              <span className="text-xs text-gray-400 -mb-1">A partir de</span>
+              <span className="text-xs text-gray-500 -mb-1">A partir de</span>
             )}
-            <p className="text-xl font-bold text-[var(--marrom-escuro)]">
+            <p className="text-xl font-bold text-white">
               R$ {(item.preco || 0).toFixed(2).replace('.', ',')}
             </p>
           </div>
 
-          {/* BOTÃO "ADICIONAR" AGORA SEM VERIFICAÇÃO DE currentUser */}
           <button
             onClick={handleAddItemClick}
-            disabled={!item.ativo} // Só desabilita se o item não estiver ativo
-            className={`bg-green-400 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold text-black transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow ${
+            disabled={!item.ativo}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-300 ${
               !item.ativo
-                ? 'bg-black cursor-not-allowed' // Estilo para item inativo
-                : 'bg-green-400 hover:bg-green-700' // Estilo para item ativo
+                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                : 'bg-amarelo-principal text-black hover:bg-yellow-500'
             }`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
