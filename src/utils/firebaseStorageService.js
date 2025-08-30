@@ -1,39 +1,41 @@
 // src/utils/firebaseStorageService.js
-import { storage } from '../firebase'; // Importe a instância do storage
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../firebase';
+import { ref, uploadBytes, deleteObject } from 'firebase/storage';
 
 /**
  * Faz upload de um arquivo para o Firebase Storage.
  * @param {File} file O arquivo a ser enviado.
  * @param {string} path O caminho completo no Storage (ex: 'images/menuItems/nome_do_arquivo.jpg').
- * @returns {Promise<string>} A URL de download do arquivo.
+ * @returns {Promise<string>} O CAMINHO (path) do arquivo salvo no Storage.
  */
 export const uploadFile = async (file, path) => {
   if (!file) {
     throw new Error("Nenhum arquivo fornecido para upload.");
   }
   const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  return await getDownloadURL(storageRef);
+  const snapshot = await uploadBytes(storageRef, file);
+  // CORREÇÃO: Retorna o caminho completo do arquivo em vez da URL de download.
+  return snapshot.ref.fullPath;
 };
 
 /**
  * Deleta um arquivo do Firebase Storage.
- * @param {string} url A URL de download do arquivo a ser deletado.
+ * @param {string} url A URL de download OU o caminho do arquivo a ser deletado.
  * @returns {Promise<void>}
  */
 export const deleteFileByUrl = async (url) => {
   if (!url) {
-    console.warn("URL de arquivo não fornecida para exclusão.");
+    console.warn("URL ou caminho do arquivo não fornecido para exclusão.");
     return;
   }
   try {
-    const fileRef = ref(storage, url); // Ref from URL path
+    // A função ref do SDK v9+ consegue lidar tanto com URLs https:// quanto com caminhos diretos.
+    const fileRef = ref(storage, url);
     await deleteObject(fileRef);
     console.log("Arquivo deletado com sucesso:", url);
   } catch (error) {
     console.error("Erro ao deletar arquivo:", error);
-    // Ignore if file doesn't exist (e.g., 'object-not-found')
+    // Ignora o erro se o arquivo já não existir.
     if (error.code !== 'storage/object-not-found') {
       throw error;
     }
