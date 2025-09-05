@@ -1,157 +1,134 @@
-// src/components/FormularioPedido.jsx
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db } from '../firebase';
+import { addDoc, collection, Timestamp, runTransaction, doc, getDoc } from 'firebase/firestore';
+import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
-const FormularioPedido = ({ itensDoPedido, estabelecimentoId, valorTotal, limparCarrinho, taxas, estabelecimentoInfo }) => {
-    const { currentUser, currentClientData, cashbackBalance, setCashbackBalance } = useAuth();
+const FormularioPedido = ({ carrinho, total, limparCarrinho, estabelecimentoId, onAplicarCupom }) => {
+    const { currentUser, currentClientData, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
+    // Estados do formulário
     const [nome, setNome] = useState('');
     const [telefone, setTelefone] = useState('');
-    const [endereco, setEndereco] = useState('');
-    const [metodoPagamento, setMetodoPagamento] = useState('PIX');
-    const [trocoPara, setTrocoPara] = useState('');
-    const [observacoes, setObservacoes] = useState('');
+    const [isRetirada, setIsRetirada] = useState(false);
+    const [rua, setRua] = useState('');
+    const [numero, setNumero] = useState('');
     const [bairro, setBairro] = useState('');
-    const [taxaEntrega, setTaxaEntrega] = useState(0);
-    const [valorCashbackUsar, setValorCashbackUsar] = useState('');
-    const [cashbackAplicado, setCashbackAplicado] = useState(0);
-    const [valorFinal, setValorFinal] = useState(valorTotal);
+    const [cidade, setCidade] = useState('');
+    const [complemento, setComplemento] = useState('');
+    const [formaPagamento, setFormaPagamento] = useState('pix');
+    const [trocoPara, setTrocoPara] = useState('');
+    const [cupomInput, setCupomInput] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Efeito para preencher os dados do usuário logado
     useEffect(() => {
-        if (currentClientData) {
+        // Usamos "optional chaining" (?.) para acessar propriedades aninhadas com segurança.
+        // Isso previne o erro que você viu na imagem!
+        if (currentUser && currentClientData) {
             setNome(currentClientData.nome || '');
             setTelefone(currentClientData.telefone || '');
-            const end = currentClientData.endereco;
-            if (end) {
-                setEndereco(`${end.rua || ''}, ${end.numero || ''} - ${end.complemento || ''}`);
-                setBairro(end.bairro || '');
-            }
+            setRua(currentClientData.endereco?.rua || '');
+            setNumero(currentClientData.endereco?.numero || '');
+            setBairro(currentClientData.endereco?.bairro || '');
+            setCidade(currentClientData.endereco?.cidade || '');
+            setComplemento(currentClientData.endereco?.complemento || '');
         }
-    }, [currentClientData]);
-
-    useEffect(() => {
-        const taxaEncontrada = taxas.find(t => t.bairro.toLowerCase() === bairro.toLowerCase());
-        const novaTaxa = taxaEncontrada ? taxaEncontrada.taxa : 0;
-        setTaxaEntrega(novaTaxa);
-    }, [bairro, taxas]);
-
-    useEffect(() => {
-        const total = valorTotal + taxaEntrega - cashbackAplicado;
-        setValorFinal(total < 0 ? 0 : total);
-    }, [valorTotal, taxaEntrega, cashbackAplicado]);
-
-    const handleAplicarCashback = () => {
-        const valorAUsar = parseFloat(valorCashbackUsar);
-        if (isNaN(valorAUsar) || valorAUsar < 0) return alert("Valor inválido.");
-        if (valorAUsar > cashbackBalance) return alert("Saldo de cashback insuficiente.");
+    }, [currentUser, currentClientData]);
+    
+    const handleFinalizarPedido = async (e) => {
+        e.preventDefault();
         
-        const maxAplicavel = valorTotal + taxaEntrega;
-        if (valorAUsar > maxAplicavel) {
-            alert(`O valor máximo de cashback aplicável é R$ ${maxAplicavel.toFixed(2)}.`);
-            setCashbackAplicado(maxAplicavel);
-            setValorCashbackUsar(maxAplicavel.toString());
+        if (carrinho.length === 0) {
+            toast.warn('Seu carrinho está vazio!');
             return;
         }
-        setCashbackAplicado(valorAUsar);
-        alert(`R$ ${valorAUsar.toFixed(2)} de cashback aplicado!`);
-    };
+        if (!isRetirada && (!rua || !numero || !bairro || !cidade)) {
+            toast.warn('Por favor, preencha o endereço de entrega completo.');
+            return;
+        }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (itensDoPedido.length === 0) return alert('O seu carrinho está vazio!');
+        setIsSubmitting(true);
 
-        const pedidoData = {
+        const pedido = {
             clienteId: currentUser.uid,
-            nomeCliente: nome,
-            telefoneCliente: telefone,
-            enderecoCliente: endereco,
-            bairroCliente: bairro,
-            itens: itensDoPedido,
-            valorSubTotal: valorTotal,
-            taxaEntrega: taxaEntrega,
-            desconto: cashbackAplicado,
-            valorTotal: valorFinal,
-            metodoPagamento,
-            trocoPara: metodoPagamento === 'Dinheiro' ? trocoPara : '',
-            observacoes,
-            estabelecimentoId,
-            estabelecimentoNome: estabelecimentoInfo.nome,
-            cashbackUsado: cashbackAplicado
+            clienteNome: nome,
+            clienteTelefone: telefone,
+            endereco: isRetirada ? null : { rua, numero, bairro, cidade, complemento },
+            itens: carrinho,
+            total: total,
+            formaPagamento,
+            trocoPara: formaPagamento === 'dinheiro' ? trocoPara : '',
+            tipoEntrega: isRetirada ? 'retirada' : 'delivery',
+            status: 'recebido',
+            timestamp: Timestamp.now(),
+            estabelecimentoId: estabelecimentoId,
         };
-        
-        try {
-            const functions = getFunctions();
-            const criarPedido = httpsCallable(functions, 'createOrderWithCashback');
-            const result = await criarPedido(pedidoData);
 
-            alert(`Pedido #${result.data.orderIdShort.toUpperCase()} enviado com sucesso!`);
-            
-            if (cashbackAplicado > 0) {
-                setCashbackBalance(saldoAtual => saldoAtual - cashbackAplicado);
-            }
-            
+        try {
+            await addDoc(collection(db, 'pedidos'), pedido);
+            toast.success('🎉 Pedido enviado com sucesso!');
             limparCarrinho();
-            navigate('/meus-pedidos');
+            // Opcional: Redirecionar para uma página de confirmação
+            // navigate('/meus-pedidos'); 
         } catch (error) {
-            console.error('Erro ao enviar pedido:', error);
-            alert(`Houve um erro: ${error.message}`);
+            console.error("Erro ao finalizar pedido:", error);
+            toast.error("Houve um erro ao enviar seu pedido.");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="p-4 border rounded-lg shadow-lg bg-white mt-6">
-            <h2 className="text-2xl font-bold mb-4 text-center">Finalizar Pedido</h2>
-            <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                    <label className="block text-gray-700">Nome</label>
-                    <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className="w-full p-2 border rounded" required />
-                </div>
-                <div className="mb-4">
-                    <label className="block text-gray-700">Bairro</label>
-                    <input type="text" value={bairro} onChange={(e) => setBairro(e.target.value)} className="w-full p-2 border rounded" required />
+        <div className="p-4 border rounded-lg shadow-lg bg-white">
+            <h2 className="text-xl font-bold mb-4">Seus Dados</h2>
+            <form onSubmit={handleFinalizarPedido} className="space-y-4">
+                {/* Campos de Nome e Telefone */}
+                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome Completo *" required className="w-full p-2 border rounded"/>
+                <input type="tel" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="Telefone *" required className="w-full p-2 border rounded"/>
+                
+                {/* Tipo de Entrega */}
+                <div className="flex gap-4">
+                    <label><input type="radio" name="entrega" checked={!isRetirada} onChange={() => setIsRetirada(false)} /> Entrega</label>
+                    <label><input type="radio" name="entrega" checked={isRetirada} onChange={() => setIsRetirada(true)} /> Retirada</label>
                 </div>
 
-                {/* AQUI ESTÁ A OPÇÃO PARA USAR O SEU CASHBACK */}
-                {cashbackBalance > 0 && (
-                    <div className="my-4 p-4 bg-green-100 border-l-4 border-green-500 rounded">
-                        <p className="font-semibold text-green-800">
-                            Você tem R$ {cashbackBalance.toFixed(2).replace('.', ',')} de cashback!
-                        </p>
-                        <div className="flex items-center mt-2">
-                            <input
-                                type="number"
-                                value={valorCashbackUsar}
-                                onChange={(e) => setValorCashbackUsar(e.target.value)}
-                                className="p-2 border rounded w-full"
-                                placeholder="0.00"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleAplicarCashback}
-                                className="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                            >
-                                Usar
-                            </button>
+                {/* Campos de Endereço (condicional) */}
+                {!isRetirada && (
+                    <div className="space-y-2 animate-fade-in">
+                        <input type="text" value={rua} onChange={e => setRua(e.target.value)} placeholder="Rua *" required={!isRetirada} className="w-full p-2 border rounded"/>
+                        <div className="flex gap-2">
+                            <input type="text" value={numero} onChange={e => setNumero(e.target.value)} placeholder="Nº *" required={!isRetirada} className="w-1/3 p-2 border rounded"/>
+                            <input type="text" value={bairro} onChange={e => setBairro(e.target.value)} placeholder="Bairro *" required={!isRetirada} className="w-2/3 p-2 border rounded"/>
                         </div>
+                        <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade *" required={!isRetirada} className="w-full p-2 border rounded"/>
+                        <input type="text" value={complemento} onChange={e => setComplemento(e.target.value)} placeholder="Complemento / Ponto de referência" className="w-full p-2 border rounded"/>
                     </div>
                 )}
 
-                <div className="text-lg font-semibold my-4 space-y-1">
-                    <p className="flex justify-between"><span>Subtotal:</span> <span>R$ {valorTotal.toFixed(2)}</span></p>
-                    <p className="flex justify-between"><span>Taxa de Entrega:</span> <span>R$ {taxaEntrega.toFixed(2)}</span></p>
-                    {cashbackAplicado > 0 && (
-                        <p className="flex justify-between text-green-600"><span>Cashback Aplicado:</span> <span>- R$ {cashbackAplicado.toFixed(2)}</span></p>
-                    )}
-                    <p className="text-xl font-bold border-t pt-2 mt-2 flex justify-between"><span>Total a Pagar:</span> <span>R$ {valorFinal.toFixed(2)}</span></p>
+                {/* Cupom */}
+                <div className="flex gap-2 pt-2">
+                    <input type="text" value={cupomInput} onChange={e => setCupomInput(e.target.value)} placeholder="Cupom de desconto" className="w-full p-2 border rounded"/>
+                    <button type="button" onClick={() => onAplicarCupom(cupomInput)} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Aplicar</button>
                 </div>
+                
+                {/* Pagamento */}
+                <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)} className="w-full p-2 border rounded">
+                    <option value="pix">PIX</option>
+                    <option value="cartao">Cartão na Entrega</option>
+                    <option value="dinheiro">Dinheiro</option>
+                </select>
+                {formaPagamento === 'dinheiro' && (
+                    <input type="number" value={trocoPara} onChange={e => setTrocoPara(e.target.value)} placeholder="Troco para quanto?" className="w-full p-2 border rounded"/>
+                )}
 
-                <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700">
-                    Finalizar Pedido
+                {/* Botão Finalizar */}
+                <button type="submit" disabled={isSubmitting || authLoading || !currentUser} className="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 disabled:bg-gray-400">
+                    {isSubmitting ? 'Enviando...' : 'Finalizar Pedido'}
                 </button>
+                 {!currentUser && <p className="text-red-500 text-center text-sm">Você precisa estar logado para finalizar o pedido.</p>}
             </form>
         </div>
     );

@@ -208,7 +208,7 @@ export default function Painel() {
                     <button onClick={toggleNotifications} className={`px-4 py-2 text-sm font-semibold rounded-lg ${notificationsEnabled ? 'bg-blue-500 text-white' : 'bg-gray-300'}`}>
                         Notificações {notificationsEnabled ? 'ON' : 'OFF'}
                     </button>
-                    <Link to="/admin-dashboard" className="text-sm text-gray-600 hover:text-blue-500">Dashboard</Link>
+                    <Link to="/dashboard" className="text-sm text-gray-600 hover:text-blue-500">Dashboard</Link>
                     <button onClick={logout} className="text-sm text-red-500 hover:underline">Sair</button>
                 </div>
             </header>

@@ -60,7 +60,6 @@ function App() {
             <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
             <Route path="/historico-pedidos" element={<ClientOrderHistory />} />
             <Route path="/planos" element={<Planos />} />
-
             {/* Rotas de Detalhamento para Master Admin (ou admins que acessam históricos) */}
             <Route path="/historico-cliente/:telefone" element={<HistoricoCliente />} />
             <Route path="/admin/clientes/:clientId" element={<ClientDetails />} />
