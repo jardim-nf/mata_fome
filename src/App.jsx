@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
+import AdminImageAssociation from './pages/admin/AdminImageAssociation';
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -65,7 +65,7 @@ function App() {
             <Route path="/admin/clientes/:clientId" element={<ClientDetails />} />
             
             <Route path="/painel-inicial" element={<HomeRedirector />} />
-
+<Route path="/master/associar-imagens" element={<AdminImageAssociation />} />
             {/* Rotas para Administradores de Estabelecimento */}
             <Route path="/painel" element={<Painel />} />
             <Route path="/dashboard" element={<AdminDashboard />} />
