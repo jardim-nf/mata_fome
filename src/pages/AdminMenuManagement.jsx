@@ -208,7 +208,7 @@ function AdminMenuManagement() {
                         <p className="text-md text-gray-400 mt-1">{establishmentName}</p>
                     </div>
                     <div className="flex items-center space-x-2 w-full sm:w-auto">
-                        <Link to="/painel" className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                        <Link to="/dashboard" className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
                             <IoArrowBack />
                             <span>Voltar</span>
                         </Link>
