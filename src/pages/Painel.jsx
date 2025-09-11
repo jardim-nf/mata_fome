@@ -111,14 +111,11 @@ export default function Painel() {
 
     const handleUpdateStatusAndNotify = (pedidoId, newStatus) => {
         const pedidoRef = doc(db, 'pedidos', pedidoId);
-
         updateDoc(pedidoRef, { status: newStatus })
             .then(() => {
                 toast.success(`Pedido movido para ${newStatus.replace('_', ' ')}!`);
-
                 const allPedidos = [...pedidos.recebido, ...pedidos.preparo, ...pedidos.em_entrega, ...pedidos.finalizado];
                 const pedidoData = allPedidos.find(p => p.id === pedidoId);
-
                 if (pedidoData) {
                     const whatsappLink = sendWhatsAppNotification(newStatus, pedidoData);
                     if (whatsappLink) {
@@ -133,13 +130,18 @@ export default function Painel() {
             });
     };
 
-    // **FUNÇÃO DE DELETAR RESTAURADA**
-    const handleDelete = async (id) => {
+    const handleExcluirPedido = async (pedidoId) => {
+        if (!pedidoId) {
+            console.error("Tentativa de excluir pedido com ID inválido.");
+            toast.error("Erro: ID do pedido inválido ou não encontrado.");
+            return;
+        }
         if (!window.confirm('Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.')) return;
         try {
-            await deleteDoc(doc(db, 'pedidos', id));
-            toast.success('Pedido excluído!');
+            await deleteDoc(doc(db, 'pedidos', pedidoId));
+            toast.success('Pedido excluído com sucesso!');
         } catch (error) {
+            console.error('Erro ao excluir pedido:', error);
             toast.error('Erro ao excluir o pedido.');
         }
     };
@@ -150,70 +152,94 @@ export default function Painel() {
         localStorage.setItem('notificationsEnabled', newState);
         toast.info(`Notificações de som ${newState ? 'ativadas' : 'desativadas'}.`);
     };
-
+    
     useEffect(() => {
-        if (authLoading) return;
-        if (!currentUser) {
-            toast.error("Sessão expirada. Faça login novamente.");
-            navigate('/login-admin');
-            setLoading(false);
-            return;
-        }
-        const fetchPanelData = async () => {
+        const setupPainel = async () => {
+            if (!currentUser) {
+                toast.error("Sessão expirada. Faça login novamente.");
+                navigate('/login-admin');
+                setLoading(false);
+                return () => {};
+            }
+
             try {
                 const idTokenResult = await currentUser.getIdTokenResult(true);
                 const { isAdmin, isMasterAdmin, estabelecimentoId } = idTokenResult.claims;
-                if (isMasterAdmin) return navigate('/master-dashboard');
+
+                if (isMasterAdmin) {
+                    navigate('/master-dashboard');
+                    setLoading(false);
+                    return () => {};
+                }
+
                 if (!isAdmin || !estabelecimentoId) {
                     toast.error('Acesso negado.');
                     logout();
-                    return navigate('/');
+                    navigate('/');
+                    setLoading(false);
+                    return () => {};
                 }
+                
                 const estDocRef = doc(db, 'estabelecimentos', estabelecimentoId);
                 const estSnap = await getDoc(estDocRef);
+
                 if (!estSnap.exists() || !estSnap.data().ativo) {
                     toast.error('Seu estabelecimento não foi encontrado ou está inativo.');
                     logout();
-                    return navigate('/');
+                    navigate('/');
+                    setLoading(false);
+                    return () => {};
                 }
+                
                 setEstabelecimentoInfo(estSnap.data());
-                return estabelecimentoId;
+
+                const todayStart = startOfDay(new Date());
+                const statuses = ['recebido', 'preparo', 'em_entrega'];
+                const unsubscribers = [];
+
+                statuses.forEach(status => {
+                    const q = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoId), where('status', '==', status), orderBy('criadoEm', 'desc'));
+                    const unsub = onSnapshot(q, (snapshot) => {
+                        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                        setPedidos(prev => ({ ...prev, [status]: list }));
+                    });
+                    unsubscribers.push(unsub);
+                });
+
+                const qFinalizado = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoId), where('status', '==', 'finalizado'), where('criadoEm', '>=', todayStart), orderBy('criadoEm', 'desc'));
+                const unsubFinalizado = onSnapshot(qFinalizado, (snapshot) => {
+                    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setPedidos(prev => ({ ...prev, finalizado: list }));
+                });
+                unsubscribers.push(unsubFinalizado);
+
+                setLoading(false);
+
+                return () => unsubscribers.forEach(unsub => unsub());
+
             } catch (e) {
-                console.error("Erro na verificação de permissões:", e);
+                console.error("Erro ao configurar o painel:", e);
                 toast.error("Ocorreu um erro ao verificar suas permissões.");
                 logout();
                 navigate('/');
-                return null;
+                setLoading(false);
+                return () => {};
             }
         };
-        let unsubscribers = [];
-        fetchPanelData().then(estabelecimentoId => {
-            if (!estabelecimentoId) {
-                setLoading(false);
-                return;
-            }
-            const todayStart = startOfDay(new Date());
-            const statuses = ['recebido', 'preparo', 'em_entrega'];
-            statuses.forEach(status => {
-                const q = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoId), where('status', '==', status), orderBy('criadoEm', 'desc'));
-                const unsub = onSnapshot(q, (snapshot) => {
-                    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setPedidos(prev => ({ ...prev, [status]: list }));
-                }, (err) => console.error(`Erro ao buscar pedidos '${status}':`, err));
-                unsubscribers.push(unsub);
-            });
-            const qFinalizado = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoId), where('status', '==', 'finalizado'), where('criadoEm', '>=', todayStart), orderBy('criadoEm', 'desc'));
-            const unsubFinalizado = onSnapshot(qFinalizado, (snapshot) => {
-                const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                setPedidos(prev => ({ ...prev, finalizado: list }));
-            }, (err) => console.error(`Erro ao buscar pedidos 'finalizado':`, err));
-            unsubscribers.push(unsubFinalizado);
-            setLoading(false);
-        });
-        return () => unsubscribers.forEach(unsub => unsub());
+
+        if (!authLoading) {
+            const cleanupPromise = setupPainel();
+            return () => {
+                cleanupPromise.then(cleanup => {
+                    if (cleanup) {
+                        cleanup();
+                    }
+                });
+            };
+        }
     }, [authLoading, currentUser, navigate, logout]);
 
-    if (loading) {
+    if (loading || authLoading) {
         return <Spinner />;
     }
 
@@ -231,7 +257,7 @@ export default function Painel() {
             <main className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 {['recebido', 'preparo', 'em_entrega', 'finalizado'].map(status => (
                     <div key={status} className="bg-gray-800 rounded-lg shadow-md border border-gray-700">
-                        <h2 className="text-lg font-bold capitalize p-4 border-b border-gray-700 text-yellow-500">{status.replace(/_/g, ' ')} ({pedidos[status]?.length})</h2>
+                        <h2 className="text-lg font-bold capitalize p-4 border-b border-gray-700 text-yellow-500">{status.replace(/_/g, ' ')} ({pedidos[status]?.length || 0})</h2>
                         <div className="p-2 space-y-3 max-h-[calc(100vh-160px)] overflow-y-auto">
                             {pedidos[status]?.length > 0 ? (
                                 pedidos[status].map(ped => (
@@ -239,7 +265,7 @@ export default function Painel() {
                                         key={ped.id}
                                         pedido={ped}
                                         onUpdateStatus={handleUpdateStatusAndNotify}
-                                        onDeletePedido={handleDelete}
+                                        onDeletePedido={handleExcluirPedido}
                                         estabelecimentoInfo={estabelecimentoInfo}
                                         newOrderIds={newOrderIds}
                                     />

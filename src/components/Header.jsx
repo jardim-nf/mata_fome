@@ -10,18 +10,18 @@ function Header() {
     const { currentUser, currentClientData, isAdmin, isMasterAdmin, logout } = useAuth();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-    // Define o link principal (do logo) com base no tipo de usuário
     let homeLink = "/";
     if (currentUser) {
         if (isMasterAdmin) homeLink = "/master-dashboard";
         else if (isAdmin) homeLink = "/dashboard";
     }
 
+    // ALTERAÇÃO 2: Lógica de logout ajustada
     const handleLogout = async () => {
         try {
             await logout();
             toast.info('Você foi desconectado.');
-            navigate('/');
+            // A LINHA 'navigate('/')' FOI REMOVIDA DAQUI
         } catch (error) {
             toast.error('Não foi possível fazer logout.');
         }
@@ -31,7 +31,6 @@ function Header() {
 
     return (
         <header className="bg-black text-white p-4 flex justify-between items-center shadow-lg relative border-b border-gray-800">
-            {/* Logo com o estilo preto e amarelo */}
             <div onClick={() => navigate(homeLink)} className="font-extrabold text-2xl text-white cursor-pointer hover:text-gray-200 transition-colors duration-300">
                 DEU FOME <span className="text-yellow-500">.</span>
             </div>
@@ -49,7 +48,9 @@ function Header() {
                             <Link to="/dashboard" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
                                 Dashboard
                             </Link>}
-                        <Link to="/cardapio" className="text-gray-300 hover:text-yellow-500 transition-colors">Cardápios</Link>
+                        
+                        {/* ALTERAÇÃO 1: Link "Cardápios" removido daqui */}
+
                         <button 
                           onClick={handleLogout} 
                           className="px-4 py-2 rounded-full text-white border border-gray-600 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-800 hover:border-gray-500"
@@ -78,7 +79,9 @@ function Header() {
                         <>
                             {isMasterAdmin && <Link to="/master-dashboard" onClick={() => setIsMenuOpen(false)} className="hover:text-yellow-500">Master</Link>}
                             {isAdmin && !isMasterAdmin && <Link to="/dashboard" onClick={() => setIsMenuOpen(false)} className="hover:text-yellow-500">Dashboard</Link>}
-                            <Link to="/cardapio" onClick={() => setIsMenuOpen(false)} className="hover:text-yellow-500">Cardápios</Link>
+                            
+                            {/* ALTERAÇÃO 1: Link "Cardápios" removido daqui também */}
+                            
                             <button onClick={() => { handleLogout(); setIsMenuOpen(false); }} className="px-5 py-3 mt-4 rounded-lg bg-yellow-500 text-black font-semibold">Sair</button>
                         </>
                     ) : (
