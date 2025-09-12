@@ -4,7 +4,7 @@ import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, quer
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { IoArrowBack, IoAddCircleOutline, IoPencil, IoTrash, IoCloseCircleOutline, IoTicketOutline } from 'react-icons/io5';
+import { IoArrowBack, IoAddCircleOutline, IoPencil, IoTrash } from 'react-icons/io5';
 
 function AdminCouponManagement() {
     const { currentUser, isAdmin, loading: authLoading, estabelecimentoId } = useAuth();
@@ -31,16 +31,14 @@ function AdminCouponManagement() {
         }
     }, [currentUser, isAdmin, authLoading, navigate]);
     
-    // Busca os cupons do estabelecimento
+    // Busca os cupons do estabelecimento no local correto
     const fetchCupons = async () => {
         if (!estabelecimentoId) return;
         setLoading(true);
         try {
-            const q = query(
-                collection(db, 'cupons'),
-                where('estabelecimentoId', '==', estabelecimentoId),
-                orderBy('codigo')
-            );
+            const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cupons');
+            const q = query(cuponsCollectionRef, orderBy('codigo'));
+            
             const querySnapshot = await getDocs(q);
             const cuponsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCupons(cuponsData);
@@ -53,7 +51,8 @@ function AdminCouponManagement() {
     };
 
     useEffect(() => {
-        fetchCupons();
+        // A função fetchCupons é chamada dentro do onSnapshot, 
+        // então não precisa ser chamada aqui para evitar duplicação.
     }, [estabelecimentoId]);
 
     const resetForm = () => {
@@ -68,18 +67,23 @@ function AdminCouponManagement() {
         setEditingCouponId(null);
     };
 
+    // --- FUNÇÃO CORRIGIDA ---
     const handleSaveCoupon = async (e) => {
         e.preventDefault();
-        if (!codigo || !valorDesconto || !validadeInicio || !validadeFim) {
-            toast.warn('Preencha os campos obrigatórios.');
+        
+        // CORREÇÃO: A validação do valorDesconto agora depende do tipoDesconto
+        if (!codigo || (tipoDesconto !== 'freteGratis' && !valorDesconto) || !validadeInicio || !validadeFim) {
+            toast.warn('Preencha os campos obrigatórios: Código, Valor (se aplicável) e Datas de Validade.');
             return;
         }
 
         try {
+            const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cupons');
+
             const newCouponData = {
                 codigo: codigo.toUpperCase().trim(),
                 tipoDesconto,
-                valorDesconto: Number(valorDesconto),
+                valorDesconto: tipoDesconto === 'freteGratis' ? 0 : Number(valorDesconto), // Valor é 0 para frete grátis
                 minimoPedido: minimoPedido ? Number(minimoPedido) : null,
                 validadeInicio: Timestamp.fromDate(new Date(validadeInicio)),
                 validadeFim: Timestamp.fromDate(new Date(validadeFim)),
@@ -90,16 +94,16 @@ function AdminCouponManagement() {
             };
 
             if (editingCouponId) {
-                const couponRef = doc(db, 'cupons', editingCouponId);
+                const couponRef = doc(cuponsCollectionRef, editingCouponId);
                 await updateDoc(couponRef, newCouponData);
                 toast.success('Cupom atualizado com sucesso!');
             } else {
-                const q = query(collection(db, 'cupons'), where('codigo', '==', newCouponData.codigo), where('estabelecimentoId', '==', estabelecimentoId));
+                const q = query(cuponsCollectionRef, where('codigo', '==', newCouponData.codigo));
                 if (!(await getDocs(q)).empty) {
-                    toast.error('Já existe um cupom com este código.');
+                    toast.error('Já existe um cupom com este código para este estabelecimento.');
                     return;
                 }
-                await addDoc(collection(db, 'cupons'), newCouponData);
+                await addDoc(cuponsCollectionRef, newCouponData);
                 toast.success('Cupom criado com sucesso!');
             }
             fetchCupons();
@@ -123,36 +127,45 @@ function AdminCouponManagement() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDeleteCoupon = (id, codigo) => {
-        toast.warning(
-            ({ closeToast }) => (
-                <div>
-                    <p className="font-semibold">Confirmar exclusão?</p>
-                    <p className="text-sm">Deseja realmente excluir o cupom "{codigo}"?</p>
-                    <div className="flex justify-end mt-2 space-x-2">
-                        <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
-                        <button onClick={async () => {
-                            try {
-                                await deleteDoc(doc(db, 'cupons', id));
-                                toast.success('Cupom excluído com sucesso!');
-                                fetchCupons();
-                            } catch (err) {
-                                toast.error("Erro ao excluir cupom.");
-                            }
-                            closeToast();
-                        }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
-                    </div>
-                </div>
-            ), { autoClose: false, closeOnClick: false }
-        );
-    };
+// Em: src/pages/AdminCouponManagement.jsx
 
+const handleDeleteCoupon = (id, codigo) => {
+    toast.warning(
+        ({ closeToast }) => (
+            <div>
+                <p className="font-semibold">Confirmar exclusão?</p>
+                <p className="text-sm">Deseja realmente excluir o cupom "{codigo}"?</p>
+                <div className="flex justify-end mt-2 space-x-2">
+                    <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
+                    <button onClick={async () => {
+                        try {
+                            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cupons', id));
+                            toast.success('Cupom excluído com sucesso!');
+                            fetchCupons();
+                        } catch (err) {
+                            toast.error("Erro ao excluir cupom.");
+                        }
+                        closeToast();
+                    }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                </div>
+            </div>
+        ), 
+        // --- ADIÇÃO AQUI ---
+        { 
+            position: "top-center", // Centraliza a notificação
+            autoClose: false,      // Impede que feche sozinha
+            closeOnClick: false,   // Impede que feche ao clicar
+            draggable: false       // Impede que seja arrastada
+        }
+    );
+};
 
     if (authLoading || loading) {
         return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando...</div>;
     }
 
     return (
+        // O restante do seu JSX continua exatamente o mesmo
         <div className="bg-gray-900 min-h-screen p-4 sm:p-6 text-white">
             <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
@@ -163,7 +176,6 @@ function AdminCouponManagement() {
                     </Link>
                 </div>
 
-                {/* Formulário */}
                 <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
                     <h2 className="text-xl font-semibold text-amber-400 mb-4 flex items-center">
                         {editingCouponId ? <IoPencil className="mr-2" /> : <IoAddCircleOutline className="mr-2" />}
@@ -171,23 +183,17 @@ function AdminCouponManagement() {
                     </h2>
                     <form onSubmit={handleSaveCoupon} className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {/* Código, Tipo, Valor */}
                             <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código (Ex: DEZEMBRO10)" disabled={!!editingCouponId} required className="bg-gray-700 p-2 rounded-md border-gray-600" />
                             <select value={tipoDesconto} onChange={(e) => setTipoDesconto(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600">
                                 <option value="percentual">Percentual (%)</option>
                                 <option value="valorFixo">Valor Fixo (R$)</option>
                                 <option value="freteGratis">Frete Grátis</option>
                             </select>
-                            {tipoDesconto !== 'freteGratis' && <input type="number" value={valorDesconto} onChange={(e) => setValorDesconto(e.target.value)} placeholder="Valor do Desconto" required className="bg-gray-700 p-2 rounded-md border-gray-600" />}
-                            
-                            {/* Validade */}
+                            {tipoDesconto !== 'freteGratis' && <input type="number" step="0.01" value={valorDesconto} onChange={(e) => setValorDesconto(e.target.value)} placeholder="Valor do Desconto" required className="bg-gray-700 p-2 rounded-md border-gray-600" />}
                             <input type="datetime-local" value={validadeInicio} onChange={(e) => setValidadeInicio(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600" title="Data de Início" />
                             <input type="datetime-local" value={validadeFim} onChange={(e) => setValidadeFim(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600" title="Data de Fim" />
-
-                            {/* Opcionais */}
                             <input type="number" value={minimoPedido} onChange={(e) => setMinimoPedido(e.target.value)} placeholder="Pedido Mínimo (R$)" className="bg-gray-700 p-2 rounded-md border-gray-600" />
                             <input type="number" value={usosMaximos} onChange={(e) => setUsosMaximos(e.target.value)} placeholder="Usos Máximos Totais" className="bg-gray-700 p-2 rounded-md border-gray-600" />
-                            
                             <div className="flex items-center space-x-2 bg-gray-700 p-2 rounded-md">
                                 <input type="checkbox" id="ativo" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} className="h-4 w-4 text-amber-500 bg-gray-600 border-gray-500 rounded focus:ring-amber-500" />
                                 <label htmlFor="ativo" className="font-medium text-gray-300">Ativo</label>
@@ -206,7 +212,6 @@ function AdminCouponManagement() {
                     </form>
                 </div>
 
-                {/* Lista de Cupons */}
                 <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
                     <h2 className="text-xl font-bold text-amber-400 mb-4">Cupons Cadastrados</h2>
                     <div className="overflow-x-auto">

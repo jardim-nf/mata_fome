@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy } from 'firebase/firestore';
-// CAMINHOS CORRIGIDOS
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -15,6 +14,7 @@ function AdminMenuManagement() {
 
     const [establishmentName, setEstablishmentName] = useState('');
     const [menuItems, setMenuItems] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
@@ -46,32 +46,210 @@ function AdminMenuManagement() {
         }
     }, [estabelecimentoId]);
 
-    // Busca itens do cardápio em tempo real
+    // --- CORREÇÃO: Restaura o listener em tempo real (onSnapshot) de forma correta ---
     useEffect(() => {
         if (!estabelecimentoId) {
             setLoading(false);
-            toast.warn("Nenhum estabelecimento associado a este administrador.");
             return;
         }
-        
+
         setLoading(true);
-        const q = query(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio'), orderBy('categoria'), orderBy('nome'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setMenuItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+        const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
+        const qCategorias = query(categoriasRef, orderBy('ordem', 'asc'));
+
+        // Listener para as categorias
+        const unsubscribeCategorias = onSnapshot(qCategorias, (categoriasSnapshot) => {
+            const fetchedCategories = categoriasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCategories(fetchedCategories);
+
+            const unsubscribers = [];
+            let allItems = [];
+            let processedCategories = 0;
+
+            if (categoriasSnapshot.empty) {
+                setMenuItems([]);
+                setLoading(false);
+                return;
+            }
+
+            // Para cada categoria, cria um listener para seus itens
+            categoriasSnapshot.forEach(catDoc => {
+                const categoriaData = catDoc.data();
+                const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', catDoc.id, 'itens');
+                const qItens = query(itensRef, orderBy('nome', 'asc'));
+
+                const unsubscribeItens = onSnapshot(qItens, (itensSnapshot) => {
+                    const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
+                        ...itemDoc.data(),
+                        id: itemDoc.id,
+                        categoria: categoriaData.nome,
+                        categoriaId: catDoc.id
+                    }));
+
+                    // Atualiza a lista geral de itens
+                    allItems = [
+                        ...allItems.filter(item => item.categoriaId !== catDoc.id),
+                        ...itemsDaCategoria
+                    ];
+                    
+                    setMenuItems(allItems.sort((a, b) => a.nome.localeCompare(b.nome)));
+
+                }, (error) => {
+                    console.error(`Erro ao ouvir itens da categoria ${catDoc.id}:`, error);
+                    toast.error("Erro ao carregar itens de uma categoria.");
+                });
+
+                unsubscribers.push(unsubscribeItens);
+            });
+
             setLoading(false);
-        }, (err) => {
-            toast.error("Erro ao carregar itens do cardápio.");
-            console.error(err);
+            
+            // Retorna uma função de limpeza para todos os listeners de itens
+            return () => {
+                unsubscribers.forEach(unsub => unsub());
+            };
+        }, (error) => {
+            console.error("Erro ao carregar categorias:", error);
+            toast.error("Erro ao carregar categorias do cardápio.");
             setLoading(false);
         });
-        return () => unsubscribe();
+
+        // Retorna a função de limpeza do listener de categorias
+        return () => {
+            unsubscribeCategorias();
+        };
     }, [estabelecimentoId]);
+
+
+    // As funções de salvar, deletar e toggle não precisam mais recarregar os dados,
+    // pois o `onSnapshot` fará isso automaticamente.
+
+    const handleSaveItem = async (e) => {
+        e.preventDefault();
+        const { nome, preco, categoria } = formData;
+        if (!nome.trim() || !preco || !categoria.trim()) {
+            toast.warn("Nome, Preço e Categoria são obrigatórios.");
+            return;
+        }
+        setFormLoading(true);
+
+        let categoriaDoc = categories.find(cat => cat.nome.toLowerCase() === categoria.toLowerCase());
+        
+        if (!categoriaDoc) {
+            toast.error(`A categoria "${categoria}" não existe.`);
+            setFormLoading(false);
+            return;
+        }
+        const categoriaId = categoriaDoc.id;
+
+        let finalImagePath = editingItem?.imageUrl || '';
+
+        try {
+            if (itemImage) {
+                if (editingItem && editingItem.imageUrl) {
+                    await deleteFileByUrl(editingItem.imageUrl);
+                }
+                const imageName = `${estabelecimentoId}_${Date.now()}_${itemImage.name.replace(/\s/g, '_')}`;
+                const imagePath = `images/menuItems/${imageName}`;
+                finalImagePath = await uploadFile(itemImage, imagePath);
+            }
+
+            const { categoriaId: formCategoriaId, ...dataToSave } = formData;
+            const finalData = { 
+                ...dataToSave, 
+                preco: Number(dataToSave.preco), 
+                imageUrl: finalImagePath,
+                categoria: categoria
+            };
+
+            if (editingItem) {
+                if (editingItem.categoriaId !== categoriaId) {
+                     toast.warn("A mudança de categoria não é suportada. Crie um novo item.");
+                     setFormLoading(false);
+                     return;
+                }
+                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens', editingItem.id), finalData);
+                toast.success("Item atualizado com sucesso!");
+            } else {
+                await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens'), finalData);
+                toast.success("Item cadastrado com sucesso!");
+            }
+            closeItemForm();
+        } catch (error) {
+            toast.error("Erro ao salvar o item: " + error.message);
+        } finally {
+            setFormLoading(false);
+        }
+    };
+    
+// Em: src/pages/AdminMenuManagement.jsx
+
+const handleDeleteItem = async (item) => {
+    toast.warning(
+        ({ closeToast }) => (
+            <div>
+                <p className="font-semibold">Confirmar exclusão?</p>
+                <p className="text-sm">Excluir o item "{item.nome}"?</p>
+                <div className="flex justify-end mt-2 space-x-2">
+                    <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
+                    <button onClick={async () => {
+                        try {
+                            if (item.imageUrl) {
+                                await deleteFileByUrl(item.imageUrl);
+                            }
+                            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id));
+                            toast.success("Item excluído!");
+                        } catch (error) {
+                            toast.error("Erro ao excluir o item.");
+                        }
+                        closeToast();
+                    }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                </div>
+            </div>
+        ), 
+        // --- ADIÇÃO AQUI ---
+        { 
+            position: "top-center", 
+            autoClose: false, 
+            closeOnClick: false, 
+            draggable: false 
+        }
+    );
+};
+
+    const toggleItemStatus = async (item) => {
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id), { ativo: !item.ativo });
+            toast.info(`Status de "${item.nome}" alterado.`);
+        } catch(error) {
+            toast.error("Erro ao alterar o status do item.");
+        }
+    };
+    
+    // O resto do seu componente continua igual
+    const availableCategories = useMemo(() => ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], [menuItems]);
+    
+    const filteredItems = useMemo(() => {
+        return menuItems.filter(item =>
+            (selectedCategory === 'Todos' || item.categoria === selectedCategory) &&
+            (item.nome || '').toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [menuItems, searchTerm, selectedCategory]);
 
     const openItemForm = (item = null) => {
         setEditingItem(item);
         if (item) {
-            setFormData({ ...item, preco: item.preco || '' });
-            setImagePreview(item.imageUrl); // Aqui o imageUrl é o caminho, mas para o preview inicial ainda funciona se for uma URL completa de um item antigo
+            setFormData({ 
+                nome: item.nome || '',
+                descricao: item.descricao || '',
+                preco: item.preco || '',
+                categoria: item.categoria || '',
+                imageUrl: item.imageUrl || '',
+                ativo: item.ativo !== undefined ? item.ativo : true,
+                categoriaId: item.categoriaId
+            });
+            setImagePreview(item.imageUrl);
         } else {
             setFormData({ nome: '', descricao: '', preco: '', categoria: '', imageUrl: '', ativo: true });
             setImagePreview('');
@@ -99,101 +277,6 @@ function AdminMenuManagement() {
             setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
         }
     };
-
-    const handleSaveItem = async (e) => {
-        e.preventDefault();
-        const { nome, preco, categoria } = formData;
-        if (!nome.trim() || !preco || !categoria.trim()) {
-            toast.warn("Nome, Preço e Categoria são obrigatórios.");
-            return;
-        }
-        setFormLoading(true);
-
-        // A variável agora armazena o caminho da imagem, não a URL.
-        let finalImagePath = editingItem?.imageUrl || '';
-
-        try {
-            // Se uma nova imagem foi selecionada, faz o upload.
-            if (itemImage) {
-                // Se o item já tinha uma imagem, deleta a antiga para não acumular lixo no Storage.
-                if (editingItem && editingItem.imageUrl) {
-                    await deleteFileByUrl(editingItem.imageUrl);
-                }
-                const imageName = `${estabelecimentoId}_${Date.now()}_${itemImage.name.replace(/\s/g, '_')}`;
-                const imagePath = `images/menuItems/${imageName}`;
-                
-                // A função uploadFile agora retorna o caminho do arquivo.
-                finalImagePath = await uploadFile(itemImage, imagePath);
-            }
-
-            const dataToSave = { 
-                ...formData, 
-                preco: Number(formData.preco), 
-                imageUrl: finalImagePath // Salva o caminho da imagem no Firestore.
-            };
-            
-            if (editingItem) {
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', editingItem.id), dataToSave);
-                toast.success("Item atualizado com sucesso!");
-            } else {
-                await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio'), dataToSave);
-                toast.success("Item cadastrado com sucesso!");
-            }
-            closeItemForm();
-        } catch (error) {
-            toast.error("Erro ao salvar o item: " + error.message);
-            console.error("Erro ao salvar item:", error);
-        } finally {
-            setFormLoading(false);
-        }
-    };
-    
-    const handleDeleteItem = async (item) => {
-        toast.warning(
-            ({ closeToast }) => (
-                <div>
-                    <p className="font-semibold">Confirmar exclusão?</p>
-                    <p className="text-sm">Excluir o item "{item.nome}"?</p>
-                    <div className="flex justify-end mt-2 space-x-2">
-                        <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
-                        <button onClick={async () => {
-                            try {
-                                // Deleta a imagem do Storage se ela existir
-                                if (item.imageUrl) {
-                                    await deleteFileByUrl(item.imageUrl);
-                                }
-                                // Deleta o documento do Firestore
-                                await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.id));
-                                toast.success("Item excluído!");
-                            } catch (error) {
-                                toast.error("Erro ao excluir o item.");
-                                console.error("Erro ao excluir:", error);
-                            }
-                            closeToast();
-                        }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
-                    </div>
-                </div>
-            ), { autoClose: false, closeOnClick: false, position: "top-center" }
-        );
-    };
-
-    const toggleItemStatus = async (item) => {
-        try {
-            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.id), { ativo: !item.ativo });
-            toast.info(`Status de "${item.nome}" alterado para ${!item.ativo ? 'Inativo' : 'Ativo'}.`);
-        } catch(error) {
-            toast.error("Erro ao alterar o status do item.");
-        }
-    };
-    
-    const categories = useMemo(() => ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], [menuItems]);
-    
-    const filteredItems = useMemo(() => {
-        return menuItems.filter(item =>
-            (selectedCategory === 'Todos' || item.categoria === selectedCategory) &&
-            (item.nome || '').toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [menuItems, searchTerm, selectedCategory]);
 
     if (authLoading || loading) {
         return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando...</div>;
@@ -232,7 +315,7 @@ function AdminMenuManagement() {
                         onChange={(e) => setSelectedCategory(e.target.value)}
                         className="w-full bg-gray-700 text-white p-3 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"
                     >
-                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        {availableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
                 </div>
 
@@ -256,7 +339,6 @@ function AdminMenuManagement() {
                 </div>
             </div>
 
-            {/* Modal de Adicionar/Editar Item */}
             {showItemForm && (
                 <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 overflow-y-auto">
                     <div className="bg-gray-800 rounded-xl shadow-2xl p-6 max-w-lg w-full text-white m-auto">
@@ -269,7 +351,19 @@ function AdminMenuManagement() {
                             <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} placeholder="Descrição" className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500" rows="3"></textarea>
                             <div className="grid grid-cols-2 gap-4">
                                 <input name="preco" type="number" step="0.01" value={formData.preco} onChange={handleFormChange} placeholder="Preço *" className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"/>
-                                <input name="categoria" value={formData.categoria} onChange={handleFormChange} placeholder="Categoria *" className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"/>
+                                <input 
+                                    name="categoria" 
+                                    value={formData.categoria} 
+                                    onChange={handleFormChange} 
+                                    placeholder="Categoria *" 
+                                    list="categories-list"
+                                    className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"
+                                    disabled={!!editingItem}
+                                />
+                                <datalist id="categories-list">
+                                    {categories.map(cat => <option key={cat.id} value={cat.nome} />)}
+                                </datalist>
+                                {editingItem && <small className="col-span-2 text-xs text-gray-400">A categoria de um item não pode ser alterada.</small>}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Imagem</label>

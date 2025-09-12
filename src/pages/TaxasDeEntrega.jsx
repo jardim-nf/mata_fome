@@ -1,25 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { useAuth } from '../context/AuthContext'; // 1. Importar o useAuth
 
-// Ícones para a nova interface
+// Ícones para a interface
 import { IoArrowBack, IoAddCircleOutline, IoPencil, IoTrash, IoCloseCircleOutline } from 'react-icons/io5';
 
 function TaxasDeEntrega() {
+    // 2. Obter o ID do estabelecimento do admin logado
+    const { estabelecimentoId, currentUser, isAdmin, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
     const [bairros, setBairros] = useState([]);
     const [nomeBairro, setNomeBairro] = useState('');
     const [valorTaxa, setValorTaxa] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const taxasCollectionRef = collection(db, 'taxasDeEntrega');
+    // Controle de acesso
+    useEffect(() => {
+        if (!authLoading && (!currentUser || !isAdmin)) {
+            toast.error('Acesso negado.');
+            navigate('/login-admin');
+        }
+    }, [currentUser, isAdmin, authLoading, navigate]);
 
-    // Função para buscar as taxas de entrega
+    // Função para buscar as taxas de entrega do estabelecimento correto
     const getTaxas = async () => {
+        // Só executa se o ID do estabelecimento estiver disponível
+        if (!estabelecimentoId) {
+            setLoading(false);
+            return;
+        }
+        
         setLoading(true);
         try {
+            // 3. Usar o caminho correto para a subcoleção
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
             const q = query(taxasCollectionRef, orderBy('nomeBairro'));
             const data = await getDocs(q);
             const fetchedBairros = data.docs.map(doc => ({ ...doc.data(), id: doc.id }));
@@ -33,17 +52,18 @@ function TaxasDeEntrega() {
     };
 
     useEffect(() => {
-        getTaxas();
-    }, []);
+        // Garante que só busca as taxas quando tiver o ID do estabelecimento
+        if (!authLoading && estabelecimentoId) {
+            getTaxas();
+        }
+    }, [estabelecimentoId, authLoading]);
 
-    // Função para limpar o formulário e o estado de edição
     const clearForm = () => {
         setEditingId(null);
         setNomeBairro('');
         setValorTaxa('');
     };
 
-    // Função para adicionar ou atualizar uma taxa
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!nomeBairro.trim() || valorTaxa === '') {
@@ -56,20 +76,16 @@ function TaxasDeEntrega() {
             return;
         }
         try {
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
+
             if (editingId) {
-                // Atualizar
-                const bairroDoc = doc(db, 'taxasDeEntrega', editingId);
-                await updateDoc(bairroDoc, {
-                    nomeBairro: nomeBairro.trim(),
-                    valorTaxa: valorNumerico
-                });
+                // Atualizar no caminho correto
+                const bairroDoc = doc(taxasCollectionRef, editingId);
+                await updateDoc(bairroDoc, { nomeBairro: nomeBairro.trim(), valorTaxa: valorNumerico });
                 toast.success("Taxa atualizada com sucesso!");
             } else {
-                // Adicionar
-                await addDoc(taxasCollectionRef, {
-                    nomeBairro: nomeBairro.trim(),
-                    valorTaxa: valorNumerico
-                });
+                // Adicionar no caminho correto
+                await addDoc(taxasCollectionRef, { nomeBairro: nomeBairro.trim(), valorTaxa: valorNumerico });
                 toast.success("Nova taxa adicionada com sucesso!");
             }
             clearForm();
@@ -80,7 +96,6 @@ function TaxasDeEntrega() {
         }
     };
 
-    // Função para preencher o formulário para edição
     const handleEdit = (bairro) => {
         setEditingId(bairro.id);
         setNomeBairro(bairro.nomeBairro);
@@ -88,40 +103,35 @@ function TaxasDeEntrega() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Função para excluir uma taxa com confirmação toast
-    const handleDelete = (id, nome) => {
-        const confirmDelete = () => {
-            deleteDoc(doc(db, 'taxasDeEntrega', id))
-                .then(() => {
-                    toast.success(`Taxa para "${nome}" foi excluída.`);
-                    getTaxas();
-                })
-                .catch(err => {
-                    console.error("Erro ao excluir taxa:", err);
-                    toast.error("Erro ao excluir a taxa.");
-                });
-        };
+// Em: src/pages/TaxasDeEntrega.jsx
 
-        toast.warning(
-            ({ closeToast }) => (
-                <div>
-                    <p className="font-semibold">Confirmar exclusão?</p>
-                    <p className="text-sm">Deseja realmente excluir a taxa para "{nome}"?</p>
-                    <div className="flex justify-end mt-2 space-x-2">
-                        <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
-                        <button onClick={() => { confirmDelete(); closeToast(); }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
-                    </div>
-                </div>
-            ), {
-                position: "top-center",
-                autoClose: false,
-                closeOnClick: false,
-                draggable: false
-            }
-        );
+const handleDelete = (id, nome) => {
+    const confirmDelete = () => {
+        // ... (código de deletar)
     };
 
-    if (loading) {
+    toast.warning(
+        ({ closeToast }) => (
+            <div>
+                <p className="font-semibold">Confirmar exclusão?</p>
+                <p className="text-sm">Deseja realmente excluir a taxa para "{nome}"?</p>
+                <div className="flex justify-end mt-2 space-x-2">
+                    <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
+                    <button onClick={() => { confirmDelete(); closeToast(); }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                </div>
+            </div>
+        ), 
+        // --- ADIÇÃO AQUI ---
+        { 
+            position: "top-center", 
+            autoClose: false, 
+            closeOnClick: false, 
+            draggable: false 
+        }
+    );
+};
+
+    if (loading || authLoading) {
         return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando Taxas de Entrega...</div>;
     }
 
@@ -136,7 +146,6 @@ function TaxasDeEntrega() {
                     </Link>
                 </div>
 
-                {/* Formulário de Adicionar/Editar */}
                 <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
                     <h2 className="text-xl font-semibold text-amber-400 mb-4 flex items-center">
                         {editingId ? <IoPencil className="mr-2" /> : <IoAddCircleOutline className="mr-2" />}
@@ -190,7 +199,6 @@ function TaxasDeEntrega() {
                     </form>
                 </div>
 
-                {/* Lista de Taxas Cadastradas */}
                 <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
                     <h2 className="text-xl font-bold text-amber-400 mb-4">Taxas Cadastradas</h2>
                     <ul className="divide-y divide-gray-700">
