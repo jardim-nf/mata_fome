@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -31,28 +31,30 @@ function AdminCouponManagement() {
         }
     }, [currentUser, isAdmin, authLoading, navigate]);
     
-    // Busca os cupons do estabelecimento no local correto
-    const fetchCupons = async () => {
-        if (!estabelecimentoId) return;
+    // EFEITO CORRIGIDO: Busca os cupons do estabelecimento no local correto e em tempo real
+    useEffect(() => {
+        if (!estabelecimentoId) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
-        try {
-            const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cupons');
-            const q = query(cuponsCollectionRef, orderBy('codigo'));
-            
-            const querySnapshot = await getDocs(q);
+        // --- CORREÇÃO AQUI: Acessando a subcoleção 'cupons' ---
+        const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cupons');
+        const q = query(cuponsCollectionRef, orderBy('codigo'));
+
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const cuponsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCupons(cuponsData);
-        } catch (err) {
+            setLoading(false);
+        }, (err) => {
             console.error("Erro ao buscar cupons:", err);
             toast.error("Erro ao carregar cupons.");
-        } finally {
             setLoading(false);
-        }
-    };
+        });
 
-    useEffect(() => {
-        // A função fetchCupons é chamada dentro do onSnapshot, 
-        // então não precisa ser chamada aqui para evitar duplicação.
+        // Limpa o listener ao desmontar o componente
+        return () => unsubscribe();
     }, [estabelecimentoId]);
 
     const resetForm = () => {
@@ -67,23 +69,23 @@ function AdminCouponManagement() {
         setEditingCouponId(null);
     };
 
-    // --- FUNÇÃO CORRIGIDA ---
     const handleSaveCoupon = async (e) => {
         e.preventDefault();
         
-        // CORREÇÃO: A validação do valorDesconto agora depende do tipoDesconto
+        // CORREÇÃO da validação do "Frete Grátis"
         if (!codigo || (tipoDesconto !== 'freteGratis' && !valorDesconto) || !validadeInicio || !validadeFim) {
             toast.warn('Preencha os campos obrigatórios: Código, Valor (se aplicável) e Datas de Validade.');
             return;
         }
 
         try {
+            // --- CORREÇÃO AQUI: Referência para a subcoleção ---
             const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cupons');
 
             const newCouponData = {
                 codigo: codigo.toUpperCase().trim(),
                 tipoDesconto,
-                valorDesconto: tipoDesconto === 'freteGratis' ? 0 : Number(valorDesconto), // Valor é 0 para frete grátis
+                valorDesconto: tipoDesconto === 'freteGratis' ? 0 : Number(valorDesconto),
                 minimoPedido: minimoPedido ? Number(minimoPedido) : null,
                 validadeInicio: Timestamp.fromDate(new Date(validadeInicio)),
                 validadeFim: Timestamp.fromDate(new Date(validadeFim)),
@@ -94,6 +96,7 @@ function AdminCouponManagement() {
             };
 
             if (editingCouponId) {
+                // --- CORREÇÃO AQUI: Caminho para o documento de edição ---
                 const couponRef = doc(cuponsCollectionRef, editingCouponId);
                 await updateDoc(couponRef, newCouponData);
                 toast.success('Cupom atualizado com sucesso!');
@@ -106,7 +109,6 @@ function AdminCouponManagement() {
                 await addDoc(cuponsCollectionRef, newCouponData);
                 toast.success('Cupom criado com sucesso!');
             }
-            fetchCupons();
             resetForm();
         } catch (err) {
             console.error("Erro ao salvar cupom:", err);
@@ -127,45 +129,42 @@ function AdminCouponManagement() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-// Em: src/pages/AdminCouponManagement.jsx
-
-const handleDeleteCoupon = (id, codigo) => {
-    toast.warning(
-        ({ closeToast }) => (
-            <div>
-                <p className="font-semibold">Confirmar exclusão?</p>
-                <p className="text-sm">Deseja realmente excluir o cupom "{codigo}"?</p>
-                <div className="flex justify-end mt-2 space-x-2">
-                    <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
-                    <button onClick={async () => {
-                        try {
-                            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cupons', id));
-                            toast.success('Cupom excluído com sucesso!');
-                            fetchCupons();
-                        } catch (err) {
-                            toast.error("Erro ao excluir cupom.");
-                        }
-                        closeToast();
-                    }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+    const handleDeleteCoupon = (id, codigo) => {
+        toast.warning(
+            ({ closeToast }) => (
+                <div>
+                    <p className="font-semibold">Confirmar exclusão?</p>
+                    <p className="text-sm">Deseja realmente excluir o cupom "{codigo}"?</p>
+                    <div className="flex justify-end mt-2 space-x-2">
+                        <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
+                        <button onClick={async () => {
+                            try {
+                                // --- CORREÇÃO AQUI: Caminho para o documento a ser deletado ---
+                                await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cupons', id));
+                                toast.success('Cupom excluído com sucesso!');
+                                // O listener onSnapshot vai atualizar a lista automaticamente
+                            } catch (err) {
+                                toast.error("Erro ao excluir cupom.");
+                            }
+                            closeToast();
+                        }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                    </div>
                 </div>
-            </div>
-        ), 
-        // --- ADIÇÃO AQUI ---
-        { 
-            position: "top-center", // Centraliza a notificação
-            autoClose: false,      // Impede que feche sozinha
-            closeOnClick: false,   // Impede que feche ao clicar
-            draggable: false       // Impede que seja arrastada
-        }
-    );
-};
+            ), { 
+                position: "top-center", 
+                autoClose: false, 
+                closeOnClick: false, 
+                draggable: false 
+            }
+        );
+    };
 
     if (authLoading || loading) {
         return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando...</div>;
     }
 
     return (
-        // O restante do seu JSX continua exatamente o mesmo
+        // O restante do seu JSX (formulário e tabela) continua igual
         <div className="bg-gray-900 min-h-screen p-4 sm:p-6 text-white">
             <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">

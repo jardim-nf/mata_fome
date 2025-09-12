@@ -103,7 +103,6 @@ function TaxasDeEntrega() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-// Em: src/pages/TaxasDeEntrega.jsx
 
 const handleDelete = (id, nome) => {
     const confirmDelete = () => {
