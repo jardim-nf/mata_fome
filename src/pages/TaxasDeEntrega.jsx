@@ -105,8 +105,17 @@ function TaxasDeEntrega() {
 
 
 const handleDelete = (id, nome) => {
-    const confirmDelete = () => {
-        // ... (código de deletar)
+    const confirmDelete = async () => {
+        try {
+            // Usa o caminho correto para deletar
+            const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', id);
+            await deleteDoc(taxaDocRef);
+            toast.success(`Taxa para "${nome}" foi excluída.`);
+            getTaxas(); // Recarrega a lista após a exclusão
+        } catch (err) {
+            console.error("Erro ao excluir taxa:", err);
+            toast.error("Erro ao excluir a taxa.");
+        }
     };
 
     toast.warning(
@@ -116,20 +125,25 @@ const handleDelete = (id, nome) => {
                 <p className="text-sm">Deseja realmente excluir a taxa para "{nome}"?</p>
                 <div className="flex justify-end mt-2 space-x-2">
                     <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
-                    <button onClick={() => { confirmDelete(); closeToast(); }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                    <button 
+                        onClick={() => { 
+                            confirmDelete(); 
+                            closeToast(); 
+                        }} 
+                        className="px-3 py-1 text-sm bg-red-600 text-white rounded"
+                    >
+                        Excluir
+                    </button>
                 </div>
             </div>
-        ), 
-        // --- ADIÇÃO AQUI ---
-        { 
-            position: "top-center", 
-            autoClose: false, 
-            closeOnClick: false, 
-            draggable: false 
+        ), {
+            position: "top-center",
+            autoClose: false,
+            closeOnClick: false,
+            draggable: false
         }
     );
 };
-
     if (loading || authLoading) {
         return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando Taxas de Entrega...</div>;
     }
