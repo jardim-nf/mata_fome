@@ -15,7 +15,7 @@ import ComandaParaImpressao from "./components/ComandaParaImpressao";
 import Planos from "./pages/Planos";
 import HistoricoCliente from './pages/HistoricoCliente';
 import ClientOrderHistory from './pages/ClientOrderHistory';
-
+import ControleSalao from "./pages/ControleSalao";
 import Painel from "./pages/Painel";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminMenuManagement from "./pages/AdminMenuManagement";
@@ -63,7 +63,9 @@ function App() {
             {/* Rotas de Detalhamento para Master Admin (ou admins que acessam históricos) */}
             <Route path="/historico-cliente/:telefone" element={<HistoricoCliente />} />
             <Route path="/admin/clientes/:clientId" element={<ClientDetails />} />
-            
+            <Route path="/controle-salao" element={<ControleSalao />} />
+<Route path="/controle-salao" element={<ControleSalao />} />
+
             <Route path="/painel-inicial" element={<HomeRedirector />} />
 <Route path="/master/associar-imagens" element={<AdminImageAssociation />} />
             {/* Rotas para Administradores de Estabelecimento */}
