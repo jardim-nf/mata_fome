@@ -4,73 +4,79 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import Comprovante from '../components/Comprovante'; // Nosso comprovante existente
-import { useReactToPrint } from 'react-to-print';
+import ComandaParaImpressao from '../components/ComandaParaImpressao';
+import { toast } from 'react-toastify';
 
 export default function PaginaImpressao() {
     const { pedidoId } = useParams();
     const [pedido, setPedido] = useState(null);
-    const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
+    const [estabelecimento, setEstabelecimento] = useState(null);
     const [loading, setLoading] = useState(true);
-
-    const comprovanteRef = useRef();
-
-    const handlePrint = useReactToPrint({
-        content: () => comprovanteRef.current,
-        // Esta função é chamada depois que a janela de impressão fecha
-        onAfterPrint: () => window.close(), 
-    });
+    const [error, setError] = useState('');
+    const componentRef = useRef();
 
     useEffect(() => {
-        if (!pedidoId) return;
-
-        const fetchPedido = async () => {
+        const buscarDados = async () => {
+            if (!pedidoId) {
+                setError("ID do pedido não fornecido.");
+                setLoading(false);
+                return;
+            }
             try {
                 const pedidoRef = doc(db, 'pedidos', pedidoId);
                 const pedidoSnap = await getDoc(pedidoRef);
 
-                if (pedidoSnap.exists()) {
-                    const pedidoData = pedidoSnap.data();
-                    setPedido(pedidoData);
+                if (!pedidoSnap.exists()) throw new Error("Pedido não encontrado.");
+                
+                const dadosPedido = { id: pedidoSnap.id, ...pedidoSnap.data() };
+                setPedido(dadosPedido);
 
-                    const estRef = doc(db, 'estabelecimentos', pedidoData.estabelecimentoId);
-                    const estSnap = await getDoc(estRef);
-                    if (estSnap.exists()) {
-                        setEstabelecimentoInfo(estSnap.data());
-                    }
-                }
-            } catch (error) {
-                console.error("Erro ao buscar pedido para impressão:", error);
+                const estabelecimentoRef = doc(db, 'estabelecimentos', dadosPedido.estabelecimentoId);
+                const estabelecimentoSnap = await getDoc(estabelecimentoRef);
+
+                if (!estabelecimentoSnap.exists()) throw new Error("Estabelecimento não encontrado.");
+                
+                setEstabelecimento({ id: estabelecimentoSnap.id, ...estabelecimentoSnap.data() });
+
+            } catch (err) {
+                console.error("Erro ao buscar dados para impressão:", err);
+                setError(err.message);
+                toast.error(err.message);
             } finally {
                 setLoading(false);
             }
         };
-
-        fetchPedido();
+        buscarDados();
     }, [pedidoId]);
 
-    // Dispara a impressão automaticamente quando os dados estiverem prontos
+    // Efeito para chamar a impressão e fechar a aba
     useEffect(() => {
-        if (!loading && pedido) {
-            handlePrint();
+        if (!loading && pedido && estabelecimento) {
+            const timer = setTimeout(() => {
+                window.print(); // Comando direto do navegador para imprimir
+            }, 500); // Pequena espera para garantir que a comanda renderizou
+
+            // Adiciona um listener para quando a impressão for concluída ou cancelada
+            window.onafterprint = () => {
+                window.close(); // Fecha a aba
+            };
+
+            return () => {
+                clearTimeout(timer);
+                window.onafterprint = null; // Limpa o listener
+            };
         }
-    }, [loading, pedido, handlePrint]);
+    }, [loading, pedido, estabelecimento]);
 
     if (loading) {
-        return <div style={{ fontFamily: 'monospace', padding: '20px' }}>Carregando comprovante...</div>;
+        return <div style={{ fontFamily: 'monospace', padding: '20px', textAlign: 'center' }}>Carregando comanda...</div>;
     }
 
-    if (!pedido) {
-        return <div style={{ fontFamily: 'monospace', padding: '20px' }}>Pedido não encontrado.</div>;
+    if (error) {
+        return <div style={{ fontFamily: 'monospace', padding: '20px', textAlign: 'center' }}>Erro: {error}</div>;
     }
 
     return (
-        <Comprovante 
-            ref={comprovanteRef}
-            pedido={pedido.itens}
-            total={pedido.totalFinal || pedido.total}
-            estabelecimentoInfo={estabelecimentoInfo}
-            formaPagamento={pedido.formaPagamento}
-        />
+        <ComandaParaImpressao ref={componentRef} pedido={pedido} estabelecimento={estabelecimento} />
     );
 }

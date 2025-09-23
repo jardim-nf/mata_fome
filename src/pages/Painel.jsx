@@ -82,7 +82,7 @@ export default function Painel() {
         const nomeCliente = pedidoData.cliente?.nome?.split(' ')[0] || 'Cliente';
         const nomeEstabelecimento = estabelecimentoInfo?.nome || 'nossa loja';
         const pedidoIdCurto = pedidoData.id.slice(0, 5).toUpperCase();
-        const itensResumo = pedidoData.itens.map(item => `  - ${item.quantidade}x ${item.nome}`).join('\n');
+        const itensResumo = pedidoData.itens.map(item => `   - ${item.quantidade}x ${item.nome}`).join('\n');
         const totalPedido = `R$ ${(pedidoData.totalFinal || pedidoData.total).toFixed(2).replace('.', ',')}`;
         const formaPagamento = pedidoData.formaPagamento || 'Não informada';
         const messageBuilder = MENSAGENS_WHATSAPP[status];
@@ -228,6 +228,7 @@ export default function Painel() {
                                         onUpdateStatus={handleUpdateStatusAndNotify}
                                         onDeletePedido={handleExcluirPedido}
                                         newOrderIds={newOrderIds}
+                                        estabelecimentoInfo={estabelecimentoInfo} // <-- LINHA ADICIONADA AQUI
                                     />
                                 ))
                             ) : (

@@ -106,7 +106,7 @@ export default function TelaPedidos() {
             }
             setMenuPorCategoria(menuCompleto);
             
-            const pedidosQuery = query(collection(db, "pedidos"), where("estabelecimentoId", "==", estabelecimentoId), where("mesaId", "==", mesaId), where("status", "in", ["recebido", "pagamento"]));
+            const pedidosQuery = query(collection(db, "pedidos"), where("estabelecimentoId", "==", estabelecimentoId), where("mesaId", "==", mesaId), where("status", "in", ["recebido", "preparo", "pronto_para_servir", "pagamento"]));
             const pedidosSnapshot = await getDocs(pedidosQuery);
             if (!pedidosSnapshot.empty) {
                 const pedidoDoc = pedidosSnapshot.docs[0];
@@ -151,16 +151,32 @@ export default function TelaPedidos() {
 
   const handleEnviarPedido = async () => {
     if (pedidoAtual.length === 0 && !pedidoIdExistente) { toast.warn("Nenhum item para salvar."); return; }
+    if (!mesaInfo) { toast.error("Informações da mesa não carregadas."); return; } // Segurança
     setEnviando(true);
     try {
       const itensParaSalvar = pedidoAtual.map(item => ({ id: item.id, nome: item.nome, preco: item.preco, quantidade: item.quantidade }));
       const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
       if (pedidoIdExistente) {
         const pedidoRef = doc(db, 'pedidos', pedidoIdExistente);
-        await updateDoc(pedidoRef, { itens: itensParaSalvar, total: totalPedido });
+        // ▼▼▼ ALTERAÇÃO 1: Adiciona 'mesaNumero' na atualização ▼▼▼
+        await updateDoc(pedidoRef, { 
+            itens: itensParaSalvar, 
+            total: totalPedido,
+            mesaNumero: mesaInfo.numero
+        });
         await updateDoc(mesaRef, { total: totalPedido });
       } else {
-        const novoPedido = { estabelecimentoId, mesaId, tipo: 'mesa', itens: itensParaSalvar, total: totalPedido, status: 'recebido', createdAt: serverTimestamp() };
+        // ▼▼▼ ALTERAÇÃO 2: Adiciona 'mesaNumero' na criação do pedido ▼▼▼
+        const novoPedido = { 
+            estabelecimentoId, 
+            mesaId, 
+            mesaNumero: mesaInfo.numero, 
+            tipo: 'mesa', 
+            itens: itensParaSalvar, 
+            total: totalPedido, 
+            status: 'recebido', 
+            createdAt: serverTimestamp() 
+        };
         const pedidoRef = await addDoc(collection(db, 'pedidos'), novoPedido);
         setPedidoIdExistente(pedidoRef.id);
         await updateDoc(mesaRef, { status: 'ocupada', total: totalPedido });
@@ -183,7 +199,7 @@ export default function TelaPedidos() {
     setIsPagamentoModalOpen(false);
     try {
       const pedidoRef = doc(db, 'pedidos', pedidoIdExistente);
-      await updateDoc(pedidoRef, { formaPagamento: formaDePagamento });
+      await updateDoc(pedidoRef, { formaPagamento: formaDePagamento, status: 'pagamento' }); // Atualiza status do pedido também
       const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
       await updateDoc(mesaRef, { status: 'pagamento' });
       toast.success("Status da mesa alterado para 'Pagamento'.");
@@ -211,6 +227,7 @@ export default function TelaPedidos() {
         const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
         await updateDoc(mesaRef, { status: 'livre', total: 0 });
         setPedidoAtual([]);
+        setPedidoIdExistente(null);
         toast.success("Mesa liberada com sucesso!");
         navigate('/controle-salao');
     } catch (error) {
@@ -226,7 +243,8 @@ export default function TelaPedidos() {
     <div className="flex h-screen bg-gray-50">
         <div className="flex-grow p-4 overflow-y-auto">
             <button onClick={() => navigate('/controle-salao')} className="mb-4 text-blue-500 hover:underline">&larr; Voltar para o Salão</button>
-            <h1 className="text-3xl font-bold mb-4">Lançar Pedidos - Mesa {mesaId}</h1>
+            {/* ▼▼▼ ALTERAÇÃO 3: Exibe o número da mesa no título ▼▼▼ */}
+            <h1 className="text-3xl font-bold mb-4">Lançar Pedidos - Mesa {mesaInfo?.numero || ''}</h1>
             <div className="mb-6 sticky top-0 z-10 bg-gray-50 py-2">
               <input type="search" value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} placeholder="Pesquisar item pelo nome..." className="w-full p-3 border border-gray-300 rounded-lg shadow-sm" />
             </div>

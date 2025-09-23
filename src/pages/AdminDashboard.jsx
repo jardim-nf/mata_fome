@@ -1,5 +1,8 @@
+// src/pages/AdminDashboard.jsx
+
 import React from "react";
 import { Link } from "react-router-dom";
+import DashboardSummary from "../components/DashboardSummary"; // 1. Importe o novo componente
 
 // Componente de botão usado no dashboard
 const ActionButton = ({ to, title, subtitle, icon, colorClass }) => (
@@ -17,11 +20,14 @@ const ActionButton = ({ to, title, subtitle, icon, colorClass }) => (
 
 const AdminDashboard = () => {
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-6 space-y-8 bg-gray-900 min-h-screen">
       {/* Título */}
-      <h1 className="text-3xl font-bold text-gray-800">
+      <h1 className="text-3xl font-bold text-white">
         Dashboard do Estabelecimento
       </h1>
+
+      {/* 2. Adicione o componente de resumo aqui */}
+      <DashboardSummary />
 
       {/* Grid com os botões de ação */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -79,10 +85,6 @@ const AdminDashboard = () => {
           colorClass="bg-gradient-to-br from-purple-600 to-indigo-700 hover:from-purple-500"
         />
       </div>
-
-      {/* Aqui você pode ter mais seções, cards ou widgets do dashboard
-          Se no seu arquivo original tem gráficos, tabelas ou estatísticas,
-          mantém tudo normalmente abaixo dessa grid. */}
     </div>
   );
 };
