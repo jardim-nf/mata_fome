@@ -34,7 +34,6 @@ const AdminDashboard = () => {
           icon="🏪"
           colorClass="bg-gradient-to-br from-blue-600 to-blue-800 hover:from-blue-500"
         />
-
         {/* Novo botão Controle de Salão */}
         <ActionButton
           to="/controle-salao"

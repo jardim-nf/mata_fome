@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
@@ -171,7 +171,13 @@ function Menu() {
             cliente: { nome: nomeCliente.trim(), telefone: telefoneCliente.trim(), endereco: isRetirada ? null : { rua: rua.trim(), numero: numero.trim(), bairro: bairro.trim(), cidade: cidade.trim(), complemento: complemento.trim() || null }, userId: currentUser.uid },
             estabelecimentoId: actualEstabelecimentoId,
             itens: carrinho.map(item => ({ nome: item.nome, quantidade: item.qtd, preco: Number(item.precoFinal), imageUrl: item.imageUrl || null, adicionais: item.adicionais || [] })),
-            status: 'recebido', criadoEm: Timestamp.now(), formaPagamento: formaPagamento, trocoPara: valorTrocoPara, taxaEntrega: taxaAplicada, totalFinal: finalOrderTotal, tipoEntrega: isRetirada ? 'retirada' : 'delivery',
+            status: 'recebido',
+            createdAt: serverTimestamp(),
+            tipo: isRetirada ? 'retirada' : 'delivery',
+            formaPagamento: formaPagamento,
+            trocoPara: valorTrocoPara,
+            taxaEntrega: taxaAplicada,
+            totalFinal: finalOrderTotal,
             ...(formaPagamento === 'pix' && { statusPagamentoPix: 'aguardando_pagamento', }),
             ...(appliedCoupon && { cupomAplicado: { id: appliedCoupon.id, codigo: appliedCoupon.codigo, tipoDesconto: appliedCoupon.tipoDesconto, valorDesconto: appliedCoupon.valorDesconto, descontoCalculado: discountAmount } })
         };
@@ -188,7 +194,7 @@ function Menu() {
             }
             const docRef = await addDoc(collection(db, 'pedidos'), pedido);
             setConfirmedOrderDetails({
-                id: docRef.id, cliente: pedido.cliente, itens: pedido.itens, subtotal: subtotalCalculado, taxaEntrega: taxaAplicada, totalFinal: finalOrderTotal, formaPagamento: formaPagamento, trocoPara: valorTrocoPara, tipoEntrega: pedido.tipoEntrega, cupomAplicado: appliedCoupon ? { codigo: appliedCoupon.codigo, desconto: discountAmount } : null
+                id: docRef.id, cliente: pedido.cliente, itens: pedido.itens, subtotal: subtotalCalculado, taxaEntrega: taxaAplicada, totalFinal: finalOrderTotal, formaPagamento: formaPagamento, trocoPara: valorTrocoPara, tipoEntrega: pedido.tipo, cupomAplicado: appliedCoupon ? { codigo: appliedCoupon.codigo, desconto: discountAmount } : null
             });
             setShowOrderConfirmationModal(true);
             toast.success('Seu pedido foi enviado com sucesso! 🎉');
@@ -397,12 +403,18 @@ function Menu() {
         }
     }, []);
 
+    useEffect(() => {
+        if (!authLoading && (isAdmin || isMasterAdmin)) {
+            toast.error('Acesso negado. Esta página é exclusiva para clientes.', { toastId: 'admin-redirect' });
+        }
+    }, [authLoading, isAdmin, isMasterAdmin]);
+
+
     if (authLoading) {
         return (<div className="flex justify-center items-center h-screen"><p>Verificando status de login...</p></div>);
     }
 
     if (isAdmin || isMasterAdmin) {
-        toast.error('Acesso negado. Esta página é exclusiva para clientes.', { toastId: 'admin-redirect' });
         return <Navigate to={isMasterAdmin ? '/master-dashboard' : '/painel'} replace />;
     }
 

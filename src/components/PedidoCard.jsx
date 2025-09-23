@@ -1,142 +1,88 @@
 // src/components/PedidoCard.jsx
 
-import React, { useState, useMemo } from 'react';
-import { useReactToPrint } from 'react-to-print';
-import { toast } from 'react-toastify';
-import { FaPrint, FaTrash, FaChevronDown, FaChevronUp, FaMotorcycle, FaCheck } from 'react-icons/fa';
-import { GiCookingPot } from "react-icons/gi";
-import ComandaParaImpressao from './ComandaParaImpressao';
-import { formatDistanceToNow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import React from 'react';
 
-export default function PedidoCard({ pedido, onUpdateStatus, onDeletePedido, estabelecimentoInfo, newOrderIds }) {
-    const [expanded, setExpanded] = useState(false);
-    const componentRef = React.useRef();
+// Função para calcular o tempo relativo (ex: "há 2 minutos")
+function formatTimeAgo(timestamp) {
+  if (!timestamp || !timestamp.toDate) return '';
+  const now = new Date();
+  const seconds = Math.floor((now - timestamp.toDate()) / 1000);
+  
+  let interval = seconds / 60;
+  if (interval < 1) return "agora";
+  if (interval < 60) return `há ${Math.floor(interval)} min`;
+  interval = interval / 60;
+  if (interval < 24) return `há ${Math.floor(interval)} h`;
+  interval = interval / 24;
+  return `há ${Math.floor(interval)} d`;
+}
 
-    const handlePrint = useReactToPrint({
-        content: () => componentRef.current,
-        onAfterPrint: () => {
-            if (pedido.status === 'recebido') {
-                onUpdateStatus(pedido.id, 'preparo');
-                toast.info('Pedido impresso e movido para "Em Preparo".');
-            }
-        }
-    });
+export default function PedidoCard({ pedido, onUpdateStatus, onDeletePedido, newOrderIds }) {
+    const isNew = newOrderIds.includes(pedido.id);
 
-    const isNew = newOrderIds && newOrderIds.includes(pedido.id);
-
-    const tempoDeEspera = useMemo(() => {
-        if (!pedido.criadoEm?.toDate) return '';
-        try {
-            return formatDistanceToNow(pedido.criadoEm.toDate(), { addSuffix: true, locale: ptBR });
-        } catch (e) {
-            return 'calculando...';
-        }
-    }, [pedido.criadoEm]);
-
-    const minutosDeEspera = useMemo(() => {
-        if (!pedido.criadoEm?.toDate) return 0;
-        const diff = new Date().getTime() - pedido.criadoEm.toDate().getTime();
-        return Math.floor(diff / 60000);
-    }, [pedido.criadoEm]);
-
-    const statusActions = {
-        recebido: [
-            { label: 'Aceitar e Preparar', action: () => onUpdateStatus(pedido.id, 'preparo'), icon: <GiCookingPot />, color: 'green' },
-        ],
-        preparo: [
-            { label: 'Saiu para Entrega', action: () => onUpdateStatus(pedido.id, 'em_entrega'), icon: <FaMotorcycle />, color: 'blue' },
-        ],
-        em_entrega: [
-            { label: 'Marcar como Finalizado', action: () => onUpdateStatus(pedido.id, 'finalizado'), icon: <FaCheck />, color: 'purple' },
-        ],
+    const getNextAction = () => {
+        const actions = {
+            recebido: { next: 'preparo', text: 'Aceitar e Preparar', color: 'bg-green-500 hover:bg-green-600' },
+            preparo: { 
+                next: pedido.tipo === 'delivery' ? 'em_entrega' : 'pronto_para_servir', 
+                text: pedido.tipo === 'delivery' ? 'Saiu para Entrega' : 'Pronto p/ Servir', 
+                color: 'bg-blue-500 hover:bg-blue-600' 
+            },
+            em_entrega: { next: 'finalizado', text: 'Finalizar Entrega', color: 'bg-purple-500 hover:bg-purple-600' },
+            pronto_para_servir: { next: 'finalizado', text: 'Finalizar Pedido', color: 'bg-purple-500 hover:bg-purple-600' }
+        };
+        return actions[pedido.status] || null;
     };
 
+    const action = getNextAction();
+    const displayName = pedido.tipo === 'delivery' 
+        ? pedido.cliente?.nome || 'Cliente Delivery'
+        : `Mesa ${pedido.mesaNumero || pedido.mesaId?.slice(-4) || 'N/A'}`;
+
     return (
-        <div className={`bg-gray-700 p-3 rounded-lg shadow-lg border-l-4 ${isNew ? 'border-yellow-400 animate-pulse' : 'border-gray-600'} transition-all duration-500`}>
-            <div className="flex justify-between items-center">
-                <div>
-                    <p className="font-bold text-white text-lg">{pedido.cliente.nome}</p>
-                    <p className="text-xs text-gray-400">ID: {pedido.id.substring(0, 5).toUpperCase()}</p>
-                </div>
-                <div className="text-right">
-                    <p className="font-semibold text-xl text-green-400">R$ {pedido.totalFinal.toFixed(2).replace('.', ',')}</p>
-                    {pedido.status !== 'finalizado' && (
-                        <p className={`text-xs font-medium ${minutosDeEspera > 10 ? 'text-red-400 animate-pulse' : 'text-gray-300'}`}>
-                            {tempoDeEspera}
-                        </p>
-                    )}
-                </div>
+        <div className={`bg-gray-800 p-3 rounded-lg shadow-lg border-2 ${isNew ? 'border-yellow-400 animate-pulse' : 'border-gray-700'}`}>
+            <div className="flex justify-between items-center mb-2">
+                <span className="font-bold text-md truncate" title={displayName}>{displayName}</span>
+                <span className="text-xs text-gray-400">{formatTimeAgo(pedido.createdAt)}</span>
             </div>
+            
+            <div className="text-sm text-gray-300 mb-2">ID: {pedido.id.slice(0, 5).toUpperCase()}</div>
 
-            {expanded && (
-                <div className="mt-4 border-t border-gray-600 pt-3">
-                    <p className="text-sm text-gray-300"><span className="font-semibold text-gray-200">Telefone:</span> {pedido.cliente?.telefone || 'N/A'}</p>
-                    {pedido.cliente?.endereco ? (
-                        <>
-                            <p className="text-sm text-gray-300">
-                                <span className="font-semibold text-gray-200">Endereço:</span>
-                                {` ${pedido.cliente.endereco.rua || ''}, ${pedido.cliente.endereco.numero || ''} - ${pedido.cliente.endereco.bairro || ''}`}
-                            </p>
-                            {pedido.cliente.endereco.complemento && (
-                                <p className="text-sm text-gray-300">
-                                    <span className="font-semibold text-gray-200">Complemento:</span>
-                                    {` ${pedido.cliente.endereco.complemento}`}
-                                </p>
-                            )}
-                        </>
-                    ) : (
-                         <p className="text-sm text-gray-300"><span className="font-semibold text-gray-200">Endereço:</span> Pedido para retirada.</p>
-                    )}
-                    <p className="text-sm text-gray-300"><span className="font-semibold text-gray-200">Pagamento:</span> {pedido.formaPagamento}</p>
-                    {pedido.formaPagamento === 'dinheiro' && pedido.trocoPara > 0 && (
-                        <p className="text-sm text-yellow-400"><span className="font-semibold text-yellow-300">Troco para:</span> R$ {parseFloat(pedido.trocoPara).toFixed(2).replace('.', ',')}</p>
-                    )}
-                    <div className="my-3">
-                        <p className="font-semibold text-gray-200 mb-1">Itens:</p>
-                        <ul className="list-disc list-inside text-sm text-gray-300 space-y-1">
-                            {pedido.itens.map((item, index) => (
-                                <li key={`${item.nome}-${index}`}>
-                                    {item.quantidade}x {item.nome}
-                                    {item.adicionais && item.adicionais.length > 0 && (
-                                        <span className="text-xs text-gray-400 ml-2">
-                                            (+ {item.adicionais.map(ad => ad.nome).join(', ')})
-                                        </span>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-600">
-                <div className="flex items-center gap-3">
-                    <button onClick={handlePrint} title="Imprimir" className="text-blue-400 hover:text-blue-300 transition-colors"><FaPrint size={20} /></button>
-                    
-                    {/* **BOTÃO DE EXCLUIR REINSERIDO AQUI** */}
-                    {pedido.status === 'recebido' && (
-                        <button onClick={() => onDeletePedido(pedido.id)} title="Excluir Pedido" className="text-red-500 hover:text-red-400 transition-colors">
-                            <FaTrash size={18} />
-                        </button>
-                    )}
-                </div>
-                <div className="flex items-center gap-3">
-                    {statusActions[pedido.status] && statusActions[pedido.status].map(action => (
-                         <button key={action.label} onClick={action.action} className={`px-3 py-1 text-xs font-bold text-white rounded-md bg-${action.color}-500 hover:bg-${action.color}-600 transition-colors flex items-center gap-2`}>
-                            {action.icon}
-                            {action.label}
-                        </button>
+            <details className="mb-3">
+                <summary className="cursor-pointer text-xs text-gray-400 hover:text-white">Ver itens ({pedido.itens.length})</summary>
+                <div className="pt-2 text-xs space-y-1 max-h-24 overflow-y-auto">
+                    {pedido.itens.map((item, index) => (
+                        <div key={index} className="flex justify-between">
+                            <span className="truncate pr-2">{item.quantidade}x {item.nome}</span>
+                            <span>R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                        </div>
                     ))}
-                    <button onClick={() => setExpanded(!expanded)} className="text-gray-400 hover:text-white">
-                        {expanded ? <FaChevronUp /> : <FaChevronDown />}
-                    </button>
                 </div>
+            </details>
+
+            <div className="flex justify-between items-center border-t border-gray-700 pt-2">
+                <span className="font-bold text-lg">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pedido.totalFinal || pedido.total)}
+                </span>
+                
+                {/* ▼▼▼ CONDIÇÃO ADICIONADA AQUI ▼▼▼ */}
+                {/* O botão de excluir só aparece se o status NÃO for 'finalizado' */}
+                {pedido.status !== 'finalizado' && (
+                    <button 
+                        onClick={() => onDeletePedido(pedido.id)} 
+                        className="text-red-500 hover:text-red-400 p-1"
+                        title="Excluir Pedido"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                    </button>
+                )}
             </div>
 
-            <div style={{ display: 'none' }}>
-                <ComandaParaImpressao ref={componentRef} pedido={pedido} estabelecimento={estabelecimentoInfo} />
-            </div>
+            {action && (
+                <button onClick={() => onUpdateStatus(pedido.id, action.next)} className={`w-full mt-2 font-semibold py-2 rounded ${action.color}`}>
+                    {action.text}
+                </button>
+            )}
         </div>
     );
 }
