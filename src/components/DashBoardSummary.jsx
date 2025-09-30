@@ -1,126 +1,93 @@
-// src/components/DashboardSummary.jsx
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase';
-import { useAuth } from '../context/AuthContext';
-import { format } from 'date-fns';
+// src/pages/AdminDashboard.jsx
 
-const DashboardSummary = () => {
-    const { estabelecimentoId } = useAuth();
-    const [summary, setSummary] = useState({ totalPedidos: 0, valorTotal: 0 });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [selectedPeriod, setSelectedPeriod] = useState('today');
+import React from "react";
+import { Link } from "react-router-dom";
+import DashboardSummary from "../components/DashboardSummary"; // 1. Importe o novo componente
 
-    useEffect(() => {
-        if (!estabelecimentoId) return;
+// Componente de botão usado no dashboard
+const ActionButton = ({ to, title, subtitle, icon, colorClass }) => (
+  <Link
+    to={to}
+    className={`p-6 rounded-2xl shadow-lg text-white flex flex-col justify-between transition-transform transform hover:scale-105 ${colorClass}`}
+  >
+    <div className="text-4xl mb-4">{icon}</div>
+    <div>
+      <h2 className="text-xl font-bold">{title}</h2>
+      <p className="text-sm opacity-90">{subtitle}</p>
+    </div>
+  </Link>
+);
 
-        const fetchSummaryData = async () => {
-            setLoading(true);
-            try {
-                const now = new Date();
-                let startTimestamp;
+const AdminDashboard = () => {
+  return (
+    <div className="p-6 space-y-8 bg-gray-900 min-h-screen">
+      {/* Título */}
+      <h1 className="text-3xl font-bold text-white">
+        Dashboard do Estabelecimento
+      </h1>
 
-                switch (selectedPeriod) {
-                    case 'yesterday':
-                        const yesterday = new Date(now);
-                        yesterday.setDate(now.getDate() - 1);
-                        startTimestamp = Timestamp.fromDate(new Date(yesterday.setHours(0, 0, 0, 0)));
-                        break;
-                    case 'this_week':
-                        const weekStart = new Date(now);
-                        weekStart.setDate(now.getDate() - now.getDay());
-                        startTimestamp = Timestamp.fromDate(new Date(weekStart.setHours(0, 0, 0, 0)));
-                        break;
-                    case 'this_month':
-                         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                         startTimestamp = Timestamp.fromDate(new Date(monthStart.setHours(0, 0, 0, 0)));
-                         break;
-                    case 'today':
-                    default:
-                        startTimestamp = Timestamp.fromDate(new Date(now.setHours(0, 0, 0, 0)));
-                        break;
-                }
-                
-                const endTimestamp = Timestamp.now();
+      {/* 2. Adicione o componente de resumo aqui */}
+      <DashboardSummary />
 
-                const pedidosRef = collection(db, 'pedidos');
-                const q = query(
-                    pedidosRef,
-                    where('estabelecimentoId', '==', estabelecimentoId),
-                    where('criadoEm', '>=', startTimestamp),
-                    where('criadoEm', '<=', endTimestamp)
-                );
+      {/* Grid com os botões de ação */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-                const querySnapshot = await getDocs(q);
-                let totalPedidos = 0;
-                let valorTotal = 0;
+        {/* Painel de pedidos */}
+        <ActionButton
+          to="/painel"
+          title="Painel de Pedidos"
+          subtitle="Gerenciar pedidos em tempo real."
+          icon="🏪"
+          colorClass="bg-gradient-to-br from-blue-600 to-blue-800 hover:from-blue-500"
+        />
+        {/* Novo botão Controle de Salão */}
+        <ActionButton
+          to="/controle-salao"
+          title="Controle de Salão"
+          subtitle="Gerenciar mesas e pedidos no salão."
+          icon="🍽️"
+          colorClass="bg-gradient-to-br from-green-600 to-green-800 hover:from-green-500"
+        />
 
-                querySnapshot.forEach(doc => {
-                    const pedido = doc.data();
-                    if (pedido.status !== 'cancelado') {
-                       totalPedidos += 1;
-                       valorTotal += pedido.totalFinal || 0;
-                    }
-                });
+        {/* Gerenciar cardápio */}
+        <ActionButton
+          to="/admin/gerenciar-cardapio"
+          title="Gerenciar Cardápio"
+          subtitle="Adicionar e editar produtos."
+          icon="🍔"
+          colorClass="bg-gradient-to-br from-yellow-600 to-orange-700 hover:from-yellow-500"
+        />
 
-                setSummary({ totalPedidos, valorTotal });
-            } catch (err) {
-                console.error("Erro ao buscar resumo de pedidos:", err);
-                setError("Não foi possível carregar o resumo.");
-            } finally {
-                setLoading(false);
-            }
-        };
+        {/* Taxas de entrega */}
+        <ActionButton
+          to="/admin/taxas-de-entrega"
+          title="Taxas de Entrega"
+          subtitle="Definir valores por bairro."
+          icon="🛵"
+          colorClass="bg-gradient-to-br from-cyan-500 to-teal-600 hover:from-cyan-400"
+        />
 
-        fetchSummaryData();
-    }, [estabelecimentoId, selectedPeriod]);
+        {/* Cupons */}
+        <ActionButton
+          to="/admin/cupons"
+          title="Gerenciar Cupons"
+          subtitle="Criar códigos de desconto."
+          icon="💰"
+          colorClass="bg-gradient-to-br from-red-500 to-pink-600 hover:from-red-400"
+        />
 
-    const handlePeriodChange = (e) => {
-        setSelectedPeriod(e.target.value);
-    };
-
-    if (loading) {
-        return (
-            <div className="mb-8 p-4 bg-gray-700 rounded-lg text-center text-white animate-pulse">
-                Carregando resumo do dia...
-            </div>
-        );
-    }
-    
-    if (error) {
-        return <div className="mb-8 p-4 bg-red-800 rounded-lg text-center text-white">{error}</div>
-    }
-
-    return (
-        <div className="mb-8 p-6 bg-gray-800 rounded-2xl shadow-lg border border-gray-700">
-             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-white">Resumo</h2>
-                <select 
-                    value={selectedPeriod} 
-                    onChange={handlePeriodChange}
-                    className="bg-gray-700 text-white border-gray-600 rounded-md p-2"
-                >
-                    <option value="today">Hoje</option>
-                    <option value="yesterday">Ontem</option>
-                    <option value="this_week">Esta Semana</option>
-                    <option value="this_month">Este Mês</option>
-                </select>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-white">
-                <div className="bg-gray-700 p-4 rounded-lg text-center">
-                    <p className="text-sm text-gray-400 uppercase">Pedidos</p>
-                    <p className="text-3xl font-bold text-amber-400">{summary.totalPedidos}</p>
-                </div>
-                <div className="bg-gray-700 p-4 rounded-lg text-center">
-                    <p className="text-sm text-gray-400 uppercase">Valor Total</p>
-                    <p className="text-3xl font-bold text-green-400">
-                        {summary.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
+        {/* Relatórios */}
+        <ActionButton
+          to="/admin/reports"
+          title="Relatórios"
+          subtitle="Acessar dados e estatísticas."
+          icon="📊"
+          colorClass="bg-gradient-to-br from-purple-600 to-indigo-700 hover:from-purple-500"
+        />
+      </div>
+    </div>
+  );
 };
 
-export default DashboardSummary;
+export default AdminDashboard;
+
