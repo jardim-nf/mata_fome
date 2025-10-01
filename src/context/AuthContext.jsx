@@ -1,4 +1,5 @@
 // src/context/AuthContext.jsx
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -15,7 +16,8 @@ export function useAuth() {
 
 // Componente PrivateRoute para proteger rotas baseadas em autenticação e papéis
 export function PrivateRoute({ children, allowedRoles }) {
-    const { currentUser, isAdmin, isMasterAdmin, loading } = useAuth();
+    // 1. Pega o estado de ativação do estabelecimento do contexto
+    const { currentUser, isAdmin, isMasterAdmin, loading, isEstabelecimentoAtivo } = useAuth();
 
     // Exibe um carregamento enquanto o estado de autenticação está sendo verificado
     if (loading) {
@@ -26,6 +28,16 @@ export function PrivateRoute({ children, allowedRoles }) {
     if (!currentUser) {
         console.log("PrivateRoute Debug: No current user, redirecting to /login-admin.");
         return <Navigate to="/login-admin" />;
+    }
+
+    // 2. Adiciona uma nova verificação para estabelecimentos inativos
+    // Esta verificação acontece ANTES da verificação de papéis.
+    // Se o usuário é um admin comum de um estabelecimento que foi desativado, ele será bloqueado.
+    if (isAdmin && !isMasterAdmin && !isEstabelecimentoAtivo) {
+        console.warn("PrivateRoute Debug: User is admin of an INACTIVE establishment. Access denied.");
+        // O ideal é criar uma rota para informar sobre o status inativo.
+        // Se não tiver, pode redirecionar para "/" e fazer logout.
+        return <Navigate to="/estabelecimento-inativo" />; 
     }
 
     // Lógica de permissão baseada nos allowedRoles e nas claims do usuário
@@ -54,8 +66,6 @@ export function AuthProvider({ children }) {
     const [estabelecimentoId, setEstabelecimentoId] = useState(null);
     const [isEstabelecimentoAtivo, setIsEstabelecimentoAtivo] = useState(false);
     const [loading, setLoading] = useState(true);
-
-    // >>> NOVO ESTADO PARA CASHBACK <<<
     const [cashbackBalance, setCashbackBalance] = useState(0);
 
     // Função de logout
@@ -78,21 +88,17 @@ export function AuthProvider({ children }) {
 
             if (user) {
                 try {
-                    // --- 1. Obtém as Custom Claims do Token ---
                     const idTokenResult = await user.getIdTokenResult(true);
                     console.log("AuthContext Debug: [onAuthStateChanged] - Fetched ID Token Result. Claims:", idTokenResult.claims);
 
                     const claimsIsAdmin = idTokenResult.claims.isAdmin === true;
                     const claimsIsMasterAdmin = idTokenResult.claims.isMasterAdmin === true;
                     const claimsEstabelecimentoId = idTokenResult.claims.estabelecimentoId || null;
-                    const claimsIsEstabelecimentoAtivo = idTokenResult.claims.isEstabelecimentoAtivo === true;
-
+                    
                     setIsAdmin(claimsIsAdmin);
                     setIsMasterAdmin(claimsIsMasterAdmin);
                     setEstabelecimentoId(claimsEstabelecimentoId);
-                    setIsEstabelecimentoAtivo(claimsIsEstabelecimentoAtivo);
-
-                    // --- 2. Busca Dados do Perfil do Firestore ---
+                    
                     let userDataFromFirestore = null;
                     const userDocRef = doc(db, 'usuarios', user.uid);
                     const clientDocRef = doc(db, 'clientes', user.uid);
@@ -108,18 +114,13 @@ export function AuthProvider({ children }) {
                     } else if (clientDocSnap.exists()) {
                         userDataFromFirestore = clientDocSnap.data();
                         console.log("AuthContext Debug: [onAuthStateChanged] - Found user data in 'clientes' collection.");
-                        
-                        // >>> LÓGICA DE CASHBACK ADICIONADA AQUI <<<
-                        // Se for um cliente, busca o saldo de cashback.
                         setCashbackBalance(userDataFromFirestore.cashbackBalance || 0);
                         console.log(`AuthContext Debug: [onAuthStateChanged] - Fetched cashback balance: ${userDataFromFirestore.cashbackBalance || 0}`);
-
                     } else {
                         console.log("AuthContext Debug: [onAuthStateChanged] - No additional profile data found in 'usuarios' or 'clientes'.");
                     }
                     setProfileData(userDataFromFirestore);
-
-                    // --- 3. VERIFICA ATIVAÇÃO DO ESTABELECIMENTO ---
+                    
                     if (claimsIsAdmin && !claimsIsMasterAdmin && claimsEstabelecimentoId) {
                         console.log(`AuthContext Debug: [onAuthStateChanged] - User is admin of establishment. Checking establishment status in Firestore for ID: ${claimsEstabelecimentoId}`);
                         const estabDocRef = doc(db, 'estabelecimentos', claimsEstabelecimentoId);
@@ -146,18 +147,17 @@ export function AuthProvider({ children }) {
                     setIsMasterAdmin(false);
                     setEstabelecimentoId(null);
                     setIsEstabelecimentoAtivo(false);
-                    setCashbackBalance(0); // Reseta cashback em caso de erro
+                    setCashbackBalance(0);
                 }
 
             } else {
-                // Usuário deslogado: reseta todos os estados
                 console.log("AuthContext Debug: [onAuthStateChanged] - User is null (logged out). Resetting all states.");
                 setProfileData(null);
                 setIsAdmin(false);
                 setIsMasterAdmin(false);
                 setEstabelecimentoId(null);
                 setIsEstabelecimentoAtivo(false);
-                setCashbackBalance(0); // Reseta cashback no logout
+                setCashbackBalance(0);
             }
 
             setLoading(false);
@@ -167,7 +167,6 @@ export function AuthProvider({ children }) {
         return unsubscribe;
     }, []);
 
-    // Objeto de valor do contexto que será fornecido aos componentes filhos
     const value = {
         currentUser,
         currentClientData: profileData,
@@ -177,9 +176,8 @@ export function AuthProvider({ children }) {
         isEstabelecimentoAtivo,
         loading,
         logout,
-        // >>> VALORES DE CASHBACK DISPONIBILIZADOS NO CONTEXTO <<<
         cashbackBalance,
-        setCashbackBalance, // Permite que outros componentes atualizem o saldo na UI
+        setCashbackBalance,
     };
 
     return (
