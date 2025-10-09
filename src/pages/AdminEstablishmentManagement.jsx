@@ -341,63 +341,63 @@ function AdminEstablishmentManagement() {
                             </div>
                         </div>
 
-                        <div className="mb-4">
-                            <label htmlFor="descricao" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Descrição</label>
-                            <textarea id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows="3"
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"></textarea>
-                        </div>
+ <div className="mb-4">
+<label htmlFor="descricao" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Descrição</label>
+ <textarea id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows="3"
+ className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"></textarea>
+ </div>
 
-                        <div className="flex gap-4 justify-end">
-                            <button type="button" onClick={closeForm} className="bg-gray-300 text-[var(--marrom-escuro)] px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition duration-300">Cancelar</button>
-                            <button type="submit" disabled={formLoading} className="bg-[var(--vermelho-principal)] text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition duration-300">
-                                {formLoading ? 'Salvando...' : (editingEstablishment ? 'Salvar Edição' : 'Cadastrar Estabelecimento')}
-                            </button>
-                        </div>
-                    </form>
-                )}
+<div className="flex gap-4 justify-end">
+<button type="button" onClick={closeForm} className="bg-gray-300 text-[var(--marrom-escuro)] px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition duration-300">Cancelar</button>
+ <button type="submit" disabled={formLoading} className="bg-[var(--vermelho-principal)] text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition duration-300">
+ {formLoading ? 'Salvando...' : (editingEstablishment ? 'Salvar Edição' : 'Cadastrar Estabelecimento')}
+</button>
+ </div>
+</form>
+)}
 
-                {/* Lista de Estabelecimentos Cadastrados */}
-                <div className="mt-8">
-                    <h2 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-6 text-center">Estabelecimentos Cadastrados</h2>
-                    {estabelecimentos.length === 0 ? (
-                        <p className="text-center text-[var(--cinza-texto)] italic">Nenhum estabelecimento cadastrado ainda.</p>
-                    ) : (
-                        <ul className="space-y-4">
-                            {estabelecimentos.map(estab => (
-                                <li key={estab.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-[var(--marrom-escuro)]">{estab.nome}</h3>
-                                        {estab.slug && ( /* O link pode quebrar em várias linhas se for muito longo em telas pequenas */
-                                            <p className="text-sm text-gray-600">
-                                                Link: <a href={`/loja/${estab.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                                    /loja/{estab.slug}
-                                                </a>
-                                        </p>
-                                        )}
-                                        <p className="text-sm text-gray-500">WhatsApp: {estab.whatsapp}</p>
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row gap-2"> {/* Botões empilham em mobile, lado a lado em sm+ */}
-                                        <button
-                                            onClick={() => openForm(estab)}
-                                            className="text-blue-600 hover:text-blue-800 transition duration-300 text-sm font-semibold"
-                                        >
-                                            Editar
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteEstablishment(estab.id, estab.nome)}
-                                            className="text-red-600 hover:text-red-800 transition duration-300 text-sm font-semibold"
-                                        >
-                                            Excluir
-                                        </button>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
+{/* Lista de Estabelecimentos Cadastrados */}
+<div className="mt-8">
+<h2 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-6 text-center">Estabelecimentos Cadastrados</h2>
+{estabelecimentos.length === 0 ? (
+ <p className="text-center text-[var(--cinza-texto)] italic">Nenhum estabelecimento cadastrado ainda.</p>
+) : (
+ <ul className="space-y-4">
+{estabelecimentos.map(estab => (
+ <li key={estab.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
+<div>
+<h3 className="text-lg font-semibold text-[var(--marrom-escuro)]">{estab.nome}</h3>
+{estab.slug && ( /* O link pode quebrar em várias linhas se for muito longo em telas pequenas */
+ <p className="text-sm text-gray-600">
+Link: <a href={`/loja/${estab.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+ /loja/{estab.slug}
+</a>
+</p>
+)}
+<p className="text-sm text-gray-500">WhatsApp: {estab.whatsapp}</p>
+</div>
+<div className="flex flex-col sm:flex-row gap-2"> {/* Botões empilham em mobile, lado a lado em sm+ */}
+<button
+ onClick={() => openForm(estab)}
+ className="text-blue-600 hover:text-blue-800 transition duration-300 text-sm font-semibold"
+>
+ Editar
+</button>
+<button
+ onClick={() => handleDeleteEstablishment(estab.id, estab.nome)}
+ className="text-red-600 hover:text-red-800 transition duration-300 text-sm font-semibold"
+ >
+ Excluir
+</button>
+</div>
+</li>
+))}
+</ul>
+)}
+</div>
+ </div>
+</div>
+ );
 }
 
 export default AdminEstablishmentManagement;

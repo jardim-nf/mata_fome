@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
-import DashboardSummary from "../components/DashboardSummary"; // 1. Importe o novo componente
+import DashboardSummary from "../components/DashBoardSummary"; // 1. Importe o novo componente
 
 // Componente de botão usado no dashboard
 const ActionButton = ({ to, title, subtitle, icon, colorClass }) => (
@@ -85,6 +85,7 @@ const AdminDashboard = () => {
           colorClass="bg-gradient-to-br from-purple-600 to-indigo-700 hover:from-purple-500"
         />
       </div>
+      
     </div>
   );
 };
