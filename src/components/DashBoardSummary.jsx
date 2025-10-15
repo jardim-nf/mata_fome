@@ -35,11 +35,12 @@ const DashboardSummary = () => {
         const hojeFim = endOfDay(new Date());
 
         const pedidosRef = collection(db, 'pedidos');
-        // Esta consulta está falhando porque provavelmente falta um índice no Firestore
+        
         const q = query(
           pedidosRef,
           where('estabelecimentoId', '==', estabelecimentoId),
-          where('status', '==', 'Finalizado'), // Corrigido para "F" maiúsculo
+          where('tipo', 'in', ['delivery', 'salao']),
+          where('status', '==', 'finalizado'), 
           where('createdAt', '>=', hojeInicio),
           where('createdAt', '<=', hojeFim)
         );
@@ -51,7 +52,10 @@ const DashboardSummary = () => {
 
         querySnapshot.forEach((doc) => {
           const pedido = doc.data();
-          vendas += Number(pedido.total) || 0; 
+          // =========== CORREÇÃO FINAL AQUI ===========
+          // Trocamos 'pedido.total' por 'pedido.totalFinal'
+          vendas += Number(pedido.totalFinal) || Number(pedido.total) || 0; 
+          // ===========================================
         });
 
         setSummaryData({
@@ -60,11 +64,8 @@ const DashboardSummary = () => {
         });
 
       } catch (err) {
-        // ============= MUDANÇA IMPORTANTE AQUI =============
-        // Isso vai mostrar o erro exato do Firestore no console
-        console.error("ERRO DETALHADO DO FIRESTORE:", err); 
-        setError("Falha ao carregar dados. Verifique o console (F12) para um link de criação de índice.");
-        // ==================================================
+        console.error("ERRO AO BUSCAR RESUMO DO DASHBOARD:", err); 
+        setError("Falha ao carregar dados. Verifique o console (F12).");
       } finally {
         setLoading(false);
       }
