@@ -1,11 +1,47 @@
 // src/components/CardapioItem.jsx
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
+import { ref, getDownloadURL } from 'firebase/storage';
+// ❗ IMPORTANTE: Verifique se o caminho para seu arquivo de configuração do Firebase está correto.
+import { storage } from '../firebase'; 
 
 function CardapioItem({ item, onAddItem }) {
   const placeholderImage = "https://via.placeholder.com/400x300.png?text=Sem+Foto";
+  
+  // Estado local para a URL da imagem e para o controle de carregamento
+  const [displayImageUrl, setDisplayImageUrl] = useState(placeholderImage);
+  const [imageLoading, setImageLoading] = useState(true);
 
-  // CORREÇÃO 1: Verifica tanto 'ativo' quanto 'disponivel' para compatibilidade.
-  // Se a propriedade não existir, o item é considerado disponível.
+  // Efeito que busca a URL da imagem
+  useEffect(() => {
+    // Função assíncrona para buscar os dados
+    const fetchImageUrl = async () => {
+      // Verifica se o item tem a propriedade imageUrl e se ela não está vazia
+      if (item.imageUrl) {
+        // Se já for uma URL completa (começa com http), usa ela diretamente
+        if (item.imageUrl.startsWith('http')) {
+          setDisplayImageUrl(item.imageUrl);
+        } else {
+          // Se for um caminho, busca a URL de download no Firebase Storage
+          try {
+            const imageRef = ref(storage, item.imageUrl);
+            const downloadUrl = await getDownloadURL(imageRef);
+            setDisplayImageUrl(downloadUrl);
+          } catch (error) {
+            console.error(`Erro ao buscar imagem para o item "${item.nome}":`, error);
+            setDisplayImageUrl(placeholderImage); // Usa imagem placeholder em caso de erro
+          }
+        }
+      } else {
+        // Se o item não tem a propriedade imageUrl, usa a imagem placeholder
+        setDisplayImageUrl(placeholderImage);
+      }
+      setImageLoading(false);
+    };
+
+    fetchImageUrl();
+  }, [item.imageUrl, item.nome]); // Roda o efeito se a referência da imagem ou o nome do item mudar
+
   const isAvailable = item.ativo !== false && item.disponivel !== false;
 
   const handleAddItemClick = () => {
@@ -22,14 +58,16 @@ function CardapioItem({ item, onAddItem }) {
     <div
       className={`bg-gray-800 rounded-2xl shadow-lg flex flex-col transition-all duration-300 hover:shadow-yellow-400/20 hover:-translate-y-1 overflow-hidden border border-gray-700 ${!isAvailable ? 'opacity-50' : ''}`}
     >
-      <div className="relative">
-        {/* CORREÇÃO 2: Usa a URL da imagem diretamente do 'item.imageUrl'. */}
+      <div className="relative w-full h-48 bg-gray-700"> {/* Fundo cinza enquanto a imagem carrega */}
+        {imageLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-700 animate-pulse" />
+        )}
         <img
-          src={item.imageUrl || placeholderImage}
+          src={displayImageUrl}
           alt={item.nome}
-          className="w-full h-48 object-cover"
-          // Garante que, se o link da imagem estiver quebrado, ele use o placeholder.
+          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
           onError={(e) => { e.target.onerror = null; e.target.src = placeholderImage; }}
+          onLoad={() => setImageLoading(false)}
         />
       </div>
 

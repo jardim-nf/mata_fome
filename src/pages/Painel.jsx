@@ -1,5 +1,3 @@
-// src/pages/Painel.jsx
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
@@ -45,17 +43,37 @@ export default function Painel() {
     const prevRecebidosRef = useRef([]);
     const [abaAtiva, setAbaAtiva] = useState('delivery');
 
+    // ================== useEffect COM DEBUGGING ==================
+    // Este bloco foi modificado para adicionar console.log e rastrear o problema
     useEffect(() => {
+        console.log("-> useEffect de notificação foi acionado.");
+
         const currentRecebidos = pedidos.recebido;
         const prevRecebidos = prevRecebidosRef.current;
+
+        console.log(`Verificando pedidos: Atuais=${currentRecebidos.length}, Anteriores=${prevRecebidos.length}`);
+
         if (currentRecebidos.length > prevRecebidos.length) {
+            console.log("%cNOVO PEDIDO DETECTADO!", "color: lightgreen; font-size: 16px;");
+
             const newOrders = currentRecebidos.filter(c => !prevRecebidos.some(p => p.id === c.id));
+            console.log("Pedidos novos encontrados:", newOrders);
+
             if (newOrders.length > 0) {
                 const newIds = newOrders.map(order => order.id);
                 setNewOrderIds(prevIds => [...new Set([...prevIds, ...newIds])]);
+                
+                console.log(`Verificando condições: Notificações Ativadas? ${notificationsEnabled}, Usuário Interagiu? ${userInteracted}`);
+
                 if (notificationsEnabled && userInteracted) {
-                    audioRef.current?.play().catch(error => console.log("A reprodução do áudio foi bloqueada.", error));
+                    console.log("%cTENTANDO TOCAR O SOM...", "color: yellow; font-weight: bold;");
+                    audioRef.current?.play().catch(error => {
+                        console.error("ERRO ao tentar tocar o áudio:", error);
+                    });
+                } else {
+                    console.log("%cSom não tocou porque uma das condições era falsa.", "color: orange;");
                 }
+                
                 setTimeout(() => {
                     setNewOrderIds(prevIds => prevIds.filter(id => !newIds.includes(id)));
                 }, 15000);
@@ -63,6 +81,7 @@ export default function Painel() {
         }
         prevRecebidosRef.current = currentRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
+    // ================== FIM DO useEffect COM DEBUGGING ==================
 
     useEffect(() => {
         const handleFirstInteraction = () => {
@@ -194,7 +213,9 @@ export default function Painel() {
 
     return (
         <div className="bg-gray-900 min-h-screen flex flex-col">
+            {/* ================== CAMINHO DO ÁUDIO CORRIGIDO ================== */}
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
+            
             <header className="bg-black text-white shadow-lg p-4 flex justify-between items-center sticky top-0 z-30 border-b border-gray-800">
                 <h1 className="text-xl font-bold text-white">Painel - <span className="text-yellow-500">{estabelecimentoInfo?.nome || '...'}</span></h1>
                 <div className="flex items-center space-x-6">
@@ -228,7 +249,7 @@ export default function Painel() {
                                         onUpdateStatus={handleUpdateStatusAndNotify}
                                         onDeletePedido={handleExcluirPedido}
                                         newOrderIds={newOrderIds}
-                                        estabelecimentoInfo={estabelecimentoInfo} // <-- LINHA ADICIONADA AQUI
+                                        estabelecimentoInfo={estabelecimentoInfo}
                                     />
                                 ))
                             ) : (
