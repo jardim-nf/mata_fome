@@ -116,6 +116,10 @@ const AdminReports = () => {
         const totalPedidos = pedidos.length;
         const totalVendas = pedidos.reduce((acc, p) => acc + (p.totalFinal || 0), 0);
         const ticketMedio = totalPedidos > 0 ? totalVendas / totalPedidos : 0;
+        
+        // ================== ALTERAÇÃO 1: Adicionar cálculo de taxas ==================
+        let totalTaxasEntrega = 0;
+        // ================== FIM DA ALTERAÇÃO 1 ==================
 
         const salesByDay = {}, salesByPayment = {}, salesByDelivery = {}, itemsCount = {};
         
@@ -132,6 +136,13 @@ const AdminReports = () => {
             p.itens.forEach(item => {
                 itemsCount[item.nome] = (itemsCount[item.nome] || 0) + item.quantidade;
             });
+
+            // ================== ALTERAÇÃO 1 (Continuação): Somar a taxa ==================
+            // Soma a taxa de entrega SOMENTE se for do tipo 'delivery'
+            if (p.tipo === 'delivery') {
+                totalTaxasEntrega += (parseFloat(p.taxaEntrega) || 0);
+            }
+            // ================== FIM DA ALTERAÇÃO 1 (Continuação) ==================
         });
         
         const sortedLabels = Object.keys(salesByDay).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
@@ -141,7 +152,7 @@ const AdminReports = () => {
             .slice(0, 5);
 
         return {
-            summaryData: { totalPedidos, totalVendas, ticketMedio },
+            summaryData: { totalPedidos, totalVendas, ticketMedio, totalTaxasEntrega }, // <-- Adicionado aqui
             salesByDay: { labels: sortedLabels, data: sortedLabels.map(l => salesByDay[l]) },
             salesByPayment: { labels: Object.keys(salesByPayment), data: Object.values(salesByPayment) },
             salesByDelivery: { labels: Object.keys(salesByDelivery), data: Object.values(salesByDelivery) },
@@ -240,11 +251,24 @@ const AdminReports = () => {
                     </div>
                 ) : (
                     <div className="space-y-8">
-                        <Card><div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-amber-400">
-                            <StatCard title="Vendas Totais" value={summaryData.totalVendas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon="💰" />
-                            <StatCard title="Pedidos" value={summaryData.totalPedidos} icon="🧾" />
-                            <StatCard title="Ticket Médio" value={summaryData.ticketMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon="📊" />
-                        </div></Card>
+                        
+                        {/* ================== ALTERAÇÃO 2: Adicionar o novo Card de Taxas ================== */}
+                        <Card>
+                            {/* Alterei para grid-cols-2 e sm:grid-cols-4 para caber o novo item */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-amber-400">
+                                <StatCard title="Vendas Totais" value={summaryData.totalVendas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon="💰" />
+                                <StatCard title="Pedidos" value={summaryData.totalPedidos} icon="🧾" />
+                                <StatCard title="Ticket Médio" value={summaryData.ticketMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon="📊" />
+                                
+                                {/* ESTE É O NOVO CARD QUE VOCÊ PEDIU */}
+                                <StatCard 
+                                    title="Taxas de Entrega" 
+                                    value={summaryData.totalTaxasEntrega.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} 
+                                    icon="🛵" 
+                                />
+                            </div>
+                        </Card>
+                        {/* ================== FIM DA ALTERAÇÃO 2 ================== */}
                         
                         <div className="grid lg:grid-cols-5 gap-6">
                             <div className="lg:col-span-3"><Card title="Vendas por Dia"><div className="h-80"><Line data={{ labels: salesByDay.labels, datasets: [{ label: 'Vendas (R$)', data: salesByDay.data, borderColor: '#FBBF24', backgroundColor: 'rgba(251, 191, 36, 0.2)', tension: 0.2, fill: true }] }} options={{ responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: 'white' } }, y: { ticks: { color: 'white' } } }, plugins: { legend: { display: false } } }} /></div></Card></div>

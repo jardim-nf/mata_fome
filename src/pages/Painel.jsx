@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
@@ -37,25 +37,24 @@ export default function Painel() {
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
     const [loading, setLoading] = useState(true);
-    const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notificationsEnabled') !== 'false');
+
+    // Notificações começam desativadas por padrão
+    const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+    
     const [userInteracted, setUserInteracted] = useState(false);
     const [newOrderIds, setNewOrderIds] = useState([]);
     const prevRecebidosRef = useRef([]);
     const [abaAtiva, setAbaAtiva] = useState('delivery');
 
-    // ================== useEffect COM DEBUGGING ==================
-    // Este bloco foi modificado para adicionar console.log e rastrear o problema
+    // useEffect para Notificação de Som
     useEffect(() => {
         console.log("-> useEffect de notificação foi acionado.");
-
         const currentRecebidos = pedidos.recebido;
         const prevRecebidos = prevRecebidosRef.current;
-
         console.log(`Verificando pedidos: Atuais=${currentRecebidos.length}, Anteriores=${prevRecebidos.length}`);
 
         if (currentRecebidos.length > prevRecebidos.length) {
             console.log("%cNOVO PEDIDO DETECTADO!", "color: lightgreen; font-size: 16px;");
-
             const newOrders = currentRecebidos.filter(c => !prevRecebidos.some(p => p.id === c.id));
             console.log("Pedidos novos encontrados:", newOrders);
 
@@ -81,15 +80,21 @@ export default function Painel() {
         }
         prevRecebidosRef.current = currentRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
-    // ================== FIM DO useEffect COM DEBUGGING ==================
 
+    // useEffect para detectar a primeira interação do usuário (liberar áudio)
     useEffect(() => {
         const handleFirstInteraction = () => {
             setUserInteracted(true);
+            console.log("%cInteração do usuário detectada! O áudio está liberado pelo navegador.", "color: cyan;");
             window.removeEventListener('click', handleFirstInteraction);
+            window.removeEventListener('keydown', handleFirstInteraction);
         };
         window.addEventListener('click', handleFirstInteraction);
-        return () => window.removeEventListener('click', handleFirstInteraction);
+        window.addEventListener('keydown', handleFirstInteraction);
+        return () => {
+            window.removeEventListener('click', handleFirstInteraction);
+            window.removeEventListener('keydown', handleFirstInteraction);
+        };
     }, []);
 
     const sendWhatsAppNotification = (status, pedidoData) => {
@@ -137,13 +142,22 @@ export default function Painel() {
         catch (error) { console.error('Erro ao excluir pedido:', error); toast.error('Erro ao excluir o pedido.'); }
     };
 
+    // Função para ativar/desativar som
     const toggleNotifications = () => {
         const newState = !notificationsEnabled;
         setNotificationsEnabled(newState);
-        localStorage.setItem('notificationsEnabled', newState);
-        toast.info(`Notificações de som ${newState ? 'ativadas' : 'desativadas'}.`);
+        
+        if (newState) {
+            toast.success('Notificações de som ATIVADAS!');
+            if (userInteracted) {
+                audioRef.current?.play().catch(e => console.log("Usuário precisa interagir para tocar o som de teste."));
+            }
+        } else {
+            toast.warn('Notificações de som DESATIVADAS.');
+        }
     };
     
+    // useEffect principal para carregar os dados
     useEffect(() => {
         if (authLoading) return;
         const setupPainel = async () => {
@@ -213,13 +227,39 @@ export default function Painel() {
 
     return (
         <div className="bg-gray-900 min-h-screen flex flex-col">
-            {/* ================== CAMINHO DO ÁUDIO CORRIGIDO ================== */}
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
             <header className="bg-black text-white shadow-lg p-4 flex justify-between items-center sticky top-0 z-30 border-b border-gray-800">
                 <h1 className="text-xl font-bold text-white">Painel - <span className="text-yellow-500">{estabelecimentoInfo?.nome || '...'}</span></h1>
-                <div className="flex items-center space-x-6">
-                    <p className="text-sm text-gray-300 hidden sm:block">Sons: <span className={notificationsEnabled ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>{notificationsEnabled ? 'ATIVADOS' : 'DESATIVADOS'}</span><button onClick={toggleNotifications} className="ml-2 text-yellow-500 hover:underline text-xs">(alterar)</button></p>
+                <div className="flex items-center space-x-4">
+                    
+                    {/* Botão de Notificação (Alerta) */}
+                    {!notificationsEnabled ? (
+                        // Estado DESATIVADO (Piscando em vermelho)
+                        <button 
+                            onClick={toggleNotifications} 
+                            className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg shadow-lg animate-pulse"
+                            title="O som de novos pedidos está desativado. Clique para ativar."
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15zM17 14l-5-5m0 5l5-5" />
+                            </svg>
+                            <span className="text-sm hidden sm:inline">Ativar Som</span>
+                        </button>
+                    ) : (
+                        // Estado ATIVADO (Verde)
+                        <button 
+                            onClick={toggleNotifications} 
+                            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg shadow-lg"
+                            title="O som de novos pedidos está ativado. Clique para desativar."
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.636 5.636a9 9 0 0112.728 0m-2.828 9.9a5 5 0 01-7.072 0M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15z" />
+                            </svg>
+                            <span className="text-sm hidden sm:inline">Som Ativado</span>
+                        </button>
+                    )}
+                    
                     <Link to="/dashboard" className="text-sm text-gray-300 hover:text-yellow-500 transition-colors">Dashboard</Link>
                     <button onClick={logout} className="text-sm text-gray-300 hover:text-yellow-500 transition-colors">Sair</button>
                 </div>
@@ -241,6 +281,8 @@ export default function Painel() {
                     <div key={status} className="bg-gray-800 rounded-lg shadow-md border border-gray-700 flex flex-col">
                         <h2 className="text-lg font-bold capitalize p-4 border-b border-gray-700 text-yellow-500">{status.replace(/_/g, ' ')} ({pedidos[status]?.length || 0})</h2>
                         <div className="p-2 space-y-3 flex-grow overflow-y-auto max-h-[calc(100vh-220px)]">
+                            
+                            {/* ================== CORREÇÃO DE SINTAXE AQUI ================== */}
                             {pedidos[status] && pedidos[status].length > 0 ? (
                                 pedidos[status].map(ped => (
                                     <PedidoCard
@@ -255,6 +297,8 @@ export default function Painel() {
                             ) : (
                                 <p className="p-4 text-center text-sm text-gray-500">Nenhum pedido aqui.</p>
                             )}
+                            {/* ================== FIM DA CORREÇÃO ================== */}
+
                         </div>
                     </div>
                 ))}

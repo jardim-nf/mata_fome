@@ -1,13 +1,14 @@
 // src/pages/TelaPedidos.jsx - VERSÃO FINAL
 
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+// ================== ALTERAÇÃO 1: Importar useNavigate ==================
+import { useParams, Link, useNavigate } from 'react-router-dom'; 
 import { db } from '../firebase';
-// ATENÇÃO: Adicionamos 'collectionGroup' aqui
 import { getDocs, doc, getDoc, updateDoc, query, where, collectionGroup } from 'firebase/firestore'; 
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { IoArrowBack, IoCartOutline, IoTrashOutline } from 'react-icons/io5';
+// ================== Adicionamos o ícone de Alerta ==================
+import { IoArrowBack, IoCartOutline, IoTrashOutline, IoWarning } from 'react-icons/io5';
 
 // --- COMPONENTE DO PRODUTO (Sem alterações) ---
 const ProdutoCard = ({ produto, onAdicionar }) => (
@@ -33,11 +34,13 @@ const ProdutoCard = ({ produto, onAdicionar }) => (
 const TelaPedidos = () => {
     const { id: mesaId } = useParams();
     const { estabelecimentoId } = useAuth();
+    // ================== ALTERAÇÃO 2: Instanciar o navigate ==================
+    const navigate = useNavigate(); 
     
-    const [mesa, setMesa] = useState(null);
+    const [mesa, setMesa] = useState(null); // Armazena o estado original da mesa
     const [cardapio, setCardapio] = useState([]);
     const [categorias, setCategorias] = useState([]);
-    const [resumoPedido, setResumoPedido] = useState([]);
+    const [resumoPedido, setResumoPedido] = useState([]); // Armazena o estado atual do pedido
     const [loading, setLoading] = useState(true);
     const [termoBusca, setTermoBusca] = useState('');
 
@@ -52,14 +55,11 @@ const TelaPedidos = () => {
                 const mesaSnap = await getDoc(mesaRef);
                 if (mesaSnap.exists()) {
                     const mesaData = mesaSnap.data();
-                    setMesa(mesaData);
-                    setResumoPedido(mesaData.itens || []);
+                    setMesa(mesaData); // Salva o estado original
+                    setResumoPedido(mesaData.itens || []); // Define o estado inicial do resumo
                 }
 
-                // ---- CORREÇÃO FINAL E DEFINITIVA AQUI ----
-                // Usamos uma "Collection Group Query" para buscar em todas as subcoleções "itens"
                 const itensRef = collectionGroup(db, 'itens');
-                // A consulta agora filtra todos os 'itens' onde o 'estabelecimentoId' dentro do item corresponde ao do admin.
                 const q = query(itensRef, where('estabelecimentoId', '==', estabelecimentoId));
                 
                 const cardapioSnap = await getDocs(q);
@@ -80,8 +80,6 @@ const TelaPedidos = () => {
         fetchData();
     }, [estabelecimentoId, mesaId]);
 
-    // O resto do seu código (adicionarItem, removerItem, etc.) continua igual e não precisa ser modificado.
-    
     const adicionarItem = (produto) => {
         setResumoPedido(prev => {
             const itemExistente = prev.find(item => item.id === produto.id);
@@ -102,32 +100,58 @@ const TelaPedidos = () => {
         try {
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
             await updateDoc(mesaRef, { itens: resumoPedido });
+            
+            // ATUALIZA O ESTADO LOCAL DA MESA para refletir o novo salvo
+            setMesa(prev => ({...prev, itens: resumoPedido }));
+
             toast.success("Pedido da mesa atualizado com sucesso!");
         } catch (error) {
             console.error("Erro ao salvar alterações:", error);
             toast.error("Falha ao salvar o pedido.");
         }
     };
+
+    // ================== ALTERAÇÃO 3: Lógica do botão Voltar (Alerta) ==================
+    const handleVoltar = () => {
+        // Compara o estado salvo (mesa.itens) com o estado atual (resumoPedido)
+        // Usamos JSON.stringify para uma comparação simples e eficaz dos arrays de objetos
+        const itemsSalvos = JSON.stringify(mesa?.itens || []);
+        const itemsAtuais = JSON.stringify(resumoPedido);
+
+        if (itemsSalvos !== itemsAtuais) {
+            // Se forem diferentes, mostra um alerta
+            if (window.confirm("Você tem alterações não salvas. Deseja realmente sair sem salvar?")) {
+                navigate('/controle-salao'); // Sai se o usuário confirmar
+            }
+            // Se o usuário clicar em "Cancelar", ele permanece na página
+        } else {
+            // Se não houver alterações, apenas volta
+            navigate('/controle-salao');
+        }
+    };
+    // ================== FIM DA ALTERAÇÃO 3 ==================
     
     const produtosFiltrados = cardapio.filter(p => p.nome.toLowerCase().includes(termoBusca.toLowerCase()));
     const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
     
     if (loading) return <div className="text-center p-8">Carregando cardápio...</div>;
 
-    // ... (O seu JSX para renderizar a página continua o mesmo)
     return (
-        <div className="bg-gray-100 min-h-screen">
-            <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-10">
-                <h1 className="text-xl font-bold text-gray-800">DEU FOME</h1>
-                <div>
-                    <Link to="/dashboard" className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-2 px-4 rounded-lg mr-2">Dashboard</Link>
-                    <button className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg">Sair</button>
-                </div>
-            </header>
-            
+        <div className="bg-gray-100 min-h-screen">           
             <main className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                    <Link to="/controle-salao" className="text-blue-500 hover:underline flex items-center mb-4"><IoArrowBack className="mr-2"/> Voltar para o Salão</Link>
+
+                    {/* ================== ALTERAÇÃO 4: Mudar o <Link> para <button> ================== */}
+                    {/* Usamos um botão amarelo (alerta) e chamamos a função handleVoltar */}
+                    <button 
+                        onClick={handleVoltar}
+                        className="inline-flex items-center mb-4 bg-yellow-400 text-black font-bold py-2 px-4 rounded-lg transition-colors hover:bg-yellow-500 shadow"
+                    >
+                        <IoArrowBack className="mr-2"/> 
+                        Voltar para o Salão
+                    </button>
+                    {/* ================== FIM DA ALTERAÇÃO 4 ================== */}
+
                     <h2 className="text-2xl font-bold text-gray-800 mb-4">Lançar Pedidos - {mesa?.nome || 'Mesa'}</h2>
                     <input type="text" placeholder="Pesquisar item pelo nome..." value={termoBusca} onChange={e => setTermoBusca(e.target.value)} className="w-full p-3 mb-6 border border-gray-300 rounded-lg shadow-sm" />
 
