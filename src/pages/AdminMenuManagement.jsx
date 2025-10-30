@@ -6,7 +6,17 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { uploadFile, deleteFileByUrl } from '../utils/firebaseStorageService';
 import AdminProductCard from '../components/AdminProductCard';
-import { IoArrowBack, IoAddCircleOutline, IoPencil } from 'react-icons/io5';
+import { 
+    IoArrowBack, 
+    IoAddCircleOutline, 
+    IoPencil,
+    IoSearch,
+    IoFilter,
+    IoClose,
+    IoImageOutline,
+    IoCheckmarkCircle,
+    IoAlertCircle
+} from 'react-icons/io5';
 
 function AdminMenuManagement() {
     const { currentUser, isAdmin, loading: authLoading, estabelecimentoId } = useAuth();
@@ -28,7 +38,7 @@ function AdminMenuManagement() {
     // Controle de acesso
     useEffect(() => {
         if (!authLoading && (!currentUser || !isAdmin)) {
-            toast.error('Acesso negado. Faça login como administrador.');
+            toast.error('🔒 Acesso negado. Faça login como administrador.');
             navigate('/login-admin');
         }
     }, [currentUser, isAdmin, authLoading, navigate]);
@@ -46,7 +56,7 @@ function AdminMenuManagement() {
         }
     }, [estabelecimentoId]);
 
-    // --- CORREÇÃO: Restaura o listener em tempo real (onSnapshot) de forma correta ---
+    // Listener para categorias e itens
     useEffect(() => {
         if (!estabelecimentoId) {
             setLoading(false);
@@ -58,14 +68,12 @@ function AdminMenuManagement() {
         const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
         const qCategorias = query(categoriasRef, orderBy('ordem', 'asc'));
 
-        // Listener para as categorias
         const unsubscribeCategorias = onSnapshot(qCategorias, (categoriasSnapshot) => {
             const fetchedCategories = categoriasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCategories(fetchedCategories);
 
             const unsubscribers = [];
             let allItems = [];
-            let processedCategories = 0;
 
             if (categoriasSnapshot.empty) {
                 setMenuItems([]);
@@ -73,7 +81,6 @@ function AdminMenuManagement() {
                 return;
             }
 
-            // Para cada categoria, cria um listener para seus itens
             categoriasSnapshot.forEach(catDoc => {
                 const categoriaData = catDoc.data();
                 const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', catDoc.id, 'itens');
@@ -87,17 +94,15 @@ function AdminMenuManagement() {
                         categoriaId: catDoc.id
                     }));
 
-                    // Atualiza a lista geral de itens
                     allItems = [
                         ...allItems.filter(item => item.categoriaId !== catDoc.id),
                         ...itemsDaCategoria
                     ];
                     
                     setMenuItems(allItems.sort((a, b) => a.nome.localeCompare(b.nome)));
-
                 }, (error) => {
                     console.error(`Erro ao ouvir itens da categoria ${catDoc.id}:`, error);
-                    toast.error("Erro ao carregar itens de uma categoria.");
+                    toast.error("❌ Erro ao carregar itens de uma categoria.");
                 });
 
                 unsubscribers.push(unsubscribeItens);
@@ -105,31 +110,25 @@ function AdminMenuManagement() {
 
             setLoading(false);
             
-            // Retorna uma função de limpeza para todos os listeners de itens
             return () => {
                 unsubscribers.forEach(unsub => unsub());
             };
         }, (error) => {
             console.error("Erro ao carregar categorias:", error);
-            toast.error("Erro ao carregar categorias do cardápio.");
+            toast.error("❌ Erro ao carregar categorias do cardápio.");
             setLoading(false);
         });
 
-        // Retorna a função de limpeza do listener de categorias
         return () => {
             unsubscribeCategorias();
         };
     }, [estabelecimentoId]);
 
-
-    // As funções de salvar, deletar e toggle não precisam mais recarregar os dados,
-    // pois o `onSnapshot` fará isso automaticamente.
-
     const handleSaveItem = async (e) => {
         e.preventDefault();
         const { nome, preco, categoria } = formData;
         if (!nome.trim() || !preco || !categoria.trim()) {
-            toast.warn("Nome, Preço e Categoria são obrigatórios.");
+            toast.warn("⚠️ Nome, Preço e Categoria são obrigatórios.");
             return;
         }
         setFormLoading(true);
@@ -137,7 +136,7 @@ function AdminMenuManagement() {
         let categoriaDoc = categories.find(cat => cat.nome.toLowerCase() === categoria.toLowerCase());
         
         if (!categoriaDoc) {
-            toast.error(`A categoria "${categoria}" não existe.`);
+            toast.error(`❌ A categoria "${categoria}" não existe.`);
             setFormLoading(false);
             return;
         }
@@ -165,69 +164,86 @@ function AdminMenuManagement() {
 
             if (editingItem) {
                 if (editingItem.categoriaId !== categoriaId) {
-                     toast.warn("A mudança de categoria não é suportada. Crie um novo item.");
+                     toast.warn("⚠️ A mudança de categoria não é suportada. Crie um novo item.");
                      setFormLoading(false);
                      return;
                 }
                 await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens', editingItem.id), finalData);
-                toast.success("Item atualizado com sucesso!");
+                toast.success("✅ Item atualizado com sucesso!");
             } else {
                 await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens'), finalData);
-                toast.success("Item cadastrado com sucesso!");
+                toast.success("✅ Item cadastrado com sucesso!");
             }
             closeItemForm();
         } catch (error) {
-            toast.error("Erro ao salvar o item: " + error.message);
+            toast.error("❌ Erro ao salvar o item: " + error.message);
         } finally {
             setFormLoading(false);
         }
     };
-    
-// Em: src/pages/AdminMenuManagement.jsx
 
-const handleDeleteItem = async (item) => {
-    toast.warning(
-        ({ closeToast }) => (
-            <div>
-                <p className="font-semibold">Confirmar exclusão?</p>
-                <p className="text-sm">Excluir o item "{item.nome}"?</p>
-                <div className="flex justify-end mt-2 space-x-2">
-                    <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
-                    <button onClick={async () => {
-                        try {
-                            if (item.imageUrl) {
-                                await deleteFileByUrl(item.imageUrl);
-                            }
-                            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id));
-                            toast.success("Item excluído!");
-                        } catch (error) {
-                            toast.error("Erro ao excluir o item.");
-                        }
-                        closeToast();
-                    }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+    const handleDeleteItem = async (item) => {
+        toast.warning(
+            ({ closeToast }) => (
+                <div className="p-4">
+                    <div className="flex items-start space-x-3">
+                        <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <IoAlertCircle className="text-red-600 text-lg" />
+                        </div>
+                        <div className="flex-1">
+                            <p className="font-semibold text-gray-900">Confirmar exclusão?</p>
+                            <p className="text-sm text-gray-600 mt-1">Tem certeza que deseja excluir o item <strong>"{item.nome}"</strong>? Esta ação não pode ser desfeita.</p>
+                            <div className="flex justify-end mt-4 space-x-3">
+                                <button 
+                                    onClick={closeToast} 
+                                    className="px-4 py-2 text-sm bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={async () => {
+                                        try {
+                                            if (item.imageUrl) {
+                                                await deleteFileByUrl(item.imageUrl);
+                                            }
+                                            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id));
+                                            toast.success("✅ Item excluído com sucesso!");
+                                        } catch (error) {
+                                            toast.error("❌ Erro ao excluir o item.");
+                                        }
+                                        closeToast();
+                                    }} 
+                                    className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                >
+                                    Excluir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        ), 
-        // --- ADIÇÃO AQUI ---
-        { 
-            position: "top-center", 
-            autoClose: false, 
-            closeOnClick: false, 
-            draggable: false 
-        }
-    );
-};
+            ), 
+            { 
+                position: "top-center", 
+                autoClose: false, 
+                closeOnClick: false, 
+                draggable: false,
+                closeButton: false
+            }
+        );
+    };
 
     const toggleItemStatus = async (item) => {
         try {
-            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id), { ativo: !item.ativo });
-            toast.info(`Status de "${item.nome}" alterado.`);
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id), { 
+                ativo: !item.ativo,
+                atualizadoEm: new Date()
+            });
+            toast.info(`🔄 Status de "${item.nome}" alterado.`);
         } catch(error) {
-            toast.error("Erro ao alterar o status do item.");
+            toast.error("❌ Erro ao alterar o status do item.");
         }
     };
     
-    // O resto do seu componente continua igual
     const availableCategories = useMemo(() => ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], [menuItems]);
     
     const filteredItems = useMemo(() => {
@@ -278,48 +294,138 @@ const handleDeleteItem = async (item) => {
         }
     };
 
+    // Estatísticas
+    const estatisticas = {
+        total: menuItems.length,
+        ativos: menuItems.filter(item => item.ativo).length,
+        inativos: menuItems.filter(item => !item.ativo).length,
+        categorias: availableCategories.length - 1 // -1 para remover "Todos"
+    };
+
     if (authLoading || loading) {
-        return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando...</div>;
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Carregando cardápio...</p>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="bg-gray-900 min-h-screen p-4 sm:p-6 text-white">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
             <div className="max-w-7xl mx-auto">
-                <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-amber-400">Gerenciar Cardápio</h1>
-                        <p className="text-md text-gray-400 mt-1">{establishmentName}</p>
+                {/* Header */}
+                <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+                    <div className="mb-4 lg:mb-0">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                            Gerenciar Cardápio
+                        </h1>
+                        <p className="text-gray-600">
+                            {establishmentName} • {estatisticas.total} itens no cardápio
+                        </p>
                     </div>
-                    <div className="flex items-center space-x-2 w-full sm:w-auto">
-                        <Link to="/dashboard" className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <Link 
+                            to="/dashboard" 
+                            className="inline-flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
+                        >
                             <IoArrowBack />
-                            <span>Voltar</span>
+                            <span>Voltar ao Dashboard</span>
                         </Link>
-                        <button onClick={() => openItemForm()} className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors">
+                        <button 
+                            onClick={() => openItemForm()} 
+                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                        >
                             <IoAddCircleOutline size={20} />
                             <span>Novo Item</span>
                         </button>
                     </div>
                 </header>
 
-                <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input
-                        type="text"
-                        placeholder="Buscar por nome do item..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-gray-700 text-white p-3 rounded-md border-gray-600 placeholder-gray-400 focus:ring-amber-500 focus:border-amber-500"
-                    />
-                    <select 
-                        value={selectedCategory} 
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full bg-gray-700 text-white p-3 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"
-                    >
-                        {availableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
+                {/* Estatísticas */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Total de Itens</p>
+                                <p className="text-2xl font-bold text-gray-900">{estatisticas.total}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <span className="text-blue-600 text-lg">📦</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Itens Ativos</p>
+                                <p className="text-2xl font-bold text-green-600">{estatisticas.ativos}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <IoCheckmarkCircle className="text-green-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Itens Inativos</p>
+                                <p className="text-2xl font-bold text-orange-600">{estatisticas.inativos}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                                <IoAlertCircle className="text-orange-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Categorias</p>
+                                <p className="text-2xl font-bold text-purple-600">{estatisticas.categorias}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <span className="text-purple-600 text-lg">📁</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="space-y-3">
+                {/* Filtros */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div className="relative flex-1">
+                            <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome do item..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                        <div className="flex items-center space-x-3">
+                            <IoFilter className="text-gray-400 text-lg" />
+                            <select 
+                                value={selectedCategory} 
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                className="bg-gray-50 border border-gray-300 text-gray-900 py-3 px-4 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            >
+                                {availableCategories.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Lista de Itens */}
+                <div className="space-y-4">
                     {filteredItems.length > 0 ? (
                         filteredItems.map(item => (
                             <AdminProductCard 
@@ -331,55 +437,185 @@ const handleDeleteItem = async (item) => {
                             />
                         ))
                     ) : (
-                        <div className="text-center p-16 bg-gray-800 rounded-xl shadow-lg">
-                            <h3 className="text-lg font-semibold text-amber-400">Nenhum item encontrado</h3>
-                            <p className="mt-1 text-sm text-gray-400">Tente ajustar sua busca ou cadastre um novo item.</p>
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <IoSearch className="text-3xl text-gray-400" />
+                            </div>
+                            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                Nenhum item encontrado
+                            </h3>
+                            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                                {searchTerm || selectedCategory !== 'Todos' 
+                                    ? 'Tente ajustar os filtros de busca ou categoria.'
+                                    : 'Comece adicionando itens ao seu cardápio.'
+                                }
+                            </p>
+                            {!searchTerm && selectedCategory === 'Todos' && (
+                                <button 
+                                    onClick={() => openItemForm()} 
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors inline-flex items-center space-x-2"
+                                >
+                                    <IoAddCircleOutline size={20} />
+                                    <span>Adicionar Primeiro Item</span>
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
             </div>
 
+            {/* Modal do Formulário */}
             {showItemForm && (
-                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                    <div className="bg-gray-800 rounded-xl shadow-2xl p-6 max-w-lg w-full text-white m-auto">
-                        <h2 className="text-2xl font-bold text-amber-400 mb-6 flex items-center">
-                            {editingItem ? <IoPencil className="mr-2" /> : <IoAddCircleOutline className="mr-2" />}
-                            {editingItem ? 'Editar Item' : 'Cadastrar Novo Item'}
-                        </h2>
-                        <form onSubmit={handleSaveItem} className="space-y-4">
-                            <input name="nome" value={formData.nome} onChange={handleFormChange} placeholder="Nome do Item *" className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"/>
-                            <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} placeholder="Descrição" className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500" rows="3"></textarea>
-                            <div className="grid grid-cols-2 gap-4">
-                                <input name="preco" type="number" step="0.01" value={formData.preco} onChange={handleFormChange} placeholder="Preço *" className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"/>
-                                <input 
-                                    name="categoria" 
-                                    value={formData.categoria} 
-                                    onChange={handleFormChange} 
-                                    placeholder="Categoria *" 
-                                    list="categories-list"
-                                    className="w-full bg-gray-700 p-2 rounded-md border-gray-600 focus:ring-amber-500 focus:border-amber-500"
-                                    disabled={!!editingItem}
-                                />
-                                <datalist id="categories-list">
-                                    {categories.map(cat => <option key={cat.id} value={cat.nome} />)}
-                                </datalist>
-                                {editingItem && <small className="col-span-2 text-xs text-gray-400">A categoria de um item não pode ser alterada.</small>}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Imagem</label>
-                                <input type="file" accept="image/*" onChange={handleFormChange} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-black hover:file:bg-amber-600 cursor-pointer"/>
-                                {imagePreview && (
-                                    <div className="mt-4"><img src={imagePreview} alt="Preview" className="w-24 h-24 object-cover rounded-lg shadow"/></div>
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full m-auto">
+                        {/* Header do Modal */}
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                                {editingItem ? (
+                                    <>
+                                        <IoPencil className="mr-2 text-blue-600" />
+                                        Editar Item
+                                    </>
+                                ) : (
+                                    <>
+                                        <IoAddCircleOutline className="mr-2 text-green-600" />
+                                        Novo Item
+                                    </>
                                 )}
+                            </h2>
+                            <button 
+                                onClick={closeItemForm}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <IoClose size={24} />
+                            </button>
+                        </div>
+
+                        {/* Formulário */}
+                        <form onSubmit={handleSaveItem} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Item *</label>
+                                <input 
+                                    name="nome" 
+                                    value={formData.nome} 
+                                    onChange={handleFormChange} 
+                                    placeholder="Ex: Pizza Calabresa"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    required
+                                />
                             </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
+                                <textarea 
+                                    name="descricao" 
+                                    value={formData.descricao} 
+                                    onChange={handleFormChange} 
+                                    placeholder="Descreva o item..."
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    rows="3"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Preço *</label>
+                                    <input 
+                                        name="preco" 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.preco} 
+                                        onChange={handleFormChange} 
+                                        placeholder="0.00"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
+                                    <input 
+                                        name="categoria" 
+                                        value={formData.categoria} 
+                                        onChange={handleFormChange} 
+                                        placeholder="Ex: Pizzas"
+                                        list="categories-list"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                        disabled={!!editingItem}
+                                        required
+                                    />
+                                    <datalist id="categories-list">
+                                        {categories.map(cat => <option key={cat.id} value={cat.nome} />)}
+                                    </datalist>
+                                </div>
+                            </div>
+                            {editingItem && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                                    <p className="text-sm text-yellow-800">
+                                        <strong>Atenção:</strong> A categoria não pode ser alterada após a criação do item.
+                                    </p>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Imagem do Item</label>
+                                <div className="flex items-center space-x-4">
+                                    <label className="flex-1 cursor-pointer">
+                                        <input 
+                                            type="file" 
+                                            accept="image/*" 
+                                            onChange={handleFormChange} 
+                                            className="hidden"
+                                        />
+                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition-colors">
+                                            <IoImageOutline className="text-gray-400 text-2xl mx-auto mb-2" />
+                                            <span className="text-sm text-gray-600">
+                                                {imagePreview ? 'Alterar imagem' : 'Selecionar imagem'}
+                                            </span>
+                                        </div>
+                                    </label>
+                                    {imagePreview && (
+                                        <div className="flex-shrink-0">
+                                            <img src={imagePreview} alt="Preview" className="w-16 h-16 object-cover rounded-lg shadow"/>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="flex items-center">
-                                <input type="checkbox" name="ativo" checked={formData.ativo} onChange={handleFormChange} id="itemAtivo" className="h-4 w-4 text-amber-500 bg-gray-600 border-gray-500 rounded focus:ring-amber-500"/>
-                                <label htmlFor="itemAtivo" className="ml-2 text-sm text-gray-300">Item Ativo no cardápio</label>
+                                <input 
+                                    type="checkbox" 
+                                    name="ativo" 
+                                    checked={formData.ativo} 
+                                    onChange={handleFormChange} 
+                                    id="itemAtivo" 
+                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <label htmlFor="itemAtivo" className="ml-2 text-sm text-gray-700">
+                                    Item visível no cardápio
+                                </label>
                             </div>
-                            <div className="flex justify-end gap-4 pt-4">
-                                <button type="button" onClick={closeItemForm} className="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg font-semibold transition-colors">Cancelar</button>
-                                <button type="submit" disabled={formLoading} className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-lg font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {formLoading ? 'Salvando...' : 'Salvar'}
+
+                            <div className="flex justify-end space-x-3 pt-4">
+                                <button 
+                                    type="button" 
+                                    onClick={closeItemForm}
+                                    className="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    disabled={formLoading}
+                                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                                >
+                                    {formLoading ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Salvando...</span>
+                                        </>
+                                    ) : (
+                                        <span>Salvar Item</span>
+                                    )}
                                 </button>
                             </div>
                         </form>

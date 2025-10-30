@@ -23,9 +23,9 @@ const MENSAGENS_WHATSAPP = {
 
 function Spinner() {
     return (
-        <div className="flex flex-col items-center justify-center p-8 h-screen bg-gray-900 text-white">
-            <div className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-4 text-gray-400">Carregando painel...</p>
+        <div className="flex flex-col items-center justify-center p-8 h-screen bg-white text-gray-900">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-4 text-gray-600">Carregando painel...</p>
         </div>
     );
 }
@@ -37,10 +37,7 @@ export default function Painel() {
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
     const [loading, setLoading] = useState(true);
-
-    // Notificações começam desativadas por padrão
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-    
     const [userInteracted, setUserInteracted] = useState(false);
     const [newOrderIds, setNewOrderIds] = useState([]);
     const prevRecebidosRef = useRef([]);
@@ -48,29 +45,20 @@ export default function Painel() {
 
     // useEffect para Notificação de Som
     useEffect(() => {
-        console.log("-> useEffect de notificação foi acionado.");
         const currentRecebidos = pedidos.recebido;
         const prevRecebidos = prevRecebidosRef.current;
-        console.log(`Verificando pedidos: Atuais=${currentRecebidos.length}, Anteriores=${prevRecebidos.length}`);
 
         if (currentRecebidos.length > prevRecebidos.length) {
-            console.log("%cNOVO PEDIDO DETECTADO!", "color: lightgreen; font-size: 16px;");
             const newOrders = currentRecebidos.filter(c => !prevRecebidos.some(p => p.id === c.id));
-            console.log("Pedidos novos encontrados:", newOrders);
 
             if (newOrders.length > 0) {
                 const newIds = newOrders.map(order => order.id);
                 setNewOrderIds(prevIds => [...new Set([...prevIds, ...newIds])]);
-                
-                console.log(`Verificando condições: Notificações Ativadas? ${notificationsEnabled}, Usuário Interagiu? ${userInteracted}`);
 
                 if (notificationsEnabled && userInteracted) {
-                    console.log("%cTENTANDO TOCAR O SOM...", "color: yellow; font-weight: bold;");
                     audioRef.current?.play().catch(error => {
                         console.error("ERRO ao tentar tocar o áudio:", error);
                     });
-                } else {
-                    console.log("%cSom não tocou porque uma das condições era falsa.", "color: orange;");
                 }
                 
                 setTimeout(() => {
@@ -81,11 +69,10 @@ export default function Painel() {
         prevRecebidosRef.current = currentRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
 
-    // useEffect para detectar a primeira interação do usuário (liberar áudio)
+    // useEffect para detectar a primeira interação do usuário
     useEffect(() => {
         const handleFirstInteraction = () => {
             setUserInteracted(true);
-            console.log("%cInteração do usuário detectada! O áudio está liberado pelo navegador.", "color: cyan;");
             window.removeEventListener('click', handleFirstInteraction);
             window.removeEventListener('keydown', handleFirstInteraction);
         };
@@ -132,28 +119,35 @@ export default function Painel() {
                     }
                 }
             })
-            .catch(error => { console.error('ERRO AO ATUALIZAR STATUS:', error); toast.error("Falha ao mover o pedido."); });
+            .catch(error => { 
+                console.error('ERRO AO ATUALIZAR STATUS:', error); 
+                toast.error("Falha ao mover o pedido."); 
+            });
     };
 
     const handleExcluirPedido = async (pedidoId) => {
         if (!pedidoId) return toast.error("Erro: ID do pedido inválido.");
         if (!window.confirm('Tem certeza que deseja excluir este pedido?')) return;
-        try { await deleteDoc(doc(db, 'pedidos', pedidoId)); toast.success('Pedido excluído com sucesso!'); } 
-        catch (error) { console.error('Erro ao excluir pedido:', error); toast.error('Erro ao excluir o pedido.'); }
+        try { 
+            await deleteDoc(doc(db, 'pedidos', pedidoId)); 
+            toast.success('Pedido excluído com sucesso!'); 
+        } catch (error) { 
+            console.error('Erro ao excluir pedido:', error); 
+            toast.error('Erro ao excluir o pedido.'); 
+        }
     };
 
-    // Função para ativar/desativar som
     const toggleNotifications = () => {
         const newState = !notificationsEnabled;
         setNotificationsEnabled(newState);
         
         if (newState) {
-            toast.success('Notificações de som ATIVADAS!');
+            toast.success('🔔 Notificações de som ATIVADAS!');
             if (userInteracted) {
                 audioRef.current?.play().catch(e => console.log("Usuário precisa interagir para tocar o som de teste."));
             }
         } else {
-            toast.warn('Notificações de som DESATIVADAS.');
+            toast.warn('🔕 Notificações de som DESATIVADAS.');
         }
     };
     
@@ -218,91 +212,160 @@ export default function Painel() {
 
     if (loading || authLoading) return <Spinner />;
 
-    const estiloAbaAtiva = "border-yellow-500 text-yellow-500";
-    const estiloAbaInativa = "border-transparent text-gray-400 hover:text-white";
-
     const colunas = abaAtiva === 'cozinha' 
         ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
         : ['recebido', 'preparo', 'em_entrega', 'finalizado'];
 
+    const getStatusConfig = (status) => {
+        const configs = {
+            recebido: { title: '📥 Recebido', color: 'border-l-red-500 bg-red-50', countColor: 'bg-red-500' },
+            preparo: { title: '👨‍🍳 Em Preparo', color: 'border-l-orange-500 bg-orange-50', countColor: 'bg-orange-500' },
+            em_entrega: { title: '🛵 Em Entrega', color: 'border-l-blue-500 bg-blue-50', countColor: 'bg-blue-500' },
+            pronto_para_servir: { title: '✅ Pronto para Servir', color: 'border-l-green-500 bg-green-50', countColor: 'bg-green-500' },
+            finalizado: { title: '📦 Finalizado', color: 'border-l-gray-500 bg-gray-50', countColor: 'bg-gray-500' }
+        };
+        return configs[status] || { title: status.replace(/_/g, ' '), color: 'border-l-gray-500 bg-gray-50', countColor: 'bg-gray-500' };
+    };
+
     return (
-        <div className="bg-gray-900 min-h-screen flex flex-col">
+        <div className="min-h-screen bg-gray-50 flex flex-col">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
-            <header className="bg-black text-white shadow-lg p-4 flex justify-between items-center sticky top-0 z-30 border-b border-gray-800">
-                <h1 className="text-xl font-bold text-white">Painel - <span className="text-yellow-500">{estabelecimentoInfo?.nome || '...'}</span></h1>
-                <div className="flex items-center space-x-4">
+            {/* Header Modernizado */}
+            <header className="bg-white shadow-sm border-b border-gray-200 p-4 sticky top-0 z-30">
+                <div className="max-w-7xl mx-auto flex justify-between items-center">
+                    <div className="flex items-center space-x-4">
+                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">🏪</span>
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-bold text-gray-900">Painel de Pedidos</h1>
+                            <p className="text-sm text-gray-600">{estabelecimentoInfo?.nome || 'Carregando...'}</p>
+                        </div>
+                    </div>
                     
-                    {/* Botão de Notificação (Alerta) */}
-                    {!notificationsEnabled ? (
-                        // Estado DESATIVADO (Piscando em vermelho)
+                    <div className="flex items-center space-x-3">
+                        {/* Botão de Notificação */}
                         <button 
                             onClick={toggleNotifications} 
-                            className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg shadow-lg animate-pulse"
-                            title="O som de novos pedidos está desativado. Clique para ativar."
+                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                                notificationsEnabled 
+                                    ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm' 
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700 animate-pulse'
+                            }`}
+                            title={notificationsEnabled ? "Notificações ativadas" : "Notificações desativadas"}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15zM17 14l-5-5m0 5l5-5" />
-                            </svg>
-                            <span className="text-sm hidden sm:inline">Ativar Som</span>
+                            {notificationsEnabled ? (
+                                <>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.93 4.93l14.14 14.14M9 11a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                    <span className="hidden sm:inline">Som Ativo</span>
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15zM17 14l-5-5m0 5l5-5" />
+                                    </svg>
+                                    <span className="hidden sm:inline">Ativar Som</span>
+                                </>
+                            )}
                         </button>
-                    ) : (
-                        // Estado ATIVADO (Verde)
+
                         <button 
-                            onClick={toggleNotifications} 
-                            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg shadow-lg"
-                            title="O som de novos pedidos está ativado. Clique para desativar."
+                            onClick={logout} 
+                            className="px-4 py-2 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.636 5.636a9 9 0 0112.728 0m-2.828 9.9a5 5 0 01-7.072 0M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15z" />
-                            </svg>
-                            <span className="text-sm hidden sm:inline">Som Ativado</span>
+                            Sair
                         </button>
-                    )}
-                    
-                    <Link to="/dashboard" className="text-sm text-gray-300 hover:text-yellow-500 transition-colors">Dashboard</Link>
-                    <button onClick={logout} className="text-sm text-gray-300 hover:text-yellow-500 transition-colors">Sair</button>
+                    </div>
                 </div>
             </header>
 
-            <div className="px-4 border-b border-gray-800">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                    <button onClick={() => setAbaAtiva('delivery')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${abaAtiva === 'delivery' ? estiloAbaAtiva : estiloAbaInativa}`}>
-                        Delivery
-                    </button>
-                    <button onClick={() => setAbaAtiva('cozinha')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${abaAtiva === 'cozinha' ? estiloAbaAtiva : estiloAbaInativa}`}>
-                        Cozinha (Mesas)
-                    </button>
-                </nav>
+            {/* Abas de Navegação */}
+            <div className="bg-white border-b border-gray-200">
+                <div className="max-w-7xl mx-auto px-4">
+                    <nav className="flex space-x-8" aria-label="Tabs">
+                        <button 
+                            onClick={() => setAbaAtiva('delivery')} 
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                abaAtiva === 'delivery' 
+                                    ? 'border-blue-500 text-blue-600' 
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            🛵 Delivery
+                        </button>
+                        <button 
+                            onClick={() => setAbaAtiva('cozinha')} 
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                abaAtiva === 'cozinha' 
+                                    ? 'border-blue-500 text-blue-600' 
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            👨‍🍳 Cozinha (Mesas)
+                        </button>
+                    </nav>
+                </div>
             </div>
 
-            <main className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 flex-grow">
-                {colunas.map(status => (
-                    <div key={status} className="bg-gray-800 rounded-lg shadow-md border border-gray-700 flex flex-col">
-                        <h2 className="text-lg font-bold capitalize p-4 border-b border-gray-700 text-yellow-500">{status.replace(/_/g, ' ')} ({pedidos[status]?.length || 0})</h2>
-                        <div className="p-2 space-y-3 flex-grow overflow-y-auto max-h-[calc(100vh-220px)]">
-                            
-                            {/* ================== CORREÇÃO DE SINTAXE AQUI ================== */}
-                            {pedidos[status] && pedidos[status].length > 0 ? (
-                                pedidos[status].map(ped => (
-                                    <PedidoCard
-                                        key={ped.id}
-                                        pedido={ped}
-                                        onUpdateStatus={handleUpdateStatusAndNotify}
-                                        onDeletePedido={handleExcluirPedido}
-                                        newOrderIds={newOrderIds}
-                                        estabelecimentoInfo={estabelecimentoInfo}
-                                    />
-                                ))
-                            ) : (
-                                <p className="p-4 text-center text-sm text-gray-500">Nenhum pedido aqui.</p>
-                            )}
-                            {/* ================== FIM DA CORREÇÃO ================== */}
-
-                        </div>
-                    </div>
-                ))}
+            {/* Grid de Pedidos */}
+            <main className="flex-grow p-4 max-w-7xl mx-auto w-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                    {colunas.map(status => {
+                        const config = getStatusConfig(status);
+                        const pedidosCount = pedidos[status]?.length || 0;
+                        
+                        return (
+                            <div key={status} className={`rounded-lg shadow-sm border border-gray-200 border-l-4 ${config.color} flex flex-col h-full`}>
+                                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+                                    <h2 className="font-semibold text-gray-900">{config.title}</h2>
+                                    <span className={`${config.countColor} text-white text-sm font-medium px-2 py-1 rounded-full min-w-8 text-center`}>
+                                        {pedidosCount}
+                                    </span>
+                                </div>
+                                <div className="p-3 space-y-3 flex-grow overflow-y-auto max-h-[calc(100vh-220px)]">
+                                    {pedidos[status] && pedidos[status].length > 0 ? (
+                                        pedidos[status].map(ped => (
+                                            <PedidoCard
+                                                key={ped.id}
+                                                pedido={ped}
+                                                onUpdateStatus={handleUpdateStatusAndNotify}
+                                                onDeletePedido={handleExcluirPedido}
+                                                newOrderIds={newOrderIds}
+                                                estabelecimentoInfo={estabelecimentoInfo}
+                                            />
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-8">
+                                            <div className="text-gray-400 text-4xl mb-2">📝</div>
+                                            <p className="text-gray-500 text-sm">Nenhum pedido</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </main>
+
+            {/* Botão Voltar para Dashboard - AGORA NA PARTE INFERIOR */}
+            <footer className="bg-white border-t border-gray-200 py-4">
+                <div className="max-w-7xl mx-auto px-4">
+                    <div className="flex justify-center">
+                        <Link 
+                            to="/dashboard" 
+                            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            <span>Voltar para Dashboard</span>
+                        </Link>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 }

@@ -4,7 +4,20 @@ import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, quer
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { IoArrowBack, IoAddCircleOutline, IoPencil, IoTrash } from 'react-icons/io5';
+import { 
+    IoArrowBack, 
+    IoAddCircleOutline, 
+    IoPencil, 
+    IoTrash, 
+    IoCloseCircleOutline,
+    IoGiftOutline,
+    IoCalendarOutline,
+    IoCashOutline,
+    IoCheckmarkCircle,
+    IoCloseCircle,
+    IoInfinite,
+    IoAlertCircle
+} from 'react-icons/io5';
 
 function AdminCouponManagement() {
     const { currentUser, isAdmin, loading: authLoading, estabelecimentoId } = useAuth();
@@ -22,16 +35,17 @@ function AdminCouponManagement() {
     const [usosMaximos, setUsosMaximos] = useState('');
     const [ativo, setAtivo] = useState(true);
     const [editingCouponId, setEditingCouponId] = useState(null);
+    const [formLoading, setFormLoading] = useState(false);
 
     // Controle de acesso
     useEffect(() => {
         if (!authLoading && (!currentUser || !isAdmin)) {
-            toast.error('Acesso negado.');
+            toast.error('🔒 Acesso negado.');
             navigate('/login-admin');
         }
     }, [currentUser, isAdmin, authLoading, navigate]);
     
-    // EFEITO CORRIGIDO: Busca os cupons do estabelecimento no local correto e em tempo real
+    // Busca os cupons em tempo real
     useEffect(() => {
         if (!estabelecimentoId) {
             setLoading(false);
@@ -39,7 +53,6 @@ function AdminCouponManagement() {
         }
 
         setLoading(true);
-        // --- CORREÇÃO AQUI: Acessando a subcoleção 'cupons' ---
         const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cupons');
         const q = query(cuponsCollectionRef, orderBy('codigo'));
 
@@ -49,11 +62,10 @@ function AdminCouponManagement() {
             setLoading(false);
         }, (err) => {
             console.error("Erro ao buscar cupons:", err);
-            toast.error("Erro ao carregar cupons.");
+            toast.error("❌ Erro ao carregar cupons.");
             setLoading(false);
         });
 
-        // Limpa o listener ao desmontar o componente
         return () => unsubscribe();
     }, [estabelecimentoId]);
 
@@ -72,14 +84,13 @@ function AdminCouponManagement() {
     const handleSaveCoupon = async (e) => {
         e.preventDefault();
         
-        // CORREÇÃO da validação do "Frete Grátis"
         if (!codigo || (tipoDesconto !== 'freteGratis' && !valorDesconto) || !validadeInicio || !validadeFim) {
-            toast.warn('Preencha os campos obrigatórios: Código, Valor (se aplicável) e Datas de Validade.');
+            toast.warn('⚠️ Preencha os campos obrigatórios: Código, Valor (se aplicável) e Datas de Validade.');
             return;
         }
 
+        setFormLoading(true);
         try {
-            // --- CORREÇÃO AQUI: Referência para a subcoleção ---
             const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cupons');
 
             const newCouponData = {
@@ -93,26 +104,29 @@ function AdminCouponManagement() {
                 usosAtuais: editingCouponId ? cupons.find(c => c.id === editingCouponId).usosAtuais : 0,
                 ativo,
                 estabelecimentoId,
+                atualizadoEm: new Date()
             };
 
             if (editingCouponId) {
-                // --- CORREÇÃO AQUI: Caminho para o documento de edição ---
                 const couponRef = doc(cuponsCollectionRef, editingCouponId);
                 await updateDoc(couponRef, newCouponData);
-                toast.success('Cupom atualizado com sucesso!');
+                toast.success('✅ Cupom atualizado com sucesso!');
             } else {
                 const q = query(cuponsCollectionRef, where('codigo', '==', newCouponData.codigo));
                 if (!(await getDocs(q)).empty) {
-                    toast.error('Já existe um cupom com este código para este estabelecimento.');
+                    toast.error('❌ Já existe um cupom com este código para este estabelecimento.');
+                    setFormLoading(false);
                     return;
                 }
-                await addDoc(cuponsCollectionRef, newCouponData);
-                toast.success('Cupom criado com sucesso!');
+                await addDoc(cuponsCollectionRef, { ...newCouponData, criadoEm: new Date() });
+                toast.success('✅ Cupom criado com sucesso!');
             }
             resetForm();
         } catch (err) {
             console.error("Erro ao salvar cupom:", err);
-            toast.error("Erro ao salvar cupom.");
+            toast.error("❌ Erro ao salvar cupom.");
+        } finally {
+            setFormLoading(false);
         }
     };
 
@@ -132,122 +146,432 @@ function AdminCouponManagement() {
     const handleDeleteCoupon = (id, codigo) => {
         toast.warning(
             ({ closeToast }) => (
-                <div>
-                    <p className="font-semibold">Confirmar exclusão?</p>
-                    <p className="text-sm">Deseja realmente excluir o cupom "{codigo}"?</p>
-                    <div className="flex justify-end mt-2 space-x-2">
-                        <button onClick={closeToast} className="px-3 py-1 text-sm bg-gray-500 text-white rounded">Cancelar</button>
-                        <button onClick={async () => {
-                            try {
-                                // --- CORREÇÃO AQUI: Caminho para o documento a ser deletado ---
-                                await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cupons', id));
-                                toast.success('Cupom excluído com sucesso!');
-                                // O listener onSnapshot vai atualizar a lista automaticamente
-                            } catch (err) {
-                                toast.error("Erro ao excluir cupom.");
-                            }
-                            closeToast();
-                        }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Excluir</button>
+                <div className="p-4">
+                    <div className="flex items-start space-x-3">
+                        <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <IoAlertCircle className="text-red-600 text-sm" />
+                        </div>
+                        <div className="flex-1">
+                            <p className="font-semibold text-gray-900">Confirmar exclusão?</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Tem certeza que deseja excluir o cupom <strong>"{codigo}"</strong>? Esta ação não pode ser desfeita.
+                            </p>
+                            <div className="flex justify-end mt-4 space-x-3">
+                                <button 
+                                    onClick={closeToast} 
+                                    className="px-4 py-2 text-sm bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={async () => {
+                                        try {
+                                            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cupons', id));
+                                            toast.success('✅ Cupom excluído com sucesso!');
+                                        } catch (err) {
+                                            toast.error("❌ Erro ao excluir cupom.");
+                                        }
+                                        closeToast();
+                                    }} 
+                                    className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                >
+                                    Excluir
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             ), { 
                 position: "top-center", 
                 autoClose: false, 
                 closeOnClick: false, 
-                draggable: false 
+                draggable: false,
+                closeButton: false
             }
         );
     };
 
+    // Estatísticas
+    const estatisticas = {
+        total: cupons.length,
+        ativos: cupons.filter(c => c.ativo).length,
+        expirados: cupons.filter(c => c.validadeFim?.toDate() < new Date()).length,
+        usosTotais: cupons.reduce((acc, c) => acc + (c.usosAtuais || 0), 0)
+    };
+
     if (authLoading || loading) {
-        return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando...</div>;
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Carregando cupons...</p>
+                </div>
+            </div>
+        );
     }
 
+    const formatarDesconto = (cupom) => {
+        switch(cupom.tipoDesconto) {
+            case 'percentual':
+                return `${cupom.valorDesconto}% OFF`;
+            case 'valorFixo':
+                return `R$ ${cupom.valorDesconto} OFF`;
+            case 'freteGratis':
+                return '🛵 Frete Grátis';
+            default:
+                return cupom.tipoDesconto;
+        }
+    };
+
+    const isExpirado = (validadeFim) => {
+        return validadeFim?.toDate() < new Date();
+    };
+
     return (
-        // O restante do seu JSX (formulário e tabela) continua igual
-        <div className="bg-gray-900 min-h-screen p-4 sm:p-6 text-white">
-            <div className="max-w-5xl mx-auto">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-amber-400">Gerenciar Cupons</h1>
-                    <Link to="/dashboard" className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+                    <div className="mb-4 lg:mb-0">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                            Gerenciar Cupons
+                        </h1>
+                        <p className="text-gray-600">
+                            Crie e gerencie cupons de desconto para seus clientes
+                        </p>
+                    </div>
+                    
+                    <Link 
+                        to="/dashboard" 
+                        className="inline-flex items-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
+                    >
                         <IoArrowBack />
                         <span>Voltar ao Dashboard</span>
                     </Link>
-                </div>
+                </header>
 
-                <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
-                    <h2 className="text-xl font-semibold text-amber-400 mb-4 flex items-center">
-                        {editingCouponId ? <IoPencil className="mr-2" /> : <IoAddCircleOutline className="mr-2" />}
-                        {editingCouponId ? 'Editar Cupom' : 'Adicionar Novo Cupom'}
-                    </h2>
-                    <form onSubmit={handleSaveCoupon} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código (Ex: DEZEMBRO10)" disabled={!!editingCouponId} required className="bg-gray-700 p-2 rounded-md border-gray-600" />
-                            <select value={tipoDesconto} onChange={(e) => setTipoDesconto(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600">
-                                <option value="percentual">Percentual (%)</option>
-                                <option value="valorFixo">Valor Fixo (R$)</option>
-                                <option value="freteGratis">Frete Grátis</option>
-                            </select>
-                            {tipoDesconto !== 'freteGratis' && <input type="number" step="0.01" value={valorDesconto} onChange={(e) => setValorDesconto(e.target.value)} placeholder="Valor do Desconto" required className="bg-gray-700 p-2 rounded-md border-gray-600" />}
-                            <input type="datetime-local" value={validadeInicio} onChange={(e) => setValidadeInicio(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600" title="Data de Início" />
-                            <input type="datetime-local" value={validadeFim} onChange={(e) => setValidadeFim(e.target.value)} required className="bg-gray-700 p-2 rounded-md border-gray-600" title="Data de Fim" />
-                            <input type="number" value={minimoPedido} onChange={(e) => setMinimoPedido(e.target.value)} placeholder="Pedido Mínimo (R$)" className="bg-gray-700 p-2 rounded-md border-gray-600" />
-                            <input type="number" value={usosMaximos} onChange={(e) => setUsosMaximos(e.target.value)} placeholder="Usos Máximos Totais" className="bg-gray-700 p-2 rounded-md border-gray-600" />
-                            <div className="flex items-center space-x-2 bg-gray-700 p-2 rounded-md">
-                                <input type="checkbox" id="ativo" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} className="h-4 w-4 text-amber-500 bg-gray-600 border-gray-500 rounded focus:ring-amber-500" />
-                                <label htmlFor="ativo" className="font-medium text-gray-300">Ativo</label>
+                {/* Estatísticas */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Total de Cupons</p>
+                                <p className="text-2xl font-bold text-gray-900">{estatisticas.total}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <IoGiftOutline className="text-blue-600 text-lg" />
                             </div>
                         </div>
-                        <div className="flex items-center gap-4 pt-4">
-                            <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors">
-                                {editingCouponId ? 'Salvar Alterações' : 'Criar Cupom'}
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Cupons Ativos</p>
+                                <p className="text-2xl font-bold text-green-600">{estatisticas.ativos}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <IoCheckmarkCircle className="text-green-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Cupons Expirados</p>
+                                <p className="text-2xl font-bold text-orange-600">{estatisticas.expirados}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                                <IoCalendarOutline className="text-orange-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Usos Totais</p>
+                                <p className="text-2xl font-bold text-purple-600">{estatisticas.usosTotais}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <IoCashOutline className="text-purple-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Formulário */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+                    <div className="flex items-center space-x-3 mb-6">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                            {editingCouponId ? (
+                                <IoPencil className="text-blue-600 text-lg" />
+                            ) : (
+                                <IoAddCircleOutline className="text-blue-600 text-lg" />
+                            )}
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                            {editingCouponId ? 'Editar Cupom' : 'Criar Novo Cupom'}
+                        </h2>
+                    </div>
+
+                    <form onSubmit={handleSaveCoupon} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Código do Cupom *
+                                </label>
+                                <input 
+                                    value={codigo} 
+                                    onChange={(e) => setCodigo(e.target.value)} 
+                                    placeholder="EXEMPLO10"
+                                    disabled={!!editingCouponId}
+                                    required 
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all uppercase"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Tipo de Desconto *
+                                </label>
+                                <select 
+                                    value={tipoDesconto} 
+                                    onChange={(e) => setTipoDesconto(e.target.value)} 
+                                    required 
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                >
+                                    <option value="percentual">Percentual (%)</option>
+                                    <option value="valorFixo">Valor Fixo (R$)</option>
+                                    <option value="freteGratis">Frete Grátis</option>
+                                </select>
+                            </div>
+
+                            {tipoDesconto !== 'freteGratis' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Valor do Desconto *
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={valorDesconto} 
+                                        onChange={(e) => setValorDesconto(e.target.value)} 
+                                        placeholder={tipoDesconto === 'percentual' ? '10' : '5.00'}
+                                        required 
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Pedido Mínimo (R$)
+                                </label>
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    value={minimoPedido} 
+                                    onChange={(e) => setMinimoPedido(e.target.value)} 
+                                    placeholder="0.00"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Data de Início *
+                                </label>
+                                <input 
+                                    type="datetime-local" 
+                                    value={validadeInicio} 
+                                    onChange={(e) => setValidadeInicio(e.target.value)} 
+                                    required 
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Data de Fim *
+                                </label>
+                                <input 
+                                    type="datetime-local" 
+                                    value={validadeFim} 
+                                    onChange={(e) => setValidadeFim(e.target.value)} 
+                                    required 
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Usos Máximos
+                                </label>
+                                <input 
+                                    type="number" 
+                                    value={usosMaximos} 
+                                    onChange={(e) => setUsosMaximos(e.target.value)} 
+                                    placeholder="Ilimitado"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                />
+                            </div>
+
+                            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                                <input 
+                                    type="checkbox" 
+                                    id="ativo" 
+                                    checked={ativo} 
+                                    onChange={(e) => setAtivo(e.target.checked)} 
+                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <label htmlFor="ativo" className="text-sm font-medium text-gray-700">
+                                    Cupom ativo
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                            <button 
+                                type="submit" 
+                                disabled={formLoading}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                            >
+                                {formLoading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        <span>Salvando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <IoCheckmarkCircle className="text-lg" />
+                                        <span>{editingCouponId ? 'Salvar Alterações' : 'Criar Cupom'}</span>
+                                    </>
+                                )}
                             </button>
                             {editingCouponId && (
-                                <button type="button" onClick={resetForm} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
-                                    Cancelar Edição
+                                <button 
+                                    type="button" 
+                                    onClick={resetForm}
+                                    className="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                                >
+                                    <IoCloseCircleOutline />
+                                    <span>Cancelar</span>
                                 </button>
                             )}
                         </div>
                     </form>
                 </div>
 
-                <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 className="text-xl font-bold text-amber-400 mb-4">Cupons Cadastrados</h2>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="border-b border-gray-700">
-                                <tr>
-                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Código</th>
-                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Desconto</th>
-                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Validade</th>
-                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Usos</th>
-                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400">Status</th>
-                                    <th className="p-3 text-sm font-semibold uppercase text-gray-400 text-right">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {cupons.map(cupom => (
-                                    <tr key={cupom.id} className="border-b border-gray-700 hover:bg-gray-700/50">
-                                        <td className="p-3 font-medium">{cupom.codigo}</td>
-                                        <td className="p-3">{cupom.tipoDesconto === 'freteGratis' ? 'Frete Grátis' : `${cupom.valorDesconto}${cupom.tipoDesconto === 'percentual' ? '%' : ' R$'}`}</td>
-                                        <td className="p-3 text-sm text-gray-400">{cupom.validadeFim?.toDate().toLocaleDateString('pt-BR')}</td>
-                                        <td className="p-3 text-sm text-gray-400">{cupom.usosAtuais} / {cupom.usosMaximos || '∞'}</td>
-                                        <td className="p-3">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${cupom.ativo ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                                {cupom.ativo ? 'Ativo' : 'Inativo'}
-                                            </span>
-                                        </td>
-                                        <td className="p-3 text-right">
-                                            <div className="flex justify-end space-x-2">
-                                                <button onClick={() => handleEditClick(cupom)} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700"><IoPencil /></button>
-                                                <button onClick={() => handleDeleteCoupon(cupom.id, cupom.codigo)} className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"><IoTrash /></button>
+                {/* Lista de Cupons */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                    <div className="p-6 border-b border-gray-200">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                                <IoGiftOutline className="text-green-600 text-lg" />
+                            </div>
+                            <h2 className="text-xl font-semibold text-gray-900">
+                                Cupons Cadastrados ({cupons.length})
+                            </h2>
+                        </div>
+                    </div>
+
+                    <div className="p-6">
+                        {cupons.length > 0 ? (
+                            <div className="space-y-4">
+                                {cupons.map(cupom => {
+                                    const expirado = isExpirado(cupom.validadeFim);
+                                    return (
+                                        <div 
+                                            key={cupom.id} 
+                                            className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                                                expirado 
+                                                    ? 'bg-red-50 border-red-200' 
+                                                    : cupom.ativo 
+                                                        ? 'bg-green-50 border-green-200' 
+                                                        : 'bg-gray-50 border-gray-200'
+                                            }`}
+                                        >
+                                            <div className="flex items-center space-x-4 flex-1">
+                                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                                                    expirado 
+                                                        ? 'bg-red-100 text-red-600' 
+                                                        : cupom.ativo 
+                                                            ? 'bg-green-100 text-green-600' 
+                                                            : 'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                    <IoGiftOutline className="text-xl" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-3 mb-1">
+                                                        <span className="font-bold text-lg text-gray-900">{cupom.codigo}</span>
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                                            expirado 
+                                                                ? 'bg-red-500 text-white' 
+                                                                : cupom.ativo 
+                                                                    ? 'bg-green-500 text-white' 
+                                                                    : 'bg-gray-500 text-white'
+                                                        }`}>
+                                                            {expirado ? 'Expirado' : cupom.ativo ? 'Ativo' : 'Inativo'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                                        <span className="font-semibold text-blue-600">{formatarDesconto(cupom)}</span>
+                                                        {cupom.minimoPedido && (
+                                                            <span>Mín: R$ {cupom.minimoPedido}</span>
+                                                        )}
+                                                        <span>Validade: {cupom.validadeFim?.toDate().toLocaleDateString('pt-BR')}</span>
+                                                        <span className="flex items-center space-x-1">
+                                                            {cupom.usosMaximos ? (
+                                                                <>
+                                                                    <span>{cupom.usosAtuais || 0}/{cupom.usosMaximos} usos</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <IoInfinite className="text-gray-400" />
+                                                                    <span>{cupom.usosAtuais || 0} usos</span>
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {cupons.length === 0 && <p className="text-center text-gray-500 py-10">Nenhum cupom cadastrado para este estabelecimento.</p>}
+                                            <div className="flex space-x-2">
+                                                <button
+                                                    onClick={() => handleEditClick(cupom)}
+                                                    className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                                    aria-label="Editar"
+                                                    title="Editar cupom"
+                                                >
+                                                    <IoPencil />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteCoupon(cupom.id, cupom.codigo)}
+                                                    className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                    aria-label="Excluir"
+                                                    title="Excluir cupom"
+                                                >
+                                                    <IoTrash />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <IoGiftOutline className="text-2xl text-gray-400" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                    Nenhum cupom cadastrado
+                                </h3>
+                                <p className="text-gray-600 max-w-md mx-auto">
+                                    Comece criando cupons de desconto para atrair mais clientes e aumentar suas vendas.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

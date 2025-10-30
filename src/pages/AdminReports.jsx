@@ -11,30 +11,79 @@ import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement } from 'chart.js';
-import { Line, Pie } from 'react-chartjs-2';
+import { Line, Pie, Bar } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 // Ícones
-import { IoArrowBack, IoDocumentTextOutline, IoSearch } from 'react-icons/io5';
+import { 
+    IoArrowBack, 
+    IoDocumentTextOutline, 
+    IoSearch,
+    IoCalendarOutline,
+    IoFilterOutline,
+    IoDownloadOutline,
+    IoRefreshOutline,
+    IoStatsChartOutline,
+    IoPieChartOutline,
+    IoTrendingUpOutline,
+    IoRestaurantOutline,
+    IoCashOutline,
+    IoReceiptOutline,
+    IoBicycleOutline
+} from 'react-icons/io5';
 
 // Registro dos componentes do Chart.js
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
 
 // --- COMPONENTES DE UI REUTILIZÁVEIS ---
 
-const Card = ({ title, children }) => (
-    <div className="bg-gray-800 p-4 sm:p-6 rounded-xl shadow-lg">{title && <h3 className="text-xl font-semibold text-amber-400 mb-4">{title}</h3>}{children}</div>
-);
-
-const StatCard = ({ title, value, icon }) => (
-    <div className="text-center">
-        <p className="text-sm text-gray-400 uppercase tracking-wider">{icon} {title}</p>
-        <p className="text-2xl sm:text-3xl font-bold">{value}</p>
+const Card = ({ title, children, className = "" }) => (
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 ${className}`}>
+        {title && <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">{title}</h3>}
+        {children}
     </div>
 );
 
+const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
+    const colorClasses = {
+        blue: 'bg-blue-100 text-blue-600',
+        green: 'bg-green-100 text-green-600',
+        amber: 'bg-amber-100 text-amber-600',
+        purple: 'bg-purple-100 text-purple-600',
+        red: 'bg-red-100 text-red-600'
+    };
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+                <div>
+                    <p className="text-sm font-medium text-gray-600">{title}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+                    {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+                </div>
+                <div className={`w-12 h-12 ${colorClasses[color]} rounded-lg flex items-center justify-center`}>
+                    {icon}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const SkeletonLoader = () => (
-    <div className="animate-pulse bg-gray-700 p-6 rounded-xl shadow-lg h-32"></div>
+    <div className="animate-pulse bg-gray-200 rounded-xl p-6 h-32"></div>
+);
+
+const FilterBadge = ({ children, active, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            active 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+    >
+        {children}
+    </button>
 );
 
 // --- COMPONENTE PRINCIPAL ---
@@ -49,17 +98,17 @@ const AdminReports = () => {
     const [pedidos, setPedidos] = useState([]);
     const [startDate, setStartDate] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-    const [statusFilter, setStatusFilter] = useState('finalizado'); // Começar com 'finalizado' é mais útil
+    const [statusFilter, setStatusFilter] = useState('finalizado');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [deliveryTypeFilter, setDeliveryTypeFilter] = useState('todos');
 
-    // OTIMIZAÇÃO: Busca de dados refatorada para usar filtros no servidor
+    // Busca de dados
     const fetchPedidos = async () => {
         if (!currentUser || !estabelecimentoId) return;
         
         try {
             setLoadingData(true);
-            const start = startOfDay(new Date(startDate + 'T00:00:00')); // Garante fuso horário local
+            const start = startOfDay(new Date(startDate + 'T00:00:00'));
             const end = endOfDay(new Date(endDate + 'T23:59:59'));
 
             let constraints = [
@@ -68,12 +117,10 @@ const AdminReports = () => {
                 where('createdAt', '<=', end)
             ];
 
-            // Adiciona filtros dinamicamente à consulta
             if (statusFilter !== 'todos') constraints.push(where('status', '==', statusFilter));
             if (paymentMethodFilter !== 'todos') constraints.push(where('formaPagamento', '==', paymentMethodFilter));
             if (deliveryTypeFilter !== 'todos') constraints.push(where('tipo', '==', deliveryTypeFilter));
             
-            // Adiciona ordenação no final
             constraints.push(orderBy('createdAt', 'desc'));
 
             const q = query(collection(db, 'pedidos'), ...constraints);
@@ -87,11 +134,11 @@ const AdminReports = () => {
 
             setPedidos(pedidosList);
             if (pedidosList.length === 0) {
-                toast.info("Nenhum pedido encontrado para os filtros selecionados.");
+                toast.info("ℹ️ Nenhum pedido encontrado para os filtros selecionados.");
             }
         } catch (err) {
             console.error("Erro ao carregar pedidos:", err);
-            toast.error("Erro ao carregar pedidos. Verifique os índices do Firestore ou o console para mais detalhes.");
+            toast.error("❌ Erro ao carregar pedidos.");
         } finally {
             setLoadingData(false);
         }
@@ -105,21 +152,17 @@ const AdminReports = () => {
     // Controle de acesso
     useEffect(() => {
         if (!authLoading && !isAdmin) {
-            toast.error('Acesso negado.');
+            toast.error('🔒 Acesso negado.');
             navigate('/login-admin');
         }
     }, [isAdmin, authLoading, navigate]);
 
-    // --- CÁLCULOS E MEMORIZAÇÃO DE DADOS PARA OS GRÁFICOS ---
-
+    // Cálculos e memorização de dados
     const { summaryData, salesByDay, salesByPayment, salesByDelivery, topItems } = useMemo(() => {
         const totalPedidos = pedidos.length;
         const totalVendas = pedidos.reduce((acc, p) => acc + (p.totalFinal || 0), 0);
         const ticketMedio = totalPedidos > 0 ? totalVendas / totalPedidos : 0;
-        
-        // ================== ALTERAÇÃO 1: Adicionar cálculo de taxas ==================
         let totalTaxasEntrega = 0;
-        // ================== FIM DA ALTERAÇÃO 1 ==================
 
         const salesByDay = {}, salesByPayment = {}, salesByDelivery = {}, itemsCount = {};
         
@@ -133,26 +176,25 @@ const AdminReports = () => {
             const deliveryKey = p.tipo || 'Não informado';
             salesByDelivery[deliveryKey] = (salesByDelivery[deliveryKey] || 0) + 1;
 
-            p.itens.forEach(item => {
+            p.itens?.forEach(item => {
                 itemsCount[item.nome] = (itemsCount[item.nome] || 0) + item.quantidade;
             });
 
-            // ================== ALTERAÇÃO 1 (Continuação): Somar a taxa ==================
-            // Soma a taxa de entrega SOMENTE se for do tipo 'delivery'
             if (p.tipo === 'delivery') {
                 totalTaxasEntrega += (parseFloat(p.taxaEntrega) || 0);
             }
-            // ================== FIM DA ALTERAÇÃO 1 (Continuação) ==================
         });
         
-        const sortedLabels = Object.keys(salesByDay).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+        const sortedLabels = Object.keys(salesByDay).sort((a, b) => 
+            new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))
+        );
         
         const topItems = Object.entries(itemsCount)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 5);
 
         return {
-            summaryData: { totalPedidos, totalVendas, ticketMedio, totalTaxasEntrega }, // <-- Adicionado aqui
+            summaryData: { totalPedidos, totalVendas, ticketMedio, totalTaxasEntrega },
             salesByDay: { labels: sortedLabels, data: sortedLabels.map(l => salesByDay[l]) },
             salesByPayment: { labels: Object.keys(salesByPayment), data: Object.values(salesByPayment) },
             salesByDelivery: { labels: Object.keys(salesByDelivery), data: Object.values(salesByDelivery) },
@@ -163,12 +205,11 @@ const AdminReports = () => {
     const handleExportPDF = async () => {
         const input = reportContentRef.current;
         if (!input) return;
-        toast.info("Gerando PDF, por favor aguarde...");
+        toast.info("📄 Gerando PDF, por favor aguarde...");
 
-        // Esconder botões
         input.querySelectorAll('.no-print').forEach(btn => btn.style.visibility = 'hidden');
         
-        const canvas = await html2canvas(input, { scale: 2, useCORS: true, backgroundColor: '#111827' });
+        const canvas = await html2canvas(input, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
         const imgData = canvas.toDataURL('image/png');
         
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -176,16 +217,16 @@ const AdminReports = () => {
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
         
         pdf.setFontSize(16);
-        pdf.setTextColor('#FBBF24');
+        pdf.setTextColor('#1f2937');
         pdf.text('Relatório de Vendas', pdfWidth / 2, 15, { align: 'center' });
         pdf.setFontSize(10);
-        pdf.setTextColor('#FFFFFF');
+        pdf.setTextColor('#6b7280');
         pdf.text(`Período: ${format(new Date(startDate + 'T00:00:00'), 'dd/MM/yyyy')} a ${format(new Date(endDate + 'T00:00:00'), 'dd/MM/yyyy')}`, pdfWidth / 2, 22, { align: 'center' });
 
         pdf.addImage(imgData, 'PNG', 0, 30, pdfWidth, pdfHeight);
         pdf.save(`relatorio_${startDate}_a_${endDate}.pdf`);
         
-        toast.success("PDF gerado com sucesso!");
+        toast.success("✅ PDF gerado com sucesso!");
         input.querySelectorAll('.no-print').forEach(btn => btn.style.visibility = 'visible');
     };
 
@@ -195,89 +236,351 @@ const AdminReports = () => {
     };
 
     if (authLoading) {
-        return <div className="text-center p-8 bg-gray-900 min-h-screen text-white">Verificando permissões...</div>;
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Verificando permissões...</p>
+                </div>
+            </div>
+        );
     }
 
-    const pieOptions = {
-        responsive: true, maintainAspectRatio: false,
+    const chartOptions = {
+        responsive: true, 
+        maintainAspectRatio: false,
         plugins: {
-            legend: { position: 'top', labels: { color: 'white', boxWidth: 12, padding: 15 } },
+            legend: { 
+                position: 'top', 
+                labels: { 
+                    color: '#374151',
+                    boxWidth: 12, 
+                    padding: 15,
+                    font: { size: 11 }
+                } 
+            },
             datalabels: {
                 formatter: (value, ctx) => {
                     const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
                     const percentage = total > 0 ? (value / total * 100).toFixed(1) + '%' : '0%';
                     return percentage;
                 },
-                color: '#fff',
-                font: { weight: 'bold', size: 12 }
+                color: '#374151',
+                font: { weight: 'bold', size: 10 }
             }
         }
     };
 
+    const lineChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: { 
+                ticks: { color: '#6b7280' },
+                grid: { color: '#f3f4f6' }
+            },
+            y: { 
+                ticks: { color: '#6b7280' },
+                grid: { color: '#f3f4f6' }
+            }
+        },
+        plugins: {
+            legend: { display: false }
+        }
+    };
+
     return (
-        <div className="bg-gray-900 min-h-screen p-2 sm:p-6 text-white">
-            {/* Cabeçalho Fixo */}
-            <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 px-2">
-                <h1 className="text-2xl sm:text-3xl font-bold text-amber-400">Relatórios Avançados</h1>
-                <div className="flex items-center space-x-2 no-print">
-                    <Link to="/dashboard" className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 py-2 px-4 rounded-lg transition-colors"><IoArrowBack /><span>Dashboard</span></Link>
-                    <button onClick={handleExportPDF} disabled={loadingData} className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"><IoDocumentTextOutline /><span>Exportar PDF</span></button>
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+            {/* Cabeçalho */}
+            <header className="max-w-7xl mx-auto mb-8">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                    <div className="mb-4 lg:mb-0">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                            Relatórios Avançados
+                        </h1>
+                        <p className="text-gray-600">
+                            Análise detalhada do desempenho do seu estabelecimento
+                        </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 no-print">
+                        <Link 
+                            to="/dashboard" 
+                            className="inline-flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
+                        >
+                            <IoArrowBack />
+                            <span>Voltar ao Dashboard</span>
+                        </Link>
+                        <button 
+                            onClick={handleExportPDF} 
+                            disabled={loadingData}
+                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            <IoDocumentTextOutline />
+                            <span>Exportar PDF</span>
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            {/* Painel de Filtros */}
-            <Card title="Filtros">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div><label className="block text-sm text-gray-300">Data Início</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1 bg-gray-700 w-full p-2 rounded-md"/></div>
-                    <div><label className="block text-sm text-gray-300">Data Fim</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1 bg-gray-700 w-full p-2 rounded-md"/></div>
-                    <div><label className="block text-sm text-gray-300">Status</label><select onChange={e => setStatusFilter(e.target.value)} value={statusFilter} className="mt-1 w-full bg-gray-700 p-2 rounded-md"><option value="todos">Todos</option><option value="finalizado">Finalizado</option><option value="cancelado">Cancelado</option></select></div>
-                    <div><label className="block text-sm text-gray-300">Pagamento</label><select onChange={e => setPaymentMethodFilter(e.target.value)} value={paymentMethodFilter} className="mt-1 w-full bg-gray-700 p-2 rounded-md"><option value="todos">Todos</option><option value="PIX">PIX</option><option value="Cartão de Crédito">Crédito</option><option value="Cartão de Débito">Débito</option><option value="Dinheiro">Dinheiro</option></select></div>
-                    <div><label className="block text-sm text-gray-300">Tipo</label><select onChange={e => setDeliveryTypeFilter(e.target.value)} value={deliveryTypeFilter} className="mt-1 w-full bg-gray-700 p-2 rounded-md"><option value="todos">Todos</option><option value="delivery">Delivery</option><option value="retirada">Retirada</option><option value="mesa">Mesa</option></select></div>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-4">
-                    <button onClick={() => setDateRange(new Date(), new Date())} className="bg-gray-600 px-3 py-1 text-xs rounded-full hover:bg-amber-500">Hoje</button>
-                    <button onClick={() => setDateRange(subDays(new Date(), 6), new Date())} className="bg-gray-600 px-3 py-1 text-xs rounded-full hover:bg-amber-500">Últimos 7 dias</button>
-                    <button onClick={() => setDateRange(subDays(new Date(), 29), new Date())} className="bg-gray-600 px-3 py-1 text-xs rounded-full hover:bg-amber-500">Últimos 30 dias</button>
-                    <button onClick={fetchPedidos} disabled={loadingData} className="ml-auto flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"><IoSearch /><span>{loadingData ? 'Buscando...' : 'Aplicar Filtros'}</span></button>
-                </div>
-            </Card>
+            <div className="max-w-7xl mx-auto" ref={reportContentRef}>
+                {/* Painel de Filtros */}
+                <Card title={
+                    <>
+                        <IoFilterOutline className="text-blue-600" />
+                        <span>Filtros e Período</span>
+                    </>
+                }>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <IoCalendarOutline className="inline mr-1" />
+                                Data Início
+                            </label>
+                            <input 
+                                type="date" 
+                                value={startDate} 
+                                onChange={e => setStartDate(e.target.value)} 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <IoCalendarOutline className="inline mr-1" />
+                                Data Fim
+                            </label>
+                            <input 
+                                type="date" 
+                                value={endDate} 
+                                onChange={e => setEndDate(e.target.value)} 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                            <select 
+                                onChange={e => setStatusFilter(e.target.value)} 
+                                value={statusFilter} 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            >
+                                <option value="todos">Todos os Status</option>
+                                <option value="finalizado">Finalizado</option>
+                                <option value="cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Pagamento</label>
+                            <select 
+                                onChange={e => setPaymentMethodFilter(e.target.value)} 
+                                value={paymentMethodFilter} 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            >
+                                <option value="todos">Todos</option>
+                                <option value="PIX">PIX</option>
+                                <option value="Cartão de Crédito">Crédito</option>
+                                <option value="Cartão de Débito">Débito</option>
+                                <option value="Dinheiro">Dinheiro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Entrega</label>
+                            <select 
+                                onChange={e => setDeliveryTypeFilter(e.target.value)} 
+                                value={deliveryTypeFilter} 
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            >
+                                <option value="todos">Todos</option>
+                                <option value="delivery">Delivery</option>
+                                <option value="retirada">Retirada</option>
+                                <option value="mesa">Mesa</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex flex-wrap gap-2">
+                            <FilterBadge 
+                                active={startDate === format(new Date(), 'yyyy-MM-dd')}
+                                onClick={() => setDateRange(new Date(), new Date())}
+                            >
+                                Hoje
+                            </FilterBadge>
+                            <FilterBadge 
+                                active={startDate === format(subDays(new Date(), 6), 'yyyy-MM-dd')}
+                                onClick={() => setDateRange(subDays(new Date(), 6), new Date())}
+                            >
+                                7 Dias
+                            </FilterBadge>
+                            <FilterBadge 
+                                active={startDate === format(subDays(new Date(), 29), 'yyyy-MM-dd')}
+                                onClick={() => setDateRange(subDays(new Date(), 29), new Date())}
+                            >
+                                30 Dias
+                            </FilterBadge>
+                        </div>
+                        
+                        <button 
+                            onClick={fetchPedidos} 
+                            disabled={loadingData}
+                            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {loadingData ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Buscando...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <IoRefreshOutline />
+                                    <span>Atualizar Relatório</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </Card>
 
-            <div className="max-w-7xl mx-auto mt-8" ref={reportContentRef}>
-                 {loadingData ? (
-                    <div className="space-y-8">
+                {loadingData ? (
+                    <div className="space-y-8 mt-8">
                         <SkeletonLoader />
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"><SkeletonLoader /><SkeletonLoader /><SkeletonLoader /></div>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <SkeletonLoader />
+                            <SkeletonLoader />
+                            <SkeletonLoader />
+                            <SkeletonLoader />
+                        </div>
                         <SkeletonLoader />
                     </div>
                 ) : (
-                    <div className="space-y-8">
-                        
-                        {/* ================== ALTERAÇÃO 2: Adicionar o novo Card de Taxas ================== */}
-                        <Card>
-                            {/* Alterei para grid-cols-2 e sm:grid-cols-4 para caber o novo item */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-amber-400">
-                                <StatCard title="Vendas Totais" value={summaryData.totalVendas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon="💰" />
-                                <StatCard title="Pedidos" value={summaryData.totalPedidos} icon="🧾" />
-                                <StatCard title="Ticket Médio" value={summaryData.ticketMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon="📊" />
-                                
-                                {/* ESTE É O NOVO CARD QUE VOCÊ PEDIU */}
-                                <StatCard 
-                                    title="Taxas de Entrega" 
-                                    value={summaryData.totalTaxasEntrega.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} 
-                                    icon="🛵" 
-                                />
-                            </div>
-                        </Card>
-                        {/* ================== FIM DA ALTERAÇÃO 2 ================== */}
-                        
-                        <div className="grid lg:grid-cols-5 gap-6">
-                            <div className="lg:col-span-3"><Card title="Vendas por Dia"><div className="h-80"><Line data={{ labels: salesByDay.labels, datasets: [{ label: 'Vendas (R$)', data: salesByDay.data, borderColor: '#FBBF24', backgroundColor: 'rgba(251, 191, 36, 0.2)', tension: 0.2, fill: true }] }} options={{ responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: 'white' } }, y: { ticks: { color: 'white' } } }, plugins: { legend: { display: false } } }} /></div></Card></div>
-                            <div className="lg:col-span-2"><Card title="Itens Mais Vendidos"><ul className="space-y-2">{topItems.map(([name, count]) => <li key={name} className="flex justify-between items-center text-sm p-2 bg-gray-700 rounded-md"><span>{name}</span><span className="font-bold text-amber-400">{count} un.</span></li>)}</ul></Card></div>
+                    <div className="space-y-8 mt-8">
+                        {/* Cards de Estatísticas */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <StatCard 
+                                title="Vendas Totais" 
+                                value={summaryData.totalVendas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                subtitle={`${summaryData.totalPedidos} pedidos`}
+                                icon={<IoCashOutline className="text-xl" />}
+                                color="green"
+                            />
+                            <StatCard 
+                                title="Pedidos" 
+                                value={summaryData.totalPedidos}
+                                subtitle="Total no período"
+                                icon={<IoReceiptOutline className="text-xl" />}
+                                color="blue"
+                            />
+                            <StatCard 
+                                title="Ticket Médio" 
+                                value={summaryData.ticketMedio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                subtitle="Por pedido"
+                                icon={<IoStatsChartOutline className="text-xl" />}
+                                color="purple"
+                            />
+                            <StatCard 
+                                title="Taxas de Entrega" 
+                                value={summaryData.totalTaxasEntrega.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                subtitle="Total acumulado"
+                                icon={<IoBicycleOutline className="text-xl" />}
+                                color="amber"
+                            />
                         </div>
 
+                        {/* Gráficos e Análises */}
+                        <div className="grid lg:grid-cols-3 gap-6">
+                            <div className="lg:col-span-2">
+                                <Card title={
+                                    <>
+                                        <IoTrendingUpOutline className="text-blue-600" />
+                                        <span>Vendas por Dia</span>
+                                    </>
+                                }>
+                                    <div className="h-80">
+                                        <Line 
+                                            data={{ 
+                                                labels: salesByDay.labels, 
+                                                datasets: [{ 
+                                                    label: 'Vendas (R$)', 
+                                                    data: salesByDay.data, 
+                                                    borderColor: '#3b82f6', 
+                                                    backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                                                    tension: 0.2, 
+                                                    fill: true 
+                                                }] 
+                                            }} 
+                                            options={lineChartOptions} 
+                                        />
+                                    </div>
+                                </Card>
+                            </div>
+                            
+                            <Card title={
+                                <>
+                                    <IoRestaurantOutline className="text-green-600" />
+                                    <span>Itens Mais Vendidos</span>
+                                </>
+                            }>
+                                <div className="space-y-3">
+                                    {topItems.map(([name, count], index) => (
+                                        <div key={name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                                    <span className="text-sm font-bold text-blue-600">{index + 1}</span>
+                                                </div>
+                                                <span className="font-medium text-gray-900 text-sm">{name}</span>
+                                            </div>
+                                            <span className="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                                {count} un.
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {topItems.length === 0 && (
+                                        <p className="text-center text-gray-500 py-8">
+                                            Nenhum item vendido no período
+                                        </p>
+                                    )}
+                                </div>
+                            </Card>
+                        </div>
+
+                        {/* Gráficos de Pizza */}
                         <div className="grid md:grid-cols-2 gap-6">
-                            <Card title="Vendas por Pagamento"><div className="h-80"><Pie data={{ labels: salesByPayment.labels, datasets: [{ data: salesByPayment.data, backgroundColor: ['#34D399', '#60A5FA', '#FBBF24', '#F87171', '#A78BFA'] }] }} options={pieOptions} /></div></Card>
-                            <Card title="Pedidos por Tipo"><div className="h-80"><Pie data={{ labels: salesByDelivery.labels, datasets: [{ data: salesByDelivery.data, backgroundColor: ['#60A5FA', '#A78BFA', '#34D399', '#FBBF24', '#F87171'] }] }} options={pieOptions} /></div></Card>
+                            <Card title={
+                                <>
+                                    <IoPieChartOutline className="text-purple-600" />
+                                    <span>Vendas por Método de Pagamento</span>
+                                </>
+                            }>
+                                <div className="h-80">
+                                    <Pie 
+                                        data={{ 
+                                            labels: salesByPayment.labels, 
+                                            datasets: [{ 
+                                                data: salesByPayment.data, 
+                                                backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'] 
+                                            }] 
+                                        }} 
+                                        options={chartOptions} 
+                                    />
+                                </div>
+                            </Card>
+                            
+                            <Card title={
+                                <>
+                                    <IoPieChartOutline className="text-amber-600" />
+                                    <span>Pedidos por Tipo</span>
+                                </>
+                            }>
+                                <div className="h-80">
+                                    <Pie 
+                                        data={{ 
+                                            labels: salesByDelivery.labels, 
+                                            datasets: [{ 
+                                                data: salesByDelivery.data, 
+                                                backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'] 
+                                            }] 
+                                        }} 
+                                        options={chartOptions} 
+                                    />
+                                </div>
+                            </Card>
                         </div>
                     </div>
                 )}
