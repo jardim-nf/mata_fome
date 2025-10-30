@@ -53,7 +53,6 @@ function App() {
         <Routes>
           {/* Rotas que NÃO usam o Layout principal (ex: tela de login) */}
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
           <Route path="/login-admin" element={<Login />} />
           <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
           <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
