@@ -232,6 +232,19 @@ function Menu() {
                 endereco: { rua: ruaAuthModal.trim(), numero: numeroAuthModal.trim(), bairro: bairroAuthModal.trim(), cidade: cidadeAuthModal.trim(), complemento: complementoAuthModal.trim() || null },
                 criadoEm: Timestamp.now(),
             });
+
+            // --- INÍCIO DA CORREÇÃO ---
+            // Preenche o formulário principal com os dados que acabaram de ser cadastrados.
+            setNomeCliente(nomeAuthModal.trim());
+            setTelefoneCliente(telefoneAuthModal.trim());
+            setRua(ruaAuthModal.trim());
+            setNumero(numeroAuthModal.trim());
+            setBairro(bairroAuthModal.trim());
+            setCidade(cidadeAuthModal.trim());
+            setComplemento(complementoAuthModal.trim() || null);
+            setIsRetirada(false); // Acabou de preencher endereço, então não é retirada
+            // --- FIM DA CORREÇÃO ---
+
             toast.success('Cadastro realizado com sucesso! Você está logado.');
             setShowLoginPrompt(false); setIsRegisteringInModal(false); setEmailAuthModal(''); setPasswordAuthModal(''); setNomeAuthModal(''); setTelefoneAuthModal(''); setRuaAuthModal(''); setNumeroAuthModal(''); setBairroAuthModal(''); setCidadeAuthModal(''); setComplementoAuthModal(''); setErrorAuthModal('');
         } catch (error) {
@@ -599,7 +612,7 @@ function Menu() {
                                 <input type="password" placeholder="Senha (mín. 6 caracteres) *" className="w-full border rounded p-2" value={passwordAuthModal} onChange={(e) => setPasswordAuthModal(e.target.value)} required />
                                 <input type="text" placeholder="Rua *" className="w-full border rounded p-2" value={ruaAuthModal} onChange={(e) => setRuaAuthModal(e.target.value)} required />
                                 <input type="text" placeholder="Número *" className="w-full border rounded p-2" value={numeroAuthModal} onChange={(e) => setNumeroAuthModal(e.target.value)} required />
-                                <input type="text" placeholder="Bairro *" className="w-full border rounded p-2" value={bairroAuthModal} onChange={(e) => setBairroAuthModal(e.target.value)} required />
+                                <input type="text" placeholder="Bairro *" className="w-full border rounded p-2" value={bairroAuthModal} onChange={(e) => setBairroAuthModal(e.gexgett.value)} required />
                                 <input type="text" placeholder="Cidade *" className="w-full border rounded p-2" value={cidadeAuthModal} onChange={(e) => setCidadeAuthModal(e.target.value)} required />
                                 <input type="text" placeholder="Complemento (Opcional)" className="w-full border rounded p-2" value={complementoAuthModal} onChange={(e) => setComplementoAuthModal(e.target.value)} />
                                 <button type="submit" className="w-full bg-[var(--vermelho-principal)] text-black font-semibold py-2 rounded hover:bg-red-700 transition-colors">Cadastrar e Entrar</button>
