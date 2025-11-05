@@ -1,10 +1,12 @@
-// Imports principais
+// ======================================================
+// 🔧 IMPORTS E CONFIGURAÇÃO INICIAL
+// ======================================================
 import * as functions from 'firebase-functions';
-import { onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
 import axios from 'axios';
 import cors from 'cors';
 
@@ -16,9 +18,9 @@ if (!getApps().length) {
 const db = getFirestore();
 const auth = getAuth();
 
-// Configura o CORS (apenas para seu domínio de produção)
+// Configura o CORS (libera seu domínio de produção)
 const corsHandler = cors({
-  origin: ['https://appdeufome.netlify.app'],
+  origin: ['https://appdeufome.netlify.app'], // domínio permitido
   methods: ['POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 });
@@ -26,8 +28,13 @@ const corsHandler = cors({
 // ======================================================
 // 🔹 CREATE USER BY MASTER ADMIN (via HTTP + CORS)
 // ======================================================
-export const createUserByMasterAdmin = onRequest((req, res) => {
+export const createUserByMasterAdminHttp = onRequest((req, res) => {
   corsHandler(req, res, async () => {
+    // Permite o método OPTIONS (pré-flight)
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('');
+    }
+
     // Apenas método POST é permitido
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido. Use POST.' });
@@ -79,84 +86,25 @@ export const createUserByMasterAdmin = onRequest((req, res) => {
         message: 'Usuário criado com sucesso!',
         uid: userRecord.uid,
       });
-    } catch (error) {// FUNÇÃO ATUALIZADA PARA CRIAR USUÁRIO VIA FETCH (HTTP REQUEST)
-// FUNÇÃO ATUALIZADA PARA CRIAR USUÁRIO VIA FETCH (HTTP REQUEST)
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoadingForm(true);
-  setFormError('');
-
-  try {
-    const userDataForCF = {
-      email: formData.email,
-      password: formData.senha,
-      name: formData.nome,
-      isAdmin: formData.isAdmin,
-      isMasterAdmin: formData.isMasterAdmin,
-      ativo: formData.ativo,
-      estabelecimentosGerenciados: formData.estabelecimentosGerenciados,
-    };
-
-    // 🌐 Chamada HTTP para Cloud Function (onRequest)
-    const response = await fetch(
-      'https://us-central1-matafome-98455.cloudfunctions.net/createUserByMasterAdmin',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // opcional: pode adicionar token JWT futuramente para segurança
-        },
-        body: JSON.stringify(userDataForCF),
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || 'Erro desconhecido ao criar usuário');
-    }
-
-    console.log('✅ Resultado da Cloud Function:', result);
-
-    auditLogger(
-      'USUARIO_CRIADO_VIA_CF',
-      { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
-      { type: 'usuario', id: result.uid, name: formData.nome },
-      { ...userDataForCF, success: result.success }
-    );
-
-    toast.success(result.message || 'Usuário criado com sucesso!');
-    navigate('/master/usuarios');
-  } catch (error) {
-    console.error('❌ Erro ao criar usuário via Cloud Function:', error);
-    let errorMessage = error.message || 'Erro ao criar usuário.';
-
-    if (error.message.includes('email')) {
-      errorMessage = 'Este e-mail já está em uso.';
-    }
-
-    setFormError(errorMessage);
-    toast.error(errorMessage);
-  } finally {
-    setLoadingForm(false);
-  }
-};
-
-
+    } catch (error) {
       console.error('❌ Erro ao criar usuário:', error);
       return res.status(500).json({
         success: false,
-        error: error.message,
+        error: error.message || 'Erro interno ao criar usuário.',
       });
     }
   });
 });
 
 // ======================================================
-// 🔹 DELETE USER BY MASTER ADMIN (mantém onCall ou pode migrar também)
+// 🔹 DELETE USER BY MASTER ADMIN (via HTTP + CORS)
 // ======================================================
 export const deleteUserByMasterAdmin = onRequest((req, res) => {
   corsHandler(req, res, async () => {
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('');
+    }
+
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido. Use POST.' });
     }
@@ -188,11 +136,14 @@ export const deleteUserByMasterAdmin = onRequest((req, res) => {
 });
 
 // ======================================================
-// 🔹 CHECK LATE PAYMENTS
+// 🔹 CHECK LATE PAYMENTS (agendada a cada 24h)
 // ======================================================
-export const checkLatePayments = onSchedule('every 24 hours', async (event) => {
+export const checkLatePayments = onSchedule('every 24 hours', async () => {
   try {
-    const snapshot = await db.collection('payments').where('status', '==', 'pending').get();
+    const snapshot = await db
+      .collection('payments')
+      .where('status', '==', 'pending')
+      .get();
 
     for (const doc of snapshot.docs) {
       const payment = doc.data();
@@ -209,7 +160,7 @@ export const checkLatePayments = onSchedule('every 24 hours', async (event) => {
 });
 
 // ======================================================
-// 🔹 ALERT LONG INACTIVE ESTABLISHMENTS
+// 🔹 ALERT LONG INACTIVE ESTABLISHMENTS (agendada a cada 24h)
 // ======================================================
 export const alertLongInactiveEstablishments = onSchedule('every 24 hours', async () => {
   try {
