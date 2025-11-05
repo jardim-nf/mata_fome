@@ -141,54 +141,52 @@ function CriarUsuarioMaster() {
     };
 
     // FUNÇÃO ATUALIZADA PARA CRIAR USUÁRIO VIA CLOUD FUNCTION
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoadingForm(true);
-        setFormError('');
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoadingForm(true);
+  setFormError('');
 
-        try {
-            const userDataForCF = {
-                email: formData.email,
-                password: formData.senha,
-                name: formData.nome,
-                isAdmin: formData.isAdmin,
-                isMasterAdmin: formData.isMasterAdmin,
-                ativo: formData.ativo, // Passando o status ativo
-                estabelecimentosGerenciados: formData.estabelecimentosGerenciados,
-            };
-
-            const createUserCallable = httpsCallable(functions, 'createUserByMasterAdmin');
-            const result = await createUserCallable(userDataForCF);
-            
-            console.log('Resultado da Cloud Function:', result.data); 
-            
-            auditLogger(
-                'USUARIO_CRIADO_VIA_CF',
-                { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
-                { type: 'usuario', id: result.data.uid, name: formData.nome }, 
-                { ...userDataForCF, success: result.data.success }
-            );
-
-            toast.success(result.data.message || 'Usuário criado com sucesso!');
-            navigate('/master/usuarios');
-        } catch (error) {
-            console.error("Erro ao criar usuário via Cloud Function:", error);
-            let errorMessage = 'Erro ao criar usuário.';
-            if (error.code === 'already-exists' || error.code === 'email-already-in-use') {
-                errorMessage = 'Este e-mail já está em uso.';
-            } else if (error.code === 'invalid-argument') {
-                errorMessage = 'Dados inválidos: ' + (error.details?.message || error.message); // Acessa details.message se disponível
-            } else if (error.code === 'permission-denied') {
-                errorMessage = 'Permissão negada: Você não é um Master Admin válido.';
-            } else if (error.message) {
-                errorMessage = `Erro: ${error.message}`;
-            }
-            setFormError(errorMessage);
-            toast.error(errorMessage);
-        } finally {
-            setLoadingForm(false);
-        }
+  try {
+    const userDataForCF = {
+      nome: formData.nome,
+      email: formData.email,
+      senha: formData.senha,
+      estabelecimentos: formData.estabelecimentosGerenciados || [],
+      isAdmin: formData.isAdmin,
+      isMasterAdmin: formData.isMasterAdmin,
     };
+
+    // 🌐 Chamada para nova Cloud Function (com CORS resolvido)
+    const response = await fetch(
+      'https://us-central1-matafome-98455.cloudfunctions.net/createUserByMasterAdminHttp',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userDataForCF),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Erro ao criar usuário');
+    }
+
+    console.log('✅ Usuário criado via CF:', result);
+
+    toast.success(result.message || 'Usuário criado com sucesso!');
+    navigate('/master/usuarios');
+  } catch (error) {
+    console.error('❌ Erro ao criar usuário via CF:', error);
+    toast.error(error.message || 'Erro ao criar usuário');
+    setFormError(error.message);
+  } finally {
+    setLoadingForm(false);
+  }
+};
+
 
     if (authLoading || loadingForm || loadingEstabelecimentos) {
         return (

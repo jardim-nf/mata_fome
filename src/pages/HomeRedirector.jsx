@@ -1,34 +1,48 @@
 // src/pages/HomeRedirector.jsx
+
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext'; // Importe o useAuth
 
-// Este componente não renderiza nada. Ele apenas decide para onde redirecionar.
 function HomeRedirector() {
-  const { isMasterAdmin, isAdmin, loading } = useAuth();
-  const navigate = useNavigate();
+    // Pega o userData completo e o status de carregamento
+    const { userData, loading } = useAuth(); 
+    const navigate = useNavigate();
 
-  useEffect(() => {
-    // Se ainda estiver carregando as informações do usuário, não faz nada.
-    if (loading) {
-      return;
-    }
+    // Extrai as permissões de forma segura
+    const isMasterAdmin = userData?.isMasterAdmin || false;
+    const isAdmin = userData?.isAdmin || false;
+    
+    // NOTA: 'estabelecimentosGerenciados' não é mais necessário, 
+    // pois o Admin vai para a rota estática '/painel'.
 
-    // Lógica de decisão
-    if (isMasterAdmin) {
-      // Se for Master Admin, vai para o dashboard principal
-      navigate('/master-dashboard');
-    } else if (isAdmin) {
-      // Se for um admin comum, vai para o painel de pedidos
-      navigate('/painel');
-    } else {
-      // Se não for nenhum dos dois (ex: cliente comum), volta para a home
-      navigate('/');
-    }
-  }, [loading, isMasterAdmin, isAdmin, navigate]); // Roda quando a autenticação terminar
+    useEffect(() => {
+        // Se ainda estiver carregando, não faz nada.
+        if (loading) {
+            return;
+        }
 
-  // Mostra uma mensagem de carregamento enquanto a lógica roda
-  return <div className="text-center p-8">Redirecionando...</div>;
+        // Lógica de decisão
+        if (isMasterAdmin) {
+            // Se for Master Admin, vai para o dashboard principal
+            console.log("REDIR: Master Admin -> /master-dashboard");
+            navigate('/master-dashboard', { replace: true });
+            
+        } else if (isAdmin) {
+            // 🚨 CORREÇÃO FINAL: Admin de Estabelecimento vai para /painel
+            console.log("REDIR: Admin Est. -> /painel");
+            navigate('/painel', { replace: true });
+            
+        } else {
+            // Cliente comum ou usuário não logado volta para a home
+            console.log("REDIR: Cliente comum -> /");
+            navigate('/', { replace: true });
+        }
+        
+    }, [loading, isMasterAdmin, isAdmin, navigate]); 
+
+    // Mensagem de carregamento
+    return <div className="text-center p-8">Redirecionando...</div>;
 }
 
 export default HomeRedirector;
