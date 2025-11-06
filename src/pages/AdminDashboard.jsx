@@ -1,8 +1,10 @@
 // src/pages/AdminDashboard.jsx
-
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardSummary from "../components/DashBoardSummary";
+import withAuth from "../hocs/withAuth";
+// 🔥 CORREÇÃO: Importar TODOS os ícones necessários
+import { IoStatsChart, IoShareSocial } from "react-icons/io5";
 
 // Componente de botão aprimorado e responsivo
 const ActionButton = ({ to, title, subtitle, icon, colorClass }) => (
@@ -77,7 +79,7 @@ const AdminDashboard = () => {
         {/* Componente de resumo */}
         <DashboardSummary />
 
-        {/* Grid de ações totalmente responsivo */}
+        {/* Grid de ações totalmente responsivo - ATUALIZADO COM MULTI-PLATAFORMA */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {/* Painel de pedidos */}
           <ActionButton
@@ -104,6 +106,24 @@ const AdminDashboard = () => {
             subtitle="Adicionar, editar e organizar produtos do seu cardápio"
             icon="🍔"
             colorClass="hover:border-orange-500 hover:bg-orange-50"
+          />
+
+          {/* Painel de Produtividade */}
+          <ActionButton
+            to="/admin/analytics"
+            title="Produtividade"
+            subtitle="Métricas, insights e otimizações para seu negócio"
+            icon={<IoStatsChart className="text-indigo-600" />}
+            colorClass="hover:border-indigo-500 hover:bg-indigo-50"
+          />
+
+          {/* 🔥 NOVO: Multi-Plataforma */}
+          <ActionButton
+            to="/admin/multi-platform"
+            title="Multi-Plataforma"
+            subtitle="Integre com iFood, WhatsApp e outras plataformas"
+            icon={<IoShareSocial className="text-purple-600" />}
+            colorClass="hover:border-purple-500 hover:bg-purple-50"
           />
 
           {/* Taxas de entrega */}
@@ -145,4 +165,11 @@ const AdminDashboard = () => {
   );
 };
 
-export default AdminDashboard;
+// Aplica o HOC de autenticação
+// ✅ Requer autenticação E permissão de admin OU master
+// ✅ Redireciona para login se não autenticado
+// ✅ Redireciona para dashboard se não tiver permissão
+export default withAuth(AdminDashboard, { 
+  requireAdmin: true,
+  message: 'Acesso ao Dashboard restrito' 
+});
