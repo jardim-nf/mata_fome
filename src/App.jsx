@@ -27,13 +27,14 @@ import TaxasDeEntrega from "./pages/TaxasDeEntrega";
 import AdminEstablishmentManagement from "./pages/AdminEstablishmentManagement";
 import NossosClientes from './pages/NossosClientes';
 import ClientDetails from "./pages/ClientDetails";
-import TelaPedidos from './pages/TelaPedidos'; 
+import TelaPedidos from './pages/TelaPedidos';
 import AdminCouponManagement from './pages/AdminCouponManagement';
 import AdminReports from './pages/AdminReports';
 import AdminImageAssociation from './pages/admin/AdminImageAssociation';
-
+import AdminAnalytics from './pages/AdminAnalytics';
+import AdminMultiPlatform from './pages/AdminMultiPlatform';
 // Páginas Master Admin
-import MasterDashboard from './pages/MasterDashboard'; 
+import MasterDashboard from './pages/MasterDashboard';
 import AdminEstabelecimentoCadastro from './pages/admin/AdminEstabelecimentoCadastro';
 import ListarEstabelecimentosMaster from './pages/admin/ListarEstabelecimentosMaster';
 import ListarPedidosMaster from './pages/admin/ListarPedidosMaster';
@@ -59,7 +60,7 @@ function App() {
 
           {/* Grupo de rotas que USAM o Layout principal */}
           <Route element={<Layout />}>
-            
+
             {/* --- Rotas Públicas/Clientes --- */}
             <Route path="/cardapio" element={<ListaEstabelecimentos />} />
             <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
@@ -68,218 +69,232 @@ function App() {
             <Route path="/painel-inicial" element={<HomeRedirector />} />
 
             {/* --- Rotas de Administrador de Estabelecimento --- */}
-            <Route 
-              path="/controle-salao" 
+            <Route
+              path="/controle-salao"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <ControleSalao />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/mesa/:id" 
+            <Route
+              path="/mesa/:id"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <TelaPedidos />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/painel" 
+            <Route
+              path="/painel"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <Painel />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dashboard" 
+            <Route
+              path="/dashboard"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <AdminDashboard />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/gerenciar-cardapio" 
+            <Route
+              path="/admin/gerenciar-cardapio"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <AdminMenuManagement />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/taxas-de-entrega" 
+            <Route
+              path="/admin/taxas-de-entrega"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <TaxasDeEntrega />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/gerenciar-estabelecimentos" 
+            <Route
+              path="/admin/gerenciar-estabelecimentos"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <AdminEstablishmentManagement />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/cupons" 
+            <Route
+              path="/admin/cupons"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <AdminCouponManagement />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/nossos-clientes" 
+            <Route
+              path="/nossos-clientes"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <NossosClientes />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/clientes/:clientId" 
+            <Route
+              path="/admin/clientes/:clientId"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <ClientDetails />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/reports" 
+            <Route
+              path="/admin/reports"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <AdminReports />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/associar-imagens" 
+            <Route
+              path="/admin/multi-platform"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                  <AdminMultiPlatform />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/associar-imagens"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <AdminImageAssociation />
                 </PrivateRoute>
-              } 
+              }
+            />
+            <Route
+              path="/admin/analytics"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                  <AdminAnalytics />
+                </PrivateRoute>
+              }
             />
 
             {/* --- Rotas EXCLUSIVAS para o Master Admin --- */}
-            <Route 
-              path="/master-dashboard" 
+            <Route
+              path="/master-dashboard"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <MasterDashboard />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/cadastrar-estabelecimento" 
+            <Route
+              path="/admin/cadastrar-estabelecimento"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <AdminEstabelecimentoCadastro />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/audit-logs" 
+            <Route
+              path="/admin/audit-logs"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <AuditLogs />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/estabelecimentos" 
+            <Route
+              path="/master/estabelecimentos"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <ListarEstabelecimentosMaster />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/pedidos" 
+            <Route
+              path="/master/pedidos"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <ListarPedidosMaster />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/usuarios" 
+            <Route
+              path="/master/usuarios"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <ListarUsuariosMaster />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/estabelecimentos/:id/editar" 
+            <Route
+              path="/master/estabelecimentos/:id/editar"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <EditarEstabelecimentoMaster />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/importar-cardapio" 
+            <Route
+              path="/master/importar-cardapio"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <ImportarCardapioMaster />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/usuarios/:id/editar" 
+            <Route
+              path="/master/usuarios/:id/editar"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <EditarUsuarioMaster />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/plans" 
+            <Route
+              path="/master/plans"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <AdminPlansManagement />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/pedidos/:id" 
+            <Route
+              path="/master/pedidos/:id"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <PedidoDetalhesMaster />
                 </PrivateRoute>
-              } 
-            /> 
-
-            
-            <Route 
-              path="/master/usuarios/criar" 
+              }
+            />
+            <Route
+              path="/master/usuarios/criar"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <CriarUsuarioMaster />
                 </PrivateRoute>
-              } 
+              }
             />
-            <Route 
-              path="/master/associar-imagens" 
+            <Route
+              path="/master/associar-imagens"
               element={
                 <PrivateRoute allowedRoles={['masterAdmin']}>
                   <AdminImageAssociation />
                 </PrivateRoute>
-              } 
+              }
             />
-            
+
             {/* Rota "catch-all" para redirecionar páginas não encontradas */}
-            <Route path="*" element={<Navigate to="/" replace />} /> 
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
 
-          
+
         </Routes>
-        
+
         {/* Toast Container para notificações */}
         <ToastContainer
           position="bottom-right"
@@ -293,10 +308,10 @@ function App() {
           pauseOnHover
           theme="colored"
         />
-        
+
       </Router>
     </AuthProvider>
-    
+
   );
 }
 

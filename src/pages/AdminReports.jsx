@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -89,8 +90,7 @@ const FilterBadge = ({ children, active, onClick }) => (
 // --- COMPONENTE PRINCIPAL ---
 
 const AdminReports = () => {
-    const navigate = useNavigate();
-    const { currentUser, isAdmin, isMaster, loading: authLoading, estabelecimentoIdPrincipal } = useAuth();
+    const { estabelecimentoIdPrincipal } = useAuth();
     const reportContentRef = useRef();
 
     // Estados
@@ -102,39 +102,11 @@ const AdminReports = () => {
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [deliveryTypeFilter, setDeliveryTypeFilter] = useState('todos');
 
-    // 🚨 CORREÇÃO: Controle de acesso atualizado
-    useEffect(() => {
-        if (!authLoading) {
-            console.log("🔐 Debug Auth AdminReports:", { 
-                currentUser: !!currentUser, 
-                isAdmin, 
-                isMaster,
-                estabelecimentoIdPrincipal 
-            });
-            
-            if (!currentUser) {
-                toast.error('🔒 Faça login para acessar.');
-                navigate('/login-admin');
-                return;
-            }
-            
-            if (!isAdmin && !isMaster) {
-                toast.error('🔒 Acesso negado. Você precisa ser administrador.');
-                navigate('/dashboard');
-                return;
-            }
-
-            if (!estabelecimentoIdPrincipal) {
-                toast.error('❌ Configuração de acesso incompleta.');
-                navigate('/dashboard');
-                return;
-            }
-        }
-    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoIdPrincipal]);
+    // ✅ REMOVIDO: Controle de acesso complexo no useEffect
 
     // Busca de dados
     const fetchPedidos = async () => {
-        if (!currentUser || !estabelecimentoIdPrincipal) return;
+        if (!estabelecimentoIdPrincipal) return;
         
         try {
             setLoadingData(true);
@@ -297,17 +269,6 @@ const AdminReports = () => {
         setStartDate(format(start, 'yyyy-MM-dd'));
         setEndDate(format(end, 'yyyy-MM-dd'));
     };
-
-    if (authLoading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Verificando permissões...</p>
-                </div>
-            </div>
-        );
-    }
 
     const chartOptions = {
         responsive: true, 
@@ -698,10 +659,6 @@ const AdminReports = () => {
                                         <p className="font-semibold">Pedidos Carregados</p>
                                         <p className="text-gray-600">{pedidos.length}</p>
                                     </div>
-                                    <div>
-                                        <p className="font-semibold">Usuário Admin</p>
-                                        <p className="text-gray-600">{isAdmin ? 'Sim' : 'Não'}</p>
-                                    </div>
                                 </div>
                             </Card>
                         )}
@@ -712,4 +669,8 @@ const AdminReports = () => {
     );
 }
 
-export default AdminReports;
+// ✅ Aplica o HOC específico para estabelecimento
+// - Verifica se é admin (não master) 
+// - Verifica se tem estabelecimentoIdPrincipal
+// - Redireciona master para master-dashboard
+export default withEstablishmentAuth(AdminReports);

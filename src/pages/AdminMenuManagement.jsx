@@ -1,13 +1,15 @@
-// src/pages/AdminMenuManagement.jsx - VERSÃO COMPLETA E CORRIGIDA
-
+// src/pages/AdminMenuManagement.jsx - COM ORDENAÇÃO E CONTROLE DE ESTOQUE
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { uploadFile, deleteFileByUrl } from '../utils/firebaseStorageService';
 import AdminProductCard from '../components/AdminProductCard';
+import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from '../components/Pagination';
 import { 
     IoArrowBack, 
     IoAddCircleOutline, 
@@ -17,19 +19,34 @@ import {
     IoClose,
     IoImageOutline,
     IoCheckmarkCircle,
-    IoAlertCircle
+    IoAlertCircle,
+    IoChevronUp,
+    IoChevronDown,
+    IoSwapVertical,
+    IoCube,
+    IoCash,
+    IoStatsChart
 } from 'react-icons/io5';
 
 function AdminMenuManagement() {
-    const { currentUser, isAdmin, isMaster, loading: authLoading, estabelecimentoIdPrincipal } = useAuth();
-    const navigate = useNavigate();
-
+    const { estabelecimentoIdPrincipal } = useAuth();
+    
     const [establishmentName, setEstablishmentName] = useState('');
     const [menuItems, setMenuItems] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
+    
+    // 🔄 Estado para ordenação
+    const [sortConfig, setSortConfig] = useState({
+        key: 'nome',      // nome, preco, ativo, criadoEm, estoque
+        direction: 'asc'  // asc, desc
+    });
+
+    // 📦 NOVO: Estado para filtro de estoque
+    const [stockFilter, setStockFilter] = useState('todos'); // todos, baixo, critico, normal
+    
     const [showItemForm, setShowItemForm] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({ 
@@ -38,41 +55,15 @@ function AdminMenuManagement() {
         preco: '', 
         categoria: '', 
         imageUrl: '', 
-        ativo: true 
+        ativo: true,
+        // 📦 NOVO: Campos de estoque
+        estoque: '',
+        estoqueMinimo: '',
+        custo: ''
     });
     const [itemImage, setItemImage] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
     const [formLoading, setFormLoading] = useState(false);
-
-    // 🚨 CONTROLE DE ACESSO CORRIGIDO
-    useEffect(() => {
-        if (authLoading) return;
-        
-        console.log("🔐 Debug Auth AdminMenu:", { 
-            currentUser: !!currentUser, 
-            isAdmin, 
-            isMaster,
-            estabelecimentoIdPrincipal 
-        });
-        
-        if (!currentUser) {
-            toast.error('🔒 Faça login para acessar.');
-            navigate('/login-admin');
-            return;
-        }
-        
-        if (!isAdmin && !isMaster) {
-            toast.error('🔒 Acesso negado. Você precisa ser administrador.');
-            navigate('/dashboard');
-            return;
-        }
-
-        if (!estabelecimentoIdPrincipal) {
-            toast.error('❌ Configuração de acesso incompleta.');
-            navigate('/dashboard');
-            return;
-        }
-    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoIdPrincipal]);
 
     // Busca o nome do estabelecimento
     useEffect(() => {
@@ -146,7 +137,13 @@ function AdminMenuManagement() {
                         ...itemDoc.data(),
                         id: itemDoc.id,
                         categoria: categoriaData.nome,
-                        categoriaId: catDoc.id
+                        categoriaId: catDoc.id,
+                        criadoEm: itemDoc.data().criadoEm?.toDate() || new Date(),
+                        atualizadoEm: itemDoc.data().atualizadoEm?.toDate() || new Date(),
+                        // 📦 NOVO: Garantir que estoque tenha valor padrão
+                        estoque: itemDoc.data().estoque || 0,
+                        estoqueMinimo: itemDoc.data().estoqueMinimo || 0,
+                        custo: itemDoc.data().custo || 0
                     }));
 
                     allItems = [
@@ -154,7 +151,7 @@ function AdminMenuManagement() {
                         ...itemsDaCategoria
                     ];
                     
-                    setMenuItems(allItems.sort((a, b) => a.nome.localeCompare(b.nome)));
+                    setMenuItems(allItems);
                 }, (error) => {
                     console.error(`❌ Erro ao ouvir itens da categoria ${catDoc.id}:`, error);
                     toast.error("❌ Erro ao carregar itens de uma categoria.");
@@ -181,6 +178,139 @@ function AdminMenuManagement() {
         };
     }, [estabelecimentoIdPrincipal]);
 
+    // 🔄 Função para ordenação
+    const handleSort = (key) => {
+        setSortConfig(prevConfig => ({
+            key,
+            direction: prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    // 🔄 Opções de ordenação - 📦 ADICIONADO ESTOQUE
+    const sortOptions = [
+        { key: 'nome', label: 'Nome', icon: 'AZ' },
+        { key: 'preco', label: 'Preço', icon: '💰' },
+        { key: 'estoque', label: 'Estoque', icon: '📦' },
+        { key: 'ativo', label: 'Status', icon: '🔄' },
+        { key: 'criadoEm', label: 'Data Criação', icon: '📅' }
+    ];
+
+    // 📦 NOVO: Função para determinar status do estoque
+    const getStockStatus = (item) => {
+        if (item.estoque === 0) return 'esgotado';
+        if (item.estoque <= (item.estoqueMinimo || 0)) return 'critico';
+        if (item.estoque <= ((item.estoqueMinimo || 0) * 2)) return 'baixo';
+        return 'normal';
+    };
+
+    // 📦 NOVO: Função para calcular margem de lucro
+    const calculateProfitMargin = (precoVenda, custo) => {
+        if (!custo || custo <= 0) return 0;
+        return ((precoVenda - custo) / precoVenda) * 100;
+    };
+
+    // Filtragem e ordenação dos itens - 📦 ATUALIZADO COM FILTRO DE ESTOQUE
+    const availableCategories = useMemo(() => 
+        ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], 
+        [menuItems]
+    );
+    
+    const filteredAndSortedItems = useMemo(() => {
+        // Primeiro filtra
+        let filtered = menuItems.filter(item =>
+            (selectedCategory === 'Todos' || item.categoria === selectedCategory) &&
+            (item.nome || '').toLowerCase().includes(searchTerm.toLowerCase()) &&
+            (stockFilter === 'todos' || 
+             (stockFilter === 'critico' && getStockStatus(item) === 'critico') ||
+             (stockFilter === 'baixo' && getStockStatus(item) === 'baixo') ||
+             (stockFilter === 'esgotado' && getStockStatus(item) === 'esgotado') ||
+             (stockFilter === 'normal' && getStockStatus(item) === 'normal'))
+        );
+
+        // Depois ordena
+        filtered.sort((a, b) => {
+            let aValue = a[sortConfig.key];
+            let bValue = b[sortConfig.key];
+            
+            // Tratamento especial para diferentes tipos de dados
+            if (sortConfig.key === 'preco' || sortConfig.key === 'estoque' || sortConfig.key === 'custo') {
+                aValue = Number(aValue) || 0;
+                bValue = Number(bValue) || 0;
+            } else if (sortConfig.key === 'ativo') {
+                aValue = aValue ? 1 : 0;
+                bValue = bValue ? 1 : 0;
+            } else if (sortConfig.key === 'nome') {
+                aValue = (aValue || '').toLowerCase();
+                bValue = (bValue || '').toLowerCase();
+            } else if (sortConfig.key === 'criadoEm') {
+                aValue = aValue instanceof Date ? aValue.getTime() : new Date(aValue).getTime();
+                bValue = bValue instanceof Date ? bValue.getTime() : new Date(bValue).getTime();
+            }
+            
+            if (aValue < bValue) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        return filtered;
+    }, [menuItems, searchTerm, selectedCategory, sortConfig, stockFilter]);
+
+    // Paginação
+    const ITEMS_PER_PAGE = 10;
+    const {
+        currentPage,
+        totalPages,
+        paginatedItems,
+        goToPage,
+        nextPage,
+        prevPage,
+        hasNextPage,
+        hasPrevPage
+    } = usePagination(filteredAndSortedItems, ITEMS_PER_PAGE);
+
+    // 🔄 Função para obter ícone de ordenação
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) {
+            return <IoSwapVertical className="text-gray-400" />;
+        }
+        return sortConfig.direction === 'asc' 
+            ? <IoChevronUp className="text-blue-600" />
+            : <IoChevronDown className="text-blue-600" />;
+    };
+
+    // 🔄 Função para obter texto de ordenação
+    const getSortLabel = (key) => {
+        if (sortConfig.key !== key) return '';
+        return sortConfig.direction === 'asc' ? ' (A-Z)' : ' (Z-A)';
+    };
+
+    // 📦 NOVO: Estatísticas de estoque
+    const stockStatistics = useMemo(() => {
+        const totalItems = menuItems.length;
+        const criticalStock = menuItems.filter(item => getStockStatus(item) === 'critico').length;
+        const lowStock = menuItems.filter(item => getStockStatus(item) === 'baixo').length;
+        const outOfStock = menuItems.filter(item => getStockStatus(item) === 'esgotado').length;
+        const normalStock = menuItems.filter(item => getStockStatus(item) === 'normal').length;
+        
+        const totalInventoryValue = menuItems.reduce((total, item) => {
+            return total + (item.estoque * (item.custo || 0));
+        }, 0);
+
+        return {
+            totalItems,
+            criticalStock,
+            lowStock,
+            outOfStock,
+            normalStock,
+            totalInventoryValue
+        };
+    }, [menuItems]);
+
+    // Restante das funções permanecem iguais...
     const handleSaveItem = async (e) => {
         e.preventDefault();
         if (!estabelecimentoIdPrincipal) {
@@ -219,12 +349,22 @@ function AdminMenuManagement() {
             }
 
             const { categoriaId: formCategoriaId, ...dataToSave } = formData;
+            
+            // 📦 NOVO: Preparar dados de estoque
+            const stockData = {
+                estoque: Number(dataToSave.estoque) || 0,
+                estoqueMinimo: Number(dataToSave.estoqueMinimo) || 0,
+                custo: Number(dataToSave.custo) || 0
+            };
+
             const finalData = { 
                 ...dataToSave, 
                 preco: Number(dataToSave.preco), 
                 imageUrl: finalImagePath,
                 categoria: categoria,
-                atualizadoEm: new Date()
+                atualizadoEm: new Date(),
+                // 📦 NOVO: Incluir dados de estoque
+                ...stockData
             };
 
             if (editingItem) {
@@ -358,18 +498,6 @@ function AdminMenuManagement() {
         }
     };
     
-    const availableCategories = useMemo(() => 
-        ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], 
-        [menuItems]
-    );
-    
-    const filteredItems = useMemo(() => {
-        return menuItems.filter(item =>
-            (selectedCategory === 'Todos' || item.categoria === selectedCategory) &&
-            (item.nome || '').toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [menuItems, searchTerm, selectedCategory]);
-
     const openItemForm = (item = null) => {
         setEditingItem(item);
         if (item) {
@@ -380,7 +508,11 @@ function AdminMenuManagement() {
                 categoria: item.categoria || '',
                 imageUrl: item.imageUrl || '',
                 ativo: item.ativo !== undefined ? item.ativo : true,
-                categoriaId: item.categoriaId
+                categoriaId: item.categoriaId,
+                // 📦 NOVO: Campos de estoque
+                estoque: item.estoque || '',
+                estoqueMinimo: item.estoqueMinimo || '',
+                custo: item.custo || ''
             });
             setImagePreview(item.imageUrl);
         } else {
@@ -390,7 +522,11 @@ function AdminMenuManagement() {
                 preco: '', 
                 categoria: '', 
                 imageUrl: '', 
-                ativo: true 
+                ativo: true,
+                // 📦 NOVO: Campos de estoque com valores padrão
+                estoque: '',
+                estoqueMinimo: '5',
+                custo: ''
             });
             setImagePreview('');
         }
@@ -407,7 +543,11 @@ function AdminMenuManagement() {
             preco: '', 
             categoria: '', 
             imageUrl: '', 
-            ativo: true 
+            ativo: true,
+            // 📦 NOVO: Campos de estoque
+            estoque: '',
+            estoqueMinimo: '5',
+            custo: ''
         });
         setImagePreview('');
         setItemImage(null);
@@ -431,15 +571,45 @@ function AdminMenuManagement() {
         }
     };
 
-    // Estatísticas
+    // 📦 NOVO: Função para atualizar estoque rapidamente
+    const quickUpdateStock = async (item, newStock) => {
+        try {
+            await updateDoc(
+                doc(
+                    db, 
+                    'estabelecimentos', 
+                    estabelecimentoIdPrincipal, 
+                    'cardapio', 
+                    item.categoriaId, 
+                    'itens', 
+                    item.id
+                ), 
+                { 
+                    estoque: Number(newStock),
+                    atualizadoEm: new Date()
+                }
+            );
+            toast.success(`✅ Estoque de "${item.nome}" atualizado para ${newStock}`);
+        } catch(error) {
+            console.error("❌ Erro ao atualizar estoque:", error);
+            toast.error("❌ Erro ao atualizar o estoque.");
+        }
+    };
+
+    // Estatísticas - 📦 ATUALIZADO COM ESTOQUE
     const estatisticas = {
         total: menuItems.length,
         ativos: menuItems.filter(item => item.ativo).length,
         inativos: menuItems.filter(item => !item.ativo).length,
-        categorias: availableCategories.length - 1 // -1 para remover "Todos"
+        categorias: availableCategories.length - 1, // -1 para remover "Todos"
+        // 📦 NOVO: Estatísticas de estoque
+        estoqueCritico: stockStatistics.criticalStock,
+        estoqueBaixo: stockStatistics.lowStock,
+        esgotados: stockStatistics.outOfStock,
+        valorTotalEstoque: stockStatistics.totalInventoryValue
     };
 
-    if (authLoading || loading) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
@@ -475,6 +645,13 @@ function AdminMenuManagement() {
                             <IoArrowBack />
                             <span>Voltar ao Dashboard</span>
                         </Link>
+                        <Link
+                            to="/admin/analytics"
+                            className="inline-flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                        >
+                            <IoStatsChart size={18} />
+                            <span>Ver Analytics</span>
+                        </Link>
                         <button 
                             onClick={() => openItemForm()} 
                             className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
@@ -485,8 +662,8 @@ function AdminMenuManagement() {
                     </div>
                 </header>
 
-                {/* Estatísticas */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                {/* Estatísticas - 📦 ATUALIZADO COM ESTOQUE */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
@@ -511,11 +688,25 @@ function AdminMenuManagement() {
                         </div>
                     </div>
 
+                    {/* 📦 NOVO: Estoque Crítico */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Itens Inativos</p>
-                                <p className="text-2xl font-bold text-orange-600">{estatisticas.inativos}</p>
+                                <p className="text-sm font-medium text-gray-600">Estoque Crítico</p>
+                                <p className="text-2xl font-bold text-red-600">{estatisticas.estoqueCritico}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                                <IoAlertCircle className="text-red-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 📦 NOVO: Estoque Baixo */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Estoque Baixo</p>
+                                <p className="text-2xl font-bold text-orange-600">{estatisticas.estoqueBaixo}</p>
                             </div>
                             <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
                                 <IoAlertCircle className="text-orange-600 text-lg" />
@@ -523,22 +714,39 @@ function AdminMenuManagement() {
                         </div>
                     </div>
 
+                    {/* 📦 NOVO: Esgotados */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Categorias</p>
-                                <p className="text-2xl font-bold text-purple-600">{estatisticas.categorias}</p>
+                                <p className="text-sm font-medium text-gray-600">Esgotados</p>
+                                <p className="text-2xl font-bold text-gray-600">{estatisticas.esgotados}</p>
+                            </div>
+                            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                                <IoCube className="text-gray-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 📦 NOVO: Valor Total Estoque */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Valor em Estoque</p>
+                                <p className="text-lg font-bold text-purple-600">
+                                    R$ {estatisticas.valorTotalEstoque.toFixed(2)}
+                                </p>
                             </div>
                             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                <span className="text-purple-600 text-lg">📁</span>
+                                <IoCash className="text-purple-600 text-lg" />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Filtros */}
+                {/* Filtros e Ordenação - 📦 ATUALIZADO COM FILTRO DE ESTOQUE */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        {/* Busca */}
                         <div className="relative flex-1">
                             <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
                             <input
@@ -549,6 +757,8 @@ function AdminMenuManagement() {
                                 className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
                         </div>
+                        
+                        {/* Filtro de Categoria */}
                         <div className="flex items-center space-x-3">
                             <IoFilter className="text-gray-400 text-lg" />
                             <select 
@@ -561,19 +771,82 @@ function AdminMenuManagement() {
                                 ))}
                             </select>
                         </div>
+
+                        {/* 📦 NOVO: Filtro de Estoque */}
+                        <div className="flex items-center space-x-3">
+                            <IoCube className="text-gray-400 text-lg" />
+                            <select 
+                                value={stockFilter} 
+                                onChange={(e) => setStockFilter(e.target.value)}
+                                className="bg-gray-50 border border-gray-300 text-gray-900 py-3 px-4 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            >
+                                <option value="todos">Todos os Estoques</option>
+                                <option value="normal">Estoque Normal</option>
+                                <option value="baixo">Estoque Baixo</option>
+                                <option value="critico">Estoque Crítico</option>
+                                <option value="esgotado">Esgotados</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Ordenação */}
+                    <div className="mt-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div className="flex items-center space-x-3">
+                            <span className="text-sm text-gray-600 font-medium">Ordenar por:</span>
+                            <div className="flex flex-wrap gap-2">
+                                {sortOptions.map(option => (
+                                    <button
+                                        key={option.key}
+                                        onClick={() => handleSort(option.key)}
+                                        className={`flex items-center space-x-1 px-3 py-2 rounded-lg border transition-all ${
+                                            sortConfig.key === option.key
+                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        <span className="text-sm">{option.icon}</span>
+                                        <span className="text-sm font-medium">
+                                            {option.label}
+                                            {getSortLabel(option.key)}
+                                        </span>
+                                        {getSortIcon(option.key)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Indicador de ordenação atual */}
+                        <div className="text-sm text-blue-600 font-medium">
+                            Ordenado por: {sortOptions.find(opt => opt.key === sortConfig.key)?.label} 
+                            {sortConfig.direction === 'asc' ? ' (Crescente)' : ' (Decrescente)'}
+                        </div>
+                    </div>
+
+                    {/* 📦 NOVO: Resumo dos filtros */}
+                    <div className="mt-4 flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                            Mostrando {paginatedItems.length} de {filteredAndSortedItems.length} itens
+                            {searchTerm && ` • Busca: "${searchTerm}"`}
+                            {selectedCategory !== 'Todos' && ` • Categoria: ${selectedCategory}`}
+                            {stockFilter !== 'todos' && ` • Estoque: ${stockFilter}`}
+                        </div>
                     </div>
                 </div>
 
                 {/* Lista de Itens */}
-                <div className="space-y-4">
-                    {filteredItems.length > 0 ? (
-                        filteredItems.map(item => (
+                <div className="space-y-4 mb-8">
+                    {paginatedItems.length > 0 ? (
+                        paginatedItems.map(item => (
                             <AdminProductCard 
                                 key={item.id} 
                                 produto={item} 
                                 onEdit={() => openItemForm(item)}
                                 onDelete={() => handleDeleteItem(item)}
                                 onToggleStatus={() => toggleItemStatus(item)}
+                                // 📦 NOVO: Passar funções de estoque
+                                onUpdateStock={(newStock) => quickUpdateStock(item, newStock)}
+                                stockStatus={getStockStatus(item)}
+                                profitMargin={calculateProfitMargin(item.preco, item.custo)}
                             />
                         ))
                     ) : (
@@ -585,12 +858,12 @@ function AdminMenuManagement() {
                                 Nenhum item encontrado
                             </h3>
                             <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                                {searchTerm || selectedCategory !== 'Todos' 
-                                    ? 'Tente ajustar os filtros de busca ou categoria.'
+                                {searchTerm || selectedCategory !== 'Todos' || stockFilter !== 'todos'
+                                    ? 'Tente ajustar os filtros de busca, categoria ou estoque.'
                                     : 'Comece adicionando itens ao seu cardápio.'
                                 }
                             </p>
-                            {!searchTerm && selectedCategory === 'Todos' && (
+                            {!searchTerm && selectedCategory === 'Todos' && stockFilter === 'todos' && (
                                 <button 
                                     onClick={() => openItemForm()} 
                                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors inline-flex items-center space-x-2"
@@ -602,14 +875,25 @@ function AdminMenuManagement() {
                         </div>
                     )}
                 </div>
+
+                {/* Paginação */}
+                {filteredAndSortedItems.length > ITEMS_PER_PAGE && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <Pagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            onPageChange={goToPage}
+                        />
+                    </div>
+                )}
             </div>
 
-            {/* Modal do Formulário */}
+            {/* Modal do Formulário - 📦 ATUALIZADO COM CAMPOS DE ESTOQUE */}
             {showItemForm && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full m-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full m-auto max-h-[90vh] overflow-y-auto">
                         {/* Header do Modal */}
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
                             <h2 className="text-xl font-bold text-gray-900 flex items-center">
                                 {editingItem ? (
                                     <>
@@ -699,6 +983,82 @@ function AdminMenuManagement() {
                                 </div>
                             </div>
 
+                            {/* 📦 NOVO: Seção de Estoque */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center">
+                                    <IoCube className="mr-2" />
+                                    Controle de Estoque
+                                </h3>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Estoque Atual
+                                        </label>
+                                        <input 
+                                            name="estoque" 
+                                            type="number" 
+                                            value={formData.estoque} 
+                                            onChange={handleFormChange} 
+                                            placeholder="0"
+                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Estoque Mínimo
+                                        </label>
+                                        <input 
+                                            name="estoqueMinimo" 
+                                            type="number" 
+                                            value={formData.estoqueMinimo} 
+                                            onChange={handleFormChange} 
+                                            placeholder="5"
+                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-3">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Custo Unitário (R$)
+                                    </label>
+                                    <input 
+                                        name="custo" 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.custo} 
+                                        onChange={handleFormChange} 
+                                        placeholder="0.00"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+
+                                {/* 📦 NOVO: Cálculo de margem */}
+                                {formData.preco && formData.custo && (
+                                    <div className="mt-3 p-3 bg-white rounded-lg border">
+                                        <div className="flex justify-between text-sm">
+                                            <span>Margem de Lucro:</span>
+                                            <span className={`font-bold ${
+                                                calculateProfitMargin(formData.preco, formData.custo) > 50 
+                                                    ? 'text-green-600' 
+                                                    : calculateProfitMargin(formData.preco, formData.custo) > 30 
+                                                    ? 'text-yellow-600' 
+                                                    : 'text-red-600'
+                                            }`}>
+                                                {calculateProfitMargin(formData.preco, formData.custo).toFixed(1)}%
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-sm mt-1">
+                                            <span>Lucro por Unidade:</span>
+                                            <span className="font-bold text-green-600">
+                                                R$ {(formData.preco - (formData.custo || 0)).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {editingItem && (
                                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                                     <p className="text-sm text-yellow-800">
@@ -752,7 +1112,7 @@ function AdminMenuManagement() {
                                 </label>
                             </div>
 
-                            <div className="flex justify-end space-x-3 pt-4">
+                            <div className="flex justify-end space-x-3 pt-4 sticky bottom-0 bg-white pb-4">
                                 <button 
                                     type="button" 
                                     onClick={closeItemForm}
@@ -783,4 +1143,4 @@ function AdminMenuManagement() {
     );
 }
 
-export default AdminMenuManagement;
+export default withEstablishmentAuth(AdminMenuManagement);

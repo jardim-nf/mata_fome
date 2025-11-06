@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
+import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { startOfDay } from 'date-fns';
 
 const MENSAGENS_WHATSAPP = {
@@ -30,11 +31,9 @@ function Spinner() {
     );
 }
 
-export default function Painel() {
-    const navigate = useNavigate();
+function Painel() {
     const audioRef = useRef(null);
-    // 🚨 CORREÇÃO: Pegue o userData completo do useAuth
-    const { currentUser, loading: authLoading, logout, userData } = useAuth();
+    const { logout, estabelecimentoIdPrincipal } = useAuth();
     
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
@@ -44,8 +43,6 @@ export default function Painel() {
     const [newOrderIds, setNewOrderIds] = useState([]);
     const prevRecebidosRef = useRef([]);
     const [abaAtiva, setAbaAtiva] = useState('delivery');
-
-    // ... (useEffect para Notificação de Som e useEffect para Interação do Usuário) ...
 
     // useEffect para Notificação de Som
     useEffect(() => {
@@ -87,9 +84,6 @@ export default function Painel() {
             window.removeEventListener('keydown', handleFirstInteraction);
         };
     }, []);
-
-
-    // ... (sendWhatsAppNotification, handleUpdateStatusAndNotify, handleExcluirPedido, toggleNotifications) ...
 
     const sendWhatsAppNotification = (status, pedidoData) => {
         const numeroCliente = pedidoData?.cliente?.telefone;
@@ -158,67 +152,37 @@ export default function Painel() {
         }
     };
     
-    // useEffect principal para carregar os dados
+    // useEffect principal para carregar os dados - SIMPLIFICADO
     useEffect(() => {
-        // Usa o 'userData' do contexto, que já foi carregado
-        if (authLoading) return;
-        
+        if (!estabelecimentoIdPrincipal) {
+            setLoading(false);
+            return;
+        }
+
         const setupPainel = async () => {
-            if (!currentUser) { setLoading(false); return () => {}; }
-            
-            // 🚨 NOVA LÓGICA DE PERMISSÃO - Usa userData do contexto
-            const isMaster = userData?.isMasterAdmin;
-            const isAdmin = userData?.isAdmin;
-            const estabs = userData?.estabelecimentosGerenciados || [];
-            const estabelecimentoId = estabs[0]; // Pega o primeiro ID
-
-            // 1. Redireciona se a permissão não for suficiente
-            if (!isMaster && (!isAdmin || estabs.length === 0)) {
-                console.log("Painel: Permissão negada. Redirecionando para /");
-                navigate('/'); 
-                return () => {}; 
-            }
-
-            // 2. Mestre não deve carregar este Painel de Pedidos.
-            if (isMaster) {
-                console.log("Painel: Usuário Master logado. Redirecionando para MasterDashboard.");
-                navigate('/master-dashboard'); 
-                return () => {};
-            }
-
-            // 3. Se for Admin, mas a lista de estabelecimentos estiver vazia.
-            if (!estabelecimentoId) {
-                 console.log("Painel: Admin sem ID de estabelecimento válido para carregar.");
-                 navigate('/');
-                 return () => {};
-            }
-
             try {
-                
-                // 4. Carrega informações do estabelecimento
-                const estDocRef = doc(db, 'estabelecimentos', estabelecimentoId);
+                // Carrega informações do estabelecimento
+                const estDocRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal);
                 const estSnap = await getDoc(estDocRef);
                 
-                // 5. Verifica se o estabelecimento existe ou está ativo
                 if (!estSnap.exists() || !estSnap.data().ativo) { 
-                    console.log("Painel: Estabelecimento não encontrado ou inativo. Redirecionando para /");
-                    navigate('/'); 
-                    return () => {}; 
-                }
+                    console.log("Painel: Estabelecimento não encontrado ou inativo.");
+                    toast.error("Estabelecimento não encontrado ou inativo.");
+                    setLoading(false);
+                    return () => {}; 
+                }
                 setEstabelecimentoInfo(estSnap.data());
 
-                // 6. Configura Listeners de Pedido (onSnapshot)
+                // Configura Listeners de Pedido (onSnapshot)
                 const tipoPedido = abaAtiva === 'cozinha' ? 'mesa' : 'delivery';
                 const statuses = ['recebido', 'preparo', 'em_entrega', 'pronto_para_servir'];
                 
-                // Lógica de onSnapshot... (mantida)
+                const unsubscribers = [];
 
-                const unsubscribers = [];
-
-                // Listeners para status (recebido, preparo, etc.)
+                // Listeners para status (recebido, preparo, etc.)
                 statuses.map(status => {
                     const q = query(collection(db, 'pedidos'), 
-                        where('estabelecimentoId', '==', estabelecimentoId),
+                        where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
                         where('tipo', '==', tipoPedido),
                         where('status', '==', status), 
                         orderBy('createdAt', 'asc')
@@ -227,13 +191,13 @@ export default function Painel() {
                         const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                         setPedidos(prev => ({ ...prev, [status]: list }));
                     }, error => console.error(`Erro no listener para status ${status}:`, error));
-                    unsubscribers.push(unsub);
+                    unsubscribers.push(unsub);
                 });
-                
-                // Listener para finalizado
+                
+                // Listener para finalizado
                 const todayStart = startOfDay(new Date());
                 const qFinalizado = query(collection(db, 'pedidos'), 
-                    where('estabelecimentoId', '==', estabelecimentoId), 
+                    where('estabelecimentoId', '==', estabelecimentoIdPrincipal), 
                     where('tipo', '==', tipoPedido),
                     where('status', '==', 'finalizado'), 
                     where('createdAt', '>=', todayStart), 
@@ -246,36 +210,31 @@ export default function Painel() {
                 unsubscribers.push(unsubFinalizado);
 
                 setLoading(false);
-                return () => unsubscribers.forEach(unsub => unsub()); // Retorna a função de limpeza
+                return () => unsubscribers.forEach(unsub => unsub());
             } catch (e) {
                 console.error("Erro ao configurar o painel:", e);
-                toast.error("Ocorreu um erro ao carregar o painel. Redirecionando.");
+                toast.error("Ocorreu um erro ao carregar o painel.");
                 setLoading(false);
-                logout(); // Melhor deslogar se houver erro grave
-                navigate('/');
                 return () => {};
             }
         };
-        // Setup Painel (Ajustado para lidar com o assincronismo do cleanup)
+
         const cleanupPromise = setupPainel();
         return () => { 
-            if (cleanupPromise) {
-                cleanupPromise.then(cleanup => { if (cleanup) cleanup(); }); 
-            }
-        };
-    }, [authLoading, currentUser, navigate, logout, abaAtiva, userData]); // 🚨 ADICIONADO userData COMO DEPENDÊNCIA
+            if (cleanupPromise) {
+                cleanupPromise.then(cleanup => { if (cleanup) cleanup(); }); 
+            }
+        };
+    }, [estabelecimentoIdPrincipal, abaAtiva]);
 
-    if (loading || authLoading) return <Spinner />;
+    if (loading) return <Spinner />;
 
-    // ... (Restante do JSX do Painel.jsx) ...
-
-    const colunas = abaAtiva === 'cozinha' 
+    const colunas = abaAtiva === 'cozinha' 
         ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
         : ['recebido', 'preparo', 'em_entrega', 'finalizado'];
 
     const getStatusConfig = (status) => {
-        // ... (lógica de getStatusConfig)
-        const configs = {
+        const configs = {
             recebido: { title: '📥 Recebido', color: 'border-l-red-500 bg-red-50', countColor: 'bg-red-500' },
             preparo: { title: '👨‍🍳 Em Preparo', color: 'border-l-orange-500 bg-orange-50', countColor: 'bg-orange-500' },
             em_entrega: { title: '🛵 Em Entrega', color: 'border-l-blue-500 bg-blue-50', countColor: 'bg-blue-500' },
@@ -285,8 +244,7 @@ export default function Painel() {
         return configs[status] || { title: status.replace(/_/g, ' '), color: 'border-l-gray-500 bg-gray-50', countColor: 'bg-gray-500' };
     };
 
-
-    return (
+    return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
@@ -409,7 +367,7 @@ export default function Painel() {
                 </div>
             </main>
 
-            {/* Botão Voltar para Dashboard - AGORA NA PARTE INFERIOR */}
+            {/* Botão Voltar para Dashboard */}
             <footer className="bg-white border-t border-gray-200 py-4">
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="flex justify-center">
@@ -428,3 +386,9 @@ export default function Painel() {
         </div>
     );
 }
+
+// ✅ Aplica o HOC específico para estabelecimento
+// - Verifica se é admin (não master) 
+// - Verifica se tem estabelecimentoIdPrincipal
+// - Redireciona master para master-dashboard
+export default withEstablishmentAuth(Painel);

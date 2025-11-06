@@ -3,7 +3,8 @@ import { db } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { 
     IoArrowBack, 
     IoAddCircleOutline, 
@@ -20,8 +21,7 @@ import {
 } from 'react-icons/io5';
 
 function AdminCouponManagement() {
-    const { currentUser, isAdmin, isMaster, loading: authLoading, estabelecimentoIdPrincipal } = useAuth();
-    const navigate = useNavigate();
+    const { estabelecimentoIdPrincipal } = useAuth();
 
     const [cupons, setCupons] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -37,35 +37,7 @@ function AdminCouponManagement() {
     const [editingCouponId, setEditingCouponId] = useState(null);
     const [formLoading, setFormLoading] = useState(false);
 
-    // 🚨 CORREÇÃO: Controle de acesso atualizado
-    useEffect(() => {
-        if (!authLoading) {
-            console.log("🔐 Debug Auth AdminCouponManagement:", { 
-                currentUser: !!currentUser, 
-                isAdmin, 
-                isMaster,
-                estabelecimentoIdPrincipal 
-            });
-            
-            if (!currentUser) {
-                toast.error('🔒 Faça login para acessar.');
-                navigate('/login-admin');
-                return;
-            }
-            
-            if (!isAdmin && !isMaster) {
-                toast.error('🔒 Acesso negado. Você precisa ser administrador.');
-                navigate('/dashboard');
-                return;
-            }
-
-            if (!estabelecimentoIdPrincipal) {
-                toast.error('❌ Configuração de acesso incompleta.');
-                navigate('/dashboard');
-                return;
-            }
-        }
-    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoIdPrincipal]);
+    // ✅ REMOVIDO: Controle de acesso complexo no useEffect
     
     // Busca os cupons em tempo real
     useEffect(() => {
@@ -244,7 +216,7 @@ function AdminCouponManagement() {
         usosTotais: cupons.reduce((acc, c) => acc + (c.usosAtuais || 0), 0)
     };
 
-    if (authLoading || loading) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
@@ -666,4 +638,8 @@ function AdminCouponManagement() {
     );
 }
 
-export default AdminCouponManagement;
+// ✅ Aplica o HOC específico para estabelecimento
+// - Verifica se é admin (não master) 
+// - Verifica se tem estabelecimentoIdPrincipal
+// - Redireciona master para master-dashboard
+export default withEstablishmentAuth(AdminCouponManagement);
