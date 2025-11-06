@@ -1,284 +1,295 @@
+// src/context/AuthContext.js - VERSÃO CORRIGIDA
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
-  setPersistence,
-  browserSessionPersistence
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged,
+    updateProfile,
+    setPersistence,
+    browserSessionPersistence
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { auth, db } from '../firebase'; 
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'; 
+import { toast } from 'react-toastify'; 
 
 const AuthContext = createContext();
 
 export function useAuth() {
-  return useContext(AuthContext);
+    return useContext(AuthContext);
 }
+
+// ==========================================================
+// FUNÇÕES DE BUSCA
+// ==========================================================
+
+const getFirestoreUserData = async (user) => { 
+    try {
+        const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+        if (userDoc.exists()) {
+            return userDoc.data();
+        } else {
+            const basicUserData = { 
+                email: user.email, 
+                nome: user.displayName || user.email.split('@')[0], 
+                isAdmin: false, 
+                isMasterAdmin: false, 
+                estabelecimentosGerenciados: [],
+                ativo: true, 
+                createdAt: new Date(),
+            };
+            await setDoc(doc(db, 'usuarios', user.uid), basicUserData);
+            return basicUserData;
+        }
+    } catch (error) {
+        console.error("Erro ao buscar dados do usuário:", error);
+        return null;
+    }
+};
+
+const getFirestoreClientData = async (user) => {
+    try {
+        const clientDocRef = doc(db, 'clientes', user.uid);
+        const clientDocSnap = await getDoc(clientDocRef);
+        return clientDocSnap.exists() ? clientDocSnap.data() : null;
+    } catch (error) {
+        console.error("Erro ao buscar dados do cliente:", error);
+        return null;
+    }
+};
+
+// ==========================================================
+// AuthProvider (Componente Principal - CORRIGIDO)
+// ==========================================================
 
 export function AuthProvider({ children }) {
-  // CORREÇÃO: Separamos o usuário do Firebase e os dados do Firestore
-  const [currentUser, setCurrentUser] = useState(null); // <-- Objeto RAW do Firebase
-  const [userData, setUserData] = useState(null); // <-- Objeto do Firestore (com isAdmin)
-  
-  // <-- ADICIONADO: Estado para os dados do CLIENTE da coleção 'clientes'
-  const [currentClientData, setCurrentClientData] = useState(null); 
-  
-  const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState(null); 
+    const [userData, setUserData] = useState(null); 
+    const [currentClientData, setCurrentClientData] = useState(null); 
+    const [loading, setLoading] = useState(true);
 
-  // Função para buscar dados adicionais do usuário no Firestore
-  const fetchUserData = async (user) => {
-    try {
-      const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setUserData(data); // <-- CORREÇÃO: Apenas define os dados do Firestore
-        return data;
-      } else {
-        // Se não existe documento, cria um básico
-        const basicUserData = {
-          email: user.email,
-          nome: user.displayName || user.email.split('@')[0],
-          isAdmin: false,
-          isMasterAdmin: false,
-          ativo: true,
-          createdAt: new Date()
-        };
-        
-        await setDoc(doc(db, 'usuarios', user.uid), basicUserData);
-        setUserData(basicUserData); // <-- CORREÇÃO: Apenas define os dados do Firestore
-        return basicUserData;
-      }
-    } catch (error) {
-      console.error("Erro ao buscar dados do usuário:", error);
-      setUserData(null); // Limpa em caso de erro
-      return null;
-    }
-  };
-
-  // Signup function
-  const signup = async (email, password, additionalData = {}) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    if (additionalData.nome) {
-      await updateProfile(user, { displayName: additionalData.nome });
-    }
-
-    const newUserData = {
-      email: user.email,
-      nome: additionalData.nome || user.email.split('@')[0],
-      isAdmin: additionalData.isAdmin || false,
-      isMasterAdmin: additionalData.isMasterAdmin || false,
-      estabelecimentosGerenciados: additionalData.estabelecimentosGerenciados || [],
-      ativo: true,
-      createdAt: new Date(),
-      ...additionalData
+    const logout = async () => {
+        try {
+            await signOut(auth); 
+            toast.success('Você foi desconectado com sucesso!');
+        } catch (error) {
+            console.error("Erro ao fazer Firebase signOut:", error);
+            toast.error('Ocorreu um erro ao tentar desconectar.');
+        } finally {
+            setUserData(null);
+            setCurrentUser(null);
+            setCurrentClientData(null); 
+        }
     };
 
-    await setDoc(doc(db, 'usuarios', user.uid), newUserData);
-    
-    // Atualiza o estado local
-    setUserData(newUserData);
-    // O currentUser será definido pelo onAuthStateChanged
+    // UseEffect principal (carrega dados)
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                console.log("👤 Usuário logado no AuthContext:", user.email);
+                setCurrentUser(user); 
+                
+                let tokenResult = { claims: {} };
+                try {
+                    tokenResult = await user.getIdTokenResult(false); 
+                } catch (e) { 
+                    console.error("Falha ao obter token result:", e); 
+                }
+                const claims = tokenResult.claims;
+                
+                const firestoreData = await getFirestoreUserData(user); 
+                
+                const combinedData = {
+                    ...firestoreData, 
+                    isAdmin: claims.isAdmin || firestoreData?.isAdmin || false,
+                    isMasterAdmin: claims.isMasterAdmin || firestoreData?.isMasterAdmin || false,
+                    estabelecimentosGerenciados: claims.estabelecimentos || firestoreData?.estabelecimentosGerenciados || [],
+                    estabelecimentoIdClaim: claims.estabelecimentoId || null, 
+                };
 
-    return userCredential;
-  };
+                console.log("📋 Dados combinados do usuário:", {
+                    isAdmin: combinedData.isAdmin,
+                    isMasterAdmin: combinedData.isMasterAdmin,
+                    estabelecimentos: combinedData.estabelecimentosGerenciados,
+                    firestoreData: firestoreData
+                });
 
-  // Login function (Correto da última vez)
-  const login = (email, password) => {
-    return setPersistence(auth, browserSessionPersistence)
-        .then(() => {
-            return signInWithEmailAndPassword(auth, email, password);
-        });
-  };
+                setUserData(combinedData);
+                setCurrentClientData(await getFirestoreClientData(user));
 
-  // Logout function (Correto)
-  const logout = () => {
-    setUserData(null);
-    setCurrentUser(null);
-    setCurrentClientData(null); // <-- ADICIONADO: Limpa os dados do cliente
-    return signOut(auth);
-  };
-
-  // Update user profile
-  const updateUserProfile = async (updates) => {
-    if (!currentUser) return;
-
-    try {
-      if (updates.nome) {
-        await updateProfile(auth.currentUser, { displayName: updates.nome });
-      }
-
-      const userRef = doc(db, 'usuarios', currentUser.uid);
-      await updateDoc(userRef, updates);
-
-      // Atualiza estado local
-      const updatedUserData = { ...userData, ...updates };
-      setUserData(updatedUserData); // <-- CORREÇÃO: Apenas atualiza userData
-
-      return true;
-    } catch (error) {
-      console.error("Erro ao atualizar perfil:", error);
-      throw error;
-    }
-  };
-
-  // CORREÇÃO: As permissões vêm do 'userData' (Firestore)
-  const isAdmin = userData?.isAdmin || false;
-  const isMasterAdmin = userData?.isMasterAdmin || false;
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Usuário está logado
-        setCurrentUser(user); 
-        
-        // 1. Busca dados de 'usuarios' (admin/roles)
-        await fetchUserData(user);
-
-        // 2. <-- ADICIONADO: Busca dados de 'clientes' (para o Menu.jsx)
-        try {
-            const clientDocRef = doc(db, 'clientes', user.uid);
-            const clientDocSnap = await getDoc(clientDocRef);
-            if (clientDocSnap.exists()) {
-                setCurrentClientData(clientDocSnap.data());
             } else {
-                // Usuário logado, mas sem registro na coleção 'clientes'
-                // (Provavelmente é um admin, o que é normal)
+                console.log("👤 Usuário deslogado no AuthContext");
+                setCurrentUser(null);
+                setUserData(null);
                 setCurrentClientData(null);
             }
-        } catch (error) {
-            console.error("Erro ao buscar dados do cliente:", error);
-            setCurrentClientData(null);
-        }
+            setLoading(false);
+        });
 
-      } else {
-        // Usuário não está logado
-        setCurrentUser(null);
-        setUserData(null);
-        setCurrentClientData(null); // <-- ADICIONADO: Limpa o estado do cliente
-      }
-      setLoading(false);
+        return unsubscribe;
+    }, []);
+    
+    // CÁLCULO DO ID PRINCIPAL
+    const primeiroEstabelecimentoId = 
+        userData?.estabelecimentosGerenciados?.[0] || null;
+
+    // 🚨 CORREÇÃO: Expondo isAdmin e isMaster diretamente
+    const isAdmin = userData?.isAdmin || false;
+    const isMasterAdmin = userData?.isMasterAdmin || false;
+
+    console.log("🔐 AuthContext valores expostos:", {
+        currentUser: !!currentUser,
+        isAdmin,
+        isMasterAdmin,
+        estabelecimentoIdPrincipal: primeiroEstabelecimentoId,
+        userData: userData
     });
 
-    return unsubscribe;
-  }, []);
+    // --- VALORES DO CONTEXTO ---
+    const value = {
+        currentUser, 
+        userData, 
+        currentClientData,
+        signup: async (email, password, additionalData = {}) => {
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                if (additionalData.nome) {
+                    await updateProfile(user, { displayName: additionalData.nome });
+                }
+                
+                const userDataToSave = {
+                    email: user.email,
+                    nome: additionalData.nome || user.email.split('@')[0],
+                    isAdmin: additionalData.isAdmin || false,
+                    isMasterAdmin: additionalData.isMasterAdmin || false,
+                    estabelecimentosGerenciados: additionalData.estabelecimentosGerenciados || [],
+                    ativo: true,
+                    createdAt: new Date(),
+                    ...additionalData
+                };
+                
+                await setDoc(doc(db, 'usuarios', user.uid), userDataToSave);
+                return userCredential;
+            } catch (error) {
+                console.error("Erro no signup:", error);
+                throw error;
+            }
+        },
+        login: (email, password) => {
+            return setPersistence(auth, browserSessionPersistence)
+                .then(() => signInWithEmailAndPassword(auth, email, password));
+        },
+        logout,
+        updateUserProfile: async (updates) => {
+            try {
+                if (auth.currentUser) {
+                    await updateProfile(auth.currentUser, updates);
+                    
+                    if (updates.nome || updates.email) {
+                        await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), {
+                            ...(updates.nome && { nome: updates.nome }),
+                            ...(updates.email && { email: updates.email }),
+                            atualizadoEm: new Date()
+                        });
+                    }
+                    
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error("Erro ao atualizar perfil:", error);
+                throw error;
+            }
+        },
+        loading,
+        estabelecimentoIdPrincipal: primeiroEstabelecimentoId,
+        // 🚨 CORREÇÃO: Expondo diretamente
+        isAdmin,
+        isMaster: isMasterAdmin,
+    };
 
-  const value = {
-    currentUser, // <-- Objeto RAW (com .getIdTokenResult)
-    userData, // <-- Objeto do Firestore (com .isAdmin)
-    currentClientData, // <-- ADICIONADO: Objeto do Firestore (com .endereco, .telefone)
-    signup,
-    login,
-    logout,
-    updateUserProfile,
-    isAdmin, // <-- Derivado do userData
-    isMasterAdmin, // <-- Derivado do userData
-    loading
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+    return (
+        <AuthContext.Provider value={value}>
+            {!loading && children} 
+        </AuthContext.Provider>
+    );
 }
 
-// Componente PrivateRoute para proteger rotas
-export function PrivateRoute({ children, allowedRoles = [] }) {
-  // CORREÇÃO: Pegamos os valores de permissão direto do hook
-  const { currentUser, isAdmin, isMasterAdmin, loading } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      // Este log agora usa as variáveis corretas
-      console.log("PrivateRoute Debug: Checking roles. User is Admin:", isAdmin, "MasterAdmin:", isMasterAdmin, "Allowed roles:", allowedRoles);
-    }
-  }, [currentUser, isAdmin, isMasterAdmin, allowedRoles]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
-      </div>
-    );
-  }
-
-  // Lógica de redirecionamento (Correta da última vez)
-  if (!currentUser) {
-    if (allowedRoles.length > 0 && (allowedRoles.includes('admin') || allowedRoles.includes('masterAdmin'))) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-    return <Navigate to="/" state={{ from: location }} replace />;
-  }
-
-  // CORREÇÃO: Verificar se o usuário tem as roles usando as variáveis do hook
-  const hasRequiredRole = allowedRoles.length === 0 || 
-      (allowedRoles.includes('admin') && isAdmin) ||
-      (allowedRoles.includes('masterAdmin') && isMasterAdmin);
-
-
-  if (!hasRequiredRole) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="bg-white p-8 rounded-lg shadow-md max-w-md text-center">
-          <div className="text-red-500 text-6xl mb-4">🚫</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Acesso Negado</h1>
-          <p className="text-gray-600 mb-6">
-            Você não tem permissão para acessar esta página.
-          </p>
-          <button
-            onClick={() => navigate('/')}
-            className="bg-yellow-500 text-black px-6 py-2 rounded-lg hover:bg-yellow-600 transition-colors"
-          >
-            Voltar para o Início
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return children;
-}
-
-// Hook personalizado para verificar permissões
+// -----------------------------------------------------------
+// usePermissions e PrivateRoute 
+// -----------------------------------------------------------
 export function usePermissions() {
-  // CORREÇÃO: Ler do 'userData'
-  const { currentUser, userData } = useAuth();
-  
-  const canAccess = (requiredRoles = []) => {
-    if (!currentUser) return false;
-    if (requiredRoles.length === 0) return true;
+    const { currentUser, userData, loading, isAdmin, isMaster } = useAuth();
     
-    return requiredRoles.some(role => {
-      switch (role) {
-        case 'admin':
-          return userData?.isAdmin;
-        case 'masterAdmin':
-          return userData?.isMasterAdmin;
-        default:
-          return false;
-      }
-    });
-  };
+    const canAccess = (requiredRoles = []) => {
+        if (!currentUser || loading) return false;
+        if (requiredRoles.length === 0) return true;
+        
+        return requiredRoles.some(role => {
+            switch (role) {
+                case 'admin':
+                    return isAdmin;
+                case 'masterAdmin':
+                    return isMaster;
+                default:
+                    return false;
+            }
+        });
+    };
 
-  const canManageEstabelecimento = (estabelecimentoId) => {
-    if (!currentUser) return false;
-    if (userData?.isMasterAdmin) return true;
+    const canManageEstabelecimento = (estabelecimentoId) => {
+        if (!currentUser || loading) return false;
+        if (isMaster) return true;
+        
+        return isAdmin && 
+               userData?.estabelecimentosGerenciados?.includes(estabelecimentoId);
+    };
+
+    return {
+        canAccess,
+        canManageEstabelecimento,
+        isAdmin: isAdmin || false,
+        isMasterAdmin: isMaster || false,
+        loading,
+    };
+}
+
+export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecimento = null }) {
+    const { currentUser, loading } = useAuth();
+    const { canAccess, canManageEstabelecimento, loading: permissionsLoading } = usePermissions();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    if (loading || permissionsLoading) { 
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
+            </div>
+        ); 
+    }
+
+    if (!currentUser) {
+        if (allowedRoles.includes('admin') || allowedRoles.includes('masterAdmin')) {
+            return <Navigate to="/login-admin" state={{ from: location }} replace />;
+        }
+        return <Navigate to="/" replace />;
+    }
+
+    const hasRequiredRole = canAccess(allowedRoles);
+
+    if (!hasRequiredRole) {
+        return <Navigate to="/" replace />;
+    }
     
-    return userData?.isAdmin && 
-            userData?.estabelecimentosGerenciados?.includes(estabelecimentoId);
-  };
+    if (requiredEstabelecimento) {
+        if (!canManageEstabelecimento(requiredEstabelecimento)) { 
+            return <Navigate to="/" replace />; 
+        }
+    }
 
-  return {
-    canAccess,
-    canManageEstabelecimento,
-    isAdmin: userData?.isAdmin || false,
-    isMasterAdmin: userData?.isMasterAdmin || false
-  };
+    return children;
 }

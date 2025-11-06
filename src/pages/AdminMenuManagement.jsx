@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+// src/pages/AdminMenuManagement.jsx - VERSÃO COMPLETA E CORRIGIDA
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, getDocs, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -19,7 +21,7 @@ import {
 } from 'react-icons/io5';
 
 function AdminMenuManagement() {
-    const { currentUser, isAdmin, loading: authLoading, estabelecimentoId } = useAuth();
+    const { currentUser, isAdmin, isMaster, loading: authLoading, estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate();
 
     const [establishmentName, setEstablishmentName] = useState('');
@@ -30,52 +32,94 @@ function AdminMenuManagement() {
     const [selectedCategory, setSelectedCategory] = useState('Todos');
     const [showItemForm, setShowItemForm] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
-    const [formData, setFormData] = useState({ nome: '', descricao: '', preco: '', categoria: '', imageUrl: '', ativo: true });
+    const [formData, setFormData] = useState({ 
+        nome: '', 
+        descricao: '', 
+        preco: '', 
+        categoria: '', 
+        imageUrl: '', 
+        ativo: true 
+    });
     const [itemImage, setItemImage] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
     const [formLoading, setFormLoading] = useState(false);
 
-    // Controle de acesso
+    // 🚨 CONTROLE DE ACESSO CORRIGIDO
     useEffect(() => {
-        if (!authLoading && (!currentUser || !isAdmin)) {
-            toast.error('🔒 Acesso negado. Faça login como administrador.');
+        if (authLoading) return;
+        
+        console.log("🔐 Debug Auth AdminMenu:", { 
+            currentUser: !!currentUser, 
+            isAdmin, 
+            isMaster,
+            estabelecimentoIdPrincipal 
+        });
+        
+        if (!currentUser) {
+            toast.error('🔒 Faça login para acessar.');
             navigate('/login-admin');
+            return;
         }
-    }, [currentUser, isAdmin, authLoading, navigate]);
-    
+        
+        if (!isAdmin && !isMaster) {
+            toast.error('🔒 Acesso negado. Você precisa ser administrador.');
+            navigate('/dashboard');
+            return;
+        }
+
+        if (!estabelecimentoIdPrincipal) {
+            toast.error('❌ Configuração de acesso incompleta.');
+            navigate('/dashboard');
+            return;
+        }
+    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoIdPrincipal]);
+
     // Busca o nome do estabelecimento
     useEffect(() => {
-        if (estabelecimentoId) {
+        if (estabelecimentoIdPrincipal) {
             const fetchEstablishmentName = async () => {
-                const estabDoc = await getDoc(doc(db, 'estabelecimentos', estabelecimentoId));
-                if (estabDoc.exists()) {
-                    setEstablishmentName(estabDoc.data().nome);
+                try {
+                    const estabDoc = await getDoc(doc(db, 'estabelecimentos', estabelecimentoIdPrincipal));
+                    if (estabDoc.exists()) {
+                        setEstablishmentName(estabDoc.data().nome);
+                        console.log("🏪 Nome do estabelecimento:", estabDoc.data().nome);
+                    }
+                } catch (error) {
+                    console.error("Erro ao buscar nome do estabelecimento:", error);
                 }
             };
             fetchEstablishmentName();
         }
-    }, [estabelecimentoId]);
+    }, [estabelecimentoIdPrincipal]);
 
     // Listener para categorias e itens
     useEffect(() => {
-        if (!estabelecimentoId) {
+        if (!estabelecimentoIdPrincipal) {
+            console.log("❌ Nenhum estabelecimentoIdPrincipal disponível");
             setLoading(false);
             return;
         }
 
         setLoading(true);
+        console.log("📦 Buscando cardápio para estabelecimento:", estabelecimentoIdPrincipal);
 
-        const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
+        const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'cardapio');
         const qCategorias = query(categoriasRef, orderBy('ordem', 'asc'));
 
         const unsubscribeCategorias = onSnapshot(qCategorias, (categoriasSnapshot) => {
-            const fetchedCategories = categoriasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("📁 Categorias encontradas:", categoriasSnapshot.docs.length);
+            
+            const fetchedCategories = categoriasSnapshot.docs.map(doc => ({ 
+                id: doc.id, 
+                ...doc.data() 
+            }));
             setCategories(fetchedCategories);
 
             const unsubscribers = [];
             let allItems = [];
 
             if (categoriasSnapshot.empty) {
+                console.log("ℹ️ Nenhuma categoria encontrada");
                 setMenuItems([]);
                 setLoading(false);
                 return;
@@ -83,10 +127,21 @@ function AdminMenuManagement() {
 
             categoriasSnapshot.forEach(catDoc => {
                 const categoriaData = catDoc.data();
-                const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', catDoc.id, 'itens');
+                console.log(`🔍 Buscando itens na categoria: ${catDoc.id} (${categoriaData.nome})`);
+                
+                const itensRef = collection(
+                    db, 
+                    'estabelecimentos', 
+                    estabelecimentoIdPrincipal, 
+                    'cardapio', 
+                    catDoc.id, 
+                    'itens'
+                );
                 const qItens = query(itensRef, orderBy('nome', 'asc'));
 
                 const unsubscribeItens = onSnapshot(qItens, (itensSnapshot) => {
+                    console.log(`📦 Itens na categoria ${catDoc.id}:`, itensSnapshot.docs.length);
+                    
                     const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
                         ...itemDoc.data(),
                         id: itemDoc.id,
@@ -101,7 +156,7 @@ function AdminMenuManagement() {
                     
                     setMenuItems(allItems.sort((a, b) => a.nome.localeCompare(b.nome)));
                 }, (error) => {
-                    console.error(`Erro ao ouvir itens da categoria ${catDoc.id}:`, error);
+                    console.error(`❌ Erro ao ouvir itens da categoria ${catDoc.id}:`, error);
                     toast.error("❌ Erro ao carregar itens de uma categoria.");
                 });
 
@@ -111,21 +166,28 @@ function AdminMenuManagement() {
             setLoading(false);
             
             return () => {
+                console.log("🧹 Limpando listeners de itens");
                 unsubscribers.forEach(unsub => unsub());
             };
         }, (error) => {
-            console.error("Erro ao carregar categorias:", error);
+            console.error("❌ Erro ao carregar categorias:", error);
             toast.error("❌ Erro ao carregar categorias do cardápio.");
             setLoading(false);
         });
 
         return () => {
+            console.log("🧹 Limpando listener de categorias");
             unsubscribeCategorias();
         };
-    }, [estabelecimentoId]);
+    }, [estabelecimentoIdPrincipal]);
 
     const handleSaveItem = async (e) => {
         e.preventDefault();
+        if (!estabelecimentoIdPrincipal) {
+            toast.error('❌ Estabelecimento não identificado.');
+            return;
+        }
+
         const { nome, preco, categoria } = formData;
         if (!nome.trim() || !preco || !categoria.trim()) {
             toast.warn("⚠️ Nome, Preço e Categoria são obrigatórios.");
@@ -133,7 +195,9 @@ function AdminMenuManagement() {
         }
         setFormLoading(true);
 
-        let categoriaDoc = categories.find(cat => cat.nome.toLowerCase() === categoria.toLowerCase());
+        let categoriaDoc = categories.find(cat => 
+            cat.nome.toLowerCase() === categoria.toLowerCase()
+        );
         
         if (!categoriaDoc) {
             toast.error(`❌ A categoria "${categoria}" não existe.`);
@@ -149,7 +213,7 @@ function AdminMenuManagement() {
                 if (editingItem && editingItem.imageUrl) {
                     await deleteFileByUrl(editingItem.imageUrl);
                 }
-                const imageName = `${estabelecimentoId}_${Date.now()}_${itemImage.name.replace(/\s/g, '_')}`;
+                const imageName = `${estabelecimentoIdPrincipal}_${Date.now()}_${itemImage.name.replace(/\s/g, '_')}`;
                 const imagePath = `images/menuItems/${imageName}`;
                 finalImagePath = await uploadFile(itemImage, imagePath);
             }
@@ -159,7 +223,8 @@ function AdminMenuManagement() {
                 ...dataToSave, 
                 preco: Number(dataToSave.preco), 
                 imageUrl: finalImagePath,
-                categoria: categoria
+                categoria: categoria,
+                atualizadoEm: new Date()
             };
 
             if (editingItem) {
@@ -168,14 +233,37 @@ function AdminMenuManagement() {
                      setFormLoading(false);
                      return;
                 }
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens', editingItem.id), finalData);
+                await updateDoc(
+                    doc(
+                        db, 
+                        'estabelecimentos', 
+                        estabelecimentoIdPrincipal, 
+                        'cardapio', 
+                        categoriaId, 
+                        'itens', 
+                        editingItem.id
+                    ), 
+                    finalData
+                );
                 toast.success("✅ Item atualizado com sucesso!");
             } else {
-                await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens'), finalData);
+                finalData.criadoEm = new Date();
+                await addDoc(
+                    collection(
+                        db, 
+                        'estabelecimentos', 
+                        estabelecimentoIdPrincipal, 
+                        'cardapio', 
+                        categoriaId, 
+                        'itens'
+                    ), 
+                    finalData
+                );
                 toast.success("✅ Item cadastrado com sucesso!");
             }
             closeItemForm();
         } catch (error) {
+            console.error("❌ Erro ao salvar item:", error);
             toast.error("❌ Erro ao salvar o item: " + error.message);
         } finally {
             setFormLoading(false);
@@ -192,7 +280,10 @@ function AdminMenuManagement() {
                         </div>
                         <div className="flex-1">
                             <p className="font-semibold text-gray-900">Confirmar exclusão?</p>
-                            <p className="text-sm text-gray-600 mt-1">Tem certeza que deseja excluir o item <strong>"{item.nome}"</strong>? Esta ação não pode ser desfeita.</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Tem certeza que deseja excluir o item <strong>"{item.nome}"</strong>? 
+                                Esta ação não pode ser desfeita.
+                            </p>
                             <div className="flex justify-end mt-4 space-x-3">
                                 <button 
                                     onClick={closeToast} 
@@ -206,9 +297,20 @@ function AdminMenuManagement() {
                                             if (item.imageUrl) {
                                                 await deleteFileByUrl(item.imageUrl);
                                             }
-                                            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id));
+                                            await deleteDoc(
+                                                doc(
+                                                    db, 
+                                                    'estabelecimentos', 
+                                                    estabelecimentoIdPrincipal, 
+                                                    'cardapio', 
+                                                    item.categoriaId, 
+                                                    'itens', 
+                                                    item.id
+                                                )
+                                            );
                                             toast.success("✅ Item excluído com sucesso!");
                                         } catch (error) {
+                                            console.error("❌ Erro ao excluir item:", error);
                                             toast.error("❌ Erro ao excluir o item.");
                                         }
                                         closeToast();
@@ -234,17 +336,32 @@ function AdminMenuManagement() {
 
     const toggleItemStatus = async (item) => {
         try {
-            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id), { 
-                ativo: !item.ativo,
-                atualizadoEm: new Date()
-            });
+            await updateDoc(
+                doc(
+                    db, 
+                    'estabelecimentos', 
+                    estabelecimentoIdPrincipal, 
+                    'cardapio', 
+                    item.categoriaId, 
+                    'itens', 
+                    item.id
+                ), 
+                { 
+                    ativo: !item.ativo,
+                    atualizadoEm: new Date()
+                }
+            );
             toast.info(`🔄 Status de "${item.nome}" alterado.`);
         } catch(error) {
+            console.error("❌ Erro ao alterar status:", error);
             toast.error("❌ Erro ao alterar o status do item.");
         }
     };
     
-    const availableCategories = useMemo(() => ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], [menuItems]);
+    const availableCategories = useMemo(() => 
+        ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], 
+        [menuItems]
+    );
     
     const filteredItems = useMemo(() => {
         return menuItems.filter(item =>
@@ -267,7 +384,14 @@ function AdminMenuManagement() {
             });
             setImagePreview(item.imageUrl);
         } else {
-            setFormData({ nome: '', descricao: '', preco: '', categoria: '', imageUrl: '', ativo: true });
+            setFormData({ 
+                nome: '', 
+                descricao: '', 
+                preco: '', 
+                categoria: '', 
+                imageUrl: '', 
+                ativo: true 
+            });
             setImagePreview('');
         }
         setItemImage(null);
@@ -277,6 +401,16 @@ function AdminMenuManagement() {
     const closeItemForm = () => {
         setShowItemForm(false);
         setEditingItem(null);
+        setFormData({ 
+            nome: '', 
+            descricao: '', 
+            preco: '', 
+            categoria: '', 
+            imageUrl: '', 
+            ativo: true 
+        });
+        setImagePreview('');
+        setItemImage(null);
     };
 
     const handleFormChange = (e) => {
@@ -290,7 +424,10 @@ function AdminMenuManagement() {
                 setImagePreview(editingItem?.imageUrl || '');
             }
         } else {
-            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+            setFormData(prev => ({ 
+                ...prev, 
+                [name]: type === 'checkbox' ? checked : value 
+            }));
         }
     };
 
@@ -324,6 +461,9 @@ function AdminMenuManagement() {
                         </h1>
                         <p className="text-gray-600">
                             {establishmentName} • {estatisticas.total} itens no cardápio
+                        </p>
+                        <p className="text-sm text-gray-500">
+                            Estabelecimento ID: {estabelecimentoIdPrincipal}
                         </p>
                     </div>
                     
@@ -494,19 +634,23 @@ function AdminMenuManagement() {
                         {/* Formulário */}
                         <form onSubmit={handleSaveItem} className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Item *</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Nome do Item *
+                                </label>
                                 <input 
                                     name="nome" 
                                     value={formData.nome} 
                                     onChange={handleFormChange} 
-                                    placeholder="Ex: Pizza Calabresa"
+                                    placeholder="Ex: X-Burguer Especial"
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Descrição
+                                </label>
                                 <textarea 
                                     name="descricao" 
                                     value={formData.descricao} 
@@ -519,7 +663,9 @@ function AdminMenuManagement() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Preço *</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Preço *
+                                    </label>
                                     <input 
                                         name="preco" 
                                         type="number" 
@@ -532,22 +678,27 @@ function AdminMenuManagement() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Categoria *</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Categoria *
+                                    </label>
                                     <input 
                                         name="categoria" 
                                         value={formData.categoria} 
                                         onChange={handleFormChange} 
-                                        placeholder="Ex: Pizzas"
+                                        placeholder="Ex: Burguers"
                                         list="categories-list"
                                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         disabled={!!editingItem}
                                         required
                                     />
                                     <datalist id="categories-list">
-                                        {categories.map(cat => <option key={cat.id} value={cat.nome} />)}
+                                        {categories.map(cat => (
+                                            <option key={cat.id} value={cat.nome} />
+                                        ))}
                                     </datalist>
                                 </div>
                             </div>
+
                             {editingItem && (
                                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                                     <p className="text-sm text-yellow-800">
@@ -557,7 +708,9 @@ function AdminMenuManagement() {
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Imagem do Item</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Imagem do Item
+                                </label>
                                 <div className="flex items-center space-x-4">
                                     <label className="flex-1 cursor-pointer">
                                         <input 
@@ -575,7 +728,11 @@ function AdminMenuManagement() {
                                     </label>
                                     {imagePreview && (
                                         <div className="flex-shrink-0">
-                                            <img src={imagePreview} alt="Preview" className="w-16 h-16 object-cover rounded-lg shadow"/>
+                                            <img 
+                                                src={imagePreview} 
+                                                alt="Preview" 
+                                                className="w-16 h-16 object-cover rounded-lg shadow"
+                                            />
                                         </div>
                                     )}
                                 </div>

@@ -19,7 +19,7 @@ import {
 } from 'react-icons/io5';
 
 function TaxasDeEntrega() {
-    const { estabelecimentoId, currentUser, isAdmin, loading: authLoading } = useAuth();
+    const { estabelecimentoIdPrincipal, currentUser, isAdmin, isMaster, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
     const [bairros, setBairros] = useState([]);
@@ -29,30 +29,56 @@ function TaxasDeEntrega() {
     const [loading, setLoading] = useState(true);
     const [formLoading, setFormLoading] = useState(false);
 
-    // Controle de acesso
+    // 🚨 CORREÇÃO: Controle de acesso atualizado
     useEffect(() => {
-        if (!authLoading && (!currentUser || !isAdmin)) {
-            toast.error('🔒 Acesso negado.');
-            navigate('/login-admin');
+        if (!authLoading) {
+            console.log("🔐 Debug Auth TaxasDeEntrega:", { 
+                currentUser: !!currentUser, 
+                isAdmin, 
+                isMaster,
+                estabelecimentoIdPrincipal 
+            });
+            
+            if (!currentUser) {
+                toast.error('🔒 Faça login para acessar.');
+                navigate('/login-admin');
+                return;
+            }
+            
+            if (!isAdmin && !isMaster) {
+                toast.error('🔒 Acesso negado. Você precisa ser administrador.');
+                navigate('/dashboard');
+                return;
+            }
+
+            if (!estabelecimentoIdPrincipal) {
+                toast.error('❌ Configuração de acesso incompleta.');
+                navigate('/dashboard');
+                return;
+            }
         }
-    }, [currentUser, isAdmin, authLoading, navigate]);
+    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoIdPrincipal]);
 
     // Função para buscar as taxas de entrega
     const getTaxas = async () => {
-        if (!estabelecimentoId) {
+        if (!estabelecimentoIdPrincipal) {
             setLoading(false);
             return;
         }
         
         setLoading(true);
         try {
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'taxasDeEntrega');
             const q = query(taxasCollectionRef, orderBy('nomeBairro'));
             const data = await getDocs(q);
-            const fetchedBairros = data.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            const fetchedBairros = data.docs.map(doc => ({ 
+                ...doc.data(), 
+                id: doc.id 
+            }));
             setBairros(fetchedBairros);
+            console.log("📦 Taxas de entrega carregadas:", fetchedBairros.length);
         } catch (err) {
-            console.error("Erro ao buscar taxas:", err);
+            console.error("❌ Erro ao buscar taxas:", err);
             toast.error("❌ Erro ao carregar as taxas de entrega.");
         } finally {
             setLoading(false);
@@ -60,10 +86,10 @@ function TaxasDeEntrega() {
     };
 
     useEffect(() => {
-        if (!authLoading && estabelecimentoId) {
+        if (!authLoading && estabelecimentoIdPrincipal) {
             getTaxas();
         }
-    }, [estabelecimentoId, authLoading]);
+    }, [estabelecimentoIdPrincipal, authLoading]);
 
     const clearForm = () => {
         setEditingId(null);
@@ -73,10 +99,16 @@ function TaxasDeEntrega() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!estabelecimentoIdPrincipal) {
+            toast.error('❌ Estabelecimento não identificado.');
+            return;
+        }
+
         if (!nomeBairro.trim() || valorTaxa === '') {
             toast.warn("⚠️ Por favor, preencha todos os campos.");
             return;
         }
+        
         const valorNumerico = parseFloat(valorTaxa.replace(',', '.'));
         if (isNaN(valorNumerico) || valorNumerico < 0) {
             toast.warn("⚠️ Por favor, insira um valor de taxa válido.");
@@ -85,7 +117,7 @@ function TaxasDeEntrega() {
 
         setFormLoading(true);
         try {
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'taxasDeEntrega');
 
             if (editingId) {
                 const bairroDoc = doc(taxasCollectionRef, editingId);
@@ -99,14 +131,15 @@ function TaxasDeEntrega() {
                 await addDoc(taxasCollectionRef, { 
                     nomeBairro: nomeBairro.trim(), 
                     valorTaxa: valorNumerico,
-                    criadoEm: new Date()
+                    criadoEm: new Date(),
+                    ativo: true
                 });
                 toast.success("✅ Nova taxa adicionada com sucesso!");
             }
             clearForm();
             getTaxas();
         } catch (err) {
-            console.error("Erro ao salvar taxa:", err);
+            console.error("❌ Erro ao salvar taxa:", err);
             toast.error("❌ Erro ao salvar a taxa.");
         } finally {
             setFormLoading(false);
@@ -123,12 +156,12 @@ function TaxasDeEntrega() {
     const handleDelete = (id, nome) => {
         const confirmDelete = async () => {
             try {
-                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', id);
+                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'taxasDeEntrega', id);
                 await deleteDoc(taxaDocRef);
                 toast.success(`✅ Taxa para "${nome}" foi excluída.`);
                 getTaxas();
             } catch (err) {
-                console.error("Erro ao excluir taxa:", err);
+                console.error("❌ Erro ao excluir taxa:", err);
                 toast.error("❌ Erro ao excluir a taxa.");
             }
         };
@@ -180,6 +213,12 @@ function TaxasDeEntrega() {
         total: bairros.length,
         valorMedio: bairros.length > 0 
             ? bairros.reduce((acc, bairro) => acc + bairro.valorTaxa, 0) / bairros.length 
+            : 0,
+        valorMinimo: bairros.length > 0 
+            ? Math.min(...bairros.map(b => b.valorTaxa))
+            : 0,
+        valorMaximo: bairros.length > 0 
+            ? Math.max(...bairros.map(b => b.valorTaxa))
             : 0
     };
 
@@ -206,6 +245,9 @@ function TaxasDeEntrega() {
                         <p className="text-gray-600">
                             Gerencie os valores de entrega por bairro
                         </p>
+                        <p className="text-sm text-gray-500">
+                            Estabelecimento ID: {estabelecimentoIdPrincipal}
+                        </p>
                     </div>
                     
                     <Link 
@@ -218,7 +260,7 @@ function TaxasDeEntrega() {
                 </header>
 
                 {/* Estatísticas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
@@ -241,6 +283,34 @@ function TaxasDeEntrega() {
                             </div>
                             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                                 <IoCashOutline className="text-green-600 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Taxa Mínima</p>
+                                <p className="text-2xl font-bold text-blue-600">
+                                    R$ {estatisticas.valorMinimo.toFixed(2).replace('.', ',')}
+                                </p>
+                            </div>
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <span className="text-blue-600 text-lg">↓</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Taxa Máxima</p>
+                                <p className="text-2xl font-bold text-orange-600">
+                                    R$ {estatisticas.valorMaximo.toFixed(2).replace('.', ',')}
+                                </p>
+                            </div>
+                            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                                <span className="text-orange-600 text-lg">↑</span>
                             </div>
                         </div>
                     </div>
@@ -296,6 +366,9 @@ function TaxasDeEntrega() {
                                         required
                                     />
                                 </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Use vírgula para centavos (ex: 8,50)
+                                </p>
                             </div>
                         </div>
                         
@@ -350,20 +423,28 @@ function TaxasDeEntrega() {
                                 {bairros.map((bairro) => (
                                     <div 
                                         key={bairro.id} 
-                                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
                                     >
                                         <div className="flex items-center space-x-4">
-                                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
                                                 <IoLocationOutline className="text-blue-600" />
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-gray-900">{bairro.nomeBairro}</p>
                                                 <p className="text-green-600 font-bold">
-                                                    {bairro.valorTaxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    {bairro.valorTaxa.toLocaleString('pt-BR', { 
+                                                        style: 'currency', 
+                                                        currency: 'BRL' 
+                                                    })}
                                                 </p>
+                                                {bairro.criadoEm && (
+                                                    <p className="text-xs text-gray-500">
+                                                        Criado em: {bairro.criadoEm.toDate?.().toLocaleDateString('pt-BR')}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="flex space-x-2">
+                                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => handleEdit(bairro)}
                                                 className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
@@ -411,6 +492,27 @@ function TaxasDeEntrega() {
                                 <p className="text-blue-800 font-medium">Dica rápida</p>
                                 <p className="text-blue-700 text-sm">
                                     Os clientes verão automaticamente a taxa de entrega ao informar seu endereço durante o pedido.
+                                    As taxas são aplicadas automaticamente no checkout.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Informações de debug (apenas desenvolvimento) */}
+                {process.env.NODE_ENV === 'development' && (
+                    <div className="mt-8 bg-gray-100 border border-gray-300 rounded-lg p-4">
+                        <div className="flex items-start space-x-3">
+                            <div className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-white text-sm">🐛</span>
+                            </div>
+                            <div>
+                                <p className="text-gray-800 font-medium">Debug Info</p>
+                                <p className="text-gray-700 text-sm">
+                                    Estabelecimento: {estabelecimentoIdPrincipal}<br/>
+                                    Bairros carregados: {bairros.length}<br/>
+                                    Usuário Admin: {isAdmin ? 'Sim' : 'Não'}<br/>
+                                    Usuário Master: {isMaster ? 'Sim' : 'Não'}
                                 </p>
                             </div>
                         </div>
