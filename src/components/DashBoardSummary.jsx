@@ -1,4 +1,4 @@
-// src/components/DashboardSummary.jsx - VERSÃO CORRIGIDA
+// src/components/DashboardSummary.jsx - VERSÃO CORRIGIDA COM VENDAS DO SALÃO
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
@@ -21,12 +21,12 @@ const StatCard = ({ title, value, icon, color }) => (
 
 // Componente Spinner para o estado de carregamento
 const SummarySpinner = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-4 rounded-lg shadow-md bg-gray-800 text-center text-gray-400 col-span-3">
-            <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-2 text-sm">Carregando resumo do dia...</p>
-        </div>
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="p-4 rounded-lg shadow-md bg-gray-800 text-center text-gray-400 col-span-3">
+      <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+      <p className="mt-2 text-sm">Carregando resumo do dia...</p>
     </div>
+  </div>
 );
 
 // Formata um número para o padrão BRL (R$)
@@ -38,13 +38,14 @@ export default function DashboardSummary() {
     totalVendasHoje: 0,
     totalTaxasHoje: 0,
     totalPedidosHoje: 0,
+    vendasDelivery: 0,
+    vendasSalao: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchSummaryData = async () => {
-      // 🚨 CORREÇÃO: Usa estabelecimentoIdPrincipal do contexto
       if (!currentUser || !estabelecimentoIdPrincipal) {
         setLoading(false);
         return;
@@ -57,8 +58,14 @@ export default function DashboardSummary() {
         const todayStart = startOfDay(new Date());
         const todayEnd = endOfDay(new Date());
 
-        // 🚨 CORREÇÃO: Query corrigida com estabelecimentoIdPrincipal
-        const q = query(
+        let totalVendas = 0;
+        let totalTaxas = 0;
+        let totalPedidos = 0;
+        let vendasDeliveryCount = 0;
+        let vendasSalaoCount = 0;
+
+        // 🆕 1. BUSCAR PEDIDOS DE DELIVERY (FINALIZADOS)
+        const pedidosQuery = query(
           collection(db, 'pedidos'),
           where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
           where('status', '==', 'finalizado'),
@@ -66,30 +73,36 @@ export default function DashboardSummary() {
           where('createdAt', '<=', todayEnd)
         );
 
-        // Executar a query
-        const querySnapshot = await getDocs(q);
-        
-        let totalVendas = 0;
-        let totalTaxas = 0;
-        let totalPedidos = querySnapshot.docs.length;
-
-        // Calcular os totais iterando sobre os pedidos
-        querySnapshot.forEach(doc => {
+        const pedidosSnapshot = await getDocs(pedidosQuery);
+        pedidosSnapshot.forEach(doc => {
           const pedido = doc.data();
-
-          // Soma o valor total do pedido
           totalVendas += parseFloat(pedido.totalFinal || pedido.total || 0);
+          totalTaxas += parseFloat(pedido.taxaEntrega || 0);
+          totalPedidos++;
+          vendasDeliveryCount++;
+        });
 
-          // Soma a taxa de entrega SOMENTE se for do tipo 'delivery'
-          if (pedido.tipo === 'delivery') {
-            totalTaxas += parseFloat(pedido.taxaEntrega || 0);
-          }
+        // 🆕 2. BUSCAR VENDAS DO SALÃO
+        const vendasQuery = query(
+          collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
+          where('dataFechamento', '>=', todayStart),
+          where('dataFechamento', '<=', todayEnd)
+        );
+
+        const vendasSnapshot = await getDocs(vendasQuery);
+        vendasSnapshot.forEach(doc => {
+          const venda = doc.data();
+          totalVendas += parseFloat(venda.total || 0);
+          totalPedidos++;
+          vendasSalaoCount++;
         });
 
         console.log("📈 Resumo carregado:", {
-          pedidos: totalPedidos,
-          vendas: totalVendas,
-          taxas: totalTaxas
+          totalPedidos,
+          totalVendas,
+          totalTaxas,
+          vendasDelivery: vendasDeliveryCount,
+          vendasSalao: vendasSalaoCount
         });
 
         // Atualizar o estado com os novos dados
@@ -97,6 +110,8 @@ export default function DashboardSummary() {
           totalVendasHoje: totalVendas,
           totalTaxasHoje: totalTaxas,
           totalPedidosHoje: totalPedidos,
+          vendasDelivery: vendasDeliveryCount,
+          vendasSalao: vendasSalaoCount
         });
 
       } catch (error) {
@@ -124,27 +139,46 @@ export default function DashboardSummary() {
     );
   }
 
-  // Renderiza os cards com os valores
+  // 🆕 VERSÃO MELHORADA DOS CARDS
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <StatCard
-        title="Vendas Hoje"
-        value={formatBRL(summaryData.totalVendasHoje)}
-        icon="💵"
-        color="bg-gradient-to-br from-green-600 to-green-800"
-      />
-      <StatCard
-        title="Pedidos Hoje (Finalizados)"
-        value={summaryData.totalPedidosHoje}
-        icon="📋"
-        color="bg-gradient-to-br from-blue-600 to-blue-800"
-      />
-      <StatCard
-        title="Taxas de Entrega (Hoje)"
-        value={formatBRL(summaryData.totalTaxasHoje)}
-        icon="🛵"
-        color="bg-gradient-to-br from-cyan-500 to-teal-600"
-      />
+    <div className="space-y-6">
+      {/* Linha 1: Totais Gerais */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard
+          title="Faturamento Total Hoje"
+          value={formatBRL(summaryData.totalVendasHoje)}
+          icon="💵"
+          color="bg-gradient-to-br from-green-600 to-green-800"
+        />
+        <StatCard
+          title="Total de Vendas Hoje"
+          value={summaryData.totalPedidosHoje}
+          icon="📋"
+          color="bg-gradient-to-br from-blue-600 to-blue-800"
+        />
+        <StatCard
+          title="Taxas de Entrega (Hoje)"
+          value={formatBRL(summaryData.totalTaxasHoje)}
+          icon="🛵"
+          color="bg-gradient-to-br from-cyan-500 to-teal-600"
+        />
+      </div>
+
+      {/* 🆕 Linha 2: Detalhamento por Tipo */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <StatCard
+          title="Vendas Delivery"
+          value={summaryData.vendasDelivery}
+          icon="🚚"
+          color="bg-gradient-to-br from-orange-500 to-orange-700"
+        />
+        <StatCard
+          title="Vendas Salão"
+          value={summaryData.vendasSalao}
+          icon="🍽️"
+          color="bg-gradient-to-br from-purple-500 to-purple-700"
+        />
+      </div>
     </div>
   );
 }
