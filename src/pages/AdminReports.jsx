@@ -90,7 +90,7 @@ const FilterBadge = ({ children, active, onClick }) => (
 
 const AdminReports = () => {
     const navigate = useNavigate();
-    const { currentUser, isAdmin, estabelecimentoId, loading: authLoading } = useAuth();
+    const { currentUser, isAdmin, isMaster, loading: authLoading, estabelecimentoIdPrincipal } = useAuth();
     const reportContentRef = useRef();
 
     // Estados
@@ -102,9 +102,39 @@ const AdminReports = () => {
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [deliveryTypeFilter, setDeliveryTypeFilter] = useState('todos');
 
+    // 🚨 CORREÇÃO: Controle de acesso atualizado
+    useEffect(() => {
+        if (!authLoading) {
+            console.log("🔐 Debug Auth AdminReports:", { 
+                currentUser: !!currentUser, 
+                isAdmin, 
+                isMaster,
+                estabelecimentoIdPrincipal 
+            });
+            
+            if (!currentUser) {
+                toast.error('🔒 Faça login para acessar.');
+                navigate('/login-admin');
+                return;
+            }
+            
+            if (!isAdmin && !isMaster) {
+                toast.error('🔒 Acesso negado. Você precisa ser administrador.');
+                navigate('/dashboard');
+                return;
+            }
+
+            if (!estabelecimentoIdPrincipal) {
+                toast.error('❌ Configuração de acesso incompleta.');
+                navigate('/dashboard');
+                return;
+            }
+        }
+    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoIdPrincipal]);
+
     // Busca de dados
     const fetchPedidos = async () => {
-        if (!currentUser || !estabelecimentoId) return;
+        if (!currentUser || !estabelecimentoIdPrincipal) return;
         
         try {
             setLoadingData(true);
@@ -112,7 +142,7 @@ const AdminReports = () => {
             const end = endOfDay(new Date(endDate + 'T23:59:59'));
 
             let constraints = [
-                where('estabelecimentoId', '==', estabelecimentoId),
+                where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
                 where('createdAt', '>=', start),
                 where('createdAt', '<=', end)
             ];
@@ -132,12 +162,16 @@ const AdminReports = () => {
                 data: doc.data().createdAt.toDate(),
             }));
 
+            console.log("📊 Pedidos carregados:", pedidosList.length);
             setPedidos(pedidosList);
+            
             if (pedidosList.length === 0) {
                 toast.info("ℹ️ Nenhum pedido encontrado para os filtros selecionados.");
+            } else {
+                toast.success(`✅ ${pedidosList.length} pedidos carregados.`);
             }
         } catch (err) {
-            console.error("Erro ao carregar pedidos:", err);
+            console.error("❌ Erro ao carregar pedidos:", err);
             toast.error("❌ Erro ao carregar pedidos.");
         } finally {
             setLoadingData(false);
@@ -146,16 +180,10 @@ const AdminReports = () => {
 
     // Efetua a primeira busca ao carregar a página
     useEffect(() => {
-        fetchPedidos();
-    }, [currentUser, estabelecimentoId]);
-    
-    // Controle de acesso
-    useEffect(() => {
-        if (!authLoading && !isAdmin) {
-            toast.error('🔒 Acesso negado.');
-            navigate('/login-admin');
+        if (estabelecimentoIdPrincipal) {
+            fetchPedidos();
         }
-    }, [isAdmin, authLoading, navigate]);
+    }, [estabelecimentoIdPrincipal]);
 
     // Cálculos e memorização de dados
     const { summaryData, salesByDay, salesByPayment, salesByDelivery, topItems } = useMemo(() => {
@@ -194,40 +222,75 @@ const AdminReports = () => {
             .slice(0, 5);
 
         return {
-            summaryData: { totalPedidos, totalVendas, ticketMedio, totalTaxasEntrega },
-            salesByDay: { labels: sortedLabels, data: sortedLabels.map(l => salesByDay[l]) },
-            salesByPayment: { labels: Object.keys(salesByPayment), data: Object.values(salesByPayment) },
-            salesByDelivery: { labels: Object.keys(salesByDelivery), data: Object.values(salesByDelivery) },
+            summaryData: { 
+                totalPedidos, 
+                totalVendas, 
+                ticketMedio, 
+                totalTaxasEntrega 
+            },
+            salesByDay: { 
+                labels: sortedLabels, 
+                data: sortedLabels.map(l => salesByDay[l]) 
+            },
+            salesByPayment: { 
+                labels: Object.keys(salesByPayment), 
+                data: Object.values(salesByPayment) 
+            },
+            salesByDelivery: { 
+                labels: Object.keys(salesByDelivery), 
+                data: Object.values(salesByDelivery) 
+            },
             topItems,
         };
     }, [pedidos]);
     
     const handleExportPDF = async () => {
+        if (pedidos.length === 0) {
+            toast.warn("⚠️ Não há dados para exportar.");
+            return;
+        }
+
         const input = reportContentRef.current;
         if (!input) return;
+        
         toast.info("📄 Gerando PDF, por favor aguarde...");
 
+        // Esconde botões durante a geração do PDF
         input.querySelectorAll('.no-print').forEach(btn => btn.style.visibility = 'hidden');
         
-        const canvas = await html2canvas(input, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-        const imgData = canvas.toDataURL('image/png');
-        
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
-        pdf.setFontSize(16);
-        pdf.setTextColor('#1f2937');
-        pdf.text('Relatório de Vendas', pdfWidth / 2, 15, { align: 'center' });
-        pdf.setFontSize(10);
-        pdf.setTextColor('#6b7280');
-        pdf.text(`Período: ${format(new Date(startDate + 'T00:00:00'), 'dd/MM/yyyy')} a ${format(new Date(endDate + 'T00:00:00'), 'dd/MM/yyyy')}`, pdfWidth / 2, 22, { align: 'center' });
+        try {
+            const canvas = await html2canvas(input, { 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: '#ffffff',
+                logging: false
+            });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            // Cabeçalho do PDF
+            pdf.setFontSize(16);
+            pdf.setTextColor('#1f2937');
+            pdf.text('Relatório de Vendas', pdfWidth / 2, 15, { align: 'center' });
+            pdf.setFontSize(10);
+            pdf.setTextColor('#6b7280');
+            pdf.text(`Período: ${format(new Date(startDate + 'T00:00:00'), 'dd/MM/yyyy')} a ${format(new Date(endDate + 'T00:00:00'), 'dd/MM/yyyy')}`, pdfWidth / 2, 22, { align: 'center' });
+            pdf.text(`Estabelecimento ID: ${estabelecimentoIdPrincipal}`, pdfWidth / 2, 28, { align: 'center' });
 
-        pdf.addImage(imgData, 'PNG', 0, 30, pdfWidth, pdfHeight);
-        pdf.save(`relatorio_${startDate}_a_${endDate}.pdf`);
-        
-        toast.success("✅ PDF gerado com sucesso!");
-        input.querySelectorAll('.no-print').forEach(btn => btn.style.visibility = 'visible');
+            pdf.addImage(imgData, 'PNG', 0, 35, pdfWidth, pdfHeight);
+            pdf.save(`relatorio_${startDate}_a_${endDate}.pdf`);
+            
+            toast.success("✅ PDF gerado com sucesso!");
+        } catch (error) {
+            console.error("❌ Erro ao gerar PDF:", error);
+            toast.error("❌ Erro ao gerar PDF.");
+        } finally {
+            // Restaura visibilidade dos botões
+            input.querySelectorAll('.no-print').forEach(btn => btn.style.visibility = 'visible');
+        }
     };
 
     const setDateRange = (start, end) => {
@@ -280,12 +343,24 @@ const AdminReports = () => {
                 grid: { color: '#f3f4f6' }
             },
             y: { 
-                ticks: { color: '#6b7280' },
+                ticks: { 
+                    color: '#6b7280',
+                    callback: function(value) {
+                        return 'R$ ' + value.toLocaleString('pt-BR');
+                    }
+                },
                 grid: { color: '#f3f4f6' }
             }
         },
         plugins: {
-            legend: { display: false }
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return 'R$ ' + context.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                    }
+                }
+            }
         }
     };
 
@@ -301,6 +376,9 @@ const AdminReports = () => {
                         <p className="text-gray-600">
                             Análise detalhada do desempenho do seu estabelecimento
                         </p>
+                        <p className="text-sm text-gray-500">
+                            Estabelecimento ID: {estabelecimentoIdPrincipal}
+                        </p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 no-print">
                         <Link 
@@ -312,8 +390,8 @@ const AdminReports = () => {
                         </Link>
                         <button 
                             onClick={handleExportPDF} 
-                            disabled={loadingData}
-                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
+                            disabled={loadingData || pedidos.length === 0}
+                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <IoDocumentTextOutline />
                             <span>Exportar PDF</span>
@@ -365,6 +443,9 @@ const AdminReports = () => {
                                 <option value="todos">Todos os Status</option>
                                 <option value="finalizado">Finalizado</option>
                                 <option value="cancelado">Cancelado</option>
+                                <option value="pendente">Pendente</option>
+                                <option value="preparando">Preparando</option>
+                                <option value="entregue">Entregue</option>
                             </select>
                         </div>
                         <div>
@@ -421,7 +502,7 @@ const AdminReports = () => {
                         <button 
                             onClick={fetchPedidos} 
                             disabled={loadingData}
-                            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed no-print"
                         >
                             {loadingData ? (
                                 <>
@@ -493,20 +574,26 @@ const AdminReports = () => {
                                     </>
                                 }>
                                     <div className="h-80">
-                                        <Line 
-                                            data={{ 
-                                                labels: salesByDay.labels, 
-                                                datasets: [{ 
-                                                    label: 'Vendas (R$)', 
-                                                    data: salesByDay.data, 
-                                                    borderColor: '#3b82f6', 
-                                                    backgroundColor: 'rgba(59, 130, 246, 0.1)', 
-                                                    tension: 0.2, 
-                                                    fill: true 
-                                                }] 
-                                            }} 
-                                            options={lineChartOptions} 
-                                        />
+                                        {salesByDay.labels.length > 0 ? (
+                                            <Line 
+                                                data={{ 
+                                                    labels: salesByDay.labels, 
+                                                    datasets: [{ 
+                                                        label: 'Vendas (R$)', 
+                                                        data: salesByDay.data, 
+                                                        borderColor: '#3b82f6', 
+                                                        backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                                                        tension: 0.2, 
+                                                        fill: true 
+                                                    }] 
+                                                }} 
+                                                options={lineChartOptions} 
+                                            />
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-gray-500">
+                                                Nenhum dado disponível para o período selecionado
+                                            </div>
+                                        )}
                                     </div>
                                 </Card>
                             </div>
@@ -549,16 +636,22 @@ const AdminReports = () => {
                                 </>
                             }>
                                 <div className="h-80">
-                                    <Pie 
-                                        data={{ 
-                                            labels: salesByPayment.labels, 
-                                            datasets: [{ 
-                                                data: salesByPayment.data, 
-                                                backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'] 
-                                            }] 
-                                        }} 
-                                        options={chartOptions} 
-                                    />
+                                    {salesByPayment.labels.length > 0 ? (
+                                        <Pie 
+                                            data={{ 
+                                                labels: salesByPayment.labels, 
+                                                datasets: [{ 
+                                                    data: salesByPayment.data, 
+                                                    backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'] 
+                                                }] 
+                                            }} 
+                                            options={chartOptions} 
+                                        />
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-gray-500">
+                                            Nenhum dado disponível
+                                        </div>
+                                    )}
                                 </div>
                             </Card>
                             
@@ -569,19 +662,49 @@ const AdminReports = () => {
                                 </>
                             }>
                                 <div className="h-80">
-                                    <Pie 
-                                        data={{ 
-                                            labels: salesByDelivery.labels, 
-                                            datasets: [{ 
-                                                data: salesByDelivery.data, 
-                                                backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'] 
-                                            }] 
-                                        }} 
-                                        options={chartOptions} 
-                                    />
+                                    {salesByDelivery.labels.length > 0 ? (
+                                        <Pie 
+                                            data={{ 
+                                                labels: salesByDelivery.labels, 
+                                                datasets: [{ 
+                                                    data: salesByDelivery.data, 
+                                                    backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'] 
+                                                }] 
+                                            }} 
+                                            options={chartOptions} 
+                                        />
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-gray-500">
+                                            Nenhum dado disponível
+                                        </div>
+                                    )}
                                 </div>
                             </Card>
                         </div>
+
+                        {/* Informações de Debug */}
+                        {process.env.NODE_ENV === 'development' && (
+                            <Card title="Informações de Debug">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div>
+                                        <p className="font-semibold">Estabelecimento ID</p>
+                                        <p className="text-gray-600 truncate">{estabelecimentoIdPrincipal}</p>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold">Período</p>
+                                        <p className="text-gray-600">{startDate} a {endDate}</p>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold">Pedidos Carregados</p>
+                                        <p className="text-gray-600">{pedidos.length}</p>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold">Usuário Admin</p>
+                                        <p className="text-gray-600">{isAdmin ? 'Sim' : 'Não'}</p>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
                     </div>
                 )}
             </div>

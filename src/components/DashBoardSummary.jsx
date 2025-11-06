@@ -1,10 +1,10 @@
-// src/components/DashBoardSummary.jsx
+// src/components/DashboardSummary.jsx - VERSÃO CORRIGIDA
 
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase'; // Verifique se o caminho para o firebase está correto
-import { useAuth } from '../context/AuthContext'; // Verifique se o caminho do AuthContext está correto
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { startOfDay } from 'date-fns'; // Usado para pegar o início do dia
+import { startOfDay, endOfDay } from 'date-fns';
 
 // Componente de Card para exibir as estatísticas
 const StatCard = ({ title, value, icon, color }) => (
@@ -32,50 +32,48 @@ const SummarySpinner = () => (
 // Formata um número para o padrão BRL (R$)
 const formatBRL = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-
 export default function DashboardSummary() {
-  const { currentUser } = useAuth();
+  const { currentUser, estabelecimentoIdPrincipal } = useAuth();
   const [summaryData, setSummaryData] = useState({
     totalVendasHoje: 0,
     totalTaxasHoje: 0,
     totalPedidosHoje: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchSummaryData = async () => {
-      // Garante que o usuário está carregado
-      if (!currentUser) return; 
+      // 🚨 CORREÇÃO: Usa estabelecimentoIdPrincipal do contexto
+      if (!currentUser || !estabelecimentoIdPrincipal) {
+        setLoading(false);
+        return;
+      }
 
       try {
-        // 1. Obter o ID do estabelecimento (exatamente como no Painel.js)
-        const idTokenResult = await currentUser.getIdTokenResult(true);
-        const { estabelecimentoId } = idTokenResult.claims;
+        console.log("📊 Buscando resumo para estabelecimento:", estabelecimentoIdPrincipal);
 
-        if (!estabelecimentoId) {
-          setLoading(false);
-          return; // Sai se não houver ID
-        }
-
-        // 2. Definir o filtro de data (somente hoje)
+        // Definir o filtro de data (somente hoje)
         const todayStart = startOfDay(new Date());
+        const todayEnd = endOfDay(new Date());
 
-        // 3. Criar a query para buscar pedidos de HOJE e FINALIZADOS
+        // 🚨 CORREÇÃO: Query corrigida com estabelecimentoIdPrincipal
         const q = query(
           collection(db, 'pedidos'),
-          where('estabelecimentoId', '==', estabelecimentoId),
-          where('status', '==', 'finalizado'), // Apenas pedidos finalizados
-          where('createdAt', '>=', todayStart) // Criados de hoje em diante
+          where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
+          where('status', '==', 'finalizado'),
+          where('createdAt', '>=', todayStart),
+          where('createdAt', '<=', todayEnd)
         );
 
-        // 4. Executar a query (usamos getDocs para pegar os dados apenas uma vez)
+        // Executar a query
         const querySnapshot = await getDocs(q);
         
         let totalVendas = 0;
         let totalTaxas = 0;
-        let totalPedidos = querySnapshot.docs.length; // Total de pedidos finalizados hoje
+        let totalPedidos = querySnapshot.docs.length;
 
-        // 5. Calcular os totais iterando sobre os pedidos
+        // Calcular os totais iterando sobre os pedidos
         querySnapshot.forEach(doc => {
           const pedido = doc.data();
 
@@ -88,7 +86,13 @@ export default function DashboardSummary() {
           }
         });
 
-        // 6. Atualizar o estado com os novos dados
+        console.log("📈 Resumo carregado:", {
+          pedidos: totalPedidos,
+          vendas: totalVendas,
+          taxas: totalTaxas
+        });
+
+        // Atualizar o estado com os novos dados
         setSummaryData({
           totalVendasHoje: totalVendas,
           totalTaxasHoje: totalTaxas,
@@ -96,18 +100,28 @@ export default function DashboardSummary() {
         });
 
       } catch (error) {
-        console.error("Erro ao buscar resumo do dashboard:", error);
-        // Você pode adicionar um toast.error aqui se quiser
+        console.error("❌ Erro ao buscar resumo do dashboard:", error);
+        setError("Erro ao carregar dados do dia");
       } finally {
-        setLoading(false); // Para o spinner
+        setLoading(false);
       }
     };
 
     fetchSummaryData();
-  }, [currentUser]); // Executa a função sempre que o usuário (currentUser) mudar
+  }, [currentUser, estabelecimentoIdPrincipal]);
 
   if (loading) {
     return <SummarySpinner />;
+  }
+
+  if (error) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="p-4 rounded-lg shadow-md bg-red-100 border border-red-300 text-center text-red-700 col-span-3">
+          <p className="text-sm">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   // Renderiza os cards com os valores
@@ -125,9 +139,6 @@ export default function DashboardSummary() {
         icon="📋"
         color="bg-gradient-to-br from-blue-600 to-blue-800"
       />
-      {/* ======================================================= */}
-      {/* ESTE É O CARD QUE VOCÊ QUERIA                               */}
-      {/* ======================================================= */}
       <StatCard
         title="Taxas de Entrega (Hoje)"
         value={formatBRL(summaryData.totalTaxasHoje)}

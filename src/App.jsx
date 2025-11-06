@@ -254,6 +254,8 @@ function App() {
                 </PrivateRoute>
               } 
             /> 
+
+            
             <Route 
               path="/master/usuarios/criar" 
               element={
@@ -274,6 +276,8 @@ function App() {
             {/* Rota "catch-all" para redirecionar páginas não encontradas */}
             <Route path="*" element={<Navigate to="/" replace />} /> 
           </Route>
+
+          
         </Routes>
         
         {/* Toast Container para notificações */}
@@ -289,8 +293,10 @@ function App() {
           pauseOnHover
           theme="colored"
         />
+        
       </Router>
     </AuthProvider>
+    
   );
 }
 
