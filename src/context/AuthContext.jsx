@@ -1,4 +1,4 @@
-// src/context/AuthContext.js - VERSÃO CORRIGIDA FINAL
+// src/context/AuthContext.jsx - VERSÃO CORRIGIDA FINAL
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import {
@@ -135,9 +135,8 @@ export function AuthProvider({ children }) {
         return unsubscribe;
     }, []);
     
-    // CÁLCULO DO ID PRINCIPAL
-    const primeiroEstabelecimentoId = 
-        userData?.estabelecimentosGerenciados?.[0] || null;
+    // CÁLCULO DO ESTABELECIMENTO PRINCIPAL - USANDO estabelecimentosGerenciados
+    const primeiroEstabelecimento = userData?.estabelecimentosGerenciados?.[0] || null;
 
     // 🚨 CORREÇÃO: Expondo isAdmin e isMaster Admin diretamente para consistência
     const isAdmin = userData?.isAdmin || false;
@@ -147,7 +146,8 @@ export function AuthProvider({ children }) {
         currentUser: !!currentUser,
         isAdmin,
         isMasterAdmin,
-        estabelecimentoIdPrincipal: primeiroEstabelecimentoId,
+        primeiroEstabelecimento,
+        estabelecimentosGerenciados: userData?.estabelecimentosGerenciados,
         userData: userData
     });
 
@@ -210,7 +210,10 @@ export function AuthProvider({ children }) {
             }
         },
         loading,
-        estabelecimentoIdPrincipal: primeiroEstabelecimentoId,
+        // REMOVIDO: estabelecimentoIdPrincipal
+        // ADICIONADO: primeiroEstabelecimento para compatibilidade
+        primeiroEstabelecimento,
+        estabelecimentosGerenciados: userData?.estabelecimentosGerenciados || [],
         // Mantive 'isMaster' como um alias para compatibilidade com o usePermissions
         isAdmin,
         isMaster: isMasterAdmin, // Alias
@@ -229,7 +232,7 @@ export function AuthProvider({ children }) {
 // -----------------------------------------------------------
 export function usePermissions() {
     // Pega o alias 'isMaster' e 'isAdmin' do useAuth()
-    const { currentUser, userData, loading, isAdmin, isMaster } = useAuth();
+    const { currentUser, userData, loading, isAdmin, isMaster, estabelecimentosGerenciados } = useAuth();
     
     const canAccess = (requiredRoles = []) => {
         if (!currentUser || loading) return false;
@@ -252,8 +255,7 @@ export function usePermissions() {
         if (!currentUser || loading) return false;
         if (isMaster) return true; // Master Admin pode gerenciar TUDO
         
-        return isAdmin && 
-                userData?.estabelecimentosGerenciados?.includes(estabelecimentoId);
+        return isAdmin && estabelecimentosGerenciados?.includes(estabelecimentoId);
     };
 
     return {
@@ -261,12 +263,13 @@ export function usePermissions() {
         canManageEstabelecimento,
         isAdmin: isAdmin || false,
         isMasterAdmin: isMaster || false, // Exporta o alias como nome completo
+        estabelecimentosGerenciados: estabelecimentosGerenciados || [],
         loading,
     };
 }
 
 export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecimento = null }) {
-    const { currentUser, loading } = useAuth();
+    const { currentUser, loading, estabelecimentosGerenciados } = useAuth();
     const { canAccess, canManageEstabelecimento, loading: permissionsLoading } = usePermissions();
     const navigate = useNavigate();
     const location = useLocation();

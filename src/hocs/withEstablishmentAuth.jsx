@@ -1,54 +1,55 @@
-// src/hocs/withEstablishmentAuth.jsx
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-toastify';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { FaSpinner } from "react-icons/fa";
 
-const withEstablishmentAuth = (Component) => {
-  return function EstablishmentAuthComponent(props) {
+const withEstablishmentAuth = (WrappedComponent) => {
+  return (props) => {
+    const { currentUser, userData, authLoading } = useAuth();
     const navigate = useNavigate();
-    const { 
-      currentUser, 
-      isAdmin, 
-      isMaster, 
-      authLoading, 
-      estabelecimentoIdPrincipal 
-    } = useAuth();
+    const [loading, setLoading] = useState(true);
+    const [shouldRedirect, setShouldRedirect] = useState(false);
+    const [redirectPath, setRedirectPath] = useState("");
 
-    if (authLoading) {
+    // Usar estabelecimentos ou estabelecimentosGerenciados
+    const estabelecimentoPrincipal = userData?.estabelecimentos?.[0] || 
+                                   userData?.estabelecimentosGerenciados?.[0] || 
+                                   null;
+
+    useEffect(() => {
+      if (!authLoading) {
+        if (!currentUser) {
+          setRedirectPath("/login");
+          setShouldRedirect(true);
+          return;
+        }
+
+        if (!estabelecimentoPrincipal) {
+          setRedirectPath("/select-establishment");
+          setShouldRedirect(true);
+          return;
+        }
+
+        setLoading(false);
+      }
+    }, [currentUser, estabelecimentoPrincipal, authLoading, navigate]);
+
+    // Efeito separado para navegação
+    useEffect(() => {
+      if (shouldRedirect && redirectPath) {
+        navigate(redirectPath);
+      }
+    }, [shouldRedirect, redirectPath, navigate]);
+
+    if (loading || authLoading) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600">Carregando estabelecimento...</p>
-          </div>
+        <div className="flex justify-center items-center min-h-screen">
+          <FaSpinner className="animate-spin text-2xl text-blue-500" />
         </div>
       );
     }
 
-    // Master não deve acessar páginas de estabelecimento específico
-    if (isMaster) {
-      console.log('🔐 Master redirecionado para MasterDashboard');
-      toast.info('👑 Acesse o Master Dashboard para gerenciar múltiplos estabelecimentos.');
-      navigate('/master-dashboard');
-      return null;
-    }
-
-    // Admin sem estabelecimento configurado
-    if (isAdmin && !estabelecimentoIdPrincipal) {
-      toast.error('❌ Nenhum estabelecimento configurado para seu acesso.');
-      navigate('/dashboard');
-      return null;
-    }
-
-    // Usuário comum tentando acessar área admin
-    if (!isAdmin && !isMaster) {
-      toast.error('🔒 Acesso restrito à administração.');
-      navigate('/');
-      return null;
-    }
-
-    return <Component {...props} />;
+    return <WrappedComponent {...props} />;
   };
 };
 

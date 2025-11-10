@@ -1,48 +1,51 @@
 // src/pages/HomeRedirector.jsx
-
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Importe o useAuth
+import { useAuth } from '../context/AuthContext';
+import { FaSpinner } from 'react-icons/fa';
 
 function HomeRedirector() {
-    // Pega o userData completo e o status de carregamento
-    const { userData, loading } = useAuth(); 
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const { currentUser, isAdmin, isMasterAdmin } = useAuth();
 
-    // Extrai as permissões de forma segura
-    const isMasterAdmin = userData?.isMasterAdmin || false;
-    const isAdmin = userData?.isAdmin || false;
-    
-    // NOTA: 'estabelecimentosGerenciados' não é mais necessário, 
-    // pois o Admin vai para a rota estática '/painel'.
+  useEffect(() => {
+    console.log('🔄 HomeRedirector analisando usuário:', { 
+      currentUser: !!currentUser, 
+      isAdmin, 
+      isMasterAdmin 
+    });
 
-    useEffect(() => {
-        // Se ainda estiver carregando, não faz nada.
-        if (loading) {
-            return;
-        }
+    // Pequeno delay para garantir que o auth context está carregado
+    const timer = setTimeout(() => {
+      if (!currentUser) {
+        console.log('🔐 Usuário não logado -> /');
+        navigate('/');
+        return;
+      }
 
-        // Lógica de decisão
-        if (isMasterAdmin) {
-            // Se for Master Admin, vai para o dashboard principal
-            console.log("REDIR: Master Admin -> /master-dashboard");
-            navigate('/master-dashboard', { replace: true });
-            
-        } else if (isAdmin) {
-            // 🚨 CORREÇÃO FINAL: Admin de Estabelecimento vai para /painel
-            console.log("REDIR: Admin Est. -> /painel");
-            navigate('/painel', { replace: true });
-            
-        } else {
-            // Cliente comum ou usuário não logado volta para a home
-            console.log("REDIR: Cliente comum -> /");
-            navigate('/', { replace: true });
-        }
-        
-    }, [loading, isMasterAdmin, isAdmin, navigate]); 
+      if (isMasterAdmin) {
+        console.log('👑 Master Admin -> /master-dashboard');
+        navigate('/master-dashboard');
+      } else if (isAdmin) {
+        console.log('⚡ Admin Estabelecimento -> /painel');
+        navigate('/painel');
+      } else {
+        console.log('👤 Usuário normal -> /');
+        navigate('/');
+      }
+    }, 100);
 
-    // Mensagem de carregamento
-    return <div className="text-center p-8">Redirecionando...</div>;
+    return () => clearTimeout(timer);
+  }, [currentUser, isAdmin, isMasterAdmin, navigate]);
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <FaSpinner className="animate-spin text-yellow-500 text-4xl mx-auto mb-4" />
+        <p className="text-gray-600">Redirecionando...</p>
+      </div>
+    </div>
+  );
 }
 
 export default HomeRedirector;

@@ -5,9 +5,8 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy } fr
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { uploadFile, deleteFileByUrl } from '../../utils/firebaseStorageService'; //
+import { uploadFile, deleteFileByUrl } from '../../utils/firebaseStorageService';
 import { auditLogger } from '../../utils/auditLogger';
-
 
 // Componente FormInput (reutilizável para campos de texto)
 function FormInput({ label, name, value, onChange, type = 'text', helpText = '', ...props }) {
@@ -82,6 +81,13 @@ function EditarEstabelecimentoMaster() {
                         informacoes_contato: data.informacoes_contato || { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
                         // Converte Timestamp para Date se necessário (para nextBillingDate)
                         nextBillingDate: data.nextBillingDate?.toDate ? data.nextBillingDate.toDate() : null,
+                        // Garante que campos string nunca sejam null
+                        adminUID: data.adminUID || '',
+                        currentPlanId: data.currentPlanId || '',
+                        slug: data.slug || '',
+                        chavePix: data.chavePix || '',
+                        imageUrl: data.imageUrl || '',
+                        nome: data.nome || '',
                     }));
                     setLogoPreview(data.imageUrl || ''); // Define a pré-visualização com a URL existente
                     // Se o slug já existe, consideramos que ele não foi editado manualmente
@@ -99,7 +105,6 @@ function EditarEstabelecimentoMaster() {
 
         fetchEstablishment();
     }, [id, isMasterAdmin, authLoading, navigate]);
-
 
     // Efeito para carregar admins disponíveis
     useEffect(() => {
@@ -127,9 +132,13 @@ function EditarEstabelecimentoMaster() {
 
         const fetchPlans = async () => {
             try {
-                const q = query(collection(db, 'plans'), where('isActive', '==', true), orderBy('price', 'asc'));
+                const q = query(collection(db, 'plans'), where('ativo', '==', true), orderBy('preco', 'asc'));
                 const querySnapshot = await getDocs(q);
-                const plans = querySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+                const plans = querySnapshot.docs.map(doc => ({ 
+                    id: doc.id, 
+                    name: doc.data().nome || doc.data().name || 'Sem nome',
+                    preco: doc.data().preco
+                }));
                 setAvailablePlans(plans);
             } catch (err) {
                 console.error("Erro ao carregar planos disponíveis:", err);
@@ -141,29 +150,33 @@ function EditarEstabelecimentoMaster() {
         fetchPlans();
     }, [isMasterAdmin, currentUser]);
 
-const handleInputChange = (e) => {
-
-        const { name, value, type, checked, files } = e.target; // Adiciona 'files'
+    const handleInputChange = (e) => {
+        const { name, value, type, checked, files } = e.target;
 
         if (name === 'slug') setSlugManuallyEdited(true);
 
-        if (type === 'file') { // Novo tratamento para input de arquivo
+        if (type === 'file') {
             const file = files[0];
             setLogoImage(file);
             if (file) {
-                setLogoPreview(URL.createObjectURL(file)); // Pré-visualização local
+                setLogoPreview(URL.createObjectURL(file));
             } else {
-                // Se o usuário limpar a seleção de arquivo, volta para a URL existente ou limpa
                 setLogoPreview(formData.imageUrl || '');
             }
         } else if (name.includes('.')) {
             const [parent, child] = name.split('.');
             setFormData(prev => ({
                 ...prev,
-                [parent]: { ...prev[parent], [child]: type === 'checkbox' ? checked : value }
+                [parent]: { 
+                    ...prev[parent], 
+                    [child]: type === 'checkbox' ? checked : (value || '') 
+                }
             }));
         } else {
-            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+            setFormData(prev => ({ 
+                ...prev, 
+                [name]: type === 'checkbox' ? checked : (value || '') 
+            }));
         }
     };
 
@@ -179,33 +192,30 @@ const handleInputChange = (e) => {
             return;
         }
 
-        let finalLogoUrl = formData.imageUrl; // Inicia com a URL existente
+        let finalLogoUrl = formData.imageUrl;
 
         try {
             // Se um novo arquivo de logo foi selecionado
             if (logoImage) {
                 const logoName = `establishment_logos/${formData.slug || id}_${Date.now()}_${logoImage.name}`;
-                finalLogoUrl = await uploadFile(logoImage, logoName); //
+                finalLogoUrl = await uploadFile(logoImage, logoName);
                 toast.success('Novo logo enviado com sucesso!');
 
-                // Se havia um logo antigo e foi substituído, delete o antigo do Storage
                 if (formData.imageUrl && formData.imageUrl !== finalLogoUrl) {
-                    // await deleteFileByUrl(formData.imageUrl); // // Descomente para ativar a exclusão da imagem antiga
-                    // console.log("Logo antigo deletado (se aplicável):", formData.imageUrl);
+                    // await deleteFileByUrl(formData.imageUrl);
                 }
             } else if (formData.imageUrl && !logoPreview && !logoImage) {
-                 // Se não selecionou nova imagem e a pré-visualização está vazia (indicando que o usuário removeu a imagem)
-                 // E havia uma URL no formData, significa que o usuário quer remover o logo existente.
-                // await deleteFileByUrl(formData.imageUrl); // // Descomente para ativar a exclusão da imagem antiga
-                finalLogoUrl = ''; // Limpa a URL no Firestore
+                finalLogoUrl = '';
             }
 
-            // Verificar se o slug já existe para outro estabelecimento (se o slug foi alterado)
-            if (formData.slug !== (await getDoc(doc(db, 'estabelecimentos', id))).data().slug) {
+            // Verificar se o slug já existe para outro estabelecimento
+            const currentDoc = await getDoc(doc(db, 'estabelecimentos', id));
+            const currentData = currentDoc.data();
+            
+            if (formData.slug !== currentData.slug) {
                 const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
                 const slugSnapshot = await getDocs(slugQuery);
                 if (!slugSnapshot.empty) {
-                    // Verifica se o slug encontrado pertence ao próprio estabelecimento que está sendo editado
                     const existingSlugDoc = slugSnapshot.docs[0];
                     if (existingSlugDoc.id !== id) {
                         setError('Este slug (URL) já está em uso por outro estabelecimento. Por favor, escolha outro.');
@@ -215,25 +225,30 @@ const handleInputChange = (e) => {
                 }
             }
 
-            // Tratar o nextBillingDate como um Timestamp do Firebase, se necessário.
-            // Aqui estamos assumindo que formData.nextBillingDate já é um Date ou null
+            // Preparar dados para atualização
             const dataToUpdate = {
-                ...formData,
-                imageUrl: finalLogoUrl, // Atualiza a URL final do logo
-                rating: Number(formData.rating),
+                nome: formData.nome,
+                endereco: formData.endereco,
+                informacoes_contato: formData.informacoes_contato,
+                chavePix: formData.chavePix,
+                slug: formData.slug,
+                imageUrl: finalLogoUrl,
+                rating: Number(formData.rating) || 0,
+                adminUID: formData.adminUID,
+                ativo: formData.ativo,
+                currentPlanId: formData.currentPlanId,
+                nextBillingDate: formData.nextBillingDate,
                 updatedAt: new Date(),
-                nextBillingDate: formData.nextBillingDate, // Já deve ser um Date ou null
             };
 
             const docRef = doc(db, 'estabelecimentos', id);
             await updateDoc(docRef, dataToUpdate);
 
             // Atualizar o vínculo do administrador (se o adminUID mudou)
-            const oldEstabData = (await getDoc(docRef)).data();
-            if (oldEstabData.adminUID !== formData.adminUID) {
+            if (currentData.adminUID !== formData.adminUID) {
                 // Remover o estabelecimento do admin antigo
-                if (oldEstabData.adminUID) {
-                    const oldAdminRef = doc(db, 'usuarios', oldEstabData.adminUID);
+                if (currentData.adminUID) {
+                    const oldAdminRef = doc(db, 'usuarios', currentData.adminUID);
                     const oldAdminSnap = await getDoc(oldAdminRef);
                     if (oldAdminSnap.exists()) {
                         const oldAdminData = oldAdminSnap.data();
@@ -262,7 +277,7 @@ const handleInputChange = (e) => {
                 'ESTABELECIMENTO_ATUALIZADO',
                 { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
                 { type: 'estabelecimento', id: id, name: formData.nome },
-                { ...dataToUpdate, rating: Number(formData.rating) } // Inclua imageUrl no log
+                dataToUpdate
             );
 
             toast.success("Estabelecimento atualizado com sucesso!");
@@ -276,9 +291,8 @@ const handleInputChange = (e) => {
         }
     };
 
-
     if (loading || authLoading || loadingAdmins || loadingPlans) return <div className="text-center p-8">Carregando...</div>;
-    if (error) return <div className="text-center p-8 text-red-600">{error}</div>;
+    if (error && !formData.nome) return <div className="text-center p-8 text-red-600">{error}</div>;
 
     return (
         <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
@@ -329,7 +343,7 @@ const handleInputChange = (e) => {
                                     onChange={handleInputChange}
                                     className="w-full border-slate-300 rounded-lg p-1"
                                 />
-                                {(logoPreview || formData.imageUrl) && ( // Exibe pré-visualização ou URL existente
+                                {(logoPreview || formData.imageUrl) && (
                                     <div className="mt-2 flex items-center gap-4">
                                         <p className="text-sm text-slate-600">Pré-visualização:</p>
                                         <img
@@ -339,25 +353,23 @@ const handleInputChange = (e) => {
                                         />
                                     </div>
                                 )}
-                                {/* Campo URL do logo original (escondido ou somente leitura) */}
                                 <input
                                     name="imageUrl"
                                     value={formData.imageUrl}
                                     readOnly
-                                    hidden // Opcional: Esconder se o upload é a única forma de gerenciar
+                                    hidden
                                 />
                             </div>
-                            {/* FIM CAMPO DE UPLOAD DE LOGO */}
 
                             <FormInput label="Avaliação (1-5)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" helpText="Avaliação média do estabelecimento."/>
 
-                            {/* Seleção do Administrador */}
+                            {/* Seleção do Administrador - CORRIGIDO */}
                             <div>
                                 <label htmlFor="adminUID" className="block text-sm font-medium text-slate-600 mb-1">Admin Responsável *</label>
                                 <select
                                     id="adminUID"
                                     name="adminUID"
-                                    value={formData.adminUID}
+                                    value={formData.adminUID || ''}
                                     onChange={handleInputChange}
                                     required
                                     className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
@@ -381,13 +393,13 @@ const handleInputChange = (e) => {
                                 </Link>
                             </div>
 
-                            {/* Seleção do Plano */}
+                            {/* Seleção do Plano - CORRIGIDO */}
                             <div>
                                 <label htmlFor="currentPlanId" className="block text-sm font-medium text-slate-600 mb-1">Plano de Assinatura *</label>
                                 <select
                                     id="currentPlanId"
                                     name="currentPlanId"
-                                    value={formData.currentPlanId}
+                                    value={formData.currentPlanId || ''}
                                     onChange={handleInputChange}
                                     required
                                     className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
@@ -400,7 +412,7 @@ const handleInputChange = (e) => {
                                     ) : (
                                         availablePlans.map(plan => (
                                             <option key={plan.id} value={plan.id}>
-                                                {plan.name}
+                                                {plan.name} - R$ {plan.preco}
                                             </option>
                                         ))
                                     )}

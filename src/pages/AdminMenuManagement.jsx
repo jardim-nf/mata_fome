@@ -1,4 +1,4 @@
-// src/pages/AdminMenuManagement.jsx - COM ORDENAÇÃO E CONTROLE DE ESTOQUE
+// src/pages/AdminMenuManagement.jsx - VERSÃO COMPLETA CORRIGIDA
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy } from 'firebase/firestore';
@@ -29,8 +29,17 @@ import {
 } from 'react-icons/io5';
 
 function AdminMenuManagement() {
-    const { estabelecimentoIdPrincipal } = useAuth();
+    const { userData } = useAuth();
     
+    console.log("🔍 Debug Auth no AdminMenuManagement - ESTRUTURA COMPLETA:", {
+        userData,
+        userDataKeys: userData ? Object.keys(userData) : 'no userData',
+        // Verifica todos os campos possíveis de estabelecimentos
+        estabelecimentos: userData?.estabelecimentos,
+        estabelecimentosGerenciados: userData?.estabelecimentosGerenciados,
+        estabelecimentosCerenciados: userData?.estabelecimentosCerenciados
+    });
+
     const [establishmentName, setEstablishmentName] = useState('');
     const [menuItems, setMenuItems] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -65,36 +74,57 @@ function AdminMenuManagement() {
     const [imagePreview, setImagePreview] = useState('');
     const [formLoading, setFormLoading] = useState(false);
 
+    // 🔧 CORREÇÃO: Busca o estabelecimento com o nome CORRETO baseado na sua estrutura
+    const primeiroEstabelecimento = useMemo(() => {
+        // Tenta na ordem: estabelecimentosCerenciados, depois estabelecimentos, depois estabelecimentosGerenciados
+        const estabelecimento = userData?.estabelecimentosCerenciados?.[0] || // ✅ NOME CORRETO baseado no seu Firebase
+                               userData?.estabelecimentos?.[0] ||
+                               userData?.estabelecimentosGerenciados?.[0] ||
+                               null;
+        
+        console.log("🏪 Estabelecimento encontrado:", estabelecimento);
+        return estabelecimento;
+    }, [userData]);
+
+    console.log("🏪 Estabelecimento selecionado:", primeiroEstabelecimento);
+
     // Busca o nome do estabelecimento
     useEffect(() => {
-        if (estabelecimentoIdPrincipal) {
+        if (primeiroEstabelecimento) {
             const fetchEstablishmentName = async () => {
                 try {
-                    const estabDoc = await getDoc(doc(db, 'estabelecimentos', estabelecimentoIdPrincipal));
+                    const estabDoc = await getDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento));
                     if (estabDoc.exists()) {
                         setEstablishmentName(estabDoc.data().nome);
                         console.log("🏪 Nome do estabelecimento:", estabDoc.data().nome);
+                    } else {
+                        console.error("❌ Estabelecimento não encontrado no Firestore:", primeiroEstabelecimento);
+                        toast.error("Estabelecimento não encontrado");
                     }
                 } catch (error) {
                     console.error("Erro ao buscar nome do estabelecimento:", error);
+                    toast.error("Erro ao carregar dados do estabelecimento");
                 }
             };
             fetchEstablishmentName();
+        } else {
+            console.log("❌ Nenhum estabelecimento disponível");
+            toast.error("Nenhum estabelecimento configurado para este usuário");
         }
-    }, [estabelecimentoIdPrincipal]);
+    }, [primeiroEstabelecimento]);
 
     // Listener para categorias e itens
     useEffect(() => {
-        if (!estabelecimentoIdPrincipal) {
-            console.log("❌ Nenhum estabelecimentoIdPrincipal disponível");
+        if (!primeiroEstabelecimento) {
+            console.log("❌ Nenhum estabelecimento disponível para carregar cardápio");
             setLoading(false);
             return;
         }
 
         setLoading(true);
-        console.log("📦 Buscando cardápio para estabelecimento:", estabelecimentoIdPrincipal);
+        console.log("📦 Buscando cardápio para estabelecimento:", primeiroEstabelecimento);
 
-        const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'cardapio');
+        const categoriasRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio');
         const qCategorias = query(categoriasRef, orderBy('ordem', 'asc'));
 
         const unsubscribeCategorias = onSnapshot(qCategorias, (categoriasSnapshot) => {
@@ -123,7 +153,7 @@ function AdminMenuManagement() {
                 const itensRef = collection(
                     db, 
                     'estabelecimentos', 
-                    estabelecimentoIdPrincipal, 
+                    primeiroEstabelecimento, 
                     'cardapio', 
                     catDoc.id, 
                     'itens'
@@ -176,7 +206,7 @@ function AdminMenuManagement() {
             console.log("🧹 Limpando listener de categorias");
             unsubscribeCategorias();
         };
-    }, [estabelecimentoIdPrincipal]);
+    }, [primeiroEstabelecimento]);
 
     // 🔄 Função para ordenação
     const handleSort = (key) => {
@@ -310,10 +340,9 @@ function AdminMenuManagement() {
         };
     }, [menuItems]);
 
-    // Restante das funções permanecem iguais...
     const handleSaveItem = async (e) => {
         e.preventDefault();
-        if (!estabelecimentoIdPrincipal) {
+        if (!primeiroEstabelecimento) {
             toast.error('❌ Estabelecimento não identificado.');
             return;
         }
@@ -343,7 +372,7 @@ function AdminMenuManagement() {
                 if (editingItem && editingItem.imageUrl) {
                     await deleteFileByUrl(editingItem.imageUrl);
                 }
-                const imageName = `${estabelecimentoIdPrincipal}_${Date.now()}_${itemImage.name.replace(/\s/g, '_')}`;
+                const imageName = `${primeiroEstabelecimento}_${Date.now()}_${itemImage.name.replace(/\s/g, '_')}`;
                 const imagePath = `images/menuItems/${imageName}`;
                 finalImagePath = await uploadFile(itemImage, imagePath);
             }
@@ -377,7 +406,7 @@ function AdminMenuManagement() {
                     doc(
                         db, 
                         'estabelecimentos', 
-                        estabelecimentoIdPrincipal, 
+                        primeiroEstabelecimento, 
                         'cardapio', 
                         categoriaId, 
                         'itens', 
@@ -392,7 +421,7 @@ function AdminMenuManagement() {
                     collection(
                         db, 
                         'estabelecimentos', 
-                        estabelecimentoIdPrincipal, 
+                        primeiroEstabelecimento, 
                         'cardapio', 
                         categoriaId, 
                         'itens'
@@ -441,7 +470,7 @@ function AdminMenuManagement() {
                                                 doc(
                                                     db, 
                                                     'estabelecimentos', 
-                                                    estabelecimentoIdPrincipal, 
+                                                    primeiroEstabelecimento, 
                                                     'cardapio', 
                                                     item.categoriaId, 
                                                     'itens', 
@@ -480,7 +509,7 @@ function AdminMenuManagement() {
                 doc(
                     db, 
                     'estabelecimentos', 
-                    estabelecimentoIdPrincipal, 
+                    primeiroEstabelecimento, 
                     'cardapio', 
                     item.categoriaId, 
                     'itens', 
@@ -578,7 +607,7 @@ function AdminMenuManagement() {
                 doc(
                     db, 
                     'estabelecimentos', 
-                    estabelecimentoIdPrincipal, 
+                    primeiroEstabelecimento, 
                     'cardapio', 
                     item.categoriaId, 
                     'itens', 
@@ -609,6 +638,41 @@ function AdminMenuManagement() {
         valorTotalEstoque: stockStatistics.totalInventoryValue
     };
 
+    // 🔧 CORREÇÃO: Se não há estabelecimento, mostra mensagem
+    if (!primeiroEstabelecimento) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <IoAlertCircle className="text-red-600 text-2xl" />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">
+                        Estabelecimento Não Configurado
+                    </h2>
+                    <p className="text-gray-600 mb-6">
+                        Este usuário não tem um estabelecimento vinculado. 
+                        Entre em contato com o administrador do sistema.
+                    </p>
+                    <div className="space-y-3">
+                        <Link 
+                            to="/dashboard" 
+                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors w-full"
+                        >
+                            <IoArrowBack />
+                            <span>Voltar ao Dashboard</span>
+                        </Link>
+                        <button 
+                            onClick={() => window.location.reload()}
+                            className="inline-flex items-center justify-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors w-full"
+                        >
+                            <span>Recarregar Página</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -633,7 +697,7 @@ function AdminMenuManagement() {
                             {establishmentName} • {estatisticas.total} itens no cardápio
                         </p>
                         <p className="text-sm text-gray-500">
-                            Estabelecimento ID: {estabelecimentoIdPrincipal}
+                            Estabelecimento ID: {primeiroEstabelecimento}
                         </p>
                     </div>
                     
