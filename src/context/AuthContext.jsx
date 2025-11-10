@@ -1,4 +1,4 @@
-// src/context/AuthContext.js - VERSÃO CORRIGIDA
+// src/context/AuthContext.js - VERSÃO CORRIGIDA FINAL
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import {
@@ -31,6 +31,7 @@ const getFirestoreUserData = async (user) => {
         if (userDoc.exists()) {
             return userDoc.data();
         } else {
+            // Cria um documento básico se não existir
             const basicUserData = { 
                 email: user.email, 
                 nome: user.displayName || user.email.split('@')[0], 
@@ -93,7 +94,8 @@ export function AuthProvider({ children }) {
                 
                 let tokenResult = { claims: {} };
                 try {
-                    tokenResult = await user.getIdTokenResult(false); 
+                    // Força a atualização do token para pegar claims recentes, se houver:
+                    tokenResult = await user.getIdTokenResult(true); 
                 } catch (e) { 
                     console.error("Falha ao obter token result:", e); 
                 }
@@ -101,10 +103,12 @@ export function AuthProvider({ children }) {
                 
                 const firestoreData = await getFirestoreUserData(user); 
                 
+                // Combina dados do Firestore e Claims. Prioriza Claims, mas usa Firestore como fallback
                 const combinedData = {
                     ...firestoreData, 
                     isAdmin: claims.isAdmin || firestoreData?.isAdmin || false,
                     isMasterAdmin: claims.isMasterAdmin || firestoreData?.isMasterAdmin || false,
+                    // Garante que seja um array
                     estabelecimentosGerenciados: claims.estabelecimentos || firestoreData?.estabelecimentosGerenciados || [],
                     estabelecimentoIdClaim: claims.estabelecimentoId || null, 
                 };
@@ -135,7 +139,7 @@ export function AuthProvider({ children }) {
     const primeiroEstabelecimentoId = 
         userData?.estabelecimentosGerenciados?.[0] || null;
 
-    // 🚨 CORREÇÃO: Expondo isAdmin e isMaster diretamente
+    // 🚨 CORREÇÃO: Expondo isAdmin e isMaster Admin diretamente para consistência
     const isAdmin = userData?.isAdmin || false;
     const isMasterAdmin = userData?.isMasterAdmin || false;
 
@@ -207,9 +211,10 @@ export function AuthProvider({ children }) {
         },
         loading,
         estabelecimentoIdPrincipal: primeiroEstabelecimentoId,
-        // 🚨 CORREÇÃO: Expondo diretamente
+        // Mantive 'isMaster' como um alias para compatibilidade com o usePermissions
         isAdmin,
-        isMaster: isMasterAdmin,
+        isMaster: isMasterAdmin, // Alias
+        isMasterAdmin: isMasterAdmin // Expondo o nome completo também
     };
 
     return (
@@ -223,6 +228,7 @@ export function AuthProvider({ children }) {
 // usePermissions e PrivateRoute 
 // -----------------------------------------------------------
 export function usePermissions() {
+    // Pega o alias 'isMaster' e 'isAdmin' do useAuth()
     const { currentUser, userData, loading, isAdmin, isMaster } = useAuth();
     
     const canAccess = (requiredRoles = []) => {
@@ -234,7 +240,8 @@ export function usePermissions() {
                 case 'admin':
                     return isAdmin;
                 case 'masterAdmin':
-                    return isMaster;
+                    // Usa o alias 'isMaster' para Master Admin
+                    return isMaster; 
                 default:
                     return false;
             }
@@ -243,17 +250,17 @@ export function usePermissions() {
 
     const canManageEstabelecimento = (estabelecimentoId) => {
         if (!currentUser || loading) return false;
-        if (isMaster) return true;
+        if (isMaster) return true; // Master Admin pode gerenciar TUDO
         
         return isAdmin && 
-               userData?.estabelecimentosGerenciados?.includes(estabelecimentoId);
+                userData?.estabelecimentosGerenciados?.includes(estabelecimentoId);
     };
 
     return {
         canAccess,
         canManageEstabelecimento,
         isAdmin: isAdmin || false,
-        isMasterAdmin: isMaster || false,
+        isMasterAdmin: isMaster || false, // Exporta o alias como nome completo
         loading,
     };
 }
