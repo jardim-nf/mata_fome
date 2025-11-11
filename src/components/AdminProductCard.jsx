@@ -22,6 +22,7 @@ export default function AdminProductCard({
 }) {
   const [editingStock, setEditingStock] = useState(false);
   const [newStockValue, setNewStockValue] = useState(produto.estoque || 0);
+  const [showStockActions, setShowStockActions] = useState(false);
 
   const precoFormatado = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -33,7 +34,7 @@ export default function AdminProductCard({
     currency: 'BRL',
   }).format(produto.custo || 0);
 
-  // 📦 Configurações de status do estoque (CORRIGIDO - usando classes CSS diretas)
+  // 📦 Configurações de status do estoque
   const getStockConfig = () => {
     switch(stockStatus) {
       case 'esgotado':
@@ -68,26 +69,49 @@ export default function AdminProductCard({
 
   // 📦 Funções de estoque
   const handleSaveStock = (e) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     if (onUpdateStock && newStockValue !== produto.estoque) {
       onUpdateStock(produto.id, newStockValue);
     }
     setEditingStock(false);
+    setShowStockActions(false);
   };
 
   const handleCancelEdit = (e) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     setNewStockValue(produto.estoque || 0);
     setEditingStock(false);
+    setShowStockActions(false);
   };
 
-  const handleStartEdit = (e) => {
+  // 📱 TOQUE LONGO para editar estoque (mobile)
+  const handleLongPress = (e) => {
     e.stopPropagation();
     setNewStockValue(produto.estoque || 0);
     setEditingStock(true);
+    setShowStockActions(false);
   };
 
-  // Determinar estilo da borda baseado no status
+  // 📱 TOQUE SIMPLES para mostrar opções (mobile)
+  const handleStockTap = (e) => {
+    e.stopPropagation();
+    if (editingStock) return;
+    
+    setShowStockActions(!showStockActions);
+  };
+
+  // 📱 Fechar ações quando tocar fora
+  React.useEffect(() => {
+    const handleClickOutside = () => {
+      setShowStockActions(false);
+    };
+
+    if (showStockActions) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showStockActions]);
+
   const getBorderStyle = () => {
     switch(stockStatus) {
       case 'critico':
@@ -128,7 +152,12 @@ export default function AdminProductCard({
               onClick={(e) => e.stopPropagation()}
             >
               {stockConfig.icon}
-              <span>{stockConfig.label}</span>
+              <span className="hidden sm:inline">{stockConfig.label}</span>
+              <span className="sm:hidden">
+                {stockStatus === 'esgotado' ? '0' : 
+                 stockStatus === 'critico' ? '!' : 
+                 stockStatus === 'baixo' ? '↓' : '✓'}
+              </span>
             </div>
           </div>
 
@@ -140,51 +169,93 @@ export default function AdminProductCard({
               <span className="font-semibold text-gray-900">{precoFormatado}</span>
             </div>
 
-            {/* Estoque Atual */}
-            <div className="flex items-center space-x-2">
+            {/* Estoque Atual - AGORA MOBILE-FRIENDLY */}
+            <div className="flex items-center space-x-2 relative">
               <IoCube className="text-blue-600 flex-shrink-0" />
+              
               {editingStock ? (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 bg-white p-1 rounded border">
                   <input
                     type="number"
                     value={newStockValue}
                     onChange={(e) => setNewStockValue(parseInt(e.target.value) || 0)}
-                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
                     min="0"
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveStock(e);
-                      if (e.key === 'Escape') handleCancelEdit(e);
+                      if (e.key === 'Enter') handleSaveStock();
+                      if (e.key === 'Escape') handleCancelEdit();
                     }}
                   />
-                  <button
-                    onClick={handleSaveStock}
-                    className="text-green-600 hover:text-green-800 text-sm p-1"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className="text-red-600 hover:text-red-800 text-sm p-1"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={handleSaveStock}
+                      className="text-green-600 hover:text-green-800 text-sm p-1"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      className="text-red-600 hover:text-red-800 text-sm p-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div 
-                  className="flex items-center space-x-2 group"
-                  onDoubleClick={handleStartEdit}
-                >
-                  <span className="font-semibold text-gray-900">
-                    {produto.estoque || 0} un
-                  </span>
-                  <button
-                    onClick={handleStartEdit}
-                    className="opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-800 transition-opacity p-1"
-                    title="Clique para editar estoque"
+                <div className="relative">
+                  {/* Área clicável para estoque */}
+                  <div 
+                    className="flex items-center space-x-2 group p-1 rounded hover:bg-gray-50 transition-colors"
+                    onClick={handleStockTap}
+                    onTouchStart={(e) => {
+                      // 📱 Detectar toque longo para mobile
+                      e.stopPropagation();
+                      const timeout = setTimeout(() => {
+                        handleLongPress(e);
+                      }, 500);
+                      
+                      e.target.addEventListener('touchend', () => clearTimeout(timeout), { once: true });
+                      e.target.addEventListener('touchmove', () => clearTimeout(timeout), { once: true });
+                    }}
                   >
-                    <IoPencil size={14} />
-                  </button>
+                    <span className="font-semibold text-gray-900">
+                      {produto.estoque || 0} un
+                    </span>
+                    {/* Ícone de edição - visível no desktop */}
+                    <IoPencil 
+                      size={14} 
+                      className="hidden md:block opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-800 transition-opacity" 
+                    />
+                    {/* Ícone sempre visível no mobile */}
+                    <IoPencil 
+                      size={14} 
+                      className="md:hidden text-blue-600" 
+                    />
+                  </div>
+
+                  {/* Menu de Ações para Mobile */}
+                  {showStockActions && (
+                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-2 min-w-[120px]">
+                      <button
+                        onClick={handleLongPress}
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded flex items-center space-x-2"
+                      >
+                        <IoPencil size={14} />
+                        <span>Editar Estoque</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setNewStockValue((produto.estoque || 0) + 1);
+                          handleSaveStock();
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50 rounded flex items-center space-x-2"
+                      >
+                        <span>+1</span>
+                        <span>Adicionar 1</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -192,7 +263,8 @@ export default function AdminProductCard({
             {/* Custo */}
             {produto.custo && produto.custo > 0 && (
               <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Custo:</span>
+                <span className="text-gray-600 hidden sm:inline">Custo:</span>
+                <span className="text-gray-600 sm:hidden">Cust:</span>
                 <span className="font-medium text-gray-900">{custoFormatado}</span>
               </div>
             )}
@@ -200,7 +272,8 @@ export default function AdminProductCard({
             {/* Margem */}
             {profitMargin !== undefined && (
               <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Margem:</span>
+                <span className="text-gray-600 hidden sm:inline">Margem:</span>
+                <span className="text-gray-600 sm:hidden">Marg:</span>
                 <span className={`font-bold ${
                   profitMargin > 50 
                     ? 'text-green-600' 
@@ -218,14 +291,14 @@ export default function AdminProductCard({
           {(stockStatus === 'critico' || stockStatus === 'baixo') && produto.estoqueMinimo && (
             <div className={`mt-3 px-3 py-2 rounded-lg text-sm ${stockConfig.styles}`}>
               <p className="font-medium">
-                ⚠️ Estoque mínimo: {produto.estoqueMinimo} unidades
-                {stockStatus === 'critico' && ' - REPOR URGENTE!'}
+                ⚠️ Mín: {produto.estoqueMinimo} un
+                {stockStatus === 'critico' && ' - REPOR!'}
               </p>
             </div>
           )}
         </div>
 
-        {/* Ações Laterais */}
+        {/* Ações Laterais - MOBILE OPTIMIZED */}
         <div className="flex flex-col items-center gap-3 flex-shrink-0 ml-2">
           {/* Status Ativo/Inativo */}
           <span 
@@ -233,7 +306,12 @@ export default function AdminProductCard({
               produto.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
             }`}
           >
-            {produto.ativo ? 'Ativo' : 'Inativo'}
+            <span className="hidden sm:inline">
+              {produto.ativo ? 'Ativo' : 'Inativo'}
+            </span>
+            <span className="sm:hidden">
+              {produto.ativo ? 'A' : 'I'}
+            </span>
           </span>
 
           {/* Botões de Ação */}
