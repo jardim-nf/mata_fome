@@ -1,4 +1,4 @@
-// src/pages/AdminMenuManagement.jsx - VERSÃO MOBILE OPTIMIZED
+// src/pages/AdminMenuManagement.jsx - VERSÃO COMPLETA E CORRIGIDA
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy } from 'firebase/firestore';
@@ -13,7 +13,6 @@ import Pagination from '../components/Pagination';
 import {
     IoArrowBack,
     IoAddCircleOutline,
-    IoPencil,
     IoSearch,
     IoFilter,
     IoClose,
@@ -26,8 +25,7 @@ import {
     IoCube,
     IoCash,
     IoStatsChart,
-    IoMenu,
-    IoEllipsisVertical
+    IoSaveOutline
 } from 'react-icons/io5';
 
 function AdminMenuManagement() {
@@ -297,35 +295,213 @@ function AdminMenuManagement() {
         return { totalItems, criticalStock, lowStock, outOfStock, normalStock, totalInventoryValue };
     }, [menuItems]);
 
-    // ... (Restante das funções: handleSaveItem, handleDeleteItem, toggleItemStatus, etc.)
-    // Elas permanecem as mesmas, apenas o layout será modificado
+    // 🛠️ FUNÇÕES PRINCIPAIS COMPLETAS
 
     const handleSaveItem = async (e) => {
-        // ... (código anterior mantido)
+        e.preventDefault();
+        setFormLoading(true);
+
+        try {
+            if (!primeiroEstabelecimento) {
+                toast.error("Estabelecimento não configurado");
+                return;
+            }
+
+            // Validar dados obrigatórios
+            if (!formData.nome.trim() || !formData.preco || !formData.categoria.trim()) {
+                toast.error("Preencha nome, preço e categoria");
+                setFormLoading(false);
+                return;
+            }
+
+            let imageUrl = formData.imageUrl;
+
+            // Upload de imagem se houver
+            if (itemImage) {
+                try {
+                    const uploadResult = await uploadFile(itemImage, `estabelecimentos/${primeiroEstabelecimento}/cardapio`);
+                    imageUrl = uploadResult.url;
+                    
+                    // Deletar imagem antiga se estiver editando
+                    if (editingItem && editingItem.imageUrl && editingItem.imageUrl !== imageUrl) {
+                        await deleteFileByUrl(editingItem.imageUrl);
+                    }
+                } catch (error) {
+                    console.error("Erro no upload da imagem:", error);
+                    toast.error("Erro ao fazer upload da imagem");
+                    setFormLoading(false);
+                    return;
+                }
+            }
+
+            // Encontrar a categoria
+            const categoriaDoc = categories.find(cat => cat.nome === formData.categoria);
+            if (!categoriaDoc && !editingItem) {
+                toast.error("Categoria não encontrada");
+                setFormLoading(false);
+                return;
+            }
+
+            const itemData = {
+                nome: formData.nome.trim(),
+                descricao: formData.descricao.trim(),
+                preco: Number(formData.preco),
+                categoria: formData.categoria.trim(),
+                imageUrl: imageUrl,
+                ativo: formData.ativo,
+                estoque: Number(formData.estoque) || 0,
+                estoqueMinimo: Number(formData.estoqueMinimo) || 0,
+                custo: Number(formData.custo) || 0,
+                atualizadoEm: new Date()
+            };
+
+            if (editingItem) {
+                // Atualizar item existente
+                const itemRef = doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', editingItem.categoriaId, 'itens', editingItem.id);
+                await updateDoc(itemRef, itemData);
+                toast.success("✅ Item atualizado com sucesso!");
+            } else {
+                // Criar novo item
+                itemData.criadoEm = new Date();
+                const itensRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', categoriaDoc.id, 'itens');
+                await addDoc(itensRef, itemData);
+                toast.success("✅ Item adicionado com sucesso!");
+            }
+
+            closeItemForm();
+        } catch (error) {
+            console.error("❌ Erro ao salvar item:", error);
+            toast.error("❌ Erro ao salvar item");
+        } finally {
+            setFormLoading(false);
+        }
     };
 
     const handleDeleteItem = async (item) => {
-        // ... (código anterior mantido)
+        if (!window.confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) {
+            return;
+        }
+
+        try {
+            // Deletar imagem se existir
+            if (item.imageUrl) {
+                await deleteFileByUrl(item.imageUrl);
+            }
+
+            // Deletar item do Firestore
+            const itemRef = doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id);
+            await deleteDoc(itemRef);
+            
+            toast.success("🗑️ Item excluído com sucesso!");
+        } catch (error) {
+            console.error("❌ Erro ao excluir item:", error);
+            toast.error("❌ Erro ao excluir item");
+        }
     };
 
     const toggleItemStatus = async (item) => {
-        // ... (código anterior mantido)
+        try {
+            const itemRef = doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id);
+            await updateDoc(itemRef, {
+                ativo: !item.ativo,
+                atualizadoEm: new Date()
+            });
+            
+            toast.success(`✅ Item ${!item.ativo ? 'ativado' : 'desativado'} com sucesso!`);
+        } catch (error) {
+            console.error("❌ Erro ao alterar status:", error);
+            toast.error("❌ Erro ao alterar status do item");
+        }
     };
 
     const openItemForm = (item = null) => {
-        // ... (código anterior mantido)
+        if (item) {
+            setEditingItem(item);
+            setFormData({
+                nome: item.nome || '',
+                descricao: item.descricao || '',
+                preco: item.preco || '',
+                categoria: item.categoria || '',
+                imageUrl: item.imageUrl || '',
+                ativo: item.ativo !== undefined ? item.ativo : true,
+                estoque: item.estoque || '',
+                estoqueMinimo: item.estoqueMinimo || '',
+                custo: item.custo || ''
+            });
+            setImagePreview(item.imageUrl || '');
+        } else {
+            setEditingItem(null);
+            setFormData({
+                nome: '',
+                descricao: '',
+                preco: '',
+                categoria: '',
+                imageUrl: '',
+                ativo: true,
+                estoque: '',
+                estoqueMinimo: '',
+                custo: ''
+            });
+            setImagePreview('');
+        }
+        setItemImage(null);
+        setShowItemForm(true);
     };
 
     const closeItemForm = () => {
-        // ... (código anterior mantido)
+        setShowItemForm(false);
+        setEditingItem(null);
+        setFormData({
+            nome: '',
+            descricao: '',
+            preco: '',
+            categoria: '',
+            imageUrl: '',
+            ativo: true,
+            estoque: '',
+            estoqueMinimo: '',
+            custo: ''
+        });
+        setImagePreview('');
+        setItemImage(null);
     };
 
     const handleFormChange = (e) => {
-        // ... (código anterior mantido)
+        const { name, value, type, checked, files } = e.target;
+        
+        if (type === 'file') {
+            const file = files[0];
+            if (file) {
+                setItemImage(file);
+                const previewUrl = URL.createObjectURL(file);
+                setImagePreview(previewUrl);
+            }
+        } else if (type === 'checkbox') {
+            setFormData(prev => ({ ...prev, [name]: checked }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
-    const quickUpdateStock = async (item, newStock) => {
-        // ... (código anterior mantido)
+    const quickUpdateStock = async (itemId, newStock) => {
+        try {
+            const item = menuItems.find(item => item.id === itemId);
+            if (!item) {
+                toast.error("Item não encontrado");
+                return;
+            }
+
+            const itemRef = doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', itemId);
+            await updateDoc(itemRef, {
+                estoque: Number(newStock),
+                atualizadoEm: new Date()
+            });
+            
+            toast.success("📦 Estoque atualizado!");
+        } catch (error) {
+            console.error("❌ Erro ao atualizar estoque:", error);
+            toast.error("❌ Erro ao atualizar estoque");
+        }
     };
 
     // Estatísticas
@@ -569,7 +745,7 @@ function AdminMenuManagement() {
                                 onEdit={() => openItemForm(item)}
                                 onDelete={() => handleDeleteItem(item)}
                                 onToggleStatus={() => toggleItemStatus(item)}
-                                onUpdateStock={(newStock) => quickUpdateStock(item, newStock)}
+                                onUpdateStock={(newStock) => quickUpdateStock(item.id, newStock)}
                                 stockStatus={getStockStatus(item)}
                                 profitMargin={calculateProfitMargin(item.preco, item.custo)}
                                 isMobile={true}
