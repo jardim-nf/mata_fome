@@ -62,12 +62,12 @@ function CardapioItem({ item, onAddItem }) {
           </span>
         )}
         {hasExtras && isAvailable && (
-          <span className="bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow">
+          <span className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold shadow">
             PERSONALIZÁVEL
           </span>
         )}
         {item.destaque && isAvailable && (
-          <span className="bg-yellow-400 text-gray-900 px-2 py-1 rounded-full text-xs font-bold shadow">
+          <span className="bg-yellow-400 text-black px-2 py-1 rounded-full text-xs font-bold shadow">
             DESTAQUE
           </span>
         )}
@@ -77,7 +77,7 @@ function CardapioItem({ item, onAddItem }) {
       <div className="relative w-full h-32 bg-gray-100 overflow-hidden">
         {imageLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse">
-            <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
         
@@ -103,12 +103,12 @@ function CardapioItem({ item, onAddItem }) {
       <div className="p-3 flex flex-col flex-grow">
         {/* Header */}
         <div className="mb-2">
-          <h3 className="text-sm font-bold text-gray-900 line-clamp-2 leading-tight group-hover:text-orange-500 transition-colors duration-300">
+          <h3 className="text-sm font-bold text-gray-900 line-clamp-2 leading-tight group-hover:text-yellow-600 transition-colors duration-300">
             {item.nome}
           </h3>
           
           {item.categoria && (
-            <p className="text-orange-500 text-xs mt-1">
+            <p className="text-yellow-600 text-xs mt-1">
               {item.categoria}
             </p>
           )}
@@ -126,7 +126,7 @@ function CardapioItem({ item, onAddItem }) {
               <span className="text-xs text-gray-500 -mb-1">A partir de</span>
             )}
             <div className="flex items-baseline gap-1">
-              <span className="text-base font-black text-orange-500">
+              <span className="text-base font-black text-yellow-600">
                 R$ {(item.preco || 0).toFixed(2).replace('.', ',')}
               </span>
               {item.precoOriginal && item.precoOriginal > item.preco && (
@@ -142,14 +142,14 @@ function CardapioItem({ item, onAddItem }) {
             disabled={!isAvailable}
             className={`
               relative flex items-center justify-center gap-1 px-3 py-2 rounded-lg font-semibold transition-all duration-200 
-              focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:ring-offset-1
+              focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:ring-offset-1
               min-w-[90px] text-xs
               ${
                 !isAvailable
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : hasExtras
-                  ? 'bg-blue-500 text-white hover:bg-blue-600 active:scale-95'
-                  : 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95'
+                  ? 'bg-yellow-500 text-black hover:bg-yellow-600 active:scale-95'
+                  : 'bg-yellow-500 text-black hover:bg-yellow-600 active:scale-95'
               }
             `}
           >

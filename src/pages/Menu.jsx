@@ -1,4 +1,4 @@
-// src/pages/Menu.jsx - VERSÃO CORRIGIDA
+// src/pages/Menu.jsx - (VERSÃO CORRIGIDA - CORES AMARELO/PRETO/CINZA)
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -475,117 +475,142 @@ function Menu() {
         }
     }, [bairro, cidade, taxasBairro, isRetirada]);
 
-    // Efeito principal para carregar estabelecimento e cardápio
+    // ✅ Efeito principal para carregar (ESTRUTURA ANINHADA)
     useEffect(() => {
         if (!estabelecimentoSlug) return;
-        let unsubscribeCardapio = () => { };
+        let unsubscribeTotal = () => {};
 
-const fetchEstabelecimento = async () => {
-    try {
-        setLoading(true);
-        console.log("🔍 Iniciando busca do estabelecimento...");
-        console.log("📌 Parâmetro recebido:", estabelecimentoSlug);
+        const fetchEstabelecimento = async () => {
+            try {
+                setLoading(true);
+                console.log("🔍 Iniciando busca do estabelecimento...");
+                console.log("📌 Parâmetro recebido:", estabelecimentoSlug);
 
-        let estabDoc = null;
-        let estabData = null;
-        let idDoEstabelecimentoReal = null;
+                const qEstabBySlug = query(
+                    collection(db, 'estabelecimentos'), 
+                    where('slug', '==', estabelecimentoSlug)
+                );
+                const estabSnapshotBySlug = await getDocs(qEstabBySlug);
 
-        // BUSCA DO ESTABELECIMENTO (mantém igual)
-        const qEstabBySlug = query(
-            collection(db, 'estabelecimentos'), 
-            where('slug', '==', estabelecimentoSlug)
-        );
-        const estabSnapshotBySlug = await getDocs(qEstabBySlug);
+                if (estabSnapshotBySlug.empty) {
+                    toast.error("Estabelecimento não encontrado.");
+                    setLoading(false);
+                    navigate('/'); // Redireciona se não achar
+                    return;
+                }
+                
+                const estabDoc = estabSnapshotBySlug.docs[0];
+                const estabData = estabDoc.data();
+                const idDoEstabelecimentoReal = estabDoc.id;
+                console.log("✅ Encontrado por SLUG:", estabData.nome);
 
-        if (!estabSnapshotBySlug.empty) {
-            estabDoc = estabSnapshotBySlug.docs[0];
-            estabData = estabDoc.data();
-            idDoEstabelecimentoReal = estabDoc.id;
-            console.log("✅ Encontrado por SLUG:", estabData.nome);
-        } else {
-            // ... resto da busca por ID/Nome (mantém igual)
-        }
+                setEstabelecimentoInfo(estabData);
+                setNomeEstabelecimento(estabData.nome || "Cardápio");
+                setActualEstabelecimentoId(idDoEstabelecimentoReal);
 
-        // CONFIGURA OS DADOS DO ESTABELECIMENTO
-        setEstabelecimentoInfo(estabData);
-        setNomeEstabelecimento(estabData.nome || "Cardápio");
-        setActualEstabelecimentoId(idDoEstabelecimentoReal);
+                // ✅ Lógica de busca de cardápio aninhado
+                console.log("📋 Buscando itens do cardápio (estrutura ANINHADA)...");
+                
+                const categoriasRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio');
+                const qCategorias = query(
+                    categoriasRef, 
+                    where('ativo', '==', true), 
+                    orderBy('ordem', 'asc')
+                );
 
-        // 🔥🔥🔥 CORREÇÃO CRÍTICA: BUSCAR ITENS DA ESTRUTURA CORRETA
-        console.log("📋 Buscando itens do cardápio...");
-        
-        // Buscar itens diretamente da coleção 'itens' do estabelecimento
-        const itensRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'itens');
-        const qItens = query(
-            itensRef, 
-            where('ativo', '==', true),
-            orderBy('nome', 'asc')
-        );
-        
-        const itensSnapshot = await getDocs(qItens);
-        console.log(`🎯 Total de itens encontrados: ${itensSnapshot.docs.length}`);
+                // Configura o listener principal
+                const unsubscribeCardapio = onSnapshot(qCategorias, (categoriasSnapshot) => {
+                    console.log("📁 Categorias ativas encontradas:", categoriasSnapshot.docs.length);
+                    
+                    const unsubscribers = [];
+                    let allItems = [];
+                    let categoriesList = ['Todos'];
+                    let initialVisibleCounts = {};
 
-        const allItems = itensSnapshot.docs.map(itemDoc => ({
-            ...itemDoc.data(),
-            id: itemDoc.id,
-            categoria: itemDoc.data().categoria || 'Geral', // Usa campo categoria do item
-            categoriaId: itemDoc.data().categoria || 'geral'
-        }));
+                    if (categoriasSnapshot.empty) {
+                        console.log("ℹ️ Nenhuma categoria ativa encontrada.");
+                        setAllProdutos([]);
+                        setAvailableCategories(['Todos']);
+                        setVisibleItemsCount({});
+                        setLoading(false);
+                        return;
+                    }
 
-        // Extrair categorias únicas dos itens
-        const categoriasUnicas = [...new Set(allItems.map(item => item.categoria))];
-        const categoriesList = ['Todos', ...categoriasUnicas];
-        
-        console.log(`📂 Categorias encontradas: ${categoriasUnicas.join(', ')}`);
+                    categoriasSnapshot.forEach(catDoc => {
+                        const categoriaData = catDoc.data();
+                        const categoriaId = catDoc.id;
+                        categoriesList.push(categoriaData.nome);
+                        initialVisibleCounts[categoriaData.nome] = 3; // Define contagem inicial
+                        
+                        console.log(`🔍 Buscando itens na categoria: ${categoriaId} (${categoriaData.nome})`);
 
-        const initialVisibleCounts = {};
-        categoriasUnicas.forEach(cat => {
-            initialVisibleCounts[cat] = 3;
-        });
+                        const itensRef = collection(
+                            db,
+                            'estabelecimentos',
+                            idDoEstabelecimentoReal,
+                            'cardapio',
+                            categoriaId,
+                            'itens'
+                        );
+                        const qItens = query(
+                            itensRef, 
+                            where('ativo', '==', true), 
+                            orderBy('nome', 'asc')
+                        );
 
-        setAvailableCategories(categoriesList);
-        setVisibleItemsCount(initialVisibleCounts);
-        setAllProdutos(allItems);
-        setLoading(false);
+                        const unsubscribeItens = onSnapshot(qItens, (itensSnapshot) => {
+                            console.log(`📦 Itens ativos na categoria ${categoriaId}:`, itensSnapshot.docs.length);
 
-        // LISTENER EM TEMPO REAL PARA A NOVA ESTRUTURA
-        console.log("👂 Configurando listener em tempo real...");
-        const unsubscribeCardapio = onSnapshot(qItens, (snapshot) => {
-            console.log("🔄 Atualização em tempo real detectada!");
+                            const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
+                                ...itemDoc.data(),
+                                id: itemDoc.id,
+                                categoria: categoriaData.nome,
+                                categoriaId: categoriaId,
+                            }));
+
+                            allItems = [
+                                ...allItems.filter(item => item.categoriaId !== categoriaId),
+                                ...itemsDaCategoria
+                            ];
+
+                            setAllProdutos(allItems);
+                        }, (error) => {
+                            console.error(`❌ Erro ao ouvir itens da categoria ${categoriaId}:`, error);
+                            toast.error("❌ Erro ao carregar itens de uma categoria.");
+                        });
+
+                        unsubscribers.push(unsubscribeItens);
+                    });
+
+                    setAvailableCategories(categoriesList);
+                    setVisibleItemsCount(initialVisibleCounts);
+                    setLoading(false);
+
+                    // Função para limpar todos os listeners de itens
+                    unsubscribeTotal = () => {
+                        console.log("🧹 Limpando listeners de itens");
+                        unsubscribers.forEach(unsub => unsub());
+                        unsubscribeCardapio(); // Limpa o listener das categorias
+                    };
+                }, (error) => {
+                    console.error("❌ Erro ao carregar o estabelecimento (categorias):", error);
+                    toast.error("Não foi possível carregar o estabelecimento.");
+                    setLoading(false);
+                });
             
-            const updatedAllItems = snapshot.docs.map(itemDoc => ({
-                ...itemDoc.data(),
-                id: itemDoc.id,
-                categoria: itemDoc.data().categoria || 'Geral',
-                categoriaId: itemDoc.data().categoria || 'geral'
-            }));
-
-            const updatedCategorias = [...new Set(updatedAllItems.map(item => item.categoria))];
-            const updatedCategoriesList = ['Todos', ...updatedCategorias];
-            
-            const updatedVisibleCounts = {};
-            updatedCategorias.forEach(cat => {
-                updatedVisibleCounts[cat] = visibleItemsCount[cat] || 3;
-            });
-
-            console.log(`🔄 Atualização: ${updatedAllItems.length} itens, ${updatedCategorias.length} categorias`);
-            setAvailableCategories(updatedCategoriesList);
-            setVisibleItemsCount(updatedVisibleCounts);
-            setAllProdutos(updatedAllItems);
-        });
-
-        return unsubscribeCardapio;
-
-    } catch (error) {
-        console.error("❌ Erro ao carregar o estabelecimento:", error);
-        toast.error("Não foi possível carregar o estabelecimento.");
-        setLoading(false);
-    }
-};
+            } catch (error) {
+                console.error("❌ Erro no fetchEstabelecimento:", error);
+                toast.error("Erro crítico ao carregar a página.");
+                setLoading(false);
+            }
+        };
 
         fetchEstabelecimento();
-        return () => unsubscribeCardapio();
-    }, [estabelecimentoSlug]);
+
+        return () => {
+            unsubscribeTotal(); // Limpa todos os listeners quando o componente desmonta
+        };
+    }, [estabelecimentoSlug, navigate]);
 
     useEffect(() => {
         let produtosProcessados = [...allProdutos];
@@ -636,16 +661,15 @@ const fetchEstabelecimento = async () => {
 
     if (authLoading || loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-gray-600 text-lg">Carregando cardápio...</p>
                 </div>
             </div>
         );
     }
 
-    // 🔧 CORREÇÃO: Usar as variáveis corrigidas para verificar admin
     if (isUserAdmin || isUserMasterAdmin) {
         return <Navigate to={isUserMasterAdmin ? '/master-dashboard' : '/painel'} replace />;
     }
@@ -659,16 +683,16 @@ const fetchEstabelecimento = async () => {
     }, {});
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 pb-48 md:pb-0">
-            {/* Header com fundo laranja */}
-            <div className="bg-gradient-to-r from-orange-500 to-amber-500 shadow-sm">
+        <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-gray-50 pb-48 md:pb-0">
+            {/* Header com fundo amarelo */}
+            <div className="bg-gradient-to-r from-yellow-500 to-yellow-400 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 py-8">
-                    <div className="text-center text-white">
+                    <div className="text-center text-black">
                         <h1 className="text-4xl font-bold mb-3">
                             {nomeEstabelecimento}
                         </h1>
                         {estabelecimentoInfo?.descricao && (
-                            <p className="text-orange-100 text-lg max-w-2xl mx-auto">
+                            <p className="text-yellow-900 text-lg max-w-2xl mx-auto">
                                 {estabelecimentoInfo.descricao}
                             </p>
                         )}
@@ -678,7 +702,7 @@ const fetchEstabelecimento = async () => {
 
             {/* Search and Filters */}
             <div className="max-w-7xl mx-auto px-4 py-6">
-                <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-orange-200">
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-yellow-200">
                     <div className="mb-6">
                         <div className="relative">
                             <input 
@@ -686,7 +710,7 @@ const fetchEstabelecimento = async () => {
                                 placeholder="🔍 Buscar por nome ou descrição..." 
                                 value={searchTerm} 
                                 onChange={(e) => setSearchTerm(e.target.value)} 
-                                className="w-full px-6 py-4 border border-orange-300 rounded-2xl text-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200" 
+                                className="w-full px-6 py-4 border border-yellow-300 rounded-2xl text-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200" 
                             />
                         </div>
                     </div>
@@ -698,8 +722,8 @@ const fetchEstabelecimento = async () => {
                                 onClick={() => setSelectedCategory(category)}
                                 className={`px-6 py-3 rounded-full text-sm font-semibold transition-all duration-200 transform hover:scale-105 ${
                                     selectedCategory === category 
-                                        ? 'bg-orange-500 text-white shadow-lg' 
-                                        : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                        ? 'bg-yellow-500 text-black shadow-lg' 
+                                        : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
                                 }`}
                             >
                                 {category}
@@ -708,7 +732,7 @@ const fetchEstabelecimento = async () => {
                         {(searchTerm || selectedCategory !== 'Todos') && (
                             <button 
                                 onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
-                                className="px-6 py-3 rounded-full text-sm font-semibold bg-gray-400 text-white hover:bg-gray-500 transition-all duration-200 transform hover:scale-105"
+                                className="px-6 py-3 rounded-full text-sm font-semibold bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 transform hover:scale-105"
                             >
                                 Limpar Filtros
                             </button>
@@ -719,15 +743,15 @@ const fetchEstabelecimento = async () => {
                 {/* Menu Items */}
                 {produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
                     <div className="text-center py-12">
-                        <div className="text-orange-400 text-6xl mb-4">🔍</div>
-                        <p className="text-orange-600 text-xl font-medium">Nenhum item encontrado com os filtros selecionados.</p>
-                        <p className="text-orange-500 mt-2">Tente alterar sua busca ou categoria.</p>
+                        <div className="text-yellow-400 text-6xl mb-4">🔍</div>
+                        <p className="text-yellow-600 text-xl font-medium">Nenhum item encontrado com os filtros selecionados.</p>
+                        <p className="text-yellow-500 mt-2">Tente alterar sua busca ou categoria.</p>
                     </div>
                 ) : allProdutos.length === 0 ? (
                     <div className="text-center py-12">
-                        <div className="text-orange-400 text-6xl mb-4">🍽️</div>
-                        <p className="text-orange-600 text-xl font-medium">Este estabelecimento ainda não possui itens no cardápio.</p>
-                        <p className="text-orange-500 mt-2">Volte em breve para conferir as novidades!</p>
+                        <div className="text-yellow-400 text-6xl mb-4">🍽️</div>
+                        <p className="text-yellow-600 text-xl font-medium">Este estabelecimento ainda não possui itens no cardápio.</p>
+                        <p className="text-yellow-500 mt-2">Volte em breve para conferir as novidades!</p>
                     </div>
                 ) : (
                     Object.keys(menuAgrupado).sort().map(categoria => {
@@ -738,8 +762,8 @@ const fetchEstabelecimento = async () => {
                         return (
                             <div key={categoria} className="mb-12">
                                 <div className="flex items-center justify-between mb-8">
-                                    <h2 className="text-3xl font-bold text-orange-800">{categoria}</h2>
-                                    <span className="text-orange-600 bg-orange-100 px-3 py-1 rounded-full text-sm">
+                                    <h2 className="text-3xl font-bold text-yellow-800">{categoria}</h2>
+                                    <span className="text-yellow-600 bg-yellow-100 px-3 py-1 rounded-full text-sm">
                                         {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
                                     </span>
                                 </div>
@@ -755,14 +779,14 @@ const fetchEstabelecimento = async () => {
                                         {todosItensVisiveis ? (
                                             <button 
                                                 onClick={() => handleShowLess(categoria)}
-                                                className="bg-orange-200 text-orange-700 font-semibold py-3 px-8 rounded-lg hover:bg-orange-300 transition-all duration-200 transform hover:scale-105"
+                                                className="bg-yellow-200 text-yellow-800 font-semibold py-3 px-8 rounded-lg hover:bg-yellow-300 transition-all duration-200 transform hover:scale-105"
                                             >
                                                 Ver menos
                                             </button>
                                         ) : (
                                             <button 
                                                 onClick={() => handleShowMore(categoria)}
-                                                className="bg-orange-500 text-white font-semibold py-3 px-8 rounded-lg hover:bg-orange-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
+                                                className="bg-yellow-500 text-black font-semibold py-3 px-8 rounded-lg hover:bg-yellow-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
                                             >
                                                 Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
                                             </button>
@@ -775,43 +799,43 @@ const fetchEstabelecimento = async () => {
                 )}
 
                 {/* Cart and Order Section */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mt-12 border border-orange-200">
-                    <h2 className="font-bold text-3xl mb-6 text-orange-800 flex items-center gap-3">
+                <div className="bg-white rounded-2xl shadow-xl p-6 mt-12 border border-yellow-200">
+                    <h2 className="font-bold text-3xl mb-6 text-yellow-800 flex items-center gap-3">
                         <span>🛒</span>
                         Seu Pedido
                     </h2>
                     
                     {carrinho.length === 0 ? (
                         <div className="text-center py-8">
-                            <div className="text-orange-400 text-6xl mb-4">🛒</div>
-                            <p className="text-orange-600 text-lg font-medium">Nenhum item adicionado ainda.</p>
-                            <p className="text-orange-500 mt-2">Explore nosso cardápio e adicione itens deliciosos!</p>
+                            <div className="text-yellow-400 text-6xl mb-4">🛒</div>
+                            <p className="text-yellow-600 text-lg font-medium">Nenhum item adicionado ainda.</p>
+                            <p className="text-yellow-500 mt-2">Explore nosso cardápio e adicione itens deliciosos!</p>
                         </div>
                     ) : (
                         <>
                             <div className="space-y-4 mb-6">
                                 {carrinho.map((item) => (
-                                    <div key={item.cartItemId} className="bg-orange-50 p-4 rounded-xl border border-orange-200 hover:shadow-md transition-all duration-200">
+                                    <div key={item.cartItemId} className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 hover:shadow-md transition-all duration-200">
                                         <div className="flex justify-between items-start">
                                             <div className="flex-1 mr-4">
                                                 <div className="flex items-start justify-between">
                                                     <div>
-                                                        <span className="font-semibold text-orange-900">{item.nome}</span>
-                                                        <span className="text-sm text-orange-600 ml-2">({item.qtd}x)</span>
+                                                        <span className="font-semibold text-yellow-900">{item.nome}</span>
+                                                        <span className="text-sm text-yellow-600 ml-2">({item.qtd}x)</span>
                                                     </div>
-                                                    <span className="font-bold text-orange-900 text-lg">
+                                                    <span className="font-bold text-yellow-900 text-lg">
                                                         R$ {(item.precoFinal * item.qtd).toFixed(2).replace('.', ',')}
                                                     </span>
                                                 </div>
                                                 {item.adicionais && item.adicionais.length > 0 && (
-                                                    <div className="text-sm text-orange-700 pl-2 mt-2 border-l-2 border-orange-500">
+                                                    <div className="text-sm text-yellow-700 pl-2 mt-2 border-l-2 border-yellow-500">
                                                         {item.adicionais.map(ad => `+ ${ad.nome}`).join(', ')}
                                                     </div>
                                                 )}
                                             </div>
                                             <button 
                                                 onClick={() => removerDoCarrinho(item.cartItemId)}
-                                                className="bg-orange-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-orange-600 transition-colors duration-200 flex-shrink-0"
+                                                className="bg-yellow-500 text-black w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-yellow-600 transition-colors duration-200 flex-shrink-0"
                                             >
                                                 -
                                             </button>
@@ -820,33 +844,33 @@ const fetchEstabelecimento = async () => {
                                 ))}
                             </div>
                             
-                            <div className="border-t border-orange-200 pt-6 space-y-4">
+                            <div className="border-t border-yellow-200 pt-6 space-y-4">
                                 <div className="flex justify-between items-center text-lg">
-                                    <span className="text-orange-700">Subtotal:</span>
-                                    <span className="font-semibold text-orange-900">R$ {subtotalCalculado.toFixed(2).replace('.', ',')}</span>
+                                    <span className="text-yellow-700">Subtotal:</span>
+                                    <span className="font-semibold text-yellow-900">R$ {subtotalCalculado.toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 
                                 {!isRetirada && (
                                     <div className="flex justify-between items-center text-lg">
-                                        <span className="text-orange-700">Taxa de Entrega:</span>
-                                        <span className="font-semibold text-orange-900">R$ {taxaAplicada.toFixed(2).replace('.', ',')}</span>
+                                        <span className="text-yellow-700">Taxa de Entrega:</span>
+                                        <span className="font-semibold text-yellow-900">R$ {taxaAplicada.toFixed(2).replace('.', ',')}</span>
                                     </div>
                                 )}
                                 
                                 {!appliedCoupon ? (
-                                    <div className="flex items-center gap-3 pt-4 border-t border-orange-200">
+                                    <div className="flex items-center gap-3 pt-4 border-t border-yellow-200">
                                         <input 
                                             type="text" 
                                             placeholder="🎁 Código do Cupom" 
                                             value={couponCodeInput} 
                                             onChange={(e) => setCouponCodeInput(e.target.value)} 
-                                            className="flex-1 border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                            className="flex-1 border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                             disabled={couponLoading}
                                         />
                                         <button 
                                             onClick={handleApplyCoupon} 
                                             disabled={couponLoading || !couponCodeInput.trim()}
-                                            className="bg-orange-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-orange-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105"
+                                            className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105"
                                         >
                                             {couponLoading ? 'Aplicando...' : 'Aplicar'}
                                         </button>
@@ -873,9 +897,9 @@ const fetchEstabelecimento = async () => {
                                     </div>
                                 )}
                                 
-                                <div className="flex justify-between items-center text-2xl font-bold pt-4 border-t border-orange-300">
-                                    <span className="text-orange-900">TOTAL:</span>
-                                    <span className="text-orange-600">R$ {finalOrderTotal.toFixed(2).replace('.', ',')}</span>
+                                <div className="flex justify-between items-center text-2xl font-bold pt-4 border-t border-yellow-300">
+                                    <span className="text-yellow-900">TOTAL:</span>
+                                    <span className="text-yellow-600">R$ {finalOrderTotal.toFixed(2).replace('.', ',')}</span>
                                 </div>
                             </div>
                         </>
@@ -883,119 +907,119 @@ const fetchEstabelecimento = async () => {
                 </div>
 
                 {/* Customer Info Section */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mt-8 border border-orange-200">
-                    <h3 className="font-bold text-2xl mb-6 text-orange-800 flex items-center gap-3">
+                <div className="bg-white rounded-2xl shadow-xl p-6 mt-8 border border-yellow-200">
+                    <h3 className="font-bold text-2xl mb-6 text-yellow-800 flex items-center gap-3">
                         <span>👤</span>
                         Seus Dados
                     </h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label htmlFor="nomeCliente" className="block text-sm font-medium text-orange-700 mb-2">Seu Nome *</label>
+                            <label htmlFor="nomeCliente" className="block text-sm font-medium text-yellow-700 mb-2">Seu Nome *</label>
                             <input 
                                 id="nomeCliente" 
                                 value={nomeCliente} 
                                 onChange={(e) => setNomeCliente(e.target.value)} 
-                                className="w-full border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                 required 
                             />
                         </div>
                         <div>
-                            <label htmlFor="telefoneCliente" className="block text-sm font-medium text-orange-700 mb-2">Seu Telefone *</label>
+                            <label htmlFor="telefoneCliente" className="block text-sm font-medium text-yellow-700 mb-2">Seu Telefone *</label>
                             <input 
                                 id="telefoneCliente" 
                                 value={telefoneCliente} 
                                 onChange={(e) => setTelefoneCliente(e.target.value)} 
-                                className="w-full border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                 type="tel" 
                                 required 
                             />
                         </div>
                     </div>
                     
-                    <div className="mt-8 pt-6 border-t border-orange-200">
-                        <h3 className="font-bold text-2xl mb-4 text-orange-800">Tipo de Entrega *</h3>
+                    <div className="mt-8 pt-6 border-t border-yellow-200">
+                        <h3 className="font-bold text-2xl mb-4 text-yellow-800">Tipo de Entrega *</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <label className="flex items-center p-4 border-2 border-orange-200 rounded-xl cursor-pointer hover:border-orange-500 transition-all duration-200">
+                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-yellow-500 transition-all duration-200">
                                 <input 
                                     type="radio" 
                                     name="deliveryType" 
                                     checked={isRetirada} 
                                     onChange={() => setIsRetirada(true)} 
-                                    className="mr-3 h-5 w-5 text-orange-600 focus:ring-orange-500"
+                                    className="mr-3 h-5 w-5 text-yellow-600 focus:ring-yellow-500"
                                 />
                                 <div>
-                                    <span className="font-semibold text-orange-900">🛵 Retirada no Local</span>
-                                    <p className="text-sm text-orange-600 mt-1">Você busca seu pedido</p>
+                                    <span className="font-semibold text-yellow-900">🛵 Retirada no Local</span>
+                                    <p className="text-sm text-yellow-600 mt-1">Você busca seu pedido</p>
                                 </div>
                             </label>
-                            <label className="flex items-center p-4 border-2 border-orange-200 rounded-xl cursor-pointer hover:border-orange-500 transition-all duration-200">
+                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-yellow-500 transition-all duration-200">
                                 <input 
                                     type="radio" 
                                     name="deliveryType" 
                                     checked={!isRetirada} 
                                     onChange={() => setIsRetirada(false)} 
-                                    className="mr-3 h-5 w-5 text-orange-600 focus:ring-orange-500"
+                                    className="mr-3 h-5 w-5 text-yellow-600 focus:ring-yellow-500"
                                 />
                                 <div>
-                                    <span className="font-semibold text-orange-900">🚚 Entrega em Casa</span>
-                                    <p className="text-sm text-orange-600 mt-1">Entregamos no seu endereço</p>
+                                    <span className="font-semibold text-yellow-900">🚚 Entrega em Casa</span>
+                                    <p className="text-sm text-yellow-600 mt-1">Entregamos no seu endereço</p>
                                 </div>
                             </label>
                         </div>
                     </div>
                     
                     {!isRetirada && (
-                        <div className="mt-8 pt-6 border-t border-orange-200">
-                            <h3 className="font-bold text-2xl mb-6 text-orange-800">📍 Endereço de Entrega</h3>
+                        <div className="mt-8 pt-6 border-t border-yellow-200">
+                            <h3 className="font-bold text-2xl mb-6 text-yellow-800">📍 Endereço de Entrega</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="md:col-span-2">
-                                    <label htmlFor="rua" className="block text-sm font-medium text-orange-700 mb-2">Rua *</label>
+                                    <label htmlFor="rua" className="block text-sm font-medium text-yellow-700 mb-2">Rua *</label>
                                     <input 
                                         id="rua" 
                                         value={rua} 
                                         onChange={(e) => setRua(e.target.value)} 
-                                        className="w-full border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                         required={!isRetirada} 
                                     />
                                 </div>
                                 <div>
-                                    <label htmlFor="numero" className="block text-sm font-medium text-orange-700 mb-2">Número *</label>
+                                    <label htmlFor="numero" className="block text-sm font-medium text-yellow-700 mb-2">Número *</label>
                                     <input 
                                         id="numero" 
                                         value={numero} 
                                         onChange={(e) => setNumero(e.target.value)} 
-                                        className="w-full border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                         required={!isRetirada} 
                                     />
                                 </div>
                                 <div>
-                                    <label htmlFor="bairro" className="block text-sm font-medium text-orange-700 mb-2">Bairro *</label>
+                                    <label htmlFor="bairro" className="block text-sm font-medium text-yellow-700 mb-2">Bairro *</label>
                                     <input 
                                         id="bairro" 
                                         value={bairro} 
                                         onChange={(e) => setBairro(e.target.value)} 
-                                        className="w-full border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                         required={!isRetirada} 
                                     />
                                 </div>
                                 <div className="md:col-span-2">
-                                    <label htmlFor="cidade" className="block text-sm font-medium text-orange-700 mb-2">Cidade *</label>
+                                    <label htmlFor="cidade" className="block text-sm font-medium text-yellow-700 mb-2">Cidade *</label>
                                     <input 
                                         id="cidade" 
                                         value={cidade} 
                                         onChange={(e) => setCidade(e.target.value)} 
-                                        className="w-full border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                         required={!isRetirada} 
                                     />
                                 </div>
                                 <div className="md:col-span-2">
-                                    <label htmlFor="complemento" className="block text-sm font-medium text-orange-700 mb-2">Complemento</label>
+                                    <label htmlFor="complemento" className="block text-sm font-medium text-yellow-700 mb-2">Complemento</label>
                                     <input 
                                         id="complemento" 
                                         value={complemento} 
                                         onChange={(e) => setComplemento(e.target.value)} 
-                                        className="w-full border border-orange-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     />
                                 </div>
                             </div>
@@ -1010,10 +1034,10 @@ const fetchEstabelecimento = async () => {
                         </div>
                     )}
                     
-                    <div className="mt-8 pt-6 border-t border-orange-200">
-                        <h3 className="font-bold text-2xl mb-6 text-orange-800">💳 Forma de Pagamento *</h3>
+                    <div className="mt-8 pt-6 border-t border-yellow-200">
+                        <h3 className="font-bold text-2xl mb-6 text-yellow-800">💳 Forma de Pagamento *</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <label className="flex items-center p-4 border-2 border-orange-200 rounded-xl cursor-pointer hover:border-green-500 transition-all duration-200">
+                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-green-500 transition-all duration-200">
                                 <input 
                                     type="radio" 
                                     name="paymentMethod" 
@@ -1023,11 +1047,11 @@ const fetchEstabelecimento = async () => {
                                     className="mr-3 h-5 w-5 text-green-600 focus:ring-green-500"
                                 />
                                 <div>
-                                    <span className="font-semibold text-orange-900">📱 PIX</span>
-                                    <p className="text-sm text-orange-600 mt-1">Pagamento instantâneo</p>
+                                    <span className="font-semibold text-yellow-900">📱 PIX</span>
+                                    <p className="text-sm text-yellow-600 mt-1">Pagamento instantâneo</p>
                                 </div>
                             </label>
-                            <label className="flex items-center p-4 border-2 border-orange-200 rounded-xl cursor-pointer hover:border-blue-500 transition-all duration-200">
+                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-blue-500 transition-all duration-200">
                                 <input 
                                     type="radio" 
                                     name="paymentMethod" 
@@ -1037,11 +1061,11 @@ const fetchEstabelecimento = async () => {
                                     className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500"
                                 />
                                 <div>
-                                    <span className="font-semibold text-orange-900">💳 Cartão</span>
-                                    <p className="text-sm text-orange-600 mt-1">Crédito/Débito na entrega</p>
+                                    <span className="font-semibold text-yellow-900">💳 Cartão</span>
+                                    <p className="text-sm text-yellow-600 mt-1">Crédito/Débito na entrega</p>
                                 </div>
                             </label>
-                            <label className="flex items-center p-4 border-2 border-orange-200 rounded-xl cursor-pointer hover:border-yellow-500 transition-all duration-200">
+                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-yellow-500 transition-all duration-200">
                                 <input 
                                     type="radio" 
                                     name="paymentMethod" 
@@ -1051,8 +1075,8 @@ const fetchEstabelecimento = async () => {
                                     className="mr-3 h-5 w-5 text-yellow-600 focus:ring-yellow-500"
                                 />
                                 <div>
-                                    <span className="font-semibold text-orange-900">💰 Dinheiro</span>
-                                    <p className="text-sm text-orange-600 mt-1">Pagamento na entrega</p>
+                                    <span className="font-semibold text-yellow-900">💰 Dinheiro</span>
+                                    <p className="text-sm text-yellow-600 mt-1">Pagamento na entrega</p>
                                 </div>
                             </label>
                         </div>
@@ -1081,7 +1105,7 @@ const fetchEstabelecimento = async () => {
 
             {/* Fixed Order Button */}
             {carrinho.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-2xl border-t border-orange-200 md:relative md:p-0 md:mt-8 md:shadow-none md:border-none">
+                <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-2xl border-t border-yellow-200 md:relative md:p-0 md:mt-8 md:shadow-none md:border-none">
                     <div className="max-w-7xl mx-auto">
                         <button 
                             onClick={enviarPedido} 
@@ -1099,11 +1123,11 @@ const fetchEstabelecimento = async () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
                     <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center">
                         <div className="text-6xl mb-4">🎉</div>
-                        <h2 className="text-3xl font-bold mb-4 text-orange-800">Pedido Enviado!</h2>
+                        <h2 className="text-3xl font-bold mb-4 text-yellow-800">Pedido Enviado!</h2>
                         <div className="space-y-3 text-left mb-6">
-                            <p><strong className="text-orange-700">ID:</strong> <span className="font-mono">{confirmedOrderDetails.id.substring(0, 8)}...</span></p>
-                            <p><strong className="text-orange-700">Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
-                            <p><strong className="text-orange-700">Forma de Pagamento:</strong> {confirmedOrderDetails.formaPagamento}</p>
+                            <p><strong className="text-yellow-700">ID:</strong> <span className="font-mono">{confirmedOrderDetails.id.substring(0, 8)}...</span></p>
+                            <p><strong className="text-yellow-700">Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
+                            <p><strong className="text-yellow-700">Forma de Pagamento:</strong> {confirmedOrderDetails.formaPagamento}</p>
                         </div>
                         <button 
                             onClick={() => setShowOrderConfirmationModal(false)} 
@@ -1121,7 +1145,7 @@ const fetchEstabelecimento = async () => {
                     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full relative">
                         <button 
                             onClick={() => { setShowLoginPrompt(false); }} 
-                            className="absolute top-4 right-4 text-orange-500 hover:text-orange-600 text-2xl font-bold transition-colors duration-200" 
+                            className="absolute top-4 right-4 text-yellow-500 hover:text-yellow-600 text-2xl font-bold transition-colors duration-200" 
                             aria-label="Fechar"
                         >
                             &times;
@@ -1129,10 +1153,10 @@ const fetchEstabelecimento = async () => {
                         
                         <div className="text-center mb-6">
                             <div className="text-4xl mb-4">🔐</div>
-                            <h2 className="text-3xl font-bold text-orange-800 mb-2">
+                            <h2 className="text-3xl font-bold text-yellow-800 mb-2">
                                 {isRegisteringInModal ? 'Criar Conta' : 'Fazer Login'}
                             </h2>
-                            <p className="text-orange-600">
+                            <p className="text-yellow-600">
                                 {isRegisteringInModal ? 'Preencha seus dados para criar uma conta.' : 'Para acessar o cardápio e fazer pedidos.'}
                             </p>
                         </div>
@@ -1148,7 +1172,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="text" 
                                     placeholder="Seu Nome Completo *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={nomeAuthModal} 
                                     onChange={(e) => setNomeAuthModal(e.target.value)} 
                                     required 
@@ -1156,7 +1180,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="tel" 
                                     placeholder="Seu Telefone (com DDD) *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={telefoneAuthModal} 
                                     onChange={(e) => setTelefoneAuthModal(e.target.value)} 
                                     required 
@@ -1164,7 +1188,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="email" 
                                     placeholder="Email *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
@@ -1172,7 +1196,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="password" 
                                     placeholder="Senha (mín. 6 caracteres) *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
@@ -1180,7 +1204,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="text" 
                                     placeholder="Rua *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={ruaAuthModal} 
                                     onChange={(e) => setRuaAuthModal(e.target.value)} 
                                     required 
@@ -1188,7 +1212,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="text" 
                                     placeholder="Número *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={numeroAuthModal} 
                                     onChange={(e) => setNumeroAuthModal(e.target.value)} 
                                     required 
@@ -1196,7 +1220,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="text" 
                                     placeholder="Bairro *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={bairroAuthModal} 
                                     onChange={(e) => setBairroAuthModal(e.target.value)} 
                                     required 
@@ -1204,7 +1228,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="text" 
                                     placeholder="Cidade *" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={cidadeAuthModal} 
                                     onChange={(e) => setCidadeAuthModal(e.target.value)} 
                                     required 
@@ -1212,22 +1236,22 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="text" 
                                     placeholder="Complemento (Opcional)" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={complementoAuthModal} 
                                     onChange={(e) => setComplementoAuthModal(e.target.value)} 
                                 />
                                 <button 
                                     type="submit" 
-                                    className="w-full bg-orange-500 text-white font-semibold py-3 rounded-xl hover:bg-orange-600 transition-all duration-200 transform hover:scale-105"
+                                    className="w-full bg-yellow-500 text-black font-semibold py-3 rounded-xl hover:bg-yellow-600 transition-all duration-200 transform hover:scale-105"
                                 >
                                     Cadastrar e Entrar
                                 </button>
-                                <p className="text-sm text-center text-orange-600">
+                                <p className="text-sm text-center text-yellow-600">
                                     Já tem uma conta?{' '}
                                     <button 
                                         type="button" 
                                         onClick={() => setIsRegisteringInModal(false)} 
-                                        className="text-orange-500 underline font-semibold hover:text-orange-600 transition-colors duration-200"
+                                        className="text-yellow-500 underline font-semibold hover:text-yellow-600 transition-colors duration-200"
                                     >
                                         Fazer Login
                                     </button>
@@ -1238,7 +1262,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="email" 
                                     placeholder="Email" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
@@ -1246,7 +1270,7 @@ const fetchEstabelecimento = async () => {
                                 <input 
                                     type="password" 
                                     placeholder="Senha" 
-                                    className="w-full border border-orange-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
@@ -1257,12 +1281,12 @@ const fetchEstabelecimento = async () => {
                                 >
                                     Entrar
                                 </button>
-                                <p className="text-sm text-center text-orange-600">
+                                <p className="text-sm text-center text-yellow-600">
                                     Não tem uma conta?{' '}
                                     <button 
                                         type="button" 
                                         onClick={() => setIsRegisteringInModal(true)} 
-                                        className="text-orange-500 underline font-semibold hover:text-orange-600 transition-colors duration-200"
+                                        className="text-yellow-500 underline font-semibold hover:text-yellow-600 transition-colors duration-200"
                                     >
                                         Cadastre-se
                                     </button>
