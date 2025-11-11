@@ -28,7 +28,6 @@ function AdminAnalytics() {
     console.log("🔍 Debug Auth no AdminAnalytics:", {
         userData,
         userDataKeys: userData ? Object.keys(userData) : 'no userData',
-        estabelecimentosCerenciados: userData?.estabelecimentosCerenciados,
         estabelecimentos: userData?.estabelecimentos,
         estabelecimentosGerenciados: userData?.estabelecimentosGerenciados
     });
@@ -41,7 +40,7 @@ function AdminAnalytics() {
     // 🔧 CORREÇÃO: Busca o estabelecimento com o nome CORRETO baseado na sua estrutura
     const primeiroEstabelecimento = useMemo(() => {
         // Tenta na ordem: estabelecimentosCerenciados, depois estabelecimentos, depois estabelecimentosGerenciados
-        const estabelecimento = userData?.estabelecimentosCerenciados?.[0] || // ✅ NOME CORRETO baseado no seu Firebase
+        const estabelecimento =  // ✅ NOME CORRETO baseado no seu Firebase
                                userData?.estabelecimentos?.[0] ||
                                userData?.estabelecimentosGerenciados?.[0] ||
                                null;

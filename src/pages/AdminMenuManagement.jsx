@@ -1,4 +1,4 @@
-// src/pages/AdminMenuManagement.jsx - VERSÃO COMPLETA CORRIGIDA
+// src/pages/AdminMenuManagement.jsx - VERSÃO COMPLETA E CORRIGIDA CONTRA ID '0'
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy } from 'firebase/firestore';
@@ -10,9 +10,9 @@ import AdminProductCard from '../components/AdminProductCard';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from '../components/Pagination';
-import { 
-    IoArrowBack, 
-    IoAddCircleOutline, 
+import {
+    IoArrowBack,
+    IoAddCircleOutline,
     IoPencil,
     IoSearch,
     IoFilter,
@@ -30,14 +30,12 @@ import {
 
 function AdminMenuManagement() {
     const { userData } = useAuth();
-    
+
     console.log("🔍 Debug Auth no AdminMenuManagement - ESTRUTURA COMPLETA:", {
         userData,
         userDataKeys: userData ? Object.keys(userData) : 'no userData',
-        // Verifica todos os campos possíveis de estabelecimentos
         estabelecimentos: userData?.estabelecimentos,
-        estabelecimentosGerenciados: userData?.estabelecimentosGerenciados,
-        estabelecimentosCerenciados: userData?.estabelecimentosCerenciados
+        estabelecimentosGerenciados: userData?.estabelecimentosGerenciados
     });
 
     const [establishmentName, setEstablishmentName] = useState('');
@@ -46,24 +44,24 @@ function AdminMenuManagement() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
-    
+
     // 🔄 Estado para ordenação
     const [sortConfig, setSortConfig] = useState({
-        key: 'nome',      // nome, preco, ativo, criadoEm, estoque
-        direction: 'asc'  // asc, desc
+        key: 'nome',      // nome, preco, ativo, criadoEm, estoque
+        direction: 'asc'  // asc, desc
     });
 
     // 📦 NOVO: Estado para filtro de estoque
     const [stockFilter, setStockFilter] = useState('todos'); // todos, baixo, critico, normal
-    
+
     const [showItemForm, setShowItemForm] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
-    const [formData, setFormData] = useState({ 
-        nome: '', 
-        descricao: '', 
-        preco: '', 
-        categoria: '', 
-        imageUrl: '', 
+    const [formData, setFormData] = useState({
+        nome: '',
+        descricao: '',
+        preco: '',
+        categoria: '',
+        imageUrl: '',
         ativo: true,
         // 📦 NOVO: Campos de estoque
         estoque: '',
@@ -74,19 +72,39 @@ function AdminMenuManagement() {
     const [imagePreview, setImagePreview] = useState('');
     const [formLoading, setFormLoading] = useState(false);
 
-    // 🔧 CORREÇÃO: Busca o estabelecimento com o nome CORRETO baseado na sua estrutura
+    // ✅ CORREÇÃO CRÍTICA: Busca robusta pelo ID do Estabelecimento, evitando o retorno '0'.
     const primeiroEstabelecimento = useMemo(() => {
-        // Tenta na ordem: estabelecimentosCerenciados, depois estabelecimentos, depois estabelecimentosGerenciados
-        const estabelecimento = userData?.estabelecimentosCerenciados?.[0] || // ✅ NOME CORRETO baseado no seu Firebase
-                               userData?.estabelecimentos?.[0] ||
-                               userData?.estabelecimentosGerenciados?.[0] ||
-                               null;
+        let estabelecimento = null;
         
-        console.log("🏪 Estabelecimento encontrado:", estabelecimento);
-        return estabelecimento;
-    }, [userData]);
+        // 1. Tenta 'estabelecimentosGerenciados' (Array de IDs - Preferencial)
+        if (Array.isArray(userData?.estabelecimentosGerenciados) && userData.estabelecimentosGerenciados.length > 0) {
+            estabelecimento = userData.estabelecimentosGerenciados[0];
+        }
 
-    console.log("🏪 Estabelecimento selecionado:", primeiroEstabelecimento);
+        // 2. Se não encontrou, tenta 'estabelecimentos' (Array ou Objeto de permissões)
+        if (!estabelecimento) {
+            const estabelecimentosData = userData?.estabelecimentos;
+
+            if (Array.isArray(estabelecimentosData) && estabelecimentosData.length > 0) {
+                // Caso seja um array de IDs (Ex: ['ID1', 'ID2'])
+                estabelecimento = estabelecimentosData[0]; 
+            } else if (estabelecimentosData && typeof estabelecimentosData === 'object' && !Array.isArray(estabelecimentosData)) {
+                // Caso seja um objeto de permissões (Ex: { 'ID1': true, 'ID2': false })
+                const keys = Object.keys(estabelecimentosData);
+                if (keys.length > 0) {
+                    estabelecimento = keys[0]; // A chave é o ID
+                }
+            }
+        }
+
+        // 3. Validação final: Garante que o ID é uma string não-vazia e não '0'
+        const finalId = (typeof estabelecimento === 'string' && estabelecimento.length > 0 && estabelecimento !== '0')
+            ? estabelecimento
+            : null;
+
+        console.log("🏪 Estabelecimento encontrado (robusto e validado):", finalId);
+        return finalId;
+    }, [userData]);
 
     // Busca o nome do estabelecimento
     useEffect(() => {
@@ -109,7 +127,7 @@ function AdminMenuManagement() {
             fetchEstablishmentName();
         } else {
             console.log("❌ Nenhum estabelecimento disponível");
-            toast.error("Nenhum estabelecimento configurado para este usuário");
+            // A tela de erro no final do componente cuida disso
         }
     }, [primeiroEstabelecimento]);
 
@@ -129,10 +147,10 @@ function AdminMenuManagement() {
 
         const unsubscribeCategorias = onSnapshot(qCategorias, (categoriasSnapshot) => {
             console.log("📁 Categorias encontradas:", categoriasSnapshot.docs.length);
-            
-            const fetchedCategories = categoriasSnapshot.docs.map(doc => ({ 
-                id: doc.id, 
-                ...doc.data() 
+
+            const fetchedCategories = categoriasSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
             }));
             setCategories(fetchedCategories);
 
@@ -149,20 +167,20 @@ function AdminMenuManagement() {
             categoriasSnapshot.forEach(catDoc => {
                 const categoriaData = catDoc.data();
                 console.log(`🔍 Buscando itens na categoria: ${catDoc.id} (${categoriaData.nome})`);
-                
+
                 const itensRef = collection(
-                    db, 
-                    'estabelecimentos', 
-                    primeiroEstabelecimento, 
-                    'cardapio', 
-                    catDoc.id, 
+                    db,
+                    'estabelecimentos',
+                    primeiroEstabelecimento,
+                    'cardapio',
+                    catDoc.id,
                     'itens'
                 );
                 const qItens = query(itensRef, orderBy('nome', 'asc'));
 
                 const unsubscribeItens = onSnapshot(qItens, (itensSnapshot) => {
                     console.log(`📦 Itens na categoria ${catDoc.id}:`, itensSnapshot.docs.length);
-                    
+
                     const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
                         ...itemDoc.data(),
                         id: itemDoc.id,
@@ -180,7 +198,7 @@ function AdminMenuManagement() {
                         ...allItems.filter(item => item.categoriaId !== catDoc.id),
                         ...itemsDaCategoria
                     ];
-                    
+
                     setMenuItems(allItems);
                 }, (error) => {
                     console.error(`❌ Erro ao ouvir itens da categoria ${catDoc.id}:`, error);
@@ -191,7 +209,7 @@ function AdminMenuManagement() {
             });
 
             setLoading(false);
-            
+
             return () => {
                 console.log("🧹 Limpando listeners de itens");
                 unsubscribers.forEach(unsub => unsub());
@@ -227,41 +245,50 @@ function AdminMenuManagement() {
 
     // 📦 NOVO: Função para determinar status do estoque
     const getStockStatus = (item) => {
-        if (item.estoque === 0) return 'esgotado';
-        if (item.estoque <= (item.estoqueMinimo || 0)) return 'critico';
-        if (item.estoque <= ((item.estoqueMinimo || 0) * 2)) return 'baixo';
+        // Garantir que os valores são numéricos
+        const estoque = Number(item.estoque) || 0;
+        const estoqueMinimo = Number(item.estoqueMinimo) || 0;
+
+        if (estoque === 0) return 'esgotado';
+        // Estoque Crítico: igual ou abaixo do mínimo
+        if (estoque <= estoqueMinimo) return 'critico';
+        // Estoque Baixo: entre o mínimo e o dobro do mínimo
+        if (estoque <= (estoqueMinimo * 2)) return 'baixo';
         return 'normal';
     };
 
     // 📦 NOVO: Função para calcular margem de lucro
     const calculateProfitMargin = (precoVenda, custo) => {
-        if (!custo || custo <= 0) return 0;
+        precoVenda = Number(precoVenda) || 0;
+        custo = Number(custo) || 0;
+
+        if (custo <= 0 || precoVenda <= 0) return 0;
         return ((precoVenda - custo) / precoVenda) * 100;
     };
 
     // Filtragem e ordenação dos itens - 📦 ATUALIZADO COM FILTRO DE ESTOQUE
-    const availableCategories = useMemo(() => 
-        ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))], 
+    const availableCategories = useMemo(() =>
+        ['Todos', ...new Set(menuItems.map(item => item.categoria).filter(Boolean))],
         [menuItems]
     );
-    
+
     const filteredAndSortedItems = useMemo(() => {
         // Primeiro filtra
         let filtered = menuItems.filter(item =>
             (selectedCategory === 'Todos' || item.categoria === selectedCategory) &&
             (item.nome || '').toLowerCase().includes(searchTerm.toLowerCase()) &&
-            (stockFilter === 'todos' || 
-             (stockFilter === 'critico' && getStockStatus(item) === 'critico') ||
-             (stockFilter === 'baixo' && getStockStatus(item) === 'baixo') ||
-             (stockFilter === 'esgotado' && getStockStatus(item) === 'esgotado') ||
-             (stockFilter === 'normal' && getStockStatus(item) === 'normal'))
+            (stockFilter === 'todos' ||
+                (stockFilter === 'critico' && getStockStatus(item) === 'critico') ||
+                (stockFilter === 'baixo' && getStockStatus(item) === 'baixo') ||
+                (stockFilter === 'esgotado' && getStockStatus(item) === 'esgotado') ||
+                (stockFilter === 'normal' && getStockStatus(item) === 'normal'))
         );
 
         // Depois ordena
         filtered.sort((a, b) => {
             let aValue = a[sortConfig.key];
             let bValue = b[sortConfig.key];
-            
+
             // Tratamento especial para diferentes tipos de dados
             if (sortConfig.key === 'preco' || sortConfig.key === 'estoque' || sortConfig.key === 'custo') {
                 aValue = Number(aValue) || 0;
@@ -276,7 +303,7 @@ function AdminMenuManagement() {
                 aValue = aValue instanceof Date ? aValue.getTime() : new Date(aValue).getTime();
                 bValue = bValue instanceof Date ? bValue.getTime() : new Date(bValue).getTime();
             }
-            
+
             if (aValue < bValue) {
                 return sortConfig.direction === 'asc' ? -1 : 1;
             }
@@ -307,7 +334,7 @@ function AdminMenuManagement() {
         if (sortConfig.key !== key) {
             return <IoSwapVertical className="text-gray-400" />;
         }
-        return sortConfig.direction === 'asc' 
+        return sortConfig.direction === 'asc'
             ? <IoChevronUp className="text-blue-600" />
             : <IoChevronDown className="text-blue-600" />;
     };
@@ -325,9 +352,9 @@ function AdminMenuManagement() {
         const lowStock = menuItems.filter(item => getStockStatus(item) === 'baixo').length;
         const outOfStock = menuItems.filter(item => getStockStatus(item) === 'esgotado').length;
         const normalStock = menuItems.filter(item => getStockStatus(item) === 'normal').length;
-        
+
         const totalInventoryValue = menuItems.reduce((total, item) => {
-            return total + (item.estoque * (item.custo || 0));
+            return total + (Number(item.estoque) * (Number(item.custo) || 0));
         }, 0);
 
         return {
@@ -354,14 +381,28 @@ function AdminMenuManagement() {
         }
         setFormLoading(true);
 
-        let categoriaDoc = categories.find(cat => 
+        let categoriaDoc = categories.find(cat =>
             cat.nome.toLowerCase() === categoria.toLowerCase()
         );
-        
+
+        // ✅ CORRIGIDO: Se a categoria não existir, cria a categoria dinamicamente.
         if (!categoriaDoc) {
-            toast.error(`❌ A categoria "${categoria}" não existe.`);
-            setFormLoading(false);
-            return;
+            try {
+                const newCatRef = await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio'), {
+                    nome: categoria,
+                    ordem: categories.length + 1, // Coloca no final
+                    ativo: true,
+                    criadoEm: new Date(),
+                    atualizadoEm: new Date(),
+                });
+                categoriaDoc = { id: newCatRef.id, nome: categoria };
+                toast.info(`➕ Categoria "${categoria}" criada.`);
+            } catch (catError) {
+                console.error("❌ Erro ao criar nova categoria:", catError);
+                toast.error("❌ Erro ao criar nova categoria.");
+                setFormLoading(false);
+                return;
+            }
         }
         const categoriaId = categoriaDoc.id;
 
@@ -378,7 +419,7 @@ function AdminMenuManagement() {
             }
 
             const { categoriaId: formCategoriaId, ...dataToSave } = formData;
-            
+
             // 📦 NOVO: Preparar dados de estoque
             const stockData = {
                 estoque: Number(dataToSave.estoque) || 0,
@@ -386,46 +427,83 @@ function AdminMenuManagement() {
                 custo: Number(dataToSave.custo) || 0
             };
 
-            const finalData = { 
-                ...dataToSave, 
-                preco: Number(dataToSave.preco), 
+            const finalData = {
+                ...dataToSave,
+                preco: Number(dataToSave.preco),
                 imageUrl: finalImagePath,
-                categoria: categoria,
+                categoria: categoriaDoc.nome, // Garante que usa o nome da categoria encontrada/criada
                 atualizadoEm: new Date(),
                 // 📦 NOVO: Incluir dados de estoque
                 ...stockData
             };
 
             if (editingItem) {
+                // Se a categoria for alterada (o que é impedido pela UI, mas por segurança)
                 if (editingItem.categoriaId !== categoriaId) {
-                     toast.warn("⚠️ A mudança de categoria não é suportada. Crie um novo item.");
-                     setFormLoading(false);
-                     return;
+                   toast.warn("⚠️ A categoria do item editado será mantida na original. Crie um novo item para mudar de categoria.");
+                   // Força a categoria original
+                   const oldCategoriaDoc = categories.find(cat => cat.id === editingItem.categoriaId);
+                   if (oldCategoriaDoc) {
+                       finalData.categoria = oldCategoriaDoc.nome;
+                       // Usa o ID da categoria original para o path do Firestore
+                       await updateDoc(
+                           doc(
+                               db,
+                               'estabelecimentos',
+                               primeiroEstabelecimento,
+                               'cardapio',
+                               editingItem.categoriaId,
+                               'itens',
+                               editingItem.id
+                           ),
+                           finalData
+                       );
+                       toast.success("✅ Item atualizado com sucesso (Categoria mantida).");
+                   } else {
+                       // Se não conseguir encontrar a categoria original, salva no novo path, mas avisa.
+                       console.warn("Categoria original não encontrada. Salvando no novo path.");
+                       await updateDoc(
+                            doc(
+                                db,
+                                'estabelecimentos',
+                                primeiroEstabelecimento,
+                                'cardapio',
+                                categoriaId,
+                                'itens',
+                                editingItem.id
+                            ),
+                            finalData
+                        );
+                        toast.success("✅ Item atualizado (nova categoria).");
+                   }
+                } else {
+                    // Categoria não mudou, salva no path original
+                    await updateDoc(
+                        doc(
+                            db,
+                            'estabelecimentos',
+                            primeiroEstabelecimento,
+                            'cardapio',
+                            categoriaId,
+                            'itens',
+                            editingItem.id
+                        ),
+                        finalData
+                    );
+                    toast.success("✅ Item atualizado com sucesso!");
                 }
-                await updateDoc(
-                    doc(
-                        db, 
-                        'estabelecimentos', 
-                        primeiroEstabelecimento, 
-                        'cardapio', 
-                        categoriaId, 
-                        'itens', 
-                        editingItem.id
-                    ), 
-                    finalData
-                );
-                toast.success("✅ Item atualizado com sucesso!");
+
             } else {
                 finalData.criadoEm = new Date();
                 await addDoc(
                     collection(
-                        db, 
-                        'estabelecimentos', 
-                        primeiroEstabelecimento, 
-                        'cardapio', 
-                        categoriaId, 
+                        db,
+                        'estabelecimentos',
+                        primeiroEstabelecimento,
+                        'cardapio',
+                        categoriaId,
                         'itens'
-                    ), 
+                    ),
                     finalData
                 );
                 toast.success("✅ Item cadastrado com sucesso!");
@@ -450,17 +528,17 @@ function AdminMenuManagement() {
                         <div className="flex-1">
                             <p className="font-semibold text-gray-900">Confirmar exclusão?</p>
                             <p className="text-sm text-gray-600 mt-1">
-                                Tem certeza que deseja excluir o item <strong>"{item.nome}"</strong>? 
+                                Tem certeza que deseja excluir o item <strong>"{item.nome}"</strong>?
                                 Esta ação não pode ser desfeita.
                             </p>
                             <div className="flex justify-end mt-4 space-x-3">
-                                <button 
-                                    onClick={closeToast} 
+                                <button
+                                    onClick={closeToast}
                                     className="px-4 py-2 text-sm bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors"
                                 >
                                     Cancelar
                                 </button>
-                                <button 
+                                <button
                                     onClick={async () => {
                                         try {
                                             if (item.imageUrl) {
@@ -468,12 +546,12 @@ function AdminMenuManagement() {
                                             }
                                             await deleteDoc(
                                                 doc(
-                                                    db, 
-                                                    'estabelecimentos', 
-                                                    primeiroEstabelecimento, 
-                                                    'cardapio', 
-                                                    item.categoriaId, 
-                                                    'itens', 
+                                                    db,
+                                                    'estabelecimentos',
+                                                    primeiroEstabelecimento,
+                                                    'cardapio',
+                                                    item.categoriaId,
+                                                    'itens',
                                                     item.id
                                                 )
                                             );
@@ -483,7 +561,7 @@ function AdminMenuManagement() {
                                             toast.error("❌ Erro ao excluir o item.");
                                         }
                                         closeToast();
-                                    }} 
+                                    }}
                                     className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
                                 >
                                     Excluir
@@ -492,11 +570,11 @@ function AdminMenuManagement() {
                         </div>
                     </div>
                 </div>
-            ), 
-            { 
-                position: "top-center", 
-                autoClose: false, 
-                closeOnClick: false, 
+            ),
+            {
+                position: "top-center",
+                autoClose: false,
+                closeOnClick: false,
                 draggable: false,
                 closeButton: false
             }
@@ -507,15 +585,15 @@ function AdminMenuManagement() {
         try {
             await updateDoc(
                 doc(
-                    db, 
-                    'estabelecimentos', 
-                    primeiroEstabelecimento, 
-                    'cardapio', 
-                    item.categoriaId, 
-                    'itens', 
+                    db,
+                    'estabelecimentos',
+                    primeiroEstabelecimento,
+                    'cardapio',
+                    item.categoriaId,
+                    'itens',
                     item.id
-                ), 
-                { 
+                ),
+                {
                     ativo: !item.ativo,
                     atualizadoEm: new Date()
                 }
@@ -526,11 +604,11 @@ function AdminMenuManagement() {
             toast.error("❌ Erro ao alterar o status do item.");
         }
     };
-    
+
     const openItemForm = (item = null) => {
         setEditingItem(item);
         if (item) {
-            setFormData({ 
+            setFormData({
                 nome: item.nome || '',
                 descricao: item.descricao || '',
                 preco: item.preco || '',
@@ -540,17 +618,17 @@ function AdminMenuManagement() {
                 categoriaId: item.categoriaId,
                 // 📦 NOVO: Campos de estoque
                 estoque: item.estoque || '',
-                estoqueMinimo: item.estoqueMinimo || '',
+                estoqueMinimo: item.estoqueMinimo || '5',
                 custo: item.custo || ''
             });
             setImagePreview(item.imageUrl);
         } else {
-            setFormData({ 
-                nome: '', 
-                descricao: '', 
-                preco: '', 
-                categoria: '', 
-                imageUrl: '', 
+            setFormData({
+                nome: '',
+                descricao: '',
+                preco: '',
+                categoria: '',
+                imageUrl: '',
                 ativo: true,
                 // 📦 NOVO: Campos de estoque com valores padrão
                 estoque: '',
@@ -566,12 +644,12 @@ function AdminMenuManagement() {
     const closeItemForm = () => {
         setShowItemForm(false);
         setEditingItem(null);
-        setFormData({ 
-            nome: '', 
-            descricao: '', 
-            preco: '', 
-            categoria: '', 
-            imageUrl: '', 
+        setFormData({
+            nome: '',
+            descricao: '',
+            preco: '',
+            categoria: '',
+            imageUrl: '',
             ativo: true,
             // 📦 NOVO: Campos de estoque
             estoque: '',
@@ -593,9 +671,9 @@ function AdminMenuManagement() {
                 setImagePreview(editingItem?.imageUrl || '');
             }
         } else {
-            setFormData(prev => ({ 
-                ...prev, 
-                [name]: type === 'checkbox' ? checked : value 
+            setFormData(prev => ({
+                ...prev,
+                [name]: type === 'checkbox' ? checked : value
             }));
         }
     };
@@ -605,15 +683,15 @@ function AdminMenuManagement() {
         try {
             await updateDoc(
                 doc(
-                    db, 
-                    'estabelecimentos', 
-                    primeiroEstabelecimento, 
-                    'cardapio', 
-                    item.categoriaId, 
-                    'itens', 
+                    db,
+                    'estabelecimentos',
+                    primeiroEstabelecimento,
+                    'cardapio',
+                    item.categoriaId,
+                    'itens',
                     item.id
-                ), 
-                { 
+                ),
+                {
                     estoque: Number(newStock),
                     atualizadoEm: new Date()
                 }
@@ -650,18 +728,18 @@ function AdminMenuManagement() {
                         Estabelecimento Não Configurado
                     </h2>
                     <p className="text-gray-600 mb-6">
-                        Este usuário não tem um estabelecimento vinculado. 
+                        Este usuário não tem um estabelecimento vinculado.
                         Entre em contato com o administrador do sistema.
                     </p>
                     <div className="space-y-3">
-                        <Link 
-                            to="/dashboard" 
+                        <Link
+                            to="/dashboard"
                             className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors w-full"
                         >
                             <IoArrowBack />
                             <span>Voltar ao Dashboard</span>
                         </Link>
-                        <button 
+                        <button
                             onClick={() => window.location.reload()}
                             className="inline-flex items-center justify-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors w-full"
                         >
@@ -700,10 +778,10 @@ function AdminMenuManagement() {
                             Estabelecimento ID: {primeiroEstabelecimento}
                         </p>
                     </div>
-                    
+
                     <div className="flex flex-col sm:flex-row gap-3">
-                        <Link 
-                            to="/dashboard" 
+                        <Link
+                            to="/dashboard"
                             className="inline-flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
                         >
                             <IoArrowBack />
@@ -716,8 +794,8 @@ function AdminMenuManagement() {
                             <IoStatsChart size={18} />
                             <span>Ver Analytics</span>
                         </Link>
-                        <button 
-                            onClick={() => openItemForm()} 
+                        <button
+                            onClick={() => openItemForm()}
                             className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
                         >
                             <IoAddCircleOutline size={20} />
@@ -821,12 +899,12 @@ function AdminMenuManagement() {
                                 className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
                         </div>
-                        
+
                         {/* Filtro de Categoria */}
                         <div className="flex items-center space-x-3">
                             <IoFilter className="text-gray-400 text-lg" />
-                            <select 
-                                value={selectedCategory} 
+                            <select
+                                value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
                                 className="bg-gray-50 border border-gray-300 text-gray-900 py-3 px-4 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             >
@@ -839,8 +917,8 @@ function AdminMenuManagement() {
                         {/* 📦 NOVO: Filtro de Estoque */}
                         <div className="flex items-center space-x-3">
                             <IoCube className="text-gray-400 text-lg" />
-                            <select 
-                                value={stockFilter} 
+                            <select
+                                value={stockFilter}
                                 onChange={(e) => setStockFilter(e.target.value)}
                                 className="bg-gray-50 border border-gray-300 text-gray-900 py-3 px-4 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             >
@@ -881,7 +959,7 @@ function AdminMenuManagement() {
 
                         {/* Indicador de ordenação atual */}
                         <div className="text-sm text-blue-600 font-medium">
-                            Ordenado por: {sortOptions.find(opt => opt.key === sortConfig.key)?.label} 
+                            Ordenado por: {sortOptions.find(opt => opt.key === sortConfig.key)?.label}
                             {sortConfig.direction === 'asc' ? ' (Crescente)' : ' (Decrescente)'}
                         </div>
                     </div>
@@ -901,9 +979,9 @@ function AdminMenuManagement() {
                 <div className="space-y-4 mb-8">
                     {paginatedItems.length > 0 ? (
                         paginatedItems.map(item => (
-                            <AdminProductCard 
-                                key={item.id} 
-                                produto={item} 
+                            <AdminProductCard
+                                key={item.id}
+                                produto={item}
                                 onEdit={() => openItemForm(item)}
                                 onDelete={() => handleDeleteItem(item)}
                                 onToggleStatus={() => toggleItemStatus(item)}
@@ -928,8 +1006,8 @@ function AdminMenuManagement() {
                                 }
                             </p>
                             {!searchTerm && selectedCategory === 'Todos' && stockFilter === 'todos' && (
-                                <button 
-                                    onClick={() => openItemForm()} 
+                                <button
+                                    onClick={() => openItemForm()}
                                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors inline-flex items-center space-x-2"
                                 >
                                     <IoAddCircleOutline size={20} />
@@ -971,7 +1049,7 @@ function AdminMenuManagement() {
                                     </>
                                 )}
                             </h2>
-                            <button 
+                            <button
                                 onClick={closeItemForm}
                                 className="text-gray-400 hover:text-gray-600 transition-colors"
                             >
@@ -985,10 +1063,10 @@ function AdminMenuManagement() {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Nome do Item *
                                 </label>
-                                <input 
-                                    name="nome" 
-                                    value={formData.nome} 
-                                    onChange={handleFormChange} 
+                                <input
+                                    name="nome"
+                                    value={formData.nome}
+                                    onChange={handleFormChange}
                                     placeholder="Ex: X-Burguer Especial"
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     required
@@ -999,10 +1077,10 @@ function AdminMenuManagement() {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Descrição
                                 </label>
-                                <textarea 
-                                    name="descricao" 
-                                    value={formData.descricao} 
-                                    onChange={handleFormChange} 
+                                <textarea
+                                    name="descricao"
+                                    value={formData.descricao}
+                                    onChange={handleFormChange}
                                     placeholder="Descreva o item..."
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     rows="3"
@@ -1014,12 +1092,12 @@ function AdminMenuManagement() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Preço *
                                     </label>
-                                    <input 
-                                        name="preco" 
-                                        type="number" 
-                                        step="0.01" 
-                                        value={formData.preco} 
-                                        onChange={handleFormChange} 
+                                    <input
+                                        name="preco"
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.preco}
+                                        onChange={handleFormChange}
                                         placeholder="0.00"
                                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         required
@@ -1029,10 +1107,10 @@ function AdminMenuManagement() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Categoria *
                                     </label>
-                                    <input 
-                                        name="categoria" 
-                                        value={formData.categoria} 
-                                        onChange={handleFormChange} 
+                                    <input
+                                        name="categoria"
+                                        value={formData.categoria}
+                                        onChange={handleFormChange}
                                         placeholder="Ex: Burguers"
                                         list="categories-list"
                                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
@@ -1053,17 +1131,17 @@ function AdminMenuManagement() {
                                     <IoCube className="mr-2" />
                                     Controle de Estoque
                                 </h3>
-                                
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Estoque Atual
                                         </label>
-                                        <input 
-                                            name="estoque" 
-                                            type="number" 
-                                            value={formData.estoque} 
-                                            onChange={handleFormChange} 
+                                        <input
+                                            name="estoque"
+                                            type="number"
+                                            value={formData.estoque}
+                                            onChange={handleFormChange}
                                             placeholder="0"
                                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
@@ -1072,11 +1150,11 @@ function AdminMenuManagement() {
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Estoque Mínimo
                                         </label>
-                                        <input 
-                                            name="estoqueMinimo" 
-                                            type="number" 
-                                            value={formData.estoqueMinimo} 
-                                            onChange={handleFormChange} 
+                                        <input
+                                            name="estoqueMinimo"
+                                            type="number"
+                                            value={formData.estoqueMinimo}
+                                            onChange={handleFormChange}
                                             placeholder="5"
                                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
@@ -1087,12 +1165,12 @@ function AdminMenuManagement() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Custo Unitário (R$)
                                     </label>
-                                    <input 
-                                        name="custo" 
-                                        type="number" 
-                                        step="0.01" 
-                                        value={formData.custo} 
-                                        onChange={handleFormChange} 
+                                    <input
+                                        name="custo"
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.custo}
+                                        onChange={handleFormChange}
                                         placeholder="0.00"
                                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     />
@@ -1104,11 +1182,11 @@ function AdminMenuManagement() {
                                         <div className="flex justify-between text-sm">
                                             <span>Margem de Lucro:</span>
                                             <span className={`font-bold ${
-                                                calculateProfitMargin(formData.preco, formData.custo) > 50 
-                                                    ? 'text-green-600' 
-                                                    : calculateProfitMargin(formData.preco, formData.custo) > 30 
-                                                    ? 'text-yellow-600' 
-                                                    : 'text-red-600'
+                                                calculateProfitMargin(formData.preco, formData.custo) > 50
+                                                    ? 'text-green-600'
+                                                    : calculateProfitMargin(formData.preco, formData.custo) > 30
+                                                        ? 'text-yellow-600'
+                                                        : 'text-red-600'
                                             }`}>
                                                 {calculateProfitMargin(formData.preco, formData.custo).toFixed(1)}%
                                             </span>
@@ -1116,7 +1194,7 @@ function AdminMenuManagement() {
                                         <div className="flex justify-between text-sm mt-1">
                                             <span>Lucro por Unidade:</span>
                                             <span className="font-bold text-green-600">
-                                                R$ {(formData.preco - (formData.custo || 0)).toFixed(2)}
+                                                R$ {(Number(formData.preco) - Number(formData.custo || 0)).toFixed(2)}
                                             </span>
                                         </div>
                                     </div>
@@ -1126,7 +1204,7 @@ function AdminMenuManagement() {
                             {editingItem && (
                                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                                     <p className="text-sm text-yellow-800">
-                                        <strong>Atenção:</strong> A categoria não pode ser alterada após a criação do item.
+                                        <strong>Atenção:</strong> A categoria não pode ser alterada após a criação do item. Se precisar mudar, crie um novo item.
                                     </p>
                                 </div>
                             )}
@@ -1137,10 +1215,10 @@ function AdminMenuManagement() {
                                 </label>
                                 <div className="flex items-center space-x-4">
                                     <label className="flex-1 cursor-pointer">
-                                        <input 
-                                            type="file" 
-                                            accept="image/*" 
-                                            onChange={handleFormChange} 
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFormChange}
                                             className="hidden"
                                         />
                                         <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition-colors">
@@ -1152,9 +1230,9 @@ function AdminMenuManagement() {
                                     </label>
                                     {imagePreview && (
                                         <div className="flex-shrink-0">
-                                            <img 
-                                                src={imagePreview} 
-                                                alt="Preview" 
+                                            <img
+                                                src={imagePreview}
+                                                alt="Preview"
                                                 className="w-16 h-16 object-cover rounded-lg shadow"
                                             />
                                         </div>
@@ -1163,12 +1241,12 @@ function AdminMenuManagement() {
                             </div>
 
                             <div className="flex items-center">
-                                <input 
-                                    type="checkbox" 
-                                    name="ativo" 
-                                    checked={formData.ativo} 
-                                    onChange={handleFormChange} 
-                                    id="itemAtivo" 
+                                <input
+                                    type="checkbox"
+                                    name="ativo"
+                                    checked={formData.ativo}
+                                    onChange={handleFormChange}
+                                    id="itemAtivo"
                                     className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                                 />
                                 <label htmlFor="itemAtivo" className="ml-2 text-sm text-gray-700">
@@ -1177,15 +1255,15 @@ function AdminMenuManagement() {
                             </div>
 
                             <div className="flex justify-end space-x-3 pt-4 sticky bottom-0 bg-white pb-4">
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     onClick={closeItemForm}
                                     className="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                                 >
                                     Cancelar
                                 </button>
-                                <button 
-                                    type="submit" 
+                                <button
+                                    type="submit"
                                     disabled={formLoading}
                                     className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                                 >

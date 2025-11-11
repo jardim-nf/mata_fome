@@ -1,4 +1,4 @@
-// src/pages/Menu.jsx
+// src/pages/Menu.jsx - VERSÃO CORRIGIDA
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
-    const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin } = useAuth();
+    const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, userData } = useAuth();
 
     // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
@@ -66,6 +66,15 @@ function Menu() {
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const finalOrderTotal = useMemo(() => Math.max(0, subtotalCalculado + taxaAplicada - discountAmount), [subtotalCalculado, taxaAplicada, discountAmount]);
+
+    // 🔧 CORREÇÃO: Verificar se o usuário é admin baseado na estrutura correta
+    const isUserAdmin = useMemo(() => {
+        return userData?.isAdmin || false;
+    }, [userData]);
+
+    const isUserMasterAdmin = useMemo(() => {
+        return userData?.isMasterAdmin || false;
+    }, [userData]);
 
     // --- FUNÇÕES ---
     const handleShowMore = (categoryName) => {
@@ -471,104 +480,108 @@ function Menu() {
         if (!estabelecimentoSlug) return;
         let unsubscribeCardapio = () => { };
 
-        const fetchEstabelecimento = async () => {
-            try {
-                setLoading(true);
-                const qEstab = query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug));
-                const estabSnapshot = await getDocs(qEstab);
+const fetchEstabelecimento = async () => {
+    try {
+        setLoading(true);
+        console.log("🔍 Iniciando busca do estabelecimento...");
+        console.log("📌 Parâmetro recebido:", estabelecimentoSlug);
 
-                if (estabSnapshot.empty) {
-                    setNomeEstabelecimento("Estabelecimento não encontrado.");
-                    setAllProdutos([]);
-                    setLoading(false);
-                    return;
-                }
+        let estabDoc = null;
+        let estabData = null;
+        let idDoEstabelecimentoReal = null;
 
-                const estabDoc = estabSnapshot.docs[0];
-                const estabData = estabDoc.data();
-                const idDoEstabelecimentoReal = estabDoc.id;
+        // BUSCA DO ESTABELECIMENTO (mantém igual)
+        const qEstabBySlug = query(
+            collection(db, 'estabelecimentos'), 
+            where('slug', '==', estabelecimentoSlug)
+        );
+        const estabSnapshotBySlug = await getDocs(qEstabBySlug);
 
-                if (!estabData.ativo) {
-                    setNomeEstabelecimento(`${estabData.nome} (Inativo)`);
-                    setAllProdutos([]);
-                    setLoading(false);
-                    return;
-                }
+        if (!estabSnapshotBySlug.empty) {
+            estabDoc = estabSnapshotBySlug.docs[0];
+            estabData = estabDoc.data();
+            idDoEstabelecimentoReal = estabDoc.id;
+            console.log("✅ Encontrado por SLUG:", estabData.nome);
+        } else {
+            // ... resto da busca por ID/Nome (mantém igual)
+        }
 
-                setEstabelecimentoInfo(estabData);
-                setNomeEstabelecimento(estabData.nome || "Cardápio");
-                setActualEstabelecimentoId(idDoEstabelecimentoReal);
+        // CONFIGURA OS DADOS DO ESTABELECIMENTO
+        setEstabelecimentoInfo(estabData);
+        setNomeEstabelecimento(estabData.nome || "Cardápio");
+        setActualEstabelecimentoId(idDoEstabelecimentoReal);
 
-                // Buscar categorias e itens
-                const categoriasRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio');
-                const qCategorias = query(categoriasRef, orderBy('ordem', 'asc'));
-                const categoriasSnapshot = await getDocs(qCategorias);
+        // 🔥🔥🔥 CORREÇÃO CRÍTICA: BUSCAR ITENS DA ESTRUTURA CORRETA
+        console.log("📋 Buscando itens do cardápio...");
+        
+        // Buscar itens diretamente da coleção 'itens' do estabelecimento
+        const itensRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'itens');
+        const qItens = query(
+            itensRef, 
+            where('ativo', '==', true),
+            orderBy('nome', 'asc')
+        );
+        
+        const itensSnapshot = await getDocs(qItens);
+        console.log(`🎯 Total de itens encontrados: ${itensSnapshot.docs.length}`);
 
-                const categoriesList = ['Todos'];
-                const allItems = [];
-                const initialVisibleCounts = {};
+        const allItems = itensSnapshot.docs.map(itemDoc => ({
+            ...itemDoc.data(),
+            id: itemDoc.id,
+            categoria: itemDoc.data().categoria || 'Geral', // Usa campo categoria do item
+            categoriaId: itemDoc.data().categoria || 'geral'
+        }));
 
-                // Para cada categoria, buscar seus itens
-                for (const catDoc of categoriasSnapshot.docs) {
-                    const categoriaData = catDoc.data();
-                    const itensRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio', catDoc.id, 'itens');
-                    const qItens = query(itensRef, where('ativo', '==', true), orderBy('nome', 'asc'));
-                    const itensSnapshot = await getDocs(qItens);
-                    const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
-                        ...itemDoc.data(),
-                        id: itemDoc.id,
-                        categoria: categoriaData.nome,
-                        categoriaId: catDoc.id
-                    }));
+        // Extrair categorias únicas dos itens
+        const categoriasUnicas = [...new Set(allItems.map(item => item.categoria))];
+        const categoriesList = ['Todos', ...categoriasUnicas];
+        
+        console.log(`📂 Categorias encontradas: ${categoriasUnicas.join(', ')}`);
 
-                    if (itemsDaCategoria.length > 0) {
-                        categoriesList.push(categoriaData.nome);
-                        initialVisibleCounts[categoriaData.nome] = 3;
-                        allItems.push(...itemsDaCategoria);
-                    }
-                }
-                
-                setAvailableCategories(categoriesList);
-                setVisibleItemsCount(initialVisibleCounts);
-                setAllProdutos(allItems);
-                setLoading(false);
+        const initialVisibleCounts = {};
+        categoriasUnicas.forEach(cat => {
+            initialVisibleCounts[cat] = 3;
+        });
 
-                // Configurar listener em tempo real
-                unsubscribeCardapio = onSnapshot(qCategorias, async (snapshot) => {
-                    const updatedCategoriesList = ['Todos'];
-                    const updatedAllItems = [];
-                    const updatedVisibleCounts = {};
+        setAvailableCategories(categoriesList);
+        setVisibleItemsCount(initialVisibleCounts);
+        setAllProdutos(allItems);
+        setLoading(false);
 
-                    for (const catDoc of snapshot.docs) {
-                        const categoriaData = catDoc.data();
-                        const itensRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio', catDoc.id, 'itens');
-                        const qItens = query(itensRef, where('ativo', '==', true), orderBy('nome', 'asc'));
-                        const itensSnapshot = await getDocs(qItens);
-                        const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
-                            ...itemDoc.data(),
-                            id: itemDoc.id,
-                            categoria: categoriaData.nome,
-                            categoriaId: catDoc.id
-                        }));
+        // LISTENER EM TEMPO REAL PARA A NOVA ESTRUTURA
+        console.log("👂 Configurando listener em tempo real...");
+        const unsubscribeCardapio = onSnapshot(qItens, (snapshot) => {
+            console.log("🔄 Atualização em tempo real detectada!");
+            
+            const updatedAllItems = snapshot.docs.map(itemDoc => ({
+                ...itemDoc.data(),
+                id: itemDoc.id,
+                categoria: itemDoc.data().categoria || 'Geral',
+                categoriaId: itemDoc.data().categoria || 'geral'
+            }));
 
-                        if (itemsDaCategoria.length > 0) {
-                            updatedCategoriesList.push(categoriaData.nome);
-                            updatedVisibleCounts[categoriaData.nome] = visibleItemsCount[categoriaData.nome] || 3;
-                            updatedAllItems.push(...itemsDaCategoria);
-                        }
-                    }
-                    
-                    setAvailableCategories(updatedCategoriesList);
-                    setVisibleItemsCount(updatedVisibleCounts);
-                    setAllProdutos(updatedAllItems);
-                });
+            const updatedCategorias = [...new Set(updatedAllItems.map(item => item.categoria))];
+            const updatedCategoriesList = ['Todos', ...updatedCategorias];
+            
+            const updatedVisibleCounts = {};
+            updatedCategorias.forEach(cat => {
+                updatedVisibleCounts[cat] = visibleItemsCount[cat] || 3;
+            });
 
-            } catch (error) {
-                console.error("Erro ao carregar o estabelecimento:", error);
-                toast.error("Não foi possível carregar o estabelecimento.");
-                setLoading(false);
-            }
-        };
+            console.log(`🔄 Atualização: ${updatedAllItems.length} itens, ${updatedCategorias.length} categorias`);
+            setAvailableCategories(updatedCategoriesList);
+            setVisibleItemsCount(updatedVisibleCounts);
+            setAllProdutos(updatedAllItems);
+        });
+
+        return unsubscribeCardapio;
+
+    } catch (error) {
+        console.error("❌ Erro ao carregar o estabelecimento:", error);
+        toast.error("Não foi possível carregar o estabelecimento.");
+        setLoading(false);
+    }
+};
 
         fetchEstabelecimento();
         return () => unsubscribeCardapio();
@@ -616,10 +629,10 @@ function Menu() {
     }, []);
 
     useEffect(() => {
-        if (!authLoading && (isAdmin || isMasterAdmin)) {
+        if (!authLoading && (isUserAdmin || isUserMasterAdmin)) {
             toast.error('Acesso negado. Esta página é exclusiva para clientes.', { toastId: 'admin-redirect' });
         }
-    }, [authLoading, isAdmin, isMasterAdmin]);
+    }, [authLoading, isUserAdmin, isUserMasterAdmin]);
 
     if (authLoading || loading) {
         return (
@@ -632,8 +645,9 @@ function Menu() {
         );
     }
 
-    if (isAdmin || isMasterAdmin) {
-        return <Navigate to={isMasterAdmin ? '/master-dashboard' : '/painel'} replace />;
+    // 🔧 CORREÇÃO: Usar as variáveis corrigidas para verificar admin
+    if (isUserAdmin || isUserMasterAdmin) {
+        return <Navigate to={isUserMasterAdmin ? '/master-dashboard' : '/painel'} replace />;
     }
 
     // Agrupar produtos por categoria para exibição

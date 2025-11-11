@@ -1,5 +1,4 @@
 // src/context/AuthContext.jsx - VERSÃO CORRIGIDA FINAL
-
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import {
     createUserWithEmailAndPassword,
@@ -22,15 +21,19 @@ export function useAuth() {
 }
 
 // ==========================================================
-// FUNÇÕES DE BUSCA
+// FUNÇÕES DE BUSCA - CORRIGIDAS
 // ==========================================================
 
 const getFirestoreUserData = async (user) => { 
     try {
+        console.log("🔍 Buscando dados do usuário no Firestore:", user.uid);
         const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+        
         if (userDoc.exists()) {
+            console.log("✅ Dados do usuário encontrados no Firestore:", userDoc.data());
             return userDoc.data();
         } else {
+            console.log("📝 Criando novo documento para usuário...");
             // Cria um documento básico se não existir
             const basicUserData = { 
                 email: user.email, 
@@ -42,21 +45,38 @@ const getFirestoreUserData = async (user) => {
                 createdAt: new Date(),
             };
             await setDoc(doc(db, 'usuarios', user.uid), basicUserData);
+            console.log("✅ Novo documento de usuário criado:", basicUserData);
             return basicUserData;
         }
     } catch (error) {
-        console.error("Erro ao buscar dados do usuário:", error);
-        return null;
+        console.error("❌ Erro ao buscar/criar dados do usuário:", error);
+        // Fallback: retorna dados mínimos baseados apenas no auth
+        return {
+            email: user.email,
+            nome: user.displayName || user.email.split('@')[0],
+            isAdmin: false,
+            isMasterAdmin: false,
+            estabelecimentosGerenciados: [],
+            ativo: true
+        };
     }
 };
 
 const getFirestoreClientData = async (user) => {
     try {
+        console.log("🔍 Buscando dados do cliente:", user.uid);
         const clientDocRef = doc(db, 'clientes', user.uid);
         const clientDocSnap = await getDoc(clientDocRef);
-        return clientDocSnap.exists() ? clientDocSnap.data() : null;
+        
+        if (clientDocSnap.exists()) {
+            console.log("✅ Dados do cliente encontrados:", clientDocSnap.data());
+            return clientDocSnap.data();
+        } else {
+            console.log("ℹ️ Nenhum dado de cliente encontrado");
+            return null;
+        }
     } catch (error) {
-        console.error("Erro ao buscar dados do cliente:", error);
+        console.error("❌ Erro ao buscar dados do cliente:", error);
         return null;
     }
 };
@@ -76,7 +96,7 @@ export function AuthProvider({ children }) {
             await signOut(auth); 
             toast.success('Você foi desconectado com sucesso!');
         } catch (error) {
-            console.error("Erro ao fazer Firebase signOut:", error);
+            console.error("❌ Erro ao fazer Firebase signOut:", error);
             toast.error('Ocorreu um erro ao tentar desconectar.');
         } finally {
             setUserData(null);
@@ -85,43 +105,43 @@ export function AuthProvider({ children }) {
         }
     };
 
-    // UseEffect principal (carrega dados)
+    // UseEffect principal (carrega dados) - CORRIGIDO
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            console.log("🔄 onAuthStateChanged disparado, usuário:", user ? user.email : "null");
+            
             if (user) {
                 console.log("👤 Usuário logado no AuthContext:", user.email);
                 setCurrentUser(user); 
                 
                 let tokenResult = { claims: {} };
                 try {
-                    // Força a atualização do token para pegar claims recentes, se houver:
-                    tokenResult = await user.getIdTokenResult(true); 
+                    // Força a atualização do token para pegar claims recentes
+                    tokenResult = await user.getIdTokenResult(true);
+                    console.log("🔐 Token Claims recebidas:", tokenResult.claims);
                 } catch (e) { 
-                    console.error("Falha ao obter token result:", e); 
+                    console.error("❌ Falha ao obter token result:", e); 
                 }
                 const claims = tokenResult.claims;
                 
+                // Busca dados do Firestore
                 const firestoreData = await getFirestoreUserData(user); 
                 
-                // Combina dados do Firestore e Claims. Prioriza Claims, mas usa Firestore como fallback
+                // Combina dados do Firestore e Claims
                 const combinedData = {
                     ...firestoreData, 
                     isAdmin: claims.isAdmin || firestoreData?.isAdmin || false,
                     isMasterAdmin: claims.isMasterAdmin || firestoreData?.isMasterAdmin || false,
-                    // Garante que seja um array
                     estabelecimentosGerenciados: claims.estabelecimentos || firestoreData?.estabelecimentosGerenciados || [],
                     estabelecimentoIdClaim: claims.estabelecimentoId || null, 
                 };
 
-                console.log("📋 Dados combinados do usuário:", {
-                    isAdmin: combinedData.isAdmin,
-                    isMasterAdmin: combinedData.isMasterAdmin,
-                    estabelecimentos: combinedData.estabelecimentosGerenciados,
-                    firestoreData: firestoreData
-                });
-
+                console.log("📋 Dados combinados do usuário:", combinedData);
                 setUserData(combinedData);
-                setCurrentClientData(await getFirestoreClientData(user));
+                
+                // Busca dados do cliente
+                const clientData = await getFirestoreClientData(user);
+                setCurrentClientData(clientData);
 
             } else {
                 console.log("👤 Usuário deslogado no AuthContext");
@@ -135,10 +155,10 @@ export function AuthProvider({ children }) {
         return unsubscribe;
     }, []);
     
-    // CÁLCULO DO ESTABELECIMENTO PRINCIPAL - USANDO estabelecimentosGerenciados
+    // CÁLCULO DO ESTABELECIMENTO PRINCIPAL
     const primeiroEstabelecimento = userData?.estabelecimentosGerenciados?.[0] || null;
 
-    // 🚨 CORREÇÃO: Expondo isAdmin e isMaster Admin diretamente para consistência
+    // Valores expostos de forma consistente
     const isAdmin = userData?.isAdmin || false;
     const isMasterAdmin = userData?.isMasterAdmin || false;
 
@@ -158,6 +178,7 @@ export function AuthProvider({ children }) {
         currentClientData,
         signup: async (email, password, additionalData = {}) => {
             try {
+                console.log("📝 Iniciando cadastro para:", email);
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
                 
@@ -176,14 +197,18 @@ export function AuthProvider({ children }) {
                     ...additionalData
                 };
                 
+                console.log("💾 Salvando dados do usuário no Firestore:", userDataToSave);
                 await setDoc(doc(db, 'usuarios', user.uid), userDataToSave);
+                
+                console.log("✅ Cadastro concluído com sucesso");
                 return userCredential;
             } catch (error) {
-                console.error("Erro no signup:", error);
+                console.error("❌ Erro no signup:", error);
                 throw error;
             }
         },
         login: (email, password) => {
+            console.log("🔐 Iniciando login para:", email);
             return setPersistence(auth, browserSessionPersistence)
                 .then(() => signInWithEmailAndPassword(auth, email, password));
         },
@@ -191,6 +216,7 @@ export function AuthProvider({ children }) {
         updateUserProfile: async (updates) => {
             try {
                 if (auth.currentUser) {
+                    console.log("✏️ Atualizando perfil do usuário:", updates);
                     await updateProfile(auth.currentUser, updates);
                     
                     if (updates.nome || updates.email) {
@@ -205,19 +231,16 @@ export function AuthProvider({ children }) {
                 }
                 return false;
             } catch (error) {
-                console.error("Erro ao atualizar perfil:", error);
+                console.error("❌ Erro ao atualizar perfil:", error);
                 throw error;
             }
         },
         loading,
-        // REMOVIDO: estabelecimentoIdPrincipal
-        // ADICIONADO: primeiroEstabelecimento para compatibilidade
         primeiroEstabelecimento,
         estabelecimentosGerenciados: userData?.estabelecimentosGerenciados || [],
-        // Mantive 'isMaster' como um alias para compatibilidade com o usePermissions
         isAdmin,
-        isMaster: isMasterAdmin, // Alias
-        isMasterAdmin: isMasterAdmin // Expondo o nome completo também
+        isMaster: isMasterAdmin,
+        isMasterAdmin: isMasterAdmin
     };
 
     return (
@@ -231,7 +254,6 @@ export function AuthProvider({ children }) {
 // usePermissions e PrivateRoute 
 // -----------------------------------------------------------
 export function usePermissions() {
-    // Pega o alias 'isMaster' e 'isAdmin' do useAuth()
     const { currentUser, userData, loading, isAdmin, isMaster, estabelecimentosGerenciados } = useAuth();
     
     const canAccess = (requiredRoles = []) => {
@@ -243,7 +265,6 @@ export function usePermissions() {
                 case 'admin':
                     return isAdmin;
                 case 'masterAdmin':
-                    // Usa o alias 'isMaster' para Master Admin
                     return isMaster; 
                 default:
                     return false;
@@ -253,7 +274,7 @@ export function usePermissions() {
 
     const canManageEstabelecimento = (estabelecimentoId) => {
         if (!currentUser || loading) return false;
-        if (isMaster) return true; // Master Admin pode gerenciar TUDO
+        if (isMaster) return true;
         
         return isAdmin && estabelecimentosGerenciados?.includes(estabelecimentoId);
     };
@@ -262,14 +283,14 @@ export function usePermissions() {
         canAccess,
         canManageEstabelecimento,
         isAdmin: isAdmin || false,
-        isMasterAdmin: isMaster || false, // Exporta o alias como nome completo
+        isMasterAdmin: isMaster || false,
         estabelecimentosGerenciados: estabelecimentosGerenciados || [],
         loading,
     };
 }
 
 export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecimento = null }) {
-    const { currentUser, loading, estabelecimentosGerenciados } = useAuth();
+    const { currentUser, loading } = useAuth();
     const { canAccess, canManageEstabelecimento, loading: permissionsLoading } = usePermissions();
     const navigate = useNavigate();
     const location = useLocation();
