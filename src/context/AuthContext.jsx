@@ -41,6 +41,8 @@ const getFirestoreUserData = async (user) => {
                 isAdmin: false, 
                 isMasterAdmin: false, 
                 estabelecimentosGerenciados: [],
+                // ✅ ADICIONADO CAMPO FALTANTE 'estabelecimentos' PARA CONSISTÊNCIA
+                estabelecimentos: [], 
                 ativo: true, 
                 createdAt: new Date(),
             };
@@ -57,6 +59,7 @@ const getFirestoreUserData = async (user) => {
             isAdmin: false,
             isMasterAdmin: false,
             estabelecimentosGerenciados: [],
+            estabelecimentos: [], // ✅ ADICIONADO CAMPO FALTANTE
             ativo: true
         };
     }
@@ -105,7 +108,9 @@ export function AuthProvider({ children }) {
         }
     };
 
+    // ==========================================================
     // UseEffect principal (carrega dados) - CORRIGIDO
+    // ==========================================================
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             console.log("🔄 onAuthStateChanged disparado, usuário:", user ? user.email : "null");
@@ -127,12 +132,39 @@ export function AuthProvider({ children }) {
                 // Busca dados do Firestore
                 const firestoreData = await getFirestoreUserData(user); 
                 
+                // =========================================================
+                // ✅ CORREÇÃO: Unifica todos os IDs de estabelecimento
+                // =========================================================
+                
+                // 1. Pega IDs do Documento (lendo os DOIS campos)
+                const docEstabs = firestoreData?.estabelecimentos || [];
+                const docEstabsGerenciados = firestoreData?.estabelecimentosGerenciados || [];
+                
+                // 2. Pega IDs do Token (Claims)
+                const claimEstabs = claims.estabelecimentos || [];
+                
+                // 3. Unifica todos e remove duplicatas
+                const allEstabs = [...new Set([
+                    ...docEstabs, 
+                    ...docEstabsGerenciados, 
+                    ...claimEstabs
+                ])];
+                
+                console.log("🏪 IDs de estabelecimentos unificados:", allEstabs);
+
+                // =========================================================
+                
                 // Combina dados do Firestore e Claims
                 const combinedData = {
                     ...firestoreData, 
                     isAdmin: claims.isAdmin || firestoreData?.isAdmin || false,
                     isMasterAdmin: claims.isMasterAdmin || firestoreData?.isMasterAdmin || false,
-                    estabelecimentosGerenciados: claims.estabelecimentos || firestoreData?.estabelecimentosGerenciados || [],
+                    
+                    // ✅ USA O ARRAY UNIFICADO
+                    // Este campo será usado em todo o app (AdminMenuManagement, usePermissions, etc)
+                    estabelecimentosGerenciados: allEstabs, 
+                    
+                    // (O campo 'estabelecimentos' original do doc é sobrescrito pelo unificado)
                     estabelecimentoIdClaim: claims.estabelecimentoId || null, 
                 };
 
@@ -156,6 +188,7 @@ export function AuthProvider({ children }) {
     }, []);
     
     // CÁLCULO DO ESTABELECIMENTO PRINCIPAL
+    // Agora 'estabelecimentosGerenciados' contém os IDs unificados
     const primeiroEstabelecimento = userData?.estabelecimentosGerenciados?.[0] || null;
 
     // Valores expostos de forma consistente
@@ -192,6 +225,8 @@ export function AuthProvider({ children }) {
                     isAdmin: additionalData.isAdmin || false,
                     isMasterAdmin: additionalData.isMasterAdmin || false,
                     estabelecimentosGerenciados: additionalData.estabelecimentosGerenciados || [],
+                    // ✅ ADICIONADO CAMPO FALTANTE
+                    estabelecimentos: additionalData.estabelecimentos || [],
                     ativo: true,
                     createdAt: new Date(),
                     ...additionalData
@@ -237,6 +272,7 @@ export function AuthProvider({ children }) {
         },
         loading,
         primeiroEstabelecimento,
+        // ✅ GARANTE QUE O VALOR CORRETO (UNIFICADO) SEJA EXPOSTO
         estabelecimentosGerenciados: userData?.estabelecimentosGerenciados || [],
         isAdmin,
         isMaster: isMasterAdmin,
@@ -254,6 +290,7 @@ export function AuthProvider({ children }) {
 // usePermissions e PrivateRoute 
 // -----------------------------------------------------------
 export function usePermissions() {
+    // ✅ 'estabelecimentosGerenciados' agora vem unificado do useAuth
     const { currentUser, userData, loading, isAdmin, isMaster, estabelecimentosGerenciados } = useAuth();
     
     const canAccess = (requiredRoles = []) => {
@@ -276,6 +313,7 @@ export function usePermissions() {
         if (!currentUser || loading) return false;
         if (isMaster) return true;
         
+        // ✅ Esta lógica agora funciona pois 'estabelecimentosGerenciados' está correto
         return isAdmin && estabelecimentosGerenciados?.includes(estabelecimentoId);
     };
 
