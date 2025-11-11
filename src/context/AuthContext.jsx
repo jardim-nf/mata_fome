@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx - VERSÃO CORRIGIDA FINAL
+// src/context/AuthContext.jsx - VERSÃO FINAL COM CORREÇÃO DE FALLBACK
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import {
     createUserWithEmailAndPassword,
@@ -33,35 +33,13 @@ const getFirestoreUserData = async (user) => {
             console.log("✅ Dados do usuário encontrados no Firestore:", userDoc.data());
             return userDoc.data();
         } else {
-            console.log("📝 Criando novo documento para usuário...");
-            // Cria um documento básico se não existir
-            const basicUserData = { 
-                email: user.email, 
-                nome: user.displayName || user.email.split('@')[0], 
-                isAdmin: false, 
-                isMasterAdmin: false, 
-                estabelecimentosGerenciados: [],
-                // ✅ ADICIONADO CAMPO FALTANTE 'estabelecimentos' PARA CONSISTÊNCIA
-                estabelecimentos: [], 
-                ativo: true, 
-                createdAt: new Date(),
-            };
-            await setDoc(doc(db, 'usuarios', user.uid), basicUserData);
-            console.log("✅ Novo documento de usuário criado:", basicUserData);
-            return basicUserData;
+            // ✅ CORREÇÃO: Não cria documento se não existir. Retorna null, o que é esperado para clientes.
+            console.log("ℹ️ Documento de usuário/admin não encontrado. Assumindo cliente ou novo usuário.");
+            return null;
         }
     } catch (error) {
-        console.error("❌ Erro ao buscar/criar dados do usuário:", error);
-        // Fallback: retorna dados mínimos baseados apenas no auth
-        return {
-            email: user.email,
-            nome: user.displayName || user.email.split('@')[0],
-            isAdmin: false,
-            isMasterAdmin: false,
-            estabelecimentosGerenciados: [],
-            estabelecimentos: [], // ✅ ADICIONADO CAMPO FALTANTE
-            ativo: true
-        };
+        console.error("❌ Erro ao buscar dados do usuário:", error);
+        return null;
     }
 };
 
@@ -85,7 +63,7 @@ const getFirestoreClientData = async (user) => {
 };
 
 // ==========================================================
-// AuthProvider (Componente Principal - CORRIGIDO)
+// AuthProvider (Componente Principal)
 // ==========================================================
 
 export function AuthProvider({ children }) {
@@ -109,7 +87,7 @@ export function AuthProvider({ children }) {
     };
 
     // ==========================================================
-    // UseEffect principal (carrega dados) - CORRIGIDO
+    // UseEffect principal (carrega dados)
     // ==========================================================
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -121,7 +99,6 @@ export function AuthProvider({ children }) {
                 
                 let tokenResult = { claims: {} };
                 try {
-                    // Força a atualização do token para pegar claims recentes
                     tokenResult = await user.getIdTokenResult(true);
                     console.log("🔐 Token Claims recebidas:", tokenResult.claims);
                 } catch (e) { 
@@ -129,21 +106,17 @@ export function AuthProvider({ children }) {
                 }
                 const claims = tokenResult.claims;
                 
-                // Busca dados do Firestore
                 const firestoreData = await getFirestoreUserData(user); 
                 
                 // =========================================================
                 // ✅ CORREÇÃO: Unifica todos os IDs de estabelecimento
                 // =========================================================
                 
-                // 1. Pega IDs do Documento (lendo os DOIS campos)
                 const docEstabs = firestoreData?.estabelecimentos || [];
                 const docEstabsGerenciados = firestoreData?.estabelecimentosGerenciados || [];
                 
-                // 2. Pega IDs do Token (Claims)
                 const claimEstabs = claims.estabelecimentos || [];
                 
-                // 3. Unifica todos e remove duplicatas
                 const allEstabs = [...new Set([
                     ...docEstabs, 
                     ...docEstabsGerenciados, 
@@ -160,11 +133,8 @@ export function AuthProvider({ children }) {
                     isAdmin: claims.isAdmin || firestoreData?.isAdmin || false,
                     isMasterAdmin: claims.isMasterAdmin || firestoreData?.isMasterAdmin || false,
                     
-                    // ✅ USA O ARRAY UNIFICADO
-                    // Este campo será usado em todo o app (AdminMenuManagement, usePermissions, etc)
                     estabelecimentosGerenciados: allEstabs, 
                     
-                    // (O campo 'estabelecimentos' original do doc é sobrescrito pelo unificado)
                     estabelecimentoIdClaim: claims.estabelecimentoId || null, 
                 };
 
@@ -188,7 +158,6 @@ export function AuthProvider({ children }) {
     }, []);
     
     // CÁLCULO DO ESTABELECIMENTO PRINCIPAL
-    // Agora 'estabelecimentosGerenciados' contém os IDs unificados
     const primeiroEstabelecimento = userData?.estabelecimentosGerenciados?.[0] || null;
 
     // Valores expostos de forma consistente
@@ -233,6 +202,7 @@ export function AuthProvider({ children }) {
                 };
                 
                 console.log("💾 Salvando dados do usuário no Firestore:", userDataToSave);
+                // NOTA: Para clientes, Home.jsx cria o doc de cliente separadamente.
                 await setDoc(doc(db, 'usuarios', user.uid), userDataToSave);
                 
                 console.log("✅ Cadastro concluído com sucesso");
@@ -290,7 +260,6 @@ export function AuthProvider({ children }) {
 // usePermissions e PrivateRoute 
 // -----------------------------------------------------------
 export function usePermissions() {
-    // ✅ 'estabelecimentosGerenciados' agora vem unificado do useAuth
     const { currentUser, userData, loading, isAdmin, isMaster, estabelecimentosGerenciados } = useAuth();
     
     const canAccess = (requiredRoles = []) => {
@@ -313,7 +282,6 @@ export function usePermissions() {
         if (!currentUser || loading) return false;
         if (isMaster) return true;
         
-        // ✅ Esta lógica agora funciona pois 'estabelecimentosGerenciados' está correto
         return isAdmin && estabelecimentosGerenciados?.includes(estabelecimentoId);
     };
 

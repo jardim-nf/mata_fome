@@ -19,7 +19,8 @@ import {
 } from 'react-icons/io5';
 
 function TaxasDeEntrega() {
-    const { estabelecimentoIdPrincipal, currentUser, isAdmin, isMaster, loading: authLoading } = useAuth();
+    // 🚨 CORREÇÃO: Use estabelecimentoPrincipal em vez de estabelecimentoIdPrincipal
+    const { estabelecimentoPrincipal, currentUser, isAdmin, isMaster, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
     const [bairros, setBairros] = useState([]);
@@ -28,16 +29,28 @@ function TaxasDeEntrega() {
     const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [formLoading, setFormLoading] = useState(false);
+    const [accessGranted, setAccessGranted] = useState(false);
 
-    // 🚨 CORREÇÃO: Controle de acesso atualizado
+    // 🚨 CORREÇÃO: Use estabelecimentoPrincipal
     useEffect(() => {
-        if (!authLoading) {
-            console.log("🔐 Debug Auth TaxasDeEntrega:", { 
-                currentUser: !!currentUser, 
-                isAdmin, 
-                isMaster,
-                estabelecimentoIdPrincipal 
-            });
+        if (authLoading) return;
+
+        console.log("🔐 Debug Auth TaxasDeEntrega:", { 
+            currentUser: !!currentUser, 
+            isAdmin, 
+            isMaster,
+            estabelecimentoPrincipal 
+        });
+        
+        // Verifica se tem acesso
+        const hasAccess = currentUser && (isAdmin || isMaster) && estabelecimentoPrincipal;
+        
+        if (hasAccess) {
+            setAccessGranted(true);
+            console.log("✅ Acesso permitido para TaxasDeEntrega");
+        } else {
+            setAccessGranted(false);
+            console.log("❌ Acesso negado para TaxasDeEntrega");
             
             if (!currentUser) {
                 toast.error('🔒 Faça login para acessar.');
@@ -51,24 +64,26 @@ function TaxasDeEntrega() {
                 return;
             }
 
-            if (!estabelecimentoIdPrincipal) {
-                toast.error('❌ Configuração de acesso incompleta.');
+            if (!estabelecimentoPrincipal) {
+                toast.error('❌ Configuração de acesso incompleta. Configure seu estabelecimento primeiro.');
                 navigate('/dashboard');
                 return;
             }
         }
-    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoIdPrincipal]);
+    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoPrincipal]);
 
-    // Função para buscar as taxas de entrega
+    // Função para buscar as taxas de entrega - CORRIGIDA
     const getTaxas = async () => {
-        if (!estabelecimentoIdPrincipal) {
+        if (!estabelecimentoPrincipal) {
+            console.error("❌ estabelecimentoPrincipal não definido");
             setLoading(false);
             return;
         }
         
         setLoading(true);
         try {
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'taxasDeEntrega');
+            console.log("📦 Buscando taxas para estabelecimento:", estabelecimentoPrincipal);
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoPrincipal, 'taxasDeEntrega');
             const q = query(taxasCollectionRef, orderBy('nomeBairro'));
             const data = await getDocs(q);
             const fetchedBairros = data.docs.map(doc => ({ 
@@ -76,20 +91,27 @@ function TaxasDeEntrega() {
                 id: doc.id 
             }));
             setBairros(fetchedBairros);
-            console.log("📦 Taxas de entrega carregadas:", fetchedBairros.length);
+            console.log("✅ Taxas de entrega carregadas:", fetchedBairros.length);
         } catch (err) {
             console.error("❌ Erro ao buscar taxas:", err);
-            toast.error("❌ Erro ao carregar as taxas de entrega.");
+            
+            if (err.code === 'permission-denied') {
+                toast.error("❌ Permissão negada para acessar taxas de entrega.");
+            } else if (err.code === 'not-found') {
+                console.log("ℹ️ Coleção de taxas não encontrada, criando primeira taxa...");
+            } else {
+                toast.error("❌ Erro ao carregar as taxas de entrega.");
+            }
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (!authLoading && estabelecimentoIdPrincipal) {
+        if (accessGranted && estabelecimentoPrincipal) {
             getTaxas();
         }
-    }, [estabelecimentoIdPrincipal, authLoading]);
+    }, [estabelecimentoPrincipal, accessGranted]);
 
     const clearForm = () => {
         setEditingId(null);
@@ -99,8 +121,9 @@ function TaxasDeEntrega() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!estabelecimentoIdPrincipal) {
-            toast.error('❌ Estabelecimento não identificado.');
+        
+        if (!accessGranted) {
+            toast.error('❌ Você não tem permissão para realizar esta ação.');
             return;
         }
 
@@ -117,7 +140,7 @@ function TaxasDeEntrega() {
 
         setFormLoading(true);
         try {
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'taxasDeEntrega');
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoPrincipal, 'taxasDeEntrega');
 
             if (editingId) {
                 const bairroDoc = doc(taxasCollectionRef, editingId);
@@ -140,13 +163,25 @@ function TaxasDeEntrega() {
             getTaxas();
         } catch (err) {
             console.error("❌ Erro ao salvar taxa:", err);
-            toast.error("❌ Erro ao salvar a taxa.");
+            
+            if (err.code === 'permission-denied') {
+                toast.error("❌ Permissão negada. Verifique suas regras do Firestore.");
+            } else if (err.code === 'not-found') {
+                toast.error("❌ Estabelecimento não encontrado.");
+            } else {
+                toast.error("❌ Erro ao salvar a taxa: " + err.message);
+            }
         } finally {
             setFormLoading(false);
         }
     };
 
     const handleEdit = (bairro) => {
+        if (!accessGranted) {
+            toast.error('❌ Você não tem permissão para editar.');
+            return;
+        }
+        
         setEditingId(bairro.id);
         setNomeBairro(bairro.nomeBairro);
         setValorTaxa(bairro.valorTaxa.toFixed(2).replace('.', ','));
@@ -154,9 +189,14 @@ function TaxasDeEntrega() {
     };
 
     const handleDelete = (id, nome) => {
+        if (!accessGranted) {
+            toast.error('❌ Você não tem permissão para excluir.');
+            return;
+        }
+
         const confirmDelete = async () => {
             try {
-                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'taxasDeEntrega', id);
+                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoPrincipal, 'taxasDeEntrega', id);
                 await deleteDoc(taxaDocRef);
                 toast.success(`✅ Taxa para "${nome}" foi excluída.`);
                 getTaxas();
@@ -222,7 +262,76 @@ function TaxasDeEntrega() {
             : 0
     };
 
-    if (loading || authLoading) {
+    // 🚨 CORREÇÃO: Loading state mais claro
+    if (authLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Verificando autenticação...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // 🚨 CORREÇÃO: Verificação de acesso mais específica
+    if (!currentUser) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <IoCloseCircleOutline className="text-2xl text-red-600" />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Negado</h2>
+                    <p className="text-gray-600 mb-4">Faça login para acessar esta página.</p>
+                    <Link 
+                        to="/login-admin" 
+                        className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                        <span>Fazer Login</span>
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    if (!accessGranted) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <IoCloseCircleOutline className="text-2xl text-yellow-600" />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Configuração Incompleta</h2>
+                    <p className="text-gray-600 mb-2">
+                        {!estabelecimentoPrincipal 
+                            ? "Configure seu estabelecimento primeiro para acessar as taxas de entrega."
+                            : "Você não tem permissão para acessar esta página."
+                        }
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center mt-4">
+                        <Link 
+                            to="/dashboard" 
+                            className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                            <IoArrowBack />
+                            <span>Voltar ao Dashboard</span>
+                        </Link>
+                        {!estabelecimentoPrincipal && (
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="inline-flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                            >
+                                <span>Recarregar</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
@@ -246,7 +355,7 @@ function TaxasDeEntrega() {
                             Gerencie os valores de entrega por bairro
                         </p>
                         <p className="text-sm text-gray-500">
-                            Estabelecimento ID: {estabelecimentoIdPrincipal}
+                            Estabelecimento ID: {estabelecimentoPrincipal}
                         </p>
                     </div>
                     
@@ -481,43 +590,24 @@ function TaxasDeEntrega() {
                     </div>
                 </div>
 
-                {/* Dica rápida */}
-                {bairros.length > 0 && (
-                    <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-start space-x-3">
-                            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <span className="text-white text-sm">💡</span>
-                            </div>
-                            <div>
-                                <p className="text-blue-800 font-medium">Dica rápida</p>
-                                <p className="text-blue-700 text-sm">
-                                    Os clientes verão automaticamente a taxa de entrega ao informar seu endereço durante o pedido.
-                                    As taxas são aplicadas automaticamente no checkout.
-                                </p>
-                            </div>
+                {/* Informações de debug */}
+                <div className="mt-8 bg-gray-100 border border-gray-300 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                        <div className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-white text-sm">🐛</span>
+                        </div>
+                        <div>
+                            <p className="text-gray-800 font-medium">Informações de Acesso</p>
+                            <p className="text-gray-700 text-sm">
+                                Estabelecimento: {estabelecimentoPrincipal}<br/>
+                                Bairros carregados: {bairros.length}<br/>
+                                Usuário Admin: {isAdmin ? 'Sim' : 'Não'}<br/>
+                                Usuário Master: {isMaster ? 'Sim' : 'Não'}<br/>
+                                Acesso Permitido: {accessGranted ? '✅ Sim' : '❌ Não'}
+                            </p>
                         </div>
                     </div>
-                )}
-
-                {/* Informações de debug (apenas desenvolvimento) */}
-                {process.env.NODE_ENV === 'development' && (
-                    <div className="mt-8 bg-gray-100 border border-gray-300 rounded-lg p-4">
-                        <div className="flex items-start space-x-3">
-                            <div className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <span className="text-white text-sm">🐛</span>
-                            </div>
-                            <div>
-                                <p className="text-gray-800 font-medium">Debug Info</p>
-                                <p className="text-gray-700 text-sm">
-                                    Estabelecimento: {estabelecimentoIdPrincipal}<br/>
-                                    Bairros carregados: {bairros.length}<br/>
-                                    Usuário Admin: {isAdmin ? 'Sim' : 'Não'}<br/>
-                                    Usuário Master: {isMaster ? 'Sim' : 'Não'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                </div>
             </div>
         </div>
     );
