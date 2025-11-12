@@ -1,10 +1,11 @@
-// src/components/DashboardSummary.jsx - VERSÃO CORRIGIDA COM VENDAS DO SALÃO
+// src/components/DashboardSummary.jsx - VERSÃO COM DEBUG AVANÇADO
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { startOfDay, endOfDay } from 'date-fns';
+import { toast } from 'react-toastify'; // Importar toast para feedback de erro
 
 // Componente de Card para exibir as estatísticas
 const StatCard = ({ title, value, icon, color }) => (
@@ -54,9 +55,13 @@ export default function DashboardSummary() {
       try {
         console.log("📊 Buscando resumo para estabelecimento:", estabelecimentoIdPrincipal);
 
-        // Definir o filtro de data (somente hoje)
+        // Define as datas e strings para filtro
         const todayStart = startOfDay(new Date());
         const todayEnd = endOfDay(new Date());
+        const todayString = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        console.log(`DEBUG DATA: Filtro do dia (String): ${todayString}`);
+        console.log(`DEBUG DATA: Filtro Início (Timestamp): ${todayStart.toISOString()}`);
 
         let totalVendas = 0;
         let totalTaxas = 0;
@@ -64,38 +69,61 @@ export default function DashboardSummary() {
         let vendasDeliveryCount = 0;
         let vendasSalaoCount = 0;
 
-        // 🆕 1. BUSCAR PEDIDOS DE DELIVERY (FINALIZADOS)
-        const pedidosQuery = query(
-          collection(db, 'pedidos'),
-          where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
-          where('status', '==', 'finalizado'),
-          where('createdAt', '>=', todayStart),
-          where('createdAt', '<=', todayEnd)
-        );
+        // 1. BUSCAR PEDIDOS DE DELIVERY (FINALIZADOS)
+        try {
+            const pedidosQuery = query(
+              collection(db, 'pedidos'),
+              where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
+              where('status', 'in', ['finalizado', 'concluido']),
+              where('createdAt', '>=', todayStart),
+              where('createdAt', '<=', todayEnd)
+            );
 
-        const pedidosSnapshot = await getDocs(pedidosQuery);
-        pedidosSnapshot.forEach(doc => {
-          const pedido = doc.data();
-          totalVendas += parseFloat(pedido.totalFinal || pedido.total || 0);
-          totalTaxas += parseFloat(pedido.taxaEntrega || 0);
-          totalPedidos++;
-          vendasDeliveryCount++;
-        });
+            const pedidosSnapshot = await getDocs(pedidosQuery);
+            pedidosSnapshot.forEach(doc => {
+              const pedido = doc.data();
+              totalVendas += parseFloat(pedido.totalFinal || pedido.total || 0);
+              totalTaxas += parseFloat(pedido.taxaEntrega || 0);
+              totalPedidos++;
+              vendasDeliveryCount++;
+            });
+            console.log(`DEBUG DELIVERY: Encontrados ${pedidosSnapshot.size} pedidos.`);
 
-        // 🆕 2. BUSCAR VENDAS DO SALÃO
-        const vendasQuery = query(
-          collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
-          where('dataFechamento', '>=', todayStart),
-          where('dataFechamento', '<=', todayEnd)
-        );
+        } catch (error) {
+            console.error("❌ ERRO NO FETCH DELIVERY:", error);
+            if (error.code === 'permission-denied') {
+                toast.error("Permissão negada para ler pedidos de delivery.");
+            }
+        }
 
-        const vendasSnapshot = await getDocs(vendasQuery);
-        vendasSnapshot.forEach(doc => {
-          const venda = doc.data();
-          totalVendas += parseFloat(venda.total || 0);
-          totalPedidos++;
-          vendasSalaoCount++;
-        });
+
+        // 2. BUSCAR VENDAS DO SALÃO - USANDO FILTRO POR STRING DE DATA
+        try {
+            const vendasQuery = query(
+              collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
+              where('dataFechamentoString', '==', todayString)
+            );
+
+            const vendasSnapshot = await getDocs(vendasQuery);
+            
+            console.log(`DEBUG SALÃO: Query usando dataFechamentoString == ${todayString}`);
+            console.log(`DEBUG SALÃO: Encontradas ${vendasSnapshot.size} vendas de salão.`);
+            
+            vendasSnapshot.forEach(doc => {
+              const venda = doc.data();
+              totalVendas += parseFloat(venda.total || 0);
+              totalPedidos++;
+              vendasSalaoCount++;
+            });
+
+        } catch (error) {
+            console.error("❌ ERRO NO FETCH SALÃO:", error);
+            if (error.code === 'permission-denied') {
+                // 🔑 DICA: Este é o erro mais provável. Se ocorrer, verifique a regra /estabelecimentos/{estabId}/vendas
+                toast.error("Permissão negada para ler vendas do salão. Verifique regras!");
+            }
+        }
+        
 
         console.log("📈 Resumo carregado:", {
           totalPedidos,
@@ -115,8 +143,10 @@ export default function DashboardSummary() {
         });
 
       } catch (error) {
-        console.error("❌ Erro ao buscar resumo do dashboard:", error);
-        setError("Erro ao carregar dados do dia");
+        // Captura quaisquer erros não específicos (ex: erros de conexão)
+        console.error("❌ ERRO GERAL AO BUSCAR RESUMO:", error);
+        setError("Erro geral ao carregar dados do dia. Consulte o console.");
+        toast.error("❌ Falha ao carregar o dashboard.");
       } finally {
         setLoading(false);
       }
@@ -139,7 +169,7 @@ export default function DashboardSummary() {
     );
   }
 
-  // 🆕 VERSÃO MELHORADA DOS CARDS
+  // VERSÃO MELHORADA DOS CARDS
   return (
     <div className="space-y-6">
       {/* Linha 1: Totais Gerais */}
@@ -164,7 +194,7 @@ export default function DashboardSummary() {
         />
       </div>
 
-      {/* 🆕 Linha 2: Detalhamento por Tipo */}
+      {/* Linha 2: Detalhamento por Tipo */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StatCard
           title="Vendas Delivery"

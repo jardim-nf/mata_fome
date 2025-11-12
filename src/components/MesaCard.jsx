@@ -1,4 +1,4 @@
-// src/components/MesaCard.jsx
+// src/components/MesaCard.jsx - COMPLETO E CORRIGIDO PARA USABILIDADE
 
 import React from 'react';
 import { toast } from 'react-toastify';
@@ -6,6 +6,12 @@ import { toast } from 'react-toastify';
 const LixeiraIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+    </svg>
+);
+
+const PagamentoIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
     </svg>
 );
 
@@ -54,15 +60,22 @@ export default function MesaCard({ mesa, onClick, onExcluir, onPagar }) {
         }
         onExcluir(mesa.id, mesa.numero); 
     };
+
+    // Ação do pagamento foi movida para o handleCardClick, esta função pode ser simples
+    // ou apenas para ser chamada pelo ícone (se ele fosse mantido clicável, mas não é o caso)
+    const handlePagarClick = (e) => {
+        // e.stopPropagation() NÃO É NECESSÁRIO AQUI, pois o ícone não é mais um botão
+        onPagar(mesa);
+    };
     
-    // 🚨 CORREÇÃO: Nova lógica de clique
+    // 🔑 LÓGICA CORRIGIDA: O card inteiro tem a ação prioritária
     const handleCardClick = () => {
         if (mesa.status === 'pagamento') {
-            // Se for pagamento, chama a função onPagar que abre o modal
-            onPagar(mesa);
+            // Se o status for PAGAMENTO, o card inteiro chama a função de pagamento.
+            onPagar(mesa); 
         } else {
-            // Para outros status, abre o editor da mesa
-            onClick();
+            // Caso contrário (livre, ocupada, com_pedido), abre a mesa.
+            onClick(); 
         }
     };
 
@@ -71,32 +84,52 @@ export default function MesaCard({ mesa, onClick, onExcluir, onPagar }) {
 
     return (
         <div 
-            onClick={handleCardClick}
+            onClick={handleCardClick} // 🔑 O clique no card agora decide a ação com base no status
             className={`p-4 rounded-lg shadow-lg cursor-pointer transform hover:scale-105 transition-transform duration-200 flex flex-col justify-between h-32 relative ${estilos.bg}`}
         >
-            {/* Botão de Excluir */}
+            {/* Botão de Excluir (apenas para mesas livres) */}
             {mesa.status === 'livre' && (
                 <button
                     onClick={handleExcluirClick}
-                    className="absolute top-1 right-1 p-1 rounded-full text-white hover:bg-black/20"
+                    className="absolute top-1 right-1 p-1 rounded-full text-white hover:bg-black/20 transition-colors"
                     title={`Excluir Mesa ${mesa.numero}`}
                 >
                     <LixeiraIcon />
                 </button>
             )}
 
+            {/* Ícone de Pagamento (apenas como indicador visual no canto) */}
+            {mesa.status === 'pagamento' && (
+                <div 
+                    className="absolute top-1 right-1 p-1 rounded-full text-white" 
+                    title={`Finalizar Pagamento Mesa ${mesa.numero}`}
+                >
+                    <PagamentoIcon />
+                </div>
+            )}
+
+            {/* Conteúdo Principal do Card */}
             <h3 className="font-bold text-xl text-center">Mesa {mesa.numero}</h3>
+            
             <div className="text-center">
                 <p className="font-semibold uppercase text-sm">{estilos.statusText}</p>
+                
                 {/* Exibe o valor apenas se não for LIVRE */}
                 {mesa.status !== 'livre' && (
                     <p className="font-bold text-lg">{totalFormatado}</p>
                 )} 
                 
-                {/* Indicador para Ação */}
+                {/* 🔑 Mensagem de Ação: A área de clique é o card inteiro */}
                 {mesa.status === 'pagamento' && (
-                    <span className="text-white text-xs font-bold mt-1 block">
-                        CLIQUE PARA FINALIZAR
+                    <span className="text-white/90 text-xs font-medium mt-1 block">
+                        Clique em qualquer lugar para pagar
+                    </span>
+                )}
+
+                {/* Indicador de ação para outras mesas */}
+                {(mesa.status === 'ocupada' || mesa.status === 'com_pedido') && (
+                    <span className="text-white/90 text-xs font-medium mt-1 block">
+                        Clique para abrir o pedido
                     </span>
                 )}
             </div>

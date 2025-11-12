@@ -37,8 +37,6 @@ function AdminCouponManagement() {
     const [editingCouponId, setEditingCouponId] = useState(null);
     const [formLoading, setFormLoading] = useState(false);
 
-    // ✅ REMOVIDO: Controle de acesso complexo no useEffect
-    
     // Busca os cupons em tempo real
     useEffect(() => {
         if (!estabelecimentoIdPrincipal) {
@@ -60,7 +58,7 @@ function AdminCouponManagement() {
             setLoading(false);
         }, (err) => {
             console.error("❌ Erro ao buscar cupons:", err);
-            toast.error("❌ Erro ao carregar cupons.");
+            toast.error("❌ Erro ao carregar cupons. Permissão ou conexão falhou.");
             setLoading(false);
         });
 
@@ -78,6 +76,38 @@ function AdminCouponManagement() {
         setAtivo(true);
         setEditingCouponId(null);
     };
+
+    // --- FUNÇÕES AUXILIARES DE STATUS (MOVIDAS PARA O TOPO) ---
+    const isExpirado = (validadeFim) => {
+        if (!validadeFim) return false;
+        return validadeFim.toDate() < new Date(); 
+    };
+
+    const isAtivo = (cupom) => {
+        return cupom.ativo && !isExpirado(cupom.validadeFim);
+    };
+
+    const formatarDesconto = (cupom) => {
+        switch(cupom.tipoDesconto) {
+            case 'percentual':
+                return `${cupom.valorDesconto}% OFF`;
+            case 'valorFixo':
+                return `R$ ${cupom.valorDesconto.toFixed(2).replace('.', ',')} OFF`;
+            case 'freteGratis':
+                return '🛵 Frete Grátis';
+            default:
+                return cupom.tipoDesconto;
+        }
+    };
+    
+    // --- ESTATÍSTICAS (DEFINIDA APÓS AS FUNÇÕES) ---
+    const estatisticas = {
+        total: cupons.length,
+        ativos: cupons.filter(c => isAtivo(c)).length,
+        expirados: cupons.filter(c => isExpirado(c.validadeFim)).length,
+        usosTotais: cupons.reduce((acc, c) => acc + (c.usosAtuais || 0), 0)
+    };
+
 
     const handleSaveCoupon = async (e) => {
         e.preventDefault();
@@ -103,15 +133,26 @@ function AdminCouponManagement() {
         setFormLoading(true);
         try {
             const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'cupons');
+            
+            // 💡 Conversão de Valores
+            const valorDesc = tipoDesconto === 'freteGratis' ? 0 : Number(valorDesconto);
+            const minPedido = minimoPedido ? Number(minimoPedido) : null;
+            const usosMax = usosMaximos ? Number(usosMaximos) : null;
+
+            if (isNaN(valorDesc) || (minPedido !== null && isNaN(minPedido)) || (usosMax !== null && isNaN(usosMax))) {
+                 toast.error('❌ Erro: Por favor, verifique se os valores numéricos estão corretos.');
+                 setFormLoading(false);
+                 return;
+            }
 
             const newCouponData = {
                 codigo: codigo.toUpperCase().trim(),
                 tipoDesconto,
-                valorDesconto: tipoDesconto === 'freteGratis' ? 0 : Number(valorDesconto),
-                minimoPedido: minimoPedido ? Number(minimoPedido) : null,
-                validadeInicio: Timestamp.fromDate(new Date(validadeInicio)),
-                validadeFim: Timestamp.fromDate(new Date(validadeFim)),
-                usosMaximos: usosMaximos ? Number(usosMaximos) : null,
+                valorDesconto: valorDesc,
+                minimoPedido: minPedido,
+                validadeInicio: Timestamp.fromDate(inicio),
+                validadeFim: Timestamp.fromDate(fim),
+                usosMaximos: usosMax,
                 usosAtuais: editingCouponId ? cupons.find(c => c.id === editingCouponId)?.usosAtuais || 0 : 0,
                 ativo,
                 estabelecimentoId: estabelecimentoIdPrincipal,
@@ -119,18 +160,25 @@ function AdminCouponManagement() {
             };
 
             if (editingCouponId) {
+                console.log(`📝 Editando cupom ${editingCouponId}...`);
                 const couponRef = doc(cuponsCollectionRef, editingCouponId);
                 await updateDoc(couponRef, newCouponData);
                 toast.success('✅ Cupom atualizado com sucesso!');
             } else {
-                // Verifica se já existe cupom com mesmo código
+                // 1. Verificação de duplicidade (Requer permissão de LEITURA)
+                console.log(`🔍 Verificando duplicidade para código: ${newCouponData.codigo}`);
+                
                 const q = query(cuponsCollectionRef, where('codigo', '==', newCouponData.codigo));
-                const existingCoupons = await getDocs(q);
+                const existingCoupons = await getDocs(q); 
+                
                 if (!existingCoupons.empty) {
-                    toast.error('❌ Já existe um cupom com este código para este estabelecimento.');
+                    toast.error(`❌ Já existe um cupom com o código ${newCouponData.codigo} para este estabelecimento.`);
                     setFormLoading(false);
                     return;
                 }
+                
+                // 2. Criação do documento (Requer permissão de ESCRITA)
+                console.log('➕ Criando novo cupom...');
                 await addDoc(cuponsCollectionRef, { 
                     ...newCouponData, 
                     criadoEm: new Date() 
@@ -139,8 +187,16 @@ function AdminCouponManagement() {
             }
             resetForm();
         } catch (err) {
-            console.error("❌ Erro ao salvar cupom:", err);
-            toast.error("❌ Erro ao salvar cupom.");
+            // 🔑 CAPTURA DE ERRO MELHORADA
+            console.error("❌ ERRO NO SALVAMENTO DO CUPOM:", err);
+            
+            if (err.code === 'permission-denied') {
+                toast.error("🔒 Permissão negada! Verifique as Regras de Segurança do Firestore para a coleção /cupons.");
+            } else if (err.code === 'unavailable') {
+                 toast.error("🌐 Erro de conexão. Tente novamente.");
+            } else {
+                toast.error(`❌ Erro ao salvar cupom: ${err.message}`);
+            }
         } finally {
             setFormLoading(false);
         }
@@ -152,6 +208,7 @@ function AdminCouponManagement() {
         setTipoDesconto(coupon.tipoDesconto);
         setValorDesconto(coupon.valorDesconto?.toString() || '');
         setMinimoPedido(coupon.minimoPedido?.toString() || '');
+        // NOTA: Converte o Timestamp do Firebase para a string de formato 'datetime-local'
         setValidadeInicio(coupon.validadeInicio ? coupon.validadeInicio.toDate().toISOString().slice(0, 16) : '');
         setValidadeFim(coupon.validadeFim ? coupon.validadeFim.toDate().toISOString().slice(0, 16) : '');
         setUsosMaximos(coupon.usosMaximos?.toString() || '');
@@ -208,14 +265,6 @@ function AdminCouponManagement() {
         );
     };
 
-    // Estatísticas
-    const estatisticas = {
-        total: cupons.length,
-        ativos: cupons.filter(c => c.ativo).length,
-        expirados: cupons.filter(c => c.validadeFim?.toDate() < new Date()).length,
-        usosTotais: cupons.reduce((acc, c) => acc + (c.usosAtuais || 0), 0)
-    };
-
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -226,27 +275,6 @@ function AdminCouponManagement() {
             </div>
         );
     }
-
-    const formatarDesconto = (cupom) => {
-        switch(cupom.tipoDesconto) {
-            case 'percentual':
-                return `${cupom.valorDesconto}% OFF`;
-            case 'valorFixo':
-                return `R$ ${cupom.valorDesconto.toFixed(2).replace('.', ',')} OFF`;
-            case 'freteGratis':
-                return '🛵 Frete Grátis';
-            default:
-                return cupom.tipoDesconto;
-        }
-    };
-
-    const isExpirado = (validadeFim) => {
-        return validadeFim?.toDate() < new Date();
-    };
-
-    const isAtivo = (cupom) => {
-        return cupom.ativo && !isExpirado(cupom.validadeFim);
-    };
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
@@ -458,7 +486,7 @@ function AdminCouponManagement() {
                                 </p>
                             </div>
 
-                            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg self-end">
                                 <input 
                                     type="checkbox" 
                                     id="ativo" 
@@ -532,7 +560,7 @@ function AdminCouponManagement() {
                                                     : ativo
                                                         ? 'bg-green-50 border-green-200 hover:bg-green-100' 
                                                         : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="flex items-center space-x-4 flex-1">
                                                 <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
@@ -541,7 +569,7 @@ function AdminCouponManagement() {
                                                         : ativo
                                                             ? 'bg-green-100 text-green-600' 
                                                             : 'bg-gray-100 text-gray-600'
-                                                }`}>
+                                                    }`}>
                                                     <IoGiftOutline className="text-xl" />
                                                 </div>
                                                 <div className="flex-1">
@@ -553,7 +581,7 @@ function AdminCouponManagement() {
                                                                 : ativo
                                                                     ? 'bg-green-500 text-white' 
                                                                     : 'bg-gray-500 text-white'
-                                                        }`}>
+                                                            }`}>
                                                             {expirado ? 'Expirado' : ativo ? 'Ativo' : 'Inativo'}
                                                         </span>
                                                     </div>
@@ -639,7 +667,4 @@ function AdminCouponManagement() {
 }
 
 // ✅ Aplica o HOC específico para estabelecimento
-// - Verifica se é admin (não master) 
-// - Verifica se tem estabelecimentoIdPrincipal
-// - Redireciona master para master-dashboard
 export default withEstablishmentAuth(AdminCouponManagement);

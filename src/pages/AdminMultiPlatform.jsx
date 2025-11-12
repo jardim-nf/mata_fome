@@ -1,4 +1,5 @@
-// src/pages/AdminMultiPlatform.jsx
+// src/pages/AdminMultiPlatform.jsx - CORRIGIDO E PREPARADO PARA INTEGRAÇÃO REAL
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -28,7 +29,7 @@ import {
     IoRefresh,
     IoAddCircle,
     IoCard,
-    IoStorefront,
+    IoStorefront, // 🔑 Ícone IoStorefront adicionado
     IoDownload,
     IoShareSocial,
     IoTime,
@@ -42,64 +43,64 @@ import {
     IoSync
 } from 'react-icons/io5';
 
-// Componente de Notificação - Adicione isso DENTRO do AdminMultiPlatform.jsx
+// Componente de Notificação
 const NotificationContainer = ({ notifications, onRemove }) => {
-  const getNotificationIcon = (type) => {
-    switch (type) {
-      case 'success':
-        return <IoCheckmarkCircle className="text-green-500 text-xl" />;
-      case 'error':
-        return <IoAlertCircle className="text-red-500 text-xl" />;
-      case 'warning':
-        return <IoWarning className="text-yellow-500 text-xl" />;
-      case 'info':
-        return <IoInformationCircle className="text-blue-500 text-xl" />;
-      default:
-        return <IoInformationCircle className="text-gray-500 text-xl" />;
-    }
-  };
+    const getNotificationIcon = (type) => {
+        switch (type) {
+            case 'success':
+                return <IoCheckmarkCircle className="text-green-500 text-xl" />;
+            case 'error':
+                return <IoAlertCircle className="text-red-500 text-xl" />;
+            case 'warning':
+                return <IoWarning className="text-yellow-500 text-xl" />;
+            case 'info':
+                return <IoInformationCircle className="text-blue-500 text-xl" />;
+            default:
+                return <IoInformationCircle className="text-gray-500 text-xl" />;
+        }
+    };
 
-  const getNotificationStyles = (type) => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-50 border-green-200 text-green-800';
-      case 'error':
-        return 'bg-red-50 border-red-200 text-red-800';
-      case 'warning':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-800';
-      case 'info':
-        return 'bg-blue-50 border-blue-200 text-blue-800';
-      default:
-        return 'bg-gray-50 border-gray-200 text-gray-800';
-    }
-  };
+    const getNotificationStyles = (type) => {
+        switch (type) {
+            case 'success':
+                return 'bg-green-50 border-green-200 text-green-800';
+            case 'error':
+                return 'bg-red-50 border-red-200 text-red-800';
+            case 'warning':
+                return 'bg-yellow-50 border-yellow-200 text-yellow-800';
+            case 'info':
+                return 'bg-blue-50 border-blue-200 text-blue-800';
+            default:
+                return 'bg-gray-50 border-gray-200 text-gray-800';
+        }
+    };
 
-  return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
-      {notifications.map((notification) => (
-        <div
-          key={notification.id}
-          className={`p-4 rounded-lg border-2 shadow-lg transform transition-all duration-300 ${
-            notification.visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
-          } ${getNotificationStyles(notification.type)}`}
-        >
-          <div className="flex items-start space-x-3">
-            {getNotificationIcon(notification.type)}
-            <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-sm">{notification.title}</h4>
-              <p className="text-sm mt-1">{notification.message}</p>
-            </div>
-            <button
-              onClick={() => onRemove(notification.id)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <IoClose className="text-lg" />
-            </button>
-          </div>
+    return (
+        <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
+            {notifications.map((notification) => (
+                <div
+                    key={notification.id}
+                    className={`p-4 rounded-lg border-2 shadow-lg transform transition-all duration-300 ${
+                        notification.visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+                    } ${getNotificationStyles(notification.type)}`}
+                >
+                    <div className="flex items-start space-x-3">
+                        {getNotificationIcon(notification.type)}
+                        <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-sm">{notification.title}</h4>
+                            <p className="text-sm mt-1">{notification.message}</p>
+                        </div>
+                        <button
+                            onClick={() => onRemove(notification.id)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            <IoClose className="text-lg" />
+                        </button>
+                    </div>
+                </div>
+            ))}
         </div>
-      ))}
-    </div>
-  );
+    );
 };
 
 function AdminMultiPlatform() {
@@ -108,7 +109,7 @@ function AdminMultiPlatform() {
     const [platforms, setPlatforms] = useState({});
     const [syncStatus, setSyncStatus] = useState('idle');
     const [syncLogs, setSyncLogs] = useState([]);
-    const [establishmentName, setEstablishmentName] = useState('');
+    const [establishmentName, setEstablishmentName] = useState('Meu Restaurante');
     const [selectedPlatform, setSelectedPlatform] = useState(null);
     const [showConfigModal, setShowConfigModal] = useState(false);
     const [configData, setConfigData] = useState({
@@ -122,8 +123,14 @@ function AdminMultiPlatform() {
         notifications,
         addNotification,
         removeNotification,
-        clearAllNotifications
     } = useNotifications();
+
+    // 🏷️ Obter nome da plataforma
+    const getPlatformName = (platformId) => {
+        const platform = availablePlatforms.find(p => p.id === platformId);
+        return platform?.name || platformId;
+    };
+
 
     // 📝 Adicionar log de sincronização com chave única
     const addSyncLog = (type, message, platformId = 'system') => {
@@ -151,6 +158,8 @@ function AdminMultiPlatform() {
             }
 
             addNotification('info', 'Inicialização', 'Criando configurações iniciais das plataformas...');
+            
+            // ⚠️ CHAMA FUNÇÃO EXTERNA DE BACKEND SIMULADA:
             const success = await initializeUserPlatforms(user.uid);
             
             if (success) {
@@ -181,18 +190,18 @@ function AdminMultiPlatform() {
                 return;
             }
 
+            // ⚠️ CORREÇÃO: Busca documentos de plataforma onde o campo 'userId' é igual ao UID
             const platformsRef = collection(db, 'platforms');
             const q = query(platformsRef, where('userId', '==', user.uid));
             const snapshot = await getDocs(q);
             
             if (snapshot.empty) {
-                // Nenhuma plataforma encontrada, oferecer para inicializar
                 addNotification('info', 'Configuração', 'Nenhuma plataforma encontrada. Clique em "Inicializar Plataformas" para começar.');
-                return;
             }
             
             const platformsData = {};
             snapshot.forEach(doc => {
+                // ⚠️ Garante que o ID do documento é a chave
                 platformsData[doc.id] = { id: doc.id, ...doc.data() };
             });
             
@@ -207,55 +216,59 @@ function AdminMultiPlatform() {
         }
     };
 
-    // 🔄 Atualizar configuração da plataforma
-// 🔄 Atualizar configuração da plataforma - VERSÃO CORRIGIDA
-const updatePlatformConfig = async (platformId, config) => {
-    try {
-        const user = auth.currentUser;
-        const platformRef = doc(db, 'platforms', platformId);
-        
-        // Primeiro verifica se o documento existe
-        const platformDoc = await getDoc(platformRef);
-        
-        if (!platformDoc.exists()) {
-            // Se não existe, CRIA o documento primeiro
-            await setDoc(platformRef, {
+
+    // 🔄 Atualizar configuração da plataforma - VERSÃO ROBUSTA
+    const updatePlatformConfig = async (platformId, config) => {
+        try {
+            const user = auth.currentUser;
+            const platformRef = doc(db, 'platforms', platformId);
+            
+            // Verifica se o documento existe
+            const platformDoc = await getDoc(platformRef);
+            
+            const baseData = {
                 name: availablePlatforms.find(p => p.id === platformId)?.name || platformId,
                 type: platformId,
                 userId: user.uid,
-                connected: false,
-                syncStatus: 'disconnected',
                 orders: 0,
                 revenue: 0,
-                config: {},
                 createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                ...config // Inclui as configurações iniciais
-            });
-        } else {
-            // Se existe, ATUALIZA o documento
-            await updateDoc(platformRef, {
-                ...config,
-                updatedAt: new Date().toISOString()
-            });
+            };
+
+            if (!platformDoc.exists()) {
+                // CRIA o documento se não existe
+                await setDoc(platformRef, {
+                    ...baseData,
+                    connected: false,
+                    syncStatus: 'disconnected',
+                    config: {},
+                    updatedAt: new Date().toISOString(),
+                    ...config
+                });
+            } else {
+                // ATUALIZA o documento se existe (merge)
+                await updateDoc(platformRef, {
+                    ...config,
+                    updatedAt: new Date().toISOString()
+                });
+            }
+            
+            // Atualizar estado local
+            setPlatforms(prev => ({
+                ...prev,
+                [platformId]: { ...prev[platformId], ...config }
+            }));
+            
+            addNotification('success', 'Configuração', `${getPlatformName(platformId)} configurado com sucesso`);
+            addSyncLog('success', `${platformId} configurado com sucesso`);
+            return true;
+        } catch (error) {
+            console.error('Erro ao atualizar plataforma:', error);
+            addNotification('error', 'Erro', `Erro ao configurar ${getPlatformName(platformId)}`);
+            addSyncLog('error', `Erro ao configurar ${platformId}: ${error.message}`);
+            return false;
         }
-        
-        // Atualizar estado local
-        setPlatforms(prev => ({
-            ...prev,
-            [platformId]: { ...prev[platformId], ...config }
-        }));
-        
-        addNotification('success', 'Configuração', `${getPlatformName(platformId)} configurado com sucesso`);
-        addSyncLog('success', `${platformId} configurado com sucesso`);
-        return true;
-    } catch (error) {
-        console.error('Erro ao atualizar plataforma:', error);
-        addNotification('error', 'Erro', `Erro ao configurar ${getPlatformName(platformId)}`);
-        addSyncLog('error', `Erro ao configurar ${platformId}: ${error.message}`);
-        return false;
-    }
-};
+    };
 
     // 🔄 Testar conexão
     const testConnection = async (platformId) => {
@@ -264,13 +277,13 @@ const updatePlatformConfig = async (platformId, config) => {
             addNotification('info', 'Teste de Conexão', `Testando conexão com ${getPlatformName(platformId)}...`);
             addSyncLog('info', `Testando conexão com ${platformId}`);
             
-            // Simular teste de conexão
+            // ⚠️ SIMULAÇÃO (DEVERIA SER CHAMADA API EXTERNA)
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // Atualizar status
+            // Atualizar status no Firestore
             await updatePlatformConfig(platformId, {
                 lastTest: new Date().toISOString(),
-                connectionStatus: 'connected',
+                connectionStatus: 'connected', // Se o teste for bem-sucedido
                 syncStatus: 'connected'
             });
             
@@ -286,44 +299,42 @@ const updatePlatformConfig = async (platformId, config) => {
     };
 
     // 🔄 Sincronizar plataforma específica
-// 🔄 Sincronizar plataforma específica - VERSÃO CORRIGIDA
-const syncPlatformOrders = async (platformId) => {
-    try {
-        setSyncStatus('syncing');
-        addNotification('info', 'Sincronização', `Iniciando sincronização com ${getPlatformName(platformId)}`);
-        addSyncLog('info', `Iniciando sincronização com ${platformId}`);
-        
-        // Simular sincronização
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Gerar dados aleatórios para demonstração
-        const newOrders = Math.floor(Math.random() * 10) + 1;
-        const newRevenue = Math.random() * 500 + 50;
-        
-        // Obter dados atuais da plataforma
-        const currentPlatform = platforms[platformId] || {};
-        const currentOrders = currentPlatform.orders || 0;
-        const currentRevenue = currentPlatform.revenue || 0;
-        
-        // Atualizar última sincronização - USA A FUNÇÃO CORRIGIDA
-        await updatePlatformConfig(platformId, {
-            lastSync: new Date().toISOString(),
-            syncStatus: 'synced',
-            orders: currentOrders + newOrders,
-            revenue: currentRevenue + newRevenue
-        });
-        
-        addNotification('success', 'Sincronização', 
-            `${getPlatformName(platformId)} sincronizado: ${newOrders} novos pedidos`);
-        addSyncLog('success', `Sincronização com ${platformId} concluída: ${newOrders} novos pedidos`);
-    } catch (error) {
-        console.error('Erro na sincronização:', error);
-        addNotification('error', 'Erro', `Erro na sincronização com ${getPlatformName(platformId)}`);
-        addSyncLog('error', `Erro na sincronização com ${platformId}`);
-    } finally {
-        setSyncStatus('idle');
-    }
-};
+    const syncPlatformOrders = async (platformId) => {
+        try {
+            setSyncStatus('syncing');
+            addNotification('info', 'Sincronização', `Iniciando sincronização com ${getPlatformName(platformId)}`);
+            addSyncLog('info', `Iniciando sincronização com ${platformId}`);
+            
+            // ⚠️ SIMULAÇÃO: Aqui você faria a chamada para o seu Cloud Function/Backend
+            // Ex: await callBackendSyncFunction(platformId, platforms[platformId].config);
+
+            // SIMULANDO RESULTADO REAL (Remover em produção)
+            const newOrders = Math.floor(Math.random() * 10) + 1;
+            const newRevenue = Math.random() * 500 + 50;
+            
+            const currentPlatform = platforms[platformId] || {};
+            const currentOrders = currentPlatform.orders || 0;
+            const currentRevenue = currentPlatform.revenue || 0;
+            
+            // Atualizar última sincronização - USA A FUNÇÃO CORRIGIDA
+            await updatePlatformConfig(platformId, {
+                lastSync: new Date().toISOString(),
+                syncStatus: 'synced',
+                orders: currentOrders + newOrders,
+                revenue: currentRevenue + newRevenue
+            });
+            
+            addNotification('success', 'Sincronização', 
+                `${getPlatformName(platformId)} sincronizado: ${newOrders} novos pedidos`);
+            addSyncLog('success', `Sincronização com ${platformId} concluída: ${newOrders} novos pedidos`);
+        } catch (error) {
+            console.error('Erro na sincronização:', error);
+            addNotification('error', 'Erro', `Erro na sincronização com ${getPlatformName(platformId)}`);
+            addSyncLog('error', `Erro na sincronização com ${platformId}`);
+        } finally {
+            setSyncStatus('idle');
+        }
+    };
 
     // 🔄 Sincronizar todas as plataformas
     const syncAllPlatforms = async () => {
@@ -332,15 +343,17 @@ const syncPlatformOrders = async (platformId) => {
             addNotification('info', 'Sincronização', 'Iniciando sincronização de todas as plataformas');
             addSyncLog('info', 'Iniciando sincronização de todas as plataformas');
             
-            const connectedPlatforms = availablePlatforms.filter(p => p.status === 'connected');
+            // Usar availablePlatforms para pegar a lista atualizada
+            const platformsToSync = availablePlatforms.filter(p => p.status === 'connected' && p.id !== 'website');
             
-            if (connectedPlatforms.length === 0) {
-                addNotification('warning', 'Aviso', 'Nenhuma plataforma conectada para sincronizar');
-                addSyncLog('warning', 'Nenhuma plataforma conectada para sincronizar');
+            if (platformsToSync.length === 0) {
+                addNotification('warning', 'Aviso', 'Nenhuma plataforma externa conectada para sincronizar');
+                addSyncLog('warning', 'Nenhuma plataforma externa conectada para sincronizar');
                 return;
             }
             
-            for (const platform of connectedPlatforms) {
+            // Sincronizar de forma serial para evitar sobrecarga
+            for (const platform of platformsToSync) {
                 await syncPlatformOrders(platform.id);
             }
             
@@ -355,133 +368,27 @@ const syncPlatformOrders = async (platformId) => {
         }
     };
 
-    // 📊 Calcular métricas
-    const getPlatformMetrics = () => {
-        const connectedPlatforms = availablePlatforms.filter(p => p.status === 'connected').length;
-        const totalOrders = availablePlatforms.reduce((sum, p) => sum + p.orders, 0);
-        const totalRevenue = availablePlatforms.reduce((sum, p) => sum + p.revenue, 0);
-        
-        const platformMetrics = {};
-        availablePlatforms.forEach(platform => {
-            platformMetrics[platform.id] = {
-                orders: platform.orders,
-                revenue: platform.revenue
-            };
-        });
-
-        return {
-            connectedPlatforms,
-            totalOrders,
-            totalRevenue,
-            platformMetrics
-        };
-    };
-
-    // 🏷️ Obter nome da plataforma
-    const getPlatformName = (platformId) => {
-        const platform = availablePlatforms.find(p => p.id === platformId);
-        return platform?.name || platformId;
-    };
-
-    // 📋 Plataformas disponíveis com dados em tempo real
-    const availablePlatforms = useMemo(() => [
-        {
-            id: 'ifood',
-            name: 'iFood',
-            icon: <IoRestaurant className="text-red-500" />,
-            color: 'red',
-            description: 'Integração com iFood Partner',
-            status: platforms.ifood?.connected ? 'connected' : 'disconnected',
-            syncStatus: platforms.ifood?.syncStatus || 'disconnected',
-            orders: platforms.ifood?.orders || 0,
-            revenue: platforms.ifood?.revenue || 0,
-            lastSync: platforms.ifood?.lastSync,
-            setupRequired: true,
-            docsUrl: 'https://developer.ifood.com.br'
-        },
-        {
-            id: 'whatsapp',
-            name: 'WhatsApp Business',
-            icon: <IoChatbubble className="text-green-500" />,
-            color: 'green',
-            description: 'Pedidos via WhatsApp',
-            status: platforms.whatsapp?.connected ? 'connected' : 'disconnected',
-            syncStatus: platforms.whatsapp?.syncStatus || 'disconnected',
-            orders: platforms.whatsapp?.orders || 0,
-            revenue: platforms.whatsapp?.revenue || 0,
-            lastSync: platforms.whatsapp?.lastSync,
-            setupRequired: true,
-            docsUrl: 'https://developers.facebook.com/docs/whatsapp/business-management-api/'
-        },
-        {
-            id: 'rappi',
-            name: 'Rappi',
-            icon: <IoPhonePortrait className="text-blue-500" />,
-            color: 'blue',
-            description: 'Integração com Rappi Partner',
-            status: platforms.rappi?.connected ? 'connected' : 'disconnected',
-            syncStatus: platforms.rappi?.syncStatus || 'disconnected',
-            orders: platforms.rappi?.orders || 0,
-            revenue: platforms.rappi?.revenue || 0,
-            lastSync: platforms.rappi?.lastSync,
-            setupRequired: true,
-            docsUrl: 'https://developer.rappi.com'
-        },
-        {
-            id: 'uberEats',
-            name: 'Uber Eats',
-            icon: <IoGlobe className="text-green-600" />,
-            color: 'green',
-            description: 'Integração com Uber Eats',
-            status: platforms.uberEats?.connected ? 'connected' : 'disconnected',
-            syncStatus: platforms.uberEats?.syncStatus || 'disconnected',
-            orders: platforms.uberEats?.orders || 0,
-            revenue: platforms.uberEats?.revenue || 0,
-            lastSync: platforms.uberEats?.lastSync,
-            setupRequired: true,
-            docsUrl: 'https://developer.uber.com/docs/eats'
-        },
-        {
-            id: 'website',
-            name: 'Site Próprio',
-            icon: <IoStorefront className="text-purple-500" />,
-            color: 'purple',
-            description: 'Sistema DeuFome',
-            status: 'connected',
-            syncStatus: 'connected',
-            orders: platforms.website?.orders || 125,
-            revenue: platforms.website?.revenue || 12500,
-            lastSync: platforms.website?.lastSync || new Date().toISOString(),
-            setupRequired: false,
-            docsUrl: null
-        }
-    ], [platforms]);
-
     // 🔄 Conectar/desconectar plataforma
     const handleToggleConnection = async (platformId, connected) => {
         const user = auth.currentUser;
         
+        if (!user) return;
+
         try {
             if (connected) {
-                // Criar ou atualizar plataforma
-                const platformRef = doc(db, 'platforms', platformId);
-                await setDoc(platformRef, {
-                    name: availablePlatforms.find(p => p.id === platformId)?.name,
-                    type: platformId,
-                    userId: user.uid,
+                // Ao conectar, atualiza o status para 'connected'
+                await updatePlatformConfig(platformId, {
                     connected: true,
                     syncStatus: 'disconnected',
                     orders: 0,
                     revenue: 0,
-                    config: configData,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
+                    config: platforms[platformId]?.config || configData,
+                });
                 
                 addNotification('success', 'Conexão', `${getPlatformName(platformId)} conectado com sucesso`);
                 addSyncLog('success', `${platformId} conectado com sucesso`);
             } else {
-                // Desconectar plataforma
+                // Ao desconectar, atualiza o status para 'disconnected'
                 await updatePlatformConfig(platformId, { 
                     connected: false,
                     syncStatus: 'disconnected'
@@ -490,7 +397,7 @@ const syncPlatformOrders = async (platformId) => {
                 addSyncLog('info', `${platformId} desconectado`);
             }
             
-            // Recarregar dados
+            // Recarregar dados para refletir o novo status
             await fetchPlatforms();
             
         } catch (error) {
@@ -500,35 +407,72 @@ const syncPlatformOrders = async (platformId) => {
         }
     };
 
-    // 🎯 Configurar plataforma
+
+    // 🎯 Configurar plataforma (Ação final do modal)
     const handleConfigurePlatform = async (platformId) => {
         try {
-            const user = auth.currentUser;
-            const platformRef = doc(db, 'platforms', platformId);
-            
-            await setDoc(platformRef, {
-                name: availablePlatforms.find(p => p.id === platformId)?.name,
-                type: platformId,
-                userId: user.uid,
-                connected: true,
+            await updatePlatformConfig(platformId, {
+                connected: true, // Conecta ao configurar
                 syncStatus: 'connected',
                 config: configData,
-                lastSync: new Date().toISOString(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
+                lastSync: new Date().toISOString(), // Simula a última sincronização
+            });
             
             addNotification('success', 'Configuração', `${getPlatformName(platformId)} configurado e conectado com sucesso`);
             addSyncLog('success', `${platformId} configurado e conectado com sucesso`);
+            
             setShowConfigModal(false);
             setConfigData({ apiKey: '', storeId: '', autoSync: false });
-            await fetchPlatforms();
+            await fetchPlatforms(); // Atualiza a lista
             
         } catch (error) {
             console.error('Erro ao configurar plataforma:', error);
             addNotification('error', 'Erro', `Erro ao configurar ${getPlatformName(platformId)}`);
             addSyncLog('error', `Erro ao configurar ${platformId}`);
         }
+    };
+
+
+    // 📋 Plataformas disponíveis com dados em tempo real (useMemo)
+    // ⚠️ ATENÇÃO: Os dados do 'website' são hardcoded para demonstração, exceto o status
+    const availablePlatforms = useMemo(() => {
+        // Mapeia a lista fixa de plataformas com os dados em tempo real do Firestore (platforms)
+        const fixedList = [
+            { id: 'ifood', name: 'iFood', icon: <IoRestaurant className="text-red-500" />, color: 'red', description: 'Integração com iFood Partner', setupRequired: true, docsUrl: 'https://developer.ifood.com.br' },
+            { id: 'whatsapp', name: 'WhatsApp Business', icon: <IoChatbubble className="text-green-500" />, color: 'green', description: 'Pedidos via WhatsApp', setupRequired: true, docsUrl: 'https://developers.facebook.com/docs/whatsapp/business-management-api/' },
+            { id: 'rappi', name: 'Rappi', icon: <IoPhonePortrait className="text-blue-500" />, color: 'blue', description: 'Integração com Rappi Partner', setupRequired: true, docsUrl: 'https://developer.rappi.com' },
+            { id: 'uberEats', name: 'Uber Eats', icon: <IoGlobe className="text-green-600" />, color: 'green', description: 'Integração com Uber Eats', setupRequired: true, docsUrl: 'https://developer.uber.com/docs/eats' },
+            { id: 'website', name: 'Site Próprio', icon: <IoStorefront className="text-purple-500" />, color: 'purple', description: 'Sistema DeuFome', setupRequired: false, docsUrl: null },
+        ];
+
+        return fixedList.map(p => {
+            const data = platforms[p.id] || {};
+            return {
+                ...p,
+                // Dados em tempo real do Firestore:
+                status: data.connected ? 'connected' : 'disconnected',
+                syncStatus: data.syncStatus || 'disconnected',
+                orders: data.orders || 0,
+                revenue: data.revenue || 0,
+                lastSync: data.lastSync,
+                config: data.config || {},
+            };
+        });
+    }, [platforms]);
+
+    // 📊 Calcular métricas
+    const getPlatformMetrics = () => {
+        const externalPlatforms = availablePlatforms.filter(p => p.id !== 'website');
+        const connectedPlatforms = availablePlatforms.filter(p => p.status === 'connected').length;
+        const totalOrders = availablePlatforms.reduce((sum, p) => sum + p.orders, 0);
+        const totalRevenue = availablePlatforms.reduce((sum, p) => sum + p.revenue, 0);
+        
+        return {
+            connectedPlatforms,
+            totalOrders,
+            totalRevenue,
+            // Detalhes extras se necessário
+        };
     };
 
     // 🕒 Formatador de data relativa
@@ -614,7 +558,6 @@ const syncPlatformOrders = async (platformId) => {
     // 📥 Efeito inicial - carregar dados
     useEffect(() => {
         const init = async () => {
-            setEstablishmentName('Meu Restaurante');
             await fetchPlatforms();
             addSyncLog('info', 'Sistema de multi-plataforma inicializado');
         };

@@ -1,3 +1,5 @@
+// src/pages/TaxasDeEntrega.jsx - VERSÃO FINAL CORRIGIDA
+
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -18,9 +20,9 @@ import {
     IoSaveOutline
 } from 'react-icons/io5';
 
-function TaxasDeEntrega() {
-    // 🚨 CORREÇÃO: Use estabelecimentoPrincipal em vez de estabelecimentoIdPrincipal
-    const { estabelecimentoPrincipal, currentUser, isAdmin, isMaster, loading: authLoading } = useAuth();
+export default function TaxasDeEntrega() {
+    // 🔑 CORREÇÃO AQUI: Destruturando a variável correta: estabelecimentoIdPrincipal
+    const { estabelecimentoIdPrincipal, currentUser, isAdmin, isMaster, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
     const [bairros, setBairros] = useState([]);
@@ -31,7 +33,9 @@ function TaxasDeEntrega() {
     const [formLoading, setFormLoading] = useState(false);
     const [accessGranted, setAccessGranted] = useState(false);
 
-    // 🚨 CORREÇÃO: Use estabelecimentoPrincipal
+    // Variável unificada para o ID (para legibilidade no restante do componente)
+    const estabelecimentoId = estabelecimentoIdPrincipal; 
+    
     useEffect(() => {
         if (authLoading) return;
 
@@ -39,11 +43,12 @@ function TaxasDeEntrega() {
             currentUser: !!currentUser, 
             isAdmin, 
             isMaster,
-            estabelecimentoPrincipal 
+            estabelecimentoId 
         });
         
         // Verifica se tem acesso
-        const hasAccess = currentUser && (isAdmin || isMaster) && estabelecimentoPrincipal;
+        // 🔑 CORREÇÃO: Usa 'estabelecimentoId'
+        const hasAccess = currentUser && (isAdmin || isMaster) && estabelecimentoId;
         
         if (hasAccess) {
             setAccessGranted(true);
@@ -64,26 +69,26 @@ function TaxasDeEntrega() {
                 return;
             }
 
-            if (!estabelecimentoPrincipal) {
+            if (!estabelecimentoId) { // Usa a variável corrigida
                 toast.error('❌ Configuração de acesso incompleta. Configure seu estabelecimento primeiro.');
                 navigate('/dashboard');
                 return;
             }
         }
-    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoPrincipal]);
+    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoId]); // Dependência corrigida
 
     // Função para buscar as taxas de entrega - CORRIGIDA
     const getTaxas = async () => {
-        if (!estabelecimentoPrincipal) {
-            console.error("❌ estabelecimentoPrincipal não definido");
+        if (!estabelecimentoId) { // Usa a variável corrigida
+            console.error("❌ estabelecimentoId não definido");
             setLoading(false);
             return;
         }
         
         setLoading(true);
         try {
-            console.log("📦 Buscando taxas para estabelecimento:", estabelecimentoPrincipal);
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoPrincipal, 'taxasDeEntrega');
+            console.log("📦 Buscando taxas para estabelecimento:", estabelecimentoId);
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
             const q = query(taxasCollectionRef, orderBy('nomeBairro'));
             const data = await getDocs(q);
             const fetchedBairros = data.docs.map(doc => ({ 
@@ -108,10 +113,10 @@ function TaxasDeEntrega() {
     };
 
     useEffect(() => {
-        if (accessGranted && estabelecimentoPrincipal) {
+        if (accessGranted && estabelecimentoId) { // Usa a variável corrigida
             getTaxas();
         }
-    }, [estabelecimentoPrincipal, accessGranted]);
+    }, [estabelecimentoId, accessGranted]); // Dependência corrigida
 
     const clearForm = () => {
         setEditingId(null);
@@ -140,7 +145,7 @@ function TaxasDeEntrega() {
 
         setFormLoading(true);
         try {
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoPrincipal, 'taxasDeEntrega');
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega'); // Usa a variável corrigida
 
             if (editingId) {
                 const bairroDoc = doc(taxasCollectionRef, editingId);
@@ -196,7 +201,7 @@ function TaxasDeEntrega() {
 
         const confirmDelete = async () => {
             try {
-                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoPrincipal, 'taxasDeEntrega', id);
+                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', id); // Usa a variável corrigida
                 await deleteDoc(taxaDocRef);
                 toast.success(`✅ Taxa para "${nome}" foi excluída.`);
                 getTaxas();
@@ -304,7 +309,7 @@ function TaxasDeEntrega() {
                     </div>
                     <h2 className="text-xl font-bold text-gray-900 mb-2">Configuração Incompleta</h2>
                     <p className="text-gray-600 mb-2">
-                        {!estabelecimentoPrincipal 
+                        {!estabelecimentoId 
                             ? "Configure seu estabelecimento primeiro para acessar as taxas de entrega."
                             : "Você não tem permissão para acessar esta página."
                         }
@@ -317,7 +322,7 @@ function TaxasDeEntrega() {
                             <IoArrowBack />
                             <span>Voltar ao Dashboard</span>
                         </Link>
-                        {!estabelecimentoPrincipal && (
+                        {!estabelecimentoId && (
                             <button
                                 onClick={() => window.location.reload()}
                                 className="inline-flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
@@ -355,7 +360,7 @@ function TaxasDeEntrega() {
                             Gerencie os valores de entrega por bairro
                         </p>
                         <p className="text-sm text-gray-500">
-                            Estabelecimento ID: {estabelecimentoPrincipal}
+                            Estabelecimento ID: {estabelecimentoId}
                         </p>
                     </div>
                     
@@ -599,7 +604,7 @@ function TaxasDeEntrega() {
                         <div>
                             <p className="text-gray-800 font-medium">Informações de Acesso</p>
                             <p className="text-gray-700 text-sm">
-                                Estabelecimento: {estabelecimentoPrincipal}<br/>
+                                Estabelecimento: {estabelecimentoId}<br/>
                                 Bairros carregados: {bairros.length}<br/>
                                 Usuário Admin: {isAdmin ? 'Sim' : 'Não'}<br/>
                                 Usuário Master: {isMaster ? 'Sim' : 'Não'}<br/>
@@ -612,5 +617,3 @@ function TaxasDeEntrega() {
         </div>
     );
 }
-
-export default TaxasDeEntrega;

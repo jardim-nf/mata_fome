@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx - COMPLETO COM TODOS OS IMPORTS
 
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
@@ -6,10 +6,14 @@ import { AuthProvider, PrivateRoute } from './context/AuthContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+// ===================================
+// 🔑 IMPORTS CORRIGIDOS E COMPLETOS 🔑
+// ===================================
+
 // Layout e Páginas Públicas/Clientes
 import Layout from "./components/Layout";
-import Home from "./pages/Home";
-import Login from "./pages/Login";
+import Home from "./pages/Home"; // 👈 Faltava o import de Home
+import Login from "./pages/Login"; // Faltava o import de Login
 import Menu from "./pages/Menu";
 import ListaEstabelecimentos from "./pages/ListaEstabelecimentos";
 import Planos from "./pages/Planos";
@@ -33,6 +37,7 @@ import AdminReports from './pages/AdminReports';
 import AdminImageAssociation from './pages/admin/AdminImageAssociation';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminMultiPlatform from './pages/AdminMultiPlatform';
+
 // Páginas Master Admin
 import MasterDashboard from './pages/MasterDashboard';
 import AdminEstabelecimentoCadastro from './pages/admin/AdminEstabelecimentoCadastro';
@@ -46,6 +51,8 @@ import CriarUsuarioMaster from './pages/admin/CriarUsuarioMaster';
 import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
+
+// ===================================
 
 function App() {
   return (
@@ -77,8 +84,9 @@ function App() {
                 </PrivateRoute>
               }
             />
+            {/* Rota corrigida que mapeia a navegação do ControleSalao */}
             <Route
-              path="/mesa/:id"
+              path="/estabelecimento/:estabelecimentoId/mesa/:id"
               element={
                 <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                   <TelaPedidos />

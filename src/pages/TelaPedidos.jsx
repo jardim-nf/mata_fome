@@ -1,4 +1,4 @@
-// src/pages/TelaPedidos.jsx - VERSÃO CORRIGIDA COM ESTRUTURA REAL
+// src/pages/TelaPedidos.jsx - VERSÃO COMPLETA, DINÂMICA E COM VISUAL APRIMORADO
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; 
@@ -16,7 +16,7 @@ import {
     IoSaveOutline
 } from 'react-icons/io5';
 
-// --- COMPONENTE DO PRODUTO ---
+// --- COMPONENTE DO PRODUTO (Mantido) ---
 const ProdutoCard = ({ produto, onAdicionar }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col group">
         {produto.imageUrl ? (
@@ -50,10 +50,12 @@ const ProdutoCard = ({ produto, onAdicionar }) => (
 );
 
 const TelaPedidos = () => {
-    const { id: mesaId } = useParams();
+    const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
     const { estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate(); 
     
+    const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId; 
+
     const [mesa, setMesa] = useState(null);
     const [cardapio, setCardapio] = useState([]);
     const [categorias, setCategorias] = useState(['todas']);
@@ -61,9 +63,10 @@ const TelaPedidos = () => {
     const [loading, setLoading] = useState(true);
     const [termoBusca, setTermoBusca] = useState('');
     const [categoriaAtiva, setCategoriaAtiva] = useState('todas');
+    const [estabelecimentoNome, setEstabelecimentoNome] = useState('Carregando...');
 
     useEffect(() => {
-        if (!estabelecimentoIdPrincipal) {
+        if (!estabelecimentoId) {
             setLoading(false);
             toast.error("Estabelecimento não identificado.");
             return;
@@ -73,8 +76,18 @@ const TelaPedidos = () => {
             try {
                 setLoading(true);
 
-                // 1. Buscar dados da Mesa
-                const mesaRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'mesas', mesaId);
+                // 1. Buscar NOME DO ESTABELECIMENTO
+                const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
+                const estabSnap = await getDoc(estabRef);
+
+                if (estabSnap.exists()) {
+                    setEstabelecimentoNome(estabSnap.data().nome || 'Estabelecimento');
+                } else {
+                    setEstabelecimentoNome('Estabelecimento Desconhecido');
+                }
+
+                // 2. Buscar dados da Mesa
+                const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
                 const mesaSnap = await getDoc(mesaRef);
                 
                 if (mesaSnap.exists()) {
@@ -83,65 +96,59 @@ const TelaPedidos = () => {
                     setResumoPedido(mesaData.itens || []);
                 } else {
                     toast.error("Mesa não encontrada.");
-                    setLoading(false);
-                    return;
                 }
 
-                // 2. Buscar TODOS os produtos de TODAS as categorias
-                // Baseado na sua estrutura real do Firestore
-                const categoriasComSubcolecoes = [
-                    { id: 'bebidas', nome: 'Bebidas' },
-                    { id: 'burguers-artesanais', nome: 'Burguers Artesanais' },
-                    { id: 'burguers-convencionais', nome: 'Burguers Convencionais' },
-                    { id: 'combos', nome: 'Combos' },
-                    { id: 'porcoes-petiscos', nome: 'Porções e Petiscos' }
-                ];
-
+                // 3. BUSCAR CATEGORIAS DINAMICAMENTE
+                const cardapioRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
+                const categoriasSnap = await getDocs(cardapioRef);
+                
+                const categoriasEncontradas = categoriasSnap.docs.map(doc => ({
+                    id: doc.id, 
+                    nome: doc.data().nome || doc.id 
+                }));
+                
                 let todosProdutos = [];
+                const possiveisSubcolecoes = ['itens', 'produtos', 'items']; 
 
-                for (const categoria of categoriasComSubcolecoes) {
-                    try {
-                        // Tentar diferentes nomes de subcoleções
-                        const possiveisSubcolecoes = ['itens', 'produtos', 'items'];
-                        
-                        for (const subcolecao of possiveisSubcolecoes) {
-                            try {
-                                const produtosRef = collection(
-                                    db, 
-                                    'estabelecimentos', 
-                                    estabelecimentoIdPrincipal, 
-                                    'cardapio', 
-                                    categoria.id, 
-                                    subcolecao
-                                );
-                                const produtosSnap = await getDocs(produtosRef);
-                                
-                                if (!produtosSnap.empty) {
-                                    const produtosDaCategoria = produtosSnap.docs.map(doc => ({
-                                        id: doc.id,
-                                        categoria: categoria.nome,
-                                        categoriaId: categoria.id,
-                                        ...doc.data()
-                                    }));
-                                    todosProdutos = [...todosProdutos, ...produtosDaCategoria];
-                                    console.log(`✅ Encontrados ${produtosDaCategoria.length} produtos em ${categoria.nome}/${subcolecao}`);
-                                    break; // Sai do loop de subcoleções se encontrou
-                                }
-                            } catch (error) {
-                                // Continua para a próxima subcoleção
-                                console.log(`❌ Subcoleção ${subcolecao} não encontrada em ${categoria.nome}`);
+                // 4. ITERAR SOBRE AS CATEGORIAS ENCONTRADAS
+                for (const categoria of categoriasEncontradas) {
+                    let produtosEncontrados = false;
+                    for (const subcolecao of possiveisSubcolecoes) {
+                        try {
+                            const produtosRef = collection(
+                                db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoria.id, subcolecao
+                            );
+                            const produtosSnap = await getDocs(produtosRef);
+                            
+                            if (!produtosSnap.empty) {
+                                const produtosDaCategoria = produtosSnap.docs.map(doc => ({
+                                    id: doc.id,
+                                    categoria: categoria.nome,
+                                    categoriaId: categoria.id,
+                                    ...doc.data()
+                                }));
+                                todosProdutos = [...todosProdutos, ...produtosDaCategoria];
+                                produtosEncontrados = true;
+                                console.log(`✅ Encontrados ${produtosDaCategoria.length} produtos em ${categoria.nome}/${subcolecao}`);
+                                break;
+                            } else {
+                                console.log(`❌ Subcoleção ${subcolecao} não encontrada em ${categoria.nome} (${categoria.id})`);
                             }
+                        } catch (error) {
+                            if (error.code === 'permission-denied') throw error; 
+                            console.log(`❌ Erro ao buscar subcoleção ${subcolecao} em ${categoria.nome}:`, error.message);
                         }
-                    } catch (error) {
-                        console.log(`❌ Erro na categoria ${categoria.nome}:`, error.message);
+                    }
+                    if (!produtosEncontrados) {
+                         console.log(`⚠️ Nenhum produto encontrado para a categoria: ${categoria.nome} nos caminhos testados.`);
                     }
                 }
 
                 console.log("🎯 TODOS OS PRODUTOS ENCONTRADOS:", todosProdutos);
                 setCardapio(todosProdutos);
 
-                // Extrair categorias únicas dos produtos
-                const categoriasUnicas = ['todas', ...new Set(todosProdutos.map(p => p.categoria).filter(Boolean))];
+                // 5. ATUALIZA A LISTA DE CATEGORIAS VISÍVEIS PARA FILTRO
+                const categoriasUnicas = ['todas', ...new Set(categoriasEncontradas.map(c => c.nome).filter(Boolean))];
                 setCategorias(categoriasUnicas);
 
                 if (todosProdutos.length === 0) {
@@ -151,20 +158,22 @@ const TelaPedidos = () => {
                 }
 
             } catch (error) {
+                if (error.code === 'permission-denied') {
+                    toast.error("❌ Erro de Permissão. O cardápio está inacessível. Verifique as Regras do Firestore!");
+                }
                 console.error("ERRO AO BUSCAR DADOS:", error);
-                toast.error("❌ Erro ao carregar cardápio.");
             } finally {
                 setLoading(false);
             }
         };
 
         fetchData();
-    }, [estabelecimentoIdPrincipal, mesaId]);
+    }, [estabelecimentoId, mesaId]);
 
-    // --- FUNÇÕES DE LÓGICA DE PEDIDO ---
+    // --- FUNÇÕES DE LÓGICA DE PEDIDO (Mantidas) ---
     const adicionarItem = (produto) => {
         setResumoPedido(prev => {
-            const itemExistente = prev.find(item => item.id === produto.id);
+            const itemExistente = prev.find(item => item.id === produto.id); 
             if (itemExistente) {
                 return prev.map(item => 
                     item.id === produto.id 
@@ -172,7 +181,7 @@ const TelaPedidos = () => {
                         : item
                 );
             }
-            return [...prev, { ...produto, quantidade: 1, preco: produto.preco }];
+            return [...prev, { ...produto, quantidade: 1, preco: parseFloat(produto.preco) }];
         });
         toast.success(`✅ ${produto.nome} adicionado!`);
     };
@@ -196,16 +205,15 @@ const TelaPedidos = () => {
         toast.warn("🗑️ Item removido.");
     };
 
-    // FUNÇÃO 1: SALVAR ALTERAÇÕES
     const salvarAlteracoes = async () => {
         const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
         try {
-            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'mesas', mesaId);
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
             await updateDoc(mesaRef, { 
                 itens: resumoPedido,
                 status: resumoPedido.length > 0 ? 'com_pedido' : 'livre',
                 total: totalPedido,
-                atualizadoEm: new Date()
+                updatedAt: new Date()
             });
             setMesa(prev => ({...prev, itens: resumoPedido }));
             toast.success("💾 Pedido salvo com sucesso!");
@@ -216,7 +224,6 @@ const TelaPedidos = () => {
         }
     };
 
-    // FUNÇÃO 2: FINALIZAR MESA PARA PAGAMENTO
     const finalizarMesa = async () => {
         if (resumoPedido.length === 0) {
             toast.warn("Não é possível finalizar um pedido vazio.");
@@ -226,13 +233,13 @@ const TelaPedidos = () => {
         const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
 
         try {
-            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'mesas', mesaId);
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
             
             await updateDoc(mesaRef, { 
                 itens: resumoPedido,
                 status: 'pagamento',
                 total: totalPedido,
-                atualizadoEm: new Date()
+                updatedAt: new Date()
             });
 
             toast.success("✅ Mesa finalizada para pagamento!");
@@ -263,14 +270,14 @@ const TelaPedidos = () => {
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Carregando cardápio da BlackBurguer...</p>
+                    <p className="mt-4 text-gray-600">Carregando cardápio de {estabelecimentoNome}...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">           
+        <div className="min-h-screen bg-gray-50">           
             {/* Header */}
             <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 py-4">
@@ -284,7 +291,7 @@ const TelaPedidos = () => {
                                 <span>Voltar</span>
                             </button>
                             <div>
-                                <h1 className="text-xl font-bold text-gray-900">Mesa {mesa?.numero || 'N/A'} - BlackBurguer</h1>
+                                <h1 className="text-xl font-bold text-gray-900">Mesa {mesa?.numero || 'N/A'} - {estabelecimentoNome}</h1>
                                 <p className="text-sm text-gray-600">Adicionando itens ao pedido</p>
                             </div>
                         </div>
@@ -310,9 +317,10 @@ const TelaPedidos = () => {
                 <div className="lg:col-span-3">
                     {/* Busca e Filtros */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-                        <div className="flex flex-col md:flex-row gap-4">
+                        {/* 🔑 MELHORIA VISUAL: Layout flexível e responsivo para busca e filtros */}
+                        <div className="flex flex-col sm:flex-row gap-4">
                             {/* Barra de Busca */}
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-[200px]"> {/* min-w para garantir espaço em telas médias */}
                                 <div className="relative">
                                     <IoSearchOutline className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
                                     <input
@@ -325,17 +333,18 @@ const TelaPedidos = () => {
                                 </div>
                             </div>
                             
-                            {/* Filtro de Categorias */}
-                            <div className="flex gap-2 overflow-x-auto pb-2">
+                            {/* Filtro de Categorias (Horizontal Scroll no Mobile) */}
+                            <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 sm:max-w-full">
                                 {categorias.map(categoria => (
                                     <button
                                         key={categoria}
                                         onClick={() => setCategoriaAtiva(categoria)}
-                                        className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                                        className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors text-sm ${
                                             categoriaAtiva === categoria
-                                                ? 'bg-blue-600 text-white'
-                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                ? 'bg-blue-600 text-white shadow-md'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-blue-50'
                                         }`}
+                                        style={{ flexShrink: 0 }} // Garante que os botões não encolham no scroll
                                     >
                                         {categoria === 'todas' ? 'Todas' : categoria}
                                     </button>
@@ -389,7 +398,7 @@ const TelaPedidos = () => {
 
                 {/* Resumo do Pedido */}
                 <aside className="lg:col-span-1">
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 sticky top-24">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 sticky lg:top-24">
                         <div className="p-4 border-b border-gray-200">
                             <h2 className="text-lg font-bold text-gray-900 flex items-center space-x-2">
                                 <IoCartOutline className="text-xl" />
@@ -405,7 +414,7 @@ const TelaPedidos = () => {
                                             <div className="flex-1">
                                                 <p className="font-semibold text-gray-900 text-sm">{item.nome}</p>
                                                 <p className="text-blue-600 font-bold">
-                                                    R$ {parseFloat(item.preco).toFixed(2).replace('.', ',')}
+                                                    R$ {parseFloat(item.preco * item.quantidade).toFixed(2).replace('.', ',')}
                                                 </p>
                                             </div>
                                             <div className="flex items-center space-x-2">

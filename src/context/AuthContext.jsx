@@ -1,4 +1,5 @@
-// src/context/AuthContext.jsx - VERSÃO FINAL COM CORREÇÃO DE FALLBACK
+// src/context/AuthContext.jsx - VERSÃO FINAL COM CORREÇÃO DE FALLBACK E UNIFICAÇÃO DE ESTABS
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import {
     createUserWithEmailAndPassword,
@@ -21,7 +22,7 @@ export function useAuth() {
 }
 
 // ==========================================================
-// FUNÇÕES DE BUSCA - CORRIGIDAS
+// FUNÇÕES DE BUSCA
 // ==========================================================
 
 const getFirestoreUserData = async (user) => { 
@@ -33,7 +34,6 @@ const getFirestoreUserData = async (user) => {
             console.log("✅ Dados do usuário encontrados no Firestore:", userDoc.data());
             return userDoc.data();
         } else {
-            // ✅ CORREÇÃO: Não cria documento se não existir. Retorna null, o que é esperado para clientes.
             console.log("ℹ️ Documento de usuário/admin não encontrado. Assumindo cliente ou novo usuário.");
             return null;
         }
@@ -246,7 +246,8 @@ export function AuthProvider({ children }) {
         estabelecimentosGerenciados: userData?.estabelecimentosGerenciados || [],
         isAdmin,
         isMaster: isMasterAdmin,
-        isMasterAdmin: isMasterAdmin
+        isMasterAdmin: isMasterAdmin,
+        estabelecimentoIdPrincipal: primeiroEstabelecimento // Expondo o ID principal para uso direto
     };
 
     return (
