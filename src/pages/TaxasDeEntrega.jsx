@@ -1,11 +1,11 @@
-// src/pages/TaxasDeEntrega.jsx - VERSÃO FINAL CORRIGIDA
-
+// src/pages/TaxasDeEntrega.jsx - VERSÃO COMPLETA COM HEADER CONTEXTUAL
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
+import { useHeader } from '../context/HeaderContext';
 
 // Ícones para a interface
 import { 
@@ -17,12 +17,14 @@ import {
     IoLocationOutline,
     IoCashOutline,
     IoListOutline,
-    IoSaveOutline
+    IoSaveOutline,
+    IoStatsChart,
+    IoSparkles
 } from 'react-icons/io5';
 
 export default function TaxasDeEntrega() {
-    // 🔑 CORREÇÃO AQUI: Destruturando a variável correta: estabelecimentoIdPrincipal
     const { estabelecimentoIdPrincipal, currentUser, isAdmin, isMaster, loading: authLoading } = useAuth();
+    const { setTitle, setSubtitle, setActions } = useHeader();
     const navigate = useNavigate();
 
     const [bairros, setBairros] = useState([]);
@@ -33,9 +35,34 @@ export default function TaxasDeEntrega() {
     const [formLoading, setFormLoading] = useState(false);
     const [accessGranted, setAccessGranted] = useState(false);
 
-    // Variável unificada para o ID (para legibilidade no restante do componente)
-    const estabelecimentoId = estabelecimentoIdPrincipal; 
+    const estabelecimentoId = estabelecimentoIdPrincipal;
     
+    // CONFIGURAÇÃO DO HEADER DINÂMICO
+    useEffect(() => {
+        // Definir título e subtítulo no header global
+        setTitle('🛵 Taxas de Entrega');
+        setSubtitle('Gerencie os valores de entrega por bairro');
+        
+        // Definir ações no header global (botão voltar)
+        const backButton = (
+            <button
+                onClick={() => navigate('/dashboard')}
+                className="inline-flex items-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-2 px-4 rounded-lg border border-gray-300 transition-all duration-200 hover:shadow-md hover:border-indigo-300"
+            >
+                <IoArrowBack />
+                <span>Voltar ao Dashboard</span>
+            </button>
+        );
+        setActions(backButton);
+
+        // Limpar ao sair da página
+        return () => {
+            setTitle(null);
+            setSubtitle(null);
+            setActions(null);
+        };
+    }, [setTitle, setSubtitle, setActions, navigate]);
+
     useEffect(() => {
         if (authLoading) return;
 
@@ -46,8 +73,6 @@ export default function TaxasDeEntrega() {
             estabelecimentoId 
         });
         
-        // Verifica se tem acesso
-        // 🔑 CORREÇÃO: Usa 'estabelecimentoId'
         const hasAccess = currentUser && (isAdmin || isMaster) && estabelecimentoId;
         
         if (hasAccess) {
@@ -69,17 +94,16 @@ export default function TaxasDeEntrega() {
                 return;
             }
 
-            if (!estabelecimentoId) { // Usa a variável corrigida
+            if (!estabelecimentoId) {
                 toast.error('❌ Configuração de acesso incompleta. Configure seu estabelecimento primeiro.');
                 navigate('/dashboard');
                 return;
             }
         }
-    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoId]); // Dependência corrigida
+    }, [currentUser, isAdmin, isMaster, authLoading, navigate, estabelecimentoId]);
 
-    // Função para buscar as taxas de entrega - CORRIGIDA
     const getTaxas = async () => {
-        if (!estabelecimentoId) { // Usa a variável corrigida
+        if (!estabelecimentoId) {
             console.error("❌ estabelecimentoId não definido");
             setLoading(false);
             return;
@@ -113,10 +137,10 @@ export default function TaxasDeEntrega() {
     };
 
     useEffect(() => {
-        if (accessGranted && estabelecimentoId) { // Usa a variável corrigida
+        if (accessGranted && estabelecimentoId) {
             getTaxas();
         }
-    }, [estabelecimentoId, accessGranted]); // Dependência corrigida
+    }, [estabelecimentoId, accessGranted]);
 
     const clearForm = () => {
         setEditingId(null);
@@ -145,7 +169,7 @@ export default function TaxasDeEntrega() {
 
         setFormLoading(true);
         try {
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega'); // Usa a variável corrigida
+            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
 
             if (editingId) {
                 const bairroDoc = doc(taxasCollectionRef, editingId);
@@ -201,7 +225,7 @@ export default function TaxasDeEntrega() {
 
         const confirmDelete = async () => {
             try {
-                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', id); // Usa a variável corrigida
+                const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', id);
                 await deleteDoc(taxaDocRef);
                 toast.success(`✅ Taxa para "${nome}" foi excluída.`);
                 getTaxas();
@@ -253,6 +277,39 @@ export default function TaxasDeEntrega() {
         );
     };
 
+    const handleQuickEdit = (bairro, novoValor) => {
+        if (!accessGranted) {
+            toast.error('❌ Você não tem permissão para editar.');
+            return;
+        }
+
+        const valorNumerico = parseFloat(novoValor.replace(',', '.'));
+        if (isNaN(valorNumerico) || valorNumerico < 0) {
+            toast.warn("⚠️ Por favor, insira um valor válido.");
+            return;
+        }
+
+        setFormLoading(true);
+        const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
+        const bairroDoc = doc(taxasCollectionRef, bairro.id);
+        
+        updateDoc(bairroDoc, { 
+            valorTaxa: valorNumerico,
+            atualizadoEm: new Date()
+        })
+        .then(() => {
+            toast.success(`✅ Taxa de ${bairro.nomeBairro} alterada para R$ ${novoValor}`);
+            getTaxas();
+        })
+        .catch((err) => {
+            console.error("❌ Erro ao alterar taxa:", err);
+            toast.error("❌ Erro ao alterar a taxa.");
+        })
+        .finally(() => {
+            setFormLoading(false);
+        });
+    };
+
     // Estatísticas
     const estatisticas = {
         total: bairros.length,
@@ -267,31 +324,30 @@ export default function TaxasDeEntrega() {
             : 0
     };
 
-    // 🚨 CORREÇÃO: Loading state mais claro
+    // Loading state
     if (authLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Verificando autenticação...</p>
+                    <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-700 font-medium">Verificando autenticação...</p>
                 </div>
             </div>
         );
     }
 
-    // 🚨 CORREÇÃO: Verificação de acesso mais específica
     if (!currentUser) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <IoCloseCircleOutline className="text-2xl text-red-600" />
+                    <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <IoCloseCircleOutline className="text-3xl text-red-600" />
                     </div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Negado</h2>
-                    <p className="text-gray-600 mb-4">Faça login para acessar esta página.</p>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-3">Acesso Negado</h2>
+                    <p className="text-gray-600 mb-6">Faça login para acessar esta página.</p>
                     <Link 
                         to="/login-admin" 
-                        className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        className="inline-flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
                     >
                         <span>Fazer Login</span>
                     </Link>
@@ -302,30 +358,30 @@ export default function TaxasDeEntrega() {
 
     if (!accessGranted) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <IoCloseCircleOutline className="text-2xl text-yellow-600" />
+                    <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <IoCloseCircleOutline className="text-3xl text-yellow-600" />
                     </div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">Configuração Incompleta</h2>
-                    <p className="text-gray-600 mb-2">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-3">Configuração Incompleta</h2>
+                    <p className="text-gray-600 mb-2 max-w-md">
                         {!estabelecimentoId 
                             ? "Configure seu estabelecimento primeiro para acessar as taxas de entrega."
                             : "Você não tem permissão para acessar esta página."
                         }
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center mt-4">
-                        <Link 
-                            to="/dashboard" 
-                            className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="inline-flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
                         >
                             <IoArrowBack />
                             <span>Voltar ao Dashboard</span>
-                        </Link>
+                        </button>
                         {!estabelecimentoId && (
                             <button
                                 onClick={() => window.location.reload()}
-                                className="inline-flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                                className="inline-flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
                             >
                                 <span>Recarregar</span>
                             </button>
@@ -338,56 +394,35 @@ export default function TaxasDeEntrega() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Carregando taxas de entrega...</p>
+                    <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-700 font-medium">Carregando taxas de entrega...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-            <div className="max-w-4xl mx-auto">
-                {/* Header */}
-                <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
-                    <div className="mb-4 lg:mb-0">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                            Taxas de Entrega
-                        </h1>
-                        <p className="text-gray-600">
-                            Gerencie os valores de entrega por bairro
-                        </p>
-                        <p className="text-sm text-gray-500">
-                            Estabelecimento ID: {estabelecimentoId}
-                        </p>
-                    </div>
-                    
-                    <Link 
-                        to="/dashboard" 
-                        className="inline-flex items-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
-                    >
-                        <IoArrowBack />
-                        <span>Voltar ao Dashboard</span>
-                    </Link>
-                </header>
-
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
+            {/* CONTEÚDO PRINCIPAL - HEADER AGORA É GLOBAL */}
+            <div className="container mx-auto px-4 sm:px-6 py-6">
+                
                 {/* Estatísticas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6 transform hover:scale-105 transition-all duration-300">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Total de Bairros</p>
                                 <p className="text-2xl font-bold text-gray-900">{estatisticas.total}</p>
                             </div>
-                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <IoLocationOutline className="text-blue-600 text-lg" />
+                            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <IoLocationOutline className="text-white text-lg" />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <div className="bg-white rounded-2xl shadow-lg border border-green-100 p-6 transform hover:scale-105 transition-all duration-300">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Taxa Média</p>
@@ -395,13 +430,13 @@ export default function TaxasDeEntrega() {
                                     R$ {estatisticas.valorMedio.toFixed(2).replace('.', ',')}
                                 </p>
                             </div>
-                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                <IoCashOutline className="text-green-600 text-lg" />
+                            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <IoStatsChart className="text-white text-lg" />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <div className="bg-white rounded-2xl shadow-lg border border-blue-100 p-6 transform hover:scale-105 transition-all duration-300">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Taxa Mínima</p>
@@ -409,13 +444,13 @@ export default function TaxasDeEntrega() {
                                     R$ {estatisticas.valorMinimo.toFixed(2).replace('.', ',')}
                                 </p>
                             </div>
-                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <span className="text-blue-600 text-lg">↓</span>
+                            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <span className="text-white text-lg font-bold">↓</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <div className="bg-white rounded-2xl shadow-lg border border-orange-100 p-6 transform hover:scale-105 transition-all duration-300">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Taxa Máxima</p>
@@ -423,83 +458,89 @@ export default function TaxasDeEntrega() {
                                     R$ {estatisticas.valorMaximo.toFixed(2).replace('.', ',')}
                                 </p>
                             </div>
-                            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                                <span className="text-orange-600 text-lg">↑</span>
+                            <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <span className="text-white text-lg font-bold">↑</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Formulário */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+                <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6 mb-8">
                     <div className="flex items-center space-x-3 mb-6">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                             {editingId ? (
-                                <IoPencil className="text-blue-600 text-lg" />
+                                <IoPencil className="text-white text-lg" />
                             ) : (
-                                <IoAddCircleOutline className="text-blue-600 text-lg" />
+                                <IoAddCircleOutline className="text-white text-lg" />
                             )}
                         </div>
-                        <h2 className="text-xl font-semibold text-gray-900">
-                            {editingId ? 'Editar Taxa' : 'Adicionar Nova Taxa'}
-                        </h2>
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900">
+                                {editingId ? '✏️ Editar Taxa' : '➕ Adicionar Nova Taxa'}
+                            </h2>
+                            <p className="text-sm text-gray-600">
+                                {editingId ? 'Atualize os dados da taxa de entrega' : 'Cadastre uma nova taxa para um bairro'}
+                            </p>
+                        </div>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label htmlFor="nomeBairro" className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="nomeBairro" className="block text-sm font-medium text-gray-700 mb-3">
                                     Nome do Bairro *
                                 </label>
                                 <div className="relative">
-                                    <IoLocationOutline className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                                    <IoLocationOutline className="absolute left-4 top-1/2 transform -translate-y-1/2 text-indigo-400 text-lg" />
                                     <input
                                         type="text"
                                         id="nomeBairro"
                                         value={nomeBairro}
                                         onChange={(e) => setNomeBairro(e.target.value)}
-                                        className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                        className="pl-12 w-full p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
                                         placeholder="Ex: Centro, Jardim das Flores..."
                                         required
                                     />
                                 </div>
                             </div>
                             <div>
-                                <label htmlFor="valorTaxa" className="block text-sm font-medium text-gray-700 mb-2">
+                                <label htmlFor="valorTaxa" className="block text-sm font-medium text-gray-700 mb-3">
                                     Valor da Taxa (R$) *
                                 </label>
                                 <div className="relative">
-                                    <IoCashOutline className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                                    <IoCashOutline className="absolute left-4 top-1/2 transform -translate-y-1/2 text-indigo-400 text-lg" />
                                     <input
                                         type="text"
                                         id="valorTaxa"
                                         value={valorTaxa}
                                         onChange={(e) => setValorTaxa(e.target.value.replace(/[^0-9,]/g, ''))}
-                                        className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                        className="pl-12 w-full p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
                                         placeholder="Ex: 5,00"
                                         required
                                     />
                                 </div>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Use vírgula para centavos (ex: 8,50)
+                                <p className="text-xs text-indigo-600 mt-2 flex items-center space-x-1">
+                                    <IoSparkles className="text-indigo-400" />
+                                    <span>Use vírgula para centavos (ex: 8,50)</span>
                                 </p>
                             </div>
                         </div>
                         
-                        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
                             <button
                                 type="submit"
                                 disabled={formLoading}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 shadow-lg"
                             >
                                 {formLoading ? (
                                     <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                         <span>Salvando...</span>
                                     </>
                                 ) : (
                                     <>
-                                        <IoSaveOutline className="text-lg" />
+                                        <IoSaveOutline className="text-xl" />
                                         <span>{editingId ? 'Salvar Alterações' : 'Adicionar Taxa'}</span>
                                     </>
                                 )}
@@ -508,9 +549,9 @@ export default function TaxasDeEntrega() {
                                 <button
                                     type="button"
                                     onClick={clearForm}
-                                    className="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                                    className="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 flex items-center justify-center space-x-2"
                                 >
-                                    <IoCloseCircleOutline />
+                                    <IoCloseCircleOutline className="text-lg" />
                                     <span>Cancelar</span>
                                 </button>
                             )}
@@ -518,62 +559,82 @@ export default function TaxasDeEntrega() {
                     </form>
                 </div>
 
-                {/* Lista de Taxas */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="p-6 border-b border-gray-200">
+                {/* Lista de Taxas com Edição Rápida */}
+                <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 overflow-hidden">
+                    <div className="p-6 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                         <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                                <IoListOutline className="text-green-600 text-lg" />
+                            <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <IoListOutline className="text-white text-lg" />
                             </div>
-                            <h2 className="text-xl font-semibold text-gray-900">
-                                Taxas Cadastradas ({bairros.length})
-                            </h2>
+                            <div>
+                                <h2 className="text-xl font-semibold text-gray-900">
+                                    📋 Taxas Cadastradas ({bairros.length})
+                                </h2>
+                                <p className="text-sm text-indigo-600 mt-1 flex items-center space-x-1">
+                                    <IoSparkles className="text-indigo-400" />
+                                    <span>Clique no valor para editar rapidamente</span>
+                                </p>
+                            </div>
                         </div>
                     </div>
 
                     <div className="p-6">
                         {bairros.length > 0 ? (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {bairros.map((bairro) => (
                                     <div 
                                         key={bairro.id} 
-                                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
+                                        className="flex items-center justify-between p-5 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl hover:from-indigo-100 hover:to-purple-100 transition-all duration-300 group border border-indigo-100 hover:border-indigo-200 hover:shadow-md"
                                     >
                                         <div className="flex items-center space-x-4">
-                                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                                                <IoLocationOutline className="text-blue-600" />
+                                            <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
+                                                <IoLocationOutline className="text-white text-lg" />
                                             </div>
                                             <div>
-                                                <p className="font-semibold text-gray-900">{bairro.nomeBairro}</p>
-                                                <p className="text-green-600 font-bold">
-                                                    {bairro.valorTaxa.toLocaleString('pt-BR', { 
-                                                        style: 'currency', 
-                                                        currency: 'BRL' 
-                                                    })}
-                                                </p>
+                                                <p className="font-semibold text-gray-900 text-lg">{bairro.nomeBairro}</p>
+                                                <div className="flex items-center space-x-3 mt-2">
+                                                    <span className="text-green-600 font-bold text-lg cursor-pointer hover:text-green-700 transition-colors duration-300 px-3 py-1 bg-green-50 rounded-lg hover:bg-green-100"
+                                                        onClick={() => {
+                                                            const novoValor = prompt(`Alterar taxa para ${bairro.nomeBairro}:`, bairro.valorTaxa.toFixed(2).replace('.', ','));
+                                                            if (novoValor && novoValor !== bairro.valorTaxa.toFixed(2).replace('.', ',')) {
+                                                                handleQuickEdit(bairro, novoValor);
+                                                            }
+                                                        }}
+                                                        title="Clique para alterar o valor"
+                                                    >
+                                                        {bairro.valorTaxa.toLocaleString('pt-BR', { 
+                                                            style: 'currency', 
+                                                            currency: 'BRL' 
+                                                        })}
+                                                    </span>
+                                                    <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-1 rounded-lg flex items-center space-x-1">
+                                                        <IoSparkles className="text-indigo-400" />
+                                                        <span>Clique para editar</span>
+                                                    </span>
+                                                </div>
                                                 {bairro.criadoEm && (
-                                                    <p className="text-xs text-gray-500">
+                                                    <p className="text-xs text-gray-500 mt-2">
                                                         Criado em: {bairro.criadoEm.toDate?.().toLocaleDateString('pt-BR')}
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                             <button
                                                 onClick={() => handleEdit(bairro)}
-                                                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                                className="p-3 bg-blue-100 text-blue-600 rounded-xl hover:bg-blue-200 transition-colors duration-300 shadow-sm hover:shadow-md"
                                                 aria-label="Editar"
-                                                title="Editar taxa"
+                                                title="Editar taxa completa"
                                             >
-                                                <IoPencil />
+                                                <IoPencil className="text-lg" />
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(bairro.id, bairro.nomeBairro)}
-                                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                className="p-3 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors duration-300 shadow-sm hover:shadow-md"
                                                 aria-label="Excluir"
                                                 title="Excluir taxa"
                                             >
-                                                <IoTrash />
+                                                <IoTrash className="text-lg" />
                                             </button>
                                         </div>
                                     </div>
@@ -581,38 +642,79 @@ export default function TaxasDeEntrega() {
                             </div>
                         ) : (
                             <div className="text-center py-12">
-                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <IoLocationOutline className="text-2xl text-gray-400" />
+                                <div className="w-20 h-20 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                    <IoLocationOutline className="text-3xl text-indigo-400" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                <h3 className="text-xl font-semibold text-gray-900 mb-3">
                                     Nenhuma taxa cadastrada
                                 </h3>
-                                <p className="text-gray-600 max-w-md mx-auto">
+                                <p className="text-gray-600 max-w-md mx-auto mb-6">
                                     Comece adicionando taxas de entrega para os bairros atendidos pelo seu estabelecimento.
                                 </p>
+                                <button
+                                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                    className="inline-flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
+                                >
+                                    <IoAddCircleOutline />
+                                    <span>Adicionar Primeira Taxa</span>
+                                </button>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Informações de debug */}
-                <div className="mt-8 bg-gray-100 border border-gray-300 rounded-lg p-4">
-                    <div className="flex items-start space-x-3">
-                        <div className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-white text-sm">🐛</span>
+                {/* Ações em Lote */}
+                {bairros.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6 mt-8">
+                        <div className="flex items-center space-x-3 mb-6">
+                            <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <IoSparkles className="text-white text-lg" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900">⚡ Ações em Lote</h3>
+                                <p className="text-sm text-gray-600">Altere várias taxas de uma só vez</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-gray-800 font-medium">Informações de Acesso</p>
-                            <p className="text-gray-700 text-sm">
-                                Estabelecimento: {estabelecimentoId}<br/>
-                                Bairros carregados: {bairros.length}<br/>
-                                Usuário Admin: {isAdmin ? 'Sim' : 'Não'}<br/>
-                                Usuário Master: {isMaster ? 'Sim' : 'Não'}<br/>
-                                Acesso Permitido: {accessGranted ? '✅ Sim' : '❌ Não'}
-                            </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <button
+                                onClick={() => {
+                                    const novoValor = prompt('Aumentar todas as taxas em quanto? (ex: 2,00)');
+                                    if (novoValor) {
+                                        const aumento = parseFloat(novoValor.replace(',', '.'));
+                                        if (!isNaN(aumento) && aumento > 0) {
+                                            bairros.forEach(bairro => {
+                                                const novoValorBairro = (bairro.valorTaxa + aumento).toFixed(2).replace('.', ',');
+                                                handleQuickEdit(bairro, novoValorBairro);
+                                            });
+                                        }
+                                    }
+                                }}
+                                className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 rounded-xl hover:from-green-100 hover:to-emerald-100 transition-all duration-300 text-left border border-green-200 hover:border-green-300 hover:shadow-md"
+                            >
+                                <div className="font-semibold text-lg mb-2">📈 Aumentar Todas</div>
+                                <div className="text-sm text-green-600">Adicionar valor fixo a todas as taxas</div>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const percentual = prompt('Aumentar todas as taxas em qual percentual? (ex: 10 para 10%)');
+                                    if (percentual) {
+                                        const percent = parseFloat(percentual);
+                                        if (!isNaN(percent) && percent > 0) {
+                                            bairros.forEach(bairro => {
+                                                const novoValorBairro = (bairro.valorTaxa * (1 + percent/100)).toFixed(2).replace('.', ',');
+                                                handleQuickEdit(bairro, novoValorBairro);
+                                            });
+                                        }
+                                    }
+                                }}
+                                className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 rounded-xl hover:from-blue-100 hover:to-indigo-100 transition-all duration-300 text-left border border-blue-200 hover:border-blue-300 hover:shadow-md"
+                            >
+                                <div className="font-semibold text-lg mb-2">📊 Aumentar Percentual</div>
+                                <div className="text-sm text-blue-600">Aumentar todas as taxas em %</div>
+                            </button>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

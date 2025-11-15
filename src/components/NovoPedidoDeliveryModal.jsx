@@ -8,12 +8,32 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave }) {
   const [endereco, setEndereco] = useState('');
   const [itens, setItens] = useState('');
   const [total, setTotal] = useState('');
+  const [erroTotal, setErroTotal] = useState('');
 
   if (!isOpen) return null;
 
+  const handleTotalChange = (value) => {
+    setTotal(value);
+    
+    // Validação em tempo real
+    const valorNumerico = parseFloat(value);
+    if (value && (isNaN(valorNumerico) || valorNumerico <= 0)) {
+      setErroTotal('Digite um valor válido maior que zero');
+    } else {
+      setErroTotal('');
+    }
+  };
+
   const handleSave = () => {
-    if (!nomeCliente || !telefone || !endereco || !itens || !total || parseFloat(total) <= 0) {
-      alert('Por favor, preencha todos os campos e o valor total corretamente.');
+    // Validações
+    if (!nomeCliente || !telefone || !endereco || !itens || !total) {
+      alert('Por favor, preencha todos os campos.');
+      return;
+    }
+
+    const valorNumerico = parseFloat(total);
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      alert('Por favor, digite um valor total válido maior que zero.');
       return;
     }
 
@@ -29,23 +49,24 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave }) {
             quantidade: isNaN(quantidade) ? 1 : quantidade,
             nome: nome
         };
-    }).filter(Boolean); // Remove linhas vazias
+    }).filter(Boolean);
 
     const pedidoData = {
       nomeCliente,
       telefoneCliente: telefone.replace(/\D/g, ''),
       enderecoEntrega: endereco,
       itens: itensArray,
-      total: parseFloat(total),
+      total: valorNumerico,
     };
 
     onSave(pedidoData);
-    // Limpa o formulário e fecha
+    // Limpa o formulário
     setNomeCliente('');
     setTelefone('');
     setEndereco('');
     setItens('');
     setTotal('');
+    setErroTotal('');
     onClose();
   };
 
@@ -64,11 +85,30 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave }) {
           <input type="tel" placeholder="Telefone (WhatsApp)" value={telefone} onChange={e => setTelefone(e.target.value)} className="w-full p-2 border rounded" />
           <input type="text" placeholder="Endereço de Entrega" value={endereco} onChange={e => setEndereco(e.target.value)} className="w-full p-2 border rounded" />
           <textarea placeholder="Itens do Pedido (Ex: 2x Pizza G&#10;1x Coca 2L)" value={itens} onChange={e => setItens(e.target.value)} className="w-full p-2 border rounded" rows="4"></textarea>
-          <input type="number" placeholder="Valor Total (R$)" value={total} onChange={e => setTotal(e.target.value)} className="w-full p-2 border rounded" />
+          
+          <div>
+            <input 
+              type="number" 
+              placeholder="Valor Total (R$)" 
+              value={total} 
+              onChange={e => handleTotalChange(e.target.value)} 
+              className={`w-full p-2 border rounded ${erroTotal ? 'border-red-500' : ''}`} 
+              step="0.01"
+              min="0.01"
+            />
+            {erroTotal && <p className="text-red-500 text-sm mt-1">{erroTotal}</p>}
+          </div>
         </div>
+        
         <div className="flex justify-end space-x-4 mt-6">
           <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
-          <button onClick={handleSave} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Salvar Pedido</button>
+          <button 
+            onClick={handleSave} 
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            disabled={!!erroTotal}
+          >
+            Salvar Pedido
+          </button>
         </div>
       </div>
     </div>

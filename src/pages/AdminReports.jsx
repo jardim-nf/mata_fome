@@ -30,7 +30,8 @@ import {
     IoRestaurantOutline,
     IoCashOutline,
     IoReceiptOutline,
-    IoBicycleOutline
+    IoBicycleOutline,
+    IoPrintOutline
 } from 'react-icons/io5';
 
 // Registro dos componentes do Chart.js
@@ -98,11 +99,9 @@ const AdminReports = () => {
     const [pedidos, setPedidos] = useState([]);
     const [startDate, setStartDate] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-    const [statusFilter, setStatusFilter] = useState('finalizado');
+    const [statusFilter, setStatusFilter] = useState('todos');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [deliveryTypeFilter, setDeliveryTypeFilter] = useState('todos');
-
-    // ✅ REMOVIDO: Controle de acesso complexo no useEffect
 
     // Busca de dados
     const fetchPedidos = async () => {
@@ -119,9 +118,17 @@ const AdminReports = () => {
                 where('createdAt', '<=', end)
             ];
 
-            if (statusFilter !== 'todos') constraints.push(where('status', '==', statusFilter));
-            if (paymentMethodFilter !== 'todos') constraints.push(where('formaPagamento', '==', paymentMethodFilter));
-            if (deliveryTypeFilter !== 'todos') constraints.push(where('tipo', '==', deliveryTypeFilter));
+            if (statusFilter !== 'todos') {
+                constraints.push(where('status', '==', statusFilter));
+            }
+
+            if (paymentMethodFilter !== 'todos') {
+                constraints.push(where('formaPagamento', '==', paymentMethodFilter));
+            }
+
+            if (deliveryTypeFilter !== 'todos') {
+                constraints.push(where('tipo', '==', deliveryTypeFilter));
+            }
             
             constraints.push(orderBy('createdAt', 'desc'));
 
@@ -158,13 +165,33 @@ const AdminReports = () => {
     }, [estabelecimentoIdPrincipal]);
 
     // Cálculos e memorização de dados
-    const { summaryData, salesByDay, salesByPayment, salesByDelivery, topItems } = useMemo(() => {
+    const { summaryData, salesByDay, salesByPayment, salesByDelivery, topItems, pedidosMesa } = useMemo(() => {
         const totalPedidos = pedidos.length;
         const totalVendas = pedidos.reduce((acc, p) => acc + (p.totalFinal || 0), 0);
         const ticketMedio = totalPedidos > 0 ? totalVendas / totalPedidos : 0;
         let totalTaxasEntrega = 0;
 
         const salesByDay = {}, salesByPayment = {}, salesByDelivery = {}, itemsCount = {};
+        const pedidosMesa = pedidos.filter(p => p.tipo === 'mesa');
+        
+        // 🔥 FUNÇÃO PARA REMOVER OBSERVAÇÕES DOS NOMES DOS PRODUTOS
+        const cleanProductName = (name) => {
+            if (!name) return 'Item sem nome';
+            
+            // Remove texto entre parênteses (observações)
+            let cleaned = name.replace(/\s*\([^)]*\)/g, '');
+            
+            // Remove texto após "obs:", "observação:", etc
+            cleaned = cleaned.replace(/\s*(obs|observação|observation):.*$/gi, '');
+            
+            // Remove texto entre colchetes
+            cleaned = cleaned.replace(/\s*\[[^\]]*\]/g, '');
+            
+            // Remove espaços extras no início e fim
+            cleaned = cleaned.trim();
+            
+            return cleaned || 'Item sem nome';
+        };
         
         pedidos.forEach(p => {
             const dateKey = format(p.data, 'dd/MM', { locale: ptBR });
@@ -177,7 +204,9 @@ const AdminReports = () => {
             salesByDelivery[deliveryKey] = (salesByDelivery[deliveryKey] || 0) + 1;
 
             p.itens?.forEach(item => {
-                itemsCount[item.nome] = (itemsCount[item.nome] || 0) + item.quantidade;
+                // 🔥 USA O NOME LIMPO SEM OBSERVAÇÕES
+                const itemName = cleanProductName(item.nome);
+                itemsCount[itemName] = (itemsCount[itemName] || 0) + (item.quantidade || 0);
             });
 
             if (p.tipo === 'delivery') {
@@ -213,6 +242,7 @@ const AdminReports = () => {
                 data: Object.values(salesByDelivery) 
             },
             topItems,
+            pedidosMesa
         };
     }, [pedidos]);
     
@@ -228,7 +258,8 @@ const AdminReports = () => {
         toast.info("📄 Gerando PDF, por favor aguarde...");
 
         // Esconde botões durante a geração do PDF
-        input.querySelectorAll('.no-print').forEach(btn => btn.style.visibility = 'hidden');
+        const buttons = input.querySelectorAll('.no-print');
+        buttons.forEach(btn => btn.style.display = 'none');
         
         try {
             const canvas = await html2canvas(input, { 
@@ -261,7 +292,7 @@ const AdminReports = () => {
             toast.error("❌ Erro ao gerar PDF.");
         } finally {
             // Restaura visibilidade dos botões
-            input.querySelectorAll('.no-print').forEach(btn => btn.style.visibility = 'visible');
+            buttons.forEach(btn => btn.style.display = 'flex');
         }
     };
 
@@ -327,39 +358,32 @@ const AdminReports = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-            {/* Cabeçalho */}
-            <header className="max-w-7xl mx-auto mb-8">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                    <div className="mb-4 lg:mb-0">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                            Relatórios Avançados
-                        </h1>
-                        <p className="text-gray-600">
-                            Análise detalhada do desempenho do seu estabelecimento
-                        </p>
-                        <p className="text-sm text-gray-500">
-                            Estabelecimento ID: {estabelecimentoIdPrincipal}
-                        </p>
+            {/* HEADER COM BOTÃO DE EXPORTAR PDF */}
+            <div className="max-w-7xl mx-auto mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div className="mb-4 sm:mb-0">
+                        <h1 className="text-2xl font-bold text-gray-900">📊 Relatórios</h1>
+                        <p className="text-gray-600 mt-1">Relatórios detalhados de vendas</p>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-3 no-print">
-                        <Link 
-                            to="/dashboard" 
-                            className="inline-flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
-                        >
-                            <IoArrowBack />
-                            <span>Voltar ao Dashboard</span>
-                        </Link>
+                    <div className="flex space-x-3">
                         <button 
-                            onClick={handleExportPDF} 
-                            disabled={loadingData || pedidos.length === 0}
-                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={handleExportPDF}
+                            disabled={pedidos.length === 0 || loadingData}
+                            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed no-print"
                         >
-                            <IoDocumentTextOutline />
+                            <IoPrintOutline className="text-lg" />
                             <span>Exportar PDF</span>
                         </button>
+                        <Link 
+                            to="/dashboard"
+                            className="flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors no-print"
+                        >
+                            <IoArrowBack className="text-lg" />
+                            <span>Voltar</span>
+                        </Link>
                     </div>
                 </div>
-            </header>
+            </div>
 
             <div className="max-w-7xl mx-auto" ref={reportContentRef}>
                 {/* Painel de Filtros */}
@@ -403,10 +427,10 @@ const AdminReports = () => {
                             >
                                 <option value="todos">Todos os Status</option>
                                 <option value="finalizado">Finalizado</option>
-                                <option value="cancelado">Cancelado</option>
-                                <option value="pendente">Pendente</option>
-                                <option value="preparando">Preparando</option>
                                 <option value="entregue">Entregue</option>
+                                <option value="preparando">Preparando</option>
+                                <option value="pendente">Pendente</option>
+                                <option value="cancelado">Cancelado</option>
                             </select>
                         </div>
                         <div>
@@ -460,23 +484,25 @@ const AdminReports = () => {
                             </FilterBadge>
                         </div>
                         
-                        <button 
-                            onClick={fetchPedidos} 
-                            disabled={loadingData}
-                            className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed no-print"
-                        >
-                            {loadingData ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    <span>Buscando...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <IoRefreshOutline />
-                                    <span>Atualizar Relatório</span>
-                                </>
-                            )}
-                        </button>
+                        <div className="flex space-x-3">
+                            <button 
+                                onClick={fetchPedidos} 
+                                disabled={loadingData}
+                                className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed no-print"
+                            >
+                                {loadingData ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        <span>Buscando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <IoRefreshOutline />
+                                        <span>Atualizar Relatório</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </Card>
 
@@ -525,6 +551,41 @@ const AdminReports = () => {
                             />
                         </div>
 
+                        {/* ✅ CARD COM ESTATÍSTICAS DE PEDIDOS DE MESA */}
+                        {pedidosMesa.length > 0 && (
+                            <Card title={
+                                <>
+                                    <IoRestaurantOutline className="text-blue-600" />
+                                    <span>Pedidos de Mesa ({pedidosMesa.length})</span>
+                                </>
+                            }>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                                        <p className="text-2xl font-bold text-blue-600">{pedidosMesa.length}</p>
+                                        <p className="text-sm text-gray-600">Total Mesas</p>
+                                    </div>
+                                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                                        <p className="text-2xl font-bold text-green-600">
+                                            {pedidosMesa.reduce((acc, p) => acc + (p.totalFinal || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </p>
+                                        <p className="text-sm text-gray-600">Vendas Mesas</p>
+                                    </div>
+                                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                                        <p className="text-2xl font-bold text-purple-600">
+                                            {[...new Set(pedidosMesa.map(p => p.mesaNumero))].length}
+                                        </p>
+                                        <p className="text-sm text-gray-600">Mesas Únicas</p>
+                                    </div>
+                                    <div className="text-center p-4 bg-amber-50 rounded-lg">
+                                        <p className="text-2xl font-bold text-amber-600">
+                                            {(pedidosMesa.reduce((acc, p) => acc + (p.totalFinal || 0), 0) / pedidosMesa.length || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </p>
+                                        <p className="text-sm text-gray-600">Ticket Médio Mesa</p>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
+
                         {/* Gráficos e Análises */}
                         <div className="grid lg:grid-cols-3 gap-6">
                             <div className="lg:col-span-2">
@@ -552,7 +613,7 @@ const AdminReports = () => {
                                             />
                                         ) : (
                                             <div className="flex items-center justify-center h-full text-gray-500">
-                                                Nenhum dado disponível para o período selecionado
+                                                📊 Nenhum dado disponível para o período selecionado
                                             </div>
                                         )}
                                     </div>
@@ -572,16 +633,18 @@ const AdminReports = () => {
                                                 <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                                                     <span className="text-sm font-bold text-blue-600">{index + 1}</span>
                                                 </div>
-                                                <span className="font-medium text-gray-900 text-sm">{name}</span>
+                                                <span className="font-medium text-gray-900 text-sm truncate flex-1" title={name}>
+                                                    {name}
+                                                </span>
                                             </div>
-                                            <span className="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                            <span className="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded text-sm whitespace-nowrap">
                                                 {count} un.
                                             </span>
                                         </div>
                                     ))}
                                     {topItems.length === 0 && (
                                         <p className="text-center text-gray-500 py-8">
-                                            Nenhum item vendido no período
+                                            📦 Nenhum item vendido no período
                                         </p>
                                     )}
                                 </div>
@@ -610,7 +673,7 @@ const AdminReports = () => {
                                         />
                                     ) : (
                                         <div className="flex items-center justify-center h-full text-gray-500">
-                                            Nenhum dado disponível
+                                            💳 Nenhum dado disponível
                                         </div>
                                     )}
                                 </div>
@@ -636,16 +699,16 @@ const AdminReports = () => {
                                         />
                                     ) : (
                                         <div className="flex items-center justify-center h-full text-gray-500">
-                                            Nenhum dado disponível
+                                            🚚 Nenhum dado disponível
                                         </div>
                                     )}
                                 </div>
                             </Card>
                         </div>
 
-                        {/* Informações de Debug */}
+                        {/* Informações de Debug - APENAS EM DESENVOLVIMENTO */}
                         {process.env.NODE_ENV === 'development' && (
-                            <Card title="Informações de Debug">
+                            <Card title="🔧 Informações de Debug">
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                     <div>
                                         <p className="font-semibold">Estabelecimento ID</p>
@@ -659,6 +722,20 @@ const AdminReports = () => {
                                         <p className="font-semibold">Pedidos Carregados</p>
                                         <p className="text-gray-600">{pedidos.length}</p>
                                     </div>
+                                    <div>
+                                        <p className="font-semibold">Pedidos Mesa</p>
+                                        <p className="text-gray-600">{pedidosMesa.length}</p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+                                    <p className="font-semibold mb-2">📋 Tipos de Pedidos:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Object.entries(salesByDelivery).map(([tipo, count]) => (
+                                            <span key={tipo} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                                                {tipo}: {count}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
                             </Card>
                         )}
@@ -669,8 +746,4 @@ const AdminReports = () => {
     );
 }
 
-// ✅ Aplica o HOC específico para estabelecimento
-// - Verifica se é admin (não master) 
-// - Verifica se tem estabelecimentoIdPrincipal
-// - Redireciona master para master-dashboard
 export default withEstablishmentAuth(AdminReports);

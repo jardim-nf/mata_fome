@@ -9,6 +9,24 @@ const ComandaParaImpressao = React.forwardRef(({ pedido, estabelecimento }, ref)
     return <div ref={ref}>Carregando dados...</div>;
   }
 
+  // 🔧 FUNÇÃO PARA CONVERTER TIMESTAMP DO FIREBASE
+  const converterTimestampParaData = (timestamp) => {
+    if (!timestamp) return new Date();
+    
+    // Se for um objeto Timestamp do Firebase
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      return timestamp.toDate();
+    }
+    
+    // Se já for uma Date
+    if (timestamp instanceof Date) {
+      return timestamp;
+    }
+    
+    // Se for um string ou número
+    return new Date(timestamp);
+  };
+
   const formatarTelefone = (tel) => {
     if (!tel) return 'Não informado';
     const cleaned = ("" + tel).replace(/\D/g, '');
@@ -22,11 +40,13 @@ const ComandaParaImpressao = React.forwardRef(({ pedido, estabelecimento }, ref)
     : 'Endereço não disponível';
 
   // ▼▼▼ LÓGICA DE CÁLCULO REFORÇADA ▼▼▼
-  // Garante que o subtotal seja sempre calculado a partir dos itens.
   const subTotal = pedido.itens?.reduce((acc, item) => acc + (item.preco * item.quantidade), 0) || 0;
-  // Garante que a taxa de entrega tenha um valor numérico.
   const taxaEntrega = pedido.taxaEntrega || 0;
   const totalFinal = pedido.totalFinal || 0;
+
+  // 🔧 CONVERTE A DATA CORRETAMENTE
+  const dataPedido = converterTimestampParaData(pedido.criadoEm);
+  const dataFormatada = format(dataPedido, "dd/MM/yy HH:mm", { locale: ptBR });
 
   return (
     <div ref={ref}>
@@ -56,20 +76,26 @@ const ComandaParaImpressao = React.forwardRef(({ pedido, estabelecimento }, ref)
         .pagamento { text-align: center; margin-top: 10px; font-size: 14px; }
         .footer { text-align: center; margin-top: 20px; font-size: 11px; }
         .whitespace-pre-line { white-space: pre-line; }
+        @media print {
+          body { margin: 0; padding: 0; }
+          .comanda-print-area { width: 80mm; padding: 10px; }
+        }
       `}</style>
       
       <div className="comanda-print-area">
         <div className="header">
           <h1>{estabelecimento?.nome || 'SEU ESTABELECIMENTO'}</h1>
           <p>{estabelecimento?.endereco?.rua}, {estabelecimento?.endereco?.numero}</p>
+          <p>{estabelecimento?.endereco?.cidade || ''}</p>
         </div>
 
         <div className="divider"></div>
         <div className="section-title">Comanda de Pedido</div>
         
         <div className="info-grid">
-          <p><strong>No. Pedido:</strong> #{pedido.id.substring(0, 5).toUpperCase()}</p>
-          <p><strong>Data:</strong> {pedido.criadoEm ? format(pedido.criadoEm.toDate(), 'dd/MM/yy HH:mm') : ''}</p>
+          <p><strong>No. Pedido:</strong> #{pedido.id?.substring(0, 5).toUpperCase() || 'N/A'}</p>
+          {/* 🔧 DATA AGORA FUNCIONANDO */}
+          <p><strong>Data:</strong> {dataFormatada}</p>
         </div>
         <div className="divider"></div>
 
@@ -77,8 +103,11 @@ const ComandaParaImpressao = React.forwardRef(({ pedido, estabelecimento }, ref)
           <h3 className="font-bold mb-2">DADOS DO CLIENTE</h3>
           <p><strong>Cliente:</strong> {pedido.cliente?.nome || 'N/A'}</p>
           <p><strong>Telefone:</strong> {formatarTelefone(pedido.cliente?.telefone)}</p>
-          {pedido.tipoEntrega !== 'retirada' && (
+          {pedido.tipo !== 'retirada' && pedido.tipoEntrega !== 'retirada' && (
             <p className="whitespace-pre-line"><strong>Endereço:</strong> {enderecoFormatado}</p>
+          )}
+          {pedido.tipo === 'retirada' && (
+            <p><strong>Tipo:</strong> 🏪 Retirada no Local</p>
           )}
         </div>
         
@@ -111,8 +140,12 @@ const ComandaParaImpressao = React.forwardRef(({ pedido, estabelecimento }, ref)
         {/* ▼▼▼ SEÇÃO DE TOTAIS CORRIGIDA ▼▼▼ */}
         <div className="totals">
           <p>Subtotal: R$ {subTotal.toFixed(2).replace('.', ',')}</p>
-          {/* A taxa de entrega agora é exibida mesmo que seja 0 */}
-          <p>Taxa de Entrega: R$ {taxaEntrega.toFixed(2).replace('.', ',')}</p>
+          {taxaEntrega > 0 && (
+            <p>Taxa de Entrega: R$ {taxaEntrega.toFixed(2).replace('.', ',')}</p>
+          )}
+          {pedido.cupomAplicado && (
+            <p>Desconto: -R$ {(pedido.cupomAplicado.descontoCalculado || 0).toFixed(2).replace('.', ',')}</p>
+          )}
           <p className="total-final">TOTAL A PAGAR: R$ {totalFinal.toFixed(2).replace('.', ',')}</p>
         </div>
 
@@ -125,8 +158,12 @@ const ComandaParaImpressao = React.forwardRef(({ pedido, estabelecimento }, ref)
           )}
         </div>
 
+        <div className="divider"></div>
+
         <div className="footer">
-          Agradecemos a sua preferência!
+          <p>** {estabelecimento?.nome || 'Estabelecimento'} **</p>
+          <p>Agradecemos a sua preferência!</p>
+          <p>{format(dataPedido, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
         </div>
       </div>
     </div>

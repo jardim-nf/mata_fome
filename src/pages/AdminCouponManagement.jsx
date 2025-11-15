@@ -280,27 +280,6 @@ function AdminCouponManagement() {
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
-                <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
-                    <div className="mb-4 lg:mb-0">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                            Gerenciar Cupons
-                        </h1>
-                        <p className="text-gray-600">
-                            Crie e gerencie cupons de desconto para seus clientes
-                        </p>
-                        <p className="text-sm text-gray-500">
-                            Estabelecimento ID: {estabelecimentoIdPrincipal}
-                        </p>
-                    </div>
-                    
-                    <Link 
-                        to="/dashboard" 
-                        className="inline-flex items-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
-                    >
-                        <IoArrowBack />
-                        <span>Voltar ao Dashboard</span>
-                    </Link>
-                </header>
 
                 {/* Estatísticas */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

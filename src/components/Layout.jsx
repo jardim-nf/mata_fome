@@ -8,14 +8,7 @@ import Footer from './Footer';
 // Lista de rotas/prefixos que NÃO DEVEM exibir o Header e Footer
 // Remova a barra inicial para simplificar a checagem, ou inclua-a. Vou mantê-la.
 const rotasSemLayout = [
-    '/admin/reports',
-    '/dashboard',
-    '/admin-menu',
-    '/admin/taxas-de-entrega',
-    '/admin/gerenciar-cardapio',
-    '/admin/cupons',
-    '/painel' 
-    // Se você tiver sub-rotas como '/admin/relatorios/detalhe', adicione '/admin/relatorios'
+ // Se você tiver sub-rotas como '/admin/relatorios/detalhe', adicione '/admin/relatorios'
 ]; 
 
 // Função auxiliar para normalizar e checar a rota

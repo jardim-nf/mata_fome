@@ -1,10 +1,11 @@
-// src/pages/ControleSalao.jsx - COMPLETO E ATUALIZADO
+// src/pages/ControleSalao.jsx - COMPLETO E CORRIGIDO
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
+import { useHeader } from '../context/HeaderContext';
 import { toast } from 'react-toastify';
 import MesaCard from "../components/MesaCard";
 import AdicionarMesaModal from "../components/AdicionarMesaModal";
@@ -12,6 +13,7 @@ import ModalPagamento from "../components/ModalPagamento";
 
 export default function ControleSalao() {
     const { userData } = useAuth(); 
+    const { setActions, clearActions } = useHeader();
     
     const [mesas, setMesas] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,7 +27,7 @@ export default function ControleSalao() {
     const estabelecimentoIdRef = useRef(null);
 
     // 🎯 Obter o ID do estabelecimento dos estabelecimentosGerenciados
-    const estabelecimentoId = React.useMemo(() => {
+    const estabelecimentoId = useMemo(() => {
         if (!userData?.estabelecimentosGerenciados || userData.estabelecimentosGerenciados.length === 0) {
             console.log("❌ Nenhum estabelecimento gerenciado encontrado");
             return null;
@@ -36,6 +38,30 @@ export default function ControleSalao() {
         return primeiroEstabelecimento;
     }, [userData]);
 
+    // 🆕 CORREÇÃO: Ações do header memoizadas
+    const headerActions = useMemo(() => (
+        <div className="flex space-x-3">
+            <button 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center space-x-2"
+                disabled={connectionError}
+            >
+                <span>+</span>
+                <span>Adicionar Mesa</span>
+            </button>
+        </div>
+    ), [connectionError]);
+
+    // 🆕 CORREÇÃO: useEffect com dependências estáveis
+    useEffect(() => {
+        setActions(headerActions);
+        
+        return () => {
+            clearActions();
+        };
+    }, [setActions, clearActions, headerActions]);
+
+    // Listener do Firestore para mesas
     useEffect(() => {
         if (estabelecimentoId === estabelecimentoIdRef.current) {
             console.log("🔄 EstabelecimentoId não mudou, mantendo listener atual");
@@ -120,6 +146,7 @@ export default function ControleSalao() {
         };
     }, [estabelecimentoId]); 
 
+    // Cleanup ao desmontar o componente
     useEffect(() => {
         return () => {
             if (unsubscribeRef.current) {
@@ -132,7 +159,7 @@ export default function ControleSalao() {
     }, []);
 
     // --- FUNÇÕES ---
-    const handleAdicionarMesa = async (numeroMesa) => {
+    const handleAdicionarMesa = useCallback(async (numeroMesa) => {
         if (!estabelecimentoId) {
             toast.error("Estabelecimento não identificado.");
             return;
@@ -179,9 +206,9 @@ export default function ControleSalao() {
                 toast.error("❌ Falha ao adicionar a mesa.");
             }
         }
-    };
+    }, [estabelecimentoId, mesas]);
 
-    const handleExcluirMesa = async (mesaId, numeroMesa) => {
+    const handleExcluirMesa = useCallback(async (mesaId, numeroMesa) => {
         if (!window.confirm(`Tem certeza que deseja excluir a Mesa ${numeroMesa}?`)) {
             return;
         }
@@ -194,19 +221,18 @@ export default function ControleSalao() {
             console.error("❌ Erro ao excluir mesa:", error);
             toast.error("❌ Falha ao excluir a mesa.");
         }
-    };
+    }, [estabelecimentoId]);
 
-    const handleAbrirPagamento = (mesa) => {
+    const handleAbrirPagamento = useCallback((mesa) => {
         setMesaParaPagamento(mesa);
         setIsModalPagamentoOpen(true);
-    };
+    }, []);
 
-    const handleAbrirMesa = (mesa) => {
-        // 🔑 ROTA COMPLETA: /estabelecimento/:estabelecimentoId/mesa/:mesaId
+    const handleAbrirMesa = useCallback((mesa) => {
         navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`);
-    };
+    }, [estabelecimentoId, navigate]);
 
-    const handleConfirmarPagamento = async (mesaId, formaPagamento) => {
+    const handleConfirmarPagamento = useCallback(async (mesaId, formaPagamento) => {
       try {
         console.log("💰 Processando pagamento para mesa:", mesaId);
 
@@ -229,8 +255,7 @@ export default function ControleSalao() {
               itens: mesaParaPagamento.itens || [],
               formaPagamento: formaPagamento,
               dataFechamento: new Date(),
-              // 🔑 CAMPO CRÍTICO ADICIONADO: Usado para o filtro do Dashboard
-              dataFechamentoString: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+              dataFechamentoString: new Date().toISOString().split('T')[0],
               createdAt: new Date(),
               tipo: 'salao',
               status: 'finalizada'
@@ -246,16 +271,16 @@ export default function ControleSalao() {
         console.error("❌ Erro ao processar pagamento:", error);
         toast.error("❌ Falha ao processar pagamento.");
       }
-    };
+    }, [estabelecimentoId, mesaParaPagamento]);
 
-    const handleRetryConnection = () => {
+    const handleRetryConnection = useCallback(() => {
         setConnectionError(false);
         setLoading(true);
         estabelecimentoIdRef.current = null;
-    };
+    }, []);
 
     // 📊 ESTATÍSTICAS COMPLETAS
-    const estatisticas = {
+    const estatisticas = useMemo(() => ({
         total: mesas.length,
         ocupadas: mesas.filter(mesa => mesa.status === 'ocupada').length,
         livres: mesas.filter(mesa => mesa.status === 'livre').length,
@@ -264,16 +289,16 @@ export default function ControleSalao() {
         valorTotalVendas: mesas.reduce((total, mesa) => total + (mesa.total || 0), 0),
         mesasComItens: mesas.filter(mesa => mesa.itens && mesa.itens.length > 0).length,
         totalItens: mesas.reduce((total, mesa) => total + (mesa.itens?.length || 0), 0)
-    };
+    }), [mesas]);
 
     // 📈 Cálculo de percentuais
-    const percentuais = {
+    const percentuais = useMemo(() => ({
         ocupacao: estatisticas.total > 0 ? ((estatisticas.ocupadas + estatisticas.comPedido + estatisticas.aguardandoPagamento) / estatisticas.total * 100).toFixed(1) : 0,
         disponibilidade: estatisticas.total > 0 ? (estatisticas.livres / estatisticas.total * 100).toFixed(1) : 0
-    };
+    }), [estatisticas]);
 
     // 🎨 Configurações visuais para estatísticas
-    const getStatConfig = (key) => {
+    const getStatConfig = useCallback((key) => {
         const configs = {
             total: { 
                 icon: '🏪', 
@@ -319,7 +344,7 @@ export default function ControleSalao() {
             }
         };
         return configs[key] || configs.total;
-    };
+    }, []);
 
     // ... (Código para renderizar tela de erro e loading)
 
@@ -406,36 +431,17 @@ export default function ControleSalao() {
                 onConfirmarPagamento={handleConfirmarPagamento}
             />
 
-            {/* Header */}
+            {/* Conteúdo Principal */}
             <div className="flex-1 p-4 md:p-6">
                 <div className="max-w-7xl mx-auto">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
-                        <div className="mb-4 lg:mb-0">
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                                Controle de Salão
-                            </h1>
-                            <p className="text-gray-600">
-                                Gerencie mesas e pedidos do seu estabelecimento
-                            </p>
-                        </div>
-                        
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <Link 
-                                to="/dashboard" 
-                                className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-all duration-200 flex items-center justify-center space-x-2"
-                            >
-                                <span>← Voltar</span>
-                            </Link>
-                            
-                            <button 
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-all duration-200 flex items-center justify-center space-x-2"
-                                disabled={connectionError}
-                            >
-                                <span>+</span>
-                                <span>Adicionar Mesa</span>
-                            </button>
-                        </div>
+                    {/* TÍTULO SIMPLIFICADO - RESTANTE NO HEADER GLOBAL */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                            Controle de Salão
+                        </h1>
+                        <p className="text-gray-600">
+                            Gerencie mesas e pedidos do seu estabelecimento
+                        </p>
                     </div>
 
                     {/* 📊 ESTATÍSTICAS COMPLETAS */}
@@ -576,7 +582,7 @@ export default function ControleSalao() {
                                         key={mesa.id}
                                         mesa={mesa}
                                         onClick={() => handleAbrirMesa(mesa)}
-                                        onExcluir={handleExcluirMesa}
+                                        onExcluir={() => handleExcluirMesa(mesa.id, mesa.numero)}
                                         onPagar={() => handleAbrirPagamento(mesa)}
                                     />
                                 ))}

@@ -7,6 +7,40 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { auditLogger } from '../../utils/auditLogger';
 
+// 🆕 FUNÇÃO DE CONVERSÃO DE JSON - ADICIONE ESTA FUNÇÃO
+function converterJSONParaSistema(seuJSON) {
+  const cardapioConvertido = {
+    categorias: seuJSON.categorias.map(categoria => ({
+      nome: categoria.nome,
+      ordem: categoria.ordem || 0,
+      observacao: categoria.observacao || '',
+      itens: categoria.itens.map(item => {
+        // 🎯 CONVERTER VARIAÇÕES
+        const variacoes = item.variacoes.map((variacao, index) => ({
+          id: `var-${index + 1}`,
+          nome: variacao.tipo, // Converte "tipo" para "nome"
+          preco: Number(variacao.preco),
+          descricao: variacao.descricao || '',
+          ativo: true
+        }));
+
+        return {
+          nome: item.nome,
+          descricao: item.descricao || '',
+          preco: Math.min(...variacoes.map(v => Number(v.preco))), // Preço principal = menor variação
+          variacoes: variacoes,
+          ativo: true,
+          estoque: 0, // Valor padrão
+          estoqueMinimo: 0, // Valor padrão
+          custo: 0 // Pode calcular depois
+        };
+      })
+    }))
+  };
+
+  return cardapioConvertido;
+}
+
 // Componente de Header atualizado
 function DashboardHeader({ currentUser, logout, navigate }) {
   const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Master';
@@ -186,7 +220,17 @@ function ImportarCardapioMaster() {
       const fileContent = await file.text();
       const dataToImport = JSON.parse(fileContent); 
 
-      if (!dataToImport || !Array.isArray(dataToImport.categorias)) {
+      // 🆕 CONVERSÃO AUTOMÁTICA DO JSON
+      let dadosParaImportar = dataToImport;
+      
+      // Verifica se precisa converter (se tem a estrutura antiga)
+      if (dataToImport.categorias && 
+          dataToImport.categorias[0]?.itens?.[0]?.variacoes?.[0]?.tipo) {
+        console.log('🔄 Detectado JSON antigo - convertendo para nova estrutura...');
+        dadosParaImportar = converterJSONParaSistema(dataToImport);
+      }
+
+      if (!dadosParaImportar || !Array.isArray(dadosParaImportar.categorias)) {
         throw new Error('Estrutura de arquivo JSON inválida. Espera um objeto com "categorias".');
       }
 
@@ -194,7 +238,7 @@ function ImportarCardapioMaster() {
       
       // 🛑 1. DEFINIÇÃO DA REFERÊNCIA PRINCIPAL: estabelecimentos/{id}/cardapio
       const estabelecimentoDocRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId);
-      const categoriasCollectionRef = collection(estabelecimentoDocRef, 'cardapio'); // <-- Coleção das Categorias
+      const categoriasCollectionRef = collection(estabelecimentoDocRef, 'cardapio');
 
       // --- DELEÇÃO DE DADOS ANTIGOS ---
       console.log(`[DEBUG] 1. Tentando buscar CATEGORIAS e ITENS antigos...`);
@@ -236,11 +280,10 @@ function ImportarCardapioMaster() {
         throw new Error(`Falha na leitura (Regras de Segurança?): ${readError.message}`);
       }
 
-
       // --- ADIÇÃO DOS NOVOS DADOS ---
       let addedItemsCount = 0;
       
-      dataToImport.categorias.forEach(categoria => {
+      dadosParaImportar.categorias.forEach(categoria => {
         // 2.1. Crie o Documento da CATEGORIA (Slug do nome como ID)
         const categoryId = categoria.nome.toLowerCase().replace(/\s/g, '-').replace(/[^\w-]+/g, '');
         const categoryDocRef = doc(categoriasCollectionRef, categoryId);
@@ -248,6 +291,7 @@ function ImportarCardapioMaster() {
         const categoryData = {
           nome: categoria.nome,
           ordem: categoria.ordem || 0,
+          observacao: categoria.observacao || '',
           updatedAt: new Date()
         };
 
@@ -269,7 +313,7 @@ function ImportarCardapioMaster() {
               ...item,
               // Mantendo o nome da categoria no produto para facilitar queries
               categoriaNome: categoria.nome, 
-              estabelecimentoId: selectedEstabelecimentoId, // Manter o ID do estabelecimento no produto, mesmo aninhado, é uma boa prática
+              estabelecimentoId: selectedEstabelecimentoId,
               updatedAt: new Date()
             };
             
@@ -294,7 +338,7 @@ function ImportarCardapioMaster() {
       }
       
       await auditLogger(
-        'CARDAPIO_IMPORTADO_OTIMIZADO_ANINHADO', // Atualizado o tipo de log para refletir a nova estrutura
+        'CARDAPIO_IMPORTADO_OTIMIZADO_ANINHADO',
         { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
         { 
           type: 'estabelecimento', 
@@ -305,7 +349,8 @@ function ImportarCardapioMaster() {
           fileName: file.name, 
           produtosAdicionados: addedItemsCount,
           produtosRemovidos: deletedItemsCount,
-          categoriasProcessadas: dataToImport.categorias.length
+          categoriasProcessadas: dadosParaImportar.categorias.length,
+          conversaoEfetuada: dataToImport !== dadosParaImportar // 🆕 Mostra se houve conversão
         },
         null
       );
@@ -314,15 +359,20 @@ function ImportarCardapioMaster() {
       setImportStats({
         produtosAdicionados: addedItemsCount,
         produtosRemovidos: deletedItemsCount,
-        categoriasProcessadas: dataToImport.categorias.length,
-        fileName: file.name
+        categoriasProcessadas: dadosParaImportar.categorias.length,
+        fileName: file.name,
+        conversaoEfetuada: dataToImport !== dadosParaImportar // 🆕 Mostra se converteu
       });
 
-      toast.success(`Cardápio importado com sucesso! ${addedItemsCount} produtos processados.`);
+      const mensagem = dataToImport !== dadosParaImportar 
+        ? `Cardápio convertido e importado com sucesso! ${addedItemsCount} produtos processados.`
+        : `Cardápio importado com sucesso! ${addedItemsCount} produtos processados.`;
+      
+      toast.success(mensagem);
       setFile(null);
 
     } catch (error) {
-      console.error("ERRO FINAL NA IMPORTAÇÃO (Pegou no catch principal):", error);
+      console.error("ERRO FINAL NA IMPORTAÇÃO:", error);
       toast.error(`Erro na importação: ${error.message}`);
     } finally {
       setImporting(false);
@@ -520,10 +570,11 @@ function ImportarCardapioMaster() {
                 </div>
                 <div>
                   <h4 className="text-green-800 font-bold text-xl">
-                    Importação Concluída com Sucesso!
+                    {importStats.conversaoEfetuada ? 'Conversão e Importação Concluídas!' : 'Importação Concluída com Sucesso!'}
                   </h4>
                   <p className="text-green-600">
                     Arquivo processado: {importStats.fileName}
+                    {importStats.conversaoEfetuada && ' (convertido automaticamente)'}
                   </p>
                 </div>
               </div>
@@ -545,6 +596,14 @@ function ImportarCardapioMaster() {
                   color="blue"
                 />
               </div>
+              
+              {importStats.conversaoEfetuada && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <p className="text-blue-700 text-sm font-medium">
+                    ✅ <strong>Conversão Automática:</strong> O JSON foi convertido da estrutura antiga para a nova estrutura do sistema.
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
         )}
@@ -578,9 +637,9 @@ function ImportarCardapioMaster() {
                   <span className="text-blue-600 text-sm font-bold">2</span>
                 </div>
                 <div>
-                  <p className="text-gray-800 font-semibold">Produtos por Categoria</p>
+                  <p className="text-gray-800 font-semibold">Conversão Automática</p>
                   <p className="text-gray-600 text-sm mt-1">
-                    Cada item deve ter nome, descrição, preço e outros campos necessários
+                    O sistema converte automaticamente JSONs da estrutura antiga para a nova
                   </p>
                 </div>
               </div>

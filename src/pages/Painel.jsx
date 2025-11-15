@@ -24,9 +24,10 @@ const MENSAGENS_WHATSAPP = {
 
 function Spinner() {
     return (
-        <div className="flex flex-col items-center justify-center p-8 h-screen bg-white text-gray-900">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-4 text-gray-600">Carregando painel...</p>
+        <div className="flex flex-col items-center justify-center p-8 h-screen bg-gradient-to-br from-amber-50 to-orange-50 text-gray-900">
+            <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-700 font-medium">Carregando painel...</p>
+            <p className="text-gray-500 text-sm mt-2">Preparando tudo para você</p>
         </div>
     );
 }
@@ -340,60 +341,76 @@ function Painel() {
         ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
         : ['recebido', 'preparo', 'em_entrega', 'finalizado'];
 
-    // Renomeia o título da coluna 'Em Entrega' se a aba for 'delivery'
+    // Configurações de cores e ícones aprimoradas
     const getStatusConfig = (status) => {
         const configs = {
-            recebido: { title: '📥 Recebido', color: 'border-l-red-500 bg-red-50', countColor: 'bg-red-500' },
-            preparo: { title: '👨‍🍳 Em Preparo', color: 'border-l-orange-500 bg-orange-50', countColor: 'bg-orange-500' },
-            em_entrega: { 
-                title: abaAtiva === 'cozinha' ? '🛵 Em Entrega' : '🛵 Pronto / Em Entrega', // Título dinâmico
-                color: 'border-l-blue-500 bg-blue-50', 
-                countColor: 'bg-blue-500' 
+            recebido: { 
+                title: '📥 Recebido', 
+                color: 'border-l-red-500 bg-gradient-to-r from-red-50 to-red-25', 
+                countColor: 'bg-red-500 text-white',
+                icon: '📥'
             },
-            pronto_para_servir: { title: '✅ Pronto para Servir', color: 'border-l-green-500 bg-green-50', countColor: 'bg-green-500' },
-            finalizado: { title: '📦 Finalizado', color: 'border-l-gray-500 bg-gray-50', countColor: 'bg-gray-500' }
+            preparo: { 
+                title: '👨‍🍳 Em Preparo', 
+                color: 'border-l-orange-500 bg-gradient-to-r from-orange-50 to-orange-25', 
+                countColor: 'bg-orange-500 text-white',
+                icon: '👨‍🍳'
+            },
+            em_entrega: { 
+                title: abaAtiva === 'cozinha' ? '🛵 Em Entrega' : '🛵 Pronto / Em Entrega',
+                color: 'border-l-blue-500 bg-gradient-to-r from-blue-50 to-blue-25', 
+                countColor: 'bg-blue-500 text-white',
+                icon: '🛵'
+            },
+            pronto_para_servir: { 
+                title: '✅ Pronto para Servir', 
+                color: 'border-l-green-500 bg-gradient-to-r from-green-50 to-green-25', 
+                countColor: 'bg-green-500 text-white',
+                icon: '✅'
+            },
+            finalizado: { 
+                title: '📦 Finalizado', 
+                color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
+                countColor: 'bg-gray-500 text-white',
+                icon: '📦'
+            }
         };
-        return configs[status] || { title: status.replace(/_/g, ' '), color: 'border-l-gray-500 bg-gray-50', countColor: 'bg-gray-500' };
+        return configs[status] || { 
+            title: status.replace(/_/g, ' '), 
+            color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
+            countColor: 'bg-gray-500 text-white',
+            icon: '📝'
+        };
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex flex-col">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
-            {/* Header Modernizado */}
-            <header className="bg-white shadow-sm border-b border-gray-200 p-4 sticky top-0 z-30">
-                <div className="max-w-7xl mx-auto flex justify-between items-center">
+            {/* Header Modernizado com Cores Âmbar/Laranja */}
+            <header className="bg-white shadow-lg border-b border-amber-200 p-4 sticky top-0 z-30">
+                <div className="max-w-7xl mx-auto flex justify-between items-center">          
                     <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                            <span className="text-white font-bold text-lg">🏪</span>
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-gray-900">Painel de Pedidos</h1>
-                            <p className="text-sm text-gray-600">{estabelecimentoInfo?.nome || 'Carregando...'}</p>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                        {/* Botão de Notificação */}
+                        {/* Botão de Notificação Aprimorado */}
                         <button 
                             onClick={toggleNotifications} 
-                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                            className={`flex items-center space-x-3 px-5 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
                                 notificationsEnabled 
-                                    ? 'bg-green-500 hover:bg-green-600 text-white shadow-sm' 
-                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700 animate-pulse'
+                                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg' 
+                                    : 'bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-700 shadow-md animate-pulse'
                             }`}
                             title={notificationsEnabled ? "Notificações ativadas" : "Notificações desativadas"}
                         >
                             {notificationsEnabled ? (
                                 <>
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.93 4.93l14.14 14.14M9 11a4 4 0 11-8 0 4 4 0 018 0z" />
                                     </svg>
                                     <span className="hidden sm:inline">Som Ativo</span>
                                 </>
                             ) : (
                                 <>
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15zM17 14l-5-5m0 5l5-5" />
                                     </svg>
                                     <span className="hidden sm:inline">Ativar Som</span>
@@ -403,7 +420,7 @@ function Painel() {
 
                         <button 
                             onClick={logout} 
-                            className="px-4 py-2 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="px-5 py-3 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 border border-gray-200 hover:border-red-200"
                         >
                             Sair
                         </button>
@@ -411,36 +428,38 @@ function Painel() {
                 </div>
             </header>
 
-            {/* Abas de Navegação */}
-            <div className="bg-white border-b border-gray-200">
+            {/* Abas de Navegação Aprimoradas */}
+            <div className="bg-white border-b border-amber-200 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4">
                     <nav className="flex space-x-8" aria-label="Tabs">
                         <button 
                             onClick={() => setAbaAtiva('delivery')} 
-                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                            className={`py-5 px-3 border-b-2 font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
                                 abaAtiva === 'delivery' 
-                                    ? 'border-blue-500 text-blue-600' 
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-amber-500 text-amber-600 bg-amber-50' 
+                                    : 'border-transparent text-gray-500 hover:text-amber-600 hover:border-amber-300'
                             }`}
                         >
-                            🛵 Delivery / Retirada
+                            <span className="text-lg">🛵</span>
+                            <span>Delivery / Retirada</span>
                         </button>
                         <button 
                             onClick={() => setAbaAtiva('cozinha')} 
-                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                            className={`py-5 px-3 border-b-2 font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
                                 abaAtiva === 'cozinha' 
-                                    ? 'border-blue-500 text-blue-600' 
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-amber-500 text-amber-600 bg-amber-50' 
+                                    : 'border-transparent text-gray-500 hover:text-amber-600 hover:border-amber-300'
                             }`}
                         >
-                            👨‍🍳 Cozinha (Mesas)
+                            <span className="text-lg">👨‍🍳</span>
+                            <span>Cozinha (Mesas)</span>
                         </button>
                     </nav>
                 </div>
             </div>
 
-            {/* Grid de Pedidos */}
-            <main className="flex-grow p-4 max-w-7xl mx-auto w-full">
+            {/* Grid de Pedidos Aprimorado */}
+            <main className="flex-grow p-6 max-w-7xl mx-auto w-full">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                     {colunas.map(status => {
                         const config = getStatusConfig(status);
@@ -461,32 +480,44 @@ function Painel() {
                         console.log(`📊 Coluna ${status}: ${pedidosCount} pedidos filtrados de ${allPedidosStatus.length} totais`);
 
                         return (
-                            <div key={status} className={`rounded-lg shadow-sm border border-gray-200 border-l-4 ${config.color} flex flex-col h-full`}>
-                                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                                    <h2 className="font-semibold text-gray-900">{config.title}</h2>
-                                    <span className={`${config.countColor} text-white text-sm font-medium px-2 py-1 rounded-full min-w-8 text-center`}>
+                            <div key={status} className={`rounded-2xl shadow-lg border border-amber-100 border-l-4 ${config.color} flex flex-col h-full transition-all duration-300 hover:shadow-xl`}>
+                                <div className="p-5 border-b border-amber-200 flex justify-between items-center bg-white/50 rounded-t-2xl">
+                                    <div className="flex items-center space-x-3">
+                                        <span className="text-2xl">{config.icon}</span>
+                                        <h2 className="font-bold text-gray-900 text-lg">{config.title}</h2>
+                                    </div>
+                                    <span className={`${config.countColor} text-sm font-bold px-3 py-2 rounded-full min-w-10 text-center shadow-md`}>
                                         {pedidosCount}
                                     </span>
                                 </div>
-                                <div className="p-3 space-y-3 flex-grow overflow-y-auto max-h-[calc(100vh-220px)]">
+                                <div className="p-4 space-y-4 flex-grow overflow-y-auto max-h-[calc(100vh-250px)] bg-white/30 rounded-b-2xl">
                                     
-                                    {pedidosFiltrados && pedidosFiltrados.length > 0 ? (
-                                        pedidosFiltrados.map(ped => (
-                                            <PedidoCard
-                                                key={ped.id}
-                                                pedido={ped}
-                                                onUpdateStatus={handleUpdateStatusAndNotify}
-                                                onDeletePedido={handleExcluirPedido}
-                                                newOrderIds={newOrderIds}
-                                                estabelecimentoInfo={estabelecimentoInfo}
-                                            />
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-8">
-                                            <div className="text-gray-400 text-4xl mb-2">📝</div>
-                                            <p className="text-gray-500 text-sm">Nenhum pedido</p>
-                                        </div>
-                                    )}
+{pedidosFiltrados && pedidosFiltrados.length > 0 ? (
+    pedidosFiltrados.map(ped => {
+        // 🛡️ VERIFICAÇÃO DE SEGURANÇA
+        if (!ped) {
+            console.warn('Pedido undefined encontrado:', ped);
+            return null;
+        }
+        
+        return (
+            <PedidoCard
+                key={ped.id}
+                item={ped} // ✅ AGORA PASSA 'item'
+                onUpdateStatus={handleUpdateStatusAndNotify}
+                onDeletePedido={handleExcluirPedido}
+                newOrderIds={newOrderIds}
+                estabelecimentoInfo={estabelecimentoInfo}
+            />
+        );
+    })
+) : (
+    <div className="text-center py-12">
+        <div className="text-amber-300 text-5xl mb-4">📝</div>
+        <p className="text-amber-600 font-medium">Nenhum pedido</p>
+        <p className="text-amber-400 text-sm mt-1">Aguardando novos pedidos</p>
+    </div>
+)}
                                 </div>
                             </div>
                         );
@@ -494,18 +525,18 @@ function Painel() {
                 </div>
             </main>
 
-            {/* Botão Voltar para Dashboard */}
-            <footer className="bg-white border-t border-gray-200 py-4">
+            {/* Botão Voltar para Dashboard Aprimorado */}
+            <footer className="bg-white border-t border-amber-200 py-6 mt-8">
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="flex justify-center">
                         <Link 
                             to="/dashboard" 
-                            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                            className="flex items-center space-x-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
                         >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
-                            <span>Voltar para Dashboard</span>
+                            <span className="text-lg">Voltar para Dashboard</span>
                         </Link>
                     </div>
                 </div>

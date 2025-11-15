@@ -1,4 +1,4 @@
-// src/pages/Menu.jsx - (VERSÃO CORRIGIDA - CORES AMARELO/PRETO/CINZA)
+// src/pages/Menu.jsx - VERSÃO MELHORADA COM VISUAL E FORMAS DE PAGAMENTO
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -8,6 +8,7 @@ import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
+import VariacoesModal from '../components/VariacoesModal';
 import { v4 as uuidv4 } from 'uuid';
 
 function Menu() {
@@ -59,6 +60,7 @@ function Menu() {
     const [selectedCategory, setSelectedCategory] = useState('Todos');
     const [availableCategories, setAvailableCategories] = useState([]);
     const [itemParaAdicionais, setItemParaAdicionais] = useState(null);
+    const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [visibleItemsCount, setVisibleItemsCount] = useState({});
     const [loading, setLoading] = useState(true);
 
@@ -67,7 +69,7 @@ function Menu() {
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const finalOrderTotal = useMemo(() => Math.max(0, subtotalCalculado + taxaAplicada - discountAmount), [subtotalCalculado, taxaAplicada, discountAmount]);
 
-    // 🔧 CORREÇÃO: Verificar se o usuário é admin baseado na estrutura correta
+    // 🔧 Verificar se o usuário é admin
     const isUserAdmin = useMemo(() => {
         return userData?.isAdmin || false;
     }, [userData]);
@@ -76,7 +78,7 @@ function Menu() {
         return userData?.isMasterAdmin || false;
     }, [userData]);
 
-    // --- FUNÇÕES ---
+    // --- FUNÇÕES PRINCIPAIS ---
     const handleShowMore = (categoryName) => {
         setVisibleItemsCount(prev => ({ ...prev, [categoryName]: (prev[categoryName] || 3) + 3 }));
     };
@@ -85,44 +87,62 @@ function Menu() {
         setVisibleItemsCount(prev => ({ ...prev, [categoryName]: 3 }));
     };
 
-    const handleAbrirModalAdicionais = (item) => {
-        if (item.adicionais && Array.isArray(item.adicionais) && item.adicionais.length > 0) {
-            setItemParaAdicionais(item);
-        } else {
-            adicionarItemSimplesAoCarrinho(item);
-        }
-    };
-
-    const handleFecharModal = () => {
-        setItemParaAdicionais(null);
-    };
-
-    const adicionarItemSimplesAoCarrinho = (item) => {
+    // 🆕 FUNÇÃO MELHORADA: Verifica se o item tem variações OU adicionais
+    const handleAbrirModalProduto = (item) => {
         if (!currentUser) {
             toast.warn('Para adicionar itens, por favor, faça login ou cadastre-se.');
             setShowLoginPrompt(true);
             return;
         }
-        const itemExistente = carrinho.find(p => p.id === item.id && (!p.adicionais || p.adicionais.length === 0));
-        if (itemExistente) {
-            setCarrinho(prevCarrinho => prevCarrinho.map(p => p.cartItemId === itemExistente.cartItemId ? { ...p, qtd: p.qtd + 1 } : p));
-        } else {
-            const novoItemNoCarrinho = { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: item.preco, adicionais: [] };
-            setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
+
+        // Se tem variações, abre o modal de variações PRIMEIRO
+        if (item.variacoes && Array.isArray(item.variacoes) && item.variacoes.length > 0) {
+            setItemParaVariacoes(item);
+        } 
+        // Para TODOS os outros casos (com ou sem adicionais), abre o AdicionaisModal
+        else {
+            setItemParaAdicionais(item);
         }
-        toast.success(`${item.nome} adicionado ao carrinho!`);
+    };
+
+    // 🆕 FUNÇÃO PARA LIDAR COM VARIAÇÕES
+    const handleConfirmarVariacoes = (itemConfigurado) => {
+        // Se após escolher a variação ainda tem adicionais, abre o modal de adicionais
+        if (itemConfigurado.adicionais && Array.isArray(itemConfigurado.adicionais) && itemConfigurado.adicionais.length > 0) {
+            setItemParaAdicionais(itemConfigurado);
+            setItemParaVariacoes(null);
+        } else {
+            // Se não tem adicionais, adiciona diretamente ao carrinho
+            const novoItemNoCarrinho = { 
+                ...itemConfigurado, 
+                qtd: 1, 
+                cartItemId: uuidv4(),
+                precoFinal: itemConfigurado.precoSelecionado || itemConfigurado.preco
+            };
+            setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
+            toast.success(`${itemConfigurado.nome} foi adicionado ao carrinho!`);
+            setItemParaVariacoes(null);
+        }
+    };
+
+    const handleFecharModalVariacoes = () => {
+        setItemParaVariacoes(null);
+    };
+
+    const handleFecharModalAdicionais = () => {
+        setItemParaAdicionais(null);
     };
 
     const handleConfirmarAdicionais = (itemConfigurado) => {
-        if (!currentUser) {
-            toast.warn('Para adicionar itens com adicionais, por favor, faça login ou cadastre-se.');
-            setShowLoginPrompt(true);
-            return;
-        }
-        const novoItemNoCarrinho = { ...itemConfigurado, qtd: 1, cartItemId: uuidv4() };
+        const novoItemNoCarrinho = { 
+            ...itemConfigurado, 
+            qtd: 1, 
+            cartItemId: uuidv4(),
+            precoFinal: itemConfigurado.precoFinal || itemConfigurado.precoSelecionado || itemConfigurado.preco
+        };
         setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
         toast.success(`${itemConfigurado.nome} foi adicionado ao carrinho!`);
-        handleFecharModal();
+        handleFecharModalAdicionais();
     };
 
     const removerDoCarrinho = (cartItemId) => {
@@ -136,6 +156,34 @@ function Menu() {
         }
     };
 
+    // 🆕 FUNÇÃO PARA FORMATAR ITENS NO CARRINHO
+    const formatarItemCarrinho = (item) => {
+        let nomeFormatado = item.nome;
+        
+        // Adiciona a variação selecionada
+        if (item.variacaoSelecionada && item.variacaoSelecionada.nome) {
+            nomeFormatado += ` - ${item.variacaoSelecionada.nome}`;
+        }
+        
+        // Adiciona os adicionais
+        if (item.adicionais && item.adicionais.length > 0) {
+            nomeFormatado += ` (${item.adicionais.map(ad => `+ ${ad.nome}`).join(', ')})`;
+        }
+
+        // Adiciona ingredientes removidos
+        if (item.removidos && item.removidos.length > 0) {
+            nomeFormatado += ` (Sem: ${item.removidos.join(', ')})`;
+        }
+        
+        // Adiciona a observação
+        if (item.observacao) {
+            nomeFormatado += ` (Obs: ${item.observacao})`;
+        }
+        
+        return nomeFormatado;
+    };
+
+    // 🔧 FUNÇÃO APLICAR CUPOM
     const handleApplyCoupon = async () => {
         if (!currentUser) { 
             toast.warn('Você precisa estar logado para aplicar um cupom.'); 
@@ -254,6 +302,20 @@ function Menu() {
                 return; 
             }
         }
+
+        // 🆕 FORMATAR ITENS DO PEDIDO COM VARIAÇÕES
+        const itensFormatados = carrinho.map(item => ({
+            nome: formatarItemCarrinho(item),
+            nomeBase: item.nome,
+            quantidade: item.qtd,
+            preco: Number(item.precoFinal),
+            imageUrl: item.imageUrl || null,
+            adicionais: item.adicionais || [],
+            variacaoSelecionada: item.variacaoSelecionada || null,
+            removidos: item.removidos || [],
+            observacao: item.observacao || null
+        }));
+
         const pedido = {
             cliente: { 
                 nome: nomeCliente.trim(), 
@@ -268,13 +330,7 @@ function Menu() {
                 userId: currentUser.uid 
             },
             estabelecimentoId: actualEstabelecimentoId,
-            itens: carrinho.map(item => ({ 
-                nome: item.nome, 
-                quantidade: item.qtd, 
-                preco: Number(item.precoFinal), 
-                imageUrl: item.imageUrl || null, 
-                adicionais: item.adicionais || [] 
-            })),
+            itens: itensFormatados,
             status: 'recebido',
             createdAt: serverTimestamp(),
             tipo: isRetirada ? 'retirada' : 'delivery',
@@ -293,6 +349,7 @@ function Menu() {
                 } 
             })
         };
+
         try {
             if (appliedCoupon) {
                 await runTransaction(db, async (transaction) => {
@@ -343,6 +400,7 @@ function Menu() {
         }
     };
 
+    // 🔧 FUNÇÕES DE AUTENTICAÇÃO
     const handleLoginModal = async (e) => {
         e.preventDefault(); 
         setErrorAuthModal('');
@@ -388,7 +446,6 @@ function Menu() {
                 criadoEm: Timestamp.now(),
             });
 
-            // Preenche o formulário principal com os dados que acabaram de ser cadastrados
             setNomeCliente(nomeAuthModal.trim());
             setTelefoneCliente(telefoneAuthModal.trim());
             setRua(ruaAuthModal.trim());
@@ -484,7 +541,6 @@ function Menu() {
             try {
                 setLoading(true);
                 console.log("🔍 Iniciando busca do estabelecimento...");
-                console.log("📌 Parâmetro recebido:", estabelecimentoSlug);
 
                 const qEstabBySlug = query(
                     collection(db, 'estabelecimentos'), 
@@ -495,7 +551,7 @@ function Menu() {
                 if (estabSnapshotBySlug.empty) {
                     toast.error("Estabelecimento não encontrado.");
                     setLoading(false);
-                    navigate('/'); // Redireciona se não achar
+                    navigate('/');
                     return;
                 }
                 
@@ -518,7 +574,6 @@ function Menu() {
                     orderBy('ordem', 'asc')
                 );
 
-                // Configura o listener principal
                 const unsubscribeCardapio = onSnapshot(qCategorias, (categoriasSnapshot) => {
                     console.log("📁 Categorias ativas encontradas:", categoriasSnapshot.docs.length);
                     
@@ -540,7 +595,7 @@ function Menu() {
                         const categoriaData = catDoc.data();
                         const categoriaId = catDoc.id;
                         categoriesList.push(categoriaData.nome);
-                        initialVisibleCounts[categoriaData.nome] = 3; // Define contagem inicial
+                        initialVisibleCounts[categoriaData.nome] = 3;
                         
                         console.log(`🔍 Buscando itens na categoria: ${categoriaId} (${categoriaData.nome})`);
 
@@ -586,11 +641,10 @@ function Menu() {
                     setVisibleItemsCount(initialVisibleCounts);
                     setLoading(false);
 
-                    // Função para limpar todos os listeners de itens
                     unsubscribeTotal = () => {
                         console.log("🧹 Limpando listeners de itens");
                         unsubscribers.forEach(unsub => unsub());
-                        unsubscribeCardapio(); // Limpa o listener das categorias
+                        unsubscribeCardapio();
                     };
                 }, (error) => {
                     console.error("❌ Erro ao carregar o estabelecimento (categorias):", error);
@@ -608,21 +662,19 @@ function Menu() {
         fetchEstabelecimento();
 
         return () => {
-            unsubscribeTotal(); // Limpa todos os listeners quando o componente desmonta
+            unsubscribeTotal();
         };
     }, [estabelecimentoSlug, navigate]);
 
     useEffect(() => {
         let produtosProcessados = [...allProdutos];
         
-        // Filtrar por categoria
         if (selectedCategory && selectedCategory !== 'Todos') {
             produtosProcessados = produtosProcessados.filter(item => 
                 item.categoria?.toLowerCase() === selectedCategory.toLowerCase()
             );
         }
         
-        // Filtrar por termo de busca
         if (debouncedSearchTerm.trim() !== '') {
             const lowerCaseSearchTerm = debouncedSearchTerm.trim().toLowerCase();
             produtosProcessados = produtosProcessados.filter(item =>
@@ -631,7 +683,6 @@ function Menu() {
             );
         }
         
-        // Ordenar por nome
         produtosProcessados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
         setProdutosFiltrados(produtosProcessados);
     }, [allProdutos, selectedCategory, debouncedSearchTerm]);
@@ -661,10 +712,10 @@ function Menu() {
 
     if (authLoading || loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600 text-lg">Carregando cardápio...</p>
+                    <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-700 text-lg font-medium">Carregando cardápio...</p>
                 </div>
             </div>
         );
@@ -683,16 +734,16 @@ function Menu() {
     }, {});
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-gray-50 pb-48 md:pb-0">
-            {/* Header com fundo amarelo */}
-            <div className="bg-gradient-to-r from-yellow-500 to-yellow-400 shadow-sm">
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 pb-48 md:pb-0">
+            {/* Header com fundo laranja moderno */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg">
                 <div className="max-w-7xl mx-auto px-4 py-8">
-                    <div className="text-center text-black">
-                        <h1 className="text-4xl font-bold mb-3">
+                    <div className="text-center text-white">
+                        <h1 className="text-4xl font-bold mb-3 drop-shadow-sm">
                             {nomeEstabelecimento}
                         </h1>
                         {estabelecimentoInfo?.descricao && (
-                            <p className="text-yellow-900 text-lg max-w-2xl mx-auto">
+                            <p className="text-amber-100 text-lg max-w-2xl mx-auto">
                                 {estabelecimentoInfo.descricao}
                             </p>
                         )}
@@ -702,7 +753,7 @@ function Menu() {
 
             {/* Search and Filters */}
             <div className="max-w-7xl mx-auto px-4 py-6">
-                <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-yellow-200">
+                <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-amber-200">
                     <div className="mb-6">
                         <div className="relative">
                             <input 
@@ -710,7 +761,7 @@ function Menu() {
                                 placeholder="🔍 Buscar por nome ou descrição..." 
                                 value={searchTerm} 
                                 onChange={(e) => setSearchTerm(e.target.value)} 
-                                className="w-full px-6 py-4 border border-yellow-300 rounded-2xl text-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200" 
+                                className="w-full px-6 py-4 border border-amber-300 rounded-2xl text-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50" 
                             />
                         </div>
                     </div>
@@ -722,8 +773,8 @@ function Menu() {
                                 onClick={() => setSelectedCategory(category)}
                                 className={`px-6 py-3 rounded-full text-sm font-semibold transition-all duration-200 transform hover:scale-105 ${
                                     selectedCategory === category 
-                                        ? 'bg-yellow-500 text-black shadow-lg' 
-                                        : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                                        ? 'bg-amber-500 text-white shadow-lg' 
+                                        : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
                                 }`}
                             >
                                 {category}
@@ -743,15 +794,15 @@ function Menu() {
                 {/* Menu Items */}
                 {produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
                     <div className="text-center py-12">
-                        <div className="text-yellow-400 text-6xl mb-4">🔍</div>
-                        <p className="text-yellow-600 text-xl font-medium">Nenhum item encontrado com os filtros selecionados.</p>
-                        <p className="text-yellow-500 mt-2">Tente alterar sua busca ou categoria.</p>
+                        <div className="text-amber-400 text-6xl mb-4">🔍</div>
+                        <p className="text-amber-600 text-xl font-medium">Nenhum item encontrado com os filtros selecionados.</p>
+                        <p className="text-amber-500 mt-2">Tente alterar sua busca ou categoria.</p>
                     </div>
                 ) : allProdutos.length === 0 ? (
                     <div className="text-center py-12">
-                        <div className="text-yellow-400 text-6xl mb-4">🍽️</div>
-                        <p className="text-yellow-600 text-xl font-medium">Este estabelecimento ainda não possui itens no cardápio.</p>
-                        <p className="text-yellow-500 mt-2">Volte em breve para conferir as novidades!</p>
+                        <div className="text-amber-400 text-6xl mb-4">🍽️</div>
+                        <p className="text-amber-600 text-xl font-medium">Este estabelecimento ainda não possui itens no cardápio.</p>
+                        <p className="text-amber-500 mt-2">Volte em breve para conferir as novidades!</p>
                     </div>
                 ) : (
                     Object.keys(menuAgrupado).sort().map(categoria => {
@@ -762,15 +813,19 @@ function Menu() {
                         return (
                             <div key={categoria} className="mb-12">
                                 <div className="flex items-center justify-between mb-8">
-                                    <h2 className="text-3xl font-bold text-yellow-800">{categoria}</h2>
-                                    <span className="text-yellow-600 bg-yellow-100 px-3 py-1 rounded-full text-sm">
+                                    <h2 className="text-3xl font-bold text-amber-800">{categoria}</h2>
+                                    <span className="text-amber-600 bg-amber-100 px-3 py-1 rounded-full text-sm font-medium">
                                         {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
                                     </span>
                                 </div>
                                 
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                     {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
-                                        <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalAdicionais} />
+                                        <CardapioItem 
+                                            key={item.id} 
+                                            item={item} 
+                                            onAddItem={handleAbrirModalProduto}
+                                        />
                                     ))}
                                 </div>
                                 
@@ -779,14 +834,14 @@ function Menu() {
                                         {todosItensVisiveis ? (
                                             <button 
                                                 onClick={() => handleShowLess(categoria)}
-                                                className="bg-yellow-200 text-yellow-800 font-semibold py-3 px-8 rounded-lg hover:bg-yellow-300 transition-all duration-200 transform hover:scale-105"
+                                                className="bg-amber-200 text-amber-800 font-semibold py-3 px-8 rounded-lg hover:bg-amber-300 transition-all duration-200 transform hover:scale-105"
                                             >
                                                 Ver menos
                                             </button>
                                         ) : (
                                             <button 
                                                 onClick={() => handleShowMore(categoria)}
-                                                className="bg-yellow-500 text-black font-semibold py-3 px-8 rounded-lg hover:bg-yellow-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
+                                                className="bg-amber-500 text-white font-semibold py-3 px-8 rounded-lg hover:bg-amber-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
                                             >
                                                 Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
                                             </button>
@@ -798,44 +853,216 @@ function Menu() {
                     })
                 )}
 
+                {/* Customer Information Section */}
+                <div className="bg-white rounded-2xl shadow-xl p-6 mt-12 border border-amber-200">
+                    <h2 className="font-bold text-3xl mb-6 text-amber-800 flex items-center gap-3">
+                        <span>👤</span>
+                        Seus Dados
+                    </h2>
+                    
+                    <div className="grid md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label className="block text-amber-700 font-semibold mb-2">Nome *</label>
+                            <input 
+                                type="text" 
+                                value={nomeCliente} 
+                                onChange={(e) => setNomeCliente(e.target.value)} 
+                                className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                placeholder="Seu nome completo"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-amber-700 font-semibold mb-2">Telefone *</label>
+                            <input 
+                                type="tel" 
+                                value={telefoneCliente} 
+                                onChange={(e) => setTelefoneCliente(e.target.value)} 
+                                className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                placeholder="(11) 99999-9999"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    {/* Tipo de Entrega */}
+                    <div className="mb-6">
+                        <label className="block text-amber-700 font-semibold mb-3">Tipo de Entrega</label>
+                        <div className="flex gap-4">
+                            <button
+                                type="button"
+                                onClick={() => setIsRetirada(false)}
+                                className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                                    !isRetirada 
+                                        ? 'bg-amber-500 text-white shadow-lg' 
+                                        : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                }`}
+                            >
+                                🚚 Entrega
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsRetirada(true)}
+                                className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                                    isRetirada 
+                                        ? 'bg-amber-500 text-white shadow-lg' 
+                                        : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                }`}
+                            >
+                                🏪 Retirada no Local
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Endereço (apenas para entrega) */}
+                    {!isRetirada && (
+                        <div className="space-y-4 mb-6">
+                            <h3 className="text-xl font-semibold text-amber-700">📍 Endereço de Entrega</h3>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="md:col-span-2">
+                                    <label className="block text-amber-700 font-semibold mb-2">Rua *</label>
+                                    <input 
+                                        type="text" 
+                                        value={rua} 
+                                        onChange={(e) => setRua(e.target.value)} 
+                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        placeholder="Nome da rua"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-amber-700 font-semibold mb-2">Número *</label>
+                                    <input 
+                                        type="text" 
+                                        value={numero} 
+                                        onChange={(e) => setNumero(e.target.value)} 
+                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        placeholder="Número"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-amber-700 font-semibold mb-2">Bairro *</label>
+                                    <input 
+                                        type="text" 
+                                        value={bairro} 
+                                        onChange={(e) => setBairro(e.target.value)} 
+                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        placeholder="Seu bairro"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-amber-700 font-semibold mb-2">Cidade *</label>
+                                    <input 
+                                        type="text" 
+                                        value={cidade} 
+                                        onChange={(e) => setCidade(e.target.value)} 
+                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        placeholder="Sua cidade"
+                                        required
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-amber-700 font-semibold mb-2">Complemento (Opcional)</label>
+                                    <input 
+                                        type="text" 
+                                        value={complemento} 
+                                        onChange={(e) => setComplemento(e.target.value)} 
+                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        placeholder="Apartamento, bloco, referência..."
+                                    />
+                                </div>
+                            </div>
+                            {bairroNaoEncontrado && !isRetirada && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                                    <p className="text-yellow-700 text-sm">
+                                        ⚠️ O bairro "<strong>{bairro}</strong>" não foi encontrado na nossa lista de áreas de entrega. 
+                                        A taxa de entrega é R$ 0,00, mas podem ser aplicadas taxas adicionais na confirmação do pedido.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Forma de Pagamento */}
+                    <div className="mb-6">
+                        <h3 className="text-xl font-semibold text-amber-700 mb-4">💳 Forma de Pagamento</h3>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {['dinheiro', 'cartão crédito', 'cartão débito', 'pix'].map((pagamento) => (
+                                <button
+                                    key={pagamento}
+                                    type="button"
+                                    onClick={() => setFormaPagamento(pagamento)}
+                                    className={`py-3 rounded-xl font-semibold transition-all duration-200 ${
+                                        formaPagamento === pagamento 
+                                            ? 'bg-amber-500 text-white shadow-lg' 
+                                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                    }`}
+                                >
+                                    {pagamento === 'dinheiro' && '💵 Dinheiro'}
+                                    {pagamento === 'cartão crédito' && '💳 Crédito'}
+                                    {pagamento === 'cartão débito' && '💳 Débito'}
+                                    {pagamento === 'pix' && '📱 PIX'}
+                                </button>
+                            ))}
+                        </div>
+                        
+                        {formaPagamento === 'dinheiro' && (
+                            <div className="mt-4">
+                                <label className="block text-amber-700 font-semibold mb-2">Troco para quanto? (Opcional)</label>
+                                <input 
+                                    type="number" 
+                                    value={trocoPara} 
+                                    onChange={(e) => setTrocoPara(e.target.value)} 
+                                    className="w-full md:w-1/2 border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    placeholder="Ex: 50,00"
+                                    step="0.01"
+                                    min={finalOrderTotal}
+                                />
+                                <p className="text-amber-600 text-sm mt-2">
+                                    Deixe em branco se não precisar de troco.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 {/* Cart and Order Section */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mt-12 border border-yellow-200">
-                    <h2 className="font-bold text-3xl mb-6 text-yellow-800 flex items-center gap-3">
+                <div className="bg-white rounded-2xl shadow-xl p-6 mt-8 border border-amber-200">
+                    <h2 className="font-bold text-3xl mb-6 text-amber-800 flex items-center gap-3">
                         <span>🛒</span>
                         Seu Pedido
                     </h2>
                     
                     {carrinho.length === 0 ? (
                         <div className="text-center py-8">
-                            <div className="text-yellow-400 text-6xl mb-4">🛒</div>
-                            <p className="text-yellow-600 text-lg font-medium">Nenhum item adicionado ainda.</p>
-                            <p className="text-yellow-500 mt-2">Explore nosso cardápio e adicione itens deliciosos!</p>
+                            <div className="text-amber-400 text-6xl mb-4">🛒</div>
+                            <p className="text-amber-600 text-lg font-medium">Nenhum item adicionado ainda.</p>
+                            <p className="text-amber-500 mt-2">Explore nosso cardápio e adicione itens deliciosos!</p>
                         </div>
                     ) : (
                         <>
                             <div className="space-y-4 mb-6">
                                 {carrinho.map((item) => (
-                                    <div key={item.cartItemId} className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 hover:shadow-md transition-all duration-200">
+                                    <div key={item.cartItemId} className="bg-amber-50 p-4 rounded-xl border border-amber-200 hover:shadow-md transition-all duration-200">
                                         <div className="flex justify-between items-start">
                                             <div className="flex-1 mr-4">
                                                 <div className="flex items-start justify-between">
                                                     <div>
-                                                        <span className="font-semibold text-yellow-900">{item.nome}</span>
-                                                        <span className="text-sm text-yellow-600 ml-2">({item.qtd}x)</span>
+                                                        <span className="font-semibold text-amber-900">
+                                                            {formatarItemCarrinho(item)}
+                                                        </span>
+                                                        <span className="text-sm text-amber-600 ml-2">({item.qtd}x)</span>
                                                     </div>
-                                                    <span className="font-bold text-yellow-900 text-lg">
+                                                    <span className="font-bold text-amber-900 text-lg">
                                                         R$ {(item.precoFinal * item.qtd).toFixed(2).replace('.', ',')}
                                                     </span>
                                                 </div>
-                                                {item.adicionais && item.adicionais.length > 0 && (
-                                                    <div className="text-sm text-yellow-700 pl-2 mt-2 border-l-2 border-yellow-500">
-                                                        {item.adicionais.map(ad => `+ ${ad.nome}`).join(', ')}
-                                                    </div>
-                                                )}
                                             </div>
                                             <button 
                                                 onClick={() => removerDoCarrinho(item.cartItemId)}
-                                                className="bg-yellow-500 text-black w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-yellow-600 transition-colors duration-200 flex-shrink-0"
+                                                className="bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-amber-600 transition-colors duration-200 flex-shrink-0"
                                             >
                                                 -
                                             </button>
@@ -844,33 +1071,33 @@ function Menu() {
                                 ))}
                             </div>
                             
-                            <div className="border-t border-yellow-200 pt-6 space-y-4">
+                            <div className="border-t border-amber-200 pt-6 space-y-4">
                                 <div className="flex justify-between items-center text-lg">
-                                    <span className="text-yellow-700">Subtotal:</span>
-                                    <span className="font-semibold text-yellow-900">R$ {subtotalCalculado.toFixed(2).replace('.', ',')}</span>
+                                    <span className="text-amber-700">Subtotal:</span>
+                                    <span className="font-semibold text-amber-900">R$ {subtotalCalculado.toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 
                                 {!isRetirada && (
                                     <div className="flex justify-between items-center text-lg">
-                                        <span className="text-yellow-700">Taxa de Entrega:</span>
-                                        <span className="font-semibold text-yellow-900">R$ {taxaAplicada.toFixed(2).replace('.', ',')}</span>
+                                        <span className="text-amber-700">Taxa de Entrega:</span>
+                                        <span className="font-semibold text-amber-900">R$ {taxaAplicada.toFixed(2).replace('.', ',')}</span>
                                     </div>
                                 )}
                                 
                                 {!appliedCoupon ? (
-                                    <div className="flex items-center gap-3 pt-4 border-t border-yellow-200">
+                                    <div className="flex items-center gap-3 pt-4 border-t border-amber-200">
                                         <input 
                                             type="text" 
                                             placeholder="🎁 Código do Cupom" 
                                             value={couponCodeInput} 
                                             onChange={(e) => setCouponCodeInput(e.target.value)} 
-                                            className="flex-1 border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                            className="flex-1 border border-amber-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                             disabled={couponLoading}
                                         />
                                         <button 
                                             onClick={handleApplyCoupon} 
                                             disabled={couponLoading || !couponCodeInput.trim()}
-                                            className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105"
+                                            className="bg-amber-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-amber-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105"
                                         >
                                             {couponLoading ? 'Aplicando...' : 'Aplicar'}
                                         </button>
@@ -897,215 +1124,19 @@ function Menu() {
                                     </div>
                                 )}
                                 
-                                <div className="flex justify-between items-center text-2xl font-bold pt-4 border-t border-yellow-300">
-                                    <span className="text-yellow-900">TOTAL:</span>
-                                    <span className="text-yellow-600">R$ {finalOrderTotal.toFixed(2).replace('.', ',')}</span>
+                                <div className="flex justify-between items-center text-2xl font-bold pt-4 border-t border-amber-300">
+                                    <span className="text-amber-900">TOTAL:</span>
+                                    <span className="text-amber-600">R$ {finalOrderTotal.toFixed(2).replace('.', ',')}</span>
                                 </div>
                             </div>
                         </>
                     )}
                 </div>
-
-                {/* Customer Info Section */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mt-8 border border-yellow-200">
-                    <h3 className="font-bold text-2xl mb-6 text-yellow-800 flex items-center gap-3">
-                        <span>👤</span>
-                        Seus Dados
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label htmlFor="nomeCliente" className="block text-sm font-medium text-yellow-700 mb-2">Seu Nome *</label>
-                            <input 
-                                id="nomeCliente" 
-                                value={nomeCliente} 
-                                onChange={(e) => setNomeCliente(e.target.value)} 
-                                className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                required 
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="telefoneCliente" className="block text-sm font-medium text-yellow-700 mb-2">Seu Telefone *</label>
-                            <input 
-                                id="telefoneCliente" 
-                                value={telefoneCliente} 
-                                onChange={(e) => setTelefoneCliente(e.target.value)} 
-                                className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                type="tel" 
-                                required 
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="mt-8 pt-6 border-t border-yellow-200">
-                        <h3 className="font-bold text-2xl mb-4 text-yellow-800">Tipo de Entrega *</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-yellow-500 transition-all duration-200">
-                                <input 
-                                    type="radio" 
-                                    name="deliveryType" 
-                                    checked={isRetirada} 
-                                    onChange={() => setIsRetirada(true)} 
-                                    className="mr-3 h-5 w-5 text-yellow-600 focus:ring-yellow-500"
-                                />
-                                <div>
-                                    <span className="font-semibold text-yellow-900">🛵 Retirada no Local</span>
-                                    <p className="text-sm text-yellow-600 mt-1">Você busca seu pedido</p>
-                                </div>
-                            </label>
-                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-yellow-500 transition-all duration-200">
-                                <input 
-                                    type="radio" 
-                                    name="deliveryType" 
-                                    checked={!isRetirada} 
-                                    onChange={() => setIsRetirada(false)} 
-                                    className="mr-3 h-5 w-5 text-yellow-600 focus:ring-yellow-500"
-                                />
-                                <div>
-                                    <span className="font-semibold text-yellow-900">🚚 Entrega em Casa</span>
-                                    <p className="text-sm text-yellow-600 mt-1">Entregamos no seu endereço</p>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    {!isRetirada && (
-                        <div className="mt-8 pt-6 border-t border-yellow-200">
-                            <h3 className="font-bold text-2xl mb-6 text-yellow-800">📍 Endereço de Entrega</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="md:col-span-2">
-                                    <label htmlFor="rua" className="block text-sm font-medium text-yellow-700 mb-2">Rua *</label>
-                                    <input 
-                                        id="rua" 
-                                        value={rua} 
-                                        onChange={(e) => setRua(e.target.value)} 
-                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                        required={!isRetirada} 
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="numero" className="block text-sm font-medium text-yellow-700 mb-2">Número *</label>
-                                    <input 
-                                        id="numero" 
-                                        value={numero} 
-                                        onChange={(e) => setNumero(e.target.value)} 
-                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                        required={!isRetirada} 
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="bairro" className="block text-sm font-medium text-yellow-700 mb-2">Bairro *</label>
-                                    <input 
-                                        id="bairro" 
-                                        value={bairro} 
-                                        onChange={(e) => setBairro(e.target.value)} 
-                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                        required={!isRetirada} 
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label htmlFor="cidade" className="block text-sm font-medium text-yellow-700 mb-2">Cidade *</label>
-                                    <input 
-                                        id="cidade" 
-                                        value={cidade} 
-                                        onChange={(e) => setCidade(e.target.value)} 
-                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                        required={!isRetirada} 
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label htmlFor="complemento" className="block text-sm font-medium text-yellow-700 mb-2">Complemento</label>
-                                    <input 
-                                        id="complemento" 
-                                        value={complemento} 
-                                        onChange={(e) => setComplemento(e.target.value)} 
-                                        className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                    />
-                                </div>
-                            </div>
-                            {bairroNaoEncontrado && (
-                                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                                    <p className="text-yellow-800 text-sm">
-                                        ⚠️ Bairro não encontrado na nossa lista de áreas de entrega. 
-                                        Entre em contato para confirmar a disponibilidade.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    
-                    <div className="mt-8 pt-6 border-t border-yellow-200">
-                        <h3 className="font-bold text-2xl mb-6 text-yellow-800">💳 Forma de Pagamento *</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-green-500 transition-all duration-200">
-                                <input 
-                                    type="radio" 
-                                    name="paymentMethod" 
-                                    value="pix" 
-                                    checked={formaPagamento === 'pix'} 
-                                    onChange={(e) => setFormaPagamento(e.target.value)} 
-                                    className="mr-3 h-5 w-5 text-green-600 focus:ring-green-500"
-                                />
-                                <div>
-                                    <span className="font-semibold text-yellow-900">📱 PIX</span>
-                                    <p className="text-sm text-yellow-600 mt-1">Pagamento instantâneo</p>
-                                </div>
-                            </label>
-                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-blue-500 transition-all duration-200">
-                                <input 
-                                    type="radio" 
-                                    name="paymentMethod" 
-                                    value="cartao" 
-                                    checked={formaPagamento === 'cartao'} 
-                                    onChange={(e) => setFormaPagamento(e.target.value)} 
-                                    className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500"
-                                />
-                                <div>
-                                    <span className="font-semibold text-yellow-900">💳 Cartão</span>
-                                    <p className="text-sm text-yellow-600 mt-1">Crédito/Débito na entrega</p>
-                                </div>
-                            </label>
-                            <label className="flex items-center p-4 border-2 border-yellow-200 rounded-xl cursor-pointer hover:border-yellow-500 transition-all duration-200">
-                                <input 
-                                    type="radio" 
-                                    name="paymentMethod" 
-                                    value="dinheiro" 
-                                    checked={formaPagamento === 'dinheiro'} 
-                                    onChange={(e) => setFormaPagamento(e.target.value)} 
-                                    className="mr-3 h-5 w-5 text-yellow-600 focus:ring-yellow-500"
-                                />
-                                <div>
-                                    <span className="font-semibold text-yellow-900">💰 Dinheiro</span>
-                                    <p className="text-sm text-yellow-600 mt-1">Pagamento na entrega</p>
-                                </div>
-                            </label>
-                        </div>
-                        
-                        {formaPagamento === 'dinheiro' && (
-                            <div className="mt-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
-                                <label htmlFor="troco" className="block text-sm font-medium text-yellow-800 mb-2">
-                                    💵 Precisa de troco para?
-                                </label>
-                                <input 
-                                    id="troco" 
-                                    type="number" 
-                                    value={trocoPara} 
-                                    onChange={(e) => setTrocoPara(e.target.value)} 
-                                    className="w-full border border-yellow-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
-                                    placeholder={`Ex: R$ ${(finalOrderTotal + 10).toFixed(2).replace('.', ',')}`}
-                                />
-                                <p className="text-yellow-700 text-sm mt-2">
-                                    Informe o valor em dinheiro que você vai pagar para calcularmos o troco.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </div>
             </div>
 
             {/* Fixed Order Button */}
             {carrinho.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-2xl border-t border-yellow-200 md:relative md:p-0 md:mt-8 md:shadow-none md:border-none">
+                <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-2xl border-t border-amber-200 md:relative md:p-0 md:mt-8 md:shadow-none md:border-none">
                     <div className="max-w-7xl mx-auto">
                         <button 
                             onClick={enviarPedido} 
@@ -1123,11 +1154,11 @@ function Menu() {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
                     <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center">
                         <div className="text-6xl mb-4">🎉</div>
-                        <h2 className="text-3xl font-bold mb-4 text-yellow-800">Pedido Enviado!</h2>
+                        <h2 className="text-3xl font-bold mb-4 text-amber-800">Pedido Enviado!</h2>
                         <div className="space-y-3 text-left mb-6">
-                            <p><strong className="text-yellow-700">ID:</strong> <span className="font-mono">{confirmedOrderDetails.id.substring(0, 8)}...</span></p>
-                            <p><strong className="text-yellow-700">Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
-                            <p><strong className="text-yellow-700">Forma de Pagamento:</strong> {confirmedOrderDetails.formaPagamento}</p>
+                            <p><strong className="text-amber-700">ID:</strong> <span className="font-mono">{confirmedOrderDetails.id.substring(0, 8)}...</span></p>
+                            <p><strong className="text-amber-700">Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
+                            <p><strong className="text-amber-700">Forma de Pagamento:</strong> {confirmedOrderDetails.formaPagamento}</p>
                         </div>
                         <button 
                             onClick={() => setShowOrderConfirmationModal(false)} 
@@ -1145,7 +1176,7 @@ function Menu() {
                     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full relative">
                         <button 
                             onClick={() => { setShowLoginPrompt(false); }} 
-                            className="absolute top-4 right-4 text-yellow-500 hover:text-yellow-600 text-2xl font-bold transition-colors duration-200" 
+                            className="absolute top-4 right-4 text-amber-500 hover:text-amber-600 text-2xl font-bold transition-colors duration-200" 
                             aria-label="Fechar"
                         >
                             &times;
@@ -1153,10 +1184,10 @@ function Menu() {
                         
                         <div className="text-center mb-6">
                             <div className="text-4xl mb-4">🔐</div>
-                            <h2 className="text-3xl font-bold text-yellow-800 mb-2">
+                            <h2 className="text-3xl font-bold text-amber-800 mb-2">
                                 {isRegisteringInModal ? 'Criar Conta' : 'Fazer Login'}
                             </h2>
-                            <p className="text-yellow-600">
+                            <p className="text-amber-600">
                                 {isRegisteringInModal ? 'Preencha seus dados para criar uma conta.' : 'Para acessar o cardápio e fazer pedidos.'}
                             </p>
                         </div>
@@ -1172,7 +1203,7 @@ function Menu() {
                                 <input 
                                     type="text" 
                                     placeholder="Seu Nome Completo *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={nomeAuthModal} 
                                     onChange={(e) => setNomeAuthModal(e.target.value)} 
                                     required 
@@ -1180,7 +1211,7 @@ function Menu() {
                                 <input 
                                     type="tel" 
                                     placeholder="Seu Telefone (com DDD) *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={telefoneAuthModal} 
                                     onChange={(e) => setTelefoneAuthModal(e.target.value)} 
                                     required 
@@ -1188,7 +1219,7 @@ function Menu() {
                                 <input 
                                     type="email" 
                                     placeholder="Email *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
@@ -1196,7 +1227,7 @@ function Menu() {
                                 <input 
                                     type="password" 
                                     placeholder="Senha (mín. 6 caracteres) *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
@@ -1204,7 +1235,7 @@ function Menu() {
                                 <input 
                                     type="text" 
                                     placeholder="Rua *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={ruaAuthModal} 
                                     onChange={(e) => setRuaAuthModal(e.target.value)} 
                                     required 
@@ -1212,7 +1243,7 @@ function Menu() {
                                 <input 
                                     type="text" 
                                     placeholder="Número *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={numeroAuthModal} 
                                     onChange={(e) => setNumeroAuthModal(e.target.value)} 
                                     required 
@@ -1220,7 +1251,7 @@ function Menu() {
                                 <input 
                                     type="text" 
                                     placeholder="Bairro *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={bairroAuthModal} 
                                     onChange={(e) => setBairroAuthModal(e.target.value)} 
                                     required 
@@ -1228,7 +1259,7 @@ function Menu() {
                                 <input 
                                     type="text" 
                                     placeholder="Cidade *" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={cidadeAuthModal} 
                                     onChange={(e) => setCidadeAuthModal(e.target.value)} 
                                     required 
@@ -1236,22 +1267,22 @@ function Menu() {
                                 <input 
                                     type="text" 
                                     placeholder="Complemento (Opcional)" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={complementoAuthModal} 
                                     onChange={(e) => setComplementoAuthModal(e.target.value)} 
                                 />
                                 <button 
                                     type="submit" 
-                                    className="w-full bg-yellow-500 text-black font-semibold py-3 rounded-xl hover:bg-yellow-600 transition-all duration-200 transform hover:scale-105"
+                                    className="w-full bg-amber-500 text-white font-semibold py-3 rounded-xl hover:bg-amber-600 transition-all duration-200 transform hover:scale-105"
                                 >
                                     Cadastrar e Entrar
                                 </button>
-                                <p className="text-sm text-center text-yellow-600">
+                                <p className="text-sm text-center text-amber-600">
                                     Já tem uma conta?{' '}
                                     <button 
                                         type="button" 
                                         onClick={() => setIsRegisteringInModal(false)} 
-                                        className="text-yellow-500 underline font-semibold hover:text-yellow-600 transition-colors duration-200"
+                                        className="text-amber-500 underline font-semibold hover:text-amber-600 transition-colors duration-200"
                                     >
                                         Fazer Login
                                     </button>
@@ -1262,7 +1293,7 @@ function Menu() {
                                 <input 
                                     type="email" 
                                     placeholder="Email" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
@@ -1270,7 +1301,7 @@ function Menu() {
                                 <input 
                                     type="password" 
                                     placeholder="Senha" 
-                                    className="w-full border border-yellow-300 rounded-xl p-3 focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-200"
+                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
@@ -1281,12 +1312,12 @@ function Menu() {
                                 >
                                     Entrar
                                 </button>
-                                <p className="text-sm text-center text-yellow-600">
+                                <p className="text-sm text-center text-amber-600">
                                     Não tem uma conta?{' '}
                                     <button 
                                         type="button" 
                                         onClick={() => setIsRegisteringInModal(true)} 
-                                        className="text-yellow-500 underline font-semibold hover:text-yellow-600 transition-colors duration-200"
+                                        className="text-amber-500 underline font-semibold hover:text-amber-600 transition-colors duration-200"
                                     >
                                         Cadastre-se
                                     </button>
@@ -1297,12 +1328,21 @@ function Menu() {
                 </div>
             )}
 
-            {/* Adicionais Modal */}
+            {/* 🆕 Modal de Variações */}
+            {itemParaVariacoes && (
+                <VariacoesModal 
+                    item={itemParaVariacoes} 
+                    onConfirm={handleConfirmarVariacoes} 
+                    onClose={handleFecharModalVariacoes} 
+                />
+            )}
+
+            {/* Modal de Adicionais */}
             {itemParaAdicionais && (
                 <AdicionaisModal 
                     item={itemParaAdicionais} 
                     onConfirm={handleConfirmarAdicionais} 
-                    onClose={handleFecharModal} 
+                    onClose={handleFecharModalAdicionais} 
                 />
             )}
         </div>
