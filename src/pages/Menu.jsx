@@ -1,4 +1,4 @@
-// src/pages/Menu.jsx - VERSÃO COMPLETA COM INFORMAÇÕES DO ESTABELECIMENTO
+// src/pages/Menu.jsx - VERSÃO COMPLETA CORRIGIDA
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -574,150 +574,148 @@ function Menu() {
     // --- EFEITOS OTIMIZADOS ---
     
     // 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
-// 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
+    useEffect(() => {
+      if (!estabelecimentoSlug) return;
 
-   // 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
-// 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
-useEffect(() => {
-  if (!estabelecimentoSlug) return;
+      const carregarTudoRapidamente = async () => {
+        try {
+          setLoading(true);
+          console.log("🚀 INICIANDO CARREGAMENTO COMPLETO");
 
-  const carregarTudoRapidamente = async () => {
-    try {
-      setLoading(true);
-      console.log("🚀 INICIANDO CARREGAMENTO COMPLETO");
+          // 1. Buscar estabelecimento pelo slug
+          const qEstabBySlug = query(
+            collection(db, 'estabelecimentos'), 
+            where('slug', '==', estabelecimentoSlug)
+          );
+          const estabSnapshotBySlug = await getDocs(qEstabBySlug);
 
-      // 1. Buscar estabelecimento pelo slug
-      const qEstabBySlug = query(
-        collection(db, 'estabelecimentos'), 
-        where('slug', '==', estabelecimentoSlug)
-      );
-      const estabSnapshotBySlug = await getDocs(qEstabBySlug);
-
-      if (estabSnapshotBySlug.empty) {
-        console.error("❌ Estabelecimento não encontrado");
-        toast.error("Estabelecimento não encontrado.");
-        setLoading(false);
-        navigate('/');
-        return;
-      }
-      
-      const estabDoc = estabSnapshotBySlug.docs[0];
-      const estabData = estabDoc.data();
-      const idDoEstabelecimentoReal = estabDoc.id;
-      
-      console.log("✅ Estabelecimento encontrado:", estabData.nome);
-      console.log("📋 Ordem de categorias do Firebase:", estabData.ordemCategorias); // 🆕 LOG IMPORTANTE
-
-      // 🎯 CARREGAMENTO PARALELO: Estabelecimento + Produtos
-      const [produtos] = await Promise.all([
-        carregarProdutosRapido(idDoEstabelecimentoReal)
-      ]);
-
-      // 🏪 DEFINIR TODOS OS DADOS DO ESTABELECIMENTO
-      const estabelecimentoInfoCompleta = {
-        ...estabData,
-        id: idDoEstabelecimentoReal,
-        nome: estabData.nome || "Cardápio",
-        descricao: estabData.descricao || "",
-        endereco: estabData.endereco || {},
-        horarioFuncionamento: estabData.horarioFuncionamento || {},
-        telefone: estabData.telefone || "",
-        whatsapp: estabData.whatsapp || "",
-        logoUrl: estabData.logoUrl || "",
-        ordemCategorias: estabData.ordemCategorias || [], // 🆕 ORDEM DAS CATEGORIAS
-        cores: estabData.cores || {
-          primaria: '#000000ff',
-          destaque: '#059669',
-          background: '#000000',
-          texto: {
-            principal: '#FFFFFF',
-            secundario: '#9CA3AF',
-            placeholder: '#6B7280',
-            destaque: '#FBBF24',
-            erro: '#EF4444',
-            sucesso: '#10B981'
+          if (estabSnapshotBySlug.empty) {
+            console.error("❌ Estabelecimento não encontrado");
+            toast.error("Estabelecimento não encontrado.");
+            setLoading(false);
+            navigate('/');
+            return;
           }
+          
+          const estabDoc = estabSnapshotBySlug.docs[0];
+          const estabData = estabDoc.data();
+          const idDoEstabelecimentoReal = estabDoc.id;
+          
+          console.log("✅ Estabelecimento encontrado:", estabData.nome);
+          console.log("📋 Ordem de categorias do Firebase:", estabData.ordemCategorias);
+
+          // 🎯 CARREGAMENTO PARALELO: Estabelecimento + Produtos
+          const [produtos] = await Promise.all([
+            carregarProdutosRapido(idDoEstabelecimentoReal)
+          ]);
+
+          // 🏪 DEFINIR TODOS OS DADOS DO ESTABELECIMENTO
+          const estabelecimentoInfoCompleta = {
+            ...estabData,
+            id: idDoEstabelecimentoReal,
+            nome: estabData.nome || "Cardápio",
+            descricao: estabData.descricao || "",
+            endereco: estabData.endereco || {},
+            horarioFuncionamento: estabData.horarioFuncionamento || {},
+            telefone: estabData.telefone || "",
+            whatsapp: estabData.whatsapp || "",
+            logoUrl: estabData.logoUrl || "",
+            ordemCategorias: estabData.ordemCategorias || [],
+            cores: estabData.cores || {
+              primaria: '#000000ff',
+              destaque: '#059669',
+              background: '#000000',
+              texto: {
+                principal: '#FFFFFF',
+                secundario: '#9CA3AF',
+                placeholder: '#6B7280',
+                destaque: '#FBBF24',
+                erro: '#EF4444',
+                sucesso: '#10B981'
+              }
+            }
+          };
+
+          setEstabelecimentoInfo(estabelecimentoInfoCompleta);
+          setNomeEstabelecimento(estabData.nome || "Cardápio");
+          setActualEstabelecimentoId(idDoEstabelecimentoReal);
+
+          // 📦 CONFIGURAR PRODUTOS
+          if (produtos.length > 0) {
+            setAllProdutos(produtos);
+            const categoriasUnicas = ['Todos', ...new Set(produtos.map(item => item.categoria).filter(Boolean))];
+            setAvailableCategories(categoriasUnicas);
+            
+            console.log("📊 Categorias disponíveis:", categoriasUnicas);
+            console.log("🎯 Ordem que será aplicada:", estabelecimentoInfoCompleta.ordemCategorias);
+            
+            const initialVisibleCounts = {};
+            categoriasUnicas.forEach(cat => {
+              if (cat !== 'Todos') {
+                initialVisibleCounts[cat] = 4;
+              }
+            });
+            setVisibleItemsCount(initialVisibleCounts);
+          } else {
+            setAllProdutos([]);
+            setAvailableCategories(['Todos']);
+          }
+
+          console.log("🎊 CARREGAMENTO COMPLETO CONCLUÍDO!");
+          setLoading(false);
+
+        } catch (error) {
+          console.error("❌ Erro no carregamento completo:", error);
+          toast.error("Erro ao carregar o cardápio.");
+          setLoading(false);
         }
       };
 
-      setEstabelecimentoInfo(estabelecimentoInfoCompleta);
-      setNomeEstabelecimento(estabData.nome || "Cardápio");
-      setActualEstabelecimentoId(idDoEstabelecimentoReal);
+      carregarTudoRapidamente();
+    }, [estabelecimentoSlug, navigate]);
 
-      // 📦 CONFIGURAR PRODUTOS
-      if (produtos.length > 0) {
-        setAllProdutos(produtos);
-        const categoriasUnicas = ['Todos', ...new Set(produtos.map(item => item.categoria).filter(Boolean))];
-        setAvailableCategories(categoriasUnicas);
+    // 🎯 FUNÇÃO PARA ORDENAR CATEGORIAS DINAMICAMENTE - VERSÃO CORRIGIDA
+    const ordenarCategorias = (categorias, ordemPersonalizada) => {
+      console.log('🔀 Ordenando categorias:', {
+        categoriasDisponiveis: categorias,
+        ordemPersonalizada: ordemPersonalizada
+      });
+      
+      // "Todos" sempre deve ser o primeiro
+      const categoriasSemTodos = categorias.filter(cat => cat !== 'Todos');
+      
+      if (!ordemPersonalizada || ordemPersonalizada.length === 0) {
+        console.log('ℹ️ Usando ordem por quantidade de itens');
+        // Se não tem ordem definida, ordena por quantidade de itens (mais popular primeiro)
+        const categoriasOrdenadas = categoriasSemTodos
+          .map(category => {
+            const quantidadeItens = allProdutos.filter(item => item.categoria === category).length;
+            return { category, quantidadeItens };
+          })
+          .sort((a, b) => b.quantidadeItens - a.quantidadeItens)
+          .map(({ category }) => category);
         
-        console.log("📊 Categorias disponíveis:", categoriasUnicas);
-        console.log("🎯 Ordem que será aplicada:", estabelecimentoInfoCompleta.ordemCategorias);
-        
-        const initialVisibleCounts = {};
-        categoriasUnicas.forEach(cat => {
-          if (cat !== 'Todos') {
-            initialVisibleCounts[cat] = 6;
-          }
-        });
-        setVisibleItemsCount(initialVisibleCounts);
-      } else {
-        setAllProdutos([]);
-        setAvailableCategories(['Todos']);
+        return ['Todos', ...categoriasOrdenadas];
       }
+      
+      console.log('✅ Aplicando ordem personalizada do estabelecimento');
+      
+      // Filtrar apenas categorias que existem atualmente
+      const ordemFiltrada = ordemPersonalizada.filter(category => 
+        categoriasSemTodos.includes(category)
+      );
+      
+      // Adicionar categorias novas que não estão na ordem
+      const categoriasNovas = categoriasSemTodos.filter(category => 
+        !ordemFiltrada.includes(category)
+      );
+      
+      const categoriasOrdenadas = ['Todos', ...ordemFiltrada, ...categoriasNovas];
+      
+      console.log('📋 Resultado da ordenação:', categoriasOrdenadas);
+      return categoriasOrdenadas;
+    };
 
-      console.log("🎊 CARREGAMENTO COMPLETO CONCLUÍDO!");
-      setLoading(false);
-
-    } catch (error) {
-      console.error("❌ Erro no carregamento completo:", error);
-      toast.error("Erro ao carregar o cardápio.");
-      setLoading(false);
-    }
-  };
-
-  carregarTudoRapidamente();
-}, [estabelecimentoSlug, navigate]);
-// 🎯 FUNÇÃO PARA ORDENAR CATEGORIAS DINAMICAMENTE - VERSÃO CORRIGIDA
-const ordenarCategorias = (categorias, ordemPersonalizada) => {
-  console.log('🔀 Ordenando categorias:', {
-    categoriasDisponiveis: categorias,
-    ordemPersonalizada: ordemPersonalizada
-  });
-  
-  // "Todos" sempre deve ser o primeiro
-  const categoriasSemTodos = categorias.filter(cat => cat !== 'Todos');
-  
-  if (!ordemPersonalizada || ordemPersonalizada.length === 0) {
-    console.log('ℹ️ Usando ordem por quantidade de itens');
-    // Se não tem ordem definida, ordena por quantidade de itens (mais popular primeiro)
-    const categoriasOrdenadas = categoriasSemTodos
-      .map(category => {
-        const quantidadeItens = allProdutos.filter(item => item.categoria === category).length;
-        return { category, quantidadeItens };
-      })
-      .sort((a, b) => b.quantidadeItens - a.quantidadeItens)
-      .map(({ category }) => category);
-    
-    return ['Todos', ...categoriasOrdenadas];
-  }
-  
-  console.log('✅ Aplicando ordem personalizada do estabelecimento');
-  
-  // Filtrar apenas categorias que existem atualmente
-  const ordemFiltrada = ordemPersonalizada.filter(category => 
-    categoriasSemTodos.includes(category)
-  );
-  
-  // Adicionar categorias novas que não estão na ordem
-  const categoriasNovas = categoriasSemTodos.filter(category => 
-    !ordemFiltrada.includes(category)
-  );
-  
-  const categoriasOrdenadas = ['Todos', ...ordemFiltrada, ...categoriasNovas];
-  
-  console.log('📋 Resultado da ordenação:', categoriasOrdenadas);
-  return categoriasOrdenadas;
-};
     // Efeito para dados do usuário
     useEffect(() => {
         if (authLoading === false) {
@@ -817,64 +815,64 @@ const ordenarCategorias = (categorias, ordemPersonalizada) => {
     }, [authLoading, isUserAdmin, isUserMasterAdmin]);
 
     // Funções para mostrar mais/menos itens
-const handleShowMore = (categoryName) => {
-  setVisibleItemsCount(prev => ({ 
-    ...prev, 
-    [categoryName]: (prev[categoryName] || 4) + 4 
-  }));
-};
+    const handleShowMore = (categoryName) => {
+        setVisibleItemsCount(prev => ({ 
+            ...prev, 
+            [categoryName]: (prev[categoryName] || 4) + 4 
+        }));
+    };
 
-const handleShowLess = (categoryName) => {
-  setVisibleItemsCount(prev => ({ 
-    ...prev, 
-    [categoryName]: 4 
-  }));
-};
+    const handleShowLess = (categoryName) => {
+        setVisibleItemsCount(prev => ({ 
+            ...prev, 
+            [categoryName]: 4 
+        }));
+    };
 
     // 🏪 COMPONENTE DE INFORMAÇÕES DO ESTABELECIMENTO
     const InfoEstabelecimento = () => {
         if (!estabelecimentoInfo) return null;
 
         return (
-            <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
-                <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div className="bg-gray-800 rounded-xl md:rounded-2xl shadow-lg p-4 md:p-6 mb-6 md:mb-8 border border-gray-700">
+                <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start">
                     {/* LOGO */}
                     {estabelecimentoInfo.logoUrl && (
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 mx-auto md:mx-0">
                             <img 
                                 src={estabelecimentoInfo.logoUrl} 
                                 alt={`Logo ${estabelecimentoInfo.nome}`}
-                                className="w-24 h-24 md:w-32 md:h-32 rounded-2xl object-cover border-2"
+                                className="w-20 h-20 md:w-32 md:h-32 rounded-xl md:rounded-2xl object-cover border-2"
                                 style={{ borderColor: coresEstabelecimento.primaria }}
                             />
                         </div>
                     )}
                     
                     {/* INFORMAÇÕES */}
-                    <div className="flex-1 space-y-4">
+                    <div className="flex-1 space-y-3 md:space-y-4">
                         {/* NOME E DESCRIÇÃO */}
                         <div>
-                            <h1 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                            <h1 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2 text-center md:text-left" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                 {estabelecimentoInfo.nome}
                             </h1>
                             {estabelecimentoInfo.descricao && (
-                                <p className="text-lg" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                <p className="text-base md:text-lg text-center md:text-left" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                     {estabelecimentoInfo.descricao}
                                 </p>
                             )}
                         </div>
 
                         {/* GRADE DE INFORMAÇÕES */}
-                        <div className="grid md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                             {/* ENDEREÇO */}
                             {estabelecimentoInfo.endereco && estabelecimentoInfo.endereco.rua && (
-                                <div className="flex items-start gap-3">
-                                    <span className="text-xl">📍</span>
+                                <div className="flex items-start gap-2 md:gap-3">
+                                    <span className="text-lg md:text-xl mt-1">📍</span>
                                     <div>
-                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                             Endereço
                                         </p>
-                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                             {estabelecimentoInfo.endereco.rua}, {estabelecimentoInfo.endereco.numero}
                                             {estabelecimentoInfo.endereco.bairro && ` - ${estabelecimentoInfo.endereco.bairro}`}
                                             {estabelecimentoInfo.endereco.cidade && `, ${estabelecimentoInfo.endereco.cidade}`}
@@ -885,13 +883,13 @@ const handleShowLess = (categoryName) => {
 
                             {/* HORÁRIO */}
                             {estabelecimentoInfo.horarioFuncionamento && (
-                                <div className="flex items-start gap-3">
-                                    <span className="text-xl">🕒</span>
+                                <div className="flex items-start gap-2 md:gap-3">
+                                    <span className="text-lg md:text-xl mt-1">🕒</span>
                                     <div>
-                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                            Horário de Funcionamento
+                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                            Horário
                                         </p>
-                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                             {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}
                                         </p>
                                     </div>
@@ -900,13 +898,13 @@ const handleShowLess = (categoryName) => {
 
                             {/* TELEFONE */}
                             {estabelecimentoInfo.telefone && (
-                                <div className="flex items-start gap-3">
-                                    <span className="text-xl">📞</span>
+                                <div className="flex items-start gap-2 md:gap-3">
+                                    <span className="text-lg md:text-xl mt-1">📞</span>
                                     <div>
-                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                             Telefone
                                         </p>
-                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                             {estabelecimentoInfo.telefone}
                                         </p>
                                     </div>
@@ -915,13 +913,13 @@ const handleShowLess = (categoryName) => {
 
                             {/* WHATSAPP */}
                             {estabelecimentoInfo.whatsapp && (
-                                <div className="flex items-start gap-3">
-                                    <span className="text-xl">💬</span>
+                                <div className="flex items-start gap-2 md:gap-3">
+                                    <span className="text-lg md:text-xl mt-1">💬</span>
                                     <div>
-                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                             WhatsApp
                                         </p>
-                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                             {estabelecimentoInfo.whatsapp}
                                         </p>
                                     </div>
@@ -963,241 +961,242 @@ const handleShowLess = (categoryName) => {
     }, {});
 
     return (
-<div className="min-h-screen pb-32 md:pb-0" style={{ 
-  backgroundColor: coresEstabelecimento.background,
-  color: coresEstabelecimento.texto?.principal || '#FFFFFF' 
-}}>
-  {/* Header Simplificado */}
-  <div className="shadow-lg" style={{ backgroundColor: coresEstabelecimento.primaria }}>
-    <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
-      <div className="text-center text-white">
-        <h1 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2 drop-shadow-sm">
-          {nomeEstabelecimento}
-        </h1>
-        <p className="text-white text-opacity-90 text-sm md:text-base">
-          Cardápio Digital
-        </p>
-      </div>
-    </div>
-  </div>
+        <div className="min-h-screen pb-32 md:pb-0" style={{ 
+            backgroundColor: coresEstabelecimento.background,
+            color: coresEstabelecimento.texto?.principal || '#FFFFFF' 
+        }}>
+            {/* Header Simplificado */}
+            <div className="shadow-lg" style={{ backgroundColor: coresEstabelecimento.primaria }}>
+                <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
+                    <div className="text-center text-white">
+                        <h1 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2 drop-shadow-sm">
+                            {nomeEstabelecimento}
+                        </h1>
+                        <p className="text-white text-opacity-90 text-sm md:text-base">
+                            Cardápio Digital
+                        </p>
+                    </div>
+                </div>
+            </div>
 
-  {/* Conteúdo Principal */}
-  <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
+            {/* Conteúdo Principal */}
+            <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
                 {/* 🏪 INFORMAÇÕES DO ESTABELECIMENTO */}
                 <InfoEstabelecimento />
 
+                {/* Search and Filters - VERSÃO RESPONSIVA */}
+                <div className="bg-gray-900 rounded-xl md:rounded-2xl shadow-xl p-4 md:p-6 mb-6 md:mb-8 border border-gray-700">
+                    {/* Search */}
+                    <div className="mb-4 md:mb-6">
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                placeholder="🔍 Buscar por nome ou descrição..." 
+                                value={searchTerm} 
+                                onChange={(e) => setSearchTerm(e.target.value)} 
+                                className="w-full px-4 md:px-6 py-3 md:py-4 border border-gray-600 rounded-xl md:rounded-2xl text-base md:text-lg focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white" 
+                                style={{ 
+                                    focusRingColor: coresEstabelecimento.primaria,
+                                    borderColor: `${coresEstabelecimento.primaria}30`
+                                }}
+                            />
+                        </div>
+                    </div>
+                    
+                    {/* BARRA DE CATEGORIAS RESPONSIVA */}
+                    <div className="relative">
+                        <div className="flex overflow-x-auto gap-2 md:gap-3 pb-3 -mb-3 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+                            {/* Todas as categorias ordenadas dinamicamente */}
+                            {ordenarCategorias(
+                                availableCategories,
+                                estabelecimentoInfo?.ordemCategorias
+                            ).map((category) => (
+                                <button 
+                                    key={category} 
+                                    onClick={() => setSelectedCategory(category)}
+                                    className={`px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0 ${
+                                        selectedCategory === category 
+                                            ? 'text-white shadow-lg' 
+                                            : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                                    }`}
+                                    style={
+                                        selectedCategory === category 
+                                            ? { backgroundColor: coresEstabelecimento.primaria }
+                                            : {}
+                                    }
+                                >
+                                    {category === 'Todos' ? '📋 Todos' : category}
+                                </button>
+                            ))}
+                            
+                            {/* Botão Limpar Filtros */}
+                            {(searchTerm || selectedCategory !== 'Todos') && (
+                                <button 
+                                    onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
+                                    className="px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold bg-gray-600 text-white hover:bg-gray-500 transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0"
+                                >
+                                    🗑️ Limpar
+                                </button>
+                            )}
+                        </div>
+                        
+                        {/* Sombra indicativa de scroll */}
+                        <div className="absolute right-0 top-0 bottom-0 w-6 md:w-8 bg-gradient-to-l from-gray-900 to-transparent pointer-events-none"></div>
+                    </div>
+                </div>
 
-{/* Search and Filters - VERSÃO RESPONSIVA */}
-<div className="bg-gray-900 rounded-2xl shadow-xl p-4 md:p-6 mb-6 md:mb-8 border border-gray-700">
-  {/* Search */}
-  <div className="mb-4 md:mb-6">
-    <div className="relative">
-      <input 
-        type="text" 
-        placeholder="🔍 Buscar por nome ou descrição..." 
-        value={searchTerm} 
-        onChange={(e) => setSearchTerm(e.target.value)} 
-        className="w-full px-4 md:px-6 py-3 md:py-4 border border-gray-600 rounded-xl md:rounded-2xl text-base md:text-lg focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white" 
-        style={{ 
-          focusRingColor: coresEstabelecimento.primaria,
-          borderColor: `${coresEstabelecimento.primaria}30`
-        }}
-      />
-    </div>
-  </div>
-  
-  {/* BARRA DE CATEGORIAS RESPONSIVA */}
-  <div className="relative">
-    <div className="flex overflow-x-auto gap-2 md:gap-3 pb-3 -mb-3 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-      {/* Todas as categorias ordenadas dinamicamente */}
-      {ordenarCategorias(
-        availableCategories,
-        estabelecimentoInfo?.ordemCategorias
-      ).map((category) => (
-        <button 
-          key={category} 
-          onClick={() => setSelectedCategory(category)}
-          className={`px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0 ${
-            selectedCategory === category 
-              ? 'text-white shadow-lg' 
-              : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-          }`}
-          style={
-            selectedCategory === category 
-              ? { backgroundColor: coresEstabelecimento.primaria }
-              : {}
-          }
-        >
-          {category === 'Todos' ? '📋 Todos' : category}
-        </button>
-      ))}
-      
-      {/* Botão Limpar Filtros */}
-      {(searchTerm || selectedCategory !== 'Todos') && (
-        <button 
-          onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
-          className="px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold bg-gray-600 text-white hover:bg-gray-500 transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0"
-        >
-          🗑️ Limpar
-        </button>
-      )}
-    </div>
-    
-    {/* Sombra indicativa de scroll */}
-    <div className="absolute right-0 top-0 bottom-0 w-6 md:w-8 bg-gradient-to-l from-gray-900 to-transparent pointer-events-none"></div>
-  </div>
-</div>
-{/* Menu Items - ORDENADO PELA ORDEM PERSONALIZADA */}
-{produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
-  <div className="text-center py-8">
-    <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-      Nenhum item encontrado com os filtros selecionados.
-    </p>
-  </div>
-) : allProdutos.length === 0 ? (
-  <div className="text-center py-8">
-    <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-      Este estabelecimento ainda não possui itens no cardápio.
-    </p>
-  </div>
-) : selectedCategory === 'Todos' ? (
-  // QUANDO "TODOS" ESTÁ SELECIONADO - MOSTRAR CATEGORIAS NA ORDEM PERSONALIZADA
-  ordenarCategorias(
-    Object.keys(menuAgrupado).filter(cat => cat !== 'Outros'),
-    estabelecimentoInfo?.ordemCategorias
-  )
-  .filter(categoria => categoria !== 'Todos') // Remove "Todos" da lista de categorias
-  .map((categoria) => {
-    const itemsNestaCategoria = menuAgrupado[categoria] || [];
-    const totalItemsVisiveis = visibleItemsCount[categoria] || 6;
-    const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
-    
-    if (itemsNestaCategoria.length === 0) return null;
-    
-    return (
-      <div key={categoria} className="mb-8">
-        {/* CABEÇALHO DA CATEGORIA */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-            {categoria}
-          </h2>
-          <span className="bg-gray-800 px-3 py-1 rounded-full text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-            {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
-          </span>
-        </div>
-        
-        {/* LISTA DE ITENS */}
-        <div className="space-y-3">
-          {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
-            <CardapioItem 
-              key={item.id} 
-              item={item} 
-              onAddItem={handleAbrirModalProduto}
-              coresEstabelecimento={coresEstabelecimento}
-            />
-          ))}
-        </div>
-        
-        {/* BOTÃO VER MAIS/VER MENOS */}
-        {itemsNestaCategoria.length > 6 && (
-          <div className="text-center mt-4">
-            {todosItensVisiveis ? (
-              <button 
-                onClick={() => handleShowLess(categoria)}
-                style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
-                className="hover:text-gray-300 font-medium text-sm transition-colors"
-              >
-                ↑ Ver menos
-              </button>
-            ) : (
-              <button 
-                onClick={() => handleShowMore(categoria)}
-                className="font-medium text-sm transition-colors"
-                style={{ color: coresEstabelecimento.primaria }}
-              >
-                ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  })
-) : (
-  // QUANDO UMA CATEGORIA ESPECÍFICA ESTÁ SELECIONADA
-  (() => {
-    const categoriaSelecionada = selectedCategory;
-    const itemsNestaCategoria = menuAgrupado[categoriaSelecionada] || [];
-    const totalItemsVisiveis = visibleItemsCount[categoriaSelecionada] || 6;
-    const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
-    
-    return (
-      <div key={categoriaSelecionada} className="mb-8">
-        {/* CABEÇALHO DA CATEGORIA */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-            {categoriaSelecionada}
-          </h2>
-          <span className="bg-gray-800 px-3 py-1 rounded-full text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-            {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
-          </span>
-        </div>
-        
-        {/* LISTA DE ITENS */}
-        <div className="space-y-3">
-          {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
-            <CardapioItem 
-              key={item.id} 
-              item={item} 
-              onAddItem={handleAbrirModalProduto}
-              coresEstabelecimento={coresEstabelecimento}
-            />
-          ))}
-        </div>
-        
-        {/* BOTÃO VER MAIS/VER MENOS */}
-        {itemsNestaCategoria.length > 6 && (
-          <div className="text-center mt-4">
-            {todosItensVisiveis ? (
-              <button 
-                onClick={() => handleShowLess(categoriaSelecionada)}
-                style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
-                className="hover:text-gray-300 font-medium text-sm transition-colors"
-              >
-                ↑ Ver menos
-              </button>
-            ) : (
-              <button 
-                onClick={() => handleShowMore(categoriaSelecionada)}
-                className="font-medium text-sm transition-colors"
-                style={{ color: coresEstabelecimento.primaria }}
-              >
-                ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  })()
-)}
-                {/* Customer Information Section */}
-                <div className="bg-gray-900 rounded-2xl shadow-xl p-6 mt-12 border border-gray-700">
-                    <h2 className="font-bold text-3xl mb-6 flex items-center gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                {/* Menu Items - VERSÃO RESPONSIVA */}
+                {produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
+                    <div className="text-center py-8">
+                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                            Nenhum item encontrado com os filtros selecionados.
+                        </p>
+                    </div>
+                ) : allProdutos.length === 0 ? (
+                    <div className="text-center py-8">
+                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                            Este estabelecimento ainda não possui itens no cardápio.
+                        </p>
+                    </div>
+                ) : selectedCategory === 'Todos' ? (
+                    // QUANDO "TODOS" ESTÁ SELECIONADO - VERSÃO RESPONSIVA
+                    ordenarCategorias(
+                        Object.keys(menuAgrupado).filter(cat => cat !== 'Outros'),
+                        estabelecimentoInfo?.ordemCategorias
+                    )
+                    .filter(categoria => categoria !== 'Todos')
+                    .map((categoria) => {
+                        const itemsNestaCategoria = menuAgrupado[categoria] || [];
+                        const totalItemsVisiveis = visibleItemsCount[categoria] || 4;
+                        const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
+                        
+                        if (itemsNestaCategoria.length === 0) return null;
+                        
+                        return (
+                            <div key={categoria} className="mb-6 md:mb-8">
+                                {/* CABEÇALHO DA CATEGORIA */}
+                                <div className="flex items-center justify-between mb-3 md:mb-4">
+                                    <h2 className="text-xl md:text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        {categoria}
+                                    </h2>
+                                    <span className="bg-gray-800 px-2 md:px-3 py-1 rounded-full text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                        {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
+                                    </span>
+                                </div>
+                                
+                                {/* LISTA DE ITENS */}
+                                <div className="space-y-3">
+                                    {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
+                                        <CardapioItem 
+                                            key={item.id} 
+                                            item={item} 
+                                            onAddItem={handleAbrirModalProduto}
+                                            coresEstabelecimento={coresEstabelecimento}
+                                        />
+                                    ))}
+                                </div>
+                                
+                                {/* BOTÃO VER MAIS/VER MENOS */}
+                                {itemsNestaCategoria.length > 4 && (
+                                    <div className="text-center mt-3 md:mt-4">
+                                        {todosItensVisiveis ? (
+                                            <button 
+                                                onClick={() => handleShowLess(categoria)}
+                                                style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
+                                                className="hover:text-gray-300 font-medium text-xs md:text-sm transition-colors px-4 py-2"
+                                            >
+                                                ↑ Ver menos
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={() => handleShowMore(categoria)}
+                                                className="font-medium text-xs md:text-sm transition-colors px-4 py-2"
+                                                style={{ color: coresEstabelecimento.primaria }}
+                                            >
+                                                ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                ) : (
+                    // QUANDO UMA CATEGORIA ESPECÍFICA ESTÁ SELECIONADA - VERSÃO RESPONSIVA
+                    (() => {
+                        const categoriaSelecionada = selectedCategory;
+                        const itemsNestaCategoria = menuAgrupado[categoriaSelecionada] || [];
+                        const totalItemsVisiveis = visibleItemsCount[categoriaSelecionada] || 4;
+                        const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
+                        
+                        return (
+                            <div key={categoriaSelecionada} className="mb-6 md:mb-8">
+                                {/* CABEÇALHO DA CATEGORIA */}
+                                <div className="flex items-center justify-between mb-3 md:mb-4">
+                                    <h2 className="text-xl md:text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        {categoriaSelecionada}
+                                    </h2>
+                                    <span className="bg-gray-800 px-2 md:px-3 py-1 rounded-full text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                        {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
+                                    </span>
+                                </div>
+                                
+                                {/* LISTA DE ITENS */}
+                                <div className="space-y-3">
+                                    {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
+                                        <CardapioItem 
+                                            key={item.id} 
+                                            item={item} 
+                                            onAddItem={handleAbrirModalProduto}
+                                            coresEstabelecimento={coresEstabelecimento}
+                                        />
+                                    ))}
+                                </div>
+                                
+                                {/* BOTÃO VER MAIS/VER MENOS */}
+                                {itemsNestaCategoria.length > 4 && (
+                                    <div className="text-center mt-3 md:mt-4">
+                                        {todosItensVisiveis ? (
+                                            <button 
+                                                onClick={() => handleShowLess(categoriaSelecionada)}
+                                                style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
+                                                className="hover:text-gray-300 font-medium text-xs md:text-sm transition-colors px-4 py-2"
+                                            >
+                                                ↑ Ver menos
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={() => handleShowMore(categoriaSelecionada)}
+                                                className="font-medium text-xs md:text-sm transition-colors px-4 py-2"
+                                                style={{ color: coresEstabelecimento.primaria }}
+                                            >
+                                                ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()
+                )}
+
+                {/* Seção de Dados do Cliente - VERSÃO RESPONSIVA */}
+                <div className="bg-gray-900 rounded-xl md:rounded-2xl shadow-xl p-4 md:p-6 mt-8 md:mt-12 border border-gray-700">
+                    <h2 className="font-bold text-2xl md:text-3xl mb-4 md:mb-6 flex items-center gap-2 md:gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                         <span>👤</span>
                         Seus Dados
                     </h2>
                     
-                    <div className="grid md:grid-cols-2 gap-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
                         <div>
-                            <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                            <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                 Nome *
                             </label>
                             <input 
                                 type="text" 
                                 value={nomeCliente} 
                                 onChange={(e) => setNomeCliente(e.target.value)} 
-                                className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                 placeholder="Seu nome completo"
                                 required
                                 style={{ 
@@ -1207,14 +1206,14 @@ const handleShowLess = (categoryName) => {
                             />
                         </div>
                         <div>
-                            <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                            <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                 Telefone *
                             </label>
                             <input 
                                 type="tel" 
                                 value={telefoneCliente} 
                                 onChange={(e) => setTelefoneCliente(e.target.value)} 
-                                className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                 placeholder="(11) 99999-9999"
                                 required
                                 style={{ 
@@ -1226,15 +1225,15 @@ const handleShowLess = (categoryName) => {
                     </div>
 
                     {/* Tipo de Entrega */}
-                    <div className="mb-6">
-                        <label className="block font-semibold mb-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                    <div className="mb-4 md:mb-6">
+                        <label className="block font-semibold mb-3 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                             Tipo de Entrega
                         </label>
-                        <div className="flex gap-4">
+                        <div className="flex flex-col sm:flex-row gap-3">
                             <button
                                 type="button"
                                 onClick={() => setIsRetirada(false)}
-                                className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                                className={`flex-1 py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-sm md:text-base ${
                                     !isRetirada 
                                         ? 'text-white shadow-lg' 
                                         : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
@@ -1250,7 +1249,7 @@ const handleShowLess = (categoryName) => {
                             <button
                                 type="button"
                                 onClick={() => setIsRetirada(true)}
-                                className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                                className={`flex-1 py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-sm md:text-base ${
                                     isRetirada 
                                         ? 'text-white shadow-lg' 
                                         : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
@@ -1261,27 +1260,27 @@ const handleShowLess = (categoryName) => {
                                         : {}
                                 }
                             >
-                                🏪 Retirada no Local
+                                🏪 Retirada
                             </button>
                         </div>
                     </div>
 
                     {/* Endereço (apenas para entrega) */}
                     {!isRetirada && (
-                        <div className="space-y-4 mb-6">
-                            <h3 className="text-xl font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                        <div className="space-y-4 mb-4 md:mb-6">
+                            <h3 className="text-lg md:text-xl font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                 📍 Endereço de Entrega
                             </h3>
-                            <div className="grid md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                                 <div className="md:col-span-2">
-                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                         Rua *
                                     </label>
                                     <input 
                                         type="text" 
                                         value={rua} 
                                         onChange={(e) => setRua(e.target.value)} 
-                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                         placeholder="Nome da rua"
                                         required
                                         style={{ 
@@ -1291,14 +1290,14 @@ const handleShowLess = (categoryName) => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                         Número *
                                     </label>
                                     <input 
                                         type="text" 
                                         value={numero} 
                                         onChange={(e) => setNumero(e.target.value)} 
-                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                         placeholder="Número"
                                         required
                                         style={{ 
@@ -1308,14 +1307,14 @@ const handleShowLess = (categoryName) => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                         Bairro *
                                     </label>
                                     <input 
                                         type="text" 
                                         value={bairro} 
                                         onChange={(e) => setBairro(e.target.value)} 
-                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                         placeholder="Seu bairro"
                                         required
                                         style={{ 
@@ -1325,14 +1324,14 @@ const handleShowLess = (categoryName) => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                         Cidade *
                                     </label>
                                     <input 
                                         type="text" 
                                         value={cidade} 
                                         onChange={(e) => setCidade(e.target.value)} 
-                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                         placeholder="Sua cidade"
                                         required
                                         style={{ 
@@ -1342,14 +1341,14 @@ const handleShowLess = (categoryName) => {
                                     />
                                 </div>
                                 <div className="md:col-span-2">
-                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                         Complemento (Opcional)
                                     </label>
                                     <input 
                                         type="text" 
                                         value={complemento} 
                                         onChange={(e) => setComplemento(e.target.value)} 
-                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                         placeholder="Apartamento, bloco, referência..."
                                         style={{ 
                                             focusRingColor: coresEstabelecimento.primaria,
@@ -1359,8 +1358,8 @@ const handleShowLess = (categoryName) => {
                                 </div>
                             </div>
                             {bairroNaoEncontrado && !isRetirada && (
-                                <div className="bg-yellow-900 border border-yellow-700 rounded-xl p-4">
-                                    <p className="text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
+                                <div className="bg-yellow-900 border border-yellow-700 rounded-lg md:rounded-xl p-3 md:p-4">
+                                    <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
                                         ⚠️ O bairro "<strong>{bairro}</strong>" não foi encontrado na nossa lista de áreas de entrega. 
                                         A taxa de entrega é R$ 0,00, mas podem ser aplicadas taxas adicionais na confirmação do pedido.
                                     </p>
@@ -1370,17 +1369,17 @@ const handleShowLess = (categoryName) => {
                     )}
 
                     {/* Forma de Pagamento */}
-                    <div className="mb-6">
-                        <h3 className="text-xl font-semibold mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                    <div className="mb-4 md:mb-6">
+                        <h3 className="text-lg md:text-xl font-semibold mb-3 md:mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                             💳 Forma de Pagamento
                         </h3>
-                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
                             {['dinheiro', 'cartão crédito', 'cartão débito', 'pix'].map((pagamento) => (
                                 <button
                                     key={pagamento}
                                     type="button"
                                     onClick={() => setFormaPagamento(pagamento)}
-                                    className={`py-3 rounded-xl font-semibold transition-all duration-200 ${
+                                    className={`py-2 md:py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-xs md:text-sm ${
                                         formaPagamento === pagamento 
                                             ? 'text-white shadow-lg' 
                                             : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
@@ -1400,15 +1399,15 @@ const handleShowLess = (categoryName) => {
                         </div>
                         
                         {formaPagamento === 'dinheiro' && (
-                            <div className="mt-4">
-                                <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                            <div className="mt-3 md:mt-4">
+                                <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                     Troco para quanto? (Opcional)
                                 </label>
                                 <input 
                                     type="number" 
                                     value={trocoPara} 
                                     onChange={(e) => setTrocoPara(e.target.value)} 
-                                    className="w-full md:w-1/2 border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full md:w-1/2 border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     placeholder="Ex: 50,00"
                                     step="0.01"
                                     min={finalOrderTotal}
@@ -1417,7 +1416,7 @@ const handleShowLess = (categoryName) => {
                                         color: coresEstabelecimento.texto?.principal || '#FFFFFF'
                                     }}
                                 />
-                                <p className="text-sm mt-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                <p className="text-xs md:text-sm mt-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                     Deixe em branco se não precisar de troco.
                                 </p>
                             </div>
@@ -1425,47 +1424,47 @@ const handleShowLess = (categoryName) => {
                     </div>
                 </div>
 
-                {/* Cart and Order Section */}
-                <div className="bg-gray-900 rounded-2xl shadow-xl p-6 mt-8 border border-gray-700">
-                    <h2 className="font-bold text-3xl mb-6 flex items-center gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                {/* Cart and Order Section - VERSÃO RESPONSIVA */}
+                <div className="bg-gray-900 rounded-xl md:rounded-2xl shadow-xl p-4 md:p-6 mt-6 md:mt-8 border border-gray-700">
+                    <h2 className="font-bold text-2xl md:text-3xl mb-4 md:mb-6 flex items-center gap-2 md:gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                         <span>🛒</span>
                         Seu Pedido
                     </h2>
                     
                     {carrinho.length === 0 ? (
-                        <div className="text-center py-8">
-                            <div className="text-6xl mb-4" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>🛒</div>
-                            <p className="text-lg font-medium" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                        <div className="text-center py-6 md:py-8">
+                            <div className="text-4xl md:text-6xl mb-3 md:mb-4" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>🛒</div>
+                            <p className="text-base md:text-lg font-medium" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                 Nenhum item adicionado ainda.
                             </p>
-                            <p className="mt-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                            <p className="mt-1 md:mt-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                 Explore nosso cardápio e adicione itens deliciosos!
                             </p>
                         </div>
                     ) : (
                         <>
-                            <div className="space-y-4 mb-6">
+                            <div className="space-y-3 md:space-y-4 mb-4 md:mb-6">
                                 {carrinho.map((item) => (
-                                    <div key={item.cartItemId} className="bg-gray-800 p-4 rounded-xl border border-gray-700 hover:shadow-md transition-all duration-200">
+                                    <div key={item.cartItemId} className="bg-gray-800 p-3 md:p-4 rounded-lg md:rounded-xl border border-gray-700 hover:shadow-md transition-all duration-200">
                                         <div className="flex justify-between items-start">
-                                            <div className="flex-1 mr-4">
+                                            <div className="flex-1 mr-3 md:mr-4">
                                                 <div className="flex items-start justify-between">
                                                     <div>
-                                                        <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                                        <span className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                                             {formatarItemCarrinho(item)}
                                                         </span>
-                                                        <span className="text-sm ml-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                                        <span className="text-xs md:text-sm ml-1 md:ml-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                                             ({item.qtd}x)
                                                         </span>
                                                     </div>
-                                                    <span className="font-bold text-lg" style={{ color: coresEstabelecimento.texto?.destaque || '#FBBF24' }}>
+                                                    <span className="font-bold text-base md:text-lg" style={{ color: coresEstabelecimento.texto?.destaque || '#FBBF24' }}>
                                                         R$ {(item.precoFinal * item.qtd).toFixed(2).replace('.', ',')}
                                                     </span>
                                                 </div>
                                             </div>
                                             <button 
                                                 onClick={() => removerDoCarrinho(item.cartItemId)}
-                                                className="text-white w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors duration-200 flex-shrink-0"
+                                                className="text-white w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold transition-colors duration-200 flex-shrink-0 text-xs md:text-base"
                                                 style={{ backgroundColor: coresEstabelecimento.primaria }}
                                             >
                                                 -
@@ -1475,8 +1474,8 @@ const handleShowLess = (categoryName) => {
                                 ))}
                             </div>
                             
-                            <div className="border-t border-gray-700 pt-6 space-y-4">
-                                <div className="flex justify-between items-center text-lg">
+                            <div className="border-t border-gray-700 pt-4 md:pt-6 space-y-3 md:space-y-4">
+                                <div className="flex justify-between items-center text-base md:text-lg">
                                     <span style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Subtotal:</span>
                                     <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                         R$ {subtotalCalculado.toFixed(2).replace('.', ',')}
@@ -1484,7 +1483,7 @@ const handleShowLess = (categoryName) => {
                                 </div>
                                 
                                 {!isRetirada && (
-                                    <div className="flex justify-between items-center text-lg">
+                                    <div className="flex justify-between items-center text-base md:text-lg">
                                         <span style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Taxa de Entrega:</span>
                                         <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                             R$ {taxaAplicada.toFixed(2).replace('.', ',')}
@@ -1493,13 +1492,13 @@ const handleShowLess = (categoryName) => {
                                 )}
                                 
                                 {!appliedCoupon ? (
-                                    <div className="flex items-center gap-3 pt-4 border-t border-gray-600">
+                                    <div className="flex flex-col sm:flex-row items-center gap-2 md:gap-3 pt-3 md:pt-4 border-t border-gray-600">
                                         <input 
                                             type="text" 
                                             placeholder="🎁 Código do Cupom" 
                                             value={couponCodeInput} 
                                             onChange={(e) => setCouponCodeInput(e.target.value)} 
-                                            className="flex-1 border border-gray-600 rounded-xl px-4 py-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                            className="flex-1 border border-gray-600 rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                             disabled={couponLoading}
                                             style={{ 
                                                 focusRingColor: coresEstabelecimento.primaria,
@@ -1509,7 +1508,7 @@ const handleShowLess = (categoryName) => {
                                         <button 
                                             onClick={handleApplyCoupon} 
                                             disabled={couponLoading || !couponCodeInput.trim()}
-                                            className="text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                            className="text-white px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm md:text-base w-full sm:w-auto"
                                             style={{ 
                                                 backgroundColor: couponLoading || !couponCodeInput.trim() ? '#4B5563' : coresEstabelecimento.primaria 
                                             }}
@@ -1518,18 +1517,18 @@ const handleShowLess = (categoryName) => {
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="flex justify-between items-center bg-green-900 p-4 rounded-xl border border-green-700 mt-4">
+                                    <div className="flex justify-between items-center bg-green-900 p-3 md:p-4 rounded-lg md:rounded-xl border border-green-700 mt-3 md:mt-4">
                                         <div>
-                                            <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
+                                            <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
                                                 🎉 Cupom: {appliedCoupon.codigo}
                                             </p>
-                                            <p className="text-sm" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
+                                            <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
                                                 Desconto aplicado com sucesso!
                                             </p>
                                         </div>
                                         <button 
                                             onClick={removeAppliedCoupon} 
-                                            className="font-semibold text-sm transition-colors duration-200"
+                                            className="font-semibold text-xs md:text-sm transition-colors duration-200"
                                             style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}
                                         >
                                             Remover
@@ -1538,7 +1537,7 @@ const handleShowLess = (categoryName) => {
                                 )}
                                 
                                 {discountAmount > 0 && (
-                                    <div className="flex justify-between items-center text-lg font-semibold">
+                                    <div className="flex justify-between items-center text-base md:text-lg font-semibold">
                                         <span style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>Desconto:</span>
                                         <span style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
                                             - R$ {discountAmount.toFixed(2).replace('.', ',')}
@@ -1546,7 +1545,7 @@ const handleShowLess = (categoryName) => {
                                     </div>
                                 )}
                                 
-                                <div className="flex justify-between items-center text-2xl font-bold pt-4 border-t border-gray-600">
+                                <div className="flex justify-between items-center text-xl md:text-2xl font-bold pt-3 md:pt-4 border-t border-gray-600">
                                     <span style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>TOTAL:</span>
                                     <span style={{ color: coresEstabelecimento.texto?.destaque || '#FBBF24' }}>
                                         R$ {finalOrderTotal.toFixed(2).replace('.', ',')}
@@ -1558,21 +1557,21 @@ const handleShowLess = (categoryName) => {
                 </div>
             </div>
 
-            {/* Fixed Order Button */}
+            {/* Fixed Order Button - VERSÃO RESPONSIVA */}
             {carrinho.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-gray-900 p-4 shadow-2xl border-t border-gray-700 md:relative md:p-0 md:mt-8 md:shadow-none md:border-none">
+                <div className="fixed bottom-0 left-0 right-0 bg-gray-900 p-3 md:p-4 shadow-2xl border-t border-gray-700 md:relative md:p-0 md:mt-6 md:shadow-none md:border-none">
                     <div className="max-w-7xl mx-auto">
                         <button 
                             onClick={enviarPedido} 
                             disabled={!currentUser || !nomeCliente.trim() || !telefoneCliente.trim() || !formaPagamento || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim()))}
-                            className="w-full px-6 py-4 rounded-2xl font-bold text-lg disabled:bg-gray-600 disabled:cursor-not-allowed text-white transition-all duration-200 transform hover:scale-105 shadow-lg"
+                            className="w-full px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg disabled:bg-gray-600 disabled:cursor-not-allowed text-white transition-all duration-200 transform hover:scale-105 shadow-lg"
                             style={{ 
                                 backgroundColor: (!currentUser || !nomeCliente.trim() || !telefoneCliente.trim() || !formaPagamento || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim()))) 
                                     ? '#4B5563' 
                                     : coresEstabelecimento.destaque 
                             }}
                         >
-                            🚀 Enviar Pedido Agora! - R$ {finalOrderTotal.toFixed(2).replace('.', ',')}
+                            🚀 Enviar Pedido - R$ {finalOrderTotal.toFixed(2).replace('.', ',')}
                         </button>
                     </div>
                 </div>
@@ -1581,25 +1580,25 @@ const handleShowLess = (categoryName) => {
             {/* Order Confirmation Modal */}
             {showOrderConfirmationModal && confirmedOrderDetails && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                    <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full text-center border border-gray-700">
-                        <div className="text-6xl mb-4">🎉</div>
-                        <h2 className="text-3xl font-bold mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                    <div className="bg-gray-900 rounded-xl md:rounded-2xl p-6 md:p-8 max-w-md w-full text-center border border-gray-700">
+                        <div className="text-4xl md:text-6xl mb-3 md:mb-4">🎉</div>
+                        <h2 className="text-2xl md:text-3xl font-bold mb-3 md:mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                             Pedido Enviado!
                         </h2>
-                        <div className="space-y-3 text-left mb-6">
-                            <p>
+                        <div className="space-y-2 md:space-y-3 text-left mb-4 md:mb-6">
+                            <p className="text-sm md:text-base">
                                 <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>ID:</strong> 
                                 <span className="font-mono ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                     {confirmedOrderDetails.id.substring(0, 8)}...
                                 </span>
                             </p>
-                            <p>
+                            <p className="text-sm md:text-base">
                                 <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Total:</strong> 
                                 <span className="ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                     R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}
                                 </span>
                             </p>
-                            <p>
+                            <p className="text-sm md:text-base">
                                 <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Forma de Pagamento:</strong> 
                                 <span className="ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                     {confirmedOrderDetails.formaPagamento}
@@ -1608,7 +1607,7 @@ const handleShowLess = (categoryName) => {
                         </div>
                         <button 
                             onClick={() => setShowOrderConfirmationModal(false)} 
-                            className="w-full text-white py-3 rounded-xl font-semibold transition-all duration-200"
+                            className="w-full text-white py-2 md:py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-sm md:text-base"
                             style={{ backgroundColor: coresEstabelecimento.destaque }}
                         >
                             Fechar
@@ -1619,40 +1618,40 @@ const handleShowLess = (categoryName) => {
             
             {/* Login Modal */}
             {showLoginPrompt && (
-                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[1000]">
-                    <div className="bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full relative border border-gray-700">
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-3 md:p-4 z-[1000]">
+                    <div className="bg-gray-900 rounded-xl md:rounded-2xl shadow-2xl p-4 md:p-6 max-w-md w-full relative border border-gray-700">
                         <button 
                             onClick={() => { setShowLoginPrompt(false); }} 
-                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-300 text-2xl font-bold transition-colors duration-200" 
+                            className="absolute top-2 md:top-4 right-2 md:right-4 text-gray-400 hover:text-gray-300 text-xl md:text-2xl font-bold transition-colors duration-200" 
                             aria-label="Fechar"
                         >
                             &times;
                         </button>
                         
-                        <div className="text-center mb-6">
-                            <div className="text-4xl mb-4">🔐</div>
-                            <h2 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                        <div className="text-center mb-4 md:mb-6">
+                            <div className="text-3xl md:text-4xl mb-2 md:mb-4">🔐</div>
+                            <h2 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                 {isRegisteringInModal ? 'Criar Conta' : 'Fazer Login'}
                             </h2>
-                            <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                            <p className="text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                 {isRegisteringInModal ? 'Preencha seus dados para criar uma conta.' : 'Para acessar o cardápio e fazer pedidos.'}
                             </p>
                         </div>
                         
                         {errorAuthModal && (
-                            <div className="bg-red-900 border border-red-700 rounded-xl p-4 mb-6">
-                                <p className="text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
+                            <div className="bg-red-900 border border-red-700 rounded-lg md:rounded-xl p-3 md:p-4 mb-4 md:mb-6">
+                                <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
                                     {errorAuthModal}
                                 </p>
                             </div>
                         )}
                         
                         {isRegisteringInModal ? (
-                            <form onSubmit={handleRegisterModal} className="space-y-4">
+                            <form onSubmit={handleRegisterModal} className="space-y-3 md:space-y-4">
                                 <input 
                                     type="text" 
                                     placeholder="Seu Nome Completo *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={nomeAuthModal} 
                                     onChange={(e) => setNomeAuthModal(e.target.value)} 
                                     required 
@@ -1664,7 +1663,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="tel" 
                                     placeholder="Seu Telefone (com DDD) *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={telefoneAuthModal} 
                                     onChange={(e) => setTelefoneAuthModal(e.target.value)} 
                                     required 
@@ -1676,7 +1675,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="email" 
                                     placeholder="Email *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
@@ -1688,7 +1687,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="password" 
                                     placeholder="Senha (mín. 6 caracteres) *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
@@ -1700,7 +1699,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="text" 
                                     placeholder="Rua *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={ruaAuthModal} 
                                     onChange={(e) => setRuaAuthModal(e.target.value)} 
                                     required 
@@ -1712,7 +1711,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="text" 
                                     placeholder="Número *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={numeroAuthModal} 
                                     onChange={(e) => setNumeroAuthModal(e.target.value)} 
                                     required 
@@ -1724,7 +1723,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="text" 
                                     placeholder="Bairro *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={bairroAuthModal} 
                                     onChange={(e) => setBairroAuthModal(e.target.value)} 
                                     required 
@@ -1736,7 +1735,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="text" 
                                     placeholder="Cidade *" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={cidadeAuthModal} 
                                     onChange={(e) => setCidadeAuthModal(e.target.value)} 
                                     required 
@@ -1748,7 +1747,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="text" 
                                     placeholder="Complemento (Opcional)" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={complementoAuthModal} 
                                     onChange={(e) => setComplementoAuthModal(e.target.value)} 
                                     style={{ 
@@ -1758,12 +1757,12 @@ const handleShowLess = (categoryName) => {
                                 />
                                 <button 
                                     type="submit" 
-                                    className="w-full text-white font-semibold py-3 rounded-xl transition-all duration-200 transform hover:scale-105"
+                                    className="w-full text-white font-semibold py-2 md:py-3 rounded-lg md:rounded-xl transition-all duration-200 transform hover:scale-105 text-sm md:text-base"
                                     style={{ backgroundColor: coresEstabelecimento.primaria }}
                                 >
                                     Cadastrar e Entrar
                                 </button>
-                                <p className="text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                <p className="text-xs md:text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                     Já tem uma conta?{' '}
                                     <button 
                                         type="button" 
@@ -1776,11 +1775,11 @@ const handleShowLess = (categoryName) => {
                                 </p>
                             </form>
                         ) : (
-                            <form onSubmit={handleLoginModal} className="space-y-4">
+                            <form onSubmit={handleLoginModal} className="space-y-3 md:space-y-4">
                                 <input 
                                     type="email" 
                                     placeholder="Email" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
@@ -1792,7 +1791,7 @@ const handleShowLess = (categoryName) => {
                                 <input 
                                     type="password" 
                                     placeholder="Senha" 
-                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
+                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
@@ -1803,12 +1802,12 @@ const handleShowLess = (categoryName) => {
                                 />
                                 <button 
                                     type="submit" 
-                                    className="w-full text-white font-semibold py-3 rounded-xl transition-all duration-200 transform hover:scale-105"
+                                    className="w-full text-white font-semibold py-2 md:py-3 rounded-lg md:rounded-xl transition-all duration-200 transform hover:scale-105 text-sm md:text-base"
                                     style={{ backgroundColor: coresEstabelecimento.destaque }}
                                 >
                                     Entrar
                                 </button>
-                                <p className="text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                <p className="text-xs md:text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                     Não tem uma conta?{' '}
                                     <button 
                                         type="button" 
