@@ -817,13 +817,19 @@ const ordenarCategorias = (categorias, ordemPersonalizada) => {
     }, [authLoading, isUserAdmin, isUserMasterAdmin]);
 
     // Funções para mostrar mais/menos itens
-    const handleShowMore = (categoryName) => {
-        setVisibleItemsCount(prev => ({ ...prev, [categoryName]: (prev[categoryName] || 3) + 3 }));
-    };
+const handleShowMore = (categoryName) => {
+  setVisibleItemsCount(prev => ({ 
+    ...prev, 
+    [categoryName]: (prev[categoryName] || 4) + 4 
+  }));
+};
 
-    const handleShowLess = (categoryName) => {
-        setVisibleItemsCount(prev => ({ ...prev, [categoryName]: 3 }));
-    };
+const handleShowLess = (categoryName) => {
+  setVisibleItemsCount(prev => ({ 
+    ...prev, 
+    [categoryName]: 4 
+  }));
+};
 
     // 🏪 COMPONENTE DE INFORMAÇÕES DO ESTABELECIMENTO
     const InfoEstabelecimento = () => {
@@ -957,89 +963,90 @@ const ordenarCategorias = (categorias, ordemPersonalizada) => {
     }, {});
 
     return (
-        <div className="min-h-screen pb-48 md:pb-0" style={{ 
-            backgroundColor: coresEstabelecimento.background,
-            color: coresEstabelecimento.texto?.principal || '#FFFFFF' 
-        }}>
-            {/* Header Simplificado */}
-            <div className="shadow-lg" style={{ backgroundColor: coresEstabelecimento.primaria }}>
-                <div className="max-w-7xl mx-auto px-4 py-6">
-                    <div className="text-center text-white">
-                        <h1 className="text-3xl font-bold mb-2 drop-shadow-sm">
-                            {nomeEstabelecimento}
-                        </h1>
-                        <p className="text-white text-opacity-90">
-                            Cardápio Digital
-                        </p>
-                    </div>
-                </div>
-            </div>
+<div className="min-h-screen pb-32 md:pb-0" style={{ 
+  backgroundColor: coresEstabelecimento.background,
+  color: coresEstabelecimento.texto?.principal || '#FFFFFF' 
+}}>
+  {/* Header Simplificado */}
+  <div className="shadow-lg" style={{ backgroundColor: coresEstabelecimento.primaria }}>
+    <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
+      <div className="text-center text-white">
+        <h1 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2 drop-shadow-sm">
+          {nomeEstabelecimento}
+        </h1>
+        <p className="text-white text-opacity-90 text-sm md:text-base">
+          Cardápio Digital
+        </p>
+      </div>
+    </div>
+  </div>
 
-            {/* Conteúdo Principal */}
-            <div className="max-w-7xl mx-auto px-4 py-6">
+  {/* Conteúdo Principal */}
+  <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
                 {/* 🏪 INFORMAÇÕES DO ESTABELECIMENTO */}
                 <InfoEstabelecimento />
 
-{/* Search and Filters */}
-<div className="bg-gray-900 rounded-2xl shadow-xl p-6 mb-8 border border-gray-700">
-    <div className="mb-6">
-        <div className="relative">
-            <input 
-                type="text" 
-                placeholder="🔍 Buscar por nome ou descrição..." 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)} 
-                className="w-full px-6 py-4 border border-gray-600 rounded-2xl text-lg focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white" 
-                style={{ 
-                    focusRingColor: coresEstabelecimento.primaria,
-                    borderColor: `${coresEstabelecimento.primaria}30`
-                }}
-            />
-        </div>
+
+{/* Search and Filters - VERSÃO RESPONSIVA */}
+<div className="bg-gray-900 rounded-2xl shadow-xl p-4 md:p-6 mb-6 md:mb-8 border border-gray-700">
+  {/* Search */}
+  <div className="mb-4 md:mb-6">
+    <div className="relative">
+      <input 
+        type="text" 
+        placeholder="🔍 Buscar por nome ou descrição..." 
+        value={searchTerm} 
+        onChange={(e) => setSearchTerm(e.target.value)} 
+        className="w-full px-4 md:px-6 py-3 md:py-4 border border-gray-600 rounded-xl md:rounded-2xl text-base md:text-lg focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white" 
+        style={{ 
+          focusRingColor: coresEstabelecimento.primaria,
+          borderColor: `${coresEstabelecimento.primaria}30`
+        }}
+      />
     </div>
-    
- {/* BARRA DE CATEGORIAS COM ORDEM DINÂMICA */}
-<div className="relative">
-  <div className="flex overflow-x-auto gap-3 pb-4 -mb-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-    {/* Todas as categorias ordenadas dinamicamente (incluindo "Todos") */}
-    {ordenarCategorias(
-      availableCategories,
-      estabelecimentoInfo?.ordemCategorias
-    ).map((category) => (
-      <button 
-        key={category} 
-        onClick={() => setSelectedCategory(category)}
-        className={`px-6 py-3 rounded-full text-sm font-semibold transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0 ${
-          selectedCategory === category 
-            ? 'text-white shadow-lg' 
-            : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-        }`}
-        style={
-          selectedCategory === category 
-            ? { backgroundColor: coresEstabelecimento.primaria }
-            : {}
-        }
-      >
-        {category === 'Todos' ? '📋 Todos' : category}
-      </button>
-    ))}
-    
-    {/* Botão Limpar Filtros */}
-    {(searchTerm || selectedCategory !== 'Todos') && (
-      <button 
-        onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
-        className="px-6 py-3 rounded-full text-sm font-semibold bg-gray-600 text-white hover:bg-gray-500 transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0"
-      >
-        🗑️ Limpar Filtros
-      </button>
-    )}
   </div>
   
-  {/* Sombra indicativa de scroll */}
-  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-900 to-transparent pointer-events-none"></div>
+  {/* BARRA DE CATEGORIAS RESPONSIVA */}
+  <div className="relative">
+    <div className="flex overflow-x-auto gap-2 md:gap-3 pb-3 -mb-3 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+      {/* Todas as categorias ordenadas dinamicamente */}
+      {ordenarCategorias(
+        availableCategories,
+        estabelecimentoInfo?.ordemCategorias
+      ).map((category) => (
+        <button 
+          key={category} 
+          onClick={() => setSelectedCategory(category)}
+          className={`px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0 ${
+            selectedCategory === category 
+              ? 'text-white shadow-lg' 
+              : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+          }`}
+          style={
+            selectedCategory === category 
+              ? { backgroundColor: coresEstabelecimento.primaria }
+              : {}
+          }
+        >
+          {category === 'Todos' ? '📋 Todos' : category}
+        </button>
+      ))}
+      
+      {/* Botão Limpar Filtros */}
+      {(searchTerm || selectedCategory !== 'Todos') && (
+        <button 
+          onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
+          className="px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold bg-gray-600 text-white hover:bg-gray-500 transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0"
+        >
+          🗑️ Limpar
+        </button>
+      )}
+    </div>
+    
+    {/* Sombra indicativa de scroll */}
+    <div className="absolute right-0 top-0 bottom-0 w-6 md:w-8 bg-gradient-to-l from-gray-900 to-transparent pointer-events-none"></div>
+  </div>
 </div>
-</div>
-
 {/* Menu Items - ORDENADO PELA ORDEM PERSONALIZADA */}
 {produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
   <div className="text-center py-8">
