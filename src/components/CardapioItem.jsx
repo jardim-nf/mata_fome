@@ -1,4 +1,4 @@
-// src/components/CardapioItem.jsx - VERSÃO ATUALIZADA COMPATÍVEL
+// src/components/CardapioItem.jsx - VERSÃO CORRIGIDA SEM CORTE
 
 import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
@@ -76,7 +76,7 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
   const mostrarPreco = () => {
     if (!safeItem.variacoes || safeItem.variacoes.length === 0) {
       return (
-        <p className="text-lg font-bold" style={{ color: cores.primaria }}>
+        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
           R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </p>
       );
@@ -88,7 +88,7 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
 
     if (variacoesAtivas.length === 0) {
       return (
-        <p className="text-lg font-bold" style={{ color: cores.primaria }}>
+        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
           R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </p>
       );
@@ -98,7 +98,7 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
     if (variacoesAtivas.length === 1) {
       const preco = Number(variacoesAtivas[0].preco);
       return (
-        <p className="text-lg font-bold" style={{ color: cores.primaria }}>
+        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
           R$ {preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </p>
       );
@@ -107,9 +107,9 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
     // 2+ VARIAÇÕES: Mostrar "A partir de"
     const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
     return (
-      <div>
-        <p className="text-xs text-gray-600">A partir de</p>
-        <p className="text-lg font-bold" style={{ color: cores.primaria }}>
+      <div className="text-right">
+        <p className="text-xs text-gray-600 whitespace-nowrap">A partir de</p>
+        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
           R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </p>
       </div>
@@ -121,9 +121,9 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
       !isAvailable ? 'opacity-60' : ''
     }`}>
       <div className="flex gap-4">
-        {/* IMAGEM */}
+        {/* IMAGEM - TAMANHO FIXO */}
         <div className="flex-shrink-0">
-          <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-100 rounded-xl overflow-hidden">
+          <div className="w-20 h-20 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
             <img
               src={displayImageUrl}
               alt={safeItem.nome}
@@ -136,60 +136,73 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
           </div>
         </div>
 
-        {/* CONTEÚDO */}
-        <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex-1 mr-2">
-              {/* NOME */}
-              <h3 className="font-bold text-gray-900 text-lg truncate">
+        {/* CONTEÚDO - FLEXÍVEL SEM CORTE */}
+        <div className="flex-1 min-w-0 overflow-hidden">
+          {/* CABEÇALHO COM NOME E PREÇO */}
+          <div className="flex justify-between items-start mb-2 gap-2">
+            {/* NOME E CATEGORIA */}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-gray-900 text-lg break-words leading-tight">
                 {safeItem.nome}
               </h3>
-
+              
               {/* CATEGORIA */}
-              <p className="text-gray-500 text-sm mt-1">
+              <p className="text-gray-500 text-sm mt-1 truncate">
                 {safeItem.categoria}
               </p>
-
-              {/* DESCRIÇÃO */}
-              {safeItem.descricao && (
-                <p className="text-gray-700 text-sm mt-2 line-clamp-2">
-                  {safeItem.descricao}
-                </p>
-              )}
             </div>
             
-            {/* PREÇO */}
-            <div className="text-right flex-shrink-0">
+            {/* PREÇO - FIXO À DIREITA */}
+            <div className="flex-shrink-0 ml-2">
               {mostrarPreco()}
             </div>
           </div>
 
-          {/* 🆕 BADGE DE MÚLTIPLAS VARIAÇÕES */}
-          {safeItem.variacoes && safeItem.variacoes.filter(v => v.ativo).length > 1 && (
-            <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mb-3" 
-                 style={{ 
-                   backgroundColor: `${cores.primaria}15`,
-                   color: cores.primaria,
-                   border: `1px solid ${cores.primaria}30`
-                 }}>
-              {safeItem.variacoes.filter(v => v.ativo).length} opções disponíveis
-            </div>
+          {/* DESCRIÇÃO */}
+          {safeItem.descricao && (
+            <p className="text-gray-700 text-sm mt-2 mb-3 line-clamp-2 break-words">
+              {safeItem.descricao}
+            </p>
           )}
 
-          {/* INFORMAÇÕES DE PERSONALIZAÇÃO */}
-          {(hasExtras || hasVariations) && isAvailable && (
-            <div className="flex items-center gap-1 text-xs mb-3"
-                 style={{ color: cores.primaria }}>
-              <span>✨</span>
-              <span className="font-medium">
-                {hasVariations && `${safeItem.variacoes.filter(v => v.ativo).length} variação(ões)`}
-                {hasExtras && hasVariations && ' • '}
-                {hasExtras && `${safeItem.adicionais.length} adicional(is)`}
-              </span>
-            </div>
-          )}
+          {/* BADGES DE PERSONALIZAÇÃO */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            {/* BADGE DE MÚLTIPLAS VARIAÇÕES */}
+            {safeItem.variacoes && safeItem.variacoes.filter(v => v.ativo).length > 1 && (
+              <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium" 
+                   style={{ 
+                     backgroundColor: `${cores.primaria}15`,
+                     color: cores.primaria,
+                     border: `1px solid ${cores.primaria}30`
+                   }}>
+                {safeItem.variacoes.filter(v => v.ativo).length} opções
+              </div>
+            )}
 
-          {/* BOTÃO */}
+            {/* BADGE DE VARIAÇÕES */}
+            {hasVariations && isAvailable && (
+              <div className="flex items-center gap-1 text-xs"
+                   style={{ color: cores.primaria }}>
+                <span>🔄</span>
+                <span className="font-medium">
+                  +{safeItem.variacoes.filter(v => v.ativo).length} variação(ões)
+                </span>
+              </div>
+            )}
+
+            {/* BADGE DE ADICIONAIS */}
+            {hasExtras && isAvailable && (
+              <div className="flex items-center gap-1 text-xs"
+                   style={{ color: cores.primaria }}>
+                <span>✨</span>
+                <span className="font-medium">
+                  +{safeItem.adicionais.length} adicional(is)
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* BOTÃO ADICIONAR */}
           <button
             onClick={handleAddItemClick}
             disabled={!isAvailable}
@@ -207,7 +220,7 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
             }}
           >
             {!isAvailable ? 'Indisponível' : 
-             (hasExtras || hasVariations) ? '➕ Adicionar' : '➕ Adicionar'}
+             (hasExtras || hasVariations) ? 'Personalizar' : 'Adicionar'}
           </button>
         </div>
       </div>
