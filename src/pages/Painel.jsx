@@ -348,31 +348,26 @@ function Painel() {
                 title: '📥 Recebido', 
                 color: 'border-l-red-500 bg-gradient-to-r from-red-50 to-red-25', 
                 countColor: 'bg-red-500 text-white',
-                icon: '📥'
             },
             preparo: { 
                 title: '👨‍🍳 Em Preparo', 
                 color: 'border-l-orange-500 bg-gradient-to-r from-orange-50 to-orange-25', 
                 countColor: 'bg-orange-500 text-white',
-                icon: '👨‍🍳'
             },
             em_entrega: { 
                 title: abaAtiva === 'cozinha' ? '🛵 Em Entrega' : '🛵 Pronto / Em Entrega',
                 color: 'border-l-blue-500 bg-gradient-to-r from-blue-50 to-blue-25', 
                 countColor: 'bg-blue-500 text-white',
-                icon: '🛵'
             },
             pronto_para_servir: { 
                 title: '✅ Pronto para Servir', 
                 color: 'border-l-green-500 bg-gradient-to-r from-green-50 to-green-25', 
                 countColor: 'bg-green-500 text-white',
-                icon: '✅'
             },
             finalizado: { 
                 title: '📦 Finalizado', 
                 color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
                 countColor: 'bg-gray-500 text-white',
-                icon: '📦'
             }
         };
         return configs[status] || { 

@@ -1,4 +1,4 @@
-// src/App.jsx - CORREÇÃO COMPLETA
+// src/App.jsx - VERSÃO COMPLETA COM ROTA ORDENAR CATEGORIAS
 
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
@@ -35,6 +35,7 @@ import AdminImageAssociation from './pages/admin/AdminImageAssociation';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminMultiPlatform from './pages/AdminMultiPlatform';
 import ClientManagement from './pages/ClientManagement'; 
+import AdminOrderCategories from './pages/AdminOrderCategories'; // 🆕 NOVA IMPORT
 
 // Páginas Master Admin
 import MasterDashboard from './pages/MasterDashboard';
@@ -62,12 +63,14 @@ function App() {
             <Route path="/login-admin" element={<Login />} />
             <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
             <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
+            <Route path="/cardapio" element={<ListaEstabelecimentos />} />
+            
+            {/* 🎯 PÁGINA DO CARDÁPIO SEM LAYOUT/HEADER - MOVIDA PARA FORA DO GRUPO */}
+            <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
 
             {/* Grupo de rotas que USAM o Layout principal */}
             <Route element={<Layout />}>
               {/* --- Rotas Públicas/Clientes --- */}
-              <Route path="/cardapio" element={<ListaEstabelecimentos />} />
-              <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
               <Route path="/planos" element={<Planos />} />
               <Route path="/historico-pedidos" element={<PrivateRoute><ClientOrderHistory /></PrivateRoute>} />
               <Route path="/painel-inicial" element={<HomeRedirector />} />
@@ -118,6 +121,15 @@ function App() {
                 element={
                   <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                     <AdminMenuManagement />
+                  </PrivateRoute>
+                }
+              />
+              {/* 🆕 ROTA ORDENAR CATEGORIAS ADICIONADA AQUI */}
+              <Route
+                path="/admin/ordenar-categorias"
+                element={
+                  <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                    <AdminOrderCategories />
                   </PrivateRoute>
                 }
               />

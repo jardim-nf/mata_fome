@@ -1,4 +1,4 @@
-// src/pages/AdminDashboard.jsx
+// src/pages/AdminDashboard.jsx - VERSÃO CORRIGIDA
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardSummary from "../components/DashBoardSummary";
@@ -7,10 +7,10 @@ import { IoStatsChart, IoShareSocial } from "react-icons/io5";
 import { FaEnvelopeOpenText, FaUsers } from 'react-icons/fa';
 
 // Componente de botão aprimorado e responsivo
-const ActionButton = ({ to, title, subtitle, icon, colorClass }) => (
-  <Link
-    to={to}
-    className={`group relative p-4 sm:p-6 lg:p-8 rounded-xl sm:rounded-2xl border border-gray-200 bg-white flex flex-col justify-between transition-all duration-300 transform hover:scale-105 hover:shadow-lg overflow-hidden min-h-[140px] sm:min-h-[160px] ${colorClass}`}
+const ActionButton = ({ to, title, subtitle, icon, colorClass, onClick }) => (
+  <div
+    onClick={onClick}
+    className={`group relative p-4 sm:p-6 lg:p-8 rounded-xl sm:rounded-2xl border border-gray-200 bg-white flex flex-col justify-between transition-all duration-300 transform hover:scale-105 hover:shadow-lg overflow-hidden min-h-[140px] sm:min-h-[160px] cursor-pointer ${colorClass}`}
   >
     {/* Efeito de brilho no hover */}
     <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -35,7 +35,7 @@ const ActionButton = ({ to, title, subtitle, icon, colorClass }) => (
         </p>
       </div>
     </div>
-  </Link>
+  </div>
 );
 
 const AdminDashboard = () => {
@@ -79,88 +79,97 @@ const AdminDashboard = () => {
         {/* Componente de resumo */}
         <DashboardSummary />
 
-        {/* Grid de ações totalmente responsivo - ATUALIZADO */}
+        {/* Grid de ações totalmente responsivo - VERSÃO CORRIGIDA */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {/* Painel de pedidos */}
-          <ActionButton
-            to="/painel"
-            title="Painel de Pedidos"
-            subtitle="Gerenciar pedidos em tempo real com atualizações instantâneas"
-            icon="🏪"
-            colorClass="hover:border-blue-500 hover:bg-blue-50"
-          />
+          <Link to="/painel">
+            <ActionButton
+              title="Painel de Pedidos"
+              subtitle="Gerenciar pedidos em tempo real com atualizações instantâneas"
+              icon="🏪"
+              colorClass="hover:border-blue-500 hover:bg-blue-50"
+            />
+          </Link>
 
           {/* Controle de Salão */}
-          <ActionButton
-            to="/controle-salao"
-            title="Controle de Salão"
-            subtitle="Gerenciar mesas e pedidos no salão com visualização em tempo real"
-            icon="🍽️"
-            colorClass="hover:border-green-500 hover:bg-green-50"
-          />
+          <Link to="/controle-salao">
+            <ActionButton
+              title="Controle de Salão"
+              subtitle="Gerenciar mesas e pedidos no salão com visualização em tempo real"
+              icon="🍽️"
+              colorClass="hover:border-green-500 hover:bg-green-50"
+            />
+          </Link>
 
           {/* Gerenciar cardápio */}
-          <ActionButton
-            to="/admin/gerenciar-cardapio"
-            title="Gerenciar Cardápio"
-            subtitle="Adicionar, editar e organizar produtos do seu cardápio"
-            icon="🍔"
-            colorClass="hover:border-orange-500 hover:bg-orange-50"
-          />
-          
-          {/* 🔥 NOVO CARD: COMUNICAÇÃO COM CLIENTES DO ESTABELECIMENTO */}
-        {/* <ActionButton
-            to="/admin/clientes-estabelecimento"
-            title="Comunicação Clientes"
-            subtitle="Envie mensagens de serviço/funcionamento para seus clientes via WhatsApp"
-            icon={<FaEnvelopeOpenText className="text-red-600" />}
-            colorClass="hover:border-red-500 hover:bg-red-50"
-          />
-*/} 
+          <Link to="/admin/gerenciar-cardapio">
+            <ActionButton
+              title="Gerenciar Cardápio"
+              subtitle="Adicionar, editar e organizar produtos do seu cardápio"
+              icon="🍔"
+              colorClass="hover:border-orange-500 hover:bg-orange-50"
+            />
+          </Link>
+
+          {/* 🎯 ORDENAR CATEGORIAS - APENAS COM LINK */}
+          <Link to="/admin/ordenar-categorias">
+            <ActionButton
+              title="Ordenar Categorias"
+              subtitle="Defina a ordem de exibição das categorias no cardápio"
+              icon="📑"
+              colorClass="hover:border-teal-500 hover:bg-teal-50"
+            />
+          </Link>
+
           {/* Painel de Produtividade */}
-          <ActionButton
-            to="/admin/analytics"
-            title="Produtividade"
-            subtitle="Métricas, insights e otimizações para seu negócio"
-            icon={<IoStatsChart className="text-indigo-600" />}
-            colorClass="hover:border-indigo-500 hover:bg-indigo-50"
-          />
+          <Link to="/admin/analytics">
+            <ActionButton
+              title="Produtividade"
+              subtitle="Métricas, insights e otimizações para seu negócio"
+              icon={<IoStatsChart className="text-indigo-600" />}
+              colorClass="hover:border-indigo-500 hover:bg-indigo-50"
+            />
+          </Link>
 
           {/* Multi-Plataforma */}
-          <ActionButton
-            to="/admin/multi-platform"
-            title="Multi-Plataforma"
-            subtitle="Integre com iFood, WhatsApp e outras plataformas"
-            icon={<IoShareSocial className="text-purple-600" />}
-            colorClass="hover:border-purple-500 hover:bg-purple-50"
-          />
+          <Link to="/admin/multi-platform">
+            <ActionButton
+              title="Multi-Plataforma"
+              subtitle="Integre com iFood, WhatsApp e outras plataformas"
+              icon={<IoShareSocial className="text-purple-600" />}
+              colorClass="hover:border-purple-500 hover:bg-purple-50"
+            />
+          </Link>
 
           {/* Taxas de entrega */}
-          <ActionButton
-            to="/admin/taxas-de-entrega"
-            title="Taxas de Entrega"
-            subtitle="Definir valores por bairro e zonas de entrega"
-            icon="🛵"
-            colorClass="hover:border-cyan-500 hover:bg-cyan-50"
-          />
+          <Link to="/admin/taxas-de-entrega">
+            <ActionButton
+              title="Taxas de Entrega"
+              subtitle="Definir valores por bairro e zonas de entrega"
+              icon="🛵"
+              colorClass="hover:border-cyan-500 hover:bg-cyan-50"
+            />
+          </Link>
 
           {/* Cupons */}
-          <ActionButton
-            to="/admin/cupons"
-            title="Gerenciar Cupons"
-            subtitle="Criar e gerenciar códigos promocionais e descontos"
-            icon="💰"
-            colorClass="hover:border-pink-500 hover:bg-pink-50"
-          />
+          <Link to="/admin/cupons">
+            <ActionButton
+              title="Gerenciar Cupons"
+              subtitle="Criar e gerenciar códigos promocionais e descontos"
+              icon="💰"
+              colorClass="hover:border-pink-500 hover:bg-pink-50"
+            />
+          </Link>
 
           {/* Relatórios */}
-          <ActionButton
-            to="/admin/reports"
-            title="Relatórios"
-            subtitle="Acessar dados detalhados e estatísticas do seu negócio"
-            icon="📊"
-            colorClass="hover:border-purple-500 hover:bg-purple-50"
-          />
+          <Link to="/admin/reports">
+            <ActionButton
+              title="Relatórios"
+              subtitle="Acessar dados detalhados e estatísticas do seu negócio"
+              icon="📊"
+              colorClass="hover:border-purple-500 hover:bg-purple-50"
+            />
+          </Link>
         </div>
 
         {/* Footer sutil */}

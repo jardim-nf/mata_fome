@@ -1,9 +1,8 @@
-// src/pages/ListaEstabelecimentos.jsx - VERSÃO CORRIGIDA COM isAdminMaster
-
+// src/pages/ListaEstabelecimentos.jsx - VERSÃO CORRIGIDA E FUNCIONAL
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { 
     IoRestaurant, 
@@ -19,10 +18,8 @@ import {
 const formatarEndereco = (endereco) => {
     if (!endereco) return 'Endereço não informado';
     
-    // Se endereco for uma string, retorna diretamente
     if (typeof endereco === 'string') return endereco;
     
-    // Se endereco for um objeto, formata as partes
     if (typeof endereco === 'object') {
         const partes = [];
         if (endereco.rua) partes.push(endereco.rua);
@@ -37,51 +34,47 @@ const formatarEndereco = (endereco) => {
 };
 
 const ListaEstabelecimentos = () => {
-    const { currentUser, userRole, isAdminMaster } = useAuth();
+    const { currentUser, userData } = useAuth();
     const navigate = useNavigate();
     const [estabelecimentos, setEstabelecimentos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Verifica se é admin master baseado nos dados do usuário
+    const isAdminMaster = userData?.isMasterAdmin || false;
+    const userRole = userData?.isMasterAdmin ? 'masterAdmin' : 
+                    userData?.isAdmin ? 'admin' : 
+                    'cliente';
+
     useEffect(() => {
         const fetchEstabelecimentos = async () => {
             try {
                 setLoading(true);
-                let estabelecimentosQuery;
+                console.log('🔍 Buscando estabelecimentos...');
                 
-                if (isAdminMaster) {
-                    // Admin Master vê todos os estabelecimentos
-                    estabelecimentosQuery = query(collection(db, 'estabelecimentos'));
-                } else if (userRole === 'proprietario' && currentUser) {
-                    // Proprietário vê apenas seus estabelecimentos
-                    estabelecimentosQuery = query(
-                        collection(db, 'estabelecimentos'),
-                        where('proprietarioId', '==', currentUser.uid)
-                    );
-                } else {
-                    // Cliente ou usuário não logado vê estabelecimentos ativos
-                    estabelecimentosQuery = query(
-                        collection(db, 'estabelecimentos'),
-                        where('ativo', '==', true)
-                    );
-                }
+                // Busca TODOS os estabelecimentos (versão simplificada)
+                const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
+                const estabelecimentosData = [];
+                
+                querySnapshot.forEach((doc) => {
+                    console.log('📄 Estabelecimento:', doc.id, doc.data());
+                    estabelecimentosData.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
 
-                const querySnapshot = await getDocs(estabelecimentosQuery);
-                const estabelecimentosData = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-
+                console.log('✅ Estabelecimentos carregados:', estabelecimentosData.length);
                 setEstabelecimentos(estabelecimentosData);
             } catch (error) {
-                console.error('Erro ao buscar estabelecimentos:', error);
+                console.error('❌ Erro ao buscar estabelecimentos:', error);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchEstabelecimentos();
-    }, [currentUser, userRole, isAdminMaster]);
+    }, []);
 
     const filteredEstabelecimentos = estabelecimentos.filter(estabelecimento => {
         const enderecoFormatado = formatarEndereco(estabelecimento.endereco);
@@ -92,20 +85,20 @@ const ListaEstabelecimentos = () => {
         );
     });
 
-    const handleEstabelecimentoClick = (estabelecimentoId) => {
-        if (userRole === 'cliente' || !userRole) {
-            navigate(`/cardapio-publico/${estabelecimentoId}`);
-        } else {
-            navigate(`/controle-salao/${estabelecimentoId}`);
-        }
+    const handleEstabelecimentoClick = (estabelecimento) => {
+        console.log('🎯 Clicou no estabelecimento:', estabelecimento);
+        
+        // SEMPRE vai para o cardápio público, independente do role
+        navigate(`/cardapio/${estabelecimento.id}`);
     };
 
     const handleCriarEstabelecimento = () => {
-        navigate('/criar-estabelecimento');
+        // Vai para o dashboard onde pode criar estabelecimento
+        navigate('/dashboard');
     };
 
     // Verifica se o usuário pode criar estabelecimentos
-    const podeCriarEstabelecimento = isAdminMaster || userRole === 'proprietario';
+    const podeCriarEstabelecimento = isAdminMaster || userRole === 'admin';
 
     if (loading) {
         return (
@@ -130,13 +123,13 @@ const ListaEstabelecimentos = () => {
                     </div>
                     <h1 className="text-4xl font-bold text-gray-900 mb-4">
                         {isAdminMaster ? 'Todos os Estabelecimentos' : 
-                         userRole === 'proprietario' ? 'Meus Estabelecimentos' : 
+                         userRole === 'admin' ? 'Estabelecimentos' : 
                          'Estabelecimentos Disponíveis'}
                     </h1>
                     <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                        {isAdminMaster ? 'Gerencie todos os estabelecimentos da plataforma' :
-                         userRole === 'proprietario' ? 'Gerencie seus estabelecimentos' :
-                         'Encontre os melhores estabelecimentos perto de você'}
+                        {filteredEstabelecimentos.length === 0 ? 
+                         'Nenhum estabelecimento encontrado' : 
+                         `Encontramos ${filteredEstabelecimentos.length} estabelecimento(s)`}
                     </p>
                 </div>
 
@@ -170,7 +163,7 @@ const ListaEstabelecimentos = () => {
                         {filteredEstabelecimentos.map((estabelecimento) => (
                             <div
                                 key={estabelecimento.id}
-                                onClick={() => handleEstabelecimentoClick(estabelecimento.id)}
+                                onClick={() => handleEstabelecimentoClick(estabelecimento)}
                                 className="bg-white rounded-2xl shadow-lg border border-gray-200 hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer group hover:border-blue-300"
                             >
                                 {/* Imagem do Estabelecimento */}
@@ -186,31 +179,22 @@ const ListaEstabelecimentos = () => {
                                             <IoRestaurant className="text-4xl text-blue-400" />
                                         </div>
                                     )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                                     
                                     {/* Status Badge */}
                                     <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-semibold ${
-                                        estabelecimento.ativo 
+                                        estabelecimento.ativo !== false 
                                             ? 'bg-green-500 text-white' 
                                             : 'bg-red-500 text-white'
                                     }`}>
-                                        {estabelecimento.ativo ? 'Ativo' : 'Inativo'}
+                                        {estabelecimento.ativo !== false ? 'Ativo' : 'Inativo'}
                                     </div>
                                 </div>
 
                                 {/* Informações do Estabelecimento */}
                                 <div className="p-6">
-                                    <div className="flex items-start justify-between mb-3">
-                                        <h3 className="text-xl font-bold text-gray-900 line-clamp-2 flex-1">
-                                            {estabelecimento.nome}
-                                        </h3>
-                                        {estabelecimento.avaliacao && (
-                                            <div className="flex items-center space-x-1 bg-amber-100 text-amber-700 px-2 py-1 rounded-full ml-2 flex-shrink-0">
-                                                <IoStar className="text-sm" />
-                                                <span className="text-sm font-bold">{estabelecimento.avaliacao}</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 line-clamp-2 mb-3">
+                                        {estabelecimento.nome || 'Estabelecimento sem nome'}
+                                    </h3>
 
                                     {estabelecimento.categoria && (
                                         <p className="text-gray-600 mb-3 flex items-center space-x-2">
@@ -227,23 +211,13 @@ const ListaEstabelecimentos = () => {
                                         </span>
                                     </p>
 
-                                    {/* Badge de Role */}
-                                    <div className="flex items-center justify-between">
-                                        <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                            isAdminMaster 
-                                                ? 'bg-purple-100 text-purple-700'
-                                                : userRole === 'proprietario'
-                                                ? 'bg-blue-100 text-blue-700'
-                                                : 'bg-green-100 text-green-700'
-                                        }`}>
-                                            {isAdminMaster ? 'Admin Master' :
-                                             userRole === 'proprietario' ? 'Proprietário' :
-                                             userRole === 'admin' ? 'Administrador' :
-                                             'Cliente'}
-                                        </div>
-                                        
+                                    {/* Botão de Ação */}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-500">
+                                            Clique para ver cardápio
+                                        </span>
                                         <button className="text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors duration-200">
-                                            {userRole === 'cliente' || !userRole ? 'Ver Cardápio' : 'Gerenciar'}
+                                            → Ver Cardápio
                                         </button>
                                     </div>
                                 </div>
@@ -256,16 +230,14 @@ const ListaEstabelecimentos = () => {
                             <IoStorefront className="text-3xl text-blue-400" />
                         </div>
                         <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                            {estabelecimentos.length === 0 ? 'Nenhum estabelecimento encontrado' : 'Nenhum resultado na busca'}
+                            {estabelecimentos.length === 0 ? 'Nenhum estabelecimento cadastrado' : 'Nenhum resultado na busca'}
                         </h3>
                         <p className="text-gray-600 mb-8 text-lg max-w-md mx-auto">
                             {estabelecimentos.length === 0 
-                                ? userRole === 'proprietario' 
-                                    ? 'Você ainda não possui estabelecimentos cadastrados.'
-                                    : 'Não há estabelecimentos disponíveis no momento.'
-                                : 'Tente ajustar os termos de busca para encontrar o que procura.'}
+                                ? 'Não há estabelecimentos disponíveis no momento.'
+                                : 'Tente ajustar os termos de busca.'}
                         </p>
-                        {podeCriarEstabelecimento && estabelecimentos.length === 0 && (
+                        {podeCriarEstabelecimento && (
                             <button
                                 onClick={handleCriarEstabelecimento}
                                 className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-200 transform hover:scale-105 shadow-lg inline-flex items-center space-x-3"
@@ -277,33 +249,10 @@ const ListaEstabelecimentos = () => {
                     </div>
                 )}
 
-                {/* Info Footer */}
-                <div className="mt-12 text-center">
-                    <div className="inline-flex items-center space-x-6 bg-white rounded-2xl shadow-sm border border-gray-200 px-6 py-4">
-                        <div className="flex items-center space-x-2">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                <IoStorefront className="text-blue-600" />
-                            </div>
-                            <div className="text-left">
-                                <p className="text-sm text-gray-600">Total de Estabelecimentos</p>
-                                <p className="text-lg font-bold text-gray-900">{estabelecimentos.length}</p>
-                            </div>
-                        </div>
-                        <div className="h-8 w-px bg-gray-300"></div>
-                        <div className="flex items-center space-x-2">
-                            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                <IoPerson className="text-green-600" />
-                            </div>
-                            <div className="text-left">
-                                <p className="text-sm text-gray-600">Seu Perfil</p>
-                                <p className="text-lg font-bold text-gray-900 capitalize">
-                                    {isAdminMaster ? 'Admin Master' : 
-                                     userRole === 'admin' ? 'Administrador' :
-                                     userRole || 'Visitante'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                {/* Debug Info */}
+                <div className="mt-8 text-center text-sm text-gray-500">
+                    <p>Estabelecimentos encontrados: {filteredEstabelecimentos.length}</p>
+                    <p>Usuário: {userRole} | Pode criar: {podeCriarEstabelecimento ? 'Sim' : 'Não'}</p>
                 </div>
             </div>
         </div>

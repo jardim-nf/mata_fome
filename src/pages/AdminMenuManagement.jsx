@@ -1,7 +1,7 @@
 // src/pages/AdminMenuManagement.jsx - VERSÃO COMPLETA CORRIGIDA
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useHeader } from '../context/HeaderContext';
@@ -10,6 +10,7 @@ import { uploadFile, deleteFileByUrl } from '../utils/firebaseStorageService';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from '../components/Pagination';
+// No início do arquivo AdminMenuManagement.jsx, adicione IoText aos imports:
 import {
     IoArrowBack,
     IoAddCircleOutline,
@@ -35,7 +36,10 @@ import {
     IoRemove,
     IoAdd,
     IoPlayForward,
-    IoRefresh
+    IoRefresh,
+    IoColorPalette,
+    IoBrush,
+    IoText // 🆕 ADICIONAR ESTE IMPORT
 } from 'react-icons/io5';
 
 // 🎨 Componente Skeleton Loader em Grid
@@ -279,571 +283,564 @@ const ProductGridCard = ({
   );
 };
 
-// 🎨 Componente Product Card para Lista (fallback)
-const ProductListCard = ({ 
-  produto, 
-  onEdit, 
-  onDelete, 
-  onToggleStatus, 
-  onUpdateStock,
-  stockStatus,
-  profitMargin 
-}) => {
-  const [localStock, setLocalStock] = useState(produto.estoque || 0);
-
-  const handleStockUpdate = (newStock) => {
-    setLocalStock(newStock);
-    onUpdateStock(newStock);
-  };
-
-  // 🆕 MOSTRAR PREÇOS DAS VARAÇÕES (versão lista) - VERSÃO MELHORADA
-  const mostrarPrecosVariacoes = () => {
-    if (!produto.variacoes || produto.variacoes.length === 0) {
-      return (
-        <p className="text-lg md:text-xl font-bold text-green-600">
-          R$ {(Number(produto.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </p>
-      );
-    }
-
-    const variacoesAtivas = produto.variacoes.filter(v => 
-      v.ativo && v.preco && !isNaN(Number(v.preco)) && Number(v.preco) > 0
-    );
-
-    if (variacoesAtivas.length === 0) {
-      return (
-        <p className="text-lg md:text-xl font-bold text-green-600">
-          R$ {(Number(produto.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </p>
-      );
-    }
-
-    // 🎯 1 VARIAÇÃO: Apenas preço
-    if (variacoesAtivas.length === 1) {
-      const preco = Number(variacoesAtivas[0].preco);
-      return (
-        <p className="text-lg md:text-xl font-bold text-green-600">
-          R$ {preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </p>
-      );
-    }
-
-    // 🎯 2+ VARIAÇÕES: Mensagem compacta
-    const precoMin = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
-    const precoMax = Math.max(...variacoesAtivas.map(v => Number(v.preco)));
-
-    return (
-      <div className="text-right">
-        <div className="text-xs text-gray-600">
-          {variacoesAtivas.length} opções
-        </div>
-        <div className="text-sm text-green-600 font-semibold">
-          R$ {precoMin.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - R$ {precoMax.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 md:p-4 hover:shadow-md transition-all">
-      <div className="flex items-center space-x-3 md:space-x-4">
-        {/* Imagem */}
-        <div className="flex-shrink-0">
-          {produto.imageUrl ? (
-            <img src={produto.imageUrl} alt={produto.nome} className="w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover" />
-          ) : (
-            <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-200 rounded-xl flex items-center justify-center">
-              <IoImageOutline className="text-gray-400 text-lg md:text-xl" />
-            </div>
-          )}
-        </div>
-
-        {/* Informações */}
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-col xs:flex-row xs:items-start xs:justify-between">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-gray-900 text-sm md:text-lg truncate">{produto.nome}</h3>
-              <p className="text-gray-600 text-xs md:text-sm">{produto.categoria}</p>
-            </div>
-            <div className="text-right mt-1 xs:mt-0">
-              {mostrarPrecosVariacoes()}
-              <p className="text-xs md:text-sm text-gray-500">Estoque: {localStock}</p>
-            </div>
-          </div>
-          
-          {produto.descricao && (
-            <p className="text-gray-700 text-xs md:text-sm mt-1 md:mt-2 line-clamp-1">{produto.descricao}</p>
-          )}
-        </div>
-
-        {/* Ações - Mobile Otimizado */}
-        <div className="flex items-center space-x-1 md:space-x-2">
-          <div className="hidden sm:flex items-center space-x-1">
-            <button
-              onClick={() => handleStockUpdate(Math.max(0, localStock - 1))}
-              className="w-6 h-6 md:w-8 md:h-8 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center"
-            >
-              <IoRemove className="w-2 h-2 md:w-3 md:h-3" />
-            </button>
-            <input
-              type="number"
-              value={localStock}
-              onChange={(e) => handleStockUpdate(Number(e.target.value))}
-              className="w-10 md:w-16 h-6 md:h-8 text-center border border-gray-300 rounded-lg text-xs md:text-sm"
-            />
-            <button
-              onClick={() => handleStockUpdate(localStock + 1)}
-              className="w-6 h-6 md:w-8 md:h-8 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center"
-            >
-              <IoAdd className="w-2 h-2 md:w-3 md:h-3" />
-            </button>
-          </div>
-          
-          <div className="flex items-center space-x-1">
-            <button
-              onClick={onToggleStatus}
-              className={`px-2 py-1 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium ${
-                produto.ativo ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-              }`}
-            >
-              {produto.ativo ? 'Desat.' : 'Ativar'}
-            </button>
-            <button
-              onClick={onEdit}
-              className="px-2 py-1 md:px-3 md:py-2 bg-blue-100 text-blue-800 rounded-lg text-xs md:text-sm font-medium"
-            >
-              Editar
-            </button>
-            <button
-              onClick={onDelete}
-              className="w-6 h-6 md:w-8 md:h-8 bg-red-100 text-red-800 rounded-lg flex items-center justify-center"
-            >
-              <IoClose className="w-3 h-3 md:w-4 md:h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// 🎨 Componente Empty State para Grid
-const EmptyState = ({ searchTerm, selectedCategory, stockFilter, onAddItem }) => (
-  <div className="col-span-full bg-white rounded-2xl shadow-lg border border-gray-200 p-6 md:p-12 text-center">
-    <div className="w-20 h-20 md:w-32 md:h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6 md:mb-8">
-      <IoCube className="text-2xl md:text-4xl text-blue-600" />
-    </div>
-    <h3 className="text-xl md:text-3xl font-bold text-gray-900 mb-3 md:mb-4">
-      {searchTerm || selectedCategory !== 'Todos' || stockFilter !== 'todos' 
-        ? 'Nenhum resultado encontrado'
-        : 'Seu cardápio está vazio'
-      }
-    </h3>
-    <p className="text-gray-600 text-sm md:text-lg mb-6 md:mb-8 max-w-md mx-auto leading-relaxed">
-      {searchTerm || selectedCategory !== 'Todos' || stockFilter !== 'todos' 
-        ? 'Tente ajustar os filtros ou termos de busca para encontrar o que procura.'
-        : 'Comece adicionando seus primeiros produtos para aparecerem aqui e atrair mais clientes!'
-      }
-    </p>
-    <button
-      onClick={onAddItem}
-      className="inline-flex items-center space-x-2 md:space-x-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-6 md:py-4 md:px-8 rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-xl text-sm md:text-lg"
-    >
-      <IoAddCircleOutline className="text-lg md:text-xl" />
-      <span>Adicionar Primeiro Item</span>
-    </button>
-  </div>
-);
-
-// 🎨 Componente Search com Sugestões
-const SearchWithSuggestions = ({ searchTerm, setSearchTerm, menuItems }) => {
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+// 🎨 Componente para Cores Personalizadas - VERSÃO CORRIGIDA
+// 🎨 Componente para Cores Personalizadas - VERSÃO COMPLETA COM TEXTO
+// 🎨 Componente para Cores Personalizadas - VERSÃO COMPLETA COM CORES DE TEXTO
+const CoresPersonalizadasSection = ({ formData, setFormData, estabelecimentosGerenciados }) => {
   
-  useEffect(() => {
-    if (searchTerm.length > 1) {
-      const filtered = menuItems
-        .filter(item => 
-          item.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.categoria?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.descricao?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        .slice(0, 5);
-      setSuggestions(filtered);
-      setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-      setSuggestions([]);
+  // 🎨 FUNÇÃO PARA SALVAR CORES
+  const handleSaveColors = async () => {
+    try {
+      if (!estabelecimentosGerenciados || estabelecimentosGerenciados.length === 0) {
+        toast.error("❌ Nenhum estabelecimento configurado para gerenciar");
+        return;
+      }
+
+      const estabelecimentoId = estabelecimentosGerenciados[0];
+      
+      if (!estabelecimentoId) {
+        toast.error("❌ ID do estabelecimento não encontrado");
+        return;
+      }
+
+      const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
+      await updateDoc(estabRef, {
+        cores: formData.cores,
+        atualizadoEm: serverTimestamp()
+      });
+
+      toast.success("🎨 Cores salvas com sucesso! As cores serão aplicadas.");
+      
+    } catch (error) {
+      console.error("❌ Erro ao salvar cores:", error);
+      toast.error("❌ Erro ao salvar cores personalizadas");
     }
-  }, [searchTerm, menuItems]);
+  };
 
   return (
-    <div className="relative">
-      <div className="relative">
-        <IoSearch className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg md:text-xl" />
-        <input
-          type="text"
-          placeholder="Buscar por nome, categoria..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          onFocus={() => searchTerm.length > 1 && setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-          className="w-full pl-10 md:pl-12 pr-4 py-3 md:py-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm md:text-base shadow-sm"
-        />
+    <div className="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-4 md:p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-pink-900 flex items-center">
+          <IoColorPalette className="mr-3 text-xl" />
+          Cores do Cardápio
+        </h3>
+        
+        {/* Info do estabelecimento */}
+        <div className="text-right">
+          <p className="text-sm text-gray-600">
+            Estabelecimentos: {estabelecimentosGerenciados?.length || 0}
+          </p>
+          <p className="text-xs text-gray-500">
+            Cores aplicadas ao primeiro estabelecimento
+          </p>
+        </div>
       </div>
       
-      {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-20 w-full mt-2 bg-white border border-gray-300 rounded-2xl shadow-lg max-h-60 overflow-y-auto">
-          {suggestions.map(item => (
-            <div
-              key={item.id}
-              className="p-3 md:p-4 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0 transition-colors"
-              onMouseDown={() => {
-                setSearchTerm(item.nome);
-                setShowSuggestions(false);
-              }}
-            >
-              <div className="flex items-center space-x-3 md:space-x-4">
-                {item.imageUrl ? (
-                  <img src={item.imageUrl} alt={item.nome} className="w-8 h-8 md:w-12 md:h-12 rounded-lg object-cover" />
-                ) : (
-                  <div className="w-8 h-8 md:w-12 md:h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                    <IoImageOutline className="text-gray-400 text-sm md:text-lg" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 truncate text-sm md:text-lg">{item.nome}</p>
-                  <div className="flex items-center space-x-2 md:space-x-3 text-xs md:text-sm text-gray-500 mt-1">
-                    <span>{item.categoria}</span>
-                    <span>•</span>
-                    <span className="text-green-600 font-semibold">
-                      R$ {(Number(item.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// 🎨 Componente Stat Card
-const StatCard = ({ title, value, color, icon, subtitle }) => (
-  <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-200 p-3 md:p-5 hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]">
-    <div className="flex items-center justify-between">
-      <div className="flex-1 min-w-0">
-        <p className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide truncate">{title}</p>
-        <p className={`text-lg md:text-2xl font-bold ${color} mt-1 md:mt-2 truncate`}>{value}</p>
-        {subtitle && <p className="text-xs text-gray-500 mt-1 truncate">{subtitle}</p>}
-      </div>
-      <div className={`p-2 md:p-3 rounded-lg md:rounded-xl ${color.replace('text', 'bg').split('-')[0] + '-100'} ml-2`}>
-        {React.cloneElement(icon, { className: `${color} text-lg md:text-2xl` })}
-      </div>
-    </div>
-  </div>
-);
-
-// 🎨 Componente Input Field
-const InputField = ({ label, error, ...props }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">
-      {label} {props.required && <span className="text-red-500">*</span>}
-    </label>
-    <input
-      {...props}
-      className={`w-full p-3 md:p-4 border rounded-2xl focus:ring-2 transition-all text-sm md:text-base ${
-        error 
-          ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50' 
-          : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-      }`}
-    />
-    {error && <p className="text-red-500 text-sm mt-2 flex items-center">
-      <IoAlertCircle className="w-4 h-4 mr-1" />
-      {error}
-    </p>}
-  </div>
-);
-
-// 🎨 Componente Variação ATUALIZADO
-const VariacaoItem = ({ variacao, index, onUpdate, onRemove, error, modoSimples }) => (
-  <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 md:p-6">
-    {!modoSimples && (
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="font-semibold text-gray-900 text-sm md:text-base">
-          Variação {index + 1}
-        </h4>
-        <button
-          type="button"
-          onClick={() => onRemove(variacao.id)}
-          className="text-red-500 hover:text-red-700 transition-colors p-1"
-        >
-          <IoClose className="w-5 h-5" />
-        </button>
-      </div>
-    )}
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Nome - Oculto no modo simples */}
-      {!modoSimples && (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {/* Cor Primária */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Nome da Variação *
+            Cor Primária *
           </label>
-          <input
-            type="text"
-            value={variacao.nome}
-            onChange={(e) => onUpdate(variacao.id, 'nome', e.target.value)}
-            placeholder="Ex: Pequeno, Médio, Grande"
-            className="w-full p-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
-          />
-          {error?.nome && <p className="text-red-500 text-xs mt-1">{error.nome}</p>}
-        </div>
-      )}
-
-      {/* Preço */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {modoSimples ? 'Preço do Produto *' : 'Preço *'}
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={variacao.preco}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (value === '' || /^\d*\.?\d*$/.test(value)) {
-              onUpdate(variacao.id, 'preco', value);
-            }
-          }}
-          placeholder="0.00"
-          className="w-full p-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
-        />
-        {error?.preco && <p className="text-red-500 text-xs mt-1">{error.preco}</p>}
-        
-        {/* MENSAGEM "A PARTIR DE" APENAS PARA VARIAÇÕES */}
-        {!modoSimples && index === 0 && (
-          <p className="text-xs text-blue-600 mt-1">
-            Os clientes verão "A partir de R$ X,XX"
-          </p>
-        )}
-      </div>
-    </div>
-
-    {/* Descrição - Oculto no modo simples */}
-    {!modoSimples && (
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Descrição da Variação
-        </label>
-        <textarea
-          value={variacao.descricao}
-          onChange={(e) => onUpdate(variacao.id, 'descricao', e.target.value)}
-          placeholder="Descreva esta variação..."
-          rows="2"
-          className="w-full p-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base resize-none"
-        />
-      </div>
-    )}
-
-    {/* Checkbox Ativo - Oculto no modo simples */}
-    {!modoSimples && (
-      <div className="flex items-center space-x-3 mt-4">
-        <input
-          type="checkbox"
-          checked={variacao.ativo}
-          onChange={(e) => onUpdate(variacao.id, 'ativo', e.target.checked)}
-          className="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500"
-        />
-        <label className="text-sm text-gray-700">
-          Variação ativa no cardápio
-        </label>
-      </div>
-    )}
-  </div>
-);
-
-// 🎨 Modal para Ativar Todos os Itens
-const ActivateAllModal = ({ isOpen, onClose, onConfirm, loading }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4">
-        <div className="text-center p-6">
-          <div className="w-12 h-12 md:w-16 md:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <IoRefresh className="text-green-600 text-xl md:text-2xl" />
-          </div>
-          <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
-            Ativar Todos os Itens
-          </h3>
-          <p className="text-gray-600 text-sm md:text-base mb-6">
-            Esta ação irá ativar todos os itens do cardápio que estão atualmente desativados. 
-            Deseja continuar?
-          </p>
-          
-          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 text-sm md:text-base"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={loading}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 text-sm md:text-base"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Ativando...</span>
-                </>
-              ) : (
-                <>
-                  <IoCheckmarkCircle className="text-lg" />
-                  <span>Ativar Todos</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// 🎨 Modal para Alteração em Massa de Preços
-const BulkPriceUpdateModal = ({ isOpen, onClose, onConfirm, loading }) => {
-  const [percentage, setPercentage] = useState('');
-  const [operation, setOperation] = useState('increase');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!percentage || isNaN(percentage) || percentage <= 0) {
-      toast.error('Por favor, insira uma porcentagem válida');
-      return;
-    }
-    onConfirm(parseFloat(percentage), operation);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4">
-        <div className="text-center p-6">
-          <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <IoCash className="text-blue-600 text-xl md:text-2xl" />
-          </div>
-          <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
-            Ajuste de Preços em Massa
-          </h3>
-          <p className="text-gray-600 text-sm md:text-base mb-6">
-            Ajuste o preço de todos os itens ativos por uma porcentagem.
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Tipo de Ajuste
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setOperation('increase')}
-                  className={`py-3 px-4 rounded-xl border-2 transition-all text-sm md:text-base ${
-                    operation === 'increase'
-                      ? 'bg-green-100 border-green-500 text-green-700 font-bold'
-                      : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Aumentar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOperation('decrease')}
-                  className={`py-3 px-4 rounded-xl border-2 transition-all text-sm md:text-base ${
-                    operation === 'decrease'
-                      ? 'bg-red-100 border-red-500 text-red-700 font-bold'
-                      : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Reduzir
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Porcentagem (%)
-              </label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={formData.cores?.primaria || '#DC2626'}
+              onChange={(e) => setFormData({
+                ...formData,
+                cores: {
+                  ...formData.cores,
+                  primaria: e.target.value
+                }
+              })}
+              className="w-12 h-12 rounded-lg border border-gray-300 cursor-pointer"
+            />
+            <div className="flex-1">
               <input
-                type="number"
-                step="0.1"
-                min="0.1"
-                max="100"
-                value={percentage}
-                onChange={(e) => setPercentage(e.target.value)}
-                placeholder="Ex: 10.5"
-                className="w-full p-3 md:p-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base md:text-lg text-center"
-                required
+                type="text"
+                value={formData.cores?.primaria || '#DC2626'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    primaria: e.target.value
+                  }
+                })}
+                placeholder="#DC2626"
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
               />
+              <p className="text-xs text-gray-500 mt-1">Botões, preços</p>
             </div>
-
-            {percentage && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                <p className="text-xs md:text-sm text-blue-800 text-center">
-                  <strong>Exemplo:</strong> Um item de R$ 20,00 passará a custar{' '}
-                  <strong>
-                    R$ {(
-                      operation === 'increase' 
-                        ? 20 * (1 + parseFloat(percentage) / 100)
-                        : 20 * (1 - parseFloat(percentage) / 100)
-                    ).toFixed(2)}
-                  </strong>
-                </p>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={loading}
-                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 text-sm md:text-base"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 text-sm md:text-base"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Aplicando...</span>
-                  </>
-                ) : (
-                  <>
-                    <IoPlayForward className="text-lg" />
-                    <span>Aplicar</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
+
+        {/* Cor de Destaque */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Cor de Destaque *
+          </label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={formData.cores?.destaque || '#059669'}
+              onChange={(e) => setFormData({
+                ...formData,
+                cores: {
+                  ...formData.cores,
+                  destaque: e.target.value
+                }
+              })}
+              className="w-12 h-12 rounded-lg border border-gray-300 cursor-pointer"
+            />
+            <div className="flex-1">
+              <input
+                type="text"
+                value={formData.cores?.destaque || '#059669'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    destaque: e.target.value
+                  }
+                })}
+                placeholder="#059669"
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">Confirmações</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Cor de Fundo */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Cor de Fundo *
+          </label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={formData.cores?.background || '#000000'}
+              onChange={(e) => setFormData({
+                ...formData,
+                cores: {
+                  ...formData.cores,
+                  background: e.target.value
+                }
+              })}
+              className="w-12 h-12 rounded-lg border border-gray-300 cursor-pointer"
+            />
+            <div className="flex-1">
+              <input
+                type="text"
+                value={formData.cores?.background || '#000000'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    background: e.target.value
+                  }
+                })}
+                placeholder="#000000"
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">Cor de fundo do site</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 🆕 SEÇÃO DE CORES DE TEXTO */}
+      <div className="border-t border-gray-200 pt-6 mb-6">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <IoText className="mr-2" />
+          Cores do Texto
+        </h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Texto Principal */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto Principal
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={formData.cores?.texto?.principal || '#FFFFFF'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    texto: {
+                      ...formData.cores?.texto,
+                      principal: e.target.value
+                    }
+                  }
+                })}
+                className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
+              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData.cores?.texto?.principal || '#FFFFFF'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    cores: {
+                      ...formData.cores,
+                      texto: {
+                        ...formData.cores?.texto,
+                        principal: e.target.value
+                      }
+                    }
+                  })}
+                  placeholder="#FFFFFF"
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Títulos, textos principais</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Texto Secundário */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto Secundário
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={formData.cores?.texto?.secundario || '#9CA3AF'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    texto: {
+                      ...formData.cores?.texto,
+                      secundario: e.target.value
+                    }
+                  }
+                })}
+                className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
+              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData.cores?.texto?.secundario || '#9CA3AF'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    cores: {
+                      ...formData.cores,
+                      texto: {
+                        ...formData.cores?.texto,
+                        secundario: e.target.value
+                      }
+                    }
+                  })}
+                  placeholder="#9CA3AF"
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Descrições, labels</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Placeholder */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto Placeholder
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={formData.cores?.texto?.placeholder || '#6B7280'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    texto: {
+                      ...formData.cores?.texto,
+                      placeholder: e.target.value
+                    }
+                  }
+                })}
+                className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
+              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData.cores?.texto?.placeholder || '#6B7280'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    cores: {
+                      ...formData.cores,
+                      texto: {
+                        ...formData.cores?.texto,
+                        placeholder: e.target.value
+                      }
+                    }
+                  })}
+                  placeholder="#6B7280"
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Textos de input vazios</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Texto Destaque */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto Destaque
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={formData.cores?.texto?.destaque || '#FBBF24'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    texto: {
+                      ...formData.cores?.texto,
+                      destaque: e.target.value
+                    }
+                  }
+                })}
+                className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
+              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData.cores?.texto?.destaque || '#FBBF24'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    cores: {
+                      ...formData.cores,
+                      texto: {
+                        ...formData.cores?.texto,
+                        destaque: e.target.value
+                      }
+                    }
+                  })}
+                  placeholder="#FBBF24"
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Preços, informações importantes</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Texto Erro */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto Erro
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={formData.cores?.texto?.erro || '#EF4444'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    texto: {
+                      ...formData.cores?.texto,
+                      erro: e.target.value
+                    }
+                  }
+                })}
+                className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
+              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData.cores?.texto?.erro || '#EF4444'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    cores: {
+                      ...formData.cores,
+                      texto: {
+                        ...formData.cores?.texto,
+                        erro: e.target.value
+                      }
+                    }
+                  })}
+                  placeholder="#EF4444"
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Mensagens de erro</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Texto Sucesso */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto Sucesso
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={formData.cores?.texto?.sucesso || '#10B981'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cores: {
+                    ...formData.cores,
+                    texto: {
+                      ...formData.cores?.texto,
+                      sucesso: e.target.value
+                    }
+                  }
+                })}
+                className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
+              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={formData.cores?.texto?.sucesso || '#10B981'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    cores: {
+                      ...formData.cores,
+                      texto: {
+                        ...formData.cores?.texto,
+                        sucesso: e.target.value
+                      }
+                    }
+                  })}
+                  placeholder="#10B981"
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Mensagens de sucesso</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Preview das Cores */}
+      <div className="mt-6 p-4 bg-white rounded-lg border border-gray-200">
+        <p className="text-sm font-medium text-gray-700 mb-3">Preview das Cores:</p>
+        
+        {/* Preview Cores Principais */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="text-center">
+            <div 
+              className="w-16 h-16 rounded-lg mx-auto mb-2 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.primaria || '#DC2626' }}
+            ></div>
+            <p className="text-xs text-gray-600">Primária</p>
+          </div>
+          <div className="text-center">
+            <div 
+              className="w-16 h-16 rounded-lg mx-auto mb-2 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.destaque || '#059669' }}
+            ></div>
+            <p className="text-xs text-gray-600">Destaque</p>
+          </div>
+          <div className="text-center">
+            <div 
+              className="w-16 h-16 rounded-lg mx-auto mb-2 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.background || '#000000' }}
+            ></div>
+            <p className="text-xs text-gray-600">Fundo</p>
+          </div>
+        </div>
+
+        {/* Preview Cores de Texto */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+          <div className="text-center">
+            <div 
+              className="w-8 h-8 rounded mx-auto mb-1 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.texto?.principal || '#FFFFFF' }}
+            ></div>
+            <p className="text-xs text-gray-600">Principal</p>
+          </div>
+          <div className="text-center">
+            <div 
+              className="w-8 h-8 rounded mx-auto mb-1 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.texto?.secundario || '#9CA3AF' }}
+            ></div>
+            <p className="text-xs text-gray-600">Secundário</p>
+          </div>
+          <div className="text-center">
+            <div 
+              className="w-8 h-8 rounded mx-auto mb-1 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.texto?.placeholder || '#6B7280' }}
+            ></div>
+            <p className="text-xs text-gray-600">Placeholder</p>
+          </div>
+          <div className="text-center">
+            <div 
+              className="w-8 h-8 rounded mx-auto mb-1 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.texto?.destaque || '#FBBF24' }}
+            ></div>
+            <p className="text-xs text-gray-600">Destaque</p>
+          </div>
+          <div className="text-center">
+            <div 
+              className="w-8 h-8 rounded mx-auto mb-1 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.texto?.erro || '#EF4444' }}
+            ></div>
+            <p className="text-xs text-gray-600">Erro</p>
+          </div>
+          <div className="text-center">
+            <div 
+              className="w-8 h-8 rounded mx-auto mb-1 border border-gray-300"
+              style={{ backgroundColor: formData.cores?.texto?.sucesso || '#10B981' }}
+            ></div>
+            <p className="text-xs text-gray-600">Sucesso</p>
+          </div>
+        </div>
+
+        {/* Preview de Textos */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <p className="text-sm font-medium text-gray-700 mb-2">Preview de Textos:</p>
+          <div className="space-y-2 p-3 rounded-lg" style={{ backgroundColor: formData.cores?.background || '#000000' }}>
+            <h3 style={{ color: formData.cores?.texto?.principal || '#FFFFFF' }} className="text-lg font-bold">
+              Título Principal
+            </h3>
+            <p style={{ color: formData.cores?.texto?.secundario || '#9CA3AF' }} className="text-sm">
+              Este é um texto secundário de exemplo
+            </p>
+            <input 
+              type="text" 
+              placeholder="Placeholder exemplo" 
+              className="w-full p-2 rounded border"
+              style={{ 
+                backgroundColor: '#1F2937',
+                borderColor: '#374151',
+                color: formData.cores?.texto?.principal || '#FFFFFF'
+              }}
+            />
+            <p style={{ color: formData.cores?.texto?.destaque || '#FBBF24' }} className="font-semibold">
+              R$ 25,90 - Preço em destaque
+            </p>
+            <p style={{ color: formData.cores?.texto?.erro || '#EF4444' }} className="text-sm">
+              ❌ Erro: Campo obrigatório
+            </p>
+            <p style={{ color: formData.cores?.texto?.sucesso || '#10B981' }} className="text-sm">
+              ✅ Sucesso: Operação concluída
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 🎨 BOTÃO SALVAR */}
+      <div className="mt-6 flex justify-center">
+        <button
+          onClick={handleSaveColors}
+          className="flex items-center space-x-2 text-white font-bold py-4 px-8 rounded-2xl transition-all transform hover:scale-105 shadow-lg text-lg border-2 border-white"
+          style={{
+            backgroundColor: formData.cores?.primaria || '#DC2626'
+          }}
+        >
+          <IoBrush className="text-2xl" />
+          <span className="text-xl">💾 SALVAR CORES</span>
+        </button>
       </div>
     </div>
   );
 };
-
 function AdminMenuManagement() {
   const { userData } = useAuth();
   const { setActions, clearActions } = useHeader();
@@ -868,7 +865,13 @@ function AdminMenuManagement() {
     ativo: true,
     estoque: 0,
     estoqueMinimo: 0,
-    custo: 0
+    custo: 0,
+    cores: {
+      primaria: '#DC2626',
+      secundaria: '#991B1B',
+      destaque: '#059669',
+      background: 'from-amber-50 to-orange-50'
+    }
   });
   const [formErrors, setFormErrors] = useState({});
   const [itemImage, setItemImage] = useState(null);
@@ -914,32 +917,25 @@ function AdminMenuManagement() {
     setVariacoes(variacoes.filter(v => v.id !== id));
   };
 
-  // Busca robusta pelo ID do Estabelecimento
-  const primeiroEstabelecimento = useMemo(() => {
-    let estabelecimento = null;
-    
+  // Busca robusta pelo ID do Estabelecimento - CORRIGIDA
+  const estabelecimentosGerenciados = useMemo(() => {
     if (Array.isArray(userData?.estabelecimentosGerenciados) && userData.estabelecimentosGerenciados.length > 0) {
-      estabelecimento = userData.estabelecimentosGerenciados[0];
+      return userData.estabelecimentosGerenciados;
     }
-
-    if (!estabelecimento) {
-      const estabelecimentosData = userData?.estabelecimentos;
-      if (Array.isArray(estabelecimentosData) && estabelecimentosData.length > 0) {
-        estabelecimento = estabelecimentosData[0];
-      } else if (estabelecimentosData && typeof estabelecimentosData === 'object' && !Array.isArray(estabelecimentosData)) {
-        const keys = Object.keys(estabelecimentosData);
-        if (keys.length > 0) {
-          estabelecimento = keys[0];
-        }
-      }
+    
+    // Fallback para estabelecimentos antigos
+    const estabelecimentosData = userData?.estabelecimentos;
+    if (Array.isArray(estabelecimentosData) && estabelecimentosData.length > 0) {
+      return estabelecimentosData;
+    } else if (estabelecimentosData && typeof estabelecimentosData === 'object' && !Array.isArray(estabelecimentosData)) {
+      return Object.keys(estabelecimentosData);
     }
-
-    const finalId = (typeof estabelecimento === 'string' && estabelecimento.length > 0 && estabelecimento !== '0')
-      ? estabelecimento
-      : null;
-
-    return finalId;
+    
+    return [];
   }, [userData]);
+
+  // Primeiro estabelecimento da lista
+  const primeiroEstabelecimento = estabelecimentosGerenciados.length > 0 ? estabelecimentosGerenciados[0] : null;
 
   // Busca o nome do estabelecimento
   useEffect(() => {
@@ -948,7 +944,16 @@ function AdminMenuManagement() {
         try {
           const estabDoc = await getDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento));
           if (estabDoc.exists()) {
-            setEstablishmentName(estabDoc.data().nome);
+            const estabData = estabDoc.data();
+            setEstablishmentName(estabData.nome);
+            
+            // 🎨 CARREGAR CORES PERSONALIZADAS DO ESTABELECIMENTO
+            if (estabData.cores) {
+              setFormData(prev => ({
+                ...prev,
+                cores: estabData.cores
+              }));
+            }
           } else {
             toast.error("Estabelecimento não encontrado");
           }
@@ -1381,7 +1386,8 @@ function AdminMenuManagement() {
         ativo: item.ativo !== undefined ? item.ativo : true,
         estoque: item.estoque || 0,
         estoqueMinimo: item.estoqueMinimo || 0,
-        custo: item.custo || 0
+        custo: item.custo || 0,
+        cores: formData.cores // Mantém as cores atuais
       });
       
       if (item.variacoes && item.variacoes.length > 0) {
@@ -1407,7 +1413,8 @@ function AdminMenuManagement() {
         ativo: true,
         estoque: 0,
         estoqueMinimo: 0,
-        custo: 0
+        custo: 0,
+        cores: formData.cores // Mantém as cores atuais
       });
       
       setVariacoes([{
@@ -1423,7 +1430,7 @@ function AdminMenuManagement() {
     setVariacoesErrors({});
     setItemImage(null);
     setShowItemForm(true);
-  }, []);
+  }, [formData.cores]);
 
   const closeItemForm = () => {
     setShowItemForm(false);
@@ -1436,7 +1443,8 @@ function AdminMenuManagement() {
       ativo: true,
       estoque: 0,
       estoqueMinimo: 0,
-      custo: 0
+      custo: 0,
+      cores: formData.cores // Mantém as cores atuais
     });
     setFormErrors({});
     setVariacoes([]);
@@ -1594,7 +1602,7 @@ function AdminMenuManagement() {
   };
 
   // CONFIGURAÇÃO DO HEADER GLOBAL
-useEffect(() => {
+  useEffect(() => {
     console.log('🎯 Configurando ações no header global...');
 
     const actions = (
@@ -1648,6 +1656,39 @@ useEffect(() => {
                     </button>
                 )}
 
+                {/* Botão Salvar Cores */}
+                <button
+                  onClick={() => {
+                    // Função inline para salvar cores
+                    const handleSaveColorsInline = async () => {
+                      try {
+                        if (!estabelecimentosGerenciados || estabelecimentosGerenciados.length === 0) {
+                          toast.error("❌ Nenhum estabelecimento configurado");
+                          return;
+                        }
+                        const estabelecimentoId = estabelecimentosGerenciados[0];
+                        const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
+                        await updateDoc(estabRef, {
+                          cores: formData.cores,
+                          atualizadoEm: serverTimestamp()
+                        });
+                        toast.success("🎨 Cores salvas com sucesso!");
+                      } catch (error) {
+                        console.error("❌ Erro ao salvar cores:", error);
+                        toast.error("❌ Erro ao salvar cores");
+                      }
+                    };
+                    handleSaveColorsInline();
+                  }}
+                  className="flex items-center space-x-2 text-white font-bold py-2 md:py-3 px-3 md:px-6 rounded-2xl transition-all transform hover:scale-105 shadow-lg text-xs md:text-sm"
+                  style={{
+                    backgroundColor: formData.cores?.primaria || '#DC2626'
+                  }}
+                >
+                  <IoBrush className="text-lg" />
+                  <span className="hidden sm:inline">Salvar Cores</span>
+                </button>
+
                 <button
                     onClick={() => setShowMobileFilters(!showMobileFilters)}
                     className="lg:hidden flex items-center justify-center w-10 h-10 md:w-12 md:h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-colors shadow-lg"
@@ -1673,11 +1714,13 @@ useEffect(() => {
         console.log('🧹 Componente AdminMenuManagement sendo desmontado - limpando ações do header');
         clearActions();
     };
-}, [
+  }, [
     viewMode, 
     stockStatistics.inactiveItems, 
-    stockStatistics.activeItems
-]);
+    stockStatistics.activeItems,
+    estabelecimentosGerenciados,
+    formData.cores
+  ]);
 
   // Estatísticas
   const estatisticas = {
@@ -1730,59 +1773,138 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-3 md:p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header - COM BOTÃO VOLTAR PADRONIZADO */}
+        {/* Header */}
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mb-6 md:mb-8">
-          
-          {/* Os botões de ação foram movidos para o useEffect do setActions */}
+          <div>
+            <button
+              onClick={() => navigate('/painel')}
+              className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-semibold mb-2 transition-colors"
+            >
+              <IoArrowBack className="text-lg" />
+              <span>Voltar ao Painel</span>
+            </button>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+              Gerenciar Cardápio
+            </h1>
+            <p className="text-gray-600">
+              {establishmentName || 'Carregando...'} 
+              {estabelecimentosGerenciados.length > 1 && (
+                <span className="text-sm text-gray-500 ml-2">
+                  (+{estabelecimentosGerenciados.length - 1} outros)
+                </span>
+              )}
+            </p>
+          </div>
         </header>
+
+        {/* 🎨 Seção de Cores Personalizadas - CORRIGIDA */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 md:p-6 mb-6 md:mb-8">
+          <CoresPersonalizadasSection 
+            formData={formData}
+            setFormData={setFormData}
+            estabelecimentosGerenciados={estabelecimentosGerenciados}
+          />
+        </div>
 
         {/* Estatísticas */}
         <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4 mb-6 md:mb-8">
-          <StatCard
-            title="Total Itens"
-            value={estatisticas.total}
-            color="text-gray-900"
-            icon={<IoList />}
-          />
-          <StatCard
-            title="Ativos"
-            value={estatisticas.ativos}
-            color="text-green-600"
-            icon={<IoCheckmarkCircle />}
-          />
-          <StatCard
-            title="Crítico"
-            value={estatisticas.estoqueCritico}
-            color="text-orange-600"
-            icon={<IoAlertCircle />}
-          />
-          <StatCard
-            title="Baixo"
-            value={estatisticas.estoqueBaixo}
-            color="text-yellow-600"
-            icon={<IoAlertCircle />}
-          />
-          <StatCard
-            title="Esgotados"
-            value={estatisticas.esgotados}
-            color="text-red-600"
-            icon={<IoClose />}
-          />
-          <StatCard
-            title="Valor Estoque"
-            value={`R$ ${(estatisticas.valorTotalEstoque || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            color="text-blue-600"
-            icon={<IoCash />}
-          />
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-200 p-3 md:p-5 hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide truncate">Total Itens</p>
+                <p className="text-lg md:text-2xl font-bold mt-1 md:mt-2 truncate" style={{ color: formData.cores?.primaria || '#DC2626' }}>
+                  {estatisticas.total}
+                </p>
+              </div>
+              <div className="p-2 md:p-3 rounded-lg md:rounded-xl ml-2" style={{ backgroundColor: `${formData.cores?.primaria || '#DC2626'}20` }}>
+                <IoList style={{ color: formData.cores?.primaria || '#DC2626', fontSize: '1.5rem' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-200 p-3 md:p-5 hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide truncate">Ativos</p>
+                <p className="text-lg md:text-2xl font-bold mt-1 md:mt-2 truncate" style={{ color: formData.cores?.primaria || '#DC2626' }}>
+                  {estatisticas.ativos}
+                </p>
+              </div>
+              <div className="p-2 md:p-3 rounded-lg md:rounded-xl ml-2" style={{ backgroundColor: `${formData.cores?.primaria || '#DC2626'}20` }}>
+                <IoCheckmarkCircle style={{ color: formData.cores?.primaria || '#DC2626', fontSize: '1.5rem' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-200 p-3 md:p-5 hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide truncate">Crítico</p>
+                <p className="text-lg md:text-2xl font-bold mt-1 md:mt-2 truncate" style={{ color: formData.cores?.primaria || '#DC2626' }}>
+                  {estatisticas.estoqueCritico}
+                </p>
+              </div>
+              <div className="p-2 md:p-3 rounded-lg md:rounded-xl ml-2" style={{ backgroundColor: `${formData.cores?.primaria || '#DC2626'}20` }}>
+                <IoAlertCircle style={{ color: formData.cores?.primaria || '#DC2626', fontSize: '1.5rem' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-200 p-3 md:p-5 hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide truncate">Baixo</p>
+                <p className="text-lg md:text-2xl font-bold mt-1 md:mt-2 truncate" style={{ color: formData.cores?.primaria || '#DC2626' }}>
+                  {estatisticas.estoqueBaixo}
+                </p>
+              </div>
+              <div className="p-2 md:p-3 rounded-lg md:rounded-xl ml-2" style={{ backgroundColor: `${formData.cores?.primaria || '#DC2626'}20` }}>
+                <IoAlertCircle style={{ color: formData.cores?.primaria || '#DC2626', fontSize: '1.5rem' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-200 p-3 md:p-5 hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide truncate">Esgotados</p>
+                <p className="text-lg md:text-2xl font-bold mt-1 md:mt-2 truncate" style={{ color: formData.cores?.primaria || '#DC2626' }}>
+                  {estatisticas.esgotados}
+                </p>
+              </div>
+              <div className="p-2 md:p-3 rounded-lg md:rounded-xl ml-2" style={{ backgroundColor: `${formData.cores?.primaria || '#DC2626'}20` }}>
+                <IoClose style={{ color: formData.cores?.primaria || '#DC2626', fontSize: '1.5rem' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-200 p-3 md:p-5 hover:shadow-md transition-all duration-300 hover:translate-y-[-2px]">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs md:text-sm font-medium text-gray-600 uppercase tracking-wide truncate">Valor Estoque</p>
+                <p className="text-lg md:text-2xl font-bold mt-1 md:mt-2 truncate" style={{ color: formData.cores?.primaria || '#DC2626' }}>
+                  R$ {(estatisticas.valorTotalEstoque || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="p-2 md:p-3 rounded-lg md:rounded-xl ml-2" style={{ backgroundColor: `${formData.cores?.primaria || '#DC2626'}20` }}>
+                <IoCash style={{ color: formData.cores?.primaria || '#DC2626', fontSize: '1.5rem' }} />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Barra de Pesquisa */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 md:p-6 mb-6 md:mb-8">
-          <SearchWithSuggestions 
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            menuItems={menuItems}
-          />
+          <div className="relative">
+            <IoSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg md:text-xl" />
+            <input
+              type="text"
+              placeholder="Buscar por nome, categoria..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 md:pl-12 pr-4 py-3 md:py-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm md:text-base shadow-sm"
+            />
+          </div>
         </div>
 
         {/* Filtros Mobile */}
@@ -1880,26 +2002,54 @@ useEffect(() => {
                     profitMargin={calculateProfitMargin(item.preco, item.custo)}
                   />
                 ) : (
-                  <ProductListCard
-                    key={item.id}
-                    produto={item}
-                    onEdit={() => openItemForm(item)}
-                    onDelete={() => handleDeleteItem(item)}
-                    onToggleStatus={() => toggleItemStatus(item)}
-                    onUpdateStock={(newStock) => quickUpdateStock(item.id, newStock)}
-                    stockStatus={getStockStatus(item)}
-                    profitMargin={calculateProfitMargin(item.preco, item.custo)}
-                  />
+                  <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 md:p-4 hover:shadow-md transition-all">
+                    {/* Componente de lista pode ser adicionado aqui se necessário */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-gray-900">{item.nome}</h3>
+                        <p className="text-gray-600 text-sm">{item.categoria}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-600 font-bold">
+                          R$ {Number(item.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                        <button
+                          onClick={() => openItemForm(item)}
+                          className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg text-sm font-medium"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )
               ))}
             </div>
           ) : (
-            <EmptyState 
-              searchTerm={searchTerm}
-              selectedCategory={selectedCategory}
-              stockFilter={stockFilter}
-              onAddItem={() => openItemForm()}
-            />
+            <div className="col-span-full bg-white rounded-2xl shadow-lg border border-gray-200 p-6 md:p-12 text-center">
+              <div className="w-20 h-20 md:w-32 md:h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6 md:mb-8">
+                <IoCube className="text-2xl md:text-4xl text-blue-600" />
+              </div>
+              <h3 className="text-xl md:text-3xl font-bold text-gray-900 mb-3 md:mb-4">
+                {searchTerm || selectedCategory !== 'Todos' || stockFilter !== 'todos' 
+                  ? 'Nenhum resultado encontrado'
+                  : 'Seu cardápio está vazio'
+                }
+              </h3>
+              <p className="text-gray-600 text-sm md:text-lg mb-6 md:mb-8 max-w-md mx-auto leading-relaxed">
+                {searchTerm || selectedCategory !== 'Todos' || stockFilter !== 'todos' 
+                  ? 'Tente ajustar os filtros ou termos de busca para encontrar o que procura.'
+                  : 'Comece adicionando seus primeiros produtos para aparecerem aqui e atrair mais clientes!'
+                }
+              </p>
+              <button
+                onClick={() => openItemForm()}
+                className="inline-flex items-center space-x-2 md:space-x-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-6 md:py-4 md:px-8 rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-xl text-sm md:text-lg"
+              >
+                <IoAddCircleOutline className="text-lg md:text-xl" />
+                <span>Adicionar Primeiro Item</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -1940,15 +2090,28 @@ useEffect(() => {
             {/* Formulário */}
             <form onSubmit={handleSaveItem} className="p-4 md:p-6 space-y-4 md:space-y-6">
               {/* Nome */}
-              <InputField
-                label="Nome do Item"
-                name="nome"
-                value={formData.nome}
-                onChange={handleFormChange}
-                placeholder="Ex: X-Burger Especial"
-                error={formErrors.nome}
-                required
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nome do Item *
+                </label>
+                <input
+                  type="text"
+                  name="nome"
+                  value={formData.nome}
+                  onChange={handleFormChange}
+                  placeholder="Ex: X-Burger Especial"
+                  className={`w-full p-3 md:p-4 border rounded-2xl focus:ring-2 transition-all text-sm md:text-base ${
+                    formErrors.nome 
+                      ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                      : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                  }`}
+                  required
+                />
+                {formErrors.nome && <p className="text-red-500 text-sm mt-2 flex items-center">
+                  <IoAlertCircle className="w-4 h-4 mr-1" />
+                  {formErrors.nome}
+                </p>}
+              </div>
 
               {/* Descrição */}
               <div>
@@ -1967,14 +2130,21 @@ useEffect(() => {
 
               {/* Categoria */}
               <div>
-                <InputField
-                  label="Categoria"
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoria *
+                </label>
+                <input
+                  type="text"
                   name="categoria"
                   value={formData.categoria}
                   onChange={handleFormChange}
                   placeholder="Ex: Burguers"
                   list="categories-list"
-                  error={formErrors.categoria}
+                  className={`w-full p-3 md:p-4 border rounded-2xl focus:ring-2 transition-all text-sm md:text-base ${
+                    formErrors.categoria 
+                      ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                      : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                  }`}
                   disabled={!!editingItem}
                   required
                 />
@@ -1983,6 +2153,10 @@ useEffect(() => {
                     <option key={cat.id} value={cat.nome} />
                   ))}
                 </datalist>
+                {formErrors.categoria && <p className="text-red-500 text-sm mt-2 flex items-center">
+                  <IoAlertCircle className="w-4 h-4 mr-1" />
+                  {formErrors.categoria}
+                </p>}
               </div>
 
               {/* 🆕 SEÇÃO DE PREÇO - SISTEMA HÍBRIDO */}
@@ -2063,15 +2237,101 @@ useEffect(() => {
                 {/* Lista de Variações */}
                 <div className="space-y-4">
                   {variacoes.map((variacao, index) => (
-                    <VariacaoItem
-                      key={variacao.id}
-                      variacao={variacao}
-                      index={index}
-                      onUpdate={atualizarVariacao}
-                      onRemove={removerVariacao}
-                      error={variacoesErrors[variacao.id]}
-                      modoSimples={variacoes.length === 1 && variacoes[0].nome === 'Padrão'}
-                    />
+                    <div key={variacao.id} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 md:p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold text-gray-900 text-sm md:text-base">
+                          Variação {index + 1}
+                        </h4>
+                        {variacoes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removerVariacao(variacao.id)}
+                            className="text-red-500 hover:text-red-700 transition-colors p-1"
+                          >
+                            <IoClose className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Nome - Oculto no modo simples */}
+                        {(variacoes.length > 1 || (variacoes.length === 1 && variacao.nome !== 'Padrão')) && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Nome da Variação *
+                            </label>
+                            <input
+                              type="text"
+                              value={variacao.nome}
+                              onChange={(e) => atualizarVariacao(variacao.id, 'nome', e.target.value)}
+                              placeholder="Ex: Pequeno, Médio, Grande"
+                              className="w-full p-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+                            />
+                            {variacoesErrors[variacao.id]?.nome && <p className="text-red-500 text-xs mt-1">{variacoesErrors[variacao.id].nome}</p>}
+                          </div>
+                        )}
+
+                        {/* Preço */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            {(variacoes.length === 1 && variacao.nome === 'Padrão') ? 'Preço do Produto *' : 'Preço *'}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            value={variacao.preco}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                atualizarVariacao(variacao.id, 'preco', value);
+                              }
+                            }}
+                            placeholder="0.00"
+                            className="w-full p-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+                          />
+                          {variacoesErrors[variacao.id]?.preco && <p className="text-red-500 text-xs mt-1">{variacoesErrors[variacao.id].preco}</p>}
+                          
+                          {/* MENSAGEM "A PARTIR DE" APENAS PARA VARIAÇÕES */}
+                          {variacoes.length > 1 && index === 0 && (
+                            <p className="text-xs text-blue-600 mt-1">
+                              Os clientes verão "A partir de R$ X,XX"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Descrição - Oculto no modo simples */}
+                      {(variacoes.length > 1 || (variacoes.length === 1 && variacao.nome !== 'Padrão')) && (
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Descrição da Variação
+                          </label>
+                          <textarea
+                            value={variacao.descricao}
+                            onChange={(e) => atualizarVariacao(variacao.id, 'descricao', e.target.value)}
+                            placeholder="Descreva esta variação..."
+                            rows="2"
+                            className="w-full p-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base resize-none"
+                          />
+                        </div>
+                      )}
+
+                      {/* Checkbox Ativo - Oculto no modo simples */}
+                      {(variacoes.length > 1 || (variacoes.length === 1 && variacao.nome !== 'Padrão')) && (
+                        <div className="flex items-center space-x-3 mt-4">
+                          <input
+                            type="checkbox"
+                            checked={variacao.ativo}
+                            onChange={(e) => atualizarVariacao(variacao.id, 'ativo', e.target.checked)}
+                            className="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <label className="text-sm text-gray-700">
+                            Variação ativa no cardápio
+                          </label>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
 
@@ -2092,31 +2352,46 @@ useEffect(() => {
                   Controle de Estoque
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-                  <InputField
-                    label="Estoque Atual"
-                    name="estoque"
-                    type="number"
-                    value={formData.estoque}
-                    onChange={handleFormChange}
-                    placeholder="0"
-                  />
-                  <InputField
-                    label="Estoque Mínimo"
-                    name="estoqueMinimo"
-                    type="number"
-                    value={formData.estoqueMinimo}
-                    onChange={handleFormChange}
-                    placeholder="5"
-                  />
-                  <InputField
-                    label="Custo (R$)"
-                    name="custo"
-                    type="number"
-                    step="0.01"
-                    value={formData.custo}
-                    onChange={handleFormChange}
-                    placeholder="0.00"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Estoque Atual
+                    </label>
+                    <input
+                      type="number"
+                      name="estoque"
+                      value={formData.estoque}
+                      onChange={handleFormChange}
+                      placeholder="0"
+                      className="w-full p-3 md:p-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm md:text-base"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Estoque Mínimo
+                    </label>
+                    <input
+                      type="number"
+                      name="estoqueMinimo"
+                      value={formData.estoqueMinimo}
+                      onChange={handleFormChange}
+                      placeholder="5"
+                      className="w-full p-3 md:p-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm md:text-base"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Custo (R$)
+                    </label>
+                    <input
+                      type="number"
+                      name="custo"
+                      step="0.01"
+                      value={formData.custo}
+                      onChange={handleFormChange}
+                      placeholder="0.00"
+                      className="w-full p-3 md:p-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm md:text-base"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2222,20 +2497,137 @@ useEffect(() => {
       )}
 
       {/* Modal Ativar Todos */}
-      <ActivateAllModal
-        isOpen={showActivateAllModal}
-        onClose={() => setShowActivateAllModal(false)}
-        onConfirm={activateAllItems}
-        loading={bulkOperationLoading}
-      />
+      {showActivateAllModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4">
+            <div className="text-center p-6">
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <IoRefresh className="text-green-600 text-xl md:text-2xl" />
+              </div>
+              <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+                Ativar Todos os Itens
+              </h3>
+              <p className="text-gray-600 text-sm md:text-base mb-6">
+                Esta ação irá ativar todos os itens do cardápio que estão atualmente desativados. 
+                Deseja continuar?
+              </p>
+              
+              <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                <button
+                  onClick={() => setShowActivateAllModal(false)}
+                  disabled={bulkOperationLoading}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 text-sm md:text-base"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={activateAllItems}
+                  disabled={bulkOperationLoading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 text-sm md:text-base"
+                >
+                  {bulkOperationLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Ativando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <IoCheckmarkCircle className="text-lg" />
+                      <span>Ativar Todos</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Ajuste de Preços em Massa */}
-      <BulkPriceUpdateModal
-        isOpen={showBulkPriceModal}
-        onClose={() => setShowBulkPriceModal(false)}
-        onConfirm={bulkUpdatePrices}
-        loading={bulkOperationLoading}
-      />
+      {showBulkPriceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4">
+            <div className="text-center p-6">
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <IoCash className="text-blue-600 text-xl md:text-2xl" />
+              </div>
+              <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+                Ajuste de Preços em Massa
+              </h3>
+              <p className="text-gray-600 text-sm md:text-base mb-6">
+                Ajuste o preço de todos os itens ativos por uma porcentagem.
+              </p>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Tipo de Ajuste
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {/* Implementar lógica de aumento */}}
+                      className="py-3 px-4 rounded-xl border-2 border-green-500 bg-green-100 text-green-700 font-bold text-sm md:text-base"
+                    >
+                      Aumentar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {/* Implementar lógica de redução */}}
+                      className="py-3 px-4 rounded-xl border-2 border-red-500 bg-red-100 text-red-700 font-bold text-sm md:text-base"
+                    >
+                      Reduzir
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Porcentagem (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    max="100"
+                    placeholder="Ex: 10.5"
+                    className="w-full p-3 md:p-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base md:text-lg text-center"
+                    required
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkPriceModal(false)}
+                    disabled={bulkOperationLoading}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 text-sm md:text-base"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={bulkOperationLoading}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 text-sm md:text-base"
+                  >
+                    {bulkOperationLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Aplicando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <IoPlayForward className="text-lg" />
+                        <span>Aplicar</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

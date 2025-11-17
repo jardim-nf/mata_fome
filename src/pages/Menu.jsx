@@ -1,4 +1,4 @@
-// src/pages/Menu.jsx - VERSÃO MELHORADA COM VISUAL E FORMAS DE PAGAMENTO
+// src/pages/Menu.jsx - VERSÃO COMPLETA COM INFORMAÇÕES DO ESTABELECIMENTO
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -56,13 +56,27 @@ function Menu() {
     const [discountAmount, setDiscountAmount] = useState(0);
     const [couponLoading, setCouponLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
     const [availableCategories, setAvailableCategories] = useState([]);
     const [itemParaAdicionais, setItemParaAdicionais] = useState(null);
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [visibleItemsCount, setVisibleItemsCount] = useState({});
     const [loading, setLoading] = useState(true);
+    
+    // 🎨 CORES DO ESTABELECIMENTO
+    const [coresEstabelecimento, setCoresEstabelecimento] = useState({
+        primaria: '#0b0b0bff',
+        destaque: '#059669',
+        background: '#000000',
+        texto: {
+            principal: '#FFFFFF',
+            secundario: '#9CA3AF',
+            placeholder: '#6B7280',
+            destaque: '#FBBF24',
+            erro: '#EF4444',
+            sucesso: '#10B981'
+        }
+    });
 
     // --- CÁLCULOS ---
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
@@ -78,13 +92,103 @@ function Menu() {
         return userData?.isMasterAdmin || false;
     }, [userData]);
 
-    // --- FUNÇÕES PRINCIPAIS ---
-    const handleShowMore = (categoryName) => {
-        setVisibleItemsCount(prev => ({ ...prev, [categoryName]: (prev[categoryName] || 3) + 3 }));
+    // 🕒 FUNÇÃO PARA FORMATAR HORÁRIOS DE FUNCIONAMENTO
+    const formatarHorarios = (horarios) => {
+        if (!horarios || typeof horarios !== 'object') {
+            return "Horário não informado";
+        }
+
+        const diasSemana = {
+            seg: 'Segunda',
+            ter: 'Terça',
+            qua: 'Quarta',
+            qui: 'Quinta',
+            sex: 'Sexta',
+            sab: 'Sábado',
+            dom: 'Domingo'
+        };
+
+        return Object.entries(horarios)
+            .map(([dia, horario]) => {
+                const diaNome = diasSemana[dia] || dia;
+                if (!horario || !horario.abertura || !horario.fechamento) {
+                    return `${diaNome}: Fechado`;
+                }
+                return `${diaNome}: ${horario.abertura} - ${horario.fechamento}`;
+            })
+            .join(' | ');
     };
 
-    const handleShowLess = (categoryName) => {
-        setVisibleItemsCount(prev => ({ ...prev, [categoryName]: 3 }));
+    // 🚀 FUNÇÃO ULTRA RÁPIDA PARA CARREGAR PRODUTOS
+    const carregarProdutosRapido = async (estabId) => {
+        console.log("🚀 CARREGAMENTO RÁPIDO INICIADO");
+        
+        try {
+            // 🎯 ESTRATÉGIA 1: Buscar TODOS os itens de uma vez
+            const todasCategoriasRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
+            const categoriasSnapshot = await getDocs(todasCategoriasRef);
+            
+            let todosProdutos = [];
+            const promessas = [];
+
+            if (!categoriasSnapshot.empty) {
+                console.log(`📂 Encontradas ${categoriasSnapshot.docs.length} categorias`);
+                
+                // Busca paralela em TODAS as categorias
+                categoriasSnapshot.docs.forEach(catDoc => {
+                    const categoriaData = catDoc.data();
+                    const categoriaId = catDoc.id;
+                    
+                    const promessa = getDocs(
+                        collection(db, 'estabelecimentos', estabId, 'cardapio', categoriaId, 'itens')
+                    ).then(itensSnapshot => {
+                        if (!itensSnapshot.empty) {
+                            const itensDaCategoria = itensSnapshot.docs.map(itemDoc => ({
+                                ...itemDoc.data(),
+                                id: itemDoc.id,
+                                categoria: categoriaData.nome || 'Geral',
+                                categoriaId: categoriaId
+                            }));
+                            return itensDaCategoria;
+                        }
+                        return [];
+                    }).catch(error => {
+                        console.log(`ℹ️ Nenhum item na categoria ${categoriaId}`);
+                        return [];
+                    });
+                    
+                    promessas.push(promessa);
+                });
+
+                // 🚀 AGUARDA TODAS AS BUSCAS PARALELAS
+                const resultados = await Promise.all(promessas);
+                todosProdutos = resultados.flat();
+            }
+
+            // 🎯 ESTRATÉGIA 2: Se não encontrou nada, tenta estrutura alternativa
+            if (todosProdutos.length === 0) {
+                console.log("🔄 Tentando estrutura alternativa...");
+                const cardapioDiretoRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
+                const qAtivos = query(cardapioDiretoRef, where('ativo', '==', true));
+                const snapshotDireto = await getDocs(qAtivos);
+                
+                if (!snapshotDireto.empty) {
+                    todosProdutos = snapshotDireto.docs.map(doc => ({
+                        ...doc.data(),
+                        id: doc.id,
+                        categoria: doc.data().categoria || 'Geral',
+                        categoriaId: 'direto'
+                    }));
+                }
+            }
+
+            console.log(`🎉 CARREGAMENTO CONCLUÍDO: ${todosProdutos.length} produtos`);
+            return todosProdutos;
+
+        } catch (error) {
+            console.error("❌ Erro no carregamento rápido:", error);
+            return [];
+        }
     };
 
     // 🆕 FUNÇÃO MELHORADA: Verifica se o item tem variações OU adicionais
@@ -95,24 +199,19 @@ function Menu() {
             return;
         }
 
-        // Se tem variações, abre o modal de variações PRIMEIRO
         if (item.variacoes && Array.isArray(item.variacoes) && item.variacoes.length > 0) {
             setItemParaVariacoes(item);
-        } 
-        // Para TODOS os outros casos (com ou sem adicionais), abre o AdicionaisModal
-        else {
+        } else {
             setItemParaAdicionais(item);
         }
     };
 
     // 🆕 FUNÇÃO PARA LIDAR COM VARIAÇÕES
     const handleConfirmarVariacoes = (itemConfigurado) => {
-        // Se após escolher a variação ainda tem adicionais, abre o modal de adicionais
         if (itemConfigurado.adicionais && Array.isArray(itemConfigurado.adicionais) && itemConfigurado.adicionais.length > 0) {
             setItemParaAdicionais(itemConfigurado);
             setItemParaVariacoes(null);
         } else {
-            // Se não tem adicionais, adiciona diretamente ao carrinho
             const novoItemNoCarrinho = { 
                 ...itemConfigurado, 
                 qtd: 1, 
@@ -160,22 +259,18 @@ function Menu() {
     const formatarItemCarrinho = (item) => {
         let nomeFormatado = item.nome;
         
-        // Adiciona a variação selecionada
         if (item.variacaoSelecionada && item.variacaoSelecionada.nome) {
             nomeFormatado += ` - ${item.variacaoSelecionada.nome}`;
         }
         
-        // Adiciona os adicionais
         if (item.adicionais && item.adicionais.length > 0) {
             nomeFormatado += ` (${item.adicionais.map(ad => `+ ${ad.nome}`).join(', ')})`;
         }
 
-        // Adiciona ingredientes removidos
         if (item.removidos && item.removidos.length > 0) {
             nomeFormatado += ` (Sem: ${item.removidos.join(', ')})`;
         }
         
-        // Adiciona a observação
         if (item.observacao) {
             nomeFormatado += ` (Obs: ${item.observacao})`;
         }
@@ -303,7 +398,6 @@ function Menu() {
             }
         }
 
-        // 🆕 FORMATAR ITENS DO PEDIDO COM VARIAÇÕES
         const itensFormatados = carrinho.map(item => ({
             nome: formatarItemCarrinho(item),
             nomeBase: item.nome,
@@ -477,12 +571,154 @@ function Menu() {
         }
     };
 
-    // --- EFEITOS (useEffect) ---
-    useEffect(() => {
-        const handler = setTimeout(() => { setDebouncedSearchTerm(searchTerm); }, 300);
-        return () => { clearTimeout(handler); };
-    }, [searchTerm]);
+    // --- EFEITOS OTIMIZADOS ---
+    
+    // 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
+// 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
 
+   // 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
+// 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
+useEffect(() => {
+  if (!estabelecimentoSlug) return;
+
+  const carregarTudoRapidamente = async () => {
+    try {
+      setLoading(true);
+      console.log("🚀 INICIANDO CARREGAMENTO COMPLETO");
+
+      // 1. Buscar estabelecimento pelo slug
+      const qEstabBySlug = query(
+        collection(db, 'estabelecimentos'), 
+        where('slug', '==', estabelecimentoSlug)
+      );
+      const estabSnapshotBySlug = await getDocs(qEstabBySlug);
+
+      if (estabSnapshotBySlug.empty) {
+        console.error("❌ Estabelecimento não encontrado");
+        toast.error("Estabelecimento não encontrado.");
+        setLoading(false);
+        navigate('/');
+        return;
+      }
+      
+      const estabDoc = estabSnapshotBySlug.docs[0];
+      const estabData = estabDoc.data();
+      const idDoEstabelecimentoReal = estabDoc.id;
+      
+      console.log("✅ Estabelecimento encontrado:", estabData.nome);
+      console.log("📋 Ordem de categorias do Firebase:", estabData.ordemCategorias); // 🆕 LOG IMPORTANTE
+
+      // 🎯 CARREGAMENTO PARALELO: Estabelecimento + Produtos
+      const [produtos] = await Promise.all([
+        carregarProdutosRapido(idDoEstabelecimentoReal)
+      ]);
+
+      // 🏪 DEFINIR TODOS OS DADOS DO ESTABELECIMENTO
+      const estabelecimentoInfoCompleta = {
+        ...estabData,
+        id: idDoEstabelecimentoReal,
+        nome: estabData.nome || "Cardápio",
+        descricao: estabData.descricao || "",
+        endereco: estabData.endereco || {},
+        horarioFuncionamento: estabData.horarioFuncionamento || {},
+        telefone: estabData.telefone || "",
+        whatsapp: estabData.whatsapp || "",
+        logoUrl: estabData.logoUrl || "",
+        ordemCategorias: estabData.ordemCategorias || [], // 🆕 ORDEM DAS CATEGORIAS
+        cores: estabData.cores || {
+          primaria: '#000000ff',
+          destaque: '#059669',
+          background: '#000000',
+          texto: {
+            principal: '#FFFFFF',
+            secundario: '#9CA3AF',
+            placeholder: '#6B7280',
+            destaque: '#FBBF24',
+            erro: '#EF4444',
+            sucesso: '#10B981'
+          }
+        }
+      };
+
+      setEstabelecimentoInfo(estabelecimentoInfoCompleta);
+      setNomeEstabelecimento(estabData.nome || "Cardápio");
+      setActualEstabelecimentoId(idDoEstabelecimentoReal);
+
+      // 📦 CONFIGURAR PRODUTOS
+      if (produtos.length > 0) {
+        setAllProdutos(produtos);
+        const categoriasUnicas = ['Todos', ...new Set(produtos.map(item => item.categoria).filter(Boolean))];
+        setAvailableCategories(categoriasUnicas);
+        
+        console.log("📊 Categorias disponíveis:", categoriasUnicas);
+        console.log("🎯 Ordem que será aplicada:", estabelecimentoInfoCompleta.ordemCategorias);
+        
+        const initialVisibleCounts = {};
+        categoriasUnicas.forEach(cat => {
+          if (cat !== 'Todos') {
+            initialVisibleCounts[cat] = 6;
+          }
+        });
+        setVisibleItemsCount(initialVisibleCounts);
+      } else {
+        setAllProdutos([]);
+        setAvailableCategories(['Todos']);
+      }
+
+      console.log("🎊 CARREGAMENTO COMPLETO CONCLUÍDO!");
+      setLoading(false);
+
+    } catch (error) {
+      console.error("❌ Erro no carregamento completo:", error);
+      toast.error("Erro ao carregar o cardápio.");
+      setLoading(false);
+    }
+  };
+
+  carregarTudoRapidamente();
+}, [estabelecimentoSlug, navigate]);
+// 🎯 FUNÇÃO PARA ORDENAR CATEGORIAS DINAMICAMENTE - VERSÃO CORRIGIDA
+const ordenarCategorias = (categorias, ordemPersonalizada) => {
+  console.log('🔀 Ordenando categorias:', {
+    categoriasDisponiveis: categorias,
+    ordemPersonalizada: ordemPersonalizada
+  });
+  
+  // "Todos" sempre deve ser o primeiro
+  const categoriasSemTodos = categorias.filter(cat => cat !== 'Todos');
+  
+  if (!ordemPersonalizada || ordemPersonalizada.length === 0) {
+    console.log('ℹ️ Usando ordem por quantidade de itens');
+    // Se não tem ordem definida, ordena por quantidade de itens (mais popular primeiro)
+    const categoriasOrdenadas = categoriasSemTodos
+      .map(category => {
+        const quantidadeItens = allProdutos.filter(item => item.categoria === category).length;
+        return { category, quantidadeItens };
+      })
+      .sort((a, b) => b.quantidadeItens - a.quantidadeItens)
+      .map(({ category }) => category);
+    
+    return ['Todos', ...categoriasOrdenadas];
+  }
+  
+  console.log('✅ Aplicando ordem personalizada do estabelecimento');
+  
+  // Filtrar apenas categorias que existem atualmente
+  const ordemFiltrada = ordemPersonalizada.filter(category => 
+    categoriasSemTodos.includes(category)
+  );
+  
+  // Adicionar categorias novas que não estão na ordem
+  const categoriasNovas = categoriasSemTodos.filter(category => 
+    !ordemFiltrada.includes(category)
+  );
+  
+  const categoriasOrdenadas = ['Todos', ...ordemFiltrada, ...categoriasNovas];
+  
+  console.log('📋 Resultado da ordenação:', categoriasOrdenadas);
+  return categoriasOrdenadas;
+};
+    // Efeito para dados do usuário
     useEffect(() => {
         if (authLoading === false) {
             setShowLoginPrompt(currentUser === null);
@@ -506,6 +742,7 @@ function Menu() {
         }
     }, [currentUser, currentClientData, authLoading]);
 
+    // Efeito para taxas de entrega
     useEffect(() => {
         if (!actualEstabelecimentoId) return;
         const taxasRef = collection(db, 'estabelecimentos', actualEstabelecimentoId, 'taxasDeEntrega');
@@ -532,140 +769,7 @@ function Menu() {
         }
     }, [bairro, cidade, taxasBairro, isRetirada]);
 
-    // ✅ Efeito principal para carregar (ESTRUTURA ANINHADA)
-    useEffect(() => {
-        if (!estabelecimentoSlug) return;
-        let unsubscribeTotal = () => {};
-
-        const fetchEstabelecimento = async () => {
-            try {
-                setLoading(true);
-                console.log("🔍 Iniciando busca do estabelecimento...");
-
-                const qEstabBySlug = query(
-                    collection(db, 'estabelecimentos'), 
-                    where('slug', '==', estabelecimentoSlug)
-                );
-                const estabSnapshotBySlug = await getDocs(qEstabBySlug);
-
-                if (estabSnapshotBySlug.empty) {
-                    toast.error("Estabelecimento não encontrado.");
-                    setLoading(false);
-                    navigate('/');
-                    return;
-                }
-                
-                const estabDoc = estabSnapshotBySlug.docs[0];
-                const estabData = estabDoc.data();
-                const idDoEstabelecimentoReal = estabDoc.id;
-                console.log("✅ Encontrado por SLUG:", estabData.nome);
-
-                setEstabelecimentoInfo(estabData);
-                setNomeEstabelecimento(estabData.nome || "Cardápio");
-                setActualEstabelecimentoId(idDoEstabelecimentoReal);
-
-                // ✅ Lógica de busca de cardápio aninhado
-                console.log("📋 Buscando itens do cardápio (estrutura ANINHADA)...");
-                
-                const categoriasRef = collection(db, 'estabelecimentos', idDoEstabelecimentoReal, 'cardapio');
-                const qCategorias = query(
-                    categoriasRef, 
-                    where('ativo', '==', true), 
-                    orderBy('ordem', 'asc')
-                );
-
-                const unsubscribeCardapio = onSnapshot(qCategorias, (categoriasSnapshot) => {
-                    console.log("📁 Categorias ativas encontradas:", categoriasSnapshot.docs.length);
-                    
-                    const unsubscribers = [];
-                    let allItems = [];
-                    let categoriesList = ['Todos'];
-                    let initialVisibleCounts = {};
-
-                    if (categoriasSnapshot.empty) {
-                        console.log("ℹ️ Nenhuma categoria ativa encontrada.");
-                        setAllProdutos([]);
-                        setAvailableCategories(['Todos']);
-                        setVisibleItemsCount({});
-                        setLoading(false);
-                        return;
-                    }
-
-                    categoriasSnapshot.forEach(catDoc => {
-                        const categoriaData = catDoc.data();
-                        const categoriaId = catDoc.id;
-                        categoriesList.push(categoriaData.nome);
-                        initialVisibleCounts[categoriaData.nome] = 3;
-                        
-                        console.log(`🔍 Buscando itens na categoria: ${categoriaId} (${categoriaData.nome})`);
-
-                        const itensRef = collection(
-                            db,
-                            'estabelecimentos',
-                            idDoEstabelecimentoReal,
-                            'cardapio',
-                            categoriaId,
-                            'itens'
-                        );
-                        const qItens = query(
-                            itensRef, 
-                            where('ativo', '==', true), 
-                            orderBy('nome', 'asc')
-                        );
-
-                        const unsubscribeItens = onSnapshot(qItens, (itensSnapshot) => {
-                            console.log(`📦 Itens ativos na categoria ${categoriaId}:`, itensSnapshot.docs.length);
-
-                            const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
-                                ...itemDoc.data(),
-                                id: itemDoc.id,
-                                categoria: categoriaData.nome,
-                                categoriaId: categoriaId,
-                            }));
-
-                            allItems = [
-                                ...allItems.filter(item => item.categoriaId !== categoriaId),
-                                ...itemsDaCategoria
-                            ];
-
-                            setAllProdutos(allItems);
-                        }, (error) => {
-                            console.error(`❌ Erro ao ouvir itens da categoria ${categoriaId}:`, error);
-                            toast.error("❌ Erro ao carregar itens de uma categoria.");
-                        });
-
-                        unsubscribers.push(unsubscribeItens);
-                    });
-
-                    setAvailableCategories(categoriesList);
-                    setVisibleItemsCount(initialVisibleCounts);
-                    setLoading(false);
-
-                    unsubscribeTotal = () => {
-                        console.log("🧹 Limpando listeners de itens");
-                        unsubscribers.forEach(unsub => unsub());
-                        unsubscribeCardapio();
-                    };
-                }, (error) => {
-                    console.error("❌ Erro ao carregar o estabelecimento (categorias):", error);
-                    toast.error("Não foi possível carregar o estabelecimento.");
-                    setLoading(false);
-                });
-            
-            } catch (error) {
-                console.error("❌ Erro no fetchEstabelecimento:", error);
-                toast.error("Erro crítico ao carregar a página.");
-                setLoading(false);
-            }
-        };
-
-        fetchEstabelecimento();
-
-        return () => {
-            unsubscribeTotal();
-        };
-    }, [estabelecimentoSlug, navigate]);
-
+    // Efeito para filtrar produtos
     useEffect(() => {
         let produtosProcessados = [...allProdutos];
         
@@ -675,8 +779,8 @@ function Menu() {
             );
         }
         
-        if (debouncedSearchTerm.trim() !== '') {
-            const lowerCaseSearchTerm = debouncedSearchTerm.trim().toLowerCase();
+        if (searchTerm.trim() !== '') {
+            const lowerCaseSearchTerm = searchTerm.trim().toLowerCase();
             produtosProcessados = produtosProcessados.filter(item =>
                 item.nome?.toLowerCase().includes(lowerCaseSearchTerm) ||
                 item.descricao?.toLowerCase().includes(lowerCaseSearchTerm)
@@ -685,8 +789,9 @@ function Menu() {
         
         produtosProcessados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
         setProdutosFiltrados(produtosProcessados);
-    }, [allProdutos, selectedCategory, debouncedSearchTerm]);
+    }, [allProdutos, selectedCategory, searchTerm]);
 
+    // Efeito para carregar pedido anterior
     useEffect(() => {
         const storedReorderItems = localStorage.getItem('reorderItems');
         if (storedReorderItems) {
@@ -704,18 +809,136 @@ function Menu() {
         }
     }, []);
 
+    // Efeito para redirecionar admins
     useEffect(() => {
         if (!authLoading && (isUserAdmin || isUserMasterAdmin)) {
             toast.error('Acesso negado. Esta página é exclusiva para clientes.', { toastId: 'admin-redirect' });
         }
     }, [authLoading, isUserAdmin, isUserMasterAdmin]);
 
+    // Funções para mostrar mais/menos itens
+    const handleShowMore = (categoryName) => {
+        setVisibleItemsCount(prev => ({ ...prev, [categoryName]: (prev[categoryName] || 3) + 3 }));
+    };
+
+    const handleShowLess = (categoryName) => {
+        setVisibleItemsCount(prev => ({ ...prev, [categoryName]: 3 }));
+    };
+
+    // 🏪 COMPONENTE DE INFORMAÇÕES DO ESTABELECIMENTO
+    const InfoEstabelecimento = () => {
+        if (!estabelecimentoInfo) return null;
+
+        return (
+            <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
+                <div className="flex flex-col md:flex-row gap-6 items-start">
+                    {/* LOGO */}
+                    {estabelecimentoInfo.logoUrl && (
+                        <div className="flex-shrink-0">
+                            <img 
+                                src={estabelecimentoInfo.logoUrl} 
+                                alt={`Logo ${estabelecimentoInfo.nome}`}
+                                className="w-24 h-24 md:w-32 md:h-32 rounded-2xl object-cover border-2"
+                                style={{ borderColor: coresEstabelecimento.primaria }}
+                            />
+                        </div>
+                    )}
+                    
+                    {/* INFORMAÇÕES */}
+                    <div className="flex-1 space-y-4">
+                        {/* NOME E DESCRIÇÃO */}
+                        <div>
+                            <h1 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                {estabelecimentoInfo.nome}
+                            </h1>
+                            {estabelecimentoInfo.descricao && (
+                                <p className="text-lg" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                    {estabelecimentoInfo.descricao}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* GRADE DE INFORMAÇÕES */}
+                        <div className="grid md:grid-cols-2 gap-4">
+                            {/* ENDEREÇO */}
+                            {estabelecimentoInfo.endereco && estabelecimentoInfo.endereco.rua && (
+                                <div className="flex items-start gap-3">
+                                    <span className="text-xl">📍</span>
+                                    <div>
+                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                            Endereço
+                                        </p>
+                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                            {estabelecimentoInfo.endereco.rua}, {estabelecimentoInfo.endereco.numero}
+                                            {estabelecimentoInfo.endereco.bairro && ` - ${estabelecimentoInfo.endereco.bairro}`}
+                                            {estabelecimentoInfo.endereco.cidade && `, ${estabelecimentoInfo.endereco.cidade}`}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* HORÁRIO */}
+                            {estabelecimentoInfo.horarioFuncionamento && (
+                                <div className="flex items-start gap-3">
+                                    <span className="text-xl">🕒</span>
+                                    <div>
+                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                            Horário de Funcionamento
+                                        </p>
+                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                            {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TELEFONE */}
+                            {estabelecimentoInfo.telefone && (
+                                <div className="flex items-start gap-3">
+                                    <span className="text-xl">📞</span>
+                                    <div>
+                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                            Telefone
+                                        </p>
+                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                            {estabelecimentoInfo.telefone}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* WHATSAPP */}
+                            {estabelecimentoInfo.whatsapp && (
+                                <div className="flex items-start gap-3">
+                                    <span className="text-xl">💬</span>
+                                    <div>
+                                        <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                            WhatsApp
+                                        </p>
+                                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                            {estabelecimentoInfo.whatsapp}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     if (authLoading || loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: coresEstabelecimento.background }}>
                 <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-700 text-lg font-medium">Carregando cardápio...</p>
+                    <div 
+                        className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4"
+                        style={{ borderColor: coresEstabelecimento.primaria }}
+                    ></div>
+                    <p className="text-lg font-medium" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                        Carregando cardápio...
+                    </p>
                 </div>
             </div>
         );
@@ -734,169 +957,286 @@ function Menu() {
     }, {});
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 pb-48 md:pb-0">
-            {/* Header com fundo laranja moderno */}
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg">
-                <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="min-h-screen pb-48 md:pb-0" style={{ 
+            backgroundColor: coresEstabelecimento.background,
+            color: coresEstabelecimento.texto?.principal || '#FFFFFF' 
+        }}>
+            {/* Header Simplificado */}
+            <div className="shadow-lg" style={{ backgroundColor: coresEstabelecimento.primaria }}>
+                <div className="max-w-7xl mx-auto px-4 py-6">
                     <div className="text-center text-white">
-                        <h1 className="text-4xl font-bold mb-3 drop-shadow-sm">
+                        <h1 className="text-3xl font-bold mb-2 drop-shadow-sm">
                             {nomeEstabelecimento}
                         </h1>
-                        {estabelecimentoInfo?.descricao && (
-                            <p className="text-amber-100 text-lg max-w-2xl mx-auto">
-                                {estabelecimentoInfo.descricao}
-                            </p>
-                        )}
+                        <p className="text-white text-opacity-90">
+                            Cardápio Digital
+                        </p>
                     </div>
                 </div>
             </div>
 
-            {/* Search and Filters */}
+            {/* Conteúdo Principal */}
             <div className="max-w-7xl mx-auto px-4 py-6">
-                <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-amber-200">
-                    <div className="mb-6">
-                        <div className="relative">
-                            <input 
-                                type="text" 
-                                placeholder="🔍 Buscar por nome ou descrição..." 
-                                value={searchTerm} 
-                                onChange={(e) => setSearchTerm(e.target.value)} 
-                                className="w-full px-6 py-4 border border-amber-300 rounded-2xl text-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50" 
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-3 justify-center">
-                        {availableCategories.map((category) => (
-                            <button 
-                                key={category} 
-                                onClick={() => setSelectedCategory(category)}
-                                className={`px-6 py-3 rounded-full text-sm font-semibold transition-all duration-200 transform hover:scale-105 ${
-                                    selectedCategory === category 
-                                        ? 'bg-amber-500 text-white shadow-lg' 
-                                        : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                }`}
-                            >
-                                {category}
-                            </button>
-                        ))}
-                        {(searchTerm || selectedCategory !== 'Todos') && (
-                            <button 
-                                onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
-                                className="px-6 py-3 rounded-full text-sm font-semibold bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 transform hover:scale-105"
-                            >
-                                Limpar Filtros
-                            </button>
-                        )}
-                    </div>
-                </div>
+                {/* 🏪 INFORMAÇÕES DO ESTABELECIMENTO */}
+                <InfoEstabelecimento />
 
-                {/* Menu Items */}
-                {produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
-                    <div className="text-center py-12">
-                        <div className="text-amber-400 text-6xl mb-4">🔍</div>
-                        <p className="text-amber-600 text-xl font-medium">Nenhum item encontrado com os filtros selecionados.</p>
-                        <p className="text-amber-500 mt-2">Tente alterar sua busca ou categoria.</p>
-                    </div>
-                ) : allProdutos.length === 0 ? (
-                    <div className="text-center py-12">
-                        <div className="text-amber-400 text-6xl mb-4">🍽️</div>
-                        <p className="text-amber-600 text-xl font-medium">Este estabelecimento ainda não possui itens no cardápio.</p>
-                        <p className="text-amber-500 mt-2">Volte em breve para conferir as novidades!</p>
-                    </div>
-                ) : (
-                    Object.keys(menuAgrupado).sort().map(categoria => {
-                        const itemsNestaCategoria = menuAgrupado[categoria];
-                        const totalItemsVisiveis = visibleItemsCount[categoria] || 3;
-                        const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
-                        
-                        return (
-                            <div key={categoria} className="mb-12">
-                                <div className="flex items-center justify-between mb-8">
-                                    <h2 className="text-3xl font-bold text-amber-800">{categoria}</h2>
-                                    <span className="text-amber-600 bg-amber-100 px-3 py-1 rounded-full text-sm font-medium">
-                                        {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
-                                    </span>
-                                </div>
-                                
-                                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                    {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
-                                        <CardapioItem 
-                                            key={item.id} 
-                                            item={item} 
-                                            onAddItem={handleAbrirModalProduto}
-                                        />
-                                    ))}
-                                </div>
-                                
-                                {itemsNestaCategoria.length > 3 && (
-                                    <div className="text-center mt-8">
-                                        {todosItensVisiveis ? (
-                                            <button 
-                                                onClick={() => handleShowLess(categoria)}
-                                                className="bg-amber-200 text-amber-800 font-semibold py-3 px-8 rounded-lg hover:bg-amber-300 transition-all duration-200 transform hover:scale-105"
-                                            >
-                                                Ver menos
-                                            </button>
-                                        ) : (
-                                            <button 
-                                                onClick={() => handleShowMore(categoria)}
-                                                className="bg-amber-500 text-white font-semibold py-3 px-8 rounded-lg hover:bg-amber-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
-                                            >
-                                                Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })
-                )}
+{/* Search and Filters */}
+<div className="bg-gray-900 rounded-2xl shadow-xl p-6 mb-8 border border-gray-700">
+    <div className="mb-6">
+        <div className="relative">
+            <input 
+                type="text" 
+                placeholder="🔍 Buscar por nome ou descrição..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                className="w-full px-6 py-4 border border-gray-600 rounded-2xl text-lg focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white" 
+                style={{ 
+                    focusRingColor: coresEstabelecimento.primaria,
+                    borderColor: `${coresEstabelecimento.primaria}30`
+                }}
+            />
+        </div>
+    </div>
+    
+ {/* BARRA DE CATEGORIAS COM ORDEM DINÂMICA */}
+<div className="relative">
+  <div className="flex overflow-x-auto gap-3 pb-4 -mb-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+    {/* Todas as categorias ordenadas dinamicamente (incluindo "Todos") */}
+    {ordenarCategorias(
+      availableCategories,
+      estabelecimentoInfo?.ordemCategorias
+    ).map((category) => (
+      <button 
+        key={category} 
+        onClick={() => setSelectedCategory(category)}
+        className={`px-6 py-3 rounded-full text-sm font-semibold transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0 ${
+          selectedCategory === category 
+            ? 'text-white shadow-lg' 
+            : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+        }`}
+        style={
+          selectedCategory === category 
+            ? { backgroundColor: coresEstabelecimento.primaria }
+            : {}
+        }
+      >
+        {category === 'Todos' ? '📋 Todos' : category}
+      </button>
+    ))}
+    
+    {/* Botão Limpar Filtros */}
+    {(searchTerm || selectedCategory !== 'Todos') && (
+      <button 
+        onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
+        className="px-6 py-3 rounded-full text-sm font-semibold bg-gray-600 text-white hover:bg-gray-500 transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0"
+      >
+        🗑️ Limpar Filtros
+      </button>
+    )}
+  </div>
+  
+  {/* Sombra indicativa de scroll */}
+  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-900 to-transparent pointer-events-none"></div>
+</div>
+</div>
 
+{/* Menu Items - ORDENADO PELA ORDEM PERSONALIZADA */}
+{produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
+  <div className="text-center py-8">
+    <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+      Nenhum item encontrado com os filtros selecionados.
+    </p>
+  </div>
+) : allProdutos.length === 0 ? (
+  <div className="text-center py-8">
+    <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+      Este estabelecimento ainda não possui itens no cardápio.
+    </p>
+  </div>
+) : selectedCategory === 'Todos' ? (
+  // QUANDO "TODOS" ESTÁ SELECIONADO - MOSTRAR CATEGORIAS NA ORDEM PERSONALIZADA
+  ordenarCategorias(
+    Object.keys(menuAgrupado).filter(cat => cat !== 'Outros'),
+    estabelecimentoInfo?.ordemCategorias
+  )
+  .filter(categoria => categoria !== 'Todos') // Remove "Todos" da lista de categorias
+  .map((categoria) => {
+    const itemsNestaCategoria = menuAgrupado[categoria] || [];
+    const totalItemsVisiveis = visibleItemsCount[categoria] || 6;
+    const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
+    
+    if (itemsNestaCategoria.length === 0) return null;
+    
+    return (
+      <div key={categoria} className="mb-8">
+        {/* CABEÇALHO DA CATEGORIA */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+            {categoria}
+          </h2>
+          <span className="bg-gray-800 px-3 py-1 rounded-full text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+            {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
+          </span>
+        </div>
+        
+        {/* LISTA DE ITENS */}
+        <div className="space-y-3">
+          {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
+            <CardapioItem 
+              key={item.id} 
+              item={item} 
+              onAddItem={handleAbrirModalProduto}
+              coresEstabelecimento={coresEstabelecimento}
+            />
+          ))}
+        </div>
+        
+        {/* BOTÃO VER MAIS/VER MENOS */}
+        {itemsNestaCategoria.length > 6 && (
+          <div className="text-center mt-4">
+            {todosItensVisiveis ? (
+              <button 
+                onClick={() => handleShowLess(categoria)}
+                style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
+                className="hover:text-gray-300 font-medium text-sm transition-colors"
+              >
+                ↑ Ver menos
+              </button>
+            ) : (
+              <button 
+                onClick={() => handleShowMore(categoria)}
+                className="font-medium text-sm transition-colors"
+                style={{ color: coresEstabelecimento.primaria }}
+              >
+                ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  })
+) : (
+  // QUANDO UMA CATEGORIA ESPECÍFICA ESTÁ SELECIONADA
+  (() => {
+    const categoriaSelecionada = selectedCategory;
+    const itemsNestaCategoria = menuAgrupado[categoriaSelecionada] || [];
+    const totalItemsVisiveis = visibleItemsCount[categoriaSelecionada] || 6;
+    const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
+    
+    return (
+      <div key={categoriaSelecionada} className="mb-8">
+        {/* CABEÇALHO DA CATEGORIA */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+            {categoriaSelecionada}
+          </h2>
+          <span className="bg-gray-800 px-3 py-1 rounded-full text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+            {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
+          </span>
+        </div>
+        
+        {/* LISTA DE ITENS */}
+        <div className="space-y-3">
+          {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
+            <CardapioItem 
+              key={item.id} 
+              item={item} 
+              onAddItem={handleAbrirModalProduto}
+              coresEstabelecimento={coresEstabelecimento}
+            />
+          ))}
+        </div>
+        
+        {/* BOTÃO VER MAIS/VER MENOS */}
+        {itemsNestaCategoria.length > 6 && (
+          <div className="text-center mt-4">
+            {todosItensVisiveis ? (
+              <button 
+                onClick={() => handleShowLess(categoriaSelecionada)}
+                style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
+                className="hover:text-gray-300 font-medium text-sm transition-colors"
+              >
+                ↑ Ver menos
+              </button>
+            ) : (
+              <button 
+                onClick={() => handleShowMore(categoriaSelecionada)}
+                className="font-medium text-sm transition-colors"
+                style={{ color: coresEstabelecimento.primaria }}
+              >
+                ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  })()
+)}
                 {/* Customer Information Section */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mt-12 border border-amber-200">
-                    <h2 className="font-bold text-3xl mb-6 text-amber-800 flex items-center gap-3">
+                <div className="bg-gray-900 rounded-2xl shadow-xl p-6 mt-12 border border-gray-700">
+                    <h2 className="font-bold text-3xl mb-6 flex items-center gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                         <span>👤</span>
                         Seus Dados
                     </h2>
                     
                     <div className="grid md:grid-cols-2 gap-6 mb-6">
                         <div>
-                            <label className="block text-amber-700 font-semibold mb-2">Nome *</label>
+                            <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                Nome *
+                            </label>
                             <input 
                                 type="text" 
                                 value={nomeCliente} 
                                 onChange={(e) => setNomeCliente(e.target.value)} 
-                                className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                 placeholder="Seu nome completo"
                                 required
+                                style={{ 
+                                    focusRingColor: coresEstabelecimento.primaria,
+                                    color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                }}
                             />
                         </div>
                         <div>
-                            <label className="block text-amber-700 font-semibold mb-2">Telefone *</label>
+                            <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                Telefone *
+                            </label>
                             <input 
                                 type="tel" 
                                 value={telefoneCliente} 
                                 onChange={(e) => setTelefoneCliente(e.target.value)} 
-                                className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                 placeholder="(11) 99999-9999"
                                 required
+                                style={{ 
+                                    focusRingColor: coresEstabelecimento.primaria,
+                                    color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                }}
                             />
                         </div>
                     </div>
 
                     {/* Tipo de Entrega */}
                     <div className="mb-6">
-                        <label className="block text-amber-700 font-semibold mb-3">Tipo de Entrega</label>
+                        <label className="block font-semibold mb-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                            Tipo de Entrega
+                        </label>
                         <div className="flex gap-4">
                             <button
                                 type="button"
                                 onClick={() => setIsRetirada(false)}
                                 className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-200 ${
                                     !isRetirada 
-                                        ? 'bg-amber-500 text-white shadow-lg' 
-                                        : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                        ? 'text-white shadow-lg' 
+                                        : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
                                 }`}
+                                style={
+                                    !isRetirada 
+                                        ? { backgroundColor: coresEstabelecimento.primaria }
+                                        : {}
+                                }
                             >
                                 🚚 Entrega
                             </button>
@@ -905,9 +1245,14 @@ function Menu() {
                                 onClick={() => setIsRetirada(true)}
                                 className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-200 ${
                                     isRetirada 
-                                        ? 'bg-amber-500 text-white shadow-lg' 
-                                        : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                        ? 'text-white shadow-lg' 
+                                        : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
                                 }`}
+                                style={
+                                    isRetirada 
+                                        ? { backgroundColor: coresEstabelecimento.primaria }
+                                        : {}
+                                }
                             >
                                 🏪 Retirada no Local
                             </button>
@@ -917,66 +1262,98 @@ function Menu() {
                     {/* Endereço (apenas para entrega) */}
                     {!isRetirada && (
                         <div className="space-y-4 mb-6">
-                            <h3 className="text-xl font-semibold text-amber-700">📍 Endereço de Entrega</h3>
+                            <h3 className="text-xl font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                📍 Endereço de Entrega
+                            </h3>
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div className="md:col-span-2">
-                                    <label className="block text-amber-700 font-semibold mb-2">Rua *</label>
+                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        Rua *
+                                    </label>
                                     <input 
                                         type="text" 
                                         value={rua} 
                                         onChange={(e) => setRua(e.target.value)} 
-                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                         placeholder="Nome da rua"
                                         required
+                                        style={{ 
+                                            focusRingColor: coresEstabelecimento.primaria,
+                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                        }}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-amber-700 font-semibold mb-2">Número *</label>
+                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        Número *
+                                    </label>
                                     <input 
                                         type="text" 
                                         value={numero} 
                                         onChange={(e) => setNumero(e.target.value)} 
-                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                         placeholder="Número"
                                         required
+                                        style={{ 
+                                            focusRingColor: coresEstabelecimento.primaria,
+                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                        }}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-amber-700 font-semibold mb-2">Bairro *</label>
+                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        Bairro *
+                                    </label>
                                     <input 
                                         type="text" 
                                         value={bairro} 
                                         onChange={(e) => setBairro(e.target.value)} 
-                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                         placeholder="Seu bairro"
                                         required
+                                        style={{ 
+                                            focusRingColor: coresEstabelecimento.primaria,
+                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                        }}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-amber-700 font-semibold mb-2">Cidade *</label>
+                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        Cidade *
+                                    </label>
                                     <input 
                                         type="text" 
                                         value={cidade} 
                                         onChange={(e) => setCidade(e.target.value)} 
-                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                         placeholder="Sua cidade"
                                         required
+                                        style={{ 
+                                            focusRingColor: coresEstabelecimento.primaria,
+                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                        }}
                                     />
                                 </div>
                                 <div className="md:col-span-2">
-                                    <label className="block text-amber-700 font-semibold mb-2">Complemento (Opcional)</label>
+                                    <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        Complemento (Opcional)
+                                    </label>
                                     <input 
                                         type="text" 
                                         value={complemento} 
                                         onChange={(e) => setComplemento(e.target.value)} 
-                                        className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                        className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                         placeholder="Apartamento, bloco, referência..."
+                                        style={{ 
+                                            focusRingColor: coresEstabelecimento.primaria,
+                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                        }}
                                     />
                                 </div>
                             </div>
                             {bairroNaoEncontrado && !isRetirada && (
-                                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                                    <p className="text-yellow-700 text-sm">
+                                <div className="bg-yellow-900 border border-yellow-700 rounded-xl p-4">
+                                    <p className="text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
                                         ⚠️ O bairro "<strong>{bairro}</strong>" não foi encontrado na nossa lista de áreas de entrega. 
                                         A taxa de entrega é R$ 0,00, mas podem ser aplicadas taxas adicionais na confirmação do pedido.
                                     </p>
@@ -987,7 +1364,9 @@ function Menu() {
 
                     {/* Forma de Pagamento */}
                     <div className="mb-6">
-                        <h3 className="text-xl font-semibold text-amber-700 mb-4">💳 Forma de Pagamento</h3>
+                        <h3 className="text-xl font-semibold mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                            💳 Forma de Pagamento
+                        </h3>
                         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
                             {['dinheiro', 'cartão crédito', 'cartão débito', 'pix'].map((pagamento) => (
                                 <button
@@ -996,9 +1375,14 @@ function Menu() {
                                     onClick={() => setFormaPagamento(pagamento)}
                                     className={`py-3 rounded-xl font-semibold transition-all duration-200 ${
                                         formaPagamento === pagamento 
-                                            ? 'bg-amber-500 text-white shadow-lg' 
-                                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                            ? 'text-white shadow-lg' 
+                                            : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
                                     }`}
+                                    style={
+                                        formaPagamento === pagamento 
+                                            ? { backgroundColor: coresEstabelecimento.primaria }
+                                            : {}
+                                    }
                                 >
                                     {pagamento === 'dinheiro' && '💵 Dinheiro'}
                                     {pagamento === 'cartão crédito' && '💳 Crédito'}
@@ -1010,17 +1394,23 @@ function Menu() {
                         
                         {formaPagamento === 'dinheiro' && (
                             <div className="mt-4">
-                                <label className="block text-amber-700 font-semibold mb-2">Troco para quanto? (Opcional)</label>
+                                <label className="block font-semibold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    Troco para quanto? (Opcional)
+                                </label>
                                 <input 
                                     type="number" 
                                     value={trocoPara} 
                                     onChange={(e) => setTrocoPara(e.target.value)} 
-                                    className="w-full md:w-1/2 border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full md:w-1/2 border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     placeholder="Ex: 50,00"
                                     step="0.01"
                                     min={finalOrderTotal}
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
-                                <p className="text-amber-600 text-sm mt-2">
+                                <p className="text-sm mt-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                     Deixe em branco se não precisar de troco.
                                 </p>
                             </div>
@@ -1029,40 +1419,47 @@ function Menu() {
                 </div>
 
                 {/* Cart and Order Section */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mt-8 border border-amber-200">
-                    <h2 className="font-bold text-3xl mb-6 text-amber-800 flex items-center gap-3">
+                <div className="bg-gray-900 rounded-2xl shadow-xl p-6 mt-8 border border-gray-700">
+                    <h2 className="font-bold text-3xl mb-6 flex items-center gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                         <span>🛒</span>
                         Seu Pedido
                     </h2>
                     
                     {carrinho.length === 0 ? (
                         <div className="text-center py-8">
-                            <div className="text-amber-400 text-6xl mb-4">🛒</div>
-                            <p className="text-amber-600 text-lg font-medium">Nenhum item adicionado ainda.</p>
-                            <p className="text-amber-500 mt-2">Explore nosso cardápio e adicione itens deliciosos!</p>
+                            <div className="text-6xl mb-4" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>🛒</div>
+                            <p className="text-lg font-medium" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                Nenhum item adicionado ainda.
+                            </p>
+                            <p className="mt-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                Explore nosso cardápio e adicione itens deliciosos!
+                            </p>
                         </div>
                     ) : (
                         <>
                             <div className="space-y-4 mb-6">
                                 {carrinho.map((item) => (
-                                    <div key={item.cartItemId} className="bg-amber-50 p-4 rounded-xl border border-amber-200 hover:shadow-md transition-all duration-200">
+                                    <div key={item.cartItemId} className="bg-gray-800 p-4 rounded-xl border border-gray-700 hover:shadow-md transition-all duration-200">
                                         <div className="flex justify-between items-start">
                                             <div className="flex-1 mr-4">
                                                 <div className="flex items-start justify-between">
                                                     <div>
-                                                        <span className="font-semibold text-amber-900">
+                                                        <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                                             {formatarItemCarrinho(item)}
                                                         </span>
-                                                        <span className="text-sm text-amber-600 ml-2">({item.qtd}x)</span>
+                                                        <span className="text-sm ml-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
+                                                            ({item.qtd}x)
+                                                        </span>
                                                     </div>
-                                                    <span className="font-bold text-amber-900 text-lg">
+                                                    <span className="font-bold text-lg" style={{ color: coresEstabelecimento.texto?.destaque || '#FBBF24' }}>
                                                         R$ {(item.precoFinal * item.qtd).toFixed(2).replace('.', ',')}
                                                     </span>
                                                 </div>
                                             </div>
                                             <button 
                                                 onClick={() => removerDoCarrinho(item.cartItemId)}
-                                                className="bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-amber-600 transition-colors duration-200 flex-shrink-0"
+                                                className="text-white w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors duration-200 flex-shrink-0"
+                                                style={{ backgroundColor: coresEstabelecimento.primaria }}
                                             >
                                                 -
                                             </button>
@@ -1071,46 +1468,62 @@ function Menu() {
                                 ))}
                             </div>
                             
-                            <div className="border-t border-amber-200 pt-6 space-y-4">
+                            <div className="border-t border-gray-700 pt-6 space-y-4">
                                 <div className="flex justify-between items-center text-lg">
-                                    <span className="text-amber-700">Subtotal:</span>
-                                    <span className="font-semibold text-amber-900">R$ {subtotalCalculado.toFixed(2).replace('.', ',')}</span>
+                                    <span style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Subtotal:</span>
+                                    <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                        R$ {subtotalCalculado.toFixed(2).replace('.', ',')}
+                                    </span>
                                 </div>
                                 
                                 {!isRetirada && (
                                     <div className="flex justify-between items-center text-lg">
-                                        <span className="text-amber-700">Taxa de Entrega:</span>
-                                        <span className="font-semibold text-amber-900">R$ {taxaAplicada.toFixed(2).replace('.', ',')}</span>
+                                        <span style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Taxa de Entrega:</span>
+                                        <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                            R$ {taxaAplicada.toFixed(2).replace('.', ',')}
+                                        </span>
                                     </div>
                                 )}
                                 
                                 {!appliedCoupon ? (
-                                    <div className="flex items-center gap-3 pt-4 border-t border-amber-200">
+                                    <div className="flex items-center gap-3 pt-4 border-t border-gray-600">
                                         <input 
                                             type="text" 
                                             placeholder="🎁 Código do Cupom" 
                                             value={couponCodeInput} 
                                             onChange={(e) => setCouponCodeInput(e.target.value)} 
-                                            className="flex-1 border border-amber-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                            className="flex-1 border border-gray-600 rounded-xl px-4 py-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                             disabled={couponLoading}
+                                            style={{ 
+                                                focusRingColor: coresEstabelecimento.primaria,
+                                                color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                            }}
                                         />
                                         <button 
                                             onClick={handleApplyCoupon} 
                                             disabled={couponLoading || !couponCodeInput.trim()}
-                                            className="bg-amber-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-amber-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105"
+                                            className="text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                            style={{ 
+                                                backgroundColor: couponLoading || !couponCodeInput.trim() ? '#4B5563' : coresEstabelecimento.primaria 
+                                            }}
                                         >
                                             {couponLoading ? 'Aplicando...' : 'Aplicar'}
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="flex justify-between items-center bg-green-50 p-4 rounded-xl border border-green-200 mt-4">
+                                    <div className="flex justify-between items-center bg-green-900 p-4 rounded-xl border border-green-700 mt-4">
                                         <div>
-                                            <p className="text-green-800 font-semibold">🎉 Cupom: {appliedCoupon.codigo}</p>
-                                            <p className="text-green-600 text-sm">Desconto aplicado com sucesso!</p>
+                                            <p className="font-semibold" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
+                                                🎉 Cupom: {appliedCoupon.codigo}
+                                            </p>
+                                            <p className="text-sm" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
+                                                Desconto aplicado com sucesso!
+                                            </p>
                                         </div>
                                         <button 
                                             onClick={removeAppliedCoupon} 
-                                            className="text-red-600 hover:text-red-700 font-semibold text-sm transition-colors duration-200"
+                                            className="font-semibold text-sm transition-colors duration-200"
+                                            style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}
                                         >
                                             Remover
                                         </button>
@@ -1118,15 +1531,19 @@ function Menu() {
                                 )}
                                 
                                 {discountAmount > 0 && (
-                                    <div className="flex justify-between items-center text-lg text-green-600 font-semibold">
-                                        <span>Desconto:</span>
-                                        <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
+                                    <div className="flex justify-between items-center text-lg font-semibold">
+                                        <span style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>Desconto:</span>
+                                        <span style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
+                                            - R$ {discountAmount.toFixed(2).replace('.', ',')}
+                                        </span>
                                     </div>
                                 )}
                                 
-                                <div className="flex justify-between items-center text-2xl font-bold pt-4 border-t border-amber-300">
-                                    <span className="text-amber-900">TOTAL:</span>
-                                    <span className="text-amber-600">R$ {finalOrderTotal.toFixed(2).replace('.', ',')}</span>
+                                <div className="flex justify-between items-center text-2xl font-bold pt-4 border-t border-gray-600">
+                                    <span style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>TOTAL:</span>
+                                    <span style={{ color: coresEstabelecimento.texto?.destaque || '#FBBF24' }}>
+                                        R$ {finalOrderTotal.toFixed(2).replace('.', ',')}
+                                    </span>
                                 </div>
                             </div>
                         </>
@@ -1136,12 +1553,17 @@ function Menu() {
 
             {/* Fixed Order Button */}
             {carrinho.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-2xl border-t border-amber-200 md:relative md:p-0 md:mt-8 md:shadow-none md:border-none">
+                <div className="fixed bottom-0 left-0 right-0 bg-gray-900 p-4 shadow-2xl border-t border-gray-700 md:relative md:p-0 md:mt-8 md:shadow-none md:border-none">
                     <div className="max-w-7xl mx-auto">
                         <button 
                             onClick={enviarPedido} 
                             disabled={!currentUser || !nomeCliente.trim() || !telefoneCliente.trim() || !formaPagamento || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim()))}
-                            className="w-full px-6 py-4 rounded-2xl font-bold text-lg disabled:bg-gray-400 disabled:cursor-not-allowed bg-green-500 text-white hover:bg-green-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
+                            className="w-full px-6 py-4 rounded-2xl font-bold text-lg disabled:bg-gray-600 disabled:cursor-not-allowed text-white transition-all duration-200 transform hover:scale-105 shadow-lg"
+                            style={{ 
+                                backgroundColor: (!currentUser || !nomeCliente.trim() || !telefoneCliente.trim() || !formaPagamento || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim()))) 
+                                    ? '#4B5563' 
+                                    : coresEstabelecimento.destaque 
+                            }}
                         >
                             🚀 Enviar Pedido Agora! - R$ {finalOrderTotal.toFixed(2).replace('.', ',')}
                         </button>
@@ -1152,17 +1574,35 @@ function Menu() {
             {/* Order Confirmation Modal */}
             {showOrderConfirmationModal && confirmedOrderDetails && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center">
+                    <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full text-center border border-gray-700">
                         <div className="text-6xl mb-4">🎉</div>
-                        <h2 className="text-3xl font-bold mb-4 text-amber-800">Pedido Enviado!</h2>
+                        <h2 className="text-3xl font-bold mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                            Pedido Enviado!
+                        </h2>
                         <div className="space-y-3 text-left mb-6">
-                            <p><strong className="text-amber-700">ID:</strong> <span className="font-mono">{confirmedOrderDetails.id.substring(0, 8)}...</span></p>
-                            <p><strong className="text-amber-700">Total:</strong> R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}</p>
-                            <p><strong className="text-amber-700">Forma de Pagamento:</strong> {confirmedOrderDetails.formaPagamento}</p>
+                            <p>
+                                <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>ID:</strong> 
+                                <span className="font-mono ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    {confirmedOrderDetails.id.substring(0, 8)}...
+                                </span>
+                            </p>
+                            <p>
+                                <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Total:</strong> 
+                                <span className="ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}
+                                </span>
+                            </p>
+                            <p>
+                                <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Forma de Pagamento:</strong> 
+                                <span className="ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
+                                    {confirmedOrderDetails.formaPagamento}
+                                </span>
+                            </p>
                         </div>
                         <button 
                             onClick={() => setShowOrderConfirmationModal(false)} 
-                            className="w-full bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600 transition-all duration-200"
+                            className="w-full text-white py-3 rounded-xl font-semibold transition-all duration-200"
+                            style={{ backgroundColor: coresEstabelecimento.destaque }}
                         >
                             Fechar
                         </button>
@@ -1173,10 +1613,10 @@ function Menu() {
             {/* Login Modal */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[1000]">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full relative">
+                    <div className="bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full relative border border-gray-700">
                         <button 
                             onClick={() => { setShowLoginPrompt(false); }} 
-                            className="absolute top-4 right-4 text-amber-500 hover:text-amber-600 text-2xl font-bold transition-colors duration-200" 
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-300 text-2xl font-bold transition-colors duration-200" 
                             aria-label="Fechar"
                         >
                             &times;
@@ -1184,17 +1624,19 @@ function Menu() {
                         
                         <div className="text-center mb-6">
                             <div className="text-4xl mb-4">🔐</div>
-                            <h2 className="text-3xl font-bold text-amber-800 mb-2">
+                            <h2 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
                                 {isRegisteringInModal ? 'Criar Conta' : 'Fazer Login'}
                             </h2>
-                            <p className="text-amber-600">
+                            <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                 {isRegisteringInModal ? 'Preencha seus dados para criar uma conta.' : 'Para acessar o cardápio e fazer pedidos.'}
                             </p>
                         </div>
                         
                         {errorAuthModal && (
-                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-                                <p className="text-red-700 text-sm">{errorAuthModal}</p>
+                            <div className="bg-red-900 border border-red-700 rounded-xl p-4 mb-6">
+                                <p className="text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
+                                    {errorAuthModal}
+                                </p>
                             </div>
                         )}
                         
@@ -1203,86 +1645,124 @@ function Menu() {
                                 <input 
                                     type="text" 
                                     placeholder="Seu Nome Completo *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={nomeAuthModal} 
                                     onChange={(e) => setNomeAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="tel" 
                                     placeholder="Seu Telefone (com DDD) *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={telefoneAuthModal} 
                                     onChange={(e) => setTelefoneAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="email" 
                                     placeholder="Email *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="password" 
                                     placeholder="Senha (mín. 6 caracteres) *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="text" 
                                     placeholder="Rua *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={ruaAuthModal} 
                                     onChange={(e) => setRuaAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="text" 
                                     placeholder="Número *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={numeroAuthModal} 
                                     onChange={(e) => setNumeroAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="text" 
                                     placeholder="Bairro *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={bairroAuthModal} 
                                     onChange={(e) => setBairroAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="text" 
                                     placeholder="Cidade *" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={cidadeAuthModal} 
                                     onChange={(e) => setCidadeAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="text" 
                                     placeholder="Complemento (Opcional)" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={complementoAuthModal} 
                                     onChange={(e) => setComplementoAuthModal(e.target.value)} 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <button 
                                     type="submit" 
-                                    className="w-full bg-amber-500 text-white font-semibold py-3 rounded-xl hover:bg-amber-600 transition-all duration-200 transform hover:scale-105"
+                                    className="w-full text-white font-semibold py-3 rounded-xl transition-all duration-200 transform hover:scale-105"
+                                    style={{ backgroundColor: coresEstabelecimento.primaria }}
                                 >
                                     Cadastrar e Entrar
                                 </button>
-                                <p className="text-sm text-center text-amber-600">
+                                <p className="text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                     Já tem uma conta?{' '}
                                     <button 
                                         type="button" 
                                         onClick={() => setIsRegisteringInModal(false)} 
-                                        className="text-amber-500 underline font-semibold hover:text-amber-600 transition-colors duration-200"
+                                        className="underline font-semibold transition-colors duration-200"
+                                        style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}
                                     >
                                         Fazer Login
                                     </button>
@@ -1293,31 +1773,41 @@ function Menu() {
                                 <input 
                                     type="email" 
                                     placeholder="Email" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={emailAuthModal} 
                                     onChange={(e) => setEmailAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <input 
                                     type="password" 
                                     placeholder="Senha" 
-                                    className="w-full border border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200 bg-amber-50"
+                                    className="w-full border border-gray-600 rounded-xl p-3 focus:ring-2 focus:border-transparent transition-all duration-200 bg-gray-800 text-white"
                                     value={passwordAuthModal} 
                                     onChange={(e) => setPasswordAuthModal(e.target.value)} 
                                     required 
+                                    style={{ 
+                                        focusRingColor: coresEstabelecimento.primaria,
+                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
+                                    }}
                                 />
                                 <button 
                                     type="submit" 
-                                    className="w-full bg-green-500 text-white font-semibold py-3 rounded-xl hover:bg-green-600 transition-all duration-200 transform hover:scale-105"
+                                    className="w-full text-white font-semibold py-3 rounded-xl transition-all duration-200 transform hover:scale-105"
+                                    style={{ backgroundColor: coresEstabelecimento.destaque }}
                                 >
                                     Entrar
                                 </button>
-                                <p className="text-sm text-center text-amber-600">
+                                <p className="text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
                                     Não tem uma conta?{' '}
                                     <button 
                                         type="button" 
                                         onClick={() => setIsRegisteringInModal(true)} 
-                                        className="text-amber-500 underline font-semibold hover:text-amber-600 transition-colors duration-200"
+                                        className="underline font-semibold transition-colors duration-200"
+                                        style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}
                                     >
                                         Cadastre-se
                                     </button>
@@ -1334,6 +1824,7 @@ function Menu() {
                     item={itemParaVariacoes} 
                     onConfirm={handleConfirmarVariacoes} 
                     onClose={handleFecharModalVariacoes} 
+                    coresEstabelecimento={coresEstabelecimento}
                 />
             )}
 
@@ -1343,6 +1834,7 @@ function Menu() {
                     item={itemParaAdicionais} 
                     onConfirm={handleConfirmarAdicionais} 
                     onClose={handleFecharModalAdicionais} 
+                    coresEstabelecimento={coresEstabelecimento}
                 />
             )}
         </div>
