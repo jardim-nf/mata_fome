@@ -1,7 +1,8 @@
-// src/components/CardapioItem.jsx - VERSÃO MELHORADA E CORRIGIDA
+// src/components/CardapioItem.jsx - VERSÃO COM MENSAGEM RÁPIDA
 import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
+import { toast } from 'react-toastify';
 
 function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
   // 🎨 Valores padrão para cores
@@ -66,26 +67,22 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
 
   // 🎯 FUNÇÃO INTELIGENTE: Verifica se pode adicionar direto (CORRIGIDA)
   const podeAdicionarDireto = () => {
-    // 1. Se NÃO tiver variações, adiciona direto.
     if (!hasVariations) {
         return true;
     }
 
-    // 2. Tem variações. Conta quantas variações ativas e válidas (com preço >= 0) existem.
     const variacoesAtivas = safeItem.variacoes.filter(v => 
         v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
     );
 
-    // 3. Se houver APENAS UMA variação ativa, ADICIONA DIRETO.
     if (variacoesAtivas.length === 1) {
         return true; 
     }
 
-    // 4. Se houver 0 ou 2+ variações ativas, precisa do modal.
     return false;
   };
 
-  // 🎯 FUNÇÃO PARA LIDAR COM CLIQUE NO BOTÃO (CORRIGIDA)
+  // 🎯 FUNÇÃO PARA LIDAR COM CLIQUE NO BOTÃO (CORRIGIDA COM MENSAGEM RÁPIDA)
   const handleButtonClick = () => {
     if (!isAvailable) return;
     
@@ -93,7 +90,6 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
         if (onQuickAdd) {
             let itemParaAdicionar = safeItem;
 
-            // Se tem exatamente 1 variação ativa, a incluímos no item para onQuickAdd
             const variacoesAtivas = safeItem.variacoes.filter(v => 
                 v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
             );
@@ -106,12 +102,18 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
                         nome: variacaoUnica.nome,
                         preco: Number(variacaoUnica.preco)
                     },
-                    // Define o preço final como o preço da variação única
                     precoFinal: Number(variacaoUnica.preco) 
                 };
             }
 
             onQuickAdd(itemParaAdicionar);
+            
+            // 🎯 MENSAGEM SUPER RÁPIDA - APENAS 1 SEGUNDO!
+            toast.success(`${safeItem.nome} adicionado! 🎉`, {
+                autoClose: 1,
+                position: "bottom-right",
+                hideProgressBar: true
+            });
         }
     } else {
       // Produto COM 0 ou 2+ variações - abre modal para escolher

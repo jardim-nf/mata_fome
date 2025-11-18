@@ -1,4 +1,4 @@
-// src/pages/Menu.jsx - VERSÃO CORRIGIDA E ATUALIZADA
+// src/pages/Menu.jsx - VERSÃO CORRIGIDA COM CORES DINÂMICAS
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -71,7 +71,7 @@ function Menu() {
     const [showAIChat, setShowAIChat] = useState(false);
     const [navegacaoRapidaVisivel, setNavegacaoRapidaVisivel] = useState(true);
 
-    // 🎨 CORES DO ESTABELECIMENTO
+    // 🎨 CORES DO ESTABELECIMENTO - AGORA DINÂMICAS
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#0b0b0bff',
         destaque: '#059669',
@@ -227,27 +227,34 @@ function Menu() {
             precoFinal: precoParaCarrinho // Usa precoFinal (vindo de 1 variação ou base)
         };
         setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
-        toast.success(`${item.nome} foi adicionado ao carrinho! 🎉`);
     };
+// ... dentro de Menu.jsx
 
-    const handleConfirmarVariacoes = (itemConfigurado) => {
-        // Se o item tiver adicionais, abre modal de adicionais
-        if (itemConfigurado.adicionais && Array.isArray(itemConfigurado.adicionais) && itemConfigurado.adicionais.length > 0) {
-            setItemParaAdicionais(itemConfigurado);
-            setItemParaVariacoes(null);
-        } else {
-            // Se não tem adicionais, adiciona direto ao carrinho
-            const novoItemNoCarrinho = {
-                ...itemConfigurado,
-                qtd: 1,
-                cartItemId: uuidv4(),
-                precoFinal: itemConfigurado.precoSelecionado || itemConfigurado.preco
-            };
-            setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
-            toast.success(`${itemConfigurado.nome} foi adicionado ao carrinho!`);
-            setItemParaVariacoes(null);
-        }
-    };
+const handleConfirmarVariacoes = (itemConfigurado) => {
+    // Se o item tiver adicionais, abre modal de adicionais
+    if (itemConfigurado.adicionais && Array.isArray(itemConfigurado.adicionais) && itemConfigurado.adicionais.length > 0) {
+        setItemParaAdicionais(itemConfigurado);
+        setItemParaVariacoes(null);
+    } else {
+        // Se não tem adicionais, adiciona direto ao carrinho
+        const novoItemNoCarrinho = {
+            ...itemConfigurado,
+            qtd: 1,
+            cartItemId: uuidv4(),
+            precoFinal: itemConfigurado.precoSelecionado || itemConfigurado.preco
+        };
+        setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
+        
+        // 🚀 OTIMIZAÇÃO: autoClose para 1000ms (1 segundo)
+        toast.success(`${itemConfigurado.nome} foi adicionado ao carrinho!`, {
+            autoClose: 1, // 1 segundo
+            hideProgressBar: true,
+            position: "bottom-right" // Posição comum para notificações rápidas
+        });
+        
+        setItemParaVariacoes(null);
+    }
+};
 
     const handleFecharModalVariacoes = () => {
         setItemParaVariacoes(null);
@@ -598,6 +605,40 @@ function Menu() {
 
     // --- EFEITOS OTIMIZADOS ---
 
+    // 🎨 LISTENER EM TEMPO REAL PARA ATUALIZAÇÕES DE CORES
+    useEffect(() => {
+        if (!actualEstabelecimentoId) return;
+
+        console.log("🎨 Iniciando listener de cores para:", actualEstabelecimentoId);
+        
+        const estabRef = doc(db, 'estabelecimentos', actualEstabelecimentoId);
+        
+        const unsubscribe = onSnapshot(estabRef, (doc) => {
+            if (doc.exists()) {
+                const estabData = doc.data();
+                if (estabData.cores) {
+                    console.log("🎨 Cores atualizadas em tempo real:", estabData.cores);
+                    setCoresEstabelecimento(estabData.cores);
+                    
+                    // Atualizar também no estabelecimentoInfo para consistência
+                    setEstabelecimentoInfo(prev => prev ? {
+                        ...prev,
+                        cores: estabData.cores
+                    } : null);
+                    
+                    toast.info("🎨 Cores do cardápio atualizadas!");
+                }
+            }
+        }, (error) => {
+            console.error("❌ Erro no listener de cores:", error);
+        });
+
+        return () => {
+            console.log("🎨 Parando listener de cores");
+            unsubscribe();
+        };
+    }, [actualEstabelecimentoId]);
+
     // 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
     useEffect(() => {
         if (!estabelecimentoSlug) return;
@@ -627,7 +668,7 @@ function Menu() {
                 const idDoEstabelecimentoReal = estabDoc.id;
 
                 console.log("✅ Estabelecimento encontrado:", estabData.nome);
-                console.log("📋 Ordem de categorias do Firebase:", estabData.ordemCategorias);
+                console.log("🎨 Cores do estabelecimento:", estabData.cores);
 
                 // 🎯 CARREGAMENTO PARALELO: Estabelecimento + Produtos
                 const [produtos] = await Promise.all([
@@ -646,8 +687,9 @@ function Menu() {
                     whatsapp: estabData.whatsapp || "",
                     logoUrl: estabData.logoUrl || "",
                     ordemCategorias: estabData.ordemCategorias || [],
+                    // 🎨 CARREGAR CORES DO ESTABELECIMENTO OU USAR PADRÃO
                     cores: estabData.cores || {
-                        primaria: '#000000ff',
+                        primaria: '#0b0b0bff',
                         destaque: '#059669',
                         background: '#000000',
                         texto: {
@@ -664,6 +706,14 @@ function Menu() {
                 setEstabelecimentoInfo(estabelecimentoInfoCompleta);
                 setNomeEstabelecimento(estabData.nome || "Cardápio");
                 setActualEstabelecimentoId(idDoEstabelecimentoReal);
+
+                // 🎨 DEFINIR CORES IMEDIATAMENTE
+                if (estabData.cores) {
+                    console.log("🎨 Aplicando cores personalizadas:", estabData.cores);
+                    setCoresEstabelecimento(estabData.cores);
+                } else {
+                    console.log("🎨 Usando cores padrão");
+                }
 
                 // 📦 CONFIGURAR PRODUTOS
                 if (produtos.length > 0) {
@@ -861,6 +911,11 @@ function Menu() {
             [categoryName]: 4
         }));
     };
+
+    // 🎨 DEBUG: Verificar se as cores estão sendo aplicadas
+    useEffect(() => {
+        console.log("🎨 Cores atuais aplicadas:", coresEstabelecimento);
+    }, [coresEstabelecimento]);
 
     // 🏪 COMPONENTE DE INFORMAÇÕES DO ESTABELECIMENTO
     const InfoEstabelecimento = () => {
