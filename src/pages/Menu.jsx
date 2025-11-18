@@ -1147,8 +1147,7 @@ function Menu() {
                                             {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
                                         </span>
                                     </div>
-
-                                    {/* LISTA DE ITENS */}
+                                                                        {/* LISTA DE ITENS */}
                                     <div className="space-y-3">
                                         {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
                                             <CardapioItem
