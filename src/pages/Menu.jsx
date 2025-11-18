@@ -1160,14 +1160,11 @@ function Menu() {
                                             />
                                         ))}
                                     </div>
-
-
-
-                                    {/* BOTÃO VER MAIS/VER MENOS */}
                                     {itemsNestaCategoria.length > 4 && (
                                         <div className="text-center mt-3 md:mt-4">
                                             {todosItensVisiveis ? (
                                           <button
+                                          
     onClick={() => handleShowLess(categoria)}
     className="font-medium text-xs md:text-sm transition-colors px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 shadow-sm border border-gray-200"
 >
