@@ -1165,21 +1165,19 @@ function Menu() {
                                     {itemsNestaCategoria.length > 4 && (
                                         <div className="text-center mt-3 md:mt-4">
                                             {todosItensVisiveis ? (
-                                                <button
-                                                    onClick={() => handleShowLess(categoria)}
-                                                    style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
-                                                    className="hover:text-gray-300 font-medium text-xs md:text-sm transition-colors px-4 py-2"
-                                                >
-                                                    ↑ Ver menos
-                                                </button>
+                                          <button
+    onClick={() => handleShowLess(categoria)}
+    className="font-medium text-xs md:text-sm transition-colors px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 shadow-sm border border-gray-200"
+>
+    ↑ Ver menos
+</button>
                                             ) : (
-                                                <button
-                                                    onClick={() => handleShowMore(categoria)}
-                                                    className="font-medium text-xs md:text-sm transition-colors px-4 py-2"
-                                                    style={{ color: coresEstabelecimento.primaria }}
-                                                >
-                                                    ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
-                                                </button>
+                                               <button
+    onClick={() => handleShowMore(categoria)}
+    className="font-medium text-xs md:text-sm transition-colors px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 shadow-sm border border-gray-200"
+>
+    ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
+</button>
                                             )}
                                         </div>
                                     )}
