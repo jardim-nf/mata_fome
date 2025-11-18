@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { startOfDay } from 'date-fns';
+import { startOfDay, isToday } from 'date-fns';
 
+// 🎯 CONSTANTES MELHORADAS
 const MENSAGENS_WHATSAPP = {
     preparo: (nomeCliente, pedidoIdCurto, itensResumo, totalPedido, formaPagamento, nomeEstabelecimento) => {
         let mensagem = `Olá, ${nomeCliente}! 👋\nConfirmamos seu pedido *#${pedidoIdCurto}* e ele já está em preparo!\n\n*Resumo:*\n${itensResumo}\n\n*Total:* ${totalPedido}\n*Pagamento:* ${formaPagamento}\n\n`;
@@ -22,88 +23,111 @@ const MENSAGENS_WHATSAPP = {
         `Olá, ${nomeCliente}! Seu pedido #${pedidoIdCurto} foi finalizado. Agradecemos a preferência e bom apetite! 😋`
 };
 
-function Spinner() {
-    return (
-        <div className="flex flex-col items-center justify-center p-8 h-screen bg-gradient-to-br from-amber-50 to-orange-50 text-gray-900">
-            <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-700 font-medium">Carregando painel...</p>
-            <p className="text-gray-500 text-sm mt-2">Preparando tudo para você</p>
-        </div>
-    );
-}
+const STATUS_CONFIG = {
+    recebido: { 
+        title: '📥 Recebido', 
+        color: 'border-l-red-500 bg-gradient-to-r from-red-50 to-red-25', 
+        countColor: 'bg-red-500 text-white',
+        nextStatus: 'preparo'
+    },
+    preparo: { 
+        title: '👨‍🍳 Em Preparo', 
+        color: 'border-l-orange-500 bg-gradient-to-r from-orange-50 to-orange-25', 
+        countColor: 'bg-orange-500 text-white',
+        nextStatus: 'em_entrega'
+    },
+    em_entrega: { 
+        title: '🛵 Em Entrega', 
+        color: 'border-l-blue-500 bg-gradient-to-r from-blue-50 to-blue-25', 
+        countColor: 'bg-blue-500 text-white',
+        nextStatus: 'finalizado'
+    },
+    pronto_para_servir: { 
+        title: '✅ Pronto para Servir', 
+        color: 'border-l-green-500 bg-gradient-to-r from-green-50 to-green-25', 
+        countColor: 'bg-green-500 text-white',
+        nextStatus: 'finalizado'
+    },
+    finalizado: { 
+        title: '📦 Finalizado', 
+        color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
+        countColor: 'bg-gray-500 text-white',
+        nextStatus: null
+    }
+};
+
+// 🎯 COMPONENTES AUXILIARES OTIMIZADOS
+const Spinner = () => (
+    <div className="flex flex-col items-center justify-center p-8 h-screen bg-gradient-to-br from-amber-50 to-orange-50 text-gray-900">
+        <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-700 font-medium">Carregando painel...</p>
+        <p className="text-gray-500 text-sm mt-2">Preparando tudo para você</p>
+    </div>
+);
+
+const NotificationToggle = ({ enabled, onToggle, userInteracted }) => (
+    <button 
+        onClick={onToggle} 
+        className={`flex items-center space-x-3 px-5 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
+            enabled 
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg' 
+                : 'bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-700 shadow-md animate-pulse'
+        }`}
+        title={enabled ? "Notificações ativadas" : "Notificações desativadas"}
+    >
+        {enabled ? (
+            <>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.93 4.93l14.14 14.14M9 11a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <span className="hidden sm:inline">Som Ativo</span>
+            </>
+        ) : (
+            <>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15zM17 14l-5-5m0 5l5-5" />
+                </svg>
+                <span className="hidden sm:inline">Ativar Som</span>
+            </>
+        )}
+    </button>
+);
 
 function Painel() {
     const audioRef = useRef(null);
     const { logout, primeiroEstabelecimento, loading: authLoading, userData } = useAuth();
     
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
-    const [pedidos, setPedidos] = useState({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
+    const [pedidos, setPedidos] = useState({ 
+        recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] 
+    });
     const [loading, setLoading] = useState(true);
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [userInteracted, setUserInteracted] = useState(false);
-    const [newOrderIds, setNewOrderIds] = useState([]);
-    const prevRecebidosRef = useRef([]);
+    const [newOrderIds, setNewOrderIds] = useState(new Set());
     const [abaAtiva, setAbaAtiva] = useState('delivery');
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    
+    const prevRecebidosRef = useRef([]);
 
-    // Debug inicial
-    useEffect(() => {
-        console.log("🔍 DEBUG PAINEL - Estado inicial:", {
-            authLoading,
-            primeiroEstabelecimento,
-            userData: userData ? {
-                email: userData.email,
-                isAdmin: userData.isAdmin,
-                isMasterAdmin: userData.isMasterAdmin
-            } : null,
-            estabelecimentoInfo
-        });
-    }, [authLoading, primeiroEstabelecimento, userData]);
-
-    // useEffect para Notificação de Som e Debug
-    useEffect(() => {
-        const currentRecebidos = pedidos.recebido;
-        const prevRecebidos = prevRecebidosRef.current;
-
-        if (currentRecebidos.length > prevRecebidos.length) {
-            console.log("%cNOVO PEDIDO DETECTADO!", "color: lightgreen; font-size: 16px;");
-
-            const newOrders = currentRecebidos.filter(c => !prevRecebidos.some(p => p.id === c.id));
-
-            if (newOrders.length > 0) {
-                const newIds = newOrders.map(order => order.id);
-                setNewOrderIds(prevIds => [...new Set([...prevIds, ...newIds])]);
-
-                if (notificationsEnabled && userInteracted) {
-                    audioRef.current?.play().catch(error => {
-                        console.error("ERRO ao tentar tocar o áudio:", error);
-                    });
-                }
-                
-                setTimeout(() => {
-                    setNewOrderIds(prevIds => prevIds.filter(id => !newIds.includes(id)));
-                }, 15000);
-            }
-        }
-        prevRecebidosRef.current = currentRecebidos;
-    }, [pedidos.recebido, notificationsEnabled, userInteracted]);
-
-    // useEffect para detectar a primeira interação do usuário
-    useEffect(() => {
+    // 🎯 HOOKS OTIMIZADOS
+    const setupUserInteraction = useCallback(() => {
         const handleFirstInteraction = () => {
             setUserInteracted(true);
             window.removeEventListener('click', handleFirstInteraction);
             window.removeEventListener('keydown', handleFirstInteraction);
         };
+        
         window.addEventListener('click', handleFirstInteraction);
         window.addEventListener('keydown', handleFirstInteraction);
+        
         return () => {
             window.removeEventListener('click', handleFirstInteraction);
             window.removeEventListener('keydown', handleFirstInteraction);
         };
     }, []);
 
-    const sendWhatsAppNotification = (status, pedidoData) => {
-        // Só envia notificação se for 'delivery'
+    const sendWhatsAppNotification = useCallback((status, pedidoData) => {
         if (pedidoData.tipo !== 'delivery') return null;
 
         const numeroCliente = pedidoData?.cliente?.telefone;
@@ -112,6 +136,7 @@ function Painel() {
         let formattedNumero = String(numeroCliente).replace(/\D/g, '');
         if (formattedNumero.length > 11) formattedNumero = formattedNumero.slice(-11);
         if (!formattedNumero.startsWith('55')) formattedNumero = '55' + formattedNumero;
+        
         const nomeCliente = pedidoData.cliente?.nome?.split(' ')[0] || 'Cliente';
         const nomeEstabelecimento = estabelecimentoInfo?.nome || 'nossa loja';
         const pedidoIdCurto = pedidoData.id.slice(0, 5).toUpperCase();
@@ -125,34 +150,38 @@ function Painel() {
             return `https://wa.me/${formattedNumero}?text=${encodeURIComponent(mensagemCliente)}`;
         }
         return null;
-    };
+    }, [estabelecimentoInfo]);
 
-    const handleUpdateStatusAndNotify = (pedidoId, newStatus) => {
-        const pedidoRef = doc(db, 'pedidos', pedidoId);
-        updateDoc(pedidoRef, { status: newStatus })
-            .then(() => {
-                toast.success(`Pedido movido para ${newStatus.replace(/_/g, ' ')}!`);
-                const allPedidos = Object.values(pedidos).flat();
-                const pedidoData = allPedidos.find(p => p.id === pedidoId);
-                
-                // Só tenta enviar WhatsApp se o pedido for 'delivery'
-                if (pedidoData && pedidoData.tipo === 'delivery') {
-                    const whatsappLink = sendWhatsAppNotification(newStatus, pedidoData);
-                    if (whatsappLink) {
-                        window.open(whatsappLink, '_blank');
-                        toast.info('Abrindo WhatsApp para notificar o cliente...');
-                    }
-                }
-            })
-            .catch(error => { 
-                console.error('ERRO AO ATUALIZAR STATUS:', error); 
-                toast.error("Falha ao mover o pedido."); 
+    const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
+        try {
+            const pedidoRef = doc(db, 'pedidos', pedidoId);
+            await updateDoc(pedidoRef, { 
+                status: newStatus,
+                atualizadoEm: new Date() 
             });
-    };
+            
+            toast.success(`Pedido movido para ${newStatus.replace(/_/g, ' ')}!`);
+            
+            const allPedidos = Object.values(pedidos).flat();
+            const pedidoData = allPedidos.find(p => p.id === pedidoId);
+            
+            if (pedidoData && pedidoData.tipo === 'delivery') {
+                const whatsappLink = sendWhatsAppNotification(newStatus, pedidoData);
+                if (whatsappLink) {
+                    window.open(whatsappLink, '_blank');
+                    toast.info('Abrindo WhatsApp para notificar o cliente...');
+                }
+            }
+        } catch (error) { 
+            console.error('ERRO AO ATUALIZAR STATUS:', error); 
+            toast.error("Falha ao mover o pedido."); 
+        }
+    }, [pedidos, sendWhatsAppNotification]);
 
-    const handleExcluirPedido = async (pedidoId) => {
+    const handleExcluirPedido = useCallback(async (pedidoId) => {
         if (!pedidoId) return toast.error("Erro: ID do pedido inválido.");
         if (!window.confirm('Tem certeza que deseja excluir este pedido?')) return;
+        
         try { 
             await deleteDoc(doc(db, 'pedidos', pedidoId)); 
             toast.success('Pedido excluído com sucesso!'); 
@@ -160,9 +189,43 @@ function Painel() {
             console.error('Erro ao excluir pedido:', error); 
             toast.error('Erro ao excluir o pedido.'); 
         }
-    };
+    }, []);
 
-    const toggleNotifications = () => {
+    const handleAvançarTodosPedidos = useCallback(async (statusAtual) => {
+        const pedidosStatus = pedidos[statusAtual] || [];
+        if (pedidosStatus.length === 0) {
+            toast.info('Nenhum pedido para avançar');
+            return;
+        }
+
+        if (!window.confirm(`Deseja avançar todos os ${pedidosStatus.length} pedidos de ${statusAtual}?`)) return;
+
+        try {
+            const batch = writeBatch(db);
+            const nextStatus = STATUS_CONFIG[statusAtual]?.nextStatus;
+            
+            if (!nextStatus) {
+                toast.error('Não há próximo status definido');
+                return;
+            }
+
+            pedidosStatus.forEach(pedido => {
+                const pedidoRef = doc(db, 'pedidos', pedido.id);
+                batch.update(pedidoRef, { 
+                    status: nextStatus,
+                    atualizadoEm: new Date() 
+                });
+            });
+
+            await batch.commit();
+            toast.success(`${pedidosStatus.length} pedidos avançados para ${nextStatus}!`);
+        } catch (error) {
+            console.error('Erro ao avançar pedidos em lote:', error);
+            toast.error('Erro ao avançar pedidos');
+        }
+    }, [pedidos]);
+
+    const toggleNotifications = useCallback(() => {
         const newState = !notificationsEnabled;
         setNotificationsEnabled(newState);
         
@@ -174,19 +237,45 @@ function Painel() {
         } else {
             toast.warn('🔕 Notificações de som DESATIVADAS.');
         }
-    };
-    
-    // ✅ useEffect principal CORRIGIDO
-    useEffect(() => {
-        console.log("🔄 [Painel Init] Iniciando setup...", {
-            authLoading,
-            primeiroEstabelecimento, 
-            user: userData?.email
-        });
+    }, [notificationsEnabled, userInteracted]);
 
-        // Se ainda está carregando o auth ou não tem estabelecimento, espera
+    // 🎯 EFEITOS OTIMIZADOS
+    useEffect(() => {
+        setupUserInteraction();
+    }, [setupUserInteraction]);
+
+    useEffect(() => {
+        const currentRecebidos = pedidos.recebido;
+        const prevRecebidos = prevRecebidosRef.current;
+
+        if (currentRecebidos.length > prevRecebidos.length) {
+            const newOrders = currentRecebidos.filter(c => !prevRecebidos.some(p => p.id === c.id));
+
+            if (newOrders.length > 0) {
+                const newIds = newOrders.map(order => order.id);
+                setNewOrderIds(prev => new Set([...prev, ...newIds]));
+
+                if (notificationsEnabled && userInteracted) {
+                    audioRef.current?.play().catch(error => {
+                        console.error("ERRO ao tentar tocar o áudio:", error);
+                    });
+                }
+                
+                setTimeout(() => {
+                    setNewOrderIds(prev => {
+                        const updated = new Set(prev);
+                        newIds.forEach(id => updated.delete(id));
+                        return updated;
+                    });
+                }, 15000);
+            }
+        }
+        prevRecebidosRef.current = currentRecebidos;
+    }, [pedidos.recebido, notificationsEnabled, userInteracted]);
+
+    // 🎯 SETUP PRINCIPAL OTIMIZADO
+    useEffect(() => {
         if (authLoading || !primeiroEstabelecimento) {
-            console.log("⏳ Aguardando auth ou estabelecimento...");
             if (!authLoading && !primeiroEstabelecimento) {
                 setLoading(false);
             }
@@ -197,33 +286,25 @@ function Painel() {
 
         const setupPainel = async () => {
             try {
-                console.log("🚀 Iniciando setupPainel para:", primeiroEstabelecimento);
-
                 // 1. Carrega informações do estabelecimento
                 const estDocRef = doc(db, 'estabelecimentos', primeiroEstabelecimento);
                 const estSnap = await getDoc(estDocRef);
                 
-                console.log("📄 Estabelecimento document:", estSnap.exists() ? "EXISTE" : "NÃO EXISTE");
-                
                 if (!estSnap.exists()) {
-                    console.error("❌ Estabelecimento não encontrado:", primeiroEstabelecimento);
                     toast.error("Estabelecimento não encontrado.");
                     setLoading(false);
                     return;
                 }
                 
                 const estabelecimentoData = estSnap.data();
-                console.log("🏪 Dados do estabelecimento:", estabelecimentoData);
                 
                 if (!estabelecimentoData.ativo) {
-                    console.error("❌ Estabelecimento inativo:", primeiroEstabelecimento);
                     toast.error("Estabelecimento inativo.");
                     setLoading(false);
                     return;
                 }
                 
                 setEstabelecimentoInfo(estabelecimentoData);
-                console.log("✅ Estabelecimento carregado:", estabelecimentoData.nome);
 
                 // 2. Configura listeners de pedidos
                 const statuses = ['recebido', 'preparo', 'em_entrega', 'pronto_para_servir'];
@@ -236,26 +317,12 @@ function Painel() {
                         orderBy('createdAt', 'asc')
                     );
                     
-                    console.log(`🔍 Configurando listener para: ${status}`);
-                    
                     const unsub = onSnapshot(q, 
                         (snapshot) => {
                             const list = snapshot.docs.map(d => ({ 
                                 id: d.id, 
                                 ...d.data()
                             }));
-                            
-                            console.log(`📦 [${status}] ${list.length} pedidos encontrados`);
-                            
-                            if (list.length > 0) {
-                                console.log(`📋 Detalhes dos pedidos ${status}:`, list.map(p => ({
-                                    id: p.id,
-                                    estabelecimentoId: p.estabelecimentoId,
-                                    status: p.status,
-                                    tipo: p.tipo,
-                                    cliente: p.cliente?.nome
-                                })));
-                            }
                             
                             setPedidos(prev => ({ 
                                 ...prev, 
@@ -264,18 +331,8 @@ function Painel() {
                         }, 
                         (error) => {
                             console.error(`❌ Erro no listener ${status}:`, error);
-                            console.error(`🔍 Detalhes do erro:`, {
-                                code: error.code,
-                                message: error.message,
-                                estabelecimentoId: primeiroEstabelecimento,
-                                status: status
-                            });
-                            
                             if (error.code === 'permission-denied') {
-                                console.error("%c🛑 FALHA NA PERMISSÃO DO FIRESTORE!", "color: red; font-size: 16px;");
                                 toast.error("Erro de permissão! Verifique as regras de segurança.");
-                            } else {
-                                toast.error(`Erro ao carregar pedidos ${status}`);
                             }
                         }
                     );
@@ -283,7 +340,7 @@ function Painel() {
                     unsubscribers.push(unsub);
                 });
                 
-                // Listener para pedidos finalizados
+                // Listener para pedidos finalizados (apenas hoje)
                 const todayStart = startOfDay(new Date());
                 const qFinalizado = query(
                     collection(db, 'pedidos'), 
@@ -295,16 +352,12 @@ function Painel() {
                 
                 const unsubFinalizado = onSnapshot(qFinalizado, (snapshot) => {
                     const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    console.log(`📦 [finalizado] ${list.length} pedidos:`, list);
                     setPedidos(prev => ({ ...prev, finalizado: list }));
-                }, (error) => {
-                    console.error("❌ Erro no listener finalizado:", error);
                 });
                 
                 unsubscribers.push(unsubFinalizado);
 
                 setLoading(false);
-                console.log("✅ Painel configurado com sucesso!");
 
             } catch (error) {
                 console.error("❌ Erro no setupPainel:", error);
@@ -316,101 +369,61 @@ function Painel() {
         setupPainel();
 
         return () => {
-            console.log("🧹 Limpando listeners...");
             unsubscribers.forEach(unsub => unsub());
         };
-    }, [primeiroEstabelecimento, authLoading, userData]);
+    }, [primeiroEstabelecimento, authLoading]);
 
-    // 🛑 CORREÇÃO DE TIMING: Combina loading local com authLoading para renderizar o Spinner
-    if (loading || authLoading) {
-        console.log("⏳ Renderizando spinner...", { loading, authLoading });
-        return <Spinner />;
-    }
+    // 🎯 MEMOIZED VALUES
+    const colunas = useMemo(() => 
+        abaAtiva === 'cozinha' 
+            ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
+            : ['recebido', 'preparo', 'em_entrega', 'finalizado'],
+        [abaAtiva]
+    );
 
-    console.log("🎯 Renderizando painel com dados:", {
-        estabelecimentoInfo: estabelecimentoInfo?.nome,
-        pedidos: Object.keys(pedidos).reduce((acc, key) => {
-            acc[key] = pedidos[key].length;
-            return acc;
-        }, {})
-    });
-
-    // 'em_entrega' é para 'delivery' e 'retirada'
-    // 'pronto_para_servir' é para 'mesa'
-    const colunas = abaAtiva === 'cozinha' 
-        ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
-        : ['recebido', 'preparo', 'em_entrega', 'finalizado'];
-
-    // Configurações de cores e ícones aprimoradas
-    const getStatusConfig = (status) => {
-        const configs = {
-            recebido: { 
-                title: '📥 Recebido', 
-                color: 'border-l-red-500 bg-gradient-to-r from-red-50 to-red-25', 
-                countColor: 'bg-red-500 text-white',
-            },
-            preparo: { 
-                title: '👨‍🍳 Em Preparo', 
-                color: 'border-l-orange-500 bg-gradient-to-r from-orange-50 to-orange-25', 
-                countColor: 'bg-orange-500 text-white',
-            },
-            em_entrega: { 
-                title: abaAtiva === 'cozinha' ? '🛵 Em Entrega' : '🛵 Pronto / Em Entrega',
-                color: 'border-l-blue-500 bg-gradient-to-r from-blue-50 to-blue-25', 
-                countColor: 'bg-blue-500 text-white',
-            },
-            pronto_para_servir: { 
-                title: '✅ Pronto para Servir', 
-                color: 'border-l-green-500 bg-gradient-to-r from-green-50 to-green-25', 
-                countColor: 'bg-green-500 text-white',
-            },
-            finalizado: { 
-                title: '📦 Finalizado', 
-                color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
-                countColor: 'bg-gray-500 text-white',
-            }
-        };
-        return configs[status] || { 
+    const getStatusConfig = useCallback((status) => {
+        const baseConfig = STATUS_CONFIG[status] || { 
             title: status.replace(/_/g, ' '), 
             color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
             countColor: 'bg-gray-500 text-white',
-            icon: '📝'
+            nextStatus: null
         };
-    };
+
+        if (status === 'em_entrega' && abaAtiva === 'cozinha') {
+            return { ...baseConfig, title: '🛵 Pronto / Em Entrega' };
+        }
+
+        return baseConfig;
+    }, [abaAtiva]);
+
+    // 🎯 RENDER CONDICIONAL
+    if (loading || authLoading) {
+        return <Spinner />;
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex flex-col">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
-            {/* Header Modernizado com Cores Âmbar/Laranja */}
+            {/* Header Modernizado */}
             <header className="bg-white shadow-lg border-b border-amber-200 p-4 sticky top-0 z-30">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">          
                     <div className="flex items-center space-x-4">
-                        {/* Botão de Notificação Aprimorado */}
+                        <NotificationToggle 
+                            enabled={notificationsEnabled}
+                            onToggle={toggleNotifications}
+                            userInteracted={userInteracted}
+                        />
+
                         <button 
-                            onClick={toggleNotifications} 
-                            className={`flex items-center space-x-3 px-5 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
-                                notificationsEnabled 
-                                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg' 
-                                    : 'bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-700 shadow-md animate-pulse'
+                            onClick={() => setAutoRefresh(!autoRefresh)}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                                autoRefresh 
+                                    ? 'bg-green-100 text-green-700 border border-green-300' 
+                                    : 'bg-gray-100 text-gray-700 border border-gray-300'
                             }`}
-                            title={notificationsEnabled ? "Notificações ativadas" : "Notificações desativadas"}
                         >
-                            {notificationsEnabled ? (
-                                <>
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.93 4.93l14.14 14.14M9 11a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                    <span className="hidden sm:inline">Som Ativo</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15zM17 14l-5-5m0 5l5-5" />
-                                    </svg>
-                                    <span className="hidden sm:inline">Ativar Som</span>
-                                </>
-                            )}
+                            {autoRefresh ? '🔄 Auto' : '⏸️ Pausado'}
                         </button>
 
                         <button 
@@ -423,32 +436,27 @@ function Painel() {
                 </div>
             </header>
 
-            {/* Abas de Navegação Aprimoradas */}
+            {/* Abas de Navegação */}
             <div className="bg-white border-b border-amber-200 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4">
                     <nav className="flex space-x-8" aria-label="Tabs">
-                        <button 
-                            onClick={() => setAbaAtiva('delivery')} 
-                            className={`py-5 px-3 border-b-2 font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                                abaAtiva === 'delivery' 
-                                    ? 'border-amber-500 text-amber-600 bg-amber-50' 
-                                    : 'border-transparent text-gray-500 hover:text-amber-600 hover:border-amber-300'
-                            }`}
-                        >
-                            <span className="text-lg">🛵</span>
-                            <span>Delivery / Retirada</span>
-                        </button>
-                        <button 
-                            onClick={() => setAbaAtiva('cozinha')} 
-                            className={`py-5 px-3 border-b-2 font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                                abaAtiva === 'cozinha' 
-                                    ? 'border-amber-500 text-amber-600 bg-amber-50' 
-                                    : 'border-transparent text-gray-500 hover:text-amber-600 hover:border-amber-300'
-                            }`}
-                        >
-                            <span className="text-lg">👨‍🍳</span>
-                            <span>Cozinha (Mesas)</span>
-                        </button>
+                        {[
+                            { key: 'delivery', label: 'Delivery / Retirada', icon: '🛵' },
+                            { key: 'cozinha', label: 'Cozinha (Mesas)', icon: '👨‍🍳' }
+                        ].map(tab => (
+                            <button 
+                                key={tab.key}
+                                onClick={() => setAbaAtiva(tab.key)} 
+                                className={`py-5 px-3 border-b-2 font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
+                                    abaAtiva === tab.key 
+                                        ? 'border-amber-500 text-amber-600 bg-amber-50' 
+                                        : 'border-transparent text-gray-500 hover:text-amber-600 hover:border-amber-300'
+                                }`}
+                            >
+                                <span className="text-lg">{tab.icon}</span>
+                                <span>{tab.label}</span>
+                            </button>
+                        ))}
                     </nav>
                 </div>
             </div>
@@ -458,21 +466,16 @@ function Painel() {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                     {colunas.map(status => {
                         const config = getStatusConfig(status);
-                        
                         const allPedidosStatus = pedidos[status] || [];
-                        let pedidosFiltrados = [];
-
-                        if (abaAtiva === 'cozinha') {
-                            // Aba Cozinha só mostra 'mesa'
-                            pedidosFiltrados = allPedidosStatus.filter(p => p.tipo === 'mesa');
-                        } else {
-                            // Aba Delivery agora mostra 'delivery' E 'retirada'
-                            pedidosFiltrados = allPedidosStatus.filter(p => p.tipo === 'delivery' || p.tipo === 'retirada');
-                        }
+                        
+                        const pedidosFiltrados = allPedidosStatus.filter(p => 
+                            abaAtiva === 'cozinha' 
+                                ? p.tipo === 'mesa'
+                                : p.tipo === 'delivery' || p.tipo === 'retirada'
+                        );
                         
                         const pedidosCount = pedidosFiltrados.length;
-                        
-                        console.log(`📊 Coluna ${status}: ${pedidosCount} pedidos filtrados de ${allPedidosStatus.length} totais`);
+                        const hasNextStatus = config.nextStatus && pedidosCount > 0;
 
                         return (
                             <div key={status} className={`rounded-2xl shadow-lg border border-amber-100 border-l-4 ${config.color} flex flex-col h-full transition-all duration-300 hover:shadow-xl`}>
@@ -481,38 +484,40 @@ function Painel() {
                                         <span className="text-2xl">{config.icon}</span>
                                         <h2 className="font-bold text-gray-900 text-lg">{config.title}</h2>
                                     </div>
-                                    <span className={`${config.countColor} text-sm font-bold px-3 py-2 rounded-full min-w-10 text-center shadow-md`}>
-                                        {pedidosCount}
-                                    </span>
+                                    <div className="flex items-center space-x-2">
+                                        <span className={`${config.countColor} text-sm font-bold px-3 py-2 rounded-full min-w-10 text-center shadow-md`}>
+                                            {pedidosCount}
+                                        </span>
+                                        {hasNextStatus && (
+                                            <button
+                                                onClick={() => handleAvançarTodosPedidos(status)}
+                                                className="bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg text-xs font-medium transition-colors"
+                                                title={`Avançar todos para ${config.nextStatus}`}
+                                            >
+                                                ⏩
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="p-4 space-y-4 flex-grow overflow-y-auto max-h-[calc(100vh-250px)] bg-white/30 rounded-b-2xl">
-                                    
-{pedidosFiltrados && pedidosFiltrados.length > 0 ? (
-    pedidosFiltrados.map(ped => {
-        // 🛡️ VERIFICAÇÃO DE SEGURANÇA
-        if (!ped) {
-            console.warn('Pedido undefined encontrado:', ped);
-            return null;
-        }
-        
-        return (
-            <PedidoCard
-                key={ped.id}
-                item={ped} // ✅ AGORA PASSA 'item'
-                onUpdateStatus={handleUpdateStatusAndNotify}
-                onDeletePedido={handleExcluirPedido}
-                newOrderIds={newOrderIds}
-                estabelecimentoInfo={estabelecimentoInfo}
-            />
-        );
-    })
-) : (
-    <div className="text-center py-12">
-        <div className="text-amber-300 text-5xl mb-4">📝</div>
-        <p className="text-amber-600 font-medium">Nenhum pedido</p>
-        <p className="text-amber-400 text-sm mt-1">Aguardando novos pedidos</p>
-    </div>
-)}
+                                    {pedidosFiltrados.length > 0 ? (
+                                        pedidosFiltrados.map(ped => (
+                                            <PedidoCard
+                                                key={ped.id}
+                                                item={ped}
+                                                onUpdateStatus={handleUpdateStatusAndNotify}
+                                                onDeletePedido={handleExcluirPedido}
+                                                newOrderIds={newOrderIds}
+                                                estabelecimentoInfo={estabelecimentoInfo}
+                                            />
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-12">
+                                            <div className="text-amber-300 text-5xl mb-4">📝</div>
+                                            <p className="text-amber-600 font-medium">Nenhum pedido</p>
+                                            <p className="text-amber-400 text-sm mt-1">Aguardando novos pedidos</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -520,25 +525,25 @@ function Painel() {
                 </div>
             </main>
 
-            {/* Botão Voltar para Dashboard Aprimorado */}
+            {/* Footer com estatísticas */}
             <footer className="bg-white border-t border-amber-200 py-6 mt-8">
-                <div className="max-w-7xl mx-auto px-4">
-                    <div className="flex justify-center">
-                        <Link 
-                            to="/dashboard" 
-                            className="flex items-center space-x-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
-                        >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                            </svg>
-                            <span className="text-lg">Voltar para Dashboard</span>
-                        </Link>
+                <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
+                    <div className="text-sm text-gray-600">
+                        Total de pedidos hoje: {Object.values(pedidos).flat().length}
                     </div>
+                    <Link 
+                        to="/dashboard" 
+                        className="flex items-center space-x-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span className="text-lg">Voltar para Dashboard</span>
+                    </Link>
                 </div>
             </footer>
         </div>
     );
 }
 
-// Aplica o HOC específico para estabelecimento
 export default withEstablishmentAuth(Painel);

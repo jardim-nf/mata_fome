@@ -1,10 +1,9 @@
-// src/components/CardapioItem.jsx - VERSÃO CORRIGIDA SEM CORTE
-
+// src/components/CardapioItem.jsx - VERSÃO MELHORADA E CORRIGIDA
 import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 
-function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
+function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
   // 🎨 Valores padrão para cores
   const cores = coresEstabelecimento || {
     primaria: '#DC2626',
@@ -63,12 +62,62 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
   }, [safeItem.imageUrl]);
 
   const isAvailable = safeItem.ativo && safeItem.disponivel;
-  const hasExtras = safeItem.adicionais.length > 0;
-  const hasVariations = safeItem.variacoes.length > 0;
+  const hasVariations = safeItem.variacoes && safeItem.variacoes.length > 0;
 
-  const handleAddItemClick = () => {
-    if (isAvailable && onAddItem) {
-      onAddItem(safeItem);
+  // 🎯 FUNÇÃO INTELIGENTE: Verifica se pode adicionar direto (CORRIGIDA)
+  const podeAdicionarDireto = () => {
+    // 1. Se NÃO tiver variações, adiciona direto.
+    if (!hasVariations) {
+        return true;
+    }
+
+    // 2. Tem variações. Conta quantas variações ativas e válidas (com preço >= 0) existem.
+    const variacoesAtivas = safeItem.variacoes.filter(v => 
+        v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
+    );
+
+    // 3. Se houver APENAS UMA variação ativa, ADICIONA DIRETO.
+    if (variacoesAtivas.length === 1) {
+        return true; 
+    }
+
+    // 4. Se houver 0 ou 2+ variações ativas, precisa do modal.
+    return false;
+  };
+
+  // 🎯 FUNÇÃO PARA LIDAR COM CLIQUE NO BOTÃO (CORRIGIDA)
+  const handleButtonClick = () => {
+    if (!isAvailable) return;
+    
+    if (podeAdicionarDireto()) {
+        if (onQuickAdd) {
+            let itemParaAdicionar = safeItem;
+
+            // Se tem exatamente 1 variação ativa, a incluímos no item para onQuickAdd
+            const variacoesAtivas = safeItem.variacoes.filter(v => 
+                v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
+            );
+
+            if (variacoesAtivas.length === 1) {
+                const variacaoUnica = variacoesAtivas[0];
+                itemParaAdicionar = {
+                    ...safeItem,
+                    variacaoSelecionada: {
+                        nome: variacaoUnica.nome,
+                        preco: Number(variacaoUnica.preco)
+                    },
+                    // Define o preço final como o preço da variação única
+                    precoFinal: Number(variacaoUnica.preco) 
+                };
+            }
+
+            onQuickAdd(itemParaAdicionar);
+        }
+    } else {
+      // Produto COM 0 ou 2+ variações - abre modal para escolher
+      if (onAddItem) {
+        onAddItem(safeItem);
+      }
     }
   };
 
@@ -83,7 +132,7 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
     }
 
     const variacoesAtivas = safeItem.variacoes.filter(v => 
-      v.ativo && v.preco && !isNaN(Number(v.preco)) && Number(v.preco) > 0
+      v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
     );
 
     if (variacoesAtivas.length === 0) {
@@ -94,7 +143,7 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
       );
     }
 
-    // 1 VARIAÇÃO: Mostrar apenas o preço
+    // 1 VARIAÇÃO (Adição Direta): Mostrar apenas o preço
     if (variacoesAtivas.length === 1) {
       const preco = Number(variacoesAtivas[0].preco);
       return (
@@ -115,6 +164,40 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
       </div>
     );
   };
+
+  // 🎯 FUNÇÃO PARA DETERMINAR O BOTÃO
+  const getBotaoConfig = () => {
+    if (!isAvailable) {
+      return {
+        texto: 'Indisponível',
+        cor: '#D1D5DB',
+        textoCor: '#6B7280',
+        disabled: true
+      };
+    }
+
+    if (podeAdicionarDireto()) {
+      // Produto sem variações ou com 1 variação - Adicionar direto
+      return {
+        texto: 'Adicionar',
+        cor: cores.destaque || '#059669', // VERDE
+        textoCor: '#FFFFFF',
+        disabled: false,
+        icone: '➕'
+      };
+    } else {
+      // Produto COM 2+ variações - Escolher opções
+      return {
+        texto: 'Escolher',
+        cor: cores.primaria || '#DC2626', // VERMELHO/AZUL
+        textoCor: '#FFFFFF', 
+        disabled: false,
+        icone: '⚙️'
+      };
+    }
+  };
+
+  const botaoConfig = getBotaoConfig();
 
   return (
     <div className={`bg-white rounded-2xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300 group ${
@@ -167,8 +250,20 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
 
           {/* BADGES DE PERSONALIZAÇÃO */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
+            {/* BADGE PRODUTO SEM VARIAÇÕES ou COM 1 VARIAÇÃO */}
+            {podeAdicionarDireto() && isAvailable && (
+              <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium" 
+                   style={{ 
+                     backgroundColor: `${cores.destaque}15`,
+                     color: cores.destaque,
+                     border: `1px solid ${cores.destaque}30`
+                   }}>
+                ✅ {hasVariations ? 'Adição direta (1 Opção)' : 'Adicionar direto'}
+              </div>
+            )}
+
             {/* BADGE DE MÚLTIPLAS VARIAÇÕES */}
-            {safeItem.variacoes && safeItem.variacoes.filter(v => v.ativo).length > 1 && (
+            {hasVariations && !podeAdicionarDireto() && (
               <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium" 
                    style={{ 
                      backgroundColor: `${cores.primaria}15`,
@@ -178,49 +273,27 @@ function CardapioItem({ item, onAddItem, coresEstabelecimento }) {
                 {safeItem.variacoes.filter(v => v.ativo).length} opções
               </div>
             )}
-
-            {/* BADGE DE VARIAÇÕES */}
-            {hasVariations && isAvailable && (
-              <div className="flex items-center gap-1 text-xs"
-                   style={{ color: cores.primaria }}>
-                <span>🔄</span>
-                <span className="font-medium">
-                  +{safeItem.variacoes.filter(v => v.ativo).length} variação(ões)
-                </span>
-              </div>
-            )}
-
-            {/* BADGE DE ADICIONAIS */}
-            {hasExtras && isAvailable && (
-              <div className="flex items-center gap-1 text-xs"
-                   style={{ color: cores.primaria }}>
-                <span>✨</span>
-                <span className="font-medium">
-                  +{safeItem.adicionais.length} adicional(is)
-                </span>
-              </div>
-            )}
           </div>
 
-          {/* BOTÃO ADICIONAR */}
+          {/* BOTÃO INTELIGENTE */}
           <button
-            onClick={handleAddItemClick}
-            disabled={!isAvailable}
+            onClick={handleButtonClick}
+            disabled={botaoConfig.disabled}
             className={`
-              w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-200 transform hover:scale-105
-              ${!isAvailable
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'text-white shadow-md hover:shadow-lg'
+              w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-200 transform
+              ${botaoConfig.disabled 
+                ? 'cursor-not-allowed' 
+                : 'hover:scale-105 shadow-md hover:shadow-lg'
               }
+              flex items-center justify-center gap-2
             `}
             style={{
-              backgroundColor: !isAvailable 
-                ? '#D1D5DB' 
-                : cores.primaria
+              backgroundColor: botaoConfig.cor,
+              color: botaoConfig.textoCor
             }}
           >
-            {!isAvailable ? 'Indisponível' : 
-             (hasExtras || hasVariations) ? 'Personalizar' : 'Adicionar'}
+            {botaoConfig.icone && <span>{botaoConfig.icone}</span>}
+            {botaoConfig.texto}
           </button>
         </div>
       </div>

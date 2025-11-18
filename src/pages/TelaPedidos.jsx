@@ -1,6 +1,6 @@
-// src/pages/TelaPedidos.jsx - VERSÃO COMPLETA CORRIGIDA
+// src/pages/TelaPedidos.jsx - VERSÃO COMPLETA E FUNCIONAL
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; 
 import { db } from '../firebase';
 import { getDocs, doc, getDoc, updateDoc, collection } from 'firebase/firestore'; 
@@ -16,62 +16,265 @@ import {
     IoSaveOutline,
     IoRestaurantOutline,
     IoReceiptOutline,
-    IoCheckmarkCircleOutline
+    IoCheckmarkCircleOutline,
+    IoChevronDownOutline,
+    IoChevronUpOutline,
+    IoGridOutline,
+    IoListOutline
 } from 'react-icons/io5';
 
-// --- COMPONENTE DO PRODUTO MELHORADO ---
-const ProdutoCard = ({ produto, onAdicionar, estaNoCarrinho }) => (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col group hover:border-amber-200">
-        {produto.imageUrl ? (
-            <div className="relative overflow-hidden">
-                <img 
-                    src={produto.imageUrl} 
-                    alt={produto.nome} 
-                    className="w-full h-36 object-cover transition-transform duration-500 group-hover:scale-110" 
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                {estaNoCarrinho && (
-                    <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-lg">
-                        <IoCheckmarkCircleOutline className="text-lg" />
+// --- COMPONENTE DO PRODUTO EM GRID ---
+const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
+    const [mostrarVariacoes, setMostrarVariacoes] = useState(false);
+    const [variacaoSelecionada, setVariacaoSelecionada] = useState(null);
+
+    const temVariacoes = produto.variacoes && produto.variacoes.length > 0;
+
+    const handleAdicionar = useCallback(() => {
+        if (temVariacoes && !variacaoSelecionada) {
+            setMostrarVariacoes(true);
+            return;
+        }
+
+        const produtoParaAdicionar = temVariacoes ? {
+            ...produto,
+            ...variacaoSelecionada,
+            id: `${produto.id}-${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
+            nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`
+        } : produto;
+
+        onAdicionar(produtoParaAdicionar);
+        setVariacaoSelecionada(null);
+        setMostrarVariacoes(false);
+    }, [produto, temVariacoes, variacaoSelecionada, onAdicionar]);
+
+    return (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col group hover:border-amber-200">
+            {produto.imageUrl ? (
+                <div className="relative overflow-hidden">
+                    <img 
+                        src={produto.imageUrl} 
+                        alt={produto.nome} 
+                        className="w-full h-24 object-cover transition-transform duration-200 group-hover:scale-105" 
+                        loading="lazy"
+                    />
+                    {estaNoCarrinho && (
+                        <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5 shadow-sm">
+                            <IoCheckmarkCircleOutline className="text-xs" />
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="w-full h-24 bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
+                    <IoRestaurantOutline className="text-xl text-amber-400" />
+                </div>
+            )}
+            
+            <div className="p-2 flex flex-col flex-grow">
+                <div className="flex-grow mb-1">
+                    <h3 className="text-gray-900 font-semibold text-xs leading-tight mb-1 line-clamp-2">{produto.nome}</h3>
+                    {produto.descricao && (
+                        <p className="text-gray-500 text-xs leading-relaxed line-clamp-2 mb-1">{produto.descricao}</p>
+                    )}
+                </div>
+
+                {/* Seção de Variações */}
+                {temVariacoes && mostrarVariacoes && (
+                    <div className="mb-1 p-1 bg-gray-50 rounded border border-gray-200">
+                        <p className="text-xs text-gray-600 mb-1 font-medium">Opções:</p>
+                        <div className="space-y-1 max-h-20 overflow-y-auto">
+                            {produto.variacoes.slice(0, 3).map((variacao, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setVariacaoSelecionada(variacao)}
+                                    className={`w-full text-left p-1 rounded border transition-all duration-200 text-xs ${
+                                        variacaoSelecionada === variacao
+                                            ? 'bg-amber-500 text-white border-amber-500'
+                                            : 'bg-white text-gray-700 border-gray-300 hover:border-amber-300'
+                                    }`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-medium truncate">
+                                            {variacao.nome || variacao.tamanho || `Opção ${index + 1}`}
+                                        </span>
+                                        <span className="font-bold whitespace-nowrap">
+                                            R$ {parseFloat(variacao.preco || produto.preco).toFixed(2).replace('.', ',')}
+                                        </span>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 )}
-            </div>
-        ) : (
-            <div className="w-full h-36 bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center group-hover:from-amber-100 group-hover:to-orange-200 transition-all duration-300">
-                <IoRestaurantOutline className="text-3xl text-amber-400" />
-            </div>
-        )}
-        <div className="p-4 flex flex-col flex-grow">
-            <div className="flex-grow mb-3">
-                <h3 className="text-gray-900 font-bold text-sm leading-tight mb-1 line-clamp-2">{produto.nome}</h3>
-                {produto.descricao && (
-                    <p className="text-gray-500 text-xs leading-relaxed line-clamp-2">{produto.descricao}</p>
-                )}
-                {produto.categoria && (
-                    <span className="inline-block bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full mt-2">
-                        {produto.categoria}
-                    </span>
-                )}
-            </div>
-            <div className="flex items-center justify-between">
-                <span className="text-amber-600 font-bold text-lg">
-                    R$ {parseFloat(produto.preco).toFixed(2).replace('.', ',')}
-                </span>
-                <button 
-                    onClick={() => onAdicionar(produto)} 
-                    className={`font-semibold py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2 ${
-                        estaNoCarrinho 
-                            ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg' 
-                            : 'bg-amber-500 hover:bg-amber-600 text-white shadow-md'
-                    }`}
-                >
-                    <IoAddCircleOutline className="text-lg" />
-                    <span className="text-sm">{estaNoCarrinho ? 'Adicionar +' : 'Adicionar'}</span>
-                </button>
+
+                <div className="flex items-center justify-between mt-auto">
+                    <div className="flex items-center space-x-1">
+                        <span className="text-amber-600 font-bold text-sm">
+                            R$ {parseFloat(produto.preco).toFixed(2).replace('.', ',')}
+                        </span>
+                        {temVariacoes && !mostrarVariacoes && (
+                            <button 
+                                onClick={() => setMostrarVariacoes(!mostrarVariacoes)}
+                                className="text-blue-500 hover:text-blue-600 text-xs"
+                            >
+                                <IoChevronDownOutline />
+                            </button>
+                        )}
+                    </div>
+                    <button 
+                        onClick={handleAdicionar}
+                        disabled={temVariacoes && mostrarVariacoes && !variacaoSelecionada}
+                        className={`font-semibold py-1 px-2 rounded text-xs transition-all duration-200 flex items-center space-x-1 ${
+                            estaNoCarrinho 
+                                ? 'bg-green-500 hover:bg-green-600 text-white' 
+                                : temVariacoes && mostrarVariacoes && !variacaoSelecionada
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-amber-500 hover:bg-amber-600 text-white'
+                        }`}
+                    >
+                        <IoAddCircleOutline className="text-xs" />
+                        <span>Add</span>
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
+
+// --- COMPONENTE DO PRODUTO EM LISTA ---
+const ProdutoCardLista = ({ produto, onAdicionar, estaNoCarrinho }) => {
+    const [mostrarVariacoes, setMostrarVariacoes] = useState(false);
+    const [variacaoSelecionada, setVariacaoSelecionada] = useState(null);
+
+    const temVariacoes = produto.variacoes && produto.variacoes.length > 0;
+
+    const handleAdicionar = useCallback(() => {
+        if (temVariacoes && !variacaoSelecionada) {
+            setMostrarVariacoes(true);
+            return;
+        }
+
+        const produtoParaAdicionar = temVariacoes ? {
+            ...produto,
+            ...variacaoSelecionada,
+            id: `${produto.id}-${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
+            nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`
+        } : produto;
+
+        onAdicionar(produtoParaAdicionar);
+        setVariacaoSelecionada(null);
+        setMostrarVariacoes(false);
+    }, [produto, temVariacoes, variacaoSelecionada, onAdicionar]);
+
+    return (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 p-2 group hover:border-amber-200">
+            <div className="flex items-start gap-2">
+                {/* Imagem do produto */}
+                <div className="flex-shrink-0">
+                    {produto.imageUrl ? (
+                        <div className="relative">
+                            <img 
+                                src={produto.imageUrl} 
+                                alt={produto.nome} 
+                                className="w-12 h-12 object-cover rounded transition-transform duration-200 group-hover:scale-105" 
+                                loading="lazy"
+                            />
+                            {estaNoCarrinho && (
+                                <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5 shadow-sm">
+                                    <IoCheckmarkCircleOutline className="text-xs" />
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="w-12 h-12 bg-gradient-to-br from-amber-50 to-orange-100 rounded flex items-center justify-center">
+                            <IoRestaurantOutline className="text-base text-amber-400" />
+                        </div>
+                    )}
+                </div>
+
+                {/* Conteúdo do produto */}
+                <div className="flex-grow min-w-0">
+                    <div className="flex items-start justify-between mb-1">
+                        <div className="flex-grow min-w-0">
+                            <h3 className="text-gray-900 font-semibold text-xs leading-tight truncate">{produto.nome}</h3>
+                            {produto.descricao && (
+                                <p className="text-gray-500 text-xs leading-relaxed line-clamp-1 mt-0.5">{produto.descricao}</p>
+                            )}
+                        </div>
+                        <div className="flex-shrink-0 ml-2">
+                            <span className="text-amber-600 font-bold text-sm whitespace-nowrap">
+                                R$ {parseFloat(produto.preco).toFixed(2).replace('.', ',')}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap gap-1">
+                            {produto.categoria && (
+                                <span className="inline-block bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-full">
+                                    {produto.categoria}
+                                </span>
+                            )}
+                            {temVariacoes && (
+                                <button 
+                                    onClick={() => setMostrarVariacoes(!mostrarVariacoes)}
+                                    className="inline-block bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full hover:bg-blue-200 transition-colors flex items-center gap-0.5"
+                                >
+                                    {mostrarVariacoes ? <IoChevronUpOutline /> : <IoChevronDownOutline />}
+                                    <span>{produto.variacoes.length} opções</span>
+                                </button>
+                            )}
+                        </div>
+
+                        <button 
+                            onClick={handleAdicionar}
+                            disabled={temVariacoes && mostrarVariacoes && !variacaoSelecionada}
+                            className={`font-semibold py-1 px-2 rounded text-xs transition-all duration-200 flex items-center justify-center space-x-1 ${
+                                estaNoCarrinho 
+                                    ? 'bg-green-500 hover:bg-green-600 text-white' 
+                                    : temVariacoes && mostrarVariacoes && !variacaoSelecionada
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-amber-500 hover:bg-amber-600 text-white'
+                            }`}
+                        >
+                            <IoAddCircleOutline className="text-xs" />
+                            <span>Add</span>
+                        </button>
+                    </div>
+
+                    {/* Seção de Variações em Lista */}
+                    {temVariacoes && mostrarVariacoes && (
+                        <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
+                            <p className="text-xs text-gray-600 mb-1 font-medium">Selecione uma opção:</p>
+                            <div className="grid grid-cols-1 gap-1">
+                                {produto.variacoes.slice(0, 3).map((variacao, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => setVariacaoSelecionada(variacao)}
+                                        className={`text-left p-1.5 rounded border transition-all duration-200 text-xs ${
+                                            variacaoSelecionada === variacao
+                                                ? 'bg-amber-500 text-white border-amber-500'
+                                                : 'bg-white text-gray-700 border-gray-300 hover:border-amber-300'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-medium truncate">
+                                                {variacao.nome || variacao.tamanho || `Opção ${index + 1}`}
+                                            </span>
+                                            <span className="font-bold whitespace-nowrap">
+                                                R$ {parseFloat(variacao.preco || produto.preco).toFixed(2).replace('.', ',')}
+                                            </span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
@@ -82,127 +285,138 @@ const TelaPedidos = () => {
 
     const [mesa, setMesa] = useState(null);
     const [cardapio, setCardapio] = useState([]);
-    const [categorias, setCategorias] = useState(['todas']);
+    const [categorias, setCategorias] = useState(['Todos']);
     const [resumoPedido, setResumoPedido] = useState([]);
     const [loading, setLoading] = useState(true);
     const [termoBusca, setTermoBusca] = useState('');
-    const [categoriaAtiva, setCategoriaAtiva] = useState('todas');
+    const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
     const [estabelecimentoNome, setEstabelecimentoNome] = useState('Carregando...');
     const [salvando, setSalvando] = useState(false);
+    const [visualizacao, setVisualizacao] = useState('grid');
+    const [showOrderSummary, setShowOrderSummary] = useState(false);
 
-    useEffect(() => {
+    // Função para carregar dados
+    const fetchData = useCallback(async () => {
         if (!estabelecimentoId) {
             setLoading(false);
             toast.error("Estabelecimento não identificado.");
             return;
         }
 
-        const fetchData = async () => {
+        try {
+            setLoading(true);
+            console.log("🔄 Iniciando carregamento do cardápio...");
+
+            // 1. Buscar dados básicos
+            const [estabSnap, mesaSnap] = await Promise.all([
+                getDoc(doc(db, 'estabelecimentos', estabelecimentoId)),
+                getDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId))
+            ]);
+
+            // Configurar estabelecimento e mesa
+            if (estabSnap.exists()) {
+                setEstabelecimentoNome(estabSnap.data().nome || 'Estabelecimento');
+            }
+
+            if (mesaSnap.exists()) {
+                const mesaData = mesaSnap.data();
+                setMesa(mesaData);
+                setResumoPedido(mesaData.itens || []);
+            } else {
+                toast.error("Mesa não encontrada.");
+            }
+
+            // 2. Buscar produtos de forma simples
+            let todosProdutos = [];
+            
             try {
-                setLoading(true);
-
-                // 1. Buscar NOME DO ESTABELECIMENTO
-                const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
-                const estabSnap = await getDoc(estabRef);
-
-                if (estabSnap.exists()) {
-                    setEstabelecimentoNome(estabSnap.data().nome || 'Estabelecimento');
-                } else {
-                    setEstabelecimentoNome('Estabelecimento Desconhecido');
-                }
-
-                // 2. Buscar dados da Mesa
-                const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-                const mesaSnap = await getDoc(mesaRef);
+                // Buscar todas as categorias
+                const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
+                const categoriasSnap = await getDocs(categoriasRef);
                 
-                if (mesaSnap.exists()) {
-                    const mesaData = mesaSnap.data();
-                    setMesa(mesaData);
-                    setResumoPedido(mesaData.itens || []);
-                } else {
-                    toast.error("Mesa não encontrada.");
-                }
+                console.log("📂 Categorias encontradas:", categoriasSnap.docs.length);
 
-                // 3. BUSCAR CATEGORIAS
-                const cardapioRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
-                const categoriasSnap = await getDocs(cardapioRef);
-                
-                const categoriasEncontradas = categoriasSnap.docs.map(doc => ({
-                    id: doc.id, 
-                    nome: doc.data().nome || doc.id,
-                    data: doc.data()
-                }));
-                
-                console.log("🔍 CATEGORIAS ENCONTRADAS:", categoriasEncontradas);
-
-                let todosProdutos = [];
-
-                // 4. BUSCAR PRODUTOS COMO DOCUMENTOS DIRETOS DENTRO DE CADA CATEGORIA
-                for (const categoria of categoriasEncontradas) {
+                // Para cada categoria, buscar produtos
+                for (const categoriaDoc of categoriasSnap.docs) {
+                    const categoriaData = categoriaDoc.data();
+                    const categoriaNome = categoriaData.nome || categoriaDoc.id;
+                    
                     try {
-                        console.log(`🔍 Buscando produtos na categoria: ${categoria.id}`);
-                        
-                        // Lista todos os documentos dentro da categoria
-                        const produtosRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoria.id);
+                        const produtosRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaDoc.id, 'itens');
                         const produtosSnap = await getDocs(produtosRef);
                         
-                        console.log(`📂 Documentos encontrados em ${categoria.id}:`, produtosSnap.docs.map(doc => doc.id));
-                        
-                        const produtosDaCategoria = [];
-                        
-                        for (const doc of produtosSnap.docs) {
-                            const produtoData = doc.data();
-                            console.log(`📄 Documento ${doc.id}:`, produtoData);
-                            
-                            // Considera como produto se tiver nome e preço
-                            if (produtoData.nome && produtoData.preco !== undefined) {
-                                produtosDaCategoria.push({
-                                    id: doc.id,
-                                    categoria: categoria.nome,
-                                    categoriaId: categoria.id,
-                                    ...produtoData
-                                });
-                            }
-                        }
-                        
+                        console.log(`📦 Produtos na categoria ${categoriaNome}:`, produtosSnap.docs.length);
+
+                        const produtosDaCategoria = produtosSnap.docs.map(doc => ({
+                            id: doc.id,
+                            categoria: categoriaNome,
+                            categoriaId: categoriaDoc.id,
+                            nome: doc.data().nome,
+                            descricao: doc.data().descricao,
+                            preco: doc.data().preco,
+                            imageUrl: doc.data().imageUrl,
+                            ativo: doc.data().ativo !== false,
+                            ordem: doc.data().ordem || 999,
+                            variacoes: doc.data().variacoes || [],
+                            ...doc.data()
+                        })).filter(produto => produto.ativo !== false);
+
                         todosProdutos = [...todosProdutos, ...produtosDaCategoria];
-                        console.log(`✅ ${produtosDaCategoria.length} produtos válidos em ${categoria.nome}`);
                         
                     } catch (error) {
-                        console.log(`❌ Erro na categoria ${categoria.nome}:`, error.message);
+                        console.warn(`⚠️ Erro ao buscar produtos da categoria ${categoriaNome}:`, error);
                     }
                 }
 
-                console.log("🎯 TODOS OS PRODUTOS ENCONTRADOS:", todosProdutos);
+                console.log("🎯 TOTAL DE PRODUTOS CARREGADOS:", todosProdutos.length);
+
+                // Ordenação simples no cliente
+                todosProdutos.sort((a, b) => {
+                    // Primeiro por categoria
+                    const categoriaCompare = a.categoria.localeCompare(b.categoria);
+                    if (categoriaCompare !== 0) return categoriaCompare;
+                    
+                    // Depois por ordem do produto
+                    const ordemA = a.ordem || 999;
+                    const ordemB = b.ordem || 999;
+                    if (ordemA !== ordemB) return ordemA - ordemB;
+                    
+                    // Por último por nome
+                    return a.nome.localeCompare(b.nome);
+                });
+
                 setCardapio(todosProdutos);
 
-                // 5. ATUALIZA A LISTA DE CATEGORIAS VISÍVEIS PARA FILTRO
-                const categoriasUnicas = ['todas', ...new Set(categoriasEncontradas.map(c => c.nome).filter(Boolean))];
+                // Criar lista de categorias
+                const categoriasUnicas = ['Todos', ...new Set(todosProdutos.map(p => p.categoria).filter(Boolean))];
                 setCategorias(categoriasUnicas);
 
                 if (todosProdutos.length === 0) {
-                    toast.warn("Nenhum produto encontrado. Verifique se os produtos estão cadastrados como documentos dentro de cada categoria.");
+                    console.warn("⚠️ Nenhum produto ativo encontrado");
+                    toast.warn("Nenhum produto ativo encontrado no cardápio.");
                 } else {
                     toast.success(`🎉 ${todosProdutos.length} produtos carregados!`);
                 }
 
             } catch (error) {
-                console.error("ERRO AO BUSCAR DADOS:", error);
-                if (error.code === 'permission-denied') {
-                    toast.error("❌ Erro de Permissão. O cardápio está inacessível. Verifique as Regras do Firestore!");
-                } else {
-                    toast.error("❌ Erro ao carregar cardápio.");
-                }
-            } finally {
-                setLoading(false);
+                console.error("❌ Erro ao buscar produtos:", error);
+                toast.error("Erro ao carregar produtos do cardápio.");
             }
-        };
 
-        fetchData();
+        } catch (error) {
+            console.error("❌ ERRO CRÍTICO:", error);
+            toast.error("❌ Falha ao carregar dados.");
+        } finally {
+            setLoading(false);
+        }
     }, [estabelecimentoId, mesaId]);
 
-    // --- FUNÇÕES DE LÓGICA DE PEDIDO MELHORADAS ---
-    const adicionarItem = (produto) => {
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    // --- FUNÇÕES ---
+    const adicionarItem = useCallback((produto) => {
         setResumoPedido(prev => {
             const itemExistente = prev.find(item => item.id === produto.id); 
             if (itemExistente) {
@@ -212,17 +426,23 @@ const TelaPedidos = () => {
                         : item
                 );
             }
-            return [...prev, { ...produto, quantidade: 1, preco: parseFloat(produto.preco) }];
+            return [...prev, { 
+                ...produto, 
+                quantidade: 1, 
+                preco: parseFloat(produto.preco),
+                nome: produto.nomeCompleto || produto.nome
+            }];
         });
-        toast.success(`✅ ${produto.nome} adicionado!`, {
-            icon: '🛒',
-            position: "bottom-right"
+        
+        toast.success(`✅ ${produto.nomeCompleto || produto.nome} adicionado!`, {
+            position: "bottom-right",
+            autoClose: 1000
         });
-    };
+    }, []);
 
-    const ajustarQuantidade = (produtoId, novaQuantidade) => {
+    const ajustarQuantidade = useCallback((produtoId, novaQuantidade) => {
         if (novaQuantidade < 1) {
-            removerItem(produtoId);
+            setResumoPedido(prev => prev.filter(item => item.id !== produtoId));
             return;
         }
         setResumoPedido(prev =>
@@ -232,31 +452,42 @@ const TelaPedidos = () => {
                     : item
             )
         );
-    };
+    }, []);
 
-    const removerItem = (produtoId) => {
+    const removerItem = useCallback((produtoId) => {
         const itemRemovido = resumoPedido.find(item => item.id === produtoId);
         setResumoPedido(prev => prev.filter(item => item.id !== produtoId));
-        toast.warn(`🗑️ ${itemRemovido?.nome} removido!`, {
-            position: "bottom-right"
-        });
-    };
+        
+        if (itemRemovido) {
+            toast.warn(`🗑️ ${itemRemovido.nome} removido!`, {
+                position: "bottom-right",
+                autoClose: 1000
+            });
+        }
+    }, [resumoPedido]);
 
     const salvarAlteracoes = async () => {
         setSalvando(true);
         const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
+        
         try {
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-            await updateDoc(mesaRef, { 
+            
+            await updateDoc(mesaRef, {
                 itens: resumoPedido,
                 status: resumoPedido.length > 0 ? 'com_pedido' : 'livre',
                 total: totalPedido,
                 updatedAt: new Date()
             });
+
             setMesa(prev => ({...prev, itens: resumoPedido }));
-            toast.success("💾 Pedido salvo com sucesso!", {
-                position: "bottom-right"
-            });
+            
+            toast.success("💾 Pedido salvo com sucesso!");
+            
+            setTimeout(() => {
+                navigate('/controle-salao');
+            }, 800);
+            
         } catch (error) {
             console.error("Erro ao salvar alterações:", error);
             toast.error("❌ Falha ao salvar o pedido.");
@@ -276,20 +507,18 @@ const TelaPedidos = () => {
         try {
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
             
-            await updateDoc(mesaRef, { 
+            await updateDoc(mesaRef, {
                 itens: resumoPedido,
                 status: 'pagamento',
                 total: totalPedido,
                 updatedAt: new Date()
             });
 
-            toast.success("✅ Mesa finalizada para pagamento!", {
-                position: "bottom-right"
-            });
+            toast.success("✅ Mesa finalizada para pagamento!");
             navigate('/controle-salao'); 
 
         } catch (error) {
-            console.error("Erro ao finalizar mesa para pagamento:", error);
+            console.error("Erro ao finalizar mesa:", error);
             toast.error("❌ Falha ao finalizar a mesa.");
         }
     };
@@ -302,16 +531,18 @@ const TelaPedidos = () => {
         navigate('/controle-salao');
     };
 
-    // Função para verificar se produto está no carrinho
-    const produtoEstaNoCarrinho = (produtoId) => {
+    const produtoEstaNoCarrinho = useCallback((produtoId) => {
         return resumoPedido.some(item => item.id === produtoId);
-    };
+    }, [resumoPedido]);
 
-    // Filtros combinados e cálculos
+    // Filtros
     const produtosFiltrados = cardapio.filter(produto => {
-        const buscaMatch = produto.nome.toLowerCase().includes(termoBusca.toLowerCase()) ||
-                          (produto.descricao && produto.descricao.toLowerCase().includes(termoBusca.toLowerCase()));
-        const categoriaMatch = categoriaAtiva === 'todas' || produto.categoria === categoriaAtiva;
+        const buscaMatch = !termoBusca || 
+            produto.nome.toLowerCase().includes(termoBusca.toLowerCase()) ||
+            (produto.descricao && produto.descricao.toLowerCase().includes(termoBusca.toLowerCase()));
+        
+        const categoriaMatch = categoriaAtiva === 'Todos' || produto.categoria === categoriaAtiva;
+        
         return buscaMatch && categoriaMatch;
     });
 
@@ -323,262 +554,301 @@ const TelaPedidos = () => {
             <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-700 font-medium">Carregando cardápio de {estabelecimentoNome}...</p>
-                    <p className="text-gray-500 text-sm mt-2">Isso pode levar alguns segundos</p>
+                    <p className="text-gray-700 font-medium">Carregando cardápio...</p>
+                    <p className="text-gray-500 text-sm mt-2">Aguarde um momento</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">           
-            {/* Header Aprimorado */}
-            <header className="bg-white shadow-lg border-b border-amber-200 sticky top-0 z-20">
-                <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
+            {/* Header */}
+            <header className="bg-white shadow-sm border-b border-amber-200 sticky top-0 z-20">
+                <div className="max-w-7xl mx-auto px-3 py-2">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
                             <button 
                                 onClick={handleVoltar}
-                                className="flex items-center space-x-2 bg-white hover:bg-amber-50 text-gray-700 font-medium py-2 px-4 rounded-xl border border-amber-300 transition-all duration-200 hover:shadow-md"
+                                className="flex items-center space-x-1 bg-white hover:bg-amber-50 text-gray-700 text-sm py-1.5 px-3 rounded-lg border border-amber-300 transition-all duration-200"
                             >
-                                <IoArrowBack className="text-lg"/>
+                                <IoArrowBack className="text-sm"/>
                                 <span>Voltar</span>
                             </button>
-                            <div className="flex items-center space-x-3">
-                                <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                                    <span className="text-white font-bold text-lg">{mesa?.numero || '?'}</span>
+                            <div className="flex items-center space-x-2">
+                                <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow">
+                                    <span className="text-white font-bold text-sm">{mesa?.numero || '?'}</span>
                                 </div>
                                 <div>
-                                    <h1 className="text-xl font-bold text-gray-900">Mesa {mesa?.numero || 'N/A'}</h1>
-                                    <p className="text-sm text-gray-600">{estabelecimentoNome}</p>
+                                    <h1 className="text-sm font-bold text-gray-900">Mesa {mesa?.numero || 'N/A'}</h1>
+                                    <p className="text-xs text-gray-600 truncate max-w-[120px]">{estabelecimentoNome}</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <div className="flex items-center space-x-4">
-                            <div className="bg-amber-100 text-amber-800 px-4 py-2 rounded-xl font-semibold shadow-sm">
-                                <span className="flex items-center space-x-2">
-                                    <IoCartOutline className="text-lg" />
-                                    <span>{totalItens} {totalItens === 1 ? 'item' : 'itens'}</span>
-                                </span>
+                        <div className="flex items-center space-x-2">
+                            <div className="lg:hidden">
+                                <button 
+                                    onClick={() => setShowOrderSummary(!showOrderSummary)}
+                                    className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white text-sm py-1.5 px-3 rounded-lg transition-all duration-200 shadow"
+                                >
+                                    <IoCartOutline className="text-sm" />
+                                    <span>{totalItens}</span>
+                                </button>
                             </div>
-                            <button 
-                                onClick={salvarAlteracoes}
-                                disabled={salvando}
-                                className="flex items-center space-x-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                            >
-                                {salvando ? (
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                    <IoSaveOutline className="text-lg" />
-                                )}
-                                <span>{salvando ? 'Salvando...' : 'Salvar'}</span>
-                            </button>
+                            
+                            <div className="hidden lg:flex items-center space-x-2">
+                                <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-lg font-semibold text-sm">
+                                    <span className="flex items-center space-x-1">
+                                        <IoCartOutline className="text-sm" />
+                                        <span>{totalItens} itens</span>
+                                    </span>
+                                </div>
+                                <button 
+                                    onClick={salvarAlteracoes}
+                                    disabled={salvando}
+                                    className="flex items-center space-x-1 bg-green-500 hover:bg-green-600 text-white text-sm py-1.5 px-3 rounded-lg transition-all duration-200 disabled:opacity-50 shadow"
+                                >
+                                    {salvando ? (
+                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                        <IoSaveOutline className="text-sm" />
+                                    )}
+                                    <span>{salvando ? 'Salvando...' : 'Salvar'}</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-4 gap-6">
-                {/* Seção do Cardápio Aprimorada */}
-                <div className="lg:col-span-3">
-                    {/* Busca e Filtros Melhorados */}
-                    <div className="bg-white rounded-2xl shadow-lg border border-amber-200 p-6 mb-6">
-                        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-                            {/* Barra de Busca Aprimorada */}
-                            <div className="flex-1 min-w-0 w-full">
-                                <div className="relative">
-                                    <IoSearchOutline className="absolute left-4 top-1/2 transform -translate-y-1/2 text-amber-400 text-xl" />
-                                    <input
-                                        type="text"
-                                        placeholder="🔍 Buscar produtos por nome ou descrição..."
-                                        value={termoBusca}
-                                        onChange={(e) => setTermoBusca(e.target.value)}
-                                        className="w-full pl-12 pr-4 py-4 border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all duration-300 bg-amber-50 text-gray-800 placeholder-amber-400"
-                                    />
-                                </div>
-                            </div>
-                            
-                            {/* Filtro de Categorias com Visual Melhorado */}
-                            <div className="w-full lg:w-auto">
-                                <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0 scrollbar-thin scrollbar-thumb-amber-300 scrollbar-track-amber-100">
-                                    {categorias.map(categoria => (
-                                        <button
-                                            key={categoria}
-                                            onClick={() => setCategoriaAtiva(categoria)}
-                                            className={`px-4 py-3 rounded-xl font-semibold whitespace-nowrap transition-all duration-200 transform hover:scale-105 ${
-                                                categoriaAtiva === categoria
-                                                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg'
-                                                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200 shadow-sm'
-                                            }`}
-                                            style={{ flexShrink: 0 }}
-                                        >
-                                            {categoria === 'todas' ? '📦 Todas' : `🍽️ ${categoria}`}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Grid de Produtos Aprimorado */}
-                    {produtosFiltrados.length > 0 ? (
-                        <div>
-                            <div className="mb-6 p-4 bg-white rounded-2xl shadow-sm border border-amber-200">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-gray-700 font-medium">
-                                        📊 Mostrando <span className="text-amber-600 font-bold">{produtosFiltrados.length}</span> de <span className="text-amber-600 font-bold">{cardapio.length}</span> produtos disponíveis
-                                    </p>
-                                    {termoBusca && (
-                                        <button 
-                                            onClick={() => setTermoBusca('')}
-                                            className="text-amber-600 hover:text-amber-700 text-sm font-medium"
-                                        >
-                                            Limpar busca
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                                {produtosFiltrados.map(produto => (
-                                    <ProdutoCard
-                                        key={produto.id}
-                                        produto={produto}
-                                        onAdicionar={adicionarItem}
-                                        estaNoCarrinho={produtoEstaNoCarrinho(produto.id)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-2xl shadow-lg border border-amber-200 p-16 text-center">
-                            <div className="w-24 h-24 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                                <span className="text-4xl">🍕</span>
-                            </div>
-                            <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                                {cardapio.length === 0 ? 'Cardápio vazio' : 'Nenhum produto encontrado'}
-                            </h3>
-                            <p className="text-gray-600 mb-8 text-lg max-w-md mx-auto">
-                                {cardapio.length === 0 
-                                    ? 'Adicione produtos ao cardápio primeiro para começar a vender.' 
-                                    : 'Tente ajustar os termos de busca ou selecione outra categoria.'}
-                            </p>
-                            {cardapio.length === 0 && (
-                                <button 
-                                    onClick={() => navigate('/cardapio')}
-                                    className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg inline-flex items-center space-x-3"
-                                >
-                                    <IoRestaurantOutline className="text-xl" />
-                                    <span>Ir para Gerenciar Cardápio</span>
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Resumo do Pedido Aprimorado */}
-                <aside className="lg:col-span-1">
-                    <div className="bg-white rounded-2xl shadow-xl border border-amber-200 sticky lg:top-24 transition-all duration-300 hover:shadow-2xl">
-                        <div className="p-6 border-b border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 rounded-t-2xl">
-                            <h2 className="text-xl font-bold text-gray-900 flex items-center space-x-3">
-                                <IoReceiptOutline className="text-2xl text-amber-500" />
-                                <span>Resumo do Pedido</span>
-                            </h2>
-                            {resumoPedido.length > 0 && (
-                                <p className="text-amber-600 text-sm mt-1 font-medium">
-                                    {totalItens} {totalItens === 1 ? 'item' : 'itens'} no pedido
-                                </p>
-                            )}
-                        </div>
-
-                        <div className="p-4 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-amber-300 scrollbar-track-amber-50">
-                            {resumoPedido.length > 0 ? (
-                                <div className="space-y-3">
-                                    {resumoPedido.map(item => (
-                                        <div key={item.id} className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200 hover:border-amber-300 transition-all duration-200">
-                                            <div className="flex items-start justify-between mb-2">
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-bold text-gray-900 text-sm leading-tight truncate">{item.nome}</p>
-                                                    <p className="text-amber-600 font-semibold text-lg">
-                                                        R$ {parseFloat(item.preco * item.quantidade).toFixed(2).replace('.', ',')}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center space-x-2 bg-white rounded-lg p-1 shadow-inner">
-                                                    <button 
-                                                        onClick={() => ajustarQuantidade(item.id, item.quantidade - 1)}
-                                                        className="w-8 h-8 bg-amber-100 hover:bg-amber-200 rounded-lg flex items-center justify-center transition-colors duration-200"
-                                                    >
-                                                        <IoRemoveCircleOutline className="text-amber-600" />
-                                                    </button>
-                                                    <span className="font-bold text-gray-900 min-w-8 text-center text-lg">
-                                                        {item.quantidade}
-                                                    </span>
-                                                    <button 
-                                                        onClick={() => ajustarQuantidade(item.id, item.quantidade + 1)}
-                                                        className="w-8 h-8 bg-amber-500 hover:bg-amber-600 rounded-lg flex items-center justify-center transition-colors duration-200"
-                                                    >
-                                                        <IoAddCircleOutline className="text-white" />
-                                                    </button>
-                                                </div>
-                                                <button 
-                                                    onClick={() => removerItem(item.id)}
-                                                    className="w-8 h-8 bg-red-100 hover:bg-red-200 rounded-lg flex items-center justify-center transition-colors duration-200 ml-2"
-                                                >
-                                                    <IoTrashOutline className="text-red-600 text-sm" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-12">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-                                        <IoCartOutline className="text-3xl text-amber-400" />
+            <main className="max-w-7xl mx-auto p-3">
+                <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Seção do Cardápio */}
+                    <div className="flex-1">
+                        {/* Busca e Filtros */}
+                        <div className="bg-white rounded-lg shadow-sm border border-amber-200 p-3 mb-4">
+                            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                                <div className="flex-1 min-w-0 w-full">
+                                    <div className="relative">
+                                        <IoSearchOutline className="absolute left-2 top-1/2 transform -translate-y-1/2 text-amber-400 text-sm" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar produtos..."
+                                            value={termoBusca}
+                                            onChange={(e) => setTermoBusca(e.target.value)}
+                                            className="w-full pl-8 pr-3 py-2 border border-amber-300 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200 bg-amber-50 text-sm"
+                                        />
                                     </div>
-                                    <p className="text-gray-500 font-medium">Nenhum item adicionado</p>
-                                    <p className="text-sm text-gray-400 mt-2">Adicione produtos do cardápio ao lado</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Total e Botões Finais Aprimorados */}
-                        {resumoPedido.length > 0 && (
-                            <div className="p-6 border-t border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 rounded-b-2xl">
-                                <div className="flex justify-between items-center mb-6">
-                                    <span className="font-bold text-gray-900 text-lg">Total do Pedido:</span>
-                                    <span className="text-2xl font-bold text-green-600">
-                                        R$ {totalPedido.toFixed(2).replace('.', ',')}
-                                    </span>
                                 </div>
                                 
-                                <div className="space-y-3">
-                                    <button 
-                                        onClick={salvarAlteracoes}
-                                        disabled={salvando}
-                                        className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-3 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                <div className="w-full sm:w-auto">
+                                    <div className="flex gap-1 overflow-x-auto pb-1">
+                                        {categorias.map(categoria => (
+                                            <button
+                                                key={categoria}
+                                                onClick={() => setCategoriaAtiva(categoria)}
+                                                className={`px-2 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-all duration-200 ${
+                                                    categoriaAtiva === categoria
+                                                        ? 'bg-amber-500 text-white shadow'
+                                                        : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                                }`}
+                                            >
+                                                {categoria}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center space-x-1 bg-amber-100 rounded-lg p-0.5">
+                                    <button
+                                        onClick={() => setVisualizacao('grid')}
+                                        className={`p-1 rounded transition-all duration-200 ${
+                                            visualizacao === 'grid'
+                                                ? 'bg-white text-amber-600 shadow-sm'
+                                                : 'text-amber-500 hover:text-amber-600'
+                                        }`}
                                     >
-                                        {salvando ? (
-                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        ) : (
-                                            <IoSaveOutline className="text-xl" />
-                                        )}
-                                        <span className="text-lg">{salvando ? 'Salvando...' : 'Salvar Pedido'}</span>
+                                        <IoGridOutline className="text-sm" />
                                     </button>
-                                    
-                                    <button 
-                                        onClick={finalizarMesa}
-                                        className="w-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-4 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-3 shadow-lg"
+                                    <button
+                                        onClick={() => setVisualizacao('lista')}
+                                        className={`p-1 rounded transition-all duration-200 ${
+                                            visualizacao === 'lista'
+                                                ? 'bg-white text-amber-600 shadow-sm'
+                                                : 'text-amber-500 hover:text-amber-600'
+                                        }`}
                                     >
-                                        <IoReceiptOutline className="text-xl" />
-                                        <span className="text-lg">Finalizar Mesa / Pagar</span>
+                                        <IoListOutline className="text-sm" />
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Grid de Produtos */}
+                        {produtosFiltrados.length > 0 ? (
+                            <div>
+                                <div className="mb-3 p-2 bg-white rounded-lg shadow-xs border border-amber-200">
+                                    <p className="text-gray-700 text-xs">
+                                        Mostrando <span className="text-amber-600 font-bold">{produtosFiltrados.length}</span> de <span className="text-amber-600 font-bold">{cardapio.length}</span> produtos
+                                    </p>
+                                </div>
+
+                                {/* Grade de Produtos */}
+                                {visualizacao === 'grid' ? (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                                        {produtosFiltrados.map(produto => (
+                                            <ProdutoCardGrid
+                                                key={produto.id}
+                                                produto={produto}
+                                                onAdicionar={adicionarItem}
+                                                estaNoCarrinho={produtoEstaNoCarrinho(produto.id)}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {produtosFiltrados.map(produto => (
+                                            <ProdutoCardLista
+                                                key={produto.id}
+                                                produto={produto}
+                                                onAdicionar={adicionarItem}
+                                                estaNoCarrinho={produtoEstaNoCarrinho(produto.id)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-lg shadow-sm border border-amber-200 p-8 text-center">
+                                <div className="w-16 h-16 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span className="text-2xl">🍕</span>
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                    {cardapio.length === 0 ? 'Cardápio vazio' : 'Nenhum produto encontrado'}
+                                </h3>
+                                <p className="text-gray-600 text-sm">
+                                    {cardapio.length === 0 
+                                        ? 'Adicione produtos ao cardápio primeiro.' 
+                                        : 'Tente ajustar os filtros de busca.'}
+                                </p>
                             </div>
                         )}
                     </div>
-                </aside>
+
+                    {/* Resumo do Pedido */}
+                    <div className={`
+                        ${showOrderSummary ? 'block' : 'hidden'} 
+                        lg:block 
+                        lg:w-64 
+                        transition-all duration-300
+                    `}>
+                        <div className="bg-white rounded-lg shadow-md border border-amber-200 lg:sticky lg:top-16">
+                            <div className="p-3 border-b border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 rounded-t-lg">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-sm font-bold text-gray-900 flex items-center space-x-2">
+                                        <IoReceiptOutline className="text-lg text-amber-500" />
+                                        <span>Resumo</span>
+                                    </h2>
+                                    <button 
+                                        onClick={() => setShowOrderSummary(false)}
+                                        className="lg:hidden text-gray-500 hover:text-gray-700 text-sm"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                {resumoPedido.length > 0 && (
+                                    <p className="text-amber-600 text-xs mt-0.5">
+                                        {totalItens} {totalItens === 1 ? 'item' : 'itens'}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="p-2 max-h-64 overflow-y-auto">
+                                {resumoPedido.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {resumoPedido.map(item => (
+                                            <div key={item.id} className="bg-amber-50 rounded-lg p-2 border border-amber-200">
+                                                <div className="flex items-start justify-between mb-1">
+                                                    <p className="font-semibold text-gray-900 text-xs leading-tight truncate flex-1">{item.nome}</p>
+                                                    <button 
+                                                        onClick={() => removerItem(item.id)}
+                                                        className="flex-shrink-0 ml-1 text-red-500 hover:text-red-700"
+                                                    >
+                                                        <IoTrashOutline className="text-xs" />
+                                                    </button>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center space-x-1 bg-white rounded p-0.5">
+                                                        <button 
+                                                            onClick={() => ajustarQuantidade(item.id, item.quantidade - 1)}
+                                                            className="w-6 h-6 bg-amber-100 hover:bg-amber-200 rounded flex items-center justify-center"
+                                                        >
+                                                            <IoRemoveCircleOutline className="text-amber-600 text-xs" />
+                                                        </button>
+                                                        <span className="font-bold text-gray-900 text-xs min-w-6 text-center">
+                                                            {item.quantidade}
+                                                        </span>
+                                                        <button 
+                                                            onClick={() => ajustarQuantidade(item.id, item.quantidade + 1)}
+                                                            className="w-6 h-6 bg-amber-500 hover:bg-amber-600 rounded flex items-center justify-center"
+                                                        >
+                                                            <IoAddCircleOutline className="text-white text-xs" />
+                                                        </button>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-amber-600 font-semibold text-sm">
+                                                            R$ {(item.preco * item.quantidade).toFixed(2).replace('.', ',')}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-6">
+                                        <IoCartOutline className="text-2xl text-amber-400 mx-auto mb-2" />
+                                        <p className="text-gray-500 text-xs">Nenhum item adicionado</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {resumoPedido.length > 0 && (
+                                <div className="p-3 border-t border-amber-200 bg-amber-50 rounded-b-lg">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="font-bold text-gray-900 text-sm">Total:</span>
+                                        <span className="text-lg font-bold text-green-600">
+                                            R$ {totalPedido.toFixed(2).replace('.', ',')}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <button 
+                                            onClick={salvarAlteracoes}
+                                            disabled={salvando}
+                                            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 text-sm disabled:opacity-50"
+                                        >
+                                            {salvando ? (
+                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            ) : (
+                                                <IoSaveOutline className="text-sm" />
+                                            )}
+                                            <span>{salvando ? 'Salvando...' : 'Salvar Pedido'}</span>
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={finalizarMesa}
+                                            className="w-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 text-sm"
+                                        >
+                                            <IoReceiptOutline className="text-sm" />
+                                            <span>Finalizar / Pagar</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </main>
         </div>
     );

@@ -246,7 +246,9 @@ function PedidoCard({
 
     const precoTotal = calcularPrecoTotal();
     const pedidoTitle = getPedidoTitle();
-    const isNewOrder = newOrderIds.includes(safeData.id);
+   const isNewOrder = Array.isArray(newOrderIds) 
+    ? newOrderIds.includes(safeData.id)
+    : newOrderIds.has(safeData.id);
     const statusButtons = getStatusButtons();
 
     return (

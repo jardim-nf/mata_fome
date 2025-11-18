@@ -1,4 +1,4 @@
-// src/pages/ControleSalao.jsx - COMPLETO E CORRIGIDO
+// src/pages/ControleSalao.jsx - CORREÇÃO DO BOTÃO VOLTAR
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -49,8 +49,17 @@ export default function ControleSalao() {
                 <span>+</span>
                 <span>Adicionar Mesa</span>
             </button>
+            
+            {/* 🆕 CORREÇÃO: Botão Voltar para Dashboard */}
+            <button 
+                onClick={() => navigate('/dashboard')}
+                className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center space-x-2"
+            >
+                <span>←</span>
+                <span>Voltar ao Dashboard</span>
+            </button>
         </div>
-    ), [connectionError]);
+    ), [connectionError, navigate]);
 
     // 🆕 CORREÇÃO: useEffect com dependências estáveis
     useEffect(() => {
@@ -346,8 +355,6 @@ export default function ControleSalao() {
         return configs[key] || configs.total;
     }, []);
 
-    // ... (Código para renderizar tela de erro e loading)
-
     if (connectionError) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -367,12 +374,12 @@ export default function ControleSalao() {
                     >
                         🔄 Tentar Novamente
                     </button>
-                    <Link 
-                        to="/dashboard" 
-                        className="block mt-3 text-blue-600 hover:text-blue-700 font-medium"
+                    <button 
+                        onClick={() => navigate('/dashboard')}
+                        className="block mt-3 text-blue-600 hover:text-blue-700 font-medium w-full py-2"
                     >
                         ← Voltar ao Dashboard
-                    </Link>
+                    </button>
                 </div>
             </div>
         );
@@ -391,12 +398,12 @@ export default function ControleSalao() {
                     <p className="text-gray-600 mb-6">
                         Você precisa ter um estabelecimento configurado para gerenciar o salão.
                     </p>
-                    <Link 
-                        to="/dashboard" 
+                    <button 
+                        onClick={() => navigate('/dashboard')}
                         className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors w-full block"
                     >
                         ← Voltar ao Dashboard
-                    </Link>
+                    </button>
                 </div>
             </div>
         );

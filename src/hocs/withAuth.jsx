@@ -78,7 +78,14 @@ const withAuth = (WrappedComponent, options = {}) => {
       );
     }
 
-    return <WrappedComponent {...props} />;
+    // ✅ CORREÇÃO: Passar o estabelecimentoPrincipal como prop
+    return (
+      <WrappedComponent 
+        {...props} 
+        estabelecimentoPrincipal={estabelecimentoPrincipal}
+        userData={userData}
+      />
+    );
   };
 };
 

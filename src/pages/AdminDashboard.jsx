@@ -160,7 +160,15 @@ const AdminDashboard = () => {
               colorClass="hover:border-pink-500 hover:bg-pink-50"
             />
           </Link>
-
+{/* Gestão de Funcionários */}
+<Link to="/admin/gestao-funcionarios">
+  <ActionButton
+    title="Gestão de Funcionários"
+    subtitle="Controle de acesso e permissões da equipe"
+    icon="👥"
+    colorClass="hover:border-blue-500 hover:bg-blue-50"
+  />
+</Link>
           {/* Relatórios */}
           <Link to="/admin/reports">
             <ActionButton
