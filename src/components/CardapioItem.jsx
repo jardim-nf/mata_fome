@@ -258,7 +258,7 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
                      color: cores.destaque,
                      border: `1px solid ${cores.destaque}30`
                    }}>
-                ✅ {hasVariations ? 'Adição direta (1 Opção)' : 'Adicionar direto'}
+                Sem variações
               </div>
             )}
 
