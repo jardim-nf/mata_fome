@@ -1,9 +1,10 @@
-// src/pages/TelaPedidos.jsx - VERSÃO COMPLETA E FUNCIONAL
+// src/pages/TelaPedidos.jsx - VERSÃO FINAL CORRIGIDA E OTIMIZADA
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; 
 import { db } from '../firebase';
-import { getDocs, doc, getDoc, updateDoc, collection } from 'firebase/firestore'; 
+// 🛠️ IMPORTAÇÃO COMPLETA: serverTimestamp, collectionGroup (mantida para robustez)
+import { getDocs, doc, getDoc, updateDoc, collection, serverTimestamp, query, where, collectionGroup } from 'firebase/firestore'; 
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { 
@@ -23,30 +24,72 @@ import {
     IoListOutline
 } from 'react-icons/io5';
 
+// 🎯 FUNÇÃO DE LÓGICA INTELIGENTE: Verifica se o item pode ser adicionado diretamente
+const podeAdicionarDireto = (produto) => {
+    const hasVariations = produto.variacoes && produto.variacoes.length > 0;
+    
+    if (!hasVariations) {
+        return true; // 0 variações: Adiciona Direto
+    }
+
+    const variacoesAtivas = produto.variacoes.filter(v => 
+        v.ativo !== false 
+    );
+
+    // 1 variação ativa: Adiciona Direto (automaticamente)
+    if (variacoesAtivas.length === 1) {
+        return true; 
+    }
+
+    return false; // 2+ variações: Precisa escolher
+};
+
+
 // --- COMPONENTE DO PRODUTO EM GRID ---
 const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
     const [mostrarVariacoes, setMostrarVariacoes] = useState(false);
     const [variacaoSelecionada, setVariacaoSelecionada] = useState(null);
 
     const temVariacoes = produto.variacoes && produto.variacoes.length > 0;
+    const podeAdicionar = podeAdicionarDireto(produto);
 
     const handleAdicionar = useCallback(() => {
+        // 1. ADIÇÃO DIRETA (0 ou 1 VARIAÇÃO ATIVA)
+        if (podeAdicionar) {
+             let itemParaAdicionar = produto;
+             
+             if (produto.variacoes && produto.variacoes.length === 1) {
+                 const variacaoUnica = produto.variacoes.find(v => v.ativo !== false);
+                 itemParaAdicionar = {
+                     ...produto,
+                     id: `${produto.id}-${variacaoUnica.nome || variacaoUnica.tamanho}`,
+                     nomeCompleto: `${produto.nome} - ${variacaoUnica.nome || variacaoUnica.tamanho}`,
+                     preco: parseFloat(variacaoUnica.preco || produto.preco)
+                 };
+             }
+             
+             onAdicionar(itemParaAdicionar);
+             return;
+        }
+
+        // 2. ADIÇÃO VIA SELETOR (2+ VARIAÇÕES)
         if (temVariacoes && !variacaoSelecionada) {
             setMostrarVariacoes(true);
             return;
         }
 
-        const produtoParaAdicionar = temVariacoes ? {
+        const produtoParaAdicionar = {
             ...produto,
             ...variacaoSelecionada,
             id: `${produto.id}-${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
-            nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`
-        } : produto;
+            nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
+            preco: parseFloat(variacaoSelecionada.preco || produto.preco)
+        }; 
 
         onAdicionar(produtoParaAdicionar);
         setVariacaoSelecionada(null);
         setMostrarVariacoes(false);
-    }, [produto, temVariacoes, variacaoSelecionada, onAdicionar]);
+    }, [produto, temVariacoes, variacaoSelecionada, onAdicionar, podeAdicionar]);
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col group hover:border-amber-200">
@@ -78,8 +121,8 @@ const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
                     )}
                 </div>
 
-                {/* Seção de Variações */}
-                {temVariacoes && mostrarVariacoes && (
+                {/* Seção de Variações - VISÍVEL APENAS SE HOUVER OPÇÕES PARA ESCOLHER */}
+                {temVariacoes && !podeAdicionar && mostrarVariacoes && (
                     <div className="mb-1 p-1 bg-gray-50 rounded border border-gray-200">
                         <p className="text-xs text-gray-600 mb-1 font-medium">Opções:</p>
                         <div className="space-y-1 max-h-20 overflow-y-auto">
@@ -112,7 +155,8 @@ const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
                         <span className="text-amber-600 font-bold text-sm">
                             R$ {parseFloat(produto.preco).toFixed(2).replace('.', ',')}
                         </span>
-                        {temVariacoes && !mostrarVariacoes && (
+                        {/* Botão de abrir seletor, visível apenas se houver 2+ variações */}
+                        {temVariacoes && !podeAdicionar && !mostrarVariacoes && (
                             <button 
                                 onClick={() => setMostrarVariacoes(!mostrarVariacoes)}
                                 className="text-blue-500 hover:text-blue-600 text-xs"
@@ -123,17 +167,18 @@ const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
                     </div>
                     <button 
                         onClick={handleAdicionar}
-                        disabled={temVariacoes && mostrarVariacoes && !variacaoSelecionada}
+                        // Desabilita se for item de 2+ variações E o seletor estiver aberto E nada selecionado
+                        disabled={!podeAdicionar && temVariacoes && mostrarVariacoes && !variacaoSelecionada}
                         className={`font-semibold py-1 px-2 rounded text-xs transition-all duration-200 flex items-center space-x-1 ${
                             estaNoCarrinho 
                                 ? 'bg-green-500 hover:bg-green-600 text-white' 
-                                : temVariacoes && mostrarVariacoes && !variacaoSelecionada
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-amber-500 hover:bg-amber-600 text-white'
+                                : podeAdicionar || (temVariacoes && variacaoSelecionada)
+                                ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         }`}
                     >
                         <IoAddCircleOutline className="text-xs" />
-                        <span>Add</span>
+                        <span>{podeAdicionar ? 'Add' : 'Opções'}</span>
                     </button>
                 </div>
             </div>
@@ -141,30 +186,51 @@ const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
     );
 };
 
-// --- COMPONENTE DO PRODUTO EM LISTA ---
+// --- COMPONENTE DO PRODUTO EM LISTA (Lógica idêntica ao Grid) ---
 const ProdutoCardLista = ({ produto, onAdicionar, estaNoCarrinho }) => {
     const [mostrarVariacoes, setMostrarVariacoes] = useState(false);
     const [variacaoSelecionada, setVariacaoSelecionada] = useState(null);
 
     const temVariacoes = produto.variacoes && produto.variacoes.length > 0;
+    const podeAdicionar = podeAdicionarDireto(produto);
 
     const handleAdicionar = useCallback(() => {
+        // 1. ADIÇÃO DIRETA (0 ou 1 VARIAÇÃO ATIVA)
+        if (podeAdicionar) {
+             let itemParaAdicionar = produto;
+             
+             if (produto.variacoes && produto.variacoes.length === 1) {
+                 const variacaoUnica = produto.variacoes.find(v => v.ativo !== false);
+                 itemParaAdicionar = {
+                     ...produto,
+                     id: `${produto.id}-${variacaoUnica.nome || variacaoUnica.tamanho}`,
+                     nomeCompleto: `${produto.nome} - ${variacaoUnica.nome || variacaoUnica.tamanho}`,
+                     preco: parseFloat(variacaoUnica.preco || produto.preco)
+                 };
+             }
+             
+             onAdicionar(itemParaAdicionar);
+             return;
+        }
+
+        // 2. ADIÇÃO VIA SELETOR (2+ VARIAÇÕES)
         if (temVariacoes && !variacaoSelecionada) {
             setMostrarVariacoes(true);
             return;
         }
 
-        const produtoParaAdicionar = temVariacoes ? {
+        const produtoParaAdicionar = {
             ...produto,
             ...variacaoSelecionada,
             id: `${produto.id}-${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
-            nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`
-        } : produto;
+            nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
+            preco: parseFloat(variacaoSelecionada.preco || produto.preco)
+        }; 
 
         onAdicionar(produtoParaAdicionar);
         setVariacaoSelecionada(null);
         setMostrarVariacoes(false);
-    }, [produto, temVariacoes, variacaoSelecionada, onAdicionar]);
+    }, [produto, temVariacoes, variacaoSelecionada, onAdicionar, podeAdicionar]);
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 p-2 group hover:border-amber-200">
@@ -215,7 +281,8 @@ const ProdutoCardLista = ({ produto, onAdicionar, estaNoCarrinho }) => {
                                     {produto.categoria}
                                 </span>
                             )}
-                            {temVariacoes && (
+                            {/* Botão de opções, visível apenas se houver 2+ variações */}
+                            {temVariacoes && !podeAdicionar && (
                                 <button 
                                     onClick={() => setMostrarVariacoes(!mostrarVariacoes)}
                                     className="inline-block bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full hover:bg-blue-200 transition-colors flex items-center gap-0.5"
@@ -228,22 +295,22 @@ const ProdutoCardLista = ({ produto, onAdicionar, estaNoCarrinho }) => {
 
                         <button 
                             onClick={handleAdicionar}
-                            disabled={temVariacoes && mostrarVariacoes && !variacaoSelecionada}
+                            disabled={!podeAdicionar && temVariacoes && mostrarVariacoes && !variacaoSelecionada}
                             className={`font-semibold py-1 px-2 rounded text-xs transition-all duration-200 flex items-center justify-center space-x-1 ${
                                 estaNoCarrinho 
                                     ? 'bg-green-500 hover:bg-green-600 text-white' 
-                                    : temVariacoes && mostrarVariacoes && !variacaoSelecionada
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : 'bg-amber-500 hover:bg-amber-600 text-white'
+                                    : podeAdicionar || (temVariacoes && variacaoSelecionada)
+                                    ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
                         >
                             <IoAddCircleOutline className="text-xs" />
-                            <span>Add</span>
+                            <span>{podeAdicionar ? 'Add' : 'Opções'}</span>
                         </button>
                     </div>
 
-                    {/* Seção de Variações em Lista */}
-                    {temVariacoes && mostrarVariacoes && (
+                    {/* Seção de Variações em Lista - VISÍVEL APENAS SE HOUVER OPÇÕES PARA ESCOLHER */}
+                    {temVariacoes && !podeAdicionar && mostrarVariacoes && (
                         <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
                             <p className="text-xs text-gray-600 mb-1 font-medium">Selecione uma opção:</p>
                             <div className="grid grid-cols-1 gap-1">
@@ -275,6 +342,70 @@ const ProdutoCardLista = ({ produto, onAdicionar, estaNoCarrinho }) => {
         </div>
     );
 };
+
+// 🚀 FUNÇÃO ULTRA RÁPIDA V2: Múltiplas buscas paralelas (Promise.all)
+// Esta função é o fallback mais rápido sem Collection Group
+const carregarProdutosRapido = async (estabId) => {
+    try {
+        let todosProdutos = [];
+
+        const todasCategoriasRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
+        const categoriasSnapshot = await getDocs(todasCategoriasRef);
+        
+        const promessas = [];
+
+        if (!categoriasSnapshot.empty) {
+            categoriasSnapshot.docs.forEach(catDoc => {
+                const categoriaData = catDoc.data();
+                const categoriaId = catDoc.id;
+
+                // Busca os itens desta categoria em paralelo
+                promessas.push(getDocs(
+                    query(
+                        collection(db, 'estabelecimentos', estabId, 'cardapio', categoriaId, 'itens'),
+                        where('ativo', '==', true)
+                    )
+                ).then(itensSnapshot => {
+                    return itensSnapshot.docs.map(itemDoc => ({
+                        ...itemDoc.data(),
+                        id: itemDoc.id,
+                        categoria: categoriaData.nome || 'Geral', // Pega o nome da categoria do doc pai
+                        categoriaId: categoriaId,
+                        // Adiciona o nome da categoria ao item para ordenação e filtro
+                        categoriaNome: categoriaData.nome || 'Geral' 
+                    }));
+                }).catch(() => [])); 
+            });
+            
+            const resultados = await Promise.all(promessas);
+            todosProdutos = resultados.flat();
+        }
+
+        // Lógica de fallback para estrutura alternativa (se existir)
+        if (todosProdutos.length === 0) {
+            const cardapioDiretoRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
+            const qAtivos = query(cardapioDiretoRef, where('ativo', '==', true));
+            const snapshotDireto = await getDocs(qAtivos);
+
+            if (!snapshotDireto.empty) {
+                todosProdutos = snapshotDireto.docs.map(doc => ({
+                    ...doc.data(),
+                    id: doc.id,
+                    categoria: doc.data().categoria || 'Geral',
+                    categoriaId: 'direto',
+                    categoriaNome: doc.data().categoria || 'Geral'
+                }));
+            }
+        }
+        
+        return todosProdutos;
+
+    } catch (error) {
+        console.error("❌ Erro no carregamento rápido:", error);
+        return [];
+    }
+};
+
 
 const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
@@ -326,81 +457,42 @@ const TelaPedidos = () => {
                 toast.error("Mesa não encontrada.");
             }
 
-            // 2. Buscar produtos de forma simples
-            let todosProdutos = [];
+            // 2. Buscar produtos de forma RÁPIDA
+            const todosProdutos = await carregarProdutosRapido(estabelecimentoId);
             
-            try {
-                // Buscar todas as categorias
-                const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
-                const categoriasSnap = await getDocs(categoriasRef);
+            console.log("🎯 TOTAL DE PRODUTOS CARREGADOS:", todosProdutos.length);
+
+            // Ordenação (mantida a ordem por categoria/nome, mas você pode usar ordem personalizada aqui)
+            todosProdutos.sort((a, b) => {
+                const categoriaCompare = a.categoria.localeCompare(b.categoria);
+                if (categoriaCompare !== 0) return categoriaCompare;
                 
-                console.log("📂 Categorias encontradas:", categoriasSnap.docs.length);
+                const ordemA = a.ordem || 999;
+                const ordemB = b.ordem || 999;
+                if (ordemA !== ordemB) return ordemA - ordemB;
+                
+                return a.nome.localeCompare(b.nome);
+            });
 
-                // Para cada categoria, buscar produtos
-                for (const categoriaDoc of categoriasSnap.docs) {
-                    const categoriaData = categoriaDoc.data();
-                    const categoriaNome = categoriaData.nome || categoriaDoc.id;
-                    
-                    try {
-                        const produtosRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaDoc.id, 'itens');
-                        const produtosSnap = await getDocs(produtosRef);
-                        
-                        console.log(`📦 Produtos na categoria ${categoriaNome}:`, produtosSnap.docs.length);
+            setCardapio(todosProdutos);
 
-                        const produtosDaCategoria = produtosSnap.docs.map(doc => ({
-                            id: doc.id,
-                            categoria: categoriaNome,
-                            categoriaId: categoriaDoc.id,
-                            nome: doc.data().nome,
-                            descricao: doc.data().descricao,
-                            preco: doc.data().preco,
-                            imageUrl: doc.data().imageUrl,
-                            ativo: doc.data().ativo !== false,
-                            ordem: doc.data().ordem || 999,
-                            variacoes: doc.data().variacoes || [],
-                            ...doc.data()
-                        })).filter(produto => produto.ativo !== false);
+            // Criar lista de categorias (e ordenar alfabeticamente)
+            let categoriasUnicas = ['Todos', ...new Set(todosProdutos.map(p => p.categoria).filter(Boolean))];
+            
+            // 🎨 Forçar ordem alfabética para os botões de controle
+            categoriasUnicas = categoriasUnicas.sort((a, b) => {
+                if (a === 'Todos') return -1;
+                if (b === 'Todos') return 1;
+                return a.localeCompare(b);
+            });
 
-                        todosProdutos = [...todosProdutos, ...produtosDaCategoria];
-                        
-                    } catch (error) {
-                        console.warn(`⚠️ Erro ao buscar produtos da categoria ${categoriaNome}:`, error);
-                    }
-                }
+            setCategorias(categoriasUnicas);
 
-                console.log("🎯 TOTAL DE PRODUTOS CARREGADOS:", todosProdutos.length);
-
-                // Ordenação simples no cliente
-                todosProdutos.sort((a, b) => {
-                    // Primeiro por categoria
-                    const categoriaCompare = a.categoria.localeCompare(b.categoria);
-                    if (categoriaCompare !== 0) return categoriaCompare;
-                    
-                    // Depois por ordem do produto
-                    const ordemA = a.ordem || 999;
-                    const ordemB = b.ordem || 999;
-                    if (ordemA !== ordemB) return ordemA - ordemB;
-                    
-                    // Por último por nome
-                    return a.nome.localeCompare(b.nome);
-                });
-
-                setCardapio(todosProdutos);
-
-                // Criar lista de categorias
-                const categoriasUnicas = ['Todos', ...new Set(todosProdutos.map(p => p.categoria).filter(Boolean))];
-                setCategorias(categoriasUnicas);
-
-                if (todosProdutos.length === 0) {
-                    console.warn("⚠️ Nenhum produto ativo encontrado");
-                    toast.warn("Nenhum produto ativo encontrado no cardápio.");
-                } else {
-                    toast.success(`🎉 ${todosProdutos.length} produtos carregados!`);
-                }
-
-            } catch (error) {
-                console.error("❌ Erro ao buscar produtos:", error);
-                toast.error("Erro ao carregar produtos do cardápio.");
+            if (todosProdutos.length === 0) {
+                console.warn("⚠️ Nenhum produto ativo encontrado");
+                toast.warn("Nenhum produto ativo encontrado no cardápio.");
+            } else {
+                toast.success(`🎉 ${todosProdutos.length} produtos carregados!`);
             }
 
         } catch (error) {
@@ -415,7 +507,7 @@ const TelaPedidos = () => {
         fetchData();
     }, [fetchData]);
 
-    // --- FUNÇÕES ---
+    // --- FUNÇÕES DE PEDIDO ---
     const adicionarItem = useCallback((produto) => {
         setResumoPedido(prev => {
             const itemExistente = prev.find(item => item.id === produto.id); 
@@ -436,7 +528,7 @@ const TelaPedidos = () => {
         
         toast.success(`✅ ${produto.nomeCompleto || produto.nome} adicionado!`, {
             position: "bottom-right",
-            autoClose: 1000
+            autoClose: 1000 // Adição rápida
         });
     }, []);
 
@@ -477,7 +569,8 @@ const TelaPedidos = () => {
                 itens: resumoPedido,
                 status: resumoPedido.length > 0 ? 'com_pedido' : 'livre',
                 total: totalPedido,
-                updatedAt: new Date()
+                // ✅ CORRIGIDO: Usando serverTimestamp()
+                updatedAt: serverTimestamp()
             });
 
             setMesa(prev => ({...prev, itens: resumoPedido }));
@@ -511,7 +604,8 @@ const TelaPedidos = () => {
                 itens: resumoPedido,
                 status: 'pagamento',
                 total: totalPedido,
-                updatedAt: new Date()
+                // ✅ CORRIGIDO: Usando serverTimestamp()
+                updatedAt: serverTimestamp()
             });
 
             toast.success("✅ Mesa finalizada para pagamento!");

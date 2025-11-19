@@ -1776,24 +1776,6 @@ function AdminMenuManagement() {
         {/* Header */}
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mb-6 md:mb-8">
           <div>
-            <button
-              onClick={() => navigate('/painel')}
-              className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-semibold mb-2 transition-colors"
-            >
-              <IoArrowBack className="text-lg" />
-              <span>Voltar ao Painel</span>
-            </button>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Gerenciar Cardápio
-            </h1>
-            <p className="text-gray-600">
-              {establishmentName || 'Carregando...'} 
-              {estabelecimentosGerenciados.length > 1 && (
-                <span className="text-sm text-gray-500 ml-2">
-                  (+{estabelecimentosGerenciados.length - 1} outros)
-                </span>
-              )}
-            </p>
           </div>
         </header>
 

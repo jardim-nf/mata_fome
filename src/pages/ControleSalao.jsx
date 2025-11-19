@@ -1,8 +1,9 @@
-// src/pages/ControleSalao.jsx - CORREÇÃO DO BOTÃO VOLTAR
+// src/pages/ControleSalao.jsx - CORREÇÃO DO BOTÃO VOLTAR e IMPORTAÇÃO DO FIRESTORE
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc, orderBy } from "firebase/firestore";
+// ✅ IMPORTAÇÃO CORRIGIDA: Inclui serverTimestamp
+import { collection, onSnapshot, query, addDoc, doc, deleteDoc, updateDoc, orderBy, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { useHeader } from '../context/HeaderContext';
@@ -197,8 +198,9 @@ export default function ControleSalao() {
                 status: 'livre', 
                 total: 0,
                 itens: [],
-                createdAt: new Date(),
-                updatedAt: new Date()
+                // ✅ Usando serverTimestamp para evitar erros de data
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
             });
             
             toast.success(`✅ Mesa "${numeroMesa}" adicionada com sucesso!`);
@@ -247,12 +249,13 @@ export default function ControleSalao() {
 
         const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
         
+        // ✅ CORREÇÃO APLICADA: Usando serverTimestamp para evitar o ReferenceError e erros de 'undefined'
         await updateDoc(mesaRef, {
           status: 'livre',
           total: 0,
           itens: [],
-          encerradaEm: new Date(),
-          updatedAt: new Date()
+          encerradaEm: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
 
         if (mesaParaPagamento.itens && mesaParaPagamento.itens.length > 0) {
@@ -263,9 +266,9 @@ export default function ControleSalao() {
               total: mesaParaPagamento.total,
               itens: mesaParaPagamento.itens || [],
               formaPagamento: formaPagamento,
-              dataFechamento: new Date(),
+              dataFechamento: serverTimestamp(), // ✅ Usando serverTimestamp
               dataFechamentoString: new Date().toISOString().split('T')[0],
-              createdAt: new Date(),
+              createdAt: serverTimestamp(), // ✅ Usando serverTimestamp
               tipo: 'salao',
               status: 'finalizada'
             });
@@ -441,15 +444,6 @@ export default function ControleSalao() {
             {/* Conteúdo Principal */}
             <div className="flex-1 p-4 md:p-6">
                 <div className="max-w-7xl mx-auto">
-                    {/* TÍTULO SIMPLIFICADO - RESTANTE NO HEADER GLOBAL */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                            Controle de Salão
-                        </h1>
-                        <p className="text-gray-600">
-                            Gerencie mesas e pedidos do seu estabelecimento
-                        </p>
-                    </div>
 
                     {/* 📊 ESTATÍSTICAS COMPLETAS */}
                     <div className="mb-8">
