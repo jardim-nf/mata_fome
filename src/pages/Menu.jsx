@@ -17,7 +17,7 @@ import PaymentModal from '../components/PaymentModal';
 function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
-    const { currentUser, currentClientData, loading: authLoading, userData } = useAuth();
+    const { currentUser, currentClientData, loading: authLoading } = useAuth();
     const { processPayment, paymentLoading } = usePayment();
 
     // --- ESTADOS ---
@@ -507,7 +507,8 @@ function Menu() {
 
     const handleShowMore = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: (p[cat] || 4) + 4 }));
     const handleShowLess = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: 4 }));
-    
+    const scrollToCategory = (cat) => document.getElementById(`categoria-${cat}`)?.scrollIntoView({ behavior: 'smooth' });
+
     // COMPONENTES VISUAIS
     const InfoEstabelecimento = () => (
         estabelecimentoInfo ? (
@@ -537,8 +538,8 @@ function Menu() {
     }, {});
 
     return (
-        // 🟢 AJUSTE AQUI: pb-48 no mobile para garantir que o rodapé não cubra o conteúdo
-        <div className="min-h-screen pb-48 md:pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
+        // 🔴 MUDANÇA IMPORTANTE AQUI: pb-64 no mobile para evitar cortes
+        <div className="min-h-screen pb-64 md:pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
             <div className="py-4 px-4 shadow-lg mb-6 sticky top-0 z-20" style={{ backgroundColor: coresEstabelecimento.primaria }}>
                 <h1 className="text-center text-2xl font-bold text-white">{nomeEstabelecimento}</h1>
             </div>
