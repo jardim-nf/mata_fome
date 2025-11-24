@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom';
 import { 
     collection, query, where, orderBy, onSnapshot, 
-    doc, updateDoc, deleteDoc, getDoc, writeBatch,
+    doc, updateDoc, deleteDoc, getDoc,
     serverTimestamp
 } from 'firebase/firestore';
 import { toast } from 'react-toastify';
@@ -10,13 +10,13 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { IoTime, IoTrash } from "react-icons/io5";
+import { IoTime } from "react-icons/io5";
 
 // ==========================================
 // 🧩 COMPONENTES AUXILIARES
 // ==========================================
 
-// 🎯 Componente de Debug (Fica fora para não poluir)
+// 🎯 Componente de Debug
 const DebugInfo = ({ pedidos, estabelecimentoId }) => {
   const [showDebug, setShowDebug] = useState(false);
   return (
@@ -50,7 +50,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
   const pedidosAgrupados = useMemo(() => {
     const grupos = {};
     pedidos.forEach(pedido => {
-      // Cria uma chave única baseada na Mesa e no Lote de Horário
       const chave = `${pedido.mesaNumero}-${pedido.loteHorario || 'principal'}`;
       
       if (!grupos[chave]) {
@@ -77,7 +76,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
     <div className="space-y-4">
       {pedidosAgrupados.map((grupo, index) => (
         <div key={index} className="border border-amber-200 rounded-xl bg-amber-50/50 overflow-hidden">
-          {/* Cabeçalho do Grupo */}
           <div className="bg-white px-4 py-3 border-b border-amber-200 flex justify-between items-center">
              <div className="flex items-center gap-3">
                 <span className="font-bold text-gray-900 text-lg">Mesa {grupo.mesaNumero}</span>
@@ -90,14 +88,13 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
              <span className="text-xs font-semibold text-gray-500">{grupo.totalItens} itens</span>
           </div>
           
-          {/* Lista de Pedidos do Grupo */}
           <div className="p-4 space-y-3">
             {grupo.pedidos.map(pedido => (
               <PedidoCard
                 key={pedido.id}
                 item={pedido}
                 onUpdateStatus={onUpdateStatus}
-                onExcluir={onExcluir} // ✅ Passando a função de excluir
+                onExcluir={onExcluir}
                 newOrderIds={newOrderIds}
                 estabelecimentoInfo={estabelecimentoInfo}
                 showMesaInfo={false}
@@ -121,7 +118,7 @@ function Painel() {
     // --- ESTADOS ---
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ 
-        recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] 
+        aguardando_pagamento: [], recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] 
     });
     const [loading, setLoading] = useState(true);
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -137,7 +134,6 @@ function Painel() {
     // --- SELEÇÃO DE ESTABELECIMENTO ---
     const estabelecimentoAtivo = useMemo(() => {
         if (!estabelecimentosGerenciados || estabelecimentosGerenciados.length === 0) return null;
-        // Tenta pegar o ID prioritário ou o primeiro da lista
         return estabelecimentosGerenciados.find(id => id === 'SgQtnakq4LT13TqwpdzH') || estabelecimentosGerenciados[0];
     }, [estabelecimentosGerenciados]);
 
@@ -150,7 +146,6 @@ function Painel() {
         try {
             console.log(`🗑️ Excluindo pedido ${pedidoId} (Origem: ${source})`);
             
-            // Define o caminho correto baseado na origem
             const pedidoRef = source === 'salao'
                 ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
                 : doc(db, 'pedidos', pedidoId);
@@ -163,9 +158,8 @@ function Painel() {
         }
     }, [estabelecimentoAtivo]);
 
-    // 2. ATUALIZAR STATUS (Mover Cards)
+    // 2. ATUALIZAR STATUS
     const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
-        // Travas de segurança para evitar clique duplo
         if (isUpdatingRef.current) return;
         if (bloqueioAtualizacao.has(pedidoId)) return;
 
@@ -175,18 +169,15 @@ function Painel() {
             
             console.log(`🔄 Movendo ${pedidoId} para ${newStatus}`);
 
-            // Encontra o pedido na memória para saber a origem (source)
             const allPedidos = Object.values(pedidos).flat();
             const pedidoData = allPedidos.find(p => p.id === pedidoId);
             
             if (!pedidoData) throw new Error("Pedido não encontrado na memória.");
 
-            // Define o caminho correto
             const pedidoRef = pedidoData.source === 'salao'
                 ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
                 : doc(db, 'pedidos', pedidoId);
 
-            // Atualiza no Firebase
             await updateDoc(pedidoRef, { 
                 status: newStatus,
                 atualizadoEm: serverTimestamp()
@@ -198,7 +189,6 @@ function Painel() {
             console.error('❌ Erro ao mover:', error); 
             toast.error(`Falha ao mover: ${error.message}`); 
         } finally {
-            // Libera a trava após 1 segundo
             setTimeout(() => {
                 isUpdatingRef.current = false;
                 setBloqueioAtualizacao(prev => {
@@ -232,7 +222,8 @@ function Painel() {
                 // 1. Listener SALÃO (Sub-coleção)
                 const qSalao = query(
                     collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
-                    where('status', 'in', ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']),
+                    // ✅ ADICIONADO: 'aguardando_pagamento'
+                    where('status', 'in', ['aguardando_pagamento', 'recebido', 'preparo', 'pronto_para_servir', 'finalizado']),
                     orderBy('dataPedido', 'asc')
                 );
                 
@@ -243,7 +234,7 @@ function Painel() {
                     
                     setPedidos(prev => ({
                         ...prev,
-                        // Remove antigos do salão e adiciona os novos atualizados
+                        aguardando_pagamento: [...prev.aguardando_pagamento.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'aguardando_pagamento')],
                         recebido: [...prev.recebido.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'recebido')],
                         preparo: [...prev.preparo.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'preparo')],
                         pronto_para_servir: pedidosSalao.filter(p => p.status === 'pronto_para_servir'),
@@ -255,7 +246,8 @@ function Painel() {
                 const qGlobal = query(
                     collection(db, 'pedidos'), 
                     where('estabelecimentoId', '==', estabelecimentoAtivo),
-                    where('status', 'in', ['recebido', 'preparo', 'em_entrega', 'finalizado']),
+                    // ✅ ADICIONADO: 'aguardando_pagamento'
+                    where('status', 'in', ['aguardando_pagamento', 'recebido', 'preparo', 'em_entrega', 'finalizado']),
                     orderBy('createdAt', 'asc')
                 );
                 
@@ -266,6 +258,7 @@ function Painel() {
                     
                     setPedidos(prev => ({
                         ...prev,
+                        aguardando_pagamento: [...prev.aguardando_pagamento.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'aguardando_pagamento')],
                         recebido: [...prev.recebido.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'recebido')],
                         preparo: [...prev.preparo.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'preparo')],
                         em_entrega: pedidosDelivery.filter(p => p.status === 'em_entrega'),
@@ -327,7 +320,6 @@ function Painel() {
         }
     };
 
-    // Setup inicial para permitir áudio (browsers bloqueiam autoplay)
     useEffect(() => {
         const unlockAudio = () => {
             setUserInteracted(true);
@@ -339,15 +331,18 @@ function Painel() {
 
     // --- RENDERIZAÇÃO ---
     
-    // Configuração das colunas (Muda conforme a Aba)
+    // Configuração das colunas
     const colunas = useMemo(() => 
         abaAtiva === 'cozinha' 
             ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
-            : ['recebido', 'preparo', 'em_entrega', 'finalizado'],
+            // ✅ ADICIONADO: 'aguardando_pagamento' como primeira coluna do Delivery
+            : ['aguardando_pagamento', 'recebido', 'preparo', 'em_entrega', 'finalizado'],
         [abaAtiva]
     );
 
+    // ✅ ADICIONADO CONFIGURAÇÃO DE COR PARA O PAGAMENTO
     const STATUS_CONFIG = {
+        aguardando_pagamento: { title: '💲 Pagamento', color: 'border-l-yellow-500', countColor: 'bg-yellow-500' },
         recebido: { title: '📥 Recebido', color: 'border-l-red-500', countColor: 'bg-red-500' },
         preparo: { title: '👨‍🍳 Em Preparo', color: 'border-l-orange-500', countColor: 'bg-orange-500' },
         em_entrega: { title: '🛵 Em Entrega', color: 'border-l-blue-500', countColor: 'bg-blue-500' },
@@ -429,7 +424,7 @@ function Painel() {
 
             {/* MAIN CONTENT (GRID) */}
             <main className="flex-grow p-4 md:p-6 overflow-x-auto">
-                <div className="flex gap-4 min-w-[1000px] h-full">
+                <div className="flex gap-4 min-w-[1200px] h-full">
                     {colunas.map(status => {
                         const config = STATUS_CONFIG[status];
                         const allPedidosStatus = pedidos[status] || [];
