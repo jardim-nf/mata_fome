@@ -1,8 +1,8 @@
 // src/pages/Menu.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
@@ -11,13 +11,14 @@ import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
 import VariacoesModal from '../components/VariacoesModal';
 import { v4 as uuidv4 } from 'uuid';
+import { IoChatbubbleEllipses, IoCart, IoClose, IoChevronUp, IoChevronDown } from 'react-icons/io5';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 import PaymentModal from '../components/PaymentModal';
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
-    const { currentUser, currentClientData, loading: authLoading } = useAuth();
+    const { currentUser, currentClientData, loading: authLoading, userData } = useAuth();
     const { processPayment, paymentLoading } = usePayment();
 
     // --- ESTADOS ---
@@ -31,7 +32,9 @@ function Menu() {
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
     const [complemento, setComplemento] = useState('');
+    const [taxasBairro, setTaxasBairro] = useState([]);
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
+    const [bairroNaoEncontrado, setBairroNaoEncontrado] = useState(false);
     const [isRetirada, setIsRetirada] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando Cardápio...");
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
@@ -51,6 +54,7 @@ function Menu() {
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
+    const [errorAuthModal, setErrorAuthModal] = useState('');
     const auth = getAuth();
 
     // Cupons e Busca
@@ -92,6 +96,9 @@ function Menu() {
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const finalOrderTotal = useMemo(() => Math.max(0, subtotalCalculado + taxaAplicada - discountAmount), [subtotalCalculado, taxaAplicada, discountAmount]);
+
+    const isUserAdmin = useMemo(() => userData?.isAdmin || false, [userData]);
+    const isUserMasterAdmin = useMemo(() => userData?.isMasterAdmin || false, [userData]);
 
     // --- FUNÇÕES AUXILIARES ---
     const formatarHorarios = (horarios) => {
@@ -410,6 +417,7 @@ function Menu() {
 
     const handleRegisterModal = async (e) => {
         e.preventDefault();
+        // Validação mais rigorosa para os novos campos
         if (!nomeAuthModal || !telefoneAuthModal || !ruaAuthModal || !numeroAuthModal || !bairroAuthModal || !cidadeAuthModal) {
             return toast.error("Preencha todos os campos obrigatórios (Endereço completo).");
         }
@@ -538,8 +546,8 @@ function Menu() {
     }, {});
 
     return (
-        // 🔴 MUDANÇA IMPORTANTE AQUI: pb-64 no mobile para evitar cortes
-        <div className="min-h-screen pb-64 md:pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
+        // AJUSTE MOBILE: pb-40 garante que o footer/carrinho flutuante não cubra o botão pagar
+        <div className="min-h-screen pb-40 md:pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
             <div className="py-4 px-4 shadow-lg mb-6 sticky top-0 z-20" style={{ backgroundColor: coresEstabelecimento.primaria }}>
                 <h1 className="text-center text-2xl font-bold text-white">{nomeEstabelecimento}</h1>
             </div>
@@ -609,14 +617,14 @@ function Menu() {
                     })
                 )}
 
-                {/* Dados do Cliente e Carrinho */}
-                <div className="grid md:grid-cols-2 gap-8 mt-12">
+                {/* Dados do Cliente e Carrinho - AJUSTE MOBILE DE GRID E PADDING */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mt-8 md:mt-12">
                     {/* Formulário Cliente */}
-                    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-xl">
+                    <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 shadow-xl">
                         <h3 className="text-xl font-bold mb-4">👤 Seus Dados</h3>
                         <div className="space-y-4">
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             
                             <div className="flex gap-2">
                                 <button onClick={() => setIsRetirada(false)} className={`flex-1 p-2 rounded font-bold transition ${!isRetirada ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600'}`}>🚚 Entrega</button>
@@ -626,19 +634,19 @@ function Menu() {
                             {!isRetirada && (
                                 <>
                                     <div className="flex gap-2">
-                                        <input className="flex-1 p-3 bg-gray-800 rounded border border-gray-600" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-                                        <input className="w-24 p-3 bg-gray-800 rounded border border-gray-600" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                        <input className="flex-1 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+                                        <input className="w-24 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
                                     </div>
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
                                 </>
                             )}
                         </div>
                     </div>
 
                     {/* Resumo do Pedido */}
-                    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-xl">
+                    <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 shadow-xl">
                         <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
                         {carrinho.length === 0 ? <p className="text-gray-500 text-center py-10">Seu carrinho está vazio.</p> : (
                             <>
@@ -649,7 +657,7 @@ function Menu() {
                                                 <p className="font-bold text-sm">{formatarItemCarrinho(item)}</p>
                                                 <p className="text-xs text-gray-400">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p>
                                             </div>
-                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold hover:text-red-400">✕</button>
+                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold hover:text-red-400 px-2">✕</button>
                                         </div>
                                     ))}
                                 </div>
@@ -683,7 +691,7 @@ function Menu() {
 
                                 <button 
                                     onClick={prepararParaPagamento}
-                                    className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform hover:scale-105 transition active:scale-95"
+                                    className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform active:scale-95 transition-all"
                                     style={{ backgroundColor: coresEstabelecimento.destaque }}
                                 >
                                     💳 Pagar R$ {finalOrderTotal.toFixed(2)}
@@ -726,7 +734,7 @@ function Menu() {
 
             {showLoginPrompt && (
                 <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 px-4 backdrop-blur-sm">
-                    <div className="bg-gray-900 p-6 rounded-2xl w-full max-w-md border border-gray-700 relative shadow-2xl">
+                    <div className="bg-gray-900 p-6 rounded-2xl w-full max-w-md border border-gray-700 relative shadow-2xl overflow-y-auto max-h-[90vh]">
                         <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl">&times;</button>
                         <h2 className="text-2xl font-bold text-white mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
@@ -735,7 +743,6 @@ function Menu() {
                                     <input placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
                                     <input placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
                                     
-                                    {/* CORREÇÃO DO LAYOUT (GRID) */}
                                     <div className="flex gap-2">
                                         <input placeholder="Rua / Avenida" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="flex-1 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
                                         <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-24 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
