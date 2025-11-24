@@ -1,9 +1,15 @@
 // src/firebase.js
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { 
+  getAuth, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut,
+  updateProfile 
+} from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
-import { getAnalytics } from 'firebase/analytics';
-import { getFunctions } from 'firebase/functions';
+import { getAnalytics, logEvent } from 'firebase/analytics';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -16,17 +22,37 @@ const firebaseConfig = {
     measurementId: import.meta.env.VITE_MEASUREMENT_ID
 };
 
+// Inicialização do Firebase
 const app = initializeApp(firebaseConfig);
 
+// Serviços do Firebase
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const analytics = getAnalytics(app);
 export const functions = getFunctions(app);
 
+// Configuração para desenvolvimento (emulator)
+if (import.meta.env.DEV) {
+  console.log('🔥 Firebase running in development mode');
+  // Descomente se estiver usando emuladores
+  // connectFunctionsEmulator(functions, 'localhost', 5001);
+  // connectFirestoreEmulator(db, 'localhost', 8080);
+  // connectAuthEmulator(auth, 'http://localhost:9099');
+}
+
 // Funções de autenticação
-export const doCreateUserWithEmailAndPassword = (email, password) => {
-  return createUserWithEmailAndPassword(auth, email, password);
+export const doCreateUserWithEmailAndPassword = async (email, password, displayName = '') => {
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  
+  // Atualizar perfil com displayName se fornecido
+  if (displayName) {
+    await updateProfile(userCredential.user, {
+      displayName: displayName
+    });
+  }
+  
+  return userCredential;
 };
 
 export const doSignInWithEmailAndPassword = (email, password) => {
@@ -37,92 +63,191 @@ export const doSignOut = () => {
   return signOut(auth);
 };
 
-// Função para inicializar plataformas para um usuário
-export const initializeUserPlatforms = async (userId) => {
+// Função para obter dados do usuário do Firestore
+export const getUserData = async (userId) => {
+  try {
+    const userDoc = await getDoc(doc(db, 'usuarios', userId));
+    return userDoc.exists() ? userDoc.data() : null;
+  } catch (error) {
+    console.error('Erro ao buscar dados do usuário:', error);
+    return null;
+  }
+};
+
+// Função para inicializar plataformas para um usuário (melhorada)
+export const initializeUserPlatforms = async (userId, userEmail) => {
   try {
     const platforms = [
       {
-        id: 'ifood',
+        id: `ifood_${userId}`,
         name: 'iFood',
         type: 'ifood',
         userId: userId,
+        userEmail: userEmail,
         connected: false,
         syncStatus: 'disconnected',
         orders: 0,
         revenue: 0,
         config: {},
+        credentials: {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'whatsapp',
+        id: `whatsapp_${userId}`,
         name: 'WhatsApp Business', 
         type: 'whatsapp',
         userId: userId,
+        userEmail: userEmail,
         connected: false,
         syncStatus: 'disconnected',
         orders: 0,
         revenue: 0,
         config: {},
+        credentials: {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'rappi',
+        id: `rappi_${userId}`,
         name: 'Rappi',
         type: 'rappi',
         userId: userId,
+        userEmail: userEmail,
         connected: false,
         syncStatus: 'disconnected',
         orders: 0,
         revenue: 0,
         config: {},
+        credentials: {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'uberEats',
+        id: `uberEats_${userId}`,
         name: 'Uber Eats',
         type: 'uberEats',
         userId: userId,
+        userEmail: userEmail,
         connected: false,
         syncStatus: 'disconnected',
         orders: 0,
         revenue: 0,
         config: {},
+        credentials: {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       },
       {
-        id: 'website',
+        id: `website_${userId}`,
         name: 'Site Próprio',
         type: 'website',
         userId: userId,
+        userEmail: userEmail,
         connected: true,
         syncStatus: 'connected',
         orders: 125,
         revenue: 12500,
-        config: {},
+        config: {
+          url: '',
+          integrationType: 'manual'
+        },
+        credentials: {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
     ];
 
-    for (const platform of platforms) {
-      const platformRef = doc(db, 'platforms', platform.id);
-      const platformDoc = await getDoc(platformRef);
-      
-      // Só cria se não existir
-      if (!platformDoc.exists()) {
+    const creationPromises = platforms.map(async (platform) => {
+      try {
+        const platformRef = doc(db, 'platforms', platform.id);
         await setDoc(platformRef, platform);
+        console.log(`✅ Plataforma ${platform.name} inicializada para usuário ${userId}`);
+        return { success: true, platform: platform.name };
+      } catch (error) {
+        console.error(`❌ Erro ao criar plataforma ${platform.name}:`, error);
+        return { success: false, platform: platform.name, error };
       }
-    }
+    });
 
-    return true;
+    const results = await Promise.all(creationPromises);
+    const successful = results.filter(result => result.success).length;
+    
+    console.log(`📊 Plataformas inicializadas: ${successful}/${platforms.length} para usuário ${userId}`);
+    
+    return {
+      success: successful === platforms.length,
+      total: platforms.length,
+      created: successful,
+      details: results
+    };
+
   } catch (error) {
-    console.error('Erro ao inicializar plataformas:', error);
-    return false;
+    console.error('❌ Erro crítico ao inicializar plataformas:', error);
+    
+    // Log do erro no Analytics
+    logEvent(analytics, 'platform_initialization_error', {
+      userId: userId,
+      error: error.message
+    });
+    
+    return {
+      success: false,
+      error: error.message
+    };
   }
 };
 
-export { app };
+// Função para inicializar dados do usuário no Firestore
+export const initializeUserData = async (userId, userData) => {
+  try {
+    const userRef = doc(db, 'usuarios', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      const defaultUserData = {
+        email: userData.email,
+        displayName: userData.displayName || '',
+        isAdmin: userData.isAdmin || false,
+        isMasterAdmin: userData.isMasterAdmin || false,
+        estabelecimentosGerenciados: userData.estabelecimentosGerenciados || [],
+        ativo: true,
+        dataCriacao: new Date().toISOString(),
+        dataAtualizacao: new Date().toISOString(),
+        preferences: {
+          notifications: true,
+          emailUpdates: true,
+          theme: 'light'
+        },
+        stats: {
+          totalOrders: 0,
+          totalRevenue: 0,
+          activePlatforms: 1 // Site próprio vem ativo por padrão
+        }
+      };
+      
+      await setDoc(userRef, defaultUserData);
+      console.log('✅ Dados do usuário inicializados no Firestore');
+      
+      // Inicializar plataformas
+      await initializeUserPlatforms(userId, userData.email);
+      
+      return defaultUserData;
+    }
+    
+    return userDoc.data();
+  } catch (error) {
+    console.error('❌ Erro ao inicializar dados do usuário:', error);
+    throw error;
+  }
+};
+
+// Função utilitária para logging de eventos
+export const logAnalyticsEvent = (eventName, eventParams = {}) => {
+  if (typeof window !== 'undefined') {
+    logEvent(analytics, eventName, eventParams);
+  }
+};
+
+// Exportação padrão
+export default app;

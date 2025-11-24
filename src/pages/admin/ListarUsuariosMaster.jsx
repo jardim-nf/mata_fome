@@ -1,7 +1,17 @@
 // src/pages/admin/ListarUsuariosMaster.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, getDocs, limit, startAfter, orderBy, where } from 'firebase/firestore'; 
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { 
+  collection, 
+  query, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  deleteDoc, 
+  orderBy, 
+  where, 
+  getDocs  
+} from 'firebase/firestore'; 
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -16,12 +26,10 @@ import {
   FaUserTimes,
   FaUsers,
   FaFilter,
-  FaSync
+  FaRedo
 } from 'react-icons/fa';
 
-const ITEMS_PER_PAGE = 10; 
-
-// --- Componente de Header Master Dashboard (atualizado) ---
+// --- Componente de Header Master Dashboard ---
 function DashboardHeader({ currentUser, logout, navigate }) {
   const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Master';
 
@@ -40,7 +48,6 @@ function DashboardHeader({ currentUser, logout, navigate }) {
     <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-lg border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
           <div 
             className="flex items-center space-x-3 cursor-pointer group"
             onClick={() => navigate('/')}
@@ -56,7 +63,6 @@ function DashboardHeader({ currentUser, logout, navigate }) {
             </div>
           </div>
 
-          {/* User Info and Actions */}
           <div className="flex items-center space-x-4">
             <div className="hidden sm:flex items-center space-x-3 bg-gray-50 rounded-lg px-4 py-2">
               <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center shadow-sm">
@@ -95,7 +101,8 @@ const FilterCard = ({ title, children }) => (
 
 function ListarUsuariosMaster() {
   const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
+  const location = useLocation();
+  const { currentUser, isMasterAdmin, loading: authLoading, logout, reloadUserData } = useAuth();
 
   const [usuarios, setUsuarios] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -107,11 +114,8 @@ function ListarUsuariosMaster() {
   const [filterRole, setFilterRole] = useState('todos');
   const [filterStatus, setFilterStatus] = useState('todos');
 
-  // Estados de paginação
-  const [lastVisible, setLastVisible] = useState(null);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [hasPrevious, setHasPrevious] = useState(false);
+  // Estado para unsubscribe do snapshot
+  const [unsubscribe, setUnsubscribe] = useState(null);
 
   useEffect(() => {
     if (!authLoading) {
@@ -123,36 +127,52 @@ function ListarUsuariosMaster() {
     }
   }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
+  // Efeito para detectar refresh da URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    if (urlParams.get('refresh') === 'true') {
+      handleRefreshUsers();
+      navigate('/master/usuarios', { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  // Carregar nomes dos estabelecimentos
   useEffect(() => {
     const fetchEstabelecimentos = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
+        console.log("🏪 Carregando mapa de estabelecimentos...");
+        const estabelecimentosSnapshot = await getDocs(collection(db, 'estabelecimentos'));
         const map = {};
-        querySnapshot.forEach(doc => {
-          map[doc.id] = doc.data().nome;
+        estabelecimentosSnapshot.forEach(doc => {
+          map[doc.id] = doc.data().nome || `Estabelecimento ${doc.id.substring(0, 8)}`;
         });
         setEstabelecimentosMap(map);
+        console.log("✅ Mapa de estabelecimentos carregado:", Object.keys(map).length, "estabelecimentos");
       } catch (err) {
-        console.error("Erro ao carregar nomes de estabelecimentos:", err);
+        console.error("❌ Erro ao carregar nomes de estabelecimentos:", err);
+        toast.error("Erro ao carregar estabelecimentos.");
       }
     };
-    fetchEstabelecimentos();
-  }, []);
+    
+    if (isMasterAdmin) {
+      fetchEstabelecimentos();
+    }
+  }, [isMasterAdmin]);
 
-  // Função para carregar usuários com paginação e filtros
-  const fetchUsuarios = useCallback(async (direction = 'next', startDoc = null, resetPagination = false) => {
+  // Efeito principal para escutar usuários em tempo real
+  useEffect(() => {
     if (!isMasterAdmin || !currentUser) {
       setLoadingUsers(false);
       return;
     }
 
+    console.log("🔄 Iniciando escuta de usuários em tempo real...");
     setLoadingUsers(true);
-    setError('');
 
     let baseQueryRef = collection(db, 'usuarios');
     let queryConstraints = [];
 
-    // Filtros de Role e Status
+    // Aplicar filtros
     if (filterRole === 'isAdmin') {
       queryConstraints.push(where('isAdmin', '==', true));
     } else if (filterRole === 'isMasterAdmin') {
@@ -168,67 +188,62 @@ function ListarUsuariosMaster() {
     }
 
     const orderByField = 'nome';
+    const q = query(baseQueryRef, ...queryConstraints, orderBy(orderByField, 'asc'));
 
-    let q;
-    if (resetPagination) { 
-      q = query(baseQueryRef, ...queryConstraints, orderBy(orderByField, 'asc'), limit(ITEMS_PER_PAGE));
-    } else if (direction === 'next' && startDoc) {
-      q = query(baseQueryRef, ...queryConstraints, orderBy(orderByField, 'asc'), startAfter(startDoc), limit(ITEMS_PER_PAGE));
-    } else {
-      q = query(baseQueryRef, ...queryConstraints, orderBy(orderByField, 'asc'), limit(ITEMS_PER_PAGE));
-    }
-
-    try {
-      const documentSnapshots = await getDocs(q);
-      const fetchedUsers = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      setUsuarios(fetchedUsers);
-      
-      if (documentSnapshots.docs.length > 0) {
-        setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+    const unsubscribeSnapshot = onSnapshot(q, 
+      (querySnapshot) => {
+        const fetchedUsers = querySnapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        }));
         
-        // Verificar se há mais páginas
-        const nextQueryCheck = query(baseQueryRef, ...queryConstraints, orderBy(orderByField, 'asc'), startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), limit(1));
-        const nextSnapshotCheck = await getDocs(nextQueryCheck);
-        setHasMore(!nextSnapshotCheck.empty);
-        setHasPrevious(currentPage > 0);
-      } else { 
-        setLastVisible(null);
-        setHasMore(false);
-        setHasPrevious(false);
+        console.log(`✅ ${fetchedUsers.length} usuários carregados em tempo real`);
+        setUsuarios(fetchedUsers);
+        setLoadingUsers(false);
+      },
+      (error) => {
+        console.error("❌ Erro ao carregar usuários:", error);
+        setError("Erro ao carregar a lista de usuários.");
+        toast.error('Erro ao carregar usuários.');
+        setLoadingUsers(false);
       }
-      
-    } catch (err) {
-      console.error("Erro ao carregar usuários:", err);
-      setError("Erro ao carregar a lista de usuários.");
-      toast.error('Erro ao carregar usuários.');
-    } finally {
-      setLoadingUsers(false);
-    }
-  }, [isMasterAdmin, currentUser, filterRole, filterStatus, currentPage]);
+    );
 
-  // Efeito para carregar usuários
-  useEffect(() => {
-    if (!authLoading && isMasterAdmin && currentUser) {
-      setCurrentPage(0);
-      fetchUsuarios('next', null, true);
-    }
-  }, [authLoading, isMasterAdmin, currentUser, filterRole, filterStatus, fetchUsuarios]);
+    setUnsubscribe(() => unsubscribeSnapshot);
 
-  // Gerenciamento de Paginação
-  const handleNextPage = () => {
-    if (hasMore) {
-      setCurrentPage(prev => prev + 1);
-      fetchUsuarios('next', lastVisible);
-    }
-  };
+    // Cleanup
+    return () => {
+      if (unsubscribeSnapshot) {
+        console.log("🧹 Limpando escuta de usuários");
+        unsubscribeSnapshot();
+      }
+    };
+  }, [isMasterAdmin, currentUser, filterRole, filterStatus]);
 
-  const handlePreviousPage = () => {
-    if (hasPrevious) {
-      setCurrentPage(prev => prev - 1);
-      fetchUsuarios('prev', null, true);
+  // Função para recarregar manualmente
+  const handleRefreshUsers = useCallback(() => {
+    console.log("🔄 Recarregando usuários manualmente...");
+    setSearchTerm('');
+    setFilterRole('todos');
+    setFilterStatus('todos');
+    
+    if (unsubscribe) {
+      unsubscribe();
     }
-  };
+    
+    setLoadingUsers(true);
+    toast.info('Recarregando usuários...');
+    
+    // Recarrega os dados do usuário e força refresh
+    if (reloadUserData) {
+      reloadUserData();
+    }
+    
+    // Pequeno delay para garantir o cleanup
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  }, [unsubscribe, reloadUserData]);
 
   // Filtragem por termo de busca no frontend
   const filteredUsuariosBySearchTerm = usuarios.filter(user => {
@@ -246,15 +261,19 @@ function ListarUsuariosMaster() {
     }
     try {
       const userRef = doc(db, 'usuarios', userId);
-      await updateDoc(userRef, { ativo: !currentStatus });
+      await updateDoc(userRef, { 
+        ativo: !currentStatus,
+        dataAtualizacao: new Date()
+      });
+      
       auditLogger(
         currentStatus ? 'USUARIO_DESATIVADO' : 'USUARIO_ATIVADO',
         { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
         { type: 'usuario', id: userId, name: userName },
         { oldValue: currentStatus, newValue: !currentStatus }
       );
+      
       toast.success(`Usuário ${userName} ${currentStatus ? 'desativado' : 'ativado'} com sucesso!`);
-      fetchUsuarios('next', null, true);
     } catch (error) {
       console.error("Erro ao alternar status do usuário:", error);
       toast.error("Erro ao alternar status do usuário.");
@@ -276,7 +295,6 @@ function ListarUsuariosMaster() {
           { type: 'usuario', id: userId, name: userName }
         );
         toast.success(`Usuário "${userName}" deletado com sucesso!`);
-        fetchUsuarios('next', null, true);
       } catch (error) {
         console.error("Erro ao deletar usuário:", error);
         toast.error(`Erro ao deletar o usuário "${userName}".`);
@@ -322,11 +340,21 @@ function ListarUsuariosMaster() {
               <FaArrowLeft />
               <span>Voltar ao Dashboard</span>
             </Link>
+            
+            <button
+              onClick={handleRefreshUsers}
+              disabled={loadingUsers}
+              className="flex items-center space-x-3 px-6 py-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition-all duration-300 shadow-sm transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FaRedo className={loadingUsers ? 'animate-spin' : ''} />
+              <span>{loadingUsers ? 'Carregando...' : 'Recarregar'}</span>
+            </button>
           </div>
           
           <Link 
             to="/master/usuarios/criar" 
             className="flex items-center space-x-3 px-6 py-3 bg-yellow-500 text-white font-semibold rounded-xl hover:bg-yellow-600 transition-all duration-300 shadow-sm transform hover:scale-105"
+            state={{ refresh: true }}
           >
             <FaPlus />
             <span>Criar Novo Usuário</span>
@@ -390,6 +418,9 @@ function ListarUsuariosMaster() {
               <span className="ml-2 text-sm font-normal text-gray-500">
                 ({filteredUsuariosBySearchTerm.length} usuários)
               </span>
+              <span className="ml-2 text-xs font-normal text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                Atualização em tempo real
+              </span>
             </h2>
           </div>
 
@@ -399,6 +430,13 @@ function ListarUsuariosMaster() {
                 <FaUsers className="text-gray-300 text-4xl mx-auto mb-4" />
                 <p className="text-gray-500 text-lg">Nenhum usuário encontrado</p>
                 <p className="text-gray-400 text-sm mt-2">Tente ajustar os filtros de busca</p>
+                <button
+                  onClick={handleRefreshUsers}
+                  className="mt-4 flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-300 mx-auto"
+                >
+                  <FaRedo />
+                  <span>Recarregar</span>
+                </button>
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
@@ -432,6 +470,9 @@ function ListarUsuariosMaster() {
                           <div className="text-sm text-gray-500">
                             {user.email}
                           </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            ID: {user.id.substring(0, 8)}...
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -441,7 +482,7 @@ function ListarUsuariosMaster() {
                               Master Admin
                             </span>
                           )}
-                          {user.isAdmin && (
+                          {user.isAdmin && !user.isMasterAdmin && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               Admin Estabelecimento
                             </span>
@@ -454,13 +495,19 @@ function ListarUsuariosMaster() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 max-w-xs">
-                        {user.isAdmin && user.estabelecimentosGerenciados && user.estabelecimentosGerenciados.length > 0 ? (
-                          user.estabelecimentosGerenciados.map((estabId, index) => (
-                            <span key={estabId} className="block text-xs text-gray-600">
-                              {estabelecimentosMap[estabId] || `ID: ${estabId.substring(0, 5)}...`}
-                              {index < user.estabelecimentosGerenciados.length - 1 ? ',' : ''}
-                            </span>
-                          ))
+                        {user.isAdmin && user.estabelecimentosGerenciados && Array.isArray(user.estabelecimentosGerenciados) && user.estabelecimentosGerenciados.length > 0 ? (
+                          <div className="space-y-1">
+                            {user.estabelecimentosGerenciados.slice(0, 2).map((estabId) => (
+                              <div key={estabId} className="text-xs text-gray-600">
+                                {estabelecimentosMap[estabId] || `ID: ${estabId.substring(0, 8)}...`}
+                              </div>
+                            ))}
+                            {user.estabelecimentosGerenciados.length > 2 && (
+                              <div className="text-xs text-gray-400">
+                                +{user.estabelecimentosGerenciados.length - 2} mais
+                              </div>
+                            )}
+                          </div>
                         ) : user.isAdmin ? (
                           <span className="text-gray-400 text-xs">Nenhum estabelecimento</span>
                         ) : (
@@ -512,30 +559,12 @@ function ListarUsuariosMaster() {
             )}
           </div>
 
-          {/* Controles de Paginação */}
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <div className="flex justify-between items-center">
-              <button
-                onClick={handlePreviousPage}
-                disabled={!hasPrevious || loadingUsers}
-                className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
-              >
-                <FaArrowLeft />
-                <span>Anterior</span>
-              </button>
-              
-              <span className="text-gray-700 font-medium">
-                Página {currentPage + 1}
+          {/* Footer com informações */}
+          <div className="px-6 py-3 border-t border-gray-200 bg-green-50">
+            <div className="text-center">
+              <span className="text-green-700 text-sm font-medium">
+                ✅ {usuarios.length} usuários carregados - Atualização em tempo real ativa
               </span>
-              
-              <button
-                onClick={handleNextPage}
-                disabled={!hasMore || loadingUsers}
-                className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
-              >
-                <span>Próxima</span>
-                <FaSync className={loadingUsers ? 'animate-spin' : ''} />
-              </button>
             </div>
           </div>
         </div>

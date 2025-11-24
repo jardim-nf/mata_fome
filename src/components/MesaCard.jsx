@@ -1,138 +1,180 @@
-// src/components/MesaCard.jsx - COMPLETO E CORRIGIDO PARA USABILIDADE
-
 import React from 'react';
-import { toast } from 'react-toastify';
+import { 
+    IoPeople, 
+    IoAdd, 
+    IoTrash, 
+    IoCard, 
+    IoPaperPlane, 
+    IoTimeOutline,
+    IoCheckmarkCircle,
+    IoRestaurant
+} from 'react-icons/io5';
 
-const LixeiraIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-    </svg>
-);
+const MesaCard = ({ 
+    mesa, 
+    onClick, 
+    onExcluir, 
+    onPagar, 
+    onAdicionarComanda,
+    onEnviarCozinha, 
+    showComandasInfo = false 
+}) => {
+    const isLivre = mesa.status === 'livre';
+    const itensPendentes = mesa.itens?.reduce((acc, item) => 
+        acc + ((item.status === 'pendente' || !item.status) ? 1 : 0), 0
+    ) || 0;
 
-const PagamentoIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>
-);
+    const totalFormatado = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(mesa.total || 0);
 
-export default function MesaCard({ mesa, onClick, onExcluir, onPagar }) { 
+    // ==========================================
+    // MESA LIVRE
+    // ==========================================
+    if (isLivre) {
+        return (
+            <div 
+                onClick={onClick}
+                className="group relative h-[200px] bg-white rounded-2xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-3 transform hover:scale-[1.02]"
+            >
+                <button
+                    onClick={(e) => { e.stopPropagation(); onExcluir(); }}
+                    className="absolute top-3 right-3 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    title="Excluir Mesa"
+                >
+                    <IoTrash className="text-lg" />
+                </button>
+
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
+                    <span className="text-xl font-bold">{mesa.numero}</span>
+                </div>
+                
+                <div className="text-center">
+                    <span className="block text-sm font-semibold text-gray-500">Mesa {mesa.numero}</span>
+                    <span className="text-xs text-gray-400 mt-1">Clique para abrir mesa</span>
+                </div>
+            </div>
+        );
+    }
+
+    // ==========================================
+    // MESA OCUPADA
+    // ==========================================
+    const isPending = itensPendentes > 0;
     
-    const formatCurrency = (amount) => {
-        const numericAmount = parseFloat(amount); 
-        if (isNaN(numericAmount)) return 'R$ 0,00';
-        return new Intl.NumberFormat('pt-BR', { 
-            style: 'currency', 
-            currency: 'BRL',
-            minimumFractionDigits: 2
-        }).format(numericAmount);
-    };
-
-    const getStatusStyles = (status) => {
-        switch (status) {
-            case 'ocupada': 
-            case 'com_pedido':
-                return { 
-                    bg: 'bg-red-500 hover:bg-red-600 text-white', 
-                    statusText: (status === 'com_pedido' ? 'COM PEDIDO' : 'OCUPADA'), 
-                    countColor: 'bg-red-700' 
-                };
-            case 'pagamento': 
-                return { 
-                    bg: 'bg-blue-600 hover:bg-blue-700 text-white', 
-                    statusText: 'PAGAMENTO', 
-                    countColor: 'bg-blue-700' 
-                };
-            case 'livre':
-            default: 
-                return { 
-                    bg: 'bg-green-500 hover:bg-green-600 text-white', 
-                    statusText: 'LIVRE', 
-                    countColor: 'bg-green-700' 
-                };
-        }
-    };
-
-    const handleExcluirClick = (e) => {
-        e.stopPropagation(); 
-        if (mesa.status !== 'livre') {
-            toast.warn("Não é possível excluir uma mesa que está em uso.");
-            return;
-        }
-        onExcluir(mesa.id, mesa.numero); 
-    };
-
-    // Ação do pagamento foi movida para o handleCardClick, esta função pode ser simples
-    // ou apenas para ser chamada pelo ícone (se ele fosse mantido clicável, mas não é o caso)
-    const handlePagarClick = (e) => {
-        // e.stopPropagation() NÃO É NECESSÁRIO AQUI, pois o ícone não é mais um botão
-        onPagar(mesa);
-    };
-    
-    // 🔑 LÓGICA CORRIGIDA: O card inteiro tem a ação prioritária
-    const handleCardClick = () => {
-        if (mesa.status === 'pagamento') {
-            // Se o status for PAGAMENTO, o card inteiro chama a função de pagamento.
-            onPagar(mesa); 
-        } else {
-            // Caso contrário (livre, ocupada, com_pedido), abre a mesa.
-            onClick(); 
-        }
-    };
-
-    const estilos = getStatusStyles(mesa.status);
-    const totalFormatado = formatCurrency(mesa.total || 0);
+    const theme = 
+        mesa.status === 'ocupada' && !isPending ? {
+            // 🔴 Mesa OCUPADA
+            border: 'border-red-200',
+            bg: 'bg-white',
+            statusColor: 'text-red-600',
+            statusBg: 'bg-red-500',
+            statusText: 'Ocupada'
+        } : 
+        isPending ? {
+            // 🟠 Mesa COM PEDIDO
+            border: 'border-orange-200',
+            bg: 'bg-white',
+            statusColor: 'text-orange-600',
+            statusBg: 'bg-orange-500',
+            statusText: 'Com Pedido'
+        } : {
+            // 🔴 Fallback
+            border: 'border-red-200',
+            bg: 'bg-white',
+            statusColor: 'text-red-600',
+            statusBg: 'bg-red-500',
+            statusText: 'Ocupada'
+        };
 
     return (
         <div 
-            onClick={handleCardClick} // 🔑 O clique no card agora decide a ação com base no status
-            className={`p-4 rounded-lg shadow-lg cursor-pointer transform hover:scale-105 transition-transform duration-200 flex flex-col justify-between h-32 relative ${estilos.bg}`}
+            onClick={onClick}
+            className={`relative h-[200px] ${theme.bg} rounded-2xl border ${theme.border} shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden cursor-pointer flex flex-col transform hover:scale-[1.02] group`}
         >
-            {/* Botão de Excluir (apenas para mesas livres) */}
-            {mesa.status === 'livre' && (
-                <button
-                    onClick={handleExcluirClick}
-                    className="absolute top-1 right-1 p-1 rounded-full text-white hover:bg-black/20 transition-colors"
-                    title={`Excluir Mesa ${mesa.numero}`}
-                >
-                    <LixeiraIcon />
-                </button>
-            )}
-
-            {/* Ícone de Pagamento (apenas como indicador visual no canto) */}
-            {mesa.status === 'pagamento' && (
-                <div 
-                    className="absolute top-1 right-1 p-1 rounded-full text-white" 
-                    title={`Finalizar Pagamento Mesa ${mesa.numero}`}
-                >
-                    <PagamentoIcon />
+            {/* CABEÇALHO SIMPLES */}
+            <div className="px-4 py-3 flex justify-between items-center border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 ${theme.statusBg} rounded-lg flex items-center justify-center text-white font-bold`}>
+                        {mesa.numero}
+                    </div>
+                    <div>
+                        <span className={`text-sm font-semibold ${theme.statusColor}`}>
+                            {theme.statusText}
+                        </span>
+                    </div>
                 </div>
-            )}
-
-            {/* Conteúdo Principal do Card */}
-            <h3 className="font-bold text-xl text-center">Mesa {mesa.numero}</h3>
-            
-            <div className="text-center">
-                <p className="font-semibold uppercase text-sm">{estilos.statusText}</p>
                 
-                {/* Exibe o valor apenas se não for LIVRE */}
-                {mesa.status !== 'livre' && (
-                    <p className="font-bold text-lg">{totalFormatado}</p>
-                )} 
-                
-                {/* 🔑 Mensagem de Ação: A área de clique é o card inteiro */}
-                {mesa.status === 'pagamento' && (
-                    <span className="text-white/90 text-xs font-medium mt-1 block">
-                        Clique em qualquer lugar para pagar
-                    </span>
+                {isPending && (
+                    <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs text-orange-600 font-medium">{itensPendentes}</span>
+                    </div>
                 )}
+            </div>
 
-                {/* Indicador de ação para outras mesas */}
-                {(mesa.status === 'ocupada' || mesa.status === 'com_pedido') && (
-                    <span className="text-white/90 text-xs font-medium mt-1 block">
-                        Clique para abrir o pedido
-                    </span>
-                )}
+            {/* CONTEÚDO PRINCIPAL */}
+            <div className="flex-1 p-4 flex flex-col justify-center">
+                {/* Valor Principal */}
+                <div className="text-center mb-3">
+                    <h3 className="text-2xl font-bold text-gray-900">
+                        {totalFormatado}
+                    </h3>
+                </div>
+
+                {/* Informações Secundárias */}
+                <div className="space-y-2 text-center">
+                    <div className="flex items-center justify-center gap-1 text-gray-600 text-sm">
+                        <IoPeople className="text-gray-400" />
+                        <span>{mesa.pessoas || 1} {mesa.pessoas === 1 ? 'pessoa' : 'pessoas'}</span>
+                    </div>
+                    
+{mesa.nomesOcupantes && mesa.nomesOcupantes.length > 0 && mesa.nomesOcupantes.find(n => n !== 'Mesa') && (
+    <div className="bg-gray-100 rounded-lg px-3 py-1">
+        <span className="text-sm font-medium text-gray-700 truncate block">
+            {mesa.nomesOcupantes.find(n => n !== 'Mesa')}
+        </span>
+    </div>
+)}
+                </div>
+            </div>
+
+            {/* AÇÕES COM LABELS CLARAS */}
+            <div className="grid grid-cols-3 border-t border-gray-100 divide-x divide-gray-100 h-12 bg-gray-50">
+                {/* BOTÃO ADICIONAR */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onAdicionarComanda(); }}
+                    className="flex flex-col items-center justify-center text-blue-600 hover:bg-blue-50 transition-colors relative group/btn"
+                    title="Adicionar itens ao pedido"
+                >
+                    <IoAdd className="text-lg mb-1" />
+                    <span className="text-[10px] font-medium text-blue-600">+ Pedidos</span>
+                    
+                    {/* Tooltip */}
+                    <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                        Adicionar itens
+                        <div className="absolute bottom-[-4px] left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+                    </div>
+                </button>
+                {/* BOTÃO PAGAR */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onPagar(); }}
+                    className="flex flex-col items-center justify-center text-green-600 hover:bg-green-50 transition-colors relative group/btn"
+                    title="Fechar conta e pagar"
+                >
+                    <IoCard className="text-lg mb-1" />
+                    <span className="text-[10px] font-medium text-green-600">Pagar</span>
+                    
+                    {/* Tooltip */}
+                    <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                        Fechar conta
+                        <div className="absolute bottom-[-4px] left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+                    </div>
+                </button>
             </div>
         </div>
     );
-}
+};
+
+export default MesaCard;

@@ -1,4 +1,4 @@
-// src/pages/Menu.jsx - VERSÃO CORRIGIDA COM CORES DINÂMICAS
+// src/pages/Menu.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -6,19 +6,20 @@ import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocF
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
+import { usePayment } from '../context/PaymentContext';
 import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
 import VariacoesModal from '../components/VariacoesModal';
 import { v4 as uuidv4 } from 'uuid';
-import { useAI } from '../context/AIContext';
-import AIChatAssistant from '../components/AIChatAssistant';
 import { IoChatbubbleEllipses, IoCart, IoClose, IoChevronUp, IoChevronDown } from 'react-icons/io5';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
+import PaymentModal from '../components/PaymentModal';
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
-    const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, userData } = useAuth();
+    const { currentUser, currentClientData, loading: authLoading, userData } = useAuth();
+    const { processPayment, paymentLoading } = usePayment();
 
     // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
@@ -31,8 +32,6 @@ function Menu() {
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
     const [complemento, setComplemento] = useState('');
-    const [formaPagamento, setFormaPagamento] = useState('');
-    const [trocoPara, setTrocoPara] = useState('');
     const [taxasBairro, setTaxasBairro] = useState([]);
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [bairroNaoEncontrado, setBairroNaoEncontrado] = useState(false);
@@ -44,6 +43,8 @@ function Menu() {
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
+    
+    // Estados Auth Modal
     const [emailAuthModal, setEmailAuthModal] = useState('');
     const [passwordAuthModal, setPasswordAuthModal] = useState('');
     const [nomeAuthModal, setNomeAuthModal] = useState('');
@@ -55,6 +56,8 @@ function Menu() {
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
     const [errorAuthModal, setErrorAuthModal] = useState('');
     const auth = getAuth();
+
+    // Cupons e Busca
     const [couponCodeInput, setCouponCodeInput] = useState('');
     const [appliedCoupon, setAppliedCoupon] = useState(null);
     const [discountAmount, setDiscountAmount] = useState(0);
@@ -62,16 +65,19 @@ function Menu() {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
     const [availableCategories, setAvailableCategories] = useState([]);
+    
+    // Modais de Produto
     const [itemParaAdicionais, setItemParaAdicionais] = useState(null);
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [visibleItemsCount, setVisibleItemsCount] = useState({});
     const [loading, setLoading] = useState(true);
 
-    // 🆕 ESTADOS DAS MELHORIAS
-    const [showAIChat, setShowAIChat] = useState(false);
-    const [navegacaoRapidaVisivel, setNavegacaoRapidaVisivel] = useState(true);
+    // ESTADOS DO SISTEMA DE PAGAMENTO
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null);
+    const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
-    // 🎨 CORES DO ESTABELECIMENTO - AGORA DINÂMICAS
+    // CORES
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#0b0b0bff',
         destaque: '#059669',
@@ -91,91 +97,56 @@ function Menu() {
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const finalOrderTotal = useMemo(() => Math.max(0, subtotalCalculado + taxaAplicada - discountAmount), [subtotalCalculado, taxaAplicada, discountAmount]);
 
-    // 🔧 Verificar se o usuário é admin
-    const isUserAdmin = useMemo(() => {
-        return userData?.isAdmin || false;
-    }, [userData]);
+    const isUserAdmin = useMemo(() => userData?.isAdmin || false, [userData]);
+    const isUserMasterAdmin = useMemo(() => userData?.isMasterAdmin || false, [userData]);
 
-    const isUserMasterAdmin = useMemo(() => {
-        return userData?.isMasterAdmin || false;
-    }, [userData]);
-
-    // 🕒 FUNÇÃO PARA FORMATAR HORÁRIOS DE FUNCIONAMENTO
+    // --- FUNÇÕES AUXILIARES ---
     const formatarHorarios = (horarios) => {
-        if (!horarios || typeof horarios !== 'object') {
-            return "Horário não informado";
-        }
-
-        const diasSemana = {
-            seg: 'Segunda',
-            ter: 'Terça',
-            qua: 'Quarta',
-            qui: 'Quinta',
-            sex: 'Sexta',
-            sab: 'Sábado',
-            dom: 'Domingo'
-        };
-
+        if (!horarios || typeof horarios !== 'object') return "Horário não informado";
+        const diasSemana = { seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta', sab: 'Sábado', dom: 'Domingo' };
         return Object.entries(horarios)
             .map(([dia, horario]) => {
                 const diaNome = diasSemana[dia] || dia;
-                if (!horario || !horario.abertura || !horario.fechamento) {
-                    return `${diaNome}: Fechado`;
-                }
+                if (!horario || !horario.abertura || !horario.fechamento) return `${diaNome}: Fechado`;
                 return `${diaNome}: ${horario.abertura} - ${horario.fechamento}`;
             })
             .join(' | ');
     };
 
-    // 🚀 FUNÇÃO ULTRA RÁPIDA PARA CARREGAR PRODUTOS
+    // CARREGAMENTO RÁPIDO
     const carregarProdutosRapido = async (estabId) => {
-        console.log("🚀 CARREGAMENTO RÁPIDO INICIADO");
-
         try {
             const todasCategoriasRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const categoriasSnapshot = await getDocs(todasCategoriasRef);
-
             let todosProdutos = [];
             const promessas = [];
 
             if (!categoriasSnapshot.empty) {
-                console.log(`📂 Encontradas ${categoriasSnapshot.docs.length} categorias`);
-
                 categoriasSnapshot.docs.forEach(catDoc => {
                     const categoriaData = catDoc.data();
                     const categoriaId = catDoc.id;
-
-                    const promessa = getDocs(
-                        collection(db, 'estabelecimentos', estabId, 'cardapio', categoriaId, 'itens')
-                    ).then(itensSnapshot => {
-                        if (!itensSnapshot.empty) {
-                            const itensDaCategoria = itensSnapshot.docs.map(itemDoc => ({
-                                ...itemDoc.data(),
-                                id: itemDoc.id,
-                                categoria: categoriaData.nome || 'Geral',
-                                categoriaId: categoriaId
-                            }));
-                            return itensDaCategoria;
-                        }
-                        return [];
-                    }).catch(error => {
-                        console.log(`ℹ️ Nenhum item na categoria ${categoriaId}`);
-                        return [];
-                    });
-
+                    const promessa = getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', categoriaId, 'itens'))
+                        .then(itensSnapshot => {
+                            if (!itensSnapshot.empty) {
+                                return itensSnapshot.docs.map(itemDoc => ({
+                                    ...itemDoc.data(),
+                                    id: itemDoc.id,
+                                    categoria: categoriaData.nome || 'Geral',
+                                    categoriaId: categoriaId
+                                }));
+                            }
+                            return [];
+                        }).catch(() => []);
                     promessas.push(promessa);
                 });
-
                 const resultados = await Promise.all(promessas);
                 todosProdutos = resultados.flat();
             }
 
             if (todosProdutos.length === 0) {
-                console.log("🔄 Tentando estrutura alternativa...");
                 const cardapioDiretoRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
                 const qAtivos = query(cardapioDiretoRef, where('ativo', '==', true));
                 const snapshotDireto = await getDocs(qAtivos);
-
                 if (!snapshotDireto.empty) {
                     todosProdutos = snapshotDireto.docs.map(doc => ({
                         ...doc.data(),
@@ -185,83 +156,57 @@ function Menu() {
                     }));
                 }
             }
-
-            console.log(`🎉 CARREGAMENTO CONCLUÍDO: ${todosProdutos.length} produtos`);
             return todosProdutos;
-
         } catch (error) {
-            console.error("❌ Erro no carregamento rápido:", error);
+            console.error("Erro carregamento:", error);
             return [];
         }
     };
 
-    // 🎯 FUNÇÕES CORRIGIDAS - SEM DUPLICAÇÃO
+    // MANIPULAÇÃO DO CARRINHO
     const handleAbrirModalProduto = (item) => {
         if (!currentUser) {
-            toast.warn('Para adicionar itens, por favor, faça login ou cadastre-se.');
+            toast.warn('Faça login para adicionar itens.');
             setShowLoginPrompt(true);
             return;
         }
-
-        // Só abre modal se tiver variações (CardapioItem.jsx garante que só chega aqui se tiver 2+ variações)
         if (item.variacoes && Array.isArray(item.variacoes) && item.variacoes.length > 0) {
             setItemParaVariacoes(item);
         }
-        // Se não tem variações, NÃO faz nada - o CardapioItem já chamou onQuickAdd
     };
 
     const handleAdicionarRapido = (item) => {
         if (!currentUser) {
-            toast.warn('Para adicionar itens, por favor, faça login ou cadastre-se.');
+            toast.warn('Faça login para adicionar itens.');
             setShowLoginPrompt(true);
             return;
         }
-
-        // Adiciona direto. O item já vem com 'variacaoSelecionada' e 'precoFinal' se tiver 1 variação.
         const precoParaCarrinho = item.precoFinal !== undefined && item.precoFinal !== null ? item.precoFinal : item.preco;
-
         const novoItemNoCarrinho = {
             ...item,
             qtd: 1,
             cartItemId: uuidv4(),
-            precoFinal: precoParaCarrinho // Usa precoFinal (vindo de 1 variação ou base)
+            precoFinal: precoParaCarrinho
         };
-        setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
-    };
-// ... dentro de Menu.jsx
-
-const handleConfirmarVariacoes = (itemConfigurado) => {
-    // Se o item tiver adicionais, abre modal de adicionais
-    if (itemConfigurado.adicionais && Array.isArray(itemConfigurado.adicionais) && itemConfigurado.adicionais.length > 0) {
-        setItemParaAdicionais(itemConfigurado);
-        setItemParaVariacoes(null);
-    } else {
-        // Se não tem adicionais, adiciona direto ao carrinho
-        const novoItemNoCarrinho = {
-            ...itemConfigurado,
-            qtd: 1,
-            cartItemId: uuidv4(),
-            precoFinal: itemConfigurado.precoSelecionado || itemConfigurado.preco
-        };
-        setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
-        
-        // 🚀 OTIMIZAÇÃO: autoClose para 1000ms (1 segundo)
-        toast.success(`${itemConfigurado.nome} foi adicionado ao carrinho!`, {
-            autoClose: 1, // 1 segundo
-            hideProgressBar: true,
-            position: "bottom-right" // Posição comum para notificações rápidas
-        });
-        
-        setItemParaVariacoes(null);
-    }
-};
-
-    const handleFecharModalVariacoes = () => {
-        setItemParaVariacoes(null);
+        setCarrinho(prev => [...prev, novoItemNoCarrinho]);
+        toast.success(`${item.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
     };
 
-    const handleFecharModalAdicionais = () => {
-        setItemParaAdicionais(null);
+    const handleConfirmarVariacoes = (itemConfigurado) => {
+        if (itemConfigurado.adicionais && itemConfigurado.adicionais.length > 0) {
+            setItemParaAdicionais(itemConfigurado);
+            setItemParaVariacoes(null);
+        } else {
+            const novoItemNoCarrinho = {
+                ...itemConfigurado,
+                qtd: 1,
+                cartItemId: uuidv4(),
+                precoFinal: itemConfigurado.precoSelecionado || itemConfigurado.preco
+            };
+            setCarrinho(prev => [...prev, novoItemNoCarrinho]);
+            toast.success(`${itemConfigurado.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
+            setItemParaVariacoes(null);
+        }
     };
 
     const handleConfirmarAdicionais = (itemConfigurado) => {
@@ -271,9 +216,9 @@ const handleConfirmarVariacoes = (itemConfigurado) => {
             cartItemId: uuidv4(),
             precoFinal: itemConfigurado.precoFinal || itemConfigurado.precoSelecionado || itemConfigurado.preco
         };
-        setCarrinho(prevCarrinho => [...prevCarrinho, novoItemNoCarrinho]);
-        toast.success(`${itemConfigurado.nome} foi adicionado ao carrinho!`);
-        handleFecharModalAdicionais();
+        setCarrinho(prev => [...prev, novoItemNoCarrinho]);
+        toast.success(`${itemConfigurado.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
+        setItemParaAdicionais(null);
     };
 
     const removerDoCarrinho = (cartItemId) => {
@@ -281,109 +226,54 @@ const handleConfirmarVariacoes = (itemConfigurado) => {
         if (!produtoNoCarrinho) return;
         if (produtoNoCarrinho.qtd === 1) {
             setCarrinho(carrinho.filter((p) => p.cartItemId !== cartItemId));
-            toast.info(`${produtoNoCarrinho.nome} removido do carrinho.`);
         } else {
             setCarrinho(carrinho.map((p) => (p.cartItemId === cartItemId ? { ...p, qtd: p.qtd - 1 } : p)));
         }
     };
 
-    // 🆕 FUNÇÃO PARA FORMATAR ITENS NO CARRINHO
     const formatarItemCarrinho = (item) => {
         let nomeFormatado = item.nome;
-
-        if (item.variacaoSelecionada && item.variacaoSelecionada.nome) {
-            nomeFormatado += ` - ${item.variacaoSelecionada.nome}`;
-        }
-
-        if (item.adicionais && item.adicionais.length > 0) {
-            nomeFormatado += ` (${item.adicionais.map(ad => `+ ${ad.nome}`).join(', ')})`;
-        }
-
-        if (item.removidos && item.removidos.length > 0) {
-            nomeFormatado += ` (Sem: ${item.removidos.join(', ')})`;
-        }
-
-        if (item.observacao) {
-            nomeFormatado += ` (Obs: ${item.observacao})`;
-        }
-
+        if (item.variacaoSelecionada && item.variacaoSelecionada.nome) nomeFormatado += ` - ${item.variacaoSelecionada.nome}`;
+        if (item.adicionais && item.adicionais.length > 0) nomeFormatado += ` (${item.adicionais.map(ad => `+ ${ad.nome}`).join(', ')})`;
+        if (item.removidos && item.removidos.length > 0) nomeFormatado += ` (Sem: ${item.removidos.join(', ')})`;
+        if (item.observacao) nomeFormatado += ` (Obs: ${item.observacao})`;
         return nomeFormatado;
     };
 
-    // 🔧 FUNÇÃO APLICAR CUPOM
+    // CUPOM
     const handleApplyCoupon = async () => {
-        if (!currentUser) {
-            toast.warn('Você precisa estar logado para aplicar um cupom.');
-            return;
-        }
-        if (!couponCodeInput.trim()) {
-            toast.warn('Por favor, digite o código do cupom.');
-            return;
-        }
+        if (!currentUser) return toast.warn('Faça login para aplicar cupom.');
+        if (!couponCodeInput.trim()) return toast.warn('Digite o código do cupom.');
         setCouponLoading(true);
-        setAppliedCoupon(null);
-        setDiscountAmount(0);
         try {
             const couponsRef = collection(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons');
             const q = query(couponsRef, where('codigo', '==', couponCodeInput.toUpperCase().trim()));
             const couponSnap = await getDocs(q);
-            if (couponSnap.empty) {
-                toast.error('Cupom inválido ou não encontrado.');
-                setCouponLoading(false);
-                return;
-            }
-            const couponDoc = couponSnap.docs[0];
-            const couponData = { id: couponDoc.id, ...couponDoc.data() };
+            
+            if (couponSnap.empty) throw new Error('Cupom inválido.');
+            const couponData = { id: couponSnap.docs[0].id, ...couponSnap.docs[0].data() };
+            
+            if (!couponData.ativo) throw new Error('Cupom inativo.');
             const now = Timestamp.now();
-            if (!couponData.ativo) {
-                toast.error('Cupom inativo.');
-                setCouponLoading(false);
-                return;
-            }
-            if (couponData.validadeInicio && couponData.validadeInicio.seconds > now.seconds) {
-                toast.error('Cupom ainda não válido.');
-                setCouponLoading(false);
-                return;
-            }
-            if (couponData.validadeFim && couponData.validadeFim.seconds < now.seconds) {
-                toast.error('Cupom expirado.');
-                setCouponLoading(false);
-                return;
-            }
-            if (couponData.usosMaximos !== null && couponData.usosAtuais >= couponData.usosMaximos) {
-                toast.error('Cupom atingiu o limite máximo de usos.');
-                setCouponLoading(false);
-                return;
-            }
-            if (couponData.minimoPedido !== null && subtotalCalculado < couponData.minimoPedido) {
-                toast.error(`Pedido mínimo de R$ ${couponData.minimoPedido.toFixed(2).replace('.', ',')} para usar este cupom.`);
-                setCouponLoading(false);
-                return;
-            }
+            if (couponData.validadeInicio && couponData.validadeInicio.seconds > now.seconds) throw new Error('Cupom não vigente.');
+            if (couponData.validadeFim && couponData.validadeFim.seconds < now.seconds) throw new Error('Cupom expirado.');
+            if (couponData.usosMaximos !== null && couponData.usosAtuais >= couponData.usosMaximos) throw new Error('Limite de usos atingido.');
+            if (couponData.minimoPedido !== null && subtotalCalculado < couponData.minimoPedido) throw new Error(`Mínimo R$ ${couponData.minimoPedido.toFixed(2)}`);
 
-            let calculatedDiscount = 0;
-            if (couponData.tipoDesconto === 'percentual') {
-                calculatedDiscount = subtotalCalculado * (couponData.valorDesconto / 100);
-            }
-            else if (couponData.tipoDesconto === 'valorFixo') {
-                calculatedDiscount = couponData.valorDesconto;
-                if (calculatedDiscount > subtotalCalculado) {
-                    calculatedDiscount = subtotalCalculado;
-                }
-            }
-            else if (couponData.tipoDesconto === 'freteGratis') {
-                calculatedDiscount = taxaAplicada;
-            }
+            let discount = 0;
+            if (couponData.tipoDesconto === 'percentual') discount = subtotalCalculado * (couponData.valorDesconto / 100);
+            else if (couponData.tipoDesconto === 'valorFixo') discount = Math.min(couponData.valorDesconto, subtotalCalculado);
+            else if (couponData.tipoDesconto === 'freteGratis') discount = taxaAplicada;
+
             setAppliedCoupon(couponData);
-            setDiscountAmount(calculatedDiscount);
-            toast.success(`Cupom ${couponData.codigo} aplicado! Desconto de R$ ${calculatedDiscount.toFixed(2).replace('.', ',')}.`);
-            setCouponLoading(false);
+            setDiscountAmount(discount);
+            toast.success('Cupom aplicado!');
         } catch (error) {
-            console.error("Erro ao aplicar cupom:", error);
-            toast.error('Erro ao aplicar cupom. Tente novamente.');
-            setCouponLoading(false);
+            toast.error(error.message);
             setAppliedCoupon(null);
             setDiscountAmount(0);
+        } finally {
+            setCouponLoading(false);
         }
     };
 
@@ -394,41 +284,13 @@ const handleConfirmarVariacoes = (itemConfigurado) => {
         toast.info('Cupom removido.');
     };
 
-    const enviarPedido = async () => {
-        if (!currentUser) {
-            toast.warn('Você precisa estar logado para enviar um pedido.');
-            setShowLoginPrompt(true);
-            return;
-        }
-        if (!actualEstabelecimentoId) {
-            toast.error('Erro: Estabelecimento não carregado corretamente. Por favor, recarregue a página.');
-            return;
-        }
-        if (!nomeCliente.trim() || !telefoneCliente.trim() || carrinho.length === 0 || !formaPagamento) {
-            toast.warn('Por favor, preencha todos os seus dados (Nome, Telefone), adicione itens ao carrinho e selecione uma forma de pagamento.');
-            return;
-        }
-        if (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) {
-            toast.warn('Para entrega, por favor, preencha o endereço completo (Rua, Número, Bairro, Cidade).');
-            return;
-        }
-        if (!isRetirada && bairroNaoEncontrado && taxaEntregaCalculada === 0) {
-            const confirmacao = window.confirm(`O bairro "${bairro.trim()}" não foi encontrado na nossa lista de áreas de entrega e a taxa é R$ 0,00. Deseja continuar? (Podem ser aplicadas taxas adicionais na entrega)`);
-            if (!confirmacao) {
-                return;
-            }
-        }
-        let valorTrocoPara = null;
-        if (formaPagamento === 'dinheiro' && trocoPara.trim() !== '') {
-            const trocoNum = Number(trocoPara);
-            if (trocoNum > finalOrderTotal) {
-                valorTrocoPara = trocoNum;
-            }
-            else {
-                toast.warn(`O valor para troco (R$ ${trocoNum.toFixed(2).replace('.', ',')}) deve ser maior que o total do pedido (R$ ${finalOrderTotal.toFixed(2).replace('.', ',')}).`);
-                return;
-            }
-        }
+    // --- PAGAMENTO E PEDIDO ---
+
+    const prepararParaPagamento = () => {
+        if (!currentUser) return setShowLoginPrompt(true);
+        if (!actualEstabelecimentoId) return toast.error('Erro de carregamento. Atualize a página.');
+        if (!nomeCliente.trim() || !telefoneCliente.trim() || carrinho.length === 0) return toast.warn('Preencha seus dados e adicione itens.');
+        if (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) return toast.warn('Endereço incompleto.');
 
         const itensFormatados = carrinho.map(item => ({
             nome: formatarItemCarrinho(item),
@@ -457,14 +319,12 @@ const handleConfirmarVariacoes = (itemConfigurado) => {
             },
             estabelecimentoId: actualEstabelecimentoId,
             itens: itensFormatados,
-            status: 'recebido',
-            createdAt: serverTimestamp(),
+            status: 'aguardando_pagamento',
+            createdAt: serverTimestamp(), // Timestamp do servidor
             tipo: isRetirada ? 'retirada' : 'delivery',
-            formaPagamento: formaPagamento,
-            trocoPara: valorTrocoPara,
+            formaPagamento: 'processando',
             taxaEntrega: taxaAplicada,
             totalFinal: finalOrderTotal,
-            ...(formaPagamento === 'pix' && { statusPagamentoPix: 'aguardando_pagamento' }),
             ...(appliedCoupon && {
                 cupomAplicado: {
                     id: appliedCoupon.id,
@@ -476,335 +336,148 @@ const handleConfirmarVariacoes = (itemConfigurado) => {
             })
         };
 
+        setPedidoParaPagamento(pedido);
+        setShowPaymentModal(true);
+    };
+
+    const handlePagamentoSucesso = async (paymentResult) => {
+        if (!pedidoParaPagamento) {
+            console.error("Pedido perdido no estado.");
+            toast.error("Erro interno: Pedido não encontrado.");
+            return;
+        }
+
+        setProcessandoPagamento(true);
+        
         try {
+            const pedidoFinal = {
+                ...pedidoParaPagamento,
+                status: 'recebido',
+                formaPagamento: paymentResult.method || 'desconhecido',
+                statusPagamento: 'aprovado',
+                transactionId: paymentResult.transactionId || `tx_${Date.now()}`, 
+                paymentData: {
+                    method: paymentResult.method || 'desconhecido',
+                    amount: paymentResult.amount || 0,
+                    timestamp: new Date().toISOString()
+                }
+            };
+
             if (appliedCoupon) {
                 await runTransaction(db, async (transaction) => {
                     const couponRef = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons', appliedCoupon.id);
                     const couponSnap = await transaction.get(couponRef);
-                    if (!couponSnap.exists()) {
-                        throw new Error("Cupom não existe mais!");
+                    if (couponSnap.exists()) {
+                        const currentUsos = couponSnap.data().usosAtuais || 0;
+                        transaction.update(couponRef, { usosAtuais: currentUsos + 1 });
                     }
-                    const currentUsosAtuais = couponSnap.data().usosAtuais || 0;
-                    if (couponSnap.data().usosMaximos !== null && currentUsosAtuais >= couponSnap.data().usosMaximos) {
-                        throw new Error("Cupom já atingiu o limite total de usos.");
-                    }
-                    transaction.update(couponRef, { usosAtuais: currentUsosAtuais + 1 });
                 });
             }
-            const docRef = await addDoc(collection(db, 'pedidos'), pedido);
+
+            const docRef = await addDoc(collection(db, 'pedidos'), pedidoFinal);
+            
             setConfirmedOrderDetails({
                 id: docRef.id,
-                cliente: pedido.cliente,
-                itens: pedido.itens,
-                subtotal: subtotalCalculado,
-                taxaEntrega: taxaAplicada,
-                totalFinal: finalOrderTotal,
-                formaPagamento: formaPagamento,
-                trocoPara: valorTrocoPara,
-                tipoEntrega: pedido.tipo,
-                cupomAplicado: appliedCoupon ? {
-                    codigo: appliedCoupon.codigo,
-                    desconto: discountAmount
-                } : null
+                ...pedidoFinal
             });
+
             setShowOrderConfirmationModal(true);
-            toast.success('Seu pedido foi enviado com sucesso! 🎉');
+            toast.success('🎉 Pedido confirmado com sucesso!');
+            
             setCarrinho([]);
-            setFormaPagamento('');
-            setTrocoPara('');
-            setCouponCodeInput('');
             setAppliedCoupon(null);
             setDiscountAmount(0);
+            setCouponCodeInput('');
+            setShowPaymentModal(false);
+            setPedidoParaPagamento(null);
+
         } catch (error) {
-            console.error("Erro ao enviar pedido ou aplicar cupom (transação): ", error);
-            if (error.message && (error.message.includes("limite total de usos") || error.message.includes("Cupom não existe mais"))) {
-                toast.error(`❌ Erro no cupom: ${error.message}`);
-            }
-            else {
-                toast.error(`❌ Ocorreu um erro ao enviar seu pedido. Por favor, tente novamente.`);
-            }
+            console.error("❌ Erro CRÍTICO ao salvar pedido:", error);
+            toast.error(`Erro ao salvar: ${error.message}`);
+        } finally {
+            setProcessandoPagamento(false);
         }
     };
 
-    // 🔧 FUNÇÕES DE AUTENTICAÇÃO
+    const handlePagamentoFalha = (error) => {
+        toast.error(`Falha no pagamento: ${error.message}`);
+    };
+
+    // --- AUTH MODAL ---
     const handleLoginModal = async (e) => {
         e.preventDefault();
-        setErrorAuthModal('');
         try {
             await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
-            toast.success('Login realizado com sucesso!');
+            toast.success('Login realizado!');
             setShowLoginPrompt(false);
-            setIsRegisteringInModal(false);
-            setEmailAuthModal('');
-            setPasswordAuthModal('');
-            setErrorAuthModal('');
         } catch (error) {
-            let msg = "Erro no login. Verifique suas credenciais.";
-            if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado. Crie uma conta.";
-            else if (error.code === 'auth/wrong-password') msg = "Senha incorreta.";
-            setErrorAuthModal(msg);
-            toast.error(msg);
+            toast.error("Erro no login. Verifique senha/email.");
         }
     };
 
     const handleRegisterModal = async (e) => {
         e.preventDefault();
-        setErrorAuthModal('');
-        if (!nomeAuthModal.trim() || !telefoneAuthModal.trim() || !emailAuthModal.trim() || !passwordAuthModal.trim() || !ruaAuthModal.trim() || !numeroAuthModal.trim() || !bairroAuthModal.trim() || !cidadeAuthModal.trim()) {
-            setErrorAuthModal('Por favor, preencha todos os campos obrigatórios, incluindo o endereço completo.');
-            toast.error('Por favor, preencha todos os campos obrigatórios, incluindo o endereço completo.');
-            return;
+        // Validação mais rigorosa para os novos campos
+        if (!nomeAuthModal || !telefoneAuthModal || !ruaAuthModal || !numeroAuthModal || !bairroAuthModal || !cidadeAuthModal) {
+            return toast.error("Preencha todos os campos obrigatórios (Endereço completo).");
         }
         try {
-            const userCredential = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
-            const user = userCredential.user;
-            await setDocFirestore(doc(db, 'clientes', user.uid), {
-                nome: nomeAuthModal.trim(),
-                telefone: telefoneAuthModal.trim(),
-                email: emailAuthModal.trim(),
-                endereco: {
-                    rua: ruaAuthModal.trim(),
-                    numero: numeroAuthModal.trim(),
-                    bairro: bairroAuthModal.trim(),
-                    cidade: cidadeAuthModal.trim(),
-                    complemento: complementoAuthModal.trim() || null
+            const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
+            await setDocFirestore(doc(db, 'clientes', cred.user.uid), {
+                nome: nomeAuthModal, 
+                telefone: telefoneAuthModal, 
+                email: emailAuthModal,
+                endereco: { 
+                    rua: ruaAuthModal, 
+                    numero: numeroAuthModal, 
+                    bairro: bairroAuthModal, 
+                    cidade: cidadeAuthModal, 
+                    complemento: complementoAuthModal || null 
                 },
-                criadoEm: Timestamp.now(),
+                criadoEm: Timestamp.now()
             });
-
-            setNomeCliente(nomeAuthModal.trim());
-            setTelefoneCliente(telefoneAuthModal.trim());
-            setRua(ruaAuthModal.trim());
-            setNumero(numeroAuthModal.trim());
-            setBairro(bairroAuthModal.trim());
-            setCidade(cidadeAuthModal.trim());
-            setComplemento(complementoAuthModal.trim() || null);
-            setIsRetirada(false);
-
-            toast.success('Cadastro realizado com sucesso! Você está logado.');
+            toast.success('Conta criada!');
             setShowLoginPrompt(false);
-            setIsRegisteringInModal(false);
-            setEmailAuthModal('');
-            setPasswordAuthModal('');
-            setNomeAuthModal('');
-            setTelefoneAuthModal('');
-            setRuaAuthModal('');
-            setNumeroAuthModal('');
-            setBairroAuthModal('');
-            setCidadeAuthModal('');
-            setComplementoAuthModal('');
-            setErrorAuthModal('');
         } catch (error) {
-            let msg = "Erro no cadastro. Tente novamente.";
-            if (error.code === 'auth/email-already-in-use') msg = "Este email já está cadastrado.";
-            else if (error.code === 'auth/weak-password') msg = "Senha muito fraca (mín. 6 caracteres).";
-            setErrorAuthModal(msg);
-            toast.error(msg);
+            toast.error("Erro ao criar conta.");
         }
     };
 
-    // --- EFEITOS OTIMIZADOS ---
-
-    // 🎨 LISTENER EM TEMPO REAL PARA ATUALIZAÇÕES DE CORES
+    // --- EFEITOS ---
     useEffect(() => {
         if (!actualEstabelecimentoId) return;
-
-        console.log("🎨 Iniciando listener de cores para:", actualEstabelecimentoId);
-        
-        const estabRef = doc(db, 'estabelecimentos', actualEstabelecimentoId);
-        
-        const unsubscribe = onSnapshot(estabRef, (doc) => {
-            if (doc.exists()) {
-                const estabData = doc.data();
-                if (estabData.cores) {
-                    console.log("🎨 Cores atualizadas em tempo real:", estabData.cores);
-                    setCoresEstabelecimento(estabData.cores);
-                    
-                    // Atualizar também no estabelecimentoInfo para consistência
-                    setEstabelecimentoInfo(prev => prev ? {
-                        ...prev,
-                        cores: estabData.cores
-                    } : null);
-                    
-                    toast.info("🎨 Cores do cardápio atualizadas!");
-                }
-            }
-        }, (error) => {
-            console.error("❌ Erro no listener de cores:", error);
+        const unsubscribe = onSnapshot(doc(db, 'estabelecimentos', actualEstabelecimentoId), (doc) => {
+            if (doc.exists() && doc.data().cores) setCoresEstabelecimento(doc.data().cores);
         });
-
-        return () => {
-            console.log("🎨 Parando listener de cores");
-            unsubscribe();
-        };
+        return () => unsubscribe();
     }, [actualEstabelecimentoId]);
 
-    // 🚀 EFEITO PRINCIPAL - CARREGAMENTO COMPLETO DO ESTABELECIMENTO
     useEffect(() => {
         if (!estabelecimentoSlug) return;
-
-        const carregarTudoRapidamente = async () => {
-            try {
-                setLoading(true);
-                console.log("🚀 INICIANDO CARREGAMENTO COMPLETO");
-
-                // 1. Buscar estabelecimento pelo slug
-                const qEstabBySlug = query(
-                    collection(db, 'estabelecimentos'),
-                    where('slug', '==', estabelecimentoSlug)
-                );
-                const estabSnapshotBySlug = await getDocs(qEstabBySlug);
-
-                if (estabSnapshotBySlug.empty) {
-                    console.error("❌ Estabelecimento não encontrado");
-                    toast.error("Estabelecimento não encontrado.");
-                    setLoading(false);
-                    navigate('/');
-                    return;
-                }
-
-                const estabDoc = estabSnapshotBySlug.docs[0];
-                const estabData = estabDoc.data();
-                const idDoEstabelecimentoReal = estabDoc.id;
-
-                console.log("✅ Estabelecimento encontrado:", estabData.nome);
-                console.log("🎨 Cores do estabelecimento:", estabData.cores);
-
-                // 🎯 CARREGAMENTO PARALELO: Estabelecimento + Produtos
-                const [produtos] = await Promise.all([
-                    carregarProdutosRapido(idDoEstabelecimentoReal)
-                ]);
-
-                // 🏪 DEFINIR TODOS OS DADOS DO ESTABELECIMENTO
-                const estabelecimentoInfoCompleta = {
-                    ...estabData,
-                    id: idDoEstabelecimentoReal,
-                    nome: estabData.nome || "Cardápio",
-                    descricao: estabData.descricao || "",
-                    endereco: estabData.endereco || {},
-                    horarioFuncionamento: estabData.horarioFuncionamento || {},
-                    telefone: estabData.telefone || "",
-                    whatsapp: estabData.whatsapp || "",
-                    logoUrl: estabData.logoUrl || "",
-                    ordemCategorias: estabData.ordemCategorias || [],
-                    // 🎨 CARREGAR CORES DO ESTABELECIMENTO OU USAR PADRÃO
-                    cores: estabData.cores || {
-                        primaria: '#0b0b0bff',
-                        destaque: '#059669',
-                        background: '#000000',
-                        texto: {
-                            principal: '#FFFFFF',
-                            secundario: '#9CA3AF',
-                            placeholder: '#6B7280',
-                            destaque: '#FBBF24',
-                            erro: '#EF4444',
-                            sucesso: '#10B981'
-                        }
-                    }
-                };
-
-                setEstabelecimentoInfo(estabelecimentoInfoCompleta);
-                setNomeEstabelecimento(estabData.nome || "Cardápio");
-                setActualEstabelecimentoId(idDoEstabelecimentoReal);
-
-                // 🎨 DEFINIR CORES IMEDIATAMENTE
-                if (estabData.cores) {
-                    console.log("🎨 Aplicando cores personalizadas:", estabData.cores);
-                    setCoresEstabelecimento(estabData.cores);
-                } else {
-                    console.log("🎨 Usando cores padrão");
-                }
-
-                // 📦 CONFIGURAR PRODUTOS
-                if (produtos.length > 0) {
-                    setAllProdutos(produtos);
-                    const categoriasUnicas = ['Todos', ...new Set(produtos.map(item => item.categoria).filter(Boolean))];
-                    setAvailableCategories(categoriasUnicas);
-
-                    console.log("📊 Categorias disponíveis:", categoriasUnicas);
-                    console.log("🎯 Ordem que será aplicada:", estabelecimentoInfoCompleta.ordemCategorias);
-
-                    const initialVisibleCounts = {};
-                    categoriasUnicas.forEach(cat => {
-                        if (cat !== 'Todos') {
-                            initialVisibleCounts[cat] = 4;
-                        }
-                    });
-                    setVisibleItemsCount(initialVisibleCounts);
-                } else {
-                    setAllProdutos([]);
-                    setAvailableCategories(['Todos']);
-                }
-
-                console.log("🎊 CARREGAMENTO COMPLETO CONCLUÍDO!");
-                setLoading(false);
-
-            } catch (error) {
-                console.error("❌ Erro no carregamento completo:", error);
-                toast.error("Erro ao carregar o cardápio.");
-                setLoading(false);
-            }
+        const load = async () => {
+            setLoading(true);
+            const q = query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug));
+            const snap = await getDocs(q);
+            if (snap.empty) { navigate('/'); return; }
+            
+            const data = snap.docs[0].data();
+            const id = snap.docs[0].id;
+            
+            const produtos = await carregarProdutosRapido(id);
+            
+            setEstabelecimentoInfo({ ...data, id });
+            setActualEstabelecimentoId(id);
+            setNomeEstabelecimento(data.nome);
+            if (data.cores) setCoresEstabelecimento(data.cores);
+            
+            setAllProdutos(produtos);
+            const cats = ['Todos', ...new Set(produtos.map(p => p.categoria).filter(Boolean))];
+            setAvailableCategories(cats);
+            
+            setLoading(false);
         };
-
-        carregarTudoRapidamente();
+        load();
     }, [estabelecimentoSlug, navigate]);
-
-    // 🎯 FUNÇÃO PARA ORDENAR CATEGORIAS DINAMICAMENTE - VERSÃO CORRIGIDA
-    const ordenarCategorias = (categorias, ordemPersonalizada) => {
-        console.log('🔀 Ordenando categorias:', {
-            categoriasDisponiveis: categorias,
-            ordemPersonalizada: ordemPersonalizada
-        });
-
-        // "Todos" sempre deve ser o primeiro
-        const categoriasSemTodos = categorias.filter(cat => cat !== 'Todos');
-
-        if (!ordemPersonalizada || ordemPersonalizada.length === 0) {
-            console.log('ℹ️ Usando ordem por quantidade de itens');
-            // Se não tem ordem definida, ordena por quantidade de itens (mais popular primeiro)
-            const categoriasOrdenadas = categoriasSemTodos
-                .map(category => {
-                    const quantidadeItens = allProdutos.filter(item => item.categoria === category).length;
-                    return { category, quantidadeItens };
-                })
-                .sort((a, b) => b.quantidadeItens - a.quantidadeItens)
-                .map(({ category }) => category);
-
-            return ['Todos', ...categoriasOrdenadas];
-        }
-
-        console.log('✅ Aplicando ordem personalizada do estabelecimento');
-
-        // Filtrar apenas categorias que existem atualmente
-        const ordemFiltrada = ordemPersonalizada.filter(category =>
-            categoriasSemTodos.includes(category)
-        );
-
-        // Adicionar categorias novas que não estão na ordem
-        const categoriasNovas = categoriasSemTodos.filter(category =>
-            !ordemFiltrada.includes(category)
-        );
-
-        const categoriasOrdenadas = ['Todos', ...ordemFiltrada, ...categoriasNovas];
-
-        console.log('📋 Resultado da ordenação:', categoriasOrdenadas);
-        return categoriasOrdenadas;
-    };
-
-    // 🆕 FUNÇÃO PARA NAVEGAÇÃO RÁPIDA ENTRE CATEGORIAS
-    const scrollToCategory = (categoria) => {
-        const element = document.getElementById(`categoria-${categoria}`);
-        if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    };
-
-    // Efeito para dados do usuário
-    useEffect(() => {
-        if (authLoading === false) {
-            setShowLoginPrompt(currentUser === null);
-        }
-    }, [authLoading, currentUser]);
 
     useEffect(() => {
         if (!authLoading && currentUser && currentClientData) {
@@ -816,1165 +489,282 @@ const handleConfirmarVariacoes = (itemConfigurado) => {
                 setBairro(currentClientData.endereco.bairro || '');
                 setCidade(currentClientData.endereco.cidade || '');
                 setComplemento(currentClientData.endereco.complemento || '');
-                setIsRetirada(false);
-            } else {
-                setIsRetirada(true);
             }
         }
     }, [currentUser, currentClientData, authLoading]);
 
-    // Efeito para taxas de entrega
+    // Cálculos de Filtro e Ordenação
     useEffect(() => {
-        if (!actualEstabelecimentoId) return;
-        const taxasRef = collection(db, 'estabelecimentos', actualEstabelecimentoId, 'taxasDeEntrega');
-        const q = query(taxasRef, orderBy('nomeBairro'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setTaxasBairro(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
-        });
-        return () => unsubscribe();
-    }, [actualEstabelecimentoId]);
-
-    useEffect(() => {
-        if (isRetirada || !bairro.trim() || !cidade.trim()) {
-            setTaxaEntregaCalculada(0);
-            setBairroNaoEncontrado(false);
-            return;
-        }
-        const bairroEncontrado = taxasBairro.find((taxa) => taxa.nomeBairro.toLowerCase() === bairro.trim().toLowerCase());
-        if (bairroEncontrado) {
-            setTaxaEntregaCalculada(bairroEncontrado.valorTaxa);
-            setBairroNaoEncontrado(false);
-        } else {
-            setTaxaEntregaCalculada(0);
-            setBairroNaoEncontrado(true);
-        }
-    }, [bairro, cidade, taxasBairro, isRetirada]);
-
-    // Efeito para filtrar produtos
-    useEffect(() => {
-        let produtosProcessados = [...allProdutos];
-
-        if (selectedCategory && selectedCategory !== 'Todos') {
-            produtosProcessados = produtosProcessados.filter(item =>
-                item.categoria?.toLowerCase() === selectedCategory.toLowerCase()
-            );
-        }
-
-        if (searchTerm.trim() !== '') {
-            const lowerCaseSearchTerm = searchTerm.trim().toLowerCase();
-            produtosProcessados = produtosProcessados.filter(item =>
-                item.nome?.toLowerCase().includes(lowerCaseSearchTerm) ||
-                item.descricao?.toLowerCase().includes(lowerCaseSearchTerm)
-            );
-        }
-
-        produtosProcessados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-        setProdutosFiltrados(produtosProcessados);
+        let processados = [...allProdutos];
+        if (selectedCategory !== 'Todos') processados = processados.filter(p => p.categoria === selectedCategory);
+        if (searchTerm) processados = processados.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase()));
+        setProdutosFiltrados(processados);
     }, [allProdutos, selectedCategory, searchTerm]);
 
-    // Efeito para carregar pedido anterior
-    useEffect(() => {
-        const storedReorderItems = localStorage.getItem('reorderItems');
-        if (storedReorderItems) {
-            try {
-                const parsedItems = JSON.parse(storedReorderItems);
-                if (Array.isArray(parsedItems) && parsedItems.length > 0) {
-                    setCarrinho(parsedItems);
-                    toast.success('Seu pedido anterior foi carregado no carrinho!');
-                }
-            } catch (e) {
-                console.error("Erro ao parsear reorderItems:", e);
-            } finally {
-                localStorage.removeItem('reorderItems');
-            }
-        }
-    }, []);
-
-    // Efeito para redirecionar admins
-    useEffect(() => {
-        if (!authLoading && (isUserAdmin || isUserMasterAdmin)) {
-            toast.error('Acesso negado. Esta página é exclusiva para clientes.', { toastId: 'admin-redirect' });
-        }
-    }, [authLoading, isUserAdmin, isUserMasterAdmin]);
-
-    // Funções para mostrar mais/menos itens
-    const handleShowMore = (categoryName) => {
-        setVisibleItemsCount(prev => ({
-            ...prev,
-            [categoryName]: (prev[categoryName] || 4) + 4
-        }));
+    const ordenarCategorias = (categorias, ordemPersonalizada) => {
+        const semTodos = categorias.filter(c => c !== 'Todos');
+        if (!ordemPersonalizada) return ['Todos', ...semTodos.sort((a, b) => {
+            const countA = allProdutos.filter(p => p.categoria === a).length;
+            const countB = allProdutos.filter(p => p.categoria === b).length;
+            return countB - countA;
+        })];
+        const ordenados = ordemPersonalizada.filter(c => semTodos.includes(c));
+        const novos = semTodos.filter(c => !ordenados.includes(c));
+        return ['Todos', ...ordenados, ...novos];
     };
 
-    const handleShowLess = (categoryName) => {
-        setVisibleItemsCount(prev => ({
-            ...prev,
-            [categoryName]: 4
-        }));
-    };
+    const handleShowMore = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: (p[cat] || 4) + 4 }));
+    const handleShowLess = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: 4 }));
+    const scrollToCategory = (cat) => document.getElementById(`categoria-${cat}`)?.scrollIntoView({ behavior: 'smooth' });
 
-    // 🎨 DEBUG: Verificar se as cores estão sendo aplicadas
-    useEffect(() => {
-        console.log("🎨 Cores atuais aplicadas:", coresEstabelecimento);
-    }, [coresEstabelecimento]);
-
-    // 🏪 COMPONENTE DE INFORMAÇÕES DO ESTABELECIMENTO
-    const InfoEstabelecimento = () => {
-        if (!estabelecimentoInfo) return null;
-
-        return (
-            <div className="bg-gray-800 rounded-xl md:rounded-2xl shadow-lg p-4 md:p-6 mb-6 md:mb-8 border border-gray-700">
-                <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start">
-                    {/* LOGO */}
-                    {estabelecimentoInfo.logoUrl && (
-                        <div className="flex-shrink-0 mx-auto md:mx-0">
-                            <img
-                                src={estabelecimentoInfo.logoUrl}
-                                alt={`Logo ${estabelecimentoInfo.nome}`}
-                                className="w-20 h-20 md:w-32 md:h-32 rounded-xl md:rounded-2xl object-cover border-2"
-                                style={{ borderColor: coresEstabelecimento.primaria }}
-                            />
-                        </div>
-                    )}
-
-                    {/* INFORMAÇÕES */}
-                    <div className="flex-1 space-y-3 md:space-y-4">
-                        {/* NOME E DESCRIÇÃO */}
-                        <div>
-                            <h1 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2 text-center md:text-left" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                {estabelecimentoInfo.nome}
-                            </h1>
-                            {estabelecimentoInfo.descricao && (
-                                <p className="text-base md:text-lg text-center md:text-left" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                    {estabelecimentoInfo.descricao}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* GRADE DE INFORMAÇÕES */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                            {/* ENDEREÇO */}
-                            {estabelecimentoInfo.endereco && estabelecimentoInfo.endereco.rua && (
-                                <div className="flex items-start gap-2 md:gap-3">
-                                    <span className="text-lg md:text-xl mt-1">📍</span>
-                                    <div>
-                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                            Endereço
-                                        </p>
-                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                            {estabelecimentoInfo.endereco.rua}, {estabelecimentoInfo.endereco.numero}
-                                            {estabelecimentoInfo.endereco.bairro && ` - ${estabelecimentoInfo.endereco.bairro}`}
-                                            {estabelecimentoInfo.endereco.cidade && `, ${estabelecimentoInfo.endereco.cidade}`}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* HORÁRIO */}
-                            {estabelecimentoInfo.horarioFuncionamento && (
-                                <div className="flex items-start gap-2 md:gap-3">
-                                    <span className="text-lg md:text-xl mt-1">🕒</span>
-                                    <div>
-                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                            Horário
-                                        </p>
-                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                            {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* TELEFONE */}
-                            {estabelecimentoInfo.telefone && (
-                                <div className="flex items-start gap-2 md:gap-3">
-                                    <span className="text-lg md:text-xl mt-1">📞</span>
-                                    <div>
-                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                            Telefone
-                                        </p>
-                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                            {estabelecimentoInfo.telefone}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* WHATSAPP */}
-                            {estabelecimentoInfo.whatsapp && (
-                                <div className="flex items-start gap-2 md:gap-3">
-                                    <span className="text-lg md:text-xl mt-1">💬</span>
-                                    <div>
-                                        <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                            WhatsApp
-                                        </p>
-                                        <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                            {estabelecimentoInfo.whatsapp}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+    // COMPONENTES VISUAIS
+    const InfoEstabelecimento = () => (
+        estabelecimentoInfo ? (
+            <div className="bg-gray-800 rounded-xl p-6 mb-6 border border-gray-700 flex flex-col md:flex-row gap-6 items-start shadow-xl">
+                {estabelecimentoInfo.logoUrl && <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />}
+                <div className="flex-1">
+                    <h1 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto.principal }}>{estabelecimentoInfo.nome}</h1>
+                    <p className="text-lg mb-4" style={{ color: coresEstabelecimento.texto.secundario }}>{estabelecimentoInfo.descricao}</p>
+                    <div className="grid md:grid-cols-2 gap-4 text-sm" style={{ color: coresEstabelecimento.texto.secundario }}>
+                        {estabelecimentoInfo.endereco?.rua && <p>📍 {estabelecimentoInfo.endereco.rua}, {estabelecimentoInfo.endereco.numero}</p>}
+                        {estabelecimentoInfo.telefone && <p>📞 {estabelecimentoInfo.telefone}</p>}
+                        {estabelecimentoInfo.horarioFuncionamento && <p>🕒 {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}</p>}
                     </div>
                 </div>
             </div>
-        );
-    };
+        ) : null
+    );
 
-    // 🆕 COMPONENTE DE NAVEGAÇÃO RÁPIDA
-    const NavegacaoRapida = () => {
-        if (availableCategories.length <= 1) return null;
-
-        return (
-            <div className="bg-gray-800 rounded-xl p-4 mb-6 sticky top-4 z-40 shadow-lg">
-                <h3 className="font-semibold mb-3 text-sm" style={{ color: coresEstabelecimento.texto?.principal }}>
-                    🎯 Navegação Rápida
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                    {ordenarCategorias(
-                        availableCategories,
-                        estabelecimentoInfo?.ordemCategorias
-                    )
-                        .slice(0, 8)
-                        .map((categoria) => (
-                            <button
-                                key={categoria}
-                                onClick={() => scrollToCategory(categoria)}
-                                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition-colors"
-                                style={{
-                                    color: coresEstabelecimento.texto?.secundario,
-                                    backgroundColor: selectedCategory === categoria ? coresEstabelecimento.primaria : ''
-                                }}
-                            >
-                                {categoria === 'Todos' ? '📋 Todos' : categoria}
-                            </button>
-                        ))}
-                </div>
-            </div>
-        );
-    };
-
-    if (authLoading || loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: coresEstabelecimento.background }}>
-                <div className="text-center">
-                    <div
-                        className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4"
-                        style={{ borderColor: coresEstabelecimento.primaria }}
-                    ></div>
-                    <p className="text-lg font-medium" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                        Carregando cardápio...
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
-    if (isUserAdmin || isUserMasterAdmin) {
-        return <Navigate to={isUserMasterAdmin ? '/master-dashboard' : '/painel'} replace />;
-    }
-
-    // Agrupar produtos por categoria para exibição
-    const menuAgrupado = produtosFiltrados.reduce((acc, produto) => {
-        const categoria = produto.categoria || 'Outros';
-        if (!acc[categoria]) acc[categoria] = [];
-        acc[categoria].push(produto);
+    // RENDERIZAÇÃO
+    if (loading) return <div className="min-h-screen flex items-center justify-center bg-black text-white">Carregando...</div>;
+    
+    const menuAgrupado = produtosFiltrados.reduce((acc, p) => {
+        const cat = p.categoria || 'Outros';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(p);
         return acc;
     }, {});
 
     return (
-        <div className="min-h-screen pb-32 md:pb-0" style={{
-            backgroundColor: coresEstabelecimento.background,
-            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-        }}>
-            {/* Header Simplificado */}
-            <div className="shadow-lg" style={{ backgroundColor: coresEstabelecimento.primaria }}>
-                <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
-                    <div className="text-center text-white">
-                        <h1 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2 drop-shadow-sm">
-                            {nomeEstabelecimento}
-                        </h1>
-                        <p className="text-white text-opacity-90 text-sm md:text-base">
-                            Cardápio Digital
-                        </p>
-                    </div>
-                </div>
+        <div className="min-h-screen pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
+            <div className="py-4 px-4 shadow-lg mb-6 sticky top-0 z-20" style={{ backgroundColor: coresEstabelecimento.primaria }}>
+                <h1 className="text-center text-2xl font-bold text-white">{nomeEstabelecimento}</h1>
             </div>
 
-            {/* Conteúdo Principal */}
-            <div className="max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-6">
-                {/* 🏪 INFORMAÇÕES DO ESTABELECIMENTO */}
+            <div className="max-w-7xl mx-auto px-4">
+                <InfoEstabelecimento />
 
-                {/* Search and Filters - VERSÃO RESPONSIVA */}
-                <div className="bg-gray-900 rounded-xl md:rounded-2xl shadow-xl p-4 md:p-6 mb-6 md:mb-8 border border-gray-700">
-                    {/* Search */}
-                    <div className="mb-4 md:mb-6">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="🔍 Buscar por nome ou descrição..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full px-4 md:px-6 py-3 md:py-4 border border-gray-600 rounded-xl md:rounded-2xl text-base md:text-lg focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white"
-                                style={{
-                                    focusRingColor: coresEstabelecimento.primaria,
-                                    borderColor: `${coresEstabelecimento.primaria}30`
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    {/* BARRA DE CATEGORIAS RESPONSIVA */}
-                    <div className="relative">
-                        <div className="flex overflow-x-auto gap-2 md:gap-3 pb-3 -mb-3 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                            {/* Todas as categorias ordenadas dinamicamente */}
-                            {ordenarCategorias(
-                                availableCategories,
-                                estabelecimentoInfo?.ordemCategorias
-                            ).map((category) => (
-                                <button
-                                    key={category}
-                                    onClick={() => setSelectedCategory(category)}
-                                    className={`px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0 ${selectedCategory === category
-                                            ? 'text-white shadow-lg'
-                                            : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                                        }`}
-                                    style={
-                                        selectedCategory === category
-                                            ? { backgroundColor: coresEstabelecimento.primaria }
-                                            : {}
-                                    }
-                                >
-                                    {category === 'Todos' ? '📋 Todos' : category}
-                                </button>
-                            ))}
-
-                            {/* Botão Limpar Filtros */}
-                            {(searchTerm || selectedCategory !== 'Todos') && (
-                                <button
-                                    onClick={() => { setSearchTerm(''); setSelectedCategory('Todos'); }}
-                                    className="px-3 md:px-4 py-2 md:py-3 rounded-full text-xs md:text-sm font-semibold bg-gray-600 text-white hover:bg-gray-500 transition-all duration-200 transform hover:scale-105 whitespace-nowrap flex-shrink-0"
-                                >
-                                    🗑️ Limpar
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Sombra indicativa de scroll */}
-                        <div className="absolute right-0 top-0 bottom-0 w-6 md:w-8 bg-gradient-to-l from-gray-900 to-transparent pointer-events-none"></div>
+                {/* Filtros */}
+                <div className="bg-gray-900 p-4 rounded-xl mb-8 border border-gray-700 z-10 shadow-xl">
+                    <input 
+                        type="text" 
+                        placeholder="🔍 Buscar produto..." 
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full p-3 mb-4 bg-gray-800 rounded-lg border border-gray-600 focus:outline-none focus:border-green-500"
+                    />
+                    <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
+                        {ordenarCategorias(availableCategories, estabelecimentoInfo?.ordemCategorias).map(cat => (
+                            <button
+                                key={cat}
+                                onClick={() => setSelectedCategory(cat)}
+                                className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${selectedCategory === cat ? 'text-white transform scale-105 shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+                                style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : '' }}
+                            >
+                                {cat}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                {/* Menu Items - VERSÃO RESPONSIVA */}
-                {produtosFiltrados.length === 0 && allProdutos.length > 0 ? (
-                    <div className="text-center py-8">
-                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                            Nenhum item encontrado com os filtros selecionados.
-                        </p>
-                    </div>
-                ) : allProdutos.length === 0 ? (
-                    <div className="text-center py-8">
-                        <p style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                            Este estabelecimento ainda não possui itens no cardápio.
-                        </p>
-                    </div>
-                ) : selectedCategory === 'Todos' ? (
-                    // QUANDO "TODOS" ESTÁ SELECIONADO - VERSÃO RESPONSIVA
-                    ordenarCategorias(
-                        Object.keys(menuAgrupado).filter(cat => cat !== 'Outros'),
-                        estabelecimentoInfo?.ordemCategorias
-                    )
-                        .filter(categoria => categoria !== 'Todos')
-                        .map((categoria) => {
-                            const itemsNestaCategoria = menuAgrupado[categoria] || [];
-                            const totalItemsVisiveis = visibleItemsCount[categoria] || 4;
-                            const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
-
-                            if (itemsNestaCategoria.length === 0) return null;
-
-                            return (
-                                <div key={categoria} id={`categoria-${categoria}`} className="mb-6 md:mb-8">
-                                    {/* CABEÇALHO DA CATEGORIA */}
-                                    <div className="flex items-center justify-between mb-3 md:mb-4">
-                                        <h2 className="text-xl md:text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                            {categoria}
-                                        </h2>
-                                        <span className="bg-gray-800 px-2 md:px-3 py-1 rounded-full text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                            {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
-                                        </span>
-                                    </div>
-                                                                        {/* LISTA DE ITENS */}
-                                    <div className="space-y-3">
-                                        {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
-                                            <CardapioItem
-                                                key={item.id}
-                                                item={item}
-                                                onAddItem={handleAbrirModalProduto}        // Para produtos com 2+ variações
-                                                onQuickAdd={handleAdicionarRapido}         // Para produtos únicos ou com 1 variação
-                                                coresEstabelecimento={coresEstabelecimento}
-                                            />
-                                        ))}
-                                    </div>
-                                    {itemsNestaCategoria.length > 4 && (
-                                        <div className="text-center mt-3 md:mt-4">
-                                            {todosItensVisiveis ? (
-                                          <button
-                                          
-    onClick={() => handleShowLess(categoria)}
-    className="font-medium text-xs md:text-sm transition-colors px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 shadow-sm border border-gray-200"
->
-    ↑ Ver menos
-</button>
-                                            ) : (
-                                               <button
-    onClick={() => handleShowMore(categoria)}
-    className="font-medium text-xs md:text-sm transition-colors px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 shadow-sm border border-gray-200"
->
-    ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
-</button>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })
+                {/* Lista de Produtos */}
+                {Object.keys(menuAgrupado).length === 0 ? (
+                    <p className="text-center text-gray-500 mt-10">Nenhum produto encontrado.</p>
                 ) : (
-                    // QUANDO UMA CATEGORIA ESPECÍFICA ESTÁ SELECIONADA - VERSÃO RESPONSIVA
-                    (() => {
-                        const categoriaSelecionada = selectedCategory;
-                        const itemsNestaCategoria = menuAgrupado[categoriaSelecionada] || [];
-                        const totalItemsVisiveis = visibleItemsCount[categoriaSelecionada] || 4;
-                        const todosItensVisiveis = totalItemsVisiveis >= itemsNestaCategoria.length;
-
+                    ordenarCategorias(Object.keys(menuAgrupado), estabelecimentoInfo?.ordemCategorias).map(cat => {
+                        if (cat === 'Todos' || !menuAgrupado[cat]) return null;
+                        const items = menuAgrupado[cat];
+                        const visible = visibleItemsCount[cat] || 4;
+                        
                         return (
-                            <div key={categoriaSelecionada} id={`categoria-${categoriaSelecionada}`} className="mb-6 md:mb-8">
-                                {/* CABEÇALHO DA CATEGORIA */}
-                                <div className="flex items-center justify-between mb-3 md:mb-4">
-                                    <h2 className="text-xl md:text-2xl font-bold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                        {categoriaSelecionada}
-                                    </h2>
-                                    <span className="bg-gray-800 px-2 md:px-3 py-1 rounded-full text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                        {itemsNestaCategoria.length} {itemsNestaCategoria.length === 1 ? 'item' : 'itens'}
-                                    </span>
-                                </div>
-
-                                {/* LISTA DE ITENS */}
-                                <div className="space-y-3">
-                                    {itemsNestaCategoria.slice(0, totalItemsVisiveis).map((item) => (
-                                        <CardapioItem
-                                            key={item.id}
-                                            item={item}
+                            <div key={cat} id={`categoria-${cat}`} className="mb-8">
+                                <h2 className="text-2xl font-bold mb-4 flex justify-between items-center border-b border-gray-800 pb-2">
+                                    {cat} <span className="text-sm font-normal bg-gray-800 px-3 py-1 rounded-full text-gray-400">{items.length}</span>
+                                </h2>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {items.slice(0, visible).map(item => (
+                                        <CardapioItem 
+                                            key={item.id} 
+                                            item={item} 
                                             onAddItem={handleAbrirModalProduto}
                                             onQuickAdd={handleAdicionarRapido}
                                             coresEstabelecimento={coresEstabelecimento}
                                         />
                                     ))}
                                 </div>
-
-                                {/* BOTÃO VER MAIS/VER MENOS */}
-                                {itemsNestaCategoria.length > 4 && (
-                                    <div className="text-center mt-3 md:mt-4">
-                                        {todosItensVisiveis ? (
-                                            <button
-                                                onClick={() => handleShowLess(categoriaSelecionada)}
-                                                style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}
-                                                className="hover:text-gray-300 font-medium text-xs md:text-sm transition-colors px-4 py-2"
-                                            >
-                                                ↑ Ver menos
-                                            </button>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleShowMore(categoriaSelecionada)}
-                                                className="font-medium text-xs md:text-sm transition-colors px-4 py-2"
-                                                style={{ color: coresEstabelecimento.primaria }}
-                                            >
-                                                ↓ Ver mais ({itemsNestaCategoria.length - totalItemsVisiveis} restantes)
-                                            </button>
-                                        )}
-                                    </div>
+                                {items.length > 4 && (
+                                    <button 
+                                        onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)}
+                                        className="w-full mt-4 py-3 text-sm font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition"
+                                    >
+                                        {visible >= items.length ? 'Ver menos' : `Ver mais (${items.length - visible})`}
+                                    </button>
                                 )}
                             </div>
                         );
-                    })()
+                    })
                 )}
 
-                {/* Seção de Dados do Cliente - VERSÃO RESPONSIVA */}
-                <div className="bg-gray-900 rounded-xl md:rounded-2xl shadow-xl p-4 md:p-6 mt-8 md:mt-12 border border-gray-700">
-                    <h2 className="font-bold text-2xl md:text-3xl mb-4 md:mb-6 flex items-center gap-2 md:gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                        <span>👤</span>
-                        Seus Dados
-                    </h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
-                        <div>
-                            <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                Nome *
-                            </label>
-                            <input
-                                type="text"
-                                value={nomeCliente}
-                                onChange={(e) => setNomeCliente(e.target.value)}
-                                className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                placeholder="Seu nome completo"
-                                required
-                                style={{
-                                    focusRingColor: coresEstabelecimento.primaria,
-                                    color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                Telefone *
-                            </label>
-                            <input
-                                type="tel"
-                                value={telefoneCliente}
-                                onChange={(e) => setTelefoneCliente(e.target.value)}
-                                className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                placeholder="(11) 99999-9999"
-                                required
-                                style={{
-                                    focusRingColor: coresEstabelecimento.primaria,
-                                    color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Tipo de Entrega */}
-                    <div className="mb-4 md:mb-6">
-                        <label className="block font-semibold mb-3 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                            Tipo de Entrega
-                        </label>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setIsRetirada(false)}
-                                className={`flex-1 py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-sm md:text-base ${!isRetirada
-                                        ? 'text-white shadow-lg'
-                                        : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                                    }`}
-                                style={
-                                    !isRetirada
-                                        ? { backgroundColor: coresEstabelecimento.primaria }
-                                        : {}
-                                }
-                            >
-                                🚚 Entrega
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setIsRetirada(true)}
-                                className={`flex-1 py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-sm md:text-base ${isRetirada
-                                        ? 'text-white shadow-lg'
-                                        : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                                    }`}
-                                style={
-                                    isRetirada
-                                        ? { backgroundColor: coresEstabelecimento.primaria }
-                                        : {}
-                                }
-                            >
-                                🏪 Retirada
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Endereço (apenas para entrega) */}
-                    {!isRetirada && (
-                        <div className="space-y-4 mb-4 md:mb-6">
-                            <h3 className="text-lg md:text-xl font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                📍 Endereço de Entrega
-                            </h3>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                                {/* Rua */}
-                                <div className="md:col-span-2">
-                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                        Rua *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={rua}
-                                        onChange={(e) => setRua(e.target.value)}
-                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                        placeholder="Nome da rua, avenida, etc."
-                                        required
-                                        style={{
-                                            focusRingColor: coresEstabelecimento.primaria,
-                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Número */}
-                                <div>
-                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                        Número *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={numero}
-                                        onChange={(e) => setNumero(e.target.value)}
-                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                        placeholder="Número"
-                                        required
-                                        style={{
-                                            focusRingColor: coresEstabelecimento.primaria,
-                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Bairro */}
-                                <div>
-                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                        Bairro *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={bairro}
-                                        onChange={(e) => setBairro(e.target.value)}
-                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                        placeholder="Seu bairro"
-                                        required
-                                        style={{
-                                            focusRingColor: coresEstabelecimento.primaria,
-                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Cidade */}
-                                <div>
-                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                        Cidade *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={cidade}
-                                        onChange={(e) => setCidade(e.target.value)}
-                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                        placeholder="Sua cidade"
-                                        required
-                                        style={{
-                                            focusRingColor: coresEstabelecimento.primaria,
-                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Complemento */}
-                                <div className="md:col-span-2">
-                                    <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                        Complemento (Opcional)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={complemento}
-                                        onChange={(e) => setComplemento(e.target.value)}
-                                        className="w-full border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                        placeholder="Apartamento, bloco, referência, casa, etc."
-                                        style={{
-                                            focusRingColor: coresEstabelecimento.primaria,
-                                            color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                        }}
-                                    />
-                                </div>
+                {/* Dados do Cliente e Carrinho */}
+                <div className="grid md:grid-cols-2 gap-8 mt-12">
+                    {/* Formulário Cliente */}
+                    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-xl">
+                        <h3 className="text-xl font-bold mb-4">👤 Seus Dados</h3>
+                        <div className="space-y-4">
+                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-2 rounded font-bold transition ${!isRetirada ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600'}`}>🚚 Entrega</button>
+                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-2 rounded font-bold transition ${isRetirada ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-700 hover:bg-gray-600'}`}>🏪 Retirada</button>
                             </div>
 
-                            {/* Mensagem de bairro não encontrado - CORRIGIDA */}
-                            {bairroNaoEncontrado && !isRetirada && bairro.trim() && (
-                                <div className="bg-yellow-900 border border-yellow-700 rounded-lg md:rounded-xl p-3 md:p-4">
-                                    <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
-                                        ⚠️ O bairro "<strong>{bairro}</strong>" não foi encontrado na nossa lista de áreas de entrega.
-                                        A taxa de entrega é R$ 0,00, mas podem ser aplicadas taxas adicionais na confirmação do pedido.
-                                    </p>
-                                </div>
+                            {!isRetirada && (
+                                <>
+                                    <div className="flex gap-2">
+                                        <input className="flex-1 p-3 bg-gray-800 rounded border border-gray-600" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+                                        <input className="w-24 p-3 bg-gray-800 rounded border border-gray-600" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                    </div>
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
+                                </>
                             )}
                         </div>
-                    )}
-
-                    {/* Forma de Pagamento */}
-                    <div className="mb-4 md:mb-6">
-                        <h3 className="text-lg md:text-xl font-semibold mb-3 md:mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                            💳 Forma de Pagamento
-                        </h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
-                            {['dinheiro', 'cartão crédito', 'cartão débito', 'pix'].map((pagamento) => (
-                                <button
-                                    key={pagamento}
-                                    type="button"
-                                    onClick={() => setFormaPagamento(pagamento)}
-                                    className={`py-2 md:py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-xs md:text-sm ${formaPagamento === pagamento
-                                            ? 'text-white shadow-lg'
-                                            : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                                        }`}
-                                    style={
-                                        formaPagamento === pagamento
-                                            ? { backgroundColor: coresEstabelecimento.primaria }
-                                            : {}
-                                    }
-                                >
-                                    {pagamento === 'dinheiro' && '💵 Dinheiro'}
-                                    {pagamento === 'cartão crédito' && '💳 Crédito'}
-                                    {pagamento === 'cartão débito' && '💳 Débito'}
-                                    {pagamento === 'pix' && '📱 PIX'}
-                                </button>
-                            ))}
-                        </div>
-
-                        {formaPagamento === 'dinheiro' && (
-                            <div className="mt-3 md:mt-4">
-                                <label className="block font-semibold mb-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                    Troco para quanto? (Opcional)
-                                </label>
-                                <input
-                                    type="number"
-                                    value={trocoPara}
-                                    onChange={(e) => setTrocoPara(e.target.value)}
-                                    className="w-full md:w-1/2 border border-gray-600 rounded-lg md:rounded-xl p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    placeholder="Ex: 50,00"
-                                    step="0.01"
-                                    min={finalOrderTotal}
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <p className="text-xs md:text-sm mt-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                    Deixe em branco se não precisar de troco.
-                                </p>
-                            </div>
-                        )}
                     </div>
-                </div>
 
-                {/* Cart and Order Section - VERSÃO RESPONSIVA */}
-                <div id="secao-pagamento" className="bg-gray-900 rounded-xl md:rounded-2xl shadow-xl p-4 md:p-6 mt-6 md:mt-8 border border-gray-700">
-                    <h2 className="font-bold text-2xl md:text-3xl mb-4 md:mb-6 flex items-center gap-2 md:gap-3" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                        <span>🛒</span>
-
-                        Seu Pedido
-                    </h2>
-
-                    {carrinho.length === 0 ? (
-                        <div className="text-center py-6 md:py-8">
-                            <div className="text-4xl md:text-6xl mb-3 md:mb-4" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>🛒</div>
-                            <p className="text-base md:text-lg font-medium" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                Nenhum item adicionado ainda.
-                            </p>
-                            <p className="mt-1 md:mt-2 text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                Explore nosso cardápio e adicione itens deliciosos!
-                            </p>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="space-y-3 md:space-y-4 mb-4 md:mb-6">
-                                {carrinho.map((item) => (
-                                    <div key={item.cartItemId} className="bg-gray-800 p-3 md:p-4 rounded-lg md:rounded-xl border border-gray-700 hover:shadow-md transition-all duration-200">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex-1 mr-3 md:mr-4">
-                                                <div className="flex items-start justify-between">
-                                                    <div>
-                                                        <span className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                                            {formatarItemCarrinho(item)}
-                                                        </span>
-                                                        <span className="text-xs md:text-sm ml-1 md:ml-2" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                                            ({item.qtd}x)
-                                                        </span>
-                                                    </div>
-                                                    <span className="font-bold text-base md:text-lg" style={{ color: coresEstabelecimento.texto?.destaque || '#FBBF24' }}>
-                                                        R$ {(item.precoFinal * item.qtd).toFixed(2).replace('.', ',')}
-                                                    </span>
-                                                </div>
+                    {/* Resumo do Pedido */}
+                    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-xl">
+                        <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
+                        {carrinho.length === 0 ? <p className="text-gray-500 text-center py-10">Seu carrinho está vazio.</p> : (
+                            <>
+                                <div className="space-y-3 mb-4">
+                                    {carrinho.map(item => (
+                                        <div key={item.cartItemId} className="flex justify-between items-start bg-gray-800 p-3 rounded">
+                                            <div>
+                                                <p className="font-bold text-sm">{formatarItemCarrinho(item)}</p>
+                                                <p className="text-xs text-gray-400">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p>
                                             </div>
-                                            <button
-                                                onClick={() => removerDoCarrinho(item.cartItemId)}
-                                                className="text-white w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold transition-colors duration-200 flex-shrink-0 text-xs md:text-base"
-                                                style={{ backgroundColor: coresEstabelecimento.primaria }}
-                                            >
-                                                -
-                                            </button>
+                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold hover:text-red-400">✕</button>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="border-t border-gray-700 pt-4 md:pt-6 space-y-3 md:space-y-4">
-                                <div className="flex justify-between items-center text-base md:text-lg">
-                                    <span style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Subtotal:</span>
-                                    <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                        R$ {subtotalCalculado.toFixed(2).replace('.', ',')}
-                                    </span>
+                                    ))}
                                 </div>
-
-                                {!isRetirada && (
-                                    <div className="flex justify-between items-center text-base md:text-lg">
-                                        <span style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Taxa de Entrega:</span>
-                                        <span className="font-semibold" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                            R$ {taxaAplicada.toFixed(2).replace('.', ',')}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {!appliedCoupon ? (
-                                    <div className="flex flex-col sm:flex-row items-center gap-2 md:gap-3 pt-3 md:pt-4 border-t border-gray-600">
-                                        <input
-                                            type="text"
-                                            placeholder="🎁 Código do Cupom"
-                                            value={couponCodeInput}
-                                            onChange={(e) => setCouponCodeInput(e.target.value)}
-                                            className="flex-1 border border-gray-600 rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                            disabled={couponLoading}
-                                            style={{
-                                                focusRingColor: coresEstabelecimento.primaria,
-                                                color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                            }}
+                                
+                                <div className="border-t border-gray-700 pt-4 space-y-2">
+                                    <div className="flex justify-between text-gray-400"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
+                                    {!isRetirada && <div className="flex justify-between text-gray-400"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
+                                    {discountAmount > 0 && <div className="flex justify-between text-green-500 font-bold"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
+                                    
+                                    {/* Input de Cupom */}
+                                    <div className="flex gap-2 mt-4">
+                                        <input 
+                                            placeholder="Código do cupom" 
+                                            value={couponCodeInput} 
+                                            onChange={e => setCouponCodeInput(e.target.value)} 
+                                            className="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-sm focus:outline-none focus:border-green-500"
                                         />
-                                        <button
-                                            onClick={handleApplyCoupon}
-                                            disabled={couponLoading || !couponCodeInput.trim()}
-                                            className="text-white px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm md:text-base w-full sm:w-auto"
-                                            style={{
-                                                backgroundColor: couponLoading || !couponCodeInput.trim() ? '#4B5563' : coresEstabelecimento.primaria
-                                            }}
+                                        <button 
+                                            onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} 
+                                            className={`px-4 rounded text-sm font-bold transition ${appliedCoupon ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
                                         >
-                                            {couponLoading ? 'Aplicando...' : 'Aplicar'}
+                                            {appliedCoupon ? 'Remover' : 'Aplicar'}
                                         </button>
                                     </div>
-                                ) : (
-                                    <div className="flex justify-between items-center bg-green-900 p-3 md:p-4 rounded-lg md:rounded-xl border border-green-700 mt-3 md:mt-4">
-                                        <div>
-                                            <p className="font-semibold text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
-                                                🎉 Cupom: {appliedCoupon.codigo}
-                                            </p>
-                                            <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
-                                                Desconto aplicado com sucesso!
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={removeAppliedCoupon}
-                                            className="font-semibold text-xs md:text-sm transition-colors duration-200"
-                                            style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}
-                                        >
-                                            Remover
-                                        </button>
-                                    </div>
-                                )}
 
-                                {discountAmount > 0 && (
-                                    <div className="flex justify-between items-center text-base md:text-lg font-semibold">
-                                        <span style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>Desconto:</span>
-                                        <span style={{ color: coresEstabelecimento.texto?.sucesso || '#10B981' }}>
-                                            - R$ {discountAmount.toFixed(2).replace('.', ',')}
-                                        </span>
+                                    <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-700">
+                                        <span>Total:</span>
+                                        <span style={{ color: coresEstabelecimento.destaque }}>R$ {finalOrderTotal.toFixed(2)}</span>
                                     </div>
-                                )}
-
-                                <div className="flex justify-between items-center text-xl md:text-2xl font-bold pt-3 md:pt-4 border-t border-gray-600">
-                                    <span style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>TOTAL:</span>
-                                    <span style={{ color: coresEstabelecimento.texto?.destaque || '#FBBF24' }}>
-                                        R$ {finalOrderTotal.toFixed(2).replace('.', ',')}
-                                    </span>
                                 </div>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-            {/* 🆕 CARRINHO FLUTUANTE - APENAS ATALHO */}
-            <CarrinhoFlutuante
-                carrinho={carrinho}
-                coresEstabelecimento={coresEstabelecimento}
-            />
 
-            {/* Fixed Order Button - VERSÃO RESPONSIVA */}
-            {carrinho.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-gray-900 p-3 md:p-4 shadow-2xl border-t border-gray-700 md:relative md:p-0 md:mt-6 md:shadow-none md:border-none">
-                    <div className="max-w-7xl mx-auto">
-                        <button
-                            onClick={enviarPedido}
-                            disabled={!currentUser || !nomeCliente.trim() || !telefoneCliente.trim() || !formaPagamento || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim()))}
-                            className="w-full px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg disabled:bg-gray-600 disabled:cursor-not-allowed text-white transition-all duration-200 transform hover:scale-105 shadow-lg"
-                            style={{
-                                backgroundColor: (!currentUser || !nomeCliente.trim() || !telefoneCliente.trim() || !formaPagamento || (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())))
-                                    ? '#4B5563'
-                                    : coresEstabelecimento.destaque
-                            }}
-                        >
-                            🚀 Enviar Pedido - R$ {finalOrderTotal.toFixed(2).replace('.', ',')}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Order Confirmation Modal */}
-            {showOrderConfirmationModal && confirmedOrderDetails && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                    <div className="bg-gray-900 rounded-xl md:rounded-2xl p-6 md:p-8 max-w-md w-full text-center border border-gray-700">
-                        <div className="text-4xl md:text-6xl mb-3 md:mb-4">🎉</div>
-                        <h2 className="text-2xl md:text-3xl font-bold mb-3 md:mb-4" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                            Pedido Enviado!
-                        </h2>
-                        <div className="space-y-2 md:space-y-3 text-left mb-4 md:mb-6">
-                            <p className="text-sm md:text-base">
-                                <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>ID:</strong>
-                                <span className="font-mono ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                    {confirmedOrderDetails.id.substring(0, 8)}...
-                                </span>
-                            </p>
-                            <p className="text-sm md:text-base">
-                                <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Total:</strong>
-                                <span className="ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                    R$ {confirmedOrderDetails.totalFinal.toFixed(2).replace('.', ',')}
-                                </span>
-                            </p>
-                            <p className="text-sm md:text-base">
-                                <strong style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>Forma de Pagamento:</strong>
-                                <span className="ml-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                    {confirmedOrderDetails.formaPagamento}
-                                </span>
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => setShowOrderConfirmationModal(false)}
-                            className="w-full text-white py-2 md:py-3 rounded-lg md:rounded-xl font-semibold transition-all duration-200 text-sm md:text-base"
-                            style={{ backgroundColor: coresEstabelecimento.destaque }}
-                        >
-                            Fechar
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Login Modal */}
-            {showLoginPrompt && (
-                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-3 md:p-4 z-[1000]">
-                    <div className="bg-gray-900 rounded-xl md:rounded-2xl shadow-2xl p-4 md:p-6 max-w-md w-full relative border border-gray-700">
-                        <button
-                            onClick={() => { setShowLoginPrompt(false); }}
-                            className="absolute top-2 md:top-4 right-2 md:right-4 text-gray-400 hover:text-gray-300 text-xl md:text-2xl font-bold transition-colors duration-200"
-                            aria-label="Fechar"
-                        >
-                            &times;
-                        </button>
-
-                        <div className="text-center mb-4 md:mb-6">
-                            <div className="text-3xl md:text-4xl mb-2 md:mb-4">🔐</div>
-                            <h2 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2" style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}>
-                                {isRegisteringInModal ? 'Criar Conta' : 'Fazer Login'}
-                            </h2>
-                            <p className="text-sm md:text-base" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                {isRegisteringInModal ? 'Preencha seus dados para criar uma conta.' : 'Para acessar o cardápio e fazer pedidos.'}
-                            </p>
-                        </div>
-
-                        {errorAuthModal && (
-                            <div className="bg-red-900 border border-red-700 rounded-lg md:rounded-xl p-3 md:p-4 mb-4 md:mb-6">
-                                <p className="text-xs md:text-sm" style={{ color: coresEstabelecimento.texto?.erro || '#EF4444' }}>
-                                    {errorAuthModal}
-                                </p>
-                            </div>
-                        )}
-
-                        {isRegisteringInModal ? (
-                            <form onSubmit={handleRegisterModal} className="space-y-3 md:space-y-4">
-                                <input
-                                    type="text"
-                                    placeholder="Seu Nome Completo *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={nomeAuthModal}
-                                    onChange={(e) => setNomeAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="tel"
-                                    placeholder="Seu Telefone (com DDD) *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={telefoneAuthModal}
-                                    onChange={(e) => setTelefoneAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="email"
-                                    placeholder="Email *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={emailAuthModal}
-                                    onChange={(e) => setEmailAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="password"
-                                    placeholder="Senha (mín. 6 caracteres) *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={passwordAuthModal}
-                                    onChange={(e) => setPasswordAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Rua *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={ruaAuthModal}
-                                    onChange={(e) => setRuaAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Número *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={numeroAuthModal}
-                                    onChange={(e) => setNumeroAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Bairro *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={bairroAuthModal}
-                                    onChange={(e) => setBairroAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Cidade *"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={cidadeAuthModal}
-                                    onChange={(e) => setCidadeAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Complemento (Opcional)"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={complementoAuthModal}
-                                    onChange={(e) => setComplementoAuthModal(e.target.value)}
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <button
-                                    type="submit"
-                                    className="w-full text-white font-semibold py-2 md:py-3 rounded-lg md:rounded-xl transition-all duration-200 transform hover:scale-105 text-sm md:text-base"
-                                    style={{ backgroundColor: coresEstabelecimento.primaria }}
-                                >
-                                    Cadastrar e Entrar
-                                </button>
-                                <p className="text-xs md:text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                    Já tem uma conta?{' '}
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsRegisteringInModal(false)}
-                                        className="underline font-semibold transition-colors duration-200"
-                                        style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}
-                                    >
-                                        Fazer Login
-                                    </button>
-                                </p>
-                            </form>
-                        ) : (
-                            <form onSubmit={handleLoginModal} className="space-y-3 md:space-y-4">
-                                <input
-                                    type="email"
-                                    placeholder="Email"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={emailAuthModal}
-                                    onChange={(e) => setEmailAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <input
-                                    type="password"
-                                    placeholder="Senha"
-                                    className="w-full border border-gray-600 rounded-lg md:rounded-xl p-2 md:p-3 focus:ring-2 focus:border-transparent outline-none transition-all duration-200 bg-gray-800 text-white text-sm md:text-base"
-                                    value={passwordAuthModal}
-                                    onChange={(e) => setPasswordAuthModal(e.target.value)}
-                                    required
-                                    style={{
-                                        focusRingColor: coresEstabelecimento.primaria,
-                                        color: coresEstabelecimento.texto?.principal || '#FFFFFF'
-                                    }}
-                                />
-                                <button
-                                    type="submit"
-                                    className="w-full text-white font-semibold py-2 md:py-3 rounded-lg md:rounded-xl transition-all duration-200 transform hover:scale-105 text-sm md:text-base"
+                                <button 
+                                    onClick={prepararParaPagamento}
+                                    className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform hover:scale-105 transition active:scale-95"
                                     style={{ backgroundColor: coresEstabelecimento.destaque }}
                                 >
-                                    Entrar
+                                    💳 Pagar R$ {finalOrderTotal.toFixed(2)}
                                 </button>
-                                <p className="text-xs md:text-sm text-center" style={{ color: coresEstabelecimento.texto?.secundario || '#9CA3AF' }}>
-                                    Não tem uma conta?{' '}
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsRegisteringInModal(true)}
-                                        className="underline font-semibold transition-colors duration-200"
-                                        style={{ color: coresEstabelecimento.texto?.principal || '#FFFFFF' }}
-                                    >
-                                        Cadastre-se
-                                    </button>
-                                </p>
-                            </form>
+                            </>
                         )}
+                    </div>
+                </div>
+            </div>
+
+            {/* MODAIS */}
+            <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} />
+            
+            {showPaymentModal && pedidoParaPagamento && (
+                <PaymentModal
+                    isOpen={showPaymentModal}
+                    onClose={() => setShowPaymentModal(false)}
+                    amount={finalOrderTotal}
+                    orderId={`ord_${Date.now()}`}
+                    cartItems={carrinho}
+                    customer={pedidoParaPagamento.cliente}
+                    onSuccess={handlePagamentoSucesso}
+                    onError={handlePagamentoFalha}
+                    coresEstabelecimento={coresEstabelecimento}
+                    pixKey={estabelecimentoInfo?.chavePix} 
+                    establishmentName={estabelecimentoInfo?.nome}
+                />
+            )}
+
+            {showOrderConfirmationModal && confirmedOrderDetails && (
+                <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-gray-900 p-8 rounded-2xl max-w-md w-full text-center border border-gray-700 shadow-2xl">
+                        <div className="text-6xl mb-4 animate-bounce">🎉</div>
+                        <h2 className="text-3xl font-bold text-white mb-2">Pedido Confirmado!</h2>
+                        <p className="text-gray-400 mb-6 font-mono text-sm">ID: {confirmedOrderDetails.id}</p>
+                        <button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold transition">Fechar</button>
                     </div>
                 </div>
             )}
 
-            {/* 🆕 Modal de Variações */}
-            {itemParaVariacoes && (
-                <VariacoesModal
-                    item={itemParaVariacoes}
-                    onConfirm={handleConfirmarVariacoes}
-                    onClose={handleFecharModalVariacoes}
-                    coresEstabelecimento={coresEstabelecimento}
-                />
+            {showLoginPrompt && (
+                <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 px-4 backdrop-blur-sm">
+                    <div className="bg-gray-900 p-6 rounded-2xl w-full max-w-md border border-gray-700 relative shadow-2xl">
+                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl">&times;</button>
+                        <h2 className="text-2xl font-bold text-white mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
+                        <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
+                            {isRegisteringInModal && (
+                                <>
+                                    <input placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                                    <input placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                                    
+                                    {/* 🔴 CORREÇÃO DO LAYOUT (GRID) */}
+                                    <div className="flex gap-2">
+                                        <input placeholder="Rua / Avenida" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="flex-1 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                                        <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-24 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <input placeholder="Bairro" value={bairroAuthModal} onChange={e => setBairroAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                                        <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                                    </div>
+                                    <input placeholder="Complemento (Opcional)" value={complementoAuthModal} onChange={e => setComplementoAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                                </>
+                            )}
+                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
+                            <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded font-bold transition">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                        </form>
+                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-500 hover:text-green-400 text-sm">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button>
+                    </div>
+                </div>
             )}
 
-            {/* Modal de Adicionais */}
-            {itemParaAdicionais && (
-                <AdicionaisModal
-                    item={itemParaAdicionais}
-                    onConfirm={handleConfirmarAdicionais}
-                    onClose={handleFecharModalAdicionais}
-                    coresEstabelecimento={coresEstabelecimento}
-                />
-            )}
+            {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
+            {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
         </div>
     );
 }

@@ -1,102 +1,124 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { 
+    collection, query, where, orderBy, onSnapshot, 
+    doc, updateDoc, deleteDoc, getDoc, writeBatch,
+    serverTimestamp
+} from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { startOfDay, isToday } from 'date-fns';
+import { IoTime, IoTrash } from "react-icons/io5";
 
-// 🎯 CONSTANTES MELHORADAS
-const MENSAGENS_WHATSAPP = {
-    preparo: (nomeCliente, pedidoIdCurto, itensResumo, totalPedido, formaPagamento, nomeEstabelecimento) => {
-        let mensagem = `Olá, ${nomeCliente}! 👋\nConfirmamos seu pedido *#${pedidoIdCurto}* e ele já está em preparo!\n\n*Resumo:*\n${itensResumo}\n\n*Total:* ${totalPedido}\n*Pagamento:* ${formaPagamento}\n\n`;
-        if (formaPagamento && formaPagamento.toLowerCase() === 'pix') {
-            mensagem += `*Atenção:* Por favor, envie o comprovante do Pix aqui para agilizar a liberação. 📄`;
-        }
-        return mensagem;
-    },
-    em_entrega: (nomeCliente, pedidoIdCurto, nomeEstabelecimento) =>
-        `Boas notícias, ${nomeCliente}! Seu pedido #${pedidoIdCurto} de ${nomeEstabelecimento} já saiu para entrega! 🛵`,
-    finalizado: (nomeCliente, pedidoIdCurto) =>
-        `Olá, ${nomeCliente}! Seu pedido #${pedidoIdCurto} foi finalizado. Agradecemos a preferência e bom apetite! 😋`
-};
+// ==========================================
+// 🧩 COMPONENTES AUXILIARES
+// ==========================================
 
-const STATUS_CONFIG = {
-    recebido: { 
-        title: '📥 Recebido', 
-        color: 'border-l-red-500 bg-gradient-to-r from-red-50 to-red-25', 
-        countColor: 'bg-red-500 text-white',
-        nextStatus: 'preparo'
-    },
-    preparo: { 
-        title: '👨‍🍳 Em Preparo', 
-        color: 'border-l-orange-500 bg-gradient-to-r from-orange-50 to-orange-25', 
-        countColor: 'bg-orange-500 text-white',
-        nextStatus: 'em_entrega'
-    },
-    em_entrega: { 
-        title: '🛵 Em Entrega', 
-        color: 'border-l-blue-500 bg-gradient-to-r from-blue-50 to-blue-25', 
-        countColor: 'bg-blue-500 text-white',
-        nextStatus: 'finalizado'
-    },
-    pronto_para_servir: { 
-        title: '✅ Pronto para Servir', 
-        color: 'border-l-green-500 bg-gradient-to-r from-green-50 to-green-25', 
-        countColor: 'bg-green-500 text-white',
-        nextStatus: 'finalizado'
-    },
-    finalizado: { 
-        title: '📦 Finalizado', 
-        color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
-        countColor: 'bg-gray-500 text-white',
-        nextStatus: null
-    }
-};
-
-// 🎯 COMPONENTES AUXILIARES OTIMIZADOS
-const Spinner = () => (
-    <div className="flex flex-col items-center justify-center p-8 h-screen bg-gradient-to-br from-amber-50 to-orange-50 text-gray-900">
-        <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-gray-700 font-medium">Carregando painel...</p>
-        <p className="text-gray-500 text-sm mt-2">Preparando tudo para você</p>
+// 🎯 Componente de Debug (Fica fora para não poluir)
+const DebugInfo = ({ pedidos, estabelecimentoId }) => {
+  const [showDebug, setShowDebug] = useState(false);
+  return (
+    <div className="fixed bottom-4 right-4 z-50">
+      <button 
+        onClick={() => setShowDebug(!showDebug)}
+        className="bg-red-500 text-white p-3 rounded-full shadow-lg hover:bg-red-600 transition-colors"
+      >
+        🐛
+      </button>
+      
+      {showDebug && (
+        <div className="absolute bottom-16 right-0 bg-white p-4 rounded-lg shadow-xl border border-red-200 text-xs max-w-sm">
+           <p><strong>Total Pedidos:</strong> {Object.values(pedidos).flat().length}</p>
+           <p><strong>Estabelecimento:</strong> {estabelecimentoId}</p>
+           <div className="mt-2 max-h-40 overflow-y-auto">
+             {Object.values(pedidos).flat().slice(0, 5).map(p => (
+                 <div key={p.id} className="border-b py-1">
+                     {p.id.slice(0,5)}... ({p.source}) - {p.status}
+                 </div>
+             ))}
+           </div>
+        </div>
+      )}
     </div>
-);
+  );
+};
 
-const NotificationToggle = ({ enabled, onToggle, userInteracted }) => (
-    <button 
-        onClick={onToggle} 
-        className={`flex items-center space-x-3 px-5 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
-            enabled 
-                ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg' 
-                : 'bg-gradient-to-r from-amber-100 to-orange-100 hover:from-amber-200 hover:to-orange-200 text-amber-700 shadow-md animate-pulse'
-        }`}
-        title={enabled ? "Notificações ativadas" : "Notificações desativadas"}
-    >
-        {enabled ? (
-            <>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.93 4.93l14.14 14.14M9 11a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                <span className="hidden sm:inline">Som Ativo</span>
-            </>
-        ) : (
-            <>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707a1 1 0 011.414 0v15.414a1 1 0 01-1.414 0L5.586 15zM17 14l-5-5m0 5l5-5" />
-                </svg>
-                <span className="hidden sm:inline">Ativar Som</span>
-            </>
-        )}
-    </button>
-);
+// 🎯 Componente de Agrupamento por Mesa
+const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
+  const pedidosAgrupados = useMemo(() => {
+    const grupos = {};
+    pedidos.forEach(pedido => {
+      // Cria uma chave única baseada na Mesa e no Lote de Horário
+      const chave = `${pedido.mesaNumero}-${pedido.loteHorario || 'principal'}`;
+      
+      if (!grupos[chave]) {
+        grupos[chave] = {
+          mesaNumero: pedido.mesaNumero,
+          loteHorario: pedido.loteHorario,
+          pedidos: [],
+          totalItens: 0,
+          status: pedido.status,
+          pessoas: pedido.pessoas || 1
+        };
+      }
+      grupos[chave].pedidos.push(pedido);
+      grupos[chave].totalItens += pedido.itens?.length || 0;
+    });
+    return Object.values(grupos);
+  }, [pedidos]);
 
+  if (pedidosAgrupados.length === 0) {
+    return <div className="text-center py-12 text-amber-600 opacity-60">Nenhum pedido</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {pedidosAgrupados.map((grupo, index) => (
+        <div key={index} className="border border-amber-200 rounded-xl bg-amber-50/50 overflow-hidden">
+          {/* Cabeçalho do Grupo */}
+          <div className="bg-white px-4 py-3 border-b border-amber-200 flex justify-between items-center">
+             <div className="flex items-center gap-3">
+                <span className="font-bold text-gray-900 text-lg">Mesa {grupo.mesaNumero}</span>
+                {grupo.loteHorario && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full flex items-center gap-1">
+                        <IoTime className="w-3 h-3"/> {grupo.loteHorario}
+                    </span>
+                )}
+             </div>
+             <span className="text-xs font-semibold text-gray-500">{grupo.totalItens} itens</span>
+          </div>
+          
+          {/* Lista de Pedidos do Grupo */}
+          <div className="p-4 space-y-3">
+            {grupo.pedidos.map(pedido => (
+              <PedidoCard
+                key={pedido.id}
+                item={pedido}
+                onUpdateStatus={onUpdateStatus}
+                onExcluir={onExcluir} // ✅ Passando a função de excluir
+                newOrderIds={newOrderIds}
+                estabelecimentoInfo={estabelecimentoInfo}
+                showMesaInfo={false}
+                isAgrupado={true}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ==========================================
+// 🚀 COMPONENTE PRINCIPAL (PAINEL)
+// ==========================================
 function Painel() {
     const audioRef = useRef(null);
-    const { logout, primeiroEstabelecimento, loading: authLoading, userData } = useAuth();
+    const { logout, loading: authLoading, estabelecimentosGerenciados } = useAuth();
     
+    // --- ESTADOS ---
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ 
         recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] 
@@ -106,161 +128,181 @@ function Painel() {
     const [userInteracted, setUserInteracted] = useState(false);
     const [newOrderIds, setNewOrderIds] = useState(new Set());
     const [abaAtiva, setAbaAtiva] = useState('delivery');
-    const [autoRefresh, setAutoRefresh] = useState(true);
     
+    // Controle de Concorrência
+    const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
+    const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
 
-    // 🎯 HOOKS OTIMIZADOS
-    const setupUserInteraction = useCallback(() => {
-        const handleFirstInteraction = () => {
-            setUserInteracted(true);
-            window.removeEventListener('click', handleFirstInteraction);
-            window.removeEventListener('keydown', handleFirstInteraction);
-        };
-        
-        window.addEventListener('click', handleFirstInteraction);
-        window.addEventListener('keydown', handleFirstInteraction);
-        
-        return () => {
-            window.removeEventListener('click', handleFirstInteraction);
-            window.removeEventListener('keydown', handleFirstInteraction);
-        };
-    }, []);
+    // --- SELEÇÃO DE ESTABELECIMENTO ---
+    const estabelecimentoAtivo = useMemo(() => {
+        if (!estabelecimentosGerenciados || estabelecimentosGerenciados.length === 0) return null;
+        // Tenta pegar o ID prioritário ou o primeiro da lista
+        return estabelecimentosGerenciados.find(id => id === 'SgQtnakq4LT13TqwpdzH') || estabelecimentosGerenciados[0];
+    }, [estabelecimentosGerenciados]);
 
-    const sendWhatsAppNotification = useCallback((status, pedidoData) => {
-        if (pedidoData.tipo !== 'delivery') return null;
+    // --- FUNÇÕES DE AÇÃO ---
 
-        const numeroCliente = pedidoData?.cliente?.telefone;
-        if (!numeroCliente) return null;
-        
-        let formattedNumero = String(numeroCliente).replace(/\D/g, '');
-        if (formattedNumero.length > 11) formattedNumero = formattedNumero.slice(-11);
-        if (!formattedNumero.startsWith('55')) formattedNumero = '55' + formattedNumero;
-        
-        const nomeCliente = pedidoData.cliente?.nome?.split(' ')[0] || 'Cliente';
-        const nomeEstabelecimento = estabelecimentoInfo?.nome || 'nossa loja';
-        const pedidoIdCurto = pedidoData.id.slice(0, 5).toUpperCase();
-        const itensResumo = pedidoData.itens.map(item => `   - ${item.quantidade}x ${item.nome}`).join('\n');
-        const totalPedido = `R$ ${(pedidoData.totalFinal || pedidoData.total).toFixed(2).replace('.', ',')}`;
-        const formaPagamento = pedidoData.formaPagamento || 'Não informada';
-        const messageBuilder = MENSAGENS_WHATSAPP[status];
-        
-        if (messageBuilder) {
-            const mensagemCliente = messageBuilder(nomeCliente, pedidoIdCurto, itensResumo, totalPedido, formaPagamento, nomeEstabelecimento);
-            return `https://wa.me/${formattedNumero}?text=${encodeURIComponent(mensagemCliente)}`;
-        }
-        return null;
-    }, [estabelecimentoInfo]);
+    // 1. EXCLUIR PEDIDO
+    const handleExcluirPedido = useCallback(async (pedidoId, source) => {
+        if (!window.confirm("Tem certeza que deseja cancelar/excluir este pedido?")) return;
 
-    const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
         try {
-            const pedidoRef = doc(db, 'pedidos', pedidoId);
-            await updateDoc(pedidoRef, { 
-                status: newStatus,
-                atualizadoEm: new Date() 
-            });
+            console.log(`🗑️ Excluindo pedido ${pedidoId} (Origem: ${source})`);
             
-            toast.success(`Pedido movido para ${newStatus.replace(/_/g, ' ')}!`);
+            // Define o caminho correto baseado na origem
+            const pedidoRef = source === 'salao'
+                ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
+                : doc(db, 'pedidos', pedidoId);
+
+            await deleteDoc(pedidoRef);
+            toast.success("Pedido excluído com sucesso!");
+        } catch (error) {
+            console.error("❌ Erro ao excluir:", error);
+            toast.error("Erro ao excluir: " + error.message);
+        }
+    }, [estabelecimentoAtivo]);
+
+    // 2. ATUALIZAR STATUS (Mover Cards)
+    const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
+        // Travas de segurança para evitar clique duplo
+        if (isUpdatingRef.current) return;
+        if (bloqueioAtualizacao.has(pedidoId)) return;
+
+        try {
+            isUpdatingRef.current = true;
+            setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
             
+            console.log(`🔄 Movendo ${pedidoId} para ${newStatus}`);
+
+            // Encontra o pedido na memória para saber a origem (source)
             const allPedidos = Object.values(pedidos).flat();
             const pedidoData = allPedidos.find(p => p.id === pedidoId);
             
-            if (pedidoData && pedidoData.tipo === 'delivery') {
-                const whatsappLink = sendWhatsAppNotification(newStatus, pedidoData);
-                if (whatsappLink) {
-                    window.open(whatsappLink, '_blank');
-                    toast.info('Abrindo WhatsApp para notificar o cliente...');
-                }
-            }
-        } catch (error) { 
-            console.error('ERRO AO ATUALIZAR STATUS:', error); 
-            toast.error("Falha ao mover o pedido."); 
-        }
-    }, [pedidos, sendWhatsAppNotification]);
+            if (!pedidoData) throw new Error("Pedido não encontrado na memória.");
 
-    const handleExcluirPedido = useCallback(async (pedidoId) => {
-        if (!pedidoId) return toast.error("Erro: ID do pedido inválido.");
-        if (!window.confirm('Tem certeza que deseja excluir este pedido?')) return;
-        
-        try { 
-            await deleteDoc(doc(db, 'pedidos', pedidoId)); 
-            toast.success('Pedido excluído com sucesso!'); 
-        } catch (error) { 
-            console.error('Erro ao excluir pedido:', error); 
-            toast.error('Erro ao excluir o pedido.'); 
-        }
-    }, []);
+            // Define o caminho correto
+            const pedidoRef = pedidoData.source === 'salao'
+                ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
+                : doc(db, 'pedidos', pedidoId);
 
-    const handleAvançarTodosPedidos = useCallback(async (statusAtual) => {
-        const pedidosStatus = pedidos[statusAtual] || [];
-        if (pedidosStatus.length === 0) {
-            toast.info('Nenhum pedido para avançar');
+            // Atualiza no Firebase
+            await updateDoc(pedidoRef, { 
+                status: newStatus,
+                atualizadoEm: serverTimestamp()
+            });
+            
+            toast.success(`Pedido movido para ${newStatus.replace(/_/g, ' ')}!`);
+
+        } catch (error) { 
+            console.error('❌ Erro ao mover:', error); 
+            toast.error(`Falha ao mover: ${error.message}`); 
+        } finally {
+            // Libera a trava após 1 segundo
+            setTimeout(() => {
+                isUpdatingRef.current = false;
+                setBloqueioAtualizacao(prev => {
+                    const novo = new Set(prev);
+                    novo.delete(pedidoId);
+                    return novo;
+                });
+            }, 1000);
+        }
+    }, [pedidos, estabelecimentoAtivo, bloqueioAtualizacao]);
+
+    // --- LISTENERS (Escuta em Tempo Real) ---
+    useEffect(() => {
+        if (authLoading) return;
+        if (!estabelecimentoAtivo) {
+            setLoading(false);
             return;
         }
 
-        if (!window.confirm(`Deseja avançar todos os ${pedidosStatus.length} pedidos de ${statusAtual}?`)) return;
+        let unsubscribers = [];
+        console.log('🚀 Iniciando Listeners do Painel...');
 
-        try {
-            const batch = writeBatch(db);
-            const nextStatus = STATUS_CONFIG[statusAtual]?.nextStatus;
-            
-            if (!nextStatus) {
-                toast.error('Não há próximo status definido');
-                return;
-            }
-
-            pedidosStatus.forEach(pedido => {
-                const pedidoRef = doc(db, 'pedidos', pedido.id);
-                batch.update(pedidoRef, { 
-                    status: nextStatus,
-                    atualizadoEm: new Date() 
+        const setupPainel = async () => {
+            try {
+                // Info do Estabelecimento
+                const estDocRef = doc(db, 'estabelecimentos', estabelecimentoAtivo);
+                getDoc(estDocRef).then(snap => {
+                    if (snap.exists()) setEstabelecimentoInfo(snap.data());
                 });
-            });
 
-            await batch.commit();
-            toast.success(`${pedidosStatus.length} pedidos avançados para ${nextStatus}!`);
-        } catch (error) {
-            console.error('Erro ao avançar pedidos em lote:', error);
-            toast.error('Erro ao avançar pedidos');
-        }
-    }, [pedidos]);
+                // 1. Listener SALÃO (Sub-coleção)
+                const qSalao = query(
+                    collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
+                    where('status', 'in', ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']),
+                    orderBy('dataPedido', 'asc')
+                );
+                
+                unsubscribers.push(onSnapshot(qSalao, (snapshot) => {
+                    const pedidosSalao = snapshot.docs.map(d => ({
+                        id: d.id, ...d.data(), source: 'salao', tipo: 'salao'
+                    }));
+                    
+                    setPedidos(prev => ({
+                        ...prev,
+                        // Remove antigos do salão e adiciona os novos atualizados
+                        recebido: [...prev.recebido.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'recebido')],
+                        preparo: [...prev.preparo.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'preparo')],
+                        pronto_para_servir: pedidosSalao.filter(p => p.status === 'pronto_para_servir'),
+                        finalizado: [...prev.finalizado.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'finalizado')]
+                    }));
+                }));
 
-    const toggleNotifications = useCallback(() => {
-        const newState = !notificationsEnabled;
-        setNotificationsEnabled(newState);
-        
-        if (newState) {
-            toast.success('🔔 Notificações de som ATIVADAS!');
-            if (userInteracted) {
-                audioRef.current?.play().catch(e => console.log("Usuário precisa interagir para tocar o som de teste."));
+                // 2. Listener DELIVERY (Coleção Raiz)
+                const qGlobal = query(
+                    collection(db, 'pedidos'), 
+                    where('estabelecimentoId', '==', estabelecimentoAtivo),
+                    where('status', 'in', ['recebido', 'preparo', 'em_entrega', 'finalizado']),
+                    orderBy('createdAt', 'asc')
+                );
+                
+                unsubscribers.push(onSnapshot(qGlobal, (snapshot) => {
+                    const pedidosDelivery = snapshot.docs.map(d => ({ 
+                        id: d.id, ...d.data(), source: 'global', tipo: d.data().tipo || 'delivery'
+                    }));
+                    
+                    setPedidos(prev => ({
+                        ...prev,
+                        recebido: [...prev.recebido.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'recebido')],
+                        preparo: [...prev.preparo.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'preparo')],
+                        em_entrega: pedidosDelivery.filter(p => p.status === 'em_entrega'),
+                        finalizado: [...prev.finalizado.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'finalizado')]
+                    }));
+                }));
+                
+                setLoading(false);
+
+            } catch (error) {
+                console.error("❌ Erro no setupPainel:", error);
+                toast.error("Erro ao carregar pedidos.");
+                setLoading(false);
             }
-        } else {
-            toast.warn('🔕 Notificações de som DESATIVADAS.');
-        }
-    }, [notificationsEnabled, userInteracted]);
+        };
 
-    // 🎯 EFEITOS OTIMIZADOS
-    useEffect(() => {
-        setupUserInteraction();
-    }, [setupUserInteraction]);
+        setupPainel();
 
+        return () => unsubscribers.forEach(u => u());
+    }, [estabelecimentoAtivo, authLoading]);
+
+    // --- ÁUDIO E NOTIFICAÇÕES ---
     useEffect(() => {
         const currentRecebidos = pedidos.recebido;
-        const prevRecebidos = prevRecebidosRef.current;
-
-        if (currentRecebidos.length > prevRecebidos.length) {
-            const newOrders = currentRecebidos.filter(c => !prevRecebidos.some(p => p.id === c.id));
-
+        // Se a quantidade de pedidos recebidos aumentou
+        if (currentRecebidos.length > prevRecebidosRef.current.length) {
+            const newOrders = currentRecebidos.filter(c => !prevRecebidosRef.current.some(p => p.id === c.id));
+            
             if (newOrders.length > 0) {
                 const newIds = newOrders.map(order => order.id);
                 setNewOrderIds(prev => new Set([...prev, ...newIds]));
 
                 if (notificationsEnabled && userInteracted) {
-                    audioRef.current?.play().catch(error => {
-                        console.error("ERRO ao tentar tocar o áudio:", error);
-                    });
+                    audioRef.current?.play().catch(e => console.log("Erro áudio:", e));
                 }
                 
+                // Limpa destaque após 15s
                 setTimeout(() => {
                     setNewOrderIds(prev => {
                         const updated = new Set(prev);
@@ -273,107 +315,31 @@ function Painel() {
         prevRecebidosRef.current = currentRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
 
-    // 🎯 SETUP PRINCIPAL OTIMIZADO
-    useEffect(() => {
-        if (authLoading || !primeiroEstabelecimento) {
-            if (!authLoading && !primeiroEstabelecimento) {
-                setLoading(false);
-            }
-            return;
+    const toggleNotifications = () => {
+        const novoStatus = !notificationsEnabled;
+        setNotificationsEnabled(novoStatus);
+        
+        if (novoStatus) {
+            toast.success('🔔 Som Ativado!');
+            if (userInteracted) audioRef.current?.play().catch(() => {});
+        } else {
+            toast.warn('🔕 Som Desativado.');
         }
+    };
 
-        let unsubscribers = [];
-
-        const setupPainel = async () => {
-            try {
-                // 1. Carrega informações do estabelecimento
-                const estDocRef = doc(db, 'estabelecimentos', primeiroEstabelecimento);
-                const estSnap = await getDoc(estDocRef);
-                
-                if (!estSnap.exists()) {
-                    toast.error("Estabelecimento não encontrado.");
-                    setLoading(false);
-                    return;
-                }
-                
-                const estabelecimentoData = estSnap.data();
-                
-                if (!estabelecimentoData.ativo) {
-                    toast.error("Estabelecimento inativo.");
-                    setLoading(false);
-                    return;
-                }
-                
-                setEstabelecimentoInfo(estabelecimentoData);
-
-                // 2. Configura listeners de pedidos
-                const statuses = ['recebido', 'preparo', 'em_entrega', 'pronto_para_servir'];
-                
-                statuses.forEach(status => {
-                    const q = query(
-                        collection(db, 'pedidos'), 
-                        where('estabelecimentoId', '==', primeiroEstabelecimento),
-                        where('status', '==', status), 
-                        orderBy('createdAt', 'asc')
-                    );
-                    
-                    const unsub = onSnapshot(q, 
-                        (snapshot) => {
-                            const list = snapshot.docs.map(d => ({ 
-                                id: d.id, 
-                                ...d.data()
-                            }));
-                            
-                            setPedidos(prev => ({ 
-                                ...prev, 
-                                [status]: list 
-                            }));
-                        }, 
-                        (error) => {
-                            console.error(`❌ Erro no listener ${status}:`, error);
-                            if (error.code === 'permission-denied') {
-                                toast.error("Erro de permissão! Verifique as regras de segurança.");
-                            }
-                        }
-                    );
-                    
-                    unsubscribers.push(unsub);
-                });
-                
-                // Listener para pedidos finalizados (apenas hoje)
-                const todayStart = startOfDay(new Date());
-                const qFinalizado = query(
-                    collection(db, 'pedidos'), 
-                    where('estabelecimentoId', '==', primeiroEstabelecimento),
-                    where('status', '==', 'finalizado'), 
-                    where('createdAt', '>=', todayStart), 
-                    orderBy('createdAt', 'desc')
-                );
-                
-                const unsubFinalizado = onSnapshot(qFinalizado, (snapshot) => {
-                    const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setPedidos(prev => ({ ...prev, finalizado: list }));
-                });
-                
-                unsubscribers.push(unsubFinalizado);
-
-                setLoading(false);
-
-            } catch (error) {
-                console.error("❌ Erro no setupPainel:", error);
-                toast.error("Erro ao configurar o painel");
-                setLoading(false);
-            }
+    // Setup inicial para permitir áudio (browsers bloqueiam autoplay)
+    useEffect(() => {
+        const unlockAudio = () => {
+            setUserInteracted(true);
+            window.removeEventListener('click', unlockAudio);
         };
+        window.addEventListener('click', unlockAudio);
+        return () => window.removeEventListener('click', unlockAudio);
+    }, []);
 
-        setupPainel();
-
-        return () => {
-            unsubscribers.forEach(unsub => unsub());
-        };
-    }, [primeiroEstabelecimento, authLoading]);
-
-    // 🎯 MEMOIZED VALUES
+    // --- RENDERIZAÇÃO ---
+    
+    // Configuração das colunas (Muda conforme a Aba)
     const colunas = useMemo(() => 
         abaAtiva === 'cozinha' 
             ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
@@ -381,141 +347,138 @@ function Painel() {
         [abaAtiva]
     );
 
-    const getStatusConfig = useCallback((status) => {
-        const baseConfig = STATUS_CONFIG[status] || { 
-            title: status.replace(/_/g, ' '), 
-            color: 'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-25', 
-            countColor: 'bg-gray-500 text-white',
-            nextStatus: null
-        };
+    const STATUS_CONFIG = {
+        recebido: { title: '📥 Recebido', color: 'border-l-red-500', countColor: 'bg-red-500' },
+        preparo: { title: '👨‍🍳 Em Preparo', color: 'border-l-orange-500', countColor: 'bg-orange-500' },
+        em_entrega: { title: '🛵 Em Entrega', color: 'border-l-blue-500', countColor: 'bg-blue-500' },
+        pronto_para_servir: { title: '✅ Pronto', color: 'border-l-green-500', countColor: 'bg-green-500' },
+        finalizado: { title: '📦 Finalizado', color: 'border-l-gray-500', countColor: 'bg-gray-500' }
+    };
 
-        if (status === 'em_entrega' && abaAtiva === 'cozinha') {
-            return { ...baseConfig, title: '🛵 Pronto / Em Entrega' };
-        }
-
-        return baseConfig;
-    }, [abaAtiva]);
-
-    // 🎯 RENDER CONDICIONAL
     if (loading || authLoading) {
-        return <Spinner />;
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Carregando painel...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!estabelecimentoAtivo) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-4">
+                <div className="text-center p-8 bg-white rounded-2xl shadow-lg">
+                    <h2 className="text-xl font-bold mb-2">Nenhum Estabelecimento Selecionado</h2>
+                    <p className="text-gray-500 mb-4">Por favor, selecione um estabelecimento no dashboard.</p>
+                    <Link to="/dashboard" className="bg-amber-500 text-white px-6 py-2 rounded-lg font-bold">Voltar</Link>
+                </div>
+            </div>
+        );
     }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex flex-col">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
-            {/* Header Modernizado */}
-            <header className="bg-white shadow-lg border-b border-amber-200 p-4 sticky top-0 z-30">
-                <div className="max-w-7xl mx-auto flex justify-between items-center">          
-                    <div className="flex items-center space-x-4">
-                        <NotificationToggle 
-                            enabled={notificationsEnabled}
-                            onToggle={toggleNotifications}
-                            userInteracted={userInteracted}
-                        />
+            <DebugInfo pedidos={pedidos} estabelecimentoId={estabelecimentoAtivo} />
 
+            {/* HEADER */}
+            <header className="bg-white shadow-lg border-b border-amber-200 p-4 sticky top-0 z-30">
+                <div className="max-w-7xl mx-auto flex justify-between items-center">
+                    <div className="flex gap-4 items-center">
                         <button 
-                            onClick={() => setAutoRefresh(!autoRefresh)}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                autoRefresh 
-                                    ? 'bg-green-100 text-green-700 border border-green-300' 
-                                    : 'bg-gray-100 text-gray-700 border border-gray-300'
+                            onClick={toggleNotifications}
+                            className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${
+                                notificationsEnabled ? 'bg-green-500 text-white shadow' : 'bg-amber-100 text-amber-800'
                             }`}
                         >
-                            {autoRefresh ? '🔄 Auto' : '⏸️ Pausado'}
+                            {notificationsEnabled ? '🔔 Som ON' : '🔕 Som OFF'}
                         </button>
+                        <div className="hidden md:block text-sm text-gray-500">
+                            ID: {estabelecimentoAtivo.slice(0, 8)}...
+                        </div>
+                    </div>
 
+                    {/* Tabs Centrais */}
+                    <div className="flex bg-gray-100 p-1 rounded-xl">
                         <button 
-                            onClick={logout} 
-                            className="px-5 py-3 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 border border-gray-200 hover:border-red-200"
+                            onClick={() => setAbaAtiva('delivery')} 
+                            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                abaAtiva === 'delivery' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                            }`}
                         >
-                            Sair
+                            🛵 Delivery
+                        </button>
+                        <button 
+                            onClick={() => setAbaAtiva('cozinha')} 
+                            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                abaAtiva === 'cozinha' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            👨‍🍳 Cozinha
                         </button>
                     </div>
+
+                    <button onClick={logout} className="text-gray-500 hover:text-red-500 font-bold px-4">
+                        Sair
+                    </button>
                 </div>
             </header>
 
-            {/* Abas de Navegação */}
-            <div className="bg-white border-b border-amber-200 shadow-sm">
-                <div className="max-w-7xl mx-auto px-4">
-                    <nav className="flex space-x-8" aria-label="Tabs">
-                        {[
-                            { key: 'delivery', label: 'Delivery / Retirada', icon: '🛵' },
-                            { key: 'cozinha', label: 'Cozinha (Mesas)', icon: '👨‍🍳' }
-                        ].map(tab => (
-                            <button 
-                                key={tab.key}
-                                onClick={() => setAbaAtiva(tab.key)} 
-                                className={`py-5 px-3 border-b-2 font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                                    abaAtiva === tab.key 
-                                        ? 'border-amber-500 text-amber-600 bg-amber-50' 
-                                        : 'border-transparent text-gray-500 hover:text-amber-600 hover:border-amber-300'
-                                }`}
-                            >
-                                <span className="text-lg">{tab.icon}</span>
-                                <span>{tab.label}</span>
-                            </button>
-                        ))}
-                    </nav>
-                </div>
-            </div>
-
-            {/* Grid de Pedidos Aprimorado */}
-            <main className="flex-grow p-6 max-w-7xl mx-auto w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {/* MAIN CONTENT (GRID) */}
+            <main className="flex-grow p-4 md:p-6 overflow-x-auto">
+                <div className="flex gap-4 min-w-[1000px] h-full">
                     {colunas.map(status => {
-                        const config = getStatusConfig(status);
+                        const config = STATUS_CONFIG[status];
                         const allPedidosStatus = pedidos[status] || [];
                         
-                        const pedidosFiltrados = allPedidosStatus.filter(p => 
-                            abaAtiva === 'cozinha' 
-                                ? p.tipo === 'mesa'
-                                : p.tipo === 'delivery' || p.tipo === 'retirada'
-                        );
-                        
-                        const pedidosCount = pedidosFiltrados.length;
-                        const hasNextStatus = config.nextStatus && pedidosCount > 0;
+                        // Filtro Principal: Salão vs Delivery
+                        const pedidosFiltrados = allPedidosStatus.filter(p => {
+                            if (abaAtiva === 'cozinha') return p.source === 'salao';
+                            return p.source === 'global';
+                        });
 
                         return (
-                            <div key={status} className={`rounded-2xl shadow-lg border border-amber-100 border-l-4 ${config.color} flex flex-col h-full transition-all duration-300 hover:shadow-xl`}>
-                                <div className="p-5 border-b border-amber-200 flex justify-between items-center bg-white/50 rounded-t-2xl">
-                                    <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">{config.icon}</span>
-                                        <h2 className="font-bold text-gray-900 text-lg">{config.title}</h2>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <span className={`${config.countColor} text-sm font-bold px-3 py-2 rounded-full min-w-10 text-center shadow-md`}>
-                                            {pedidosCount}
-                                        </span>
-                                        {hasNextStatus && (
-                                            <button
-                                                onClick={() => handleAvançarTodosPedidos(status)}
-                                                className="bg-amber-500 hover:bg-amber-600 text-white p-2 rounded-lg text-xs font-medium transition-colors"
-                                                title={`Avançar todos para ${config.nextStatus}`}
-                                            >
-                                                ⏩
-                                            </button>
-                                        )}
-                                    </div>
+                            <div key={status} className={`flex-1 min-w-[300px] rounded-2xl shadow-lg border border-amber-100 border-l-4 ${config.color} bg-white flex flex-col max-h-[calc(100vh-140px)]`}>
+                                {/* Header da Coluna */}
+                                <div className="p-4 border-b border-amber-100 flex justify-between items-center bg-gray-50 rounded-tr-xl">
+                                    <h2 className="font-bold text-gray-800 text-lg">{config.title}</h2>
+                                    <span className={`${config.countColor} text-white text-xs font-bold px-3 py-1 rounded-full`}>
+                                        {pedidosFiltrados.length}
+                                    </span>
                                 </div>
-                                <div className="p-4 space-y-4 flex-grow overflow-y-auto max-h-[calc(100vh-250px)] bg-white/30 rounded-b-2xl">
+
+                                {/* Lista de Pedidos (Scrollável) */}
+                                <div className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                                     {pedidosFiltrados.length > 0 ? (
-                                        pedidosFiltrados.map(ped => (
-                                            <PedidoCard
-                                                key={ped.id}
-                                                item={ped}
+                                        abaAtiva === 'cozinha' ? (
+                                            // Modo Agrupado (Cozinha)
+                                            <GrupoPedidosMesa
+                                                pedidos={pedidosFiltrados}
                                                 onUpdateStatus={handleUpdateStatusAndNotify}
-                                                onDeletePedido={handleExcluirPedido}
+                                                onExcluir={handleExcluirPedido}
                                                 newOrderIds={newOrderIds}
                                                 estabelecimentoInfo={estabelecimentoInfo}
                                             />
-                                        ))
+                                        ) : (
+                                            // Modo Lista Simples (Delivery)
+                                            pedidosFiltrados.map(ped => (
+                                                <PedidoCard
+                                                    key={ped.id}
+                                                    item={ped}
+                                                    onUpdateStatus={handleUpdateStatusAndNotify}
+                                                    onExcluir={handleExcluirPedido}
+                                                    newOrderIds={newOrderIds}
+                                                    estabelecimentoInfo={estabelecimentoInfo}
+                                                />
+                                            ))
+                                        )
                                     ) : (
-                                        <div className="text-center py-12">
-                                            <div className="text-amber-300 text-5xl mb-4">📝</div>
-                                            <p className="text-amber-600 font-medium">Nenhum pedido</p>
-                                            <p className="text-amber-400 text-sm mt-1">Aguardando novos pedidos</p>
+                                        <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50">
+                                            <div className="text-4xl mb-2">🍃</div>
+                                            <p>Vazio</p>
                                         </div>
                                     )}
                                 </div>
@@ -524,24 +487,6 @@ function Painel() {
                     })}
                 </div>
             </main>
-
-            {/* Footer com estatísticas */}
-            <footer className="bg-white border-t border-amber-200 py-6 mt-8">
-                <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
-                    <div className="text-sm text-gray-600">
-                        Total de pedidos hoje: {Object.values(pedidos).flat().length}
-                    </div>
-                    <Link 
-                        to="/dashboard" 
-                        className="flex items-center space-x-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg"
-                    >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        <span className="text-lg">Voltar para Dashboard</span>
-                    </Link>
-                </div>
-            </footer>
         </div>
     );
 }

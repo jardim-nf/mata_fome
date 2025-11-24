@@ -1,81 +1,54 @@
-// src/pages/TelaPedidos.jsx - VERSÃO FINAL CORRIGIDA E OTIMIZADA
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; 
 import { db } from '../firebase';
-// 🛠️ IMPORTAÇÃO COMPLETA: serverTimestamp, collectionGroup (mantida para robustez)
-import { getDocs, doc, getDoc, updateDoc, collection, serverTimestamp, query, where, collectionGroup } from 'firebase/firestore'; 
+import { 
+    getDocs, 
+    doc, 
+    getDoc, 
+    updateDoc, 
+    collection, 
+    serverTimestamp, 
+    query, 
+    where,
+    writeBatch
+} from 'firebase/firestore'; 
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { 
-    IoArrowBack, 
-    IoCartOutline, 
-    IoTrashOutline, 
-    IoSearchOutline,
-    IoAddCircleOutline,
-    IoRemoveCircleOutline,
-    IoSaveOutline,
-    IoRestaurantOutline,
-    IoReceiptOutline,
-    IoCheckmarkCircleOutline,
-    IoChevronDownOutline,
-    IoChevronUpOutline,
-    IoGridOutline,
-    IoListOutline
+    IoArrowBack, IoCart, IoTrash, IoSearch, IoAdd,
+    IoRemove, IoSave, IoRestaurant, IoReceipt,
+    IoCheckmark, IoChevronDown, IoClose, IoPerson,
+    IoPencil, IoAddCircle, IoRemoveCircle, IoGrid,
+    IoList, IoTime, IoCheckmarkCircle, IoChevronUp,
+    IoAddOutline, IoRemoveOutline
 } from 'react-icons/io5';
 
-// 🎯 FUNÇÃO DE LÓGICA INTELIGENTE: Verifica se o item pode ser adicionado diretamente
-const podeAdicionarDireto = (produto) => {
-    const hasVariations = produto.variacoes && produto.variacoes.length > 0;
-    
-    if (!hasVariations) {
-        return true; // 0 variações: Adiciona Direto
-    }
-
-    const variacoesAtivas = produto.variacoes.filter(v => 
-        v.ativo !== false 
-    );
-
-    // 1 variação ativa: Adiciona Direto (automaticamente)
-    if (variacoesAtivas.length === 1) {
-        return true; 
-    }
-
-    return false; // 2+ variações: Precisa escolher
-};
-
-
-// --- COMPONENTE DO PRODUTO EM GRID ---
-const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
+// --- COMPONENTE PRODUTO CARD MOBILE-FIRST ---
+const ProdutoCard = ({ produto, onAdicionar, estaNoCarrinho, layout = 'grid' }) => {
     const [mostrarVariacoes, setMostrarVariacoes] = useState(false);
     const [variacaoSelecionada, setVariacaoSelecionada] = useState(null);
-
     const temVariacoes = produto.variacoes && produto.variacoes.length > 0;
-    const podeAdicionar = podeAdicionarDireto(produto);
+    const podeAdicionar = !temVariacoes || produto.variacoes.filter(v => v.ativo !== false).length === 1;
 
     const handleAdicionar = useCallback(() => {
-        // 1. ADIÇÃO DIRETA (0 ou 1 VARIAÇÃO ATIVA)
         if (podeAdicionar) {
-             let itemParaAdicionar = produto;
-             
-             if (produto.variacoes && produto.variacoes.length === 1) {
-                 const variacaoUnica = produto.variacoes.find(v => v.ativo !== false);
-                 itemParaAdicionar = {
-                     ...produto,
-                     id: `${produto.id}-${variacaoUnica.nome || variacaoUnica.tamanho}`,
-                     nomeCompleto: `${produto.nome} - ${variacaoUnica.nome || variacaoUnica.tamanho}`,
-                     preco: parseFloat(variacaoUnica.preco || produto.preco)
-                 };
-             }
-             
-             onAdicionar(itemParaAdicionar);
-             return;
-        }
-
-        // 2. ADIÇÃO VIA SELETOR (2+ VARIAÇÕES)
-        if (temVariacoes && !variacaoSelecionada) {
-            setMostrarVariacoes(true);
+            let itemParaAdicionar = produto;
+            if (produto.variacoes && produto.variacoes.length === 1) {
+                const variacaoUnica = produto.variacoes.find(v => v.ativo !== false);
+                itemParaAdicionar = {
+                    ...produto,
+                    id: `${produto.id}-${variacaoUnica.nome || variacaoUnica.tamanho}`,
+                    nomeCompleto: `${produto.nome} - ${variacaoUnica.nome || variacaoUnica.tamanho}`,
+                    preco: parseFloat(variacaoUnica.preco || produto.preco)
+                };
+            }
+            onAdicionar(itemParaAdicionar);
+            toast.success('✅ Adicionado!', { position: "bottom-center" });
             return;
+        }
+        if (temVariacoes && !variacaoSelecionada) { 
+            setMostrarVariacoes(true); 
+            return; 
         }
 
         const produtoParaAdicionar = {
@@ -85,65 +58,57 @@ const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
             nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
             preco: parseFloat(variacaoSelecionada.preco || produto.preco)
         }; 
-
         onAdicionar(produtoParaAdicionar);
         setVariacaoSelecionada(null);
         setMostrarVariacoes(false);
+        toast.success('✅ Adicionado!', { position: "bottom-center" });
     }, [produto, temVariacoes, variacaoSelecionada, onAdicionar, podeAdicionar]);
 
+    // Layout Mobile Otimizado
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col group hover:border-amber-200">
+        <div className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 active:scale-95 transition-all duration-150 overflow-hidden flex flex-col h-full">
             {produto.imageUrl ? (
-                <div className="relative overflow-hidden">
+                <div className="relative h-24 overflow-hidden">
                     <img 
                         src={produto.imageUrl} 
                         alt={produto.nome} 
-                        className="w-full h-24 object-cover transition-transform duration-200 group-hover:scale-105" 
-                        loading="lazy"
+                        className="w-full h-full object-cover"
                     />
                     {estaNoCarrinho && (
-                        <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5 shadow-sm">
-                            <IoCheckmarkCircleOutline className="text-xs" />
+                        <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-1 shadow-lg">
+                            <IoCheckmark className="text-xs" />
                         </div>
                     )}
                 </div>
             ) : (
-                <div className="w-full h-24 bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
-                    <IoRestaurantOutline className="text-xl text-amber-400" />
+                <div className="w-full h-24 bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+                    <IoRestaurant className="text-xl text-blue-400" />
                 </div>
             )}
             
             <div className="p-2 flex flex-col flex-grow">
                 <div className="flex-grow mb-1">
-                    <h3 className="text-gray-900 font-semibold text-xs leading-tight mb-1 line-clamp-2">{produto.nome}</h3>
+                    <h3 className="text-gray-900 font-semibold text-xs leading-tight line-clamp-2 mb-1">{produto.nome}</h3>
                     {produto.descricao && (
-                        <p className="text-gray-500 text-xs leading-relaxed line-clamp-2 mb-1">{produto.descricao}</p>
+                        <p className="text-gray-500 text-[10px] line-clamp-2 leading-tight">{produto.descricao}</p>
                     )}
                 </div>
 
-                {/* Seção de Variações - VISÍVEL APENAS SE HOUVER OPÇÕES PARA ESCOLHER */}
                 {temVariacoes && !podeAdicionar && mostrarVariacoes && (
-                    <div className="mb-1 p-1 bg-gray-50 rounded border border-gray-200">
-                        <p className="text-xs text-gray-600 mb-1 font-medium">Opções:</p>
+                    <div className="mb-1 p-1 bg-blue-50 rounded border border-blue-100">
                         <div className="space-y-1 max-h-20 overflow-y-auto">
-                            {produto.variacoes.slice(0, 3).map((variacao, index) => (
-                                <button
-                                    key={index}
+                            {produto.variacoes.map((variacao, index) => (
+                                <button 
+                                    key={index} 
                                     onClick={() => setVariacaoSelecionada(variacao)}
-                                    className={`w-full text-left p-1 rounded border transition-all duration-200 text-xs ${
-                                        variacaoSelecionada === variacao
-                                            ? 'bg-amber-500 text-white border-amber-500'
-                                            : 'bg-white text-gray-700 border-gray-300 hover:border-amber-300'
+                                    className={`w-full text-left p-1 rounded text-[10px] flex justify-between items-center transition-all ${
+                                        variacaoSelecionada === variacao 
+                                            ? 'bg-blue-500 text-white' 
+                                            : 'bg-white text-gray-700 border border-gray-200'
                                     }`}
                                 >
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-medium truncate">
-                                            {variacao.nome || variacao.tamanho || `Opção ${index + 1}`}
-                                        </span>
-                                        <span className="font-bold whitespace-nowrap">
-                                            R$ {parseFloat(variacao.preco || produto.preco).toFixed(2).replace('.', ',')}
-                                        </span>
-                                    </div>
+                                    <span className="font-medium truncate">{variacao.nome || variacao.tamanho}</span>
+                                    <span className="font-bold whitespace-nowrap">R$ {parseFloat(variacao.preco || produto.preco).toFixed(2)}</span>
                                 </button>
                             ))}
                         </div>
@@ -151,34 +116,27 @@ const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
                 )}
 
                 <div className="flex items-center justify-between mt-auto">
-                    <div className="flex items-center space-x-1">
-                        <span className="text-amber-600 font-bold text-sm">
-                            R$ {parseFloat(produto.preco).toFixed(2).replace('.', ',')}
-                        </span>
-                        {/* Botão de abrir seletor, visível apenas se houver 2+ variações */}
-                        {temVariacoes && !podeAdicionar && !mostrarVariacoes && (
-                            <button 
-                                onClick={() => setMostrarVariacoes(!mostrarVariacoes)}
-                                className="text-blue-500 hover:text-blue-600 text-xs"
-                            >
-                                <IoChevronDownOutline />
-                            </button>
-                        )}
-                    </div>
+                    <span className="text-blue-600 font-bold text-xs">R$ {parseFloat(produto.preco).toFixed(2)}</span>
                     <button 
                         onClick={handleAdicionar}
-                        // Desabilita se for item de 2+ variações E o seletor estiver aberto E nada selecionado
                         disabled={!podeAdicionar && temVariacoes && mostrarVariacoes && !variacaoSelecionada}
-                        className={`font-semibold py-1 px-2 rounded text-xs transition-all duration-200 flex items-center space-x-1 ${
+                        className={`px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-0.5 transition-all active:scale-95 ${
                             estaNoCarrinho 
-                                ? 'bg-green-500 hover:bg-green-600 text-white' 
-                                : podeAdicionar || (temVariacoes && variacaoSelecionada)
-                                ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        }`}
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-blue-500 hover:bg-blue-600 text-white'
+                        } ${(!podeAdicionar && temVariacoes && mostrarVariacoes && !variacaoSelecionada) ? 'opacity-50' : ''}`}
                     >
-                        <IoAddCircleOutline className="text-xs" />
-                        <span>{podeAdicionar ? 'Add' : 'Opções'}</span>
+                        {temVariacoes && !podeAdicionar && !mostrarVariacoes ? (
+                            <>
+                                Opções
+                                <IoChevronDown className="text-[8px]"/>
+                            </>
+                        ) : (
+                            <>
+                                <IoAdd className="text-[10px]"/> 
+                                Add
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
@@ -186,232 +144,11 @@ const ProdutoCardGrid = ({ produto, onAdicionar, estaNoCarrinho }) => {
     );
 };
 
-// --- COMPONENTE DO PRODUTO EM LISTA (Lógica idêntica ao Grid) ---
-const ProdutoCardLista = ({ produto, onAdicionar, estaNoCarrinho }) => {
-    const [mostrarVariacoes, setMostrarVariacoes] = useState(false);
-    const [variacaoSelecionada, setVariacaoSelecionada] = useState(null);
-
-    const temVariacoes = produto.variacoes && produto.variacoes.length > 0;
-    const podeAdicionar = podeAdicionarDireto(produto);
-
-    const handleAdicionar = useCallback(() => {
-        // 1. ADIÇÃO DIRETA (0 ou 1 VARIAÇÃO ATIVA)
-        if (podeAdicionar) {
-             let itemParaAdicionar = produto;
-             
-             if (produto.variacoes && produto.variacoes.length === 1) {
-                 const variacaoUnica = produto.variacoes.find(v => v.ativo !== false);
-                 itemParaAdicionar = {
-                     ...produto,
-                     id: `${produto.id}-${variacaoUnica.nome || variacaoUnica.tamanho}`,
-                     nomeCompleto: `${produto.nome} - ${variacaoUnica.nome || variacaoUnica.tamanho}`,
-                     preco: parseFloat(variacaoUnica.preco || produto.preco)
-                 };
-             }
-             
-             onAdicionar(itemParaAdicionar);
-             return;
-        }
-
-        // 2. ADIÇÃO VIA SELETOR (2+ VARIAÇÕES)
-        if (temVariacoes && !variacaoSelecionada) {
-            setMostrarVariacoes(true);
-            return;
-        }
-
-        const produtoParaAdicionar = {
-            ...produto,
-            ...variacaoSelecionada,
-            id: `${produto.id}-${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
-            nomeCompleto: `${produto.nome} - ${variacaoSelecionada.nome || variacaoSelecionada.tamanho}`,
-            preco: parseFloat(variacaoSelecionada.preco || produto.preco)
-        }; 
-
-        onAdicionar(produtoParaAdicionar);
-        setVariacaoSelecionada(null);
-        setMostrarVariacoes(false);
-    }, [produto, temVariacoes, variacaoSelecionada, onAdicionar, podeAdicionar]);
-
-    return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 p-2 group hover:border-amber-200">
-            <div className="flex items-start gap-2">
-                {/* Imagem do produto */}
-                <div className="flex-shrink-0">
-                    {produto.imageUrl ? (
-                        <div className="relative">
-                            <img 
-                                src={produto.imageUrl} 
-                                alt={produto.nome} 
-                                className="w-12 h-12 object-cover rounded transition-transform duration-200 group-hover:scale-105" 
-                                loading="lazy"
-                            />
-                            {estaNoCarrinho && (
-                                <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5 shadow-sm">
-                                    <IoCheckmarkCircleOutline className="text-xs" />
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="w-12 h-12 bg-gradient-to-br from-amber-50 to-orange-100 rounded flex items-center justify-center">
-                            <IoRestaurantOutline className="text-base text-amber-400" />
-                        </div>
-                    )}
-                </div>
-
-                {/* Conteúdo do produto */}
-                <div className="flex-grow min-w-0">
-                    <div className="flex items-start justify-between mb-1">
-                        <div className="flex-grow min-w-0">
-                            <h3 className="text-gray-900 font-semibold text-xs leading-tight truncate">{produto.nome}</h3>
-                            {produto.descricao && (
-                                <p className="text-gray-500 text-xs leading-relaxed line-clamp-1 mt-0.5">{produto.descricao}</p>
-                            )}
-                        </div>
-                        <div className="flex-shrink-0 ml-2">
-                            <span className="text-amber-600 font-bold text-sm whitespace-nowrap">
-                                R$ {parseFloat(produto.preco).toFixed(2).replace('.', ',')}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                        <div className="flex flex-wrap gap-1">
-                            {produto.categoria && (
-                                <span className="inline-block bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-full">
-                                    {produto.categoria}
-                                </span>
-                            )}
-                            {/* Botão de opções, visível apenas se houver 2+ variações */}
-                            {temVariacoes && !podeAdicionar && (
-                                <button 
-                                    onClick={() => setMostrarVariacoes(!mostrarVariacoes)}
-                                    className="inline-block bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full hover:bg-blue-200 transition-colors flex items-center gap-0.5"
-                                >
-                                    {mostrarVariacoes ? <IoChevronUpOutline /> : <IoChevronDownOutline />}
-                                    <span>{produto.variacoes.length} opções</span>
-                                </button>
-                            )}
-                        </div>
-
-                        <button 
-                            onClick={handleAdicionar}
-                            disabled={!podeAdicionar && temVariacoes && mostrarVariacoes && !variacaoSelecionada}
-                            className={`font-semibold py-1 px-2 rounded text-xs transition-all duration-200 flex items-center justify-center space-x-1 ${
-                                estaNoCarrinho 
-                                    ? 'bg-green-500 hover:bg-green-600 text-white' 
-                                    : podeAdicionar || (temVariacoes && variacaoSelecionada)
-                                    ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            }`}
-                        >
-                            <IoAddCircleOutline className="text-xs" />
-                            <span>{podeAdicionar ? 'Add' : 'Opções'}</span>
-                        </button>
-                    </div>
-
-                    {/* Seção de Variações em Lista - VISÍVEL APENAS SE HOUVER OPÇÕES PARA ESCOLHER */}
-                    {temVariacoes && !podeAdicionar && mostrarVariacoes && (
-                        <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
-                            <p className="text-xs text-gray-600 mb-1 font-medium">Selecione uma opção:</p>
-                            <div className="grid grid-cols-1 gap-1">
-                                {produto.variacoes.slice(0, 3).map((variacao, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => setVariacaoSelecionada(variacao)}
-                                        className={`text-left p-1.5 rounded border transition-all duration-200 text-xs ${
-                                            variacaoSelecionada === variacao
-                                                ? 'bg-amber-500 text-white border-amber-500'
-                                                : 'bg-white text-gray-700 border-gray-300 hover:border-amber-300'
-                                        }`}
-                                    >
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-medium truncate">
-                                                {variacao.nome || variacao.tamanho || `Opção ${index + 1}`}
-                                            </span>
-                                            <span className="font-bold whitespace-nowrap">
-                                                R$ {parseFloat(variacao.preco || produto.preco).toFixed(2).replace('.', ',')}
-                                            </span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// 🚀 FUNÇÃO ULTRA RÁPIDA V2: Múltiplas buscas paralelas (Promise.all)
-// Esta função é o fallback mais rápido sem Collection Group
-const carregarProdutosRapido = async (estabId) => {
-    try {
-        let todosProdutos = [];
-
-        const todasCategoriasRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
-        const categoriasSnapshot = await getDocs(todasCategoriasRef);
-        
-        const promessas = [];
-
-        if (!categoriasSnapshot.empty) {
-            categoriasSnapshot.docs.forEach(catDoc => {
-                const categoriaData = catDoc.data();
-                const categoriaId = catDoc.id;
-
-                // Busca os itens desta categoria em paralelo
-                promessas.push(getDocs(
-                    query(
-                        collection(db, 'estabelecimentos', estabId, 'cardapio', categoriaId, 'itens'),
-                        where('ativo', '==', true)
-                    )
-                ).then(itensSnapshot => {
-                    return itensSnapshot.docs.map(itemDoc => ({
-                        ...itemDoc.data(),
-                        id: itemDoc.id,
-                        categoria: categoriaData.nome || 'Geral', // Pega o nome da categoria do doc pai
-                        categoriaId: categoriaId,
-                        // Adiciona o nome da categoria ao item para ordenação e filtro
-                        categoriaNome: categoriaData.nome || 'Geral' 
-                    }));
-                }).catch(() => [])); 
-            });
-            
-            const resultados = await Promise.all(promessas);
-            todosProdutos = resultados.flat();
-        }
-
-        // Lógica de fallback para estrutura alternativa (se existir)
-        if (todosProdutos.length === 0) {
-            const cardapioDiretoRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
-            const qAtivos = query(cardapioDiretoRef, where('ativo', '==', true));
-            const snapshotDireto = await getDocs(qAtivos);
-
-            if (!snapshotDireto.empty) {
-                todosProdutos = snapshotDireto.docs.map(doc => ({
-                    ...doc.data(),
-                    id: doc.id,
-                    categoria: doc.data().categoria || 'Geral',
-                    categoriaId: 'direto',
-                    categoriaNome: doc.data().categoria || 'Geral'
-                }));
-            }
-        }
-        
-        return todosProdutos;
-
-    } catch (error) {
-        console.error("❌ Erro no carregamento rápido:", error);
-        return [];
-    }
-};
-
-
+// --- COMPONENTE PRINCIPAL MOBILE-FIRST ---
 const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
     const { estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate(); 
-    
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId; 
 
     const [mesa, setMesa] = useState(null);
@@ -421,529 +158,552 @@ const TelaPedidos = () => {
     const [loading, setLoading] = useState(true);
     const [termoBusca, setTermoBusca] = useState('');
     const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
-    const [estabelecimentoNome, setEstabelecimentoNome] = useState('Carregando...');
     const [salvando, setSalvando] = useState(false);
-    const [visualizacao, setVisualizacao] = useState('grid');
     const [showOrderSummary, setShowOrderSummary] = useState(false);
+    const [layout, setLayout] = useState('grid');
 
-    // Função para carregar dados
+    // COMANDA INDIVIDUAL
+    const [ocupantes, setOcupantes] = useState(['Mesa']); 
+    const [clienteSelecionado, setClienteSelecionado] = useState('Mesa');
+    const [editandoNomeIndex, setEditandoNomeIndex] = useState(null);
+    const [novoNomeTemp, setNovoNomeTemp] = useState('');
+
     const fetchData = useCallback(async () => {
-        if (!estabelecimentoId) {
-            setLoading(false);
-            toast.error("Estabelecimento não identificado.");
-            return;
-        }
-
+        if (!estabelecimentoId) return;
         try {
             setLoading(true);
-            console.log("🔄 Iniciando carregamento do cardápio...");
-
-            // 1. Buscar dados básicos
-            const [estabSnap, mesaSnap] = await Promise.all([
-                getDoc(doc(db, 'estabelecimentos', estabelecimentoId)),
-                getDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId))
-            ]);
-
-            // Configurar estabelecimento e mesa
-            if (estabSnap.exists()) {
-                setEstabelecimentoNome(estabSnap.data().nome || 'Estabelecimento');
-            }
+            const mesaSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId));
 
             if (mesaSnap.exists()) {
                 const mesaData = mesaSnap.data();
                 setMesa(mesaData);
                 setResumoPedido(mesaData.itens || []);
-            } else {
-                toast.error("Mesa não encontrada.");
+                
+                if (mesaData.nomesOcupantes && mesaData.nomesOcupantes.length > 0) {
+                    setOcupantes(mesaData.nomesOcupantes);
+                    setClienteSelecionado(mesaData.nomesOcupantes[0]);
+                }
             }
 
-            // 2. Buscar produtos de forma RÁPIDA
-            const todosProdutos = await carregarProdutosRapido(estabelecimentoId);
-            
-            console.log("🎯 TOTAL DE PRODUTOS CARREGADOS:", todosProdutos.length);
+            // Carregar cardápio
+            const snap = await getDocs(query(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio'), where('ativo', '==', true)));
+            const produtos = snap.docs.map(d => ({...d.data(), id: d.id}));
+            setCardapio(produtos);
+            setCategorias(['Todos', ...new Set(produtos.map(p => p.categoria).filter(Boolean))]);
 
-            // Ordenação (mantida a ordem por categoria/nome, mas você pode usar ordem personalizada aqui)
-            todosProdutos.sort((a, b) => {
-                const categoriaCompare = a.categoria.localeCompare(b.categoria);
-                if (categoriaCompare !== 0) return categoriaCompare;
-                
-                const ordemA = a.ordem || 999;
-                const ordemB = b.ordem || 999;
-                if (ordemA !== ordemB) return ordemA - ordemB;
-                
-                return a.nome.localeCompare(b.nome);
-            });
-
-            setCardapio(todosProdutos);
-
-            // Criar lista de categorias (e ordenar alfabeticamente)
-            let categoriasUnicas = ['Todos', ...new Set(todosProdutos.map(p => p.categoria).filter(Boolean))];
-            
-            // 🎨 Forçar ordem alfabética para os botões de controle
-            categoriasUnicas = categoriasUnicas.sort((a, b) => {
-                if (a === 'Todos') return -1;
-                if (b === 'Todos') return 1;
-                return a.localeCompare(b);
-            });
-
-            setCategorias(categoriasUnicas);
-
-            if (todosProdutos.length === 0) {
-                console.warn("⚠️ Nenhum produto ativo encontrado");
-                toast.warn("Nenhum produto ativo encontrado no cardápio.");
-            } else {
-                toast.success(`🎉 ${todosProdutos.length} produtos carregados!`);
-            }
-
-        } catch (error) {
-            console.error("❌ ERRO CRÍTICO:", error);
-            toast.error("❌ Falha ao carregar dados.");
-        } finally {
-            setLoading(false);
+        } catch (error) { 
+            toast.error("Erro ao carregar", { position: "bottom-center" }); 
+        } finally { 
+            setLoading(false); 
         }
     }, [estabelecimentoId, mesaId]);
 
-    useEffect(() => {
-        fetchData();
+    useEffect(() => { 
+        fetchData(); 
     }, [fetchData]);
 
-    // --- FUNÇÕES DE PEDIDO ---
+    const salvarNomePessoa = async (index, novoNome) => {
+        if (!novoNome.trim()) return;
+        
+        const novosOcupantes = [...ocupantes];
+        novosOcupantes[index] = novoNome;
+        setOcupantes(novosOcupantes);
+        setEditandoNomeIndex(null);
+        
+        // Se estava editando o cliente selecionado, atualiza também
+        if (clienteSelecionado === ocupantes[index]) {
+            setClienteSelecionado(novoNome);
+        }
+
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
+                nomesOcupantes: novosOcupantes,
+                updatedAt: serverTimestamp()
+            });
+            toast.success('Nome atualizado! ✏️', { position: "bottom-center" });
+        } catch(e) { 
+            console.error("Erro ao salvar nome", e);
+            toast.error('Erro ao salvar nome', { position: "bottom-center" });
+        }
+    };
+
     const adicionarItem = useCallback((produto) => {
         setResumoPedido(prev => {
-            const itemExistente = prev.find(item => item.id === produto.id); 
+            const itemExistente = prev.find(item => 
+                item.id === produto.id && 
+                item.cliente === clienteSelecionado &&
+                (item.status === 'pendente' || !item.status)
+            ); 
+            
             if (itemExistente) {
                 return prev.map(item => 
-                    item.id === produto.id 
+                    (item.id === produto.id && item.cliente === clienteSelecionado && (item.status === 'pendente' || !item.status)) 
                         ? { ...item, quantidade: item.quantidade + 1 } 
                         : item
                 );
             }
+            
             return [...prev, { 
                 ...produto, 
                 quantidade: 1, 
-                preco: parseFloat(produto.preco),
-                nome: produto.nomeCompleto || produto.nome
+                preco: parseFloat(produto.preco), 
+                nome: produto.nomeCompleto || produto.nome,
+                cliente: clienteSelecionado,
+                adicionadoEm: new Date(),
+                status: 'pendente'
             }];
         });
-        
-        toast.success(`✅ ${produto.nomeCompleto || produto.nome} adicionado!`, {
-            position: "bottom-right",
-            autoClose: 1000 // Adição rápida
+    }, [clienteSelecionado]);
+
+    const ajustarQuantidade = useCallback((produtoId, clienteDoItem, novaQuantidade) => {
+        setResumoPedido(prev => {
+            const itemAlvo = prev.find(item => item.id === produtoId && item.cliente === clienteDoItem);
+            
+            if (itemAlvo && (itemAlvo.status === 'enviado' || itemAlvo.status === 'entregue')) {
+                toast.info("Item já enviado", { position: "bottom-center" });
+                return prev;
+            }
+
+            if (novaQuantidade < 1) {
+                toast.info('🗑️ Removido', { position: "bottom-center" });
+                return prev.filter(item => !(item.id === produtoId && item.cliente === clienteDoItem));
+            }
+            
+            return prev.map(item => 
+                (item.id === produtoId && item.cliente === clienteDoItem) 
+                    ? { ...item, quantidade: novaQuantidade } 
+                    : item
+            );
         });
     }, []);
-
-    const ajustarQuantidade = useCallback((produtoId, novaQuantidade) => {
-        if (novaQuantidade < 1) {
-            setResumoPedido(prev => prev.filter(item => item.id !== produtoId));
-            return;
-        }
-        setResumoPedido(prev =>
-            prev.map(item =>
-                item.id === produtoId
-                    ? { ...item, quantidade: novaQuantidade }
-                    : item
-            )
-        );
-    }, []);
-
-    const removerItem = useCallback((produtoId) => {
-        const itemRemovido = resumoPedido.find(item => item.id === produtoId);
-        setResumoPedido(prev => prev.filter(item => item.id !== produtoId));
-        
-        if (itemRemovido) {
-            toast.warn(`🗑️ ${itemRemovido.nome} removido!`, {
-                position: "bottom-right",
-                autoClose: 1000
-            });
-        }
-    }, [resumoPedido]);
 
     const salvarAlteracoes = async () => {
         setSalvando(true);
-        const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
-        
         try {
-            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-            
-            await updateDoc(mesaRef, {
-                itens: resumoPedido,
-                status: resumoPedido.length > 0 ? 'com_pedido' : 'livre',
-                total: totalPedido,
-                // ✅ CORRIGIDO: Usando serverTimestamp()
-                updatedAt: serverTimestamp()
-            });
+            const itensNovos = resumoPedido.filter(item => item.status === 'pendente' || !item.status);
+            const totalGeral = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
 
-            setMesa(prev => ({...prev, itens: resumoPedido }));
-            
-            toast.success("💾 Pedido salvo com sucesso!");
-            
-            setTimeout(() => {
+            if (itensNovos.length === 0) {
+                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
+                    itens: resumoPedido,
+                    nomesOcupantes: ocupantes,
+                    total: totalGeral,
+                    updatedAt: serverTimestamp()
+                });
+                toast.success("✅ Mesa salva", { position: "bottom-center" });
                 navigate('/controle-salao');
-            }, 800);
-            
-        } catch (error) {
-            console.error("Erro ao salvar alterações:", error);
-            toast.error("❌ Falha ao salvar o pedido.");
-        } finally {
-            setSalvando(false);
-        }
-    };
+                return;
+            }
 
-    const finalizarMesa = async () => {
-        if (resumoPedido.length === 0) {
-            toast.warn("Não é possível finalizar um pedido vazio.");
-            return;
-        }
+            const batch = writeBatch(db);
+            const timestampAtual = Date.now();
+            const idPedidoCozinha = `pedido_${mesaId}_${timestampAtual}`;
+            const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoCozinha);
 
-        const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
-
-        try {
-            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-            
-            await updateDoc(mesaRef, {
-                itens: resumoPedido,
-                status: 'pagamento',
-                total: totalPedido,
-                // ✅ CORRIGIDO: Usando serverTimestamp()
+            batch.set(pedidoRef, {
+                id: idPedidoCozinha,
+                mesaId: mesaId,
+                mesaNumero: mesa?.numero,
+                itens: itensNovos.map(item => ({ ...item, status: 'recebido' })),
+                status: 'recebido',
+                total: itensNovos.reduce((acc, item) => acc + (item.preco * item.quantidade), 0),
+                dataPedido: serverTimestamp(),
+                source: 'salao',
                 updatedAt: serverTimestamp()
             });
 
-            toast.success("✅ Mesa finalizada para pagamento!");
-            navigate('/controle-salao'); 
+            const itensMesaAtualizados = resumoPedido.map(item => {
+                if (item.status === 'pendente' || !item.status) {
+                    return { ...item, status: 'enviado', pedidoCozinhaId: idPedidoCozinha };
+                }
+                return item;
+            });
 
-        } catch (error) {
-            console.error("Erro ao finalizar mesa:", error);
-            toast.error("❌ Falha ao finalizar a mesa.");
-        }
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            batch.update(mesaRef, {
+                itens: itensMesaAtualizados,
+                nomesOcupantes: ocupantes,
+                status: 'com_pedido',
+                total: totalGeral,
+                updatedAt: serverTimestamp()
+            });
+
+            await batch.commit();
+            toast.success(`✅ ${itensNovos.length} itens enviados!`, { position: "bottom-center" });
+            setShowOrderSummary(false);
+            setTimeout(() => navigate('/controle-salao'), 800);
+            
+        } catch (error) { 
+            toast.error("❌ Erro ao enviar", { position: "bottom-center" }); 
+        } finally { setSalvando(false); }
     };
 
-    const handleVoltar = () => {
-        if (resumoPedido.length > 0) {
-            const confirmar = window.confirm("Tem alterações não salvas. Deseja realmente voltar?");
-            if (!confirmar) return;
-        }
-        navigate('/controle-salao');
-    };
-
-    const produtoEstaNoCarrinho = useCallback((produtoId) => {
-        return resumoPedido.some(item => item.id === produtoId);
-    }, [resumoPedido]);
-
-    // Filtros
-    const produtosFiltrados = cardapio.filter(produto => {
-        const buscaMatch = !termoBusca || 
-            produto.nome.toLowerCase().includes(termoBusca.toLowerCase()) ||
-            (produto.descricao && produto.descricao.toLowerCase().includes(termoBusca.toLowerCase()));
-        
-        const categoriaMatch = categoriaAtiva === 'Todos' || produto.categoria === categoriaAtiva;
-        
-        return buscaMatch && categoriaMatch;
-    });
+    const produtosFiltrados = cardapio.filter(p => 
+        (!termoBusca || p.nome.toLowerCase().includes(termoBusca.toLowerCase())) && 
+        (categoriaAtiva === 'Todos' || p.categoria === categoriaAtiva)
+    );
 
     const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
     const totalItens = resumoPedido.reduce((acc, item) => acc + item.quantidade, 0);
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-700 font-medium">Carregando cardápio...</p>
-                    <p className="text-gray-500 text-sm mt-2">Aguarde um momento</p>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
+                    <p className="text-gray-600 text-sm">Carregando...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
-            {/* Header */}
-            <header className="bg-white shadow-sm border-b border-amber-200 sticky top-0 z-20">
-                <div className="max-w-7xl mx-auto px-3 py-2">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
+        <div className="min-h-screen bg-gray-50 safe-area-bottom">
+            {/* Header Mobile Otimizado */}
+            <header className="bg-white border-b border-gray-200 sticky top-0 z-40 safe-area-top">
+                <div className="px-3 py-2">
+                    {/* Top Bar Compacta */}
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
                             <button 
-                                onClick={handleVoltar}
-                                className="flex items-center space-x-1 bg-white hover:bg-amber-50 text-gray-700 text-sm py-1.5 px-3 rounded-lg border border-amber-300 transition-all duration-200"
+                                onClick={() => navigate('/controle-salao')} 
+                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors active:scale-95 flex-shrink-0"
                             >
-                                <IoArrowBack className="text-sm"/>
-                                <span>Voltar</span>
+                                <IoArrowBack className="text-base text-gray-600"/>
                             </button>
-                            <div className="flex items-center space-x-2">
-                                <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow">
-                                    <span className="text-white font-bold text-sm">{mesa?.numero || '?'}</span>
-                                </div>
-                                <div>
-                                    <h1 className="text-sm font-bold text-gray-900">Mesa {mesa?.numero || 'N/A'}</h1>
-                                    <p className="text-xs text-gray-600 truncate max-w-[120px]">{estabelecimentoNome}</p>
-                                </div>
+                            <div className="min-w-0 flex-1">
+                                <h1 className="font-bold text-base text-gray-900 truncate">Mesa {mesa?.numero}</h1>
+                                <p className="text-gray-500 text-xs truncate">Pedindo para: {clienteSelecionado}</p>
                             </div>
                         </div>
                         
-                        <div className="flex items-center space-x-2">
-                            <div className="lg:hidden">
-                                <button 
-                                    onClick={() => setShowOrderSummary(!showOrderSummary)}
-                                    className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white text-sm py-1.5 px-3 rounded-lg transition-all duration-200 shadow"
-                                >
-                                    <IoCartOutline className="text-sm" />
-                                    <span>{totalItens}</span>
-                                </button>
+                        <button 
+                            onClick={() => setShowOrderSummary(true)} 
+                            className="relative bg-blue-500 text-white p-2 rounded-lg font-semibold text-sm flex items-center gap-1 shadow-sm hover:bg-blue-600 transition-colors active:scale-95 flex-shrink-0"
+                        >
+                            <IoCart className="text-base"/>
+                            {totalItens > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                                    {totalItens}
+                                </span>
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Seleção de Pessoa - Edição com 1 Clique */}
+                    <div className="flex gap-1 overflow-x-auto pb-1 hide-scrollbar">
+                        {ocupantes.map((nome, index) => (
+                            <div key={index} className="relative flex-shrink-0">
+                                {editandoNomeIndex === index ? (
+                                    // Modo Edição
+                                    <div className="flex items-center gap-2 bg-white border-2 border-blue-500 rounded-xl p-2">
+                                        <input 
+                                            autoFocus
+                                            className="w-20 px-2 py-1 text-sm rounded border border-gray-300 focus:ring-1 focus:ring-blue-500 outline-none"
+                                            value={novoNomeTemp}
+                                            onChange={(e) => setNovoNomeTemp(e.target.value)}
+                                            onBlur={() => {
+                                                if (novoNomeTemp.trim()) {
+                                                    salvarNomePessoa(index, novoNomeTemp.trim());
+                                                } else {
+                                                    setEditandoNomeIndex(null);
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    if (novoNomeTemp.trim()) {
+                                                        salvarNomePessoa(index, novoNomeTemp.trim());
+                                                    }
+                                                }
+                                                if (e.key === 'Escape') {
+                                                    setEditandoNomeIndex(null);
+                                                }
+                                            }}
+                                            placeholder="Nome"
+                                            maxLength={15}
+                                        />
+                                    </div>
+                                ) : (
+                                    // Botão Normal - 1 Clique para Editar (se não for "Mesa")
+                                    <button
+                                        onClick={() => {
+                                            if (nome !== 'Mesa') {
+                                                setEditandoNomeIndex(index);
+                                                setNovoNomeTemp(nome);
+                                            }
+                                            setClienteSelecionado(nome);
+                                        }}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex-shrink-0 transition-colors active:scale-95 ${
+                                            clienteSelecionado === nome 
+                                                ? 'bg-blue-500 text-white shadow-sm' 
+                                                : 'bg-gray-100 text-gray-700 active:bg-gray-200'
+                                        }`}
+                                    >
+                                        <IoPerson className="text-xs"/>
+                                        {nome}
+                                        
+                                        {nome !== 'Mesa' && clienteSelecionado === nome && (
+                                            <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full p-0.5 shadow-lg">
+                                                <IoPencil className="text-[8px]" />
+                                            </div>
+                                        )}
+                                    </button>
+                                )}
                             </div>
-                            
-                            <div className="hidden lg:flex items-center space-x-2">
-                                <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-lg font-semibold text-sm">
-                                    <span className="flex items-center space-x-1">
-                                        <IoCartOutline className="text-sm" />
-                                        <span>{totalItens} itens</span>
-                                    </span>
-                                </div>
-                                <button 
-                                    onClick={salvarAlteracoes}
-                                    disabled={salvando}
-                                    className="flex items-center space-x-1 bg-green-500 hover:bg-green-600 text-white text-sm py-1.5 px-3 rounded-lg transition-all duration-200 disabled:opacity-50 shadow"
-                                >
-                                    {salvando ? (
-                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    ) : (
-                                        <IoSaveOutline className="text-sm" />
-                                    )}
-                                    <span>{salvando ? 'Salvando...' : 'Salvar'}</span>
-                                </button>
-                            </div>
+                        ))}
+                        
+                        <button 
+                            onClick={() => { 
+                                const n = `P${ocupantes.length}`; 
+                                setOcupantes([...ocupantes, n]); 
+                                setClienteSelecionado(n); 
+                            }} 
+                            className="w-8 h-8 rounded bg-gray-100 border border-dashed border-gray-300 active:border-blue-400 flex items-center justify-center text-gray-500 active:text-blue-500 transition-colors flex-shrink-0 active:scale-95"
+                        >
+                            <IoAdd className="text-sm"/>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Barra de Busca e Filtros */}
+                <div className="px-3 py-2 bg-gray-50 border-t border-gray-200">
+                    <div className="flex gap-2 mb-2">
+                        {/* Busca */}
+                        <div className="flex-1 relative">
+                            <IoSearch className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm"/>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar produtos..." 
+                                value={termoBusca} 
+                                onChange={e => setTermoBusca(e.target.value)} 
+                                className="w-full pl-7 pr-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
+                            />
                         </div>
+                        
+                        {/* Layout Toggle */}
+                        <div className="flex bg-white border border-gray-200 rounded-lg p-0.5">
+                            <button
+                                onClick={() => setLayout('grid')}
+                                className={`p-1.5 rounded transition-colors ${layout === 'grid' ? 'bg-blue-500 text-white' : 'text-gray-500'}`}
+                            >
+                                <IoGrid className="text-xs"/>
+                            </button>
+                            <button
+                                onClick={() => setLayout('list')}
+                                className={`p-1.5 rounded transition-colors ${layout === 'list' ? 'bg-blue-500 text-white' : 'text-gray-500'}`}
+                            >
+                                <IoList className="text-xs"/>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Categorias - Scroll Horizontal */}
+                    <div className="flex gap-1 overflow-x-auto hide-scrollbar">
+                        {categorias.map(cat => (
+                            <button 
+                                key={cat} 
+                                onClick={() => setCategoriaAtiva(cat)}
+                                className={`whitespace-nowrap px-2 py-1 rounded text-xs font-medium transition-colors flex-shrink-0 active:scale-95 ${
+                                    categoriaAtiva === cat 
+                                        ? 'bg-blue-500 text-white' 
+                                        : 'bg-white text-gray-600 active:bg-gray-100 border border-gray-200'
+                                }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto p-3">
-                <div className="flex flex-col lg:flex-row gap-4">
-                    {/* Seção do Cardápio */}
-                    <div className="flex-1">
-                        {/* Busca e Filtros */}
-                        <div className="bg-white rounded-lg shadow-sm border border-amber-200 p-3 mb-4">
-                            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                                <div className="flex-1 min-w-0 w-full">
-                                    <div className="relative">
-                                        <IoSearchOutline className="absolute left-2 top-1/2 transform -translate-y-1/2 text-amber-400 text-sm" />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar produtos..."
-                                            value={termoBusca}
-                                            onChange={(e) => setTermoBusca(e.target.value)}
-                                            className="w-full pl-8 pr-3 py-2 border border-amber-300 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition-all duration-200 bg-amber-50 text-sm"
-                                        />
-                                    </div>
-                                </div>
-                                
-                                <div className="w-full sm:w-auto">
-                                    <div className="flex gap-1 overflow-x-auto pb-1">
-                                        {categorias.map(categoria => (
-                                            <button
-                                                key={categoria}
-                                                onClick={() => setCategoriaAtiva(categoria)}
-                                                className={`px-2 py-1.5 rounded-lg font-medium text-xs whitespace-nowrap transition-all duration-200 ${
-                                                    categoriaAtiva === categoria
-                                                        ? 'bg-amber-500 text-white shadow'
-                                                        : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                                                }`}
-                                            >
-                                                {categoria}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center space-x-1 bg-amber-100 rounded-lg p-0.5">
-                                    <button
-                                        onClick={() => setVisualizacao('grid')}
-                                        className={`p-1 rounded transition-all duration-200 ${
-                                            visualizacao === 'grid'
-                                                ? 'bg-white text-amber-600 shadow-sm'
-                                                : 'text-amber-500 hover:text-amber-600'
-                                        }`}
-                                    >
-                                        <IoGridOutline className="text-sm" />
-                                    </button>
-                                    <button
-                                        onClick={() => setVisualizacao('lista')}
-                                        className={`p-1 rounded transition-all duration-200 ${
-                                            visualizacao === 'lista'
-                                                ? 'bg-white text-amber-600 shadow-sm'
-                                                : 'text-amber-500 hover:text-amber-600'
-                                        }`}
-                                    >
-                                        <IoListOutline className="text-sm" />
-                                    </button>
-                                </div>
-                            </div>
+            {/* Lista de Produtos - Mobile First */}
+            <main className="p-2">
+                {produtosFiltrados.length > 0 ? (
+                    layout === 'grid' ? (
+                        <div className="grid grid-cols-3 gap-2">
+                            {produtosFiltrados.map(produto => (
+                                <ProdutoCard 
+                                    key={produto.id} 
+                                    produto={produto} 
+                                    onAdicionar={adicionarItem} 
+                                    estaNoCarrinho={resumoPedido.some(item => item.id === produto.id && item.cliente === clienteSelecionado)}
+                                />
+                            ))}
                         </div>
-
-                        {/* Grid de Produtos */}
-                        {produtosFiltrados.length > 0 ? (
-                            <div>
-                                <div className="mb-3 p-2 bg-white rounded-lg shadow-xs border border-amber-200">
-                                    <p className="text-gray-700 text-xs">
-                                        Mostrando <span className="text-amber-600 font-bold">{produtosFiltrados.length}</span> de <span className="text-amber-600 font-bold">{cardapio.length}</span> produtos
-                                    </p>
-                                </div>
-
-                                {/* Grade de Produtos */}
-                                {visualizacao === 'grid' ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                                        {produtosFiltrados.map(produto => (
-                                            <ProdutoCardGrid
-                                                key={produto.id}
-                                                produto={produto}
-                                                onAdicionar={adicionarItem}
-                                                estaNoCarrinho={produtoEstaNoCarrinho(produto.id)}
-                                            />
-                                        ))}
+                    ) : (
+                        <div className="space-y-1">
+                            {produtosFiltrados.map(produto => (
+                                <div key={produto.id} className="bg-white rounded-lg border border-gray-200 p-2 flex items-center gap-2 active:scale-95 transition-transform">
+                                    {produto.imageUrl ? (
+                                        <img src={produto.imageUrl} alt={produto.nome} className="w-10 h-10 rounded object-cover flex-shrink-0"/>
+                                    ) : (
+                                        <div className="w-10 h-10 rounded bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                            <IoRestaurant className="text-blue-400 text-sm"/>
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-semibold text-sm text-gray-900 truncate">{produto.nome}</h3>
+                                        <p className="text-blue-600 font-bold text-xs">R$ {parseFloat(produto.preco).toFixed(2)}</p>
                                     </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {produtosFiltrados.map(produto => (
-                                            <ProdutoCardLista
-                                                key={produto.id}
-                                                produto={produto}
-                                                onAdicionar={adicionarItem}
-                                                estaNoCarrinho={produtoEstaNoCarrinho(produto.id)}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="bg-white rounded-lg shadow-sm border border-amber-200 p-8 text-center">
-                                <div className="w-16 h-16 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-2xl">🍕</span>
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                    {cardapio.length === 0 ? 'Cardápio vazio' : 'Nenhum produto encontrado'}
-                                </h3>
-                                <p className="text-gray-600 text-sm">
-                                    {cardapio.length === 0 
-                                        ? 'Adicione produtos ao cardápio primeiro.' 
-                                        : 'Tente ajustar os filtros de busca.'}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Resumo do Pedido */}
-                    <div className={`
-                        ${showOrderSummary ? 'block' : 'hidden'} 
-                        lg:block 
-                        lg:w-64 
-                        transition-all duration-300
-                    `}>
-                        <div className="bg-white rounded-lg shadow-md border border-amber-200 lg:sticky lg:top-16">
-                            <div className="p-3 border-b border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 rounded-t-lg">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-bold text-gray-900 flex items-center space-x-2">
-                                        <IoReceiptOutline className="text-lg text-amber-500" />
-                                        <span>Resumo</span>
-                                    </h2>
                                     <button 
-                                        onClick={() => setShowOrderSummary(false)}
-                                        className="lg:hidden text-gray-500 hover:text-gray-700 text-sm"
+                                        onClick={() => adicionarItem(produto)}
+                                        className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-lg transition-colors active:scale-90 flex-shrink-0"
                                     >
-                                        ✕
+                                        <IoAdd className="text-xs"/>
                                     </button>
                                 </div>
-                                {resumoPedido.length > 0 && (
-                                    <p className="text-amber-600 text-xs mt-0.5">
-                                        {totalItens} {totalItens === 1 ? 'item' : 'itens'}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div className="p-2 max-h-64 overflow-y-auto">
-                                {resumoPedido.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {resumoPedido.map(item => (
-                                            <div key={item.id} className="bg-amber-50 rounded-lg p-2 border border-amber-200">
-                                                <div className="flex items-start justify-between mb-1">
-                                                    <p className="font-semibold text-gray-900 text-xs leading-tight truncate flex-1">{item.nome}</p>
-                                                    <button 
-                                                        onClick={() => removerItem(item.id)}
-                                                        className="flex-shrink-0 ml-1 text-red-500 hover:text-red-700"
-                                                    >
-                                                        <IoTrashOutline className="text-xs" />
-                                                    </button>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center space-x-1 bg-white rounded p-0.5">
-                                                        <button 
-                                                            onClick={() => ajustarQuantidade(item.id, item.quantidade - 1)}
-                                                            className="w-6 h-6 bg-amber-100 hover:bg-amber-200 rounded flex items-center justify-center"
-                                                        >
-                                                            <IoRemoveCircleOutline className="text-amber-600 text-xs" />
-                                                        </button>
-                                                        <span className="font-bold text-gray-900 text-xs min-w-6 text-center">
-                                                            {item.quantidade}
-                                                        </span>
-                                                        <button 
-                                                            onClick={() => ajustarQuantidade(item.id, item.quantidade + 1)}
-                                                            className="w-6 h-6 bg-amber-500 hover:bg-amber-600 rounded flex items-center justify-center"
-                                                        >
-                                                            <IoAddCircleOutline className="text-white text-xs" />
-                                                        </button>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-amber-600 font-semibold text-sm">
-                                                            R$ {(item.preco * item.quantidade).toFixed(2).replace('.', ',')}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6">
-                                        <IoCartOutline className="text-2xl text-amber-400 mx-auto mb-2" />
-                                        <p className="text-gray-500 text-xs">Nenhum item adicionado</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {resumoPedido.length > 0 && (
-                                <div className="p-3 border-t border-amber-200 bg-amber-50 rounded-b-lg">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <span className="font-bold text-gray-900 text-sm">Total:</span>
-                                        <span className="text-lg font-bold text-green-600">
-                                            R$ {totalPedido.toFixed(2).replace('.', ',')}
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="space-y-2">
-                                        <button 
-                                            onClick={salvarAlteracoes}
-                                            disabled={salvando}
-                                            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 text-sm disabled:opacity-50"
-                                        >
-                                            {salvando ? (
-                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                            ) : (
-                                                <IoSaveOutline className="text-sm" />
-                                            )}
-                                            <span>{salvando ? 'Salvando...' : 'Salvar Pedido'}</span>
-                                        </button>
-                                        
-                                        <button 
-                                            onClick={finalizarMesa}
-                                            className="w-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 text-sm"
-                                        >
-                                            <IoReceiptOutline className="text-sm" />
-                                            <span>Finalizar / Pagar</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                            ))}
                         </div>
+                    )
+                ) : (
+                    <div className="text-center py-8">
+                        <IoSearch className="text-3xl text-gray-300 mx-auto mb-2"/>
+                        <p className="text-gray-500 text-sm">Nenhum produto encontrado</p>
+                        <p className="text-gray-400 text-xs">Tente ajustar os filtros ou busca</p>
+                    </div>
+                )}
+            </main>
+
+            {/* Barra Flutuante Mobile - Otimizada */}
+            {resumoPedido.length > 0 && (
+                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg safe-area-padding">
+                    <div className="flex justify-between items-center">
+                        <div className="flex-1">
+                            <p className="text-gray-500 text-xs">Total do pedido</p>
+                            <p className="font-bold text-gray-900 text-lg">R$ {totalPedido.toFixed(2)}</p>
+                        </div>
+                        <button 
+                            onClick={() => setShowOrderSummary(true)} 
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors active:scale-95 whitespace-nowrap"
+                        >
+                            <IoCart className="text-base"/> 
+                            Ver Pedido
+                            {totalItens > 0 && (
+                                <span className="bg-white text-blue-500 text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                                    {totalItens}
+                                </span>
+                            )}
+                        </button>
                     </div>
                 </div>
-            </main>
+            )}
+
+            {/* Bottom Sheet Mobile - Nativo */}
+            {showOrderSummary && (
+                <>
+                    <div 
+                        className="fixed inset-0 bg-black/50 z-40 transition-opacity" 
+                        onClick={() => setShowOrderSummary(false)} 
+                    />
+                    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[85vh] overflow-hidden animate-slide-up">
+                        {/* Handle */}
+                        <div className="flex justify-center pt-2 pb-1">
+                            <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+                        </div>
+                        
+                        <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                            <h2 className="font-bold text-lg text-gray-900">Pedido da Mesa {mesa?.numero}</h2>
+                            <button 
+                                onClick={() => setShowOrderSummary(false)} 
+                                className="p-1 active:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <IoClose className="text-xl text-gray-500"/>
+                            </button>
+                        </div>
+                        
+                        {/* Lista de Itens com Scroll */}
+                        <div className="px-4 py-3 space-y-3 overflow-y-auto max-h-[45vh]">
+                            {resumoPedido.filter(item => item.cliente === clienteSelecionado).length === 0 ? (
+                                <div className="text-center py-8">
+                                    <IoCart className="text-3xl text-gray-300 mx-auto mb-2"/>
+                                    <p className="text-gray-500 text-sm">Nenhum item para {clienteSelecionado}</p>
+                                    <p className="text-gray-400 text-xs">Adicione itens ao pedir</p>
+                                </div>
+                            ) : (
+                                resumoPedido.filter(item => item.cliente === clienteSelecionado).map((item, index) => (
+                                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-sm text-gray-900 truncate">{item.nome}</p>
+                                            <p className="text-gray-500 text-xs">R$ {item.preco.toFixed(2)} cada</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2 bg-white rounded-lg px-2 py-1 border border-gray-200">
+                                                <button 
+                                                    onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)}
+                                                    className="text-red-500 active:text-red-600 p-1"
+                                                >
+                                                    <IoRemoveCircle className="text-base"/>
+                                                </button>
+                                                <span className="font-bold text-sm w-6 text-center">{item.quantidade}</span>
+                                                <button 
+                                                    onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade + 1)}
+                                                    className="text-green-500 active:text-green-600 p-1"
+                                                >
+                                                    <IoAddCircle className="text-base"/>
+                                                </button>
+                                            </div>
+                                            <p className="font-bold text-sm w-16 text-right">R$ {(item.preco * item.quantidade).toFixed(2)}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        
+                        {/* Footer Fixo */}
+                        <div className="px-4 py-3 border-t border-gray-200 bg-white">
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="font-semibold text-gray-900">Total</span>
+                                <span className="font-bold text-xl text-gray-900">R$ {totalPedido.toFixed(2)}</span>
+                            </div>
+                            <button 
+                                onClick={salvarAlteracoes} 
+                                disabled={salvando}
+                                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                            >
+                                {salvando ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>
+                                        Enviando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <IoSave className="text-lg"/>
+                                        Enviar para Cozinha
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* CSS para Safe Areas (iPhone) */}
+            <style jsx>{`
+                .safe-area-bottom {
+                    padding-bottom: env(safe-area-inset-bottom);
+                }
+                .safe-area-top {
+                    padding-top: env(safe-area-inset-top);
+                }
+                .safe-area-padding {
+                    padding-left: env(safe-area-inset-left);
+                    padding-right: env(safe-area-inset-right);
+                }
+                .hide-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+                .hide-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                @keyframes slide-up {
+                    from { transform: translateY(100%); }
+                    to { transform: translateY(0); }
+                }
+                .animate-slide-up {
+                    animation: slide-up 0.2s ease-out;
+                }
+            `}</style>
         </div>
     );
 };

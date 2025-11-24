@@ -1,4 +1,4 @@
-// src/components/DashboardSummary.jsx - VERSÃO COM ATUALIZAÇÃO AUTOMÁTICA
+// src/components/DashboardSummary.jsx - VERSÃO CORRIGIDA
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -39,7 +39,9 @@ export default function DashboardSummary() {
     totalTaxasHoje: 0,
     totalPedidosHoje: 0,
     vendasDelivery: 0,
-    vendasSalao: 0
+    vendasSalao: 0,
+    totalDelivery: 0,
+    totalSalao: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -54,51 +56,60 @@ export default function DashboardSummary() {
     try {
       console.log("📊 Buscando resumo para estabelecimento:", estabelecimentoIdPrincipal);
 
-      // Define as datas e strings para filtro
+      // Define as datas para filtro
       const todayStart = startOfDay(new Date());
       const todayEnd = endOfDay(new Date());
-      const todayString = new Date().toISOString().split('T')[0];
 
-      console.log(`DEBUG DATA: Filtro do dia: ${todayString}`);
+      console.log(`DEBUG DATA: Filtro do dia: ${todayStart.toISOString()} até ${todayEnd.toISOString()}`);
 
       let totalVendas = 0;
       let totalTaxas = 0;
       let totalPedidos = 0;
       let vendasDeliveryCount = 0;
       let vendasSalaoCount = 0;
+      let totalDelivery = 0;
+      let totalSalao = 0;
 
-      // 1. BUSCAR PEDIDOS DE DELIVERY (FINALIZADOS) - COM ATUALIZAÇÃO EM TEMPO REAL
+      // 1. 🛵 BUSCAR PEDIDOS DE DELIVERY (FINALIZADOS)
       try {
         const pedidosQuery = query(
           collection(db, 'pedidos'),
           where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
-          where('status', 'in', ['finalizado', 'concluido']),
+          where('status', '==', 'finalizado'),
           where('createdAt', '>=', todayStart),
           where('createdAt', '<=', todayEnd)
         );
 
         const pedidosSnapshot = await getDocs(pedidosQuery);
+        console.log(`DEBUG DELIVERY: Encontrados ${pedidosSnapshot.size} pedidos de delivery.`);
+
         pedidosSnapshot.forEach(doc => {
           const pedido = doc.data();
-          totalVendas += parseFloat(pedido.totalFinal || pedido.total || 0);
-          totalTaxas += parseFloat(pedido.taxaEntrega || 0);
+          const valorPedido = parseFloat(pedido.totalFinal || pedido.total || 0);
+          const taxaEntrega = parseFloat(pedido.taxaEntrega || 0);
+          
+          totalVendas += valorPedido;
+          totalTaxas += taxaEntrega;
           totalPedidos++;
           vendasDeliveryCount++;
+          totalDelivery += valorPedido;
+          
+          console.log(`📦 Pedido Delivery: ${doc.id} - R$ ${valorPedido} (Taxa: R$ ${taxaEntrega})`);
         });
-        console.log(`DEBUG DELIVERY: Encontrados ${pedidosSnapshot.size} pedidos.`);
 
       } catch (error) {
         console.error("❌ ERRO NO FETCH DELIVERY:", error);
-        if (error.code === 'permission-denied') {
-          toast.error("Permissão negada para ler pedidos de delivery.");
+        if (error.code === 'failed-precondition') {
+          console.log('⚠️ Índice composto necessário para pedidos de delivery');
         }
       }
 
-      // 2. BUSCAR VENDAS DO SALÃO - COM ATUALIZAÇÃO EM TEMPO REAL
+      // 2. 🍽️ BUSCAR VENDAS DO SALÃO (MESAS FECHADAS)
       try {
         const vendasQuery = query(
           collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
-          where('dataFechamentoString', '==', todayString)
+          where('dataFechamento', '>=', todayStart),
+          where('dataFechamento', '<=', todayEnd)
         );
 
         const vendasSnapshot = await getDocs(vendasQuery);
@@ -107,24 +118,74 @@ export default function DashboardSummary() {
         
         vendasSnapshot.forEach(doc => {
           const venda = doc.data();
-          totalVendas += parseFloat(venda.total || 0);
+          const valorVenda = parseFloat(venda.total || 0);
+          
+          totalVendas += valorVenda;
           totalPedidos++;
           vendasSalaoCount++;
+          totalSalao += valorVenda;
+          
+          console.log(`🍽️ Venda Salão: Mesa ${venda.mesaNumero} - R$ ${valorVenda}`, {
+            mesaId: venda.mesaId,
+            pessoas: venda.pessoas,
+            itens: venda.itens?.length || 0
+          });
         });
 
       } catch (error) {
         console.error("❌ ERRO NO FETCH SALÃO:", error);
-        if (error.code === 'permission-denied') {
-          toast.error("Permissão negada para ler vendas do salão.");
+        if (error.code === 'failed-precondition') {
+          console.log('⚠️ Índice composto necessário para vendas do salão');
         }
       }
 
-      console.log("📈 Resumo carregado:", {
+      // 3. 🔄 BUSCAR VENDAS ALTERNATIVA (se a anterior falhar)
+      if (vendasSalaoCount === 0) {
+        try {
+          console.log('🔄 Tentando busca alternativa de vendas do salão...');
+          
+          const vendasAltQuery = query(
+            collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas')
+          );
+
+          const vendasAltSnapshot = await getDocs(vendasAltQuery);
+          let vendasHojeCount = 0;
+          let totalSalaoAlt = 0;
+
+          vendasAltSnapshot.forEach(doc => {
+            const venda = doc.data();
+            const dataFechamento = venda.dataFechamento?.toDate();
+            
+            if (dataFechamento && dataFechamento >= todayStart && dataFechamento <= todayEnd) {
+              const valorVenda = parseFloat(venda.total || 0);
+              totalVendas += valorVenda;
+              totalPedidos++;
+              vendasHojeCount++;
+              totalSalaoAlt += valorVenda;
+              
+              console.log(`🍽️ Venda Salão (alt): Mesa ${venda.mesaNumero} - R$ ${valorVenda}`);
+            }
+          });
+
+          if (vendasHojeCount > 0) {
+            vendasSalaoCount = vendasHojeCount;
+            totalSalao = totalSalaoAlt;
+            console.log(`✅ Encontradas ${vendasHojeCount} vendas do salão (busca alternativa)`);
+          }
+
+        } catch (error) {
+          console.error("❌ ERRO NA BUSCA ALTERNATIVA:", error);
+        }
+      }
+
+      console.log("📈 Resumo final carregado:", {
         totalPedidos,
-        totalVendas,
-        totalTaxas,
+        totalVendas: formatBRL(totalVendas),
+        totalTaxas: formatBRL(totalTaxas),
         vendasDelivery: vendasDeliveryCount,
-        vendasSalao: vendasSalaoCount
+        vendasSalao: vendasSalaoCount,
+        totalDelivery: formatBRL(totalDelivery),
+        totalSalao: formatBRL(totalSalao)
       });
 
       // Atualizar o estado com os novos dados
@@ -133,12 +194,14 @@ export default function DashboardSummary() {
         totalTaxasHoje: totalTaxas,
         totalPedidosHoje: totalPedidos,
         vendasDelivery: vendasDeliveryCount,
-        vendasSalao: vendasSalaoCount
+        vendasSalao: vendasSalaoCount,
+        totalDelivery: totalDelivery,
+        totalSalao: totalSalao
       });
 
     } catch (error) {
       console.error("❌ ERRO GERAL AO BUSCAR RESUMO:", error);
-      setError("Erro geral ao carregar dados do dia.");
+      setError("Erro ao carregar dados do dia.");
       toast.error("❌ Falha ao carregar o dashboard.");
     } finally {
       setLoading(false);
@@ -155,49 +218,57 @@ export default function DashboardSummary() {
     const interval = setInterval(fetchSummaryData, 30000);
 
     // Configurar listeners em tempo real para atualizações imediatas
-    const todayString = new Date().toISOString().split('T')[0];
     
     // Listener para pedidos de delivery
-    const pedidosQuery = query(
-      collection(db, 'pedidos'),
-      where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
-      where('status', 'in', ['finalizado', 'concluido']),
-      where('createdAt', '>=', startOfDay(new Date())),
-      where('createdAt', '<=', endOfDay(new Date()))
-    );
+    try {
+      const todayStart = startOfDay(new Date());
+      const todayEnd = endOfDay(new Date());
+      
+      const pedidosQuery = query(
+        collection(db, 'pedidos'),
+        where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
+        where('status', '==', 'finalizado'),
+        where('createdAt', '>=', todayStart),
+        where('createdAt', '<=', todayEnd)
+      );
 
-    const unsubscribePedidos = onSnapshot(pedidosQuery, 
-      (snapshot) => {
-        console.log("🔄 Atualização em tempo real - Pedidos alterados");
-        fetchSummaryData(); // Recarrega quando houver mudanças
-      },
-      (error) => {
-        console.error("❌ Erro no listener de pedidos:", error);
-      }
-    );
+      const unsubscribePedidos = onSnapshot(pedidosQuery, 
+        (snapshot) => {
+          console.log("🔄 Atualização em tempo real - Pedidos delivery alterados");
+          fetchSummaryData();
+        },
+        (error) => {
+          console.error("❌ Erro no listener de pedidos:", error);
+        }
+      );
 
-    // Listener para vendas do salão
-    const vendasQuery = query(
-      collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
-      where('dataFechamentoString', '==', todayString)
-    );
+      // Listener para vendas do salão
+      const vendasQuery = query(
+        collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
+        where('dataFechamento', '>=', todayStart),
+        where('dataFechamento', '<=', todayEnd)
+      );
 
-    const unsubscribeVendas = onSnapshot(vendasQuery,
-      (snapshot) => {
-        console.log("🔄 Atualização em tempo real - Vendas alteradas");
-        fetchSummaryData(); // Recarrega quando houver mudanças
-      },
-      (error) => {
-        console.error("❌ Erro no listener de vendas:", error);
-      }
-    );
+      const unsubscribeVendas = onSnapshot(vendasQuery,
+        (snapshot) => {
+          console.log("🔄 Atualização em tempo real - Vendas salão alteradas");
+          fetchSummaryData();
+        },
+        (error) => {
+          console.error("❌ Erro no listener de vendas:", error);
+        }
+      );
 
-    // Cleanup function
-    return () => {
-      clearInterval(interval);
-      unsubscribePedidos();
-      unsubscribeVendas();
-    };
+      // Cleanup function
+      return () => {
+        clearInterval(interval);
+        unsubscribePedidos();
+        unsubscribeVendas();
+      };
+    } catch (error) {
+      console.error("❌ Erro ao configurar listeners:", error);
+    }
+
   }, [currentUser, estabelecimentoIdPrincipal]);
 
   // 🔄 BOTÃO DE ATUALIZAÇÃO MANUAL
@@ -279,10 +350,29 @@ export default function DashboardSummary() {
         />
       </div>
 
+      {/* Linha 3: Valores por Tipo */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <StatCard
+          title="Faturamento Delivery"
+          value={formatBRL(summaryData.totalDelivery)}
+          icon="💰"
+          color="bg-gradient-to-br from-yellow-500 to-yellow-700"
+        />
+        <StatCard
+          title="Faturamento Salão"
+          value={formatBRL(summaryData.totalSalao)}
+          icon="💳"
+          color="bg-gradient-to-br from-pink-500 to-pink-700"
+        />
+      </div>
+
       {/* Indicador de última atualização */}
       <div className="text-center">
         <p className="text-xs text-gray-500">
           Última atualização: {new Date().toLocaleTimeString('pt-BR')}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          Atualização automática a cada 30 segundos
         </p>
       </div>
     </div>

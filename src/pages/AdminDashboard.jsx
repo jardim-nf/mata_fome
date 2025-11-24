@@ -1,9 +1,10 @@
-// src/pages/AdminDashboard.jsx - VERSÃO CORRIGIDA
+// src/pages/AdminDashboard.jsx - VERSÃO CORRIGIDA E COMPLETA
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardSummary from "../components/DashBoardSummary";
 import withAuth from "../hocs/withAuth";
-import { IoStatsChart, IoShareSocial } from "react-icons/io5";
+// ✅ CORREÇÃO: Adicionado IoColorPalette aos imports
+import { IoStatsChart, IoShareSocial, IoColorPalette } from "react-icons/io5";
 import { FaEnvelopeOpenText, FaUsers } from 'react-icons/fa';
 
 // Componente de botão aprimorado e responsivo
@@ -14,7 +15,7 @@ const ActionButton = ({ to, title, subtitle, icon, colorClass, onClick }) => (
   >
     {/* Efeito de brilho no hover */}
     <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-    
+
     <div className="relative z-10 flex flex-col h-full justify-between">
       <div className="flex items-start justify-between">
         <div className="text-3xl sm:text-4xl lg:text-5xl transform group-hover:scale-110 transition-transform duration-300">
@@ -25,7 +26,7 @@ const ActionButton = ({ to, title, subtitle, icon, colorClass, onClick }) => (
           →
         </div>
       </div>
-      
+
       <div className="space-y-1 sm:space-y-2 mt-2 sm:mt-4">
         <h2 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight leading-tight text-gray-900">
           {title}
@@ -46,7 +47,7 @@ const AdminDashboard = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userData');
     sessionStorage.clear();
-    
+
     // Redirecionar para a tela principal
     navigate("/home");
   };
@@ -54,7 +55,7 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-white p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 lg:space-y-10">
-        
+
         {/* Header melhorado com botão Sair no canto superior direito */}
         <div className="relative">
           <div className="text-center space-y-3 sm:space-y-4 px-12">
@@ -65,7 +66,7 @@ const AdminDashboard = () => {
               Gerencie seu estabelecimento de forma completa e eficiente
             </p>
           </div>
-          
+
           {/* Botão Sair no canto superior direito */}
           <button
             onClick={handleLogout}
@@ -79,8 +80,9 @@ const AdminDashboard = () => {
         {/* Componente de resumo */}
         <DashboardSummary />
 
-        {/* Grid de ações totalmente responsivo - VERSÃO CORRIGIDA */}
+        {/* Grid de ações totalmente responsivo */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+          
           {/* Painel de pedidos */}
           <Link to="/painel">
             <ActionButton
@@ -111,7 +113,17 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          {/* 🎯 ORDENAR CATEGORIAS - APENAS COM LINK */}
+          {/* Identidade Visual (NOVO) */}
+          <Link to="/admin/cores">
+            <ActionButton
+              title="Identidade Visual"
+              subtitle="Personalize as cores e aparência do seu cardápio digital"
+              icon={<IoColorPalette className="text-purple-600" />}
+              colorClass="hover:border-purple-500 hover:bg-purple-50"
+            />
+          </Link>
+
+          {/* Ordenar Categorias */}
           <Link to="/admin/ordenar-categorias">
             <ActionButton
               title="Ordenar Categorias"
@@ -160,15 +172,17 @@ const AdminDashboard = () => {
               colorClass="hover:border-pink-500 hover:bg-pink-50"
             />
           </Link>
-{/* Gestão de Funcionários */}
-<Link to="/admin/gestao-funcionarios">
-  <ActionButton
-    title="Gestão de Funcionários"
-    subtitle="Controle de acesso e permissões da equipe"
-    icon="👥"
-    colorClass="hover:border-blue-500 hover:bg-blue-50"
-  />
-</Link>
+
+          {/* Gestão de Funcionários */}
+          <Link to="/admin/gestao-funcionarios">
+            <ActionButton
+              title="Gestão de Funcionários"
+              subtitle="Controle de acesso e permissões da equipe"
+              icon={<FaUsers className="text-blue-600" />}
+              colorClass="hover:border-blue-500 hover:bg-blue-50"
+            />
+          </Link>
+
           {/* Relatórios */}
           <Link to="/admin/reports">
             <ActionButton
@@ -192,7 +206,7 @@ const AdminDashboard = () => {
 };
 
 // Aplica o HOC de autenticação
-export default withAuth(AdminDashboard, { 
+export default withAuth(AdminDashboard, {
   requireAdmin: true,
-  message: 'Acesso ao Dashboard restrito' 
+  message: 'Acesso ao Dashboard restrito'
 });

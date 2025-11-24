@@ -1,8 +1,9 @@
-// src/components/CardapioItem.jsx - VERSÃO COM MENSAGEM RÁPIDA
+// src/components/CardapioItem.jsx
 import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { toast } from 'react-toastify';
+import { IoAdd, IoOptions } from 'react-icons/io5'; // Ícones opcionais para embelezar
 
 function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
   // 🎨 Valores padrão para cores
@@ -12,19 +13,12 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
     background: '#FFFBEB'
   };
 
-  if (!item) {
-    return (
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-3 opacity-60">
-        <div className="flex items-start gap-3">
-          <div className="w-16 h-16 bg-gray-200 rounded-xl flex-shrink-0"></div>
-          <div className="flex-1">
-            <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
-            <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // 🆕 ESTADOS PARA CONTROLE DE IMAGEM
+  const [displayImageUrl, setDisplayImageUrl] = useState(null);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+
+  if (!item) return null;
 
   const safeItem = {
     nome: item.nome || 'Item sem nome',
@@ -38,265 +32,191 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
     variacoes: Array.isArray(item.variacoes) ? item.variacoes : []
   };
 
-  const placeholderImage = "https://via.placeholder.com/80x80.png?text=🍔";
-  const [displayImageUrl, setDisplayImageUrl] = useState(placeholderImage);
-  const [imageLoading, setImageLoading] = useState(true);
-
+  // 🆕 FUNÇÃO SEGURA PARA CARREGAR IMAGEM
   useEffect(() => {
-    const fetchImageUrl = async () => {
-      if (safeItem.imageUrl) {
-        if (safeItem.imageUrl.startsWith('http')) {
-          setDisplayImageUrl(safeItem.imageUrl);
-        } else {
+    let isMounted = true;
+    
+    const loadImageSafely = async () => {
+      if (!safeItem.imageUrl) {
+        setImageLoading(false);
+        setImageError(true);
+        return;
+      }
+
+      try {
+        setImageLoading(true);
+        setImageError(false);
+        
+        let finalUrl = safeItem.imageUrl;
+        
+        if (!safeItem.imageUrl.startsWith('http')) {
           try {
             const imageRef = ref(storage, safeItem.imageUrl);
-            const downloadUrl = await getDownloadURL(imageRef);
-            setDisplayImageUrl(downloadUrl);
-          } catch (error) {
-            setDisplayImageUrl(placeholderImage);
+            finalUrl = await getDownloadURL(imageRef);
+          } catch (storageError) {
+            console.log('📦 Erro Firebase Storage, mantendo original');
           }
         }
+        
+        if (isMounted) setDisplayImageUrl(finalUrl);
+        
+      } catch (error) {
+        if (isMounted) setImageError(true);
+      } finally {
+        if (isMounted) setImageLoading(false);
       }
-      setImageLoading(false);
     };
-    fetchImageUrl();
+
+    loadImageSafely();
+
+    return () => { isMounted = false; };
   }, [safeItem.imageUrl]);
+
+  const handleImageError = () => { setImageError(true); setImageLoading(false); };
+  const handleImageLoad = () => { setImageLoading(false); setImageError(false); };
 
   const isAvailable = safeItem.ativo && safeItem.disponivel;
   const hasVariations = safeItem.variacoes && safeItem.variacoes.length > 0;
 
-  // 🎯 FUNÇÃO INTELIGENTE: Verifica se pode adicionar direto (CORRIGIDA)
+  // 🎯 FUNÇÃO INTELIGENTE
   const podeAdicionarDireto = () => {
-    if (!hasVariations) {
-        return true;
-    }
-
-    const variacoesAtivas = safeItem.variacoes.filter(v => 
-        v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
-    );
-
-    if (variacoesAtivas.length === 1) {
-        return true; 
-    }
-
-    return false;
+    if (!hasVariations) return true;
+    const variacoesAtivas = safeItem.variacoes.filter(v => v.ativo);
+    return variacoesAtivas.length === 1;
   };
 
-  // 🎯 FUNÇÃO PARA LIDAR COM CLIQUE NO BOTÃO (CORRIGIDA COM MENSAGEM RÁPIDA)
-  const handleButtonClick = () => {
+  const handleButtonClick = (e) => {
+    e.stopPropagation(); // Evita clique duplo se o card inteiro for clicável
     if (!isAvailable) return;
     
     if (podeAdicionarDireto()) {
         if (onQuickAdd) {
             let itemParaAdicionar = safeItem;
-
-            const variacoesAtivas = safeItem.variacoes.filter(v => 
-                v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
-            );
+            const variacoesAtivas = safeItem.variacoes.filter(v => v.ativo);
 
             if (variacoesAtivas.length === 1) {
                 const variacaoUnica = variacoesAtivas[0];
                 itemParaAdicionar = {
                     ...safeItem,
-                    variacaoSelecionada: {
-                        nome: variacaoUnica.nome,
-                        preco: Number(variacaoUnica.preco)
-                    },
+                    variacaoSelecionada: { nome: variacaoUnica.nome, preco: Number(variacaoUnica.preco) },
                     precoFinal: Number(variacaoUnica.preco) 
                 };
             }
-
             onQuickAdd(itemParaAdicionar);
-            
-            // 🎯 MENSAGEM SUPER RÁPIDA - APENAS 1 SEGUNDO!
-            toast.success(`${safeItem.nome} adicionado! 🎉`, {
-                autoClose: 1,
-                position: "bottom-right",
-                hideProgressBar: true
-            });
         }
     } else {
-      // Produto COM 0 ou 2+ variações - abre modal para escolher
-      if (onAddItem) {
-        onAddItem(safeItem);
-      }
+      if (onAddItem) onAddItem(safeItem);
     }
   };
 
-  // 🎯 FUNÇÃO MELHORADA PARA PREÇOS
   const mostrarPreco = () => {
-    if (!safeItem.variacoes || safeItem.variacoes.length === 0) {
-      return (
-        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
-          R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </p>
-      );
+    const stylePreco = { color: cores.destaque, fontSize: '1.1rem', fontWeight: 'bold' };
+    
+    if (!hasVariations) {
+      return <p style={stylePreco}>R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
     }
 
-    const variacoesAtivas = safeItem.variacoes.filter(v => 
-      v.ativo && v.preco !== undefined && !isNaN(Number(v.preco)) && Number(v.preco) >= 0
-    );
+    const variacoesAtivas = safeItem.variacoes.filter(v => v.ativo);
+    if (variacoesAtivas.length === 0) return <p style={stylePreco}>R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    if (variacoesAtivas.length === 1) return <p style={stylePreco}>R$ {Number(variacoesAtivas[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
 
-    if (variacoesAtivas.length === 0) {
-      return (
-        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
-          R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </p>
-      );
-    }
-
-    // 1 VARIAÇÃO (Adição Direta): Mostrar apenas o preço
-    if (variacoesAtivas.length === 1) {
-      const preco = Number(variacoesAtivas[0].preco);
-      return (
-        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
-          R$ {preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </p>
-      );
-    }
-
-    // 2+ VARIAÇÕES: Mostrar "A partir de"
     const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
     return (
-      <div className="text-right">
-        <p className="text-xs text-gray-600 whitespace-nowrap">A partir de</p>
-        <p className="text-lg font-bold whitespace-nowrap" style={{ color: cores.primaria }}>
-          R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </p>
+      <div className="flex flex-col items-end">
+        <span className="text-[10px] text-gray-400 uppercase tracking-wide">A partir de</span>
+        <p style={stylePreco}>R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </div>
     );
   };
 
-  // 🎯 FUNÇÃO PARA DETERMINAR O BOTÃO
   const getBotaoConfig = () => {
-    if (!isAvailable) {
-      return {
-        texto: 'Indisponível',
-        cor: '#D1D5DB',
-        textoCor: '#6B7280',
-        disabled: true
-      };
-    }
-
-    if (podeAdicionarDireto()) {
-      // Produto sem variações ou com 1 variação - Adicionar direto
-      return {
-        texto: 'Adicionar',
-        cor: cores.destaque || '#059669', // VERDE
-        textoCor: '#FFFFFF',
-        disabled: false,
-        icone: '➕'
-      };
-    } else {
-      // Produto COM 2+ variações - Escolher opções
-      return {
-        texto: 'Escolher',
-        cor: cores.primaria || '#DC2626', // VERMELHO/AZUL
-        textoCor: '#FFFFFF', 
-        disabled: false,
-        icone: '⚙️'
-      };
-    }
+    if (!isAvailable) return { texto: 'Indisponível', cor: '#E5E7EB', textoCor: '#9CA3AF', disabled: true };
+    if (podeAdicionarDireto()) return { texto: 'Adicionar', cor: cores.destaque, textoCor: '#FFF', disabled: false, icone: <IoAdd size={18} /> };
+    return { texto: 'Detalhes', cor: cores.primaria, textoCor: '#FFF', disabled: false, icone: <IoOptions size={18} /> };
   };
 
   const botaoConfig = getBotaoConfig();
 
+  const getPlaceholderEmoji = () => {
+    const cat = safeItem.categoria?.toLowerCase() || '';
+    if (cat.includes('burger')) return '🍔';
+    if (cat.includes('pizza')) return '🍕';
+    if (cat.includes('bebida')) return '🥤';
+    if (cat.includes('sobremesa') || cat.includes('doce')) return '🍰';
+    return '🍽️';
+  };
+
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300 group ${
-      !isAvailable ? 'opacity-60' : ''
-    }`}>
+    <div 
+        onClick={() => !podeAdicionarDireto() && onAddItem(safeItem)}
+        className={`bg-gray-800 rounded-xl border border-gray-700 p-3 hover:border-gray-500 transition-all duration-300 group cursor-pointer relative overflow-hidden ${!isAvailable ? 'opacity-50 grayscale' : ''}`}
+    >
       <div className="flex gap-4">
-        {/* IMAGEM - TAMANHO FIXO */}
+        {/* 📸 IMAGEM - AUMENTADA PARA w-28 (112px) no Mobile e w-32 no Desktop */}
         <div className="flex-shrink-0">
-          <div className="w-20 h-20 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
-            <img
-              src={displayImageUrl}
-              alt={safeItem.nome}
-              className="w-full h-full object-cover transition-transform group-hover:scale-105"
-              onError={(e) => { 
-                e.target.onerror = null; 
-                e.target.src = placeholderImage;
-              }}
-            />
+          <div className="w-28 h-28 md:w-32 md:h-32 bg-gray-900 rounded-lg overflow-hidden flex items-center justify-center relative shadow-lg">
+             {/* Badge Promoção (Opcional) */}
+             {safeItem.promo && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 z-10">OFERTA</div>}
+
+            {imageLoading && !imageError && displayImageUrl ? (
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            ) : imageError || !displayImageUrl ? (
+              <span className="text-4xl filter grayscale opacity-50">{getPlaceholderEmoji()}</span>
+            ) : (
+              <img
+                src={displayImageUrl}
+                alt={safeItem.nome}
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                onError={handleImageError}
+                onLoad={handleImageLoad}
+                loading="lazy"
+              />
+            )}
           </div>
         </div>
 
-        {/* CONTEÚDO - FLEXÍVEL SEM CORTE */}
-        <div className="flex-1 min-w-0 overflow-hidden">
-          {/* CABEÇALHO COM NOME E PREÇO */}
-          <div className="flex justify-between items-start mb-2 gap-2">
-            {/* NOME E CATEGORIA */}
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-gray-900 text-lg break-words leading-tight">
+        {/* 📝 CONTEÚDO */}
+        <div className="flex-1 flex flex-col justify-between min-w-0 py-1">
+          <div>
+            <div className="flex justify-between items-start">
+                <h3 className="font-bold text-white text-lg leading-tight mb-1 line-clamp-2 group-hover:text-green-400 transition-colors">
                 {safeItem.nome}
-              </h3>
-              
-              {/* CATEGORIA */}
-              <p className="text-gray-500 text-sm mt-1 truncate">
-                {safeItem.categoria}
-              </p>
+                </h3>
             </div>
             
-            {/* PREÇO - FIXO À DIREITA */}
-            <div className="flex-shrink-0 ml-2">
-              {mostrarPreco()}
+            {safeItem.descricao && (
+              <p className="text-gray-400 text-sm leading-relaxed line-clamp-2 mb-2">
+                {safeItem.descricao}
+              </p>
+            )}
+
+            {/* Badges de Variação */}
+            {!podeAdicionarDireto() && (
+                <span className="inline-block px-2 py-0.5 rounded text-[10px] bg-gray-700 text-gray-300 border border-gray-600 mb-2">
+                    {safeItem.variacoes.filter(v => v.ativo).length} opções
+                </span>
+            )}
+          </div>
+
+          {/* PREÇO E BOTÃO */}
+          <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-700/50">
+            <div>
+                {mostrarPreco()}
             </div>
+
+            <button
+              onClick={handleButtonClick}
+              disabled={botaoConfig.disabled}
+              style={{ backgroundColor: botaoConfig.disabled ? '#374151' : botaoConfig.cor, color: botaoConfig.textoCor }}
+              className={`
+                px-4 py-2 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-1
+                ${botaoConfig.disabled ? 'cursor-not-allowed opacity-50' : 'hover:brightness-110'}
+              `}
+            >
+              {botaoConfig.icone}
+              <span className="hidden sm:inline">{botaoConfig.texto}</span>
+            </button>
           </div>
-
-          {/* DESCRIÇÃO */}
-          {safeItem.descricao && (
-            <p className="text-gray-700 text-sm mt-2 mb-3 line-clamp-2 break-words">
-              {safeItem.descricao}
-            </p>
-          )}
-
-          {/* BADGES DE PERSONALIZAÇÃO */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            {/* BADGE PRODUTO SEM VARIAÇÕES ou COM 1 VARIAÇÃO */}
-            {podeAdicionarDireto() && isAvailable && (
-              <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium" 
-                   style={{ 
-                     backgroundColor: `${cores.destaque}15`,
-                     color: cores.destaque,
-                     border: `1px solid ${cores.destaque}30`
-                   }}>
-                Sem variações
-              </div>
-            )}
-
-            {/* BADGE DE MÚLTIPLAS VARIAÇÕES */}
-            {hasVariations && !podeAdicionarDireto() && (
-              <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium" 
-                   style={{ 
-                     backgroundColor: `${cores.primaria}15`,
-                     color: cores.primaria,
-                     border: `1px solid ${cores.primaria}30`
-                   }}>
-                {safeItem.variacoes.filter(v => v.ativo).length} opções
-              </div>
-            )}
-          </div>
-
-          {/* BOTÃO INTELIGENTE */}
-          <button
-            onClick={handleButtonClick}
-            disabled={botaoConfig.disabled}
-            className={`
-              w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-200 transform
-              ${botaoConfig.disabled 
-                ? 'cursor-not-allowed' 
-                : 'hover:scale-105 shadow-md hover:shadow-lg'
-              }
-              flex items-center justify-center gap-2
-            `}
-            style={{
-              backgroundColor: botaoConfig.cor,
-              color: botaoConfig.textoCor
-            }}
-          >
-            {botaoConfig.icone && <span>{botaoConfig.icone}</span>}
-            {botaoConfig.texto}
-          </button>
         </div>
       </div>
     </div>
