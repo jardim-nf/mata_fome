@@ -678,20 +678,20 @@ function Menu() {
                                     {discountAmount > 0 && <div className="flex justify-between text-green-500 font-bold"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
                                     
                                     {/* Input de Cupom */}
-                                    <div className="flex gap-2 mt-4">
-                                        <input 
-                                            placeholder="Código do cupom" 
-                                            value={couponCodeInput} 
-                                            onChange={e => setCouponCodeInput(e.target.value)} 
-                                            className="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-sm focus:outline-none focus:border-green-500"
-                                        />
-                                        <button 
-                                            onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} 
-                                            className={`px-4 rounded text-sm font-bold transition ${appliedCoupon ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
-                                        >
-                                            {appliedCoupon ? 'Remover' : 'Aplicar'}
-                                        </button>
-                                    </div>
+<div className="grid grid-cols-3 gap-2 mt-4">
+    <input 
+        placeholder="Cupom" 
+        value={couponCodeInput} 
+        onChange={e => setCouponCodeInput(e.target.value)} 
+        className="col-span-2 bg-gray-800 p-2 rounded border border-gray-600 text-sm focus:outline-none focus:border-green-500 w-full"
+    />
+    <button 
+        onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} 
+        className={`col-span-1 rounded text-sm font-bold transition w-full ${appliedCoupon ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
+    >
+        {appliedCoupon ? 'Remover' : 'Aplicar'}
+    </button>
+</div>
 
                                     <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-700">
                                         <span>Total:</span>
