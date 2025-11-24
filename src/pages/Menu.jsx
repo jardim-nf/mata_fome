@@ -1,8 +1,8 @@
 // src/pages/Menu.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +11,6 @@ import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
 import VariacoesModal from '../components/VariacoesModal';
 import { v4 as uuidv4 } from 'uuid';
-import { IoChatbubbleEllipses, IoCart, IoClose, IoChevronUp, IoChevronDown } from 'react-icons/io5';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 import PaymentModal from '../components/PaymentModal';
 
@@ -32,9 +31,7 @@ function Menu() {
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
     const [complemento, setComplemento] = useState('');
-    const [taxasBairro, setTaxasBairro] = useState([]);
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
-    const [bairroNaoEncontrado, setBairroNaoEncontrado] = useState(false);
     const [isRetirada, setIsRetirada] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando Cardápio...");
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
@@ -54,7 +51,6 @@ function Menu() {
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
-    const [errorAuthModal, setErrorAuthModal] = useState('');
     const auth = getAuth();
 
     // Cupons e Busca
@@ -96,9 +92,6 @@ function Menu() {
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const finalOrderTotal = useMemo(() => Math.max(0, subtotalCalculado + taxaAplicada - discountAmount), [subtotalCalculado, taxaAplicada, discountAmount]);
-
-    const isUserAdmin = useMemo(() => userData?.isAdmin || false, [userData]);
-    const isUserMasterAdmin = useMemo(() => userData?.isMasterAdmin || false, [userData]);
 
     // --- FUNÇÕES AUXILIARES ---
     const formatarHorarios = (horarios) => {
@@ -417,7 +410,6 @@ function Menu() {
 
     const handleRegisterModal = async (e) => {
         e.preventDefault();
-        // Validação mais rigorosa para os novos campos
         if (!nomeAuthModal || !telefoneAuthModal || !ruaAuthModal || !numeroAuthModal || !bairroAuthModal || !cidadeAuthModal) {
             return toast.error("Preencha todos os campos obrigatórios (Endereço completo).");
         }
@@ -515,8 +507,7 @@ function Menu() {
 
     const handleShowMore = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: (p[cat] || 4) + 4 }));
     const handleShowLess = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: 4 }));
-    const scrollToCategory = (cat) => document.getElementById(`categoria-${cat}`)?.scrollIntoView({ behavior: 'smooth' });
-
+    
     // COMPONENTES VISUAIS
     const InfoEstabelecimento = () => (
         estabelecimentoInfo ? (
@@ -546,7 +537,8 @@ function Menu() {
     }, {});
 
     return (
-        <div className="min-h-screen pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
+        // 🟢 AJUSTE AQUI: pb-48 no mobile para garantir que o rodapé não cubra o conteúdo
+        <div className="min-h-screen pb-48 md:pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
             <div className="py-4 px-4 shadow-lg mb-6 sticky top-0 z-20" style={{ backgroundColor: coresEstabelecimento.primaria }}>
                 <h1 className="text-center text-2xl font-bold text-white">{nomeEstabelecimento}</h1>
             </div>
@@ -742,7 +734,7 @@ function Menu() {
                                     <input placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
                                     <input placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
                                     
-                                    {/* 🔴 CORREÇÃO DO LAYOUT (GRID) */}
+                                    {/* CORREÇÃO DO LAYOUT (GRID) */}
                                     <div className="flex gap-2">
                                         <input placeholder="Rua / Avenida" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="flex-1 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
                                         <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-24 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" />
