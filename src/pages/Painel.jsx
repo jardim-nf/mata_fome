@@ -131,10 +131,14 @@ function Painel() {
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
 
-    // --- SELEÇÃO DE ESTABELECIMENTO ---
+    // --- SELEÇÃO DE ESTABELECIMENTO AUTOMÁTICA ---
     const estabelecimentoAtivo = useMemo(() => {
+        // Se não tiver lista ou ela for vazia, retorna null
         if (!estabelecimentosGerenciados || estabelecimentosGerenciados.length === 0) return null;
-        return estabelecimentosGerenciados.find(id => id === 'SgQtnakq4LT13TqwpdzH') || estabelecimentosGerenciados[0];
+        
+        // CORREÇÃO: Pega automaticamente o primeiro ID da lista de permissões do usuário
+        // Isso resolve o problema de ficar preso a um ID antigo
+        return estabelecimentosGerenciados[0]; 
     }, [estabelecimentosGerenciados]);
 
     // --- FUNÇÕES DE AÇÃO ---
@@ -209,7 +213,7 @@ function Painel() {
         }
 
         let unsubscribers = [];
-        console.log('🚀 Iniciando Listeners do Painel...');
+        console.log(`🚀 Iniciando Listeners para Estabelecimento: ${estabelecimentoAtivo}`);
 
         const setupPainel = async () => {
             try {
@@ -222,7 +226,7 @@ function Painel() {
                 // 1. Listener SALÃO (Sub-coleção)
                 const qSalao = query(
                     collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
-                    // ✅ ADICIONADO: 'aguardando_pagamento'
+                    // Status 'aguardando_pagamento' incluído aqui
                     where('status', 'in', ['aguardando_pagamento', 'recebido', 'preparo', 'pronto_para_servir', 'finalizado']),
                     orderBy('dataPedido', 'asc')
                 );
@@ -246,7 +250,7 @@ function Painel() {
                 const qGlobal = query(
                     collection(db, 'pedidos'), 
                     where('estabelecimentoId', '==', estabelecimentoAtivo),
-                    // ✅ ADICIONADO: 'aguardando_pagamento'
+                    // Status 'aguardando_pagamento' incluído aqui
                     where('status', 'in', ['aguardando_pagamento', 'recebido', 'preparo', 'em_entrega', 'finalizado']),
                     orderBy('createdAt', 'asc')
                 );
@@ -335,12 +339,10 @@ function Painel() {
     const colunas = useMemo(() => 
         abaAtiva === 'cozinha' 
             ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
-            // ✅ ADICIONADO: 'aguardando_pagamento' como primeira coluna do Delivery
             : ['aguardando_pagamento', 'recebido', 'preparo', 'em_entrega', 'finalizado'],
         [abaAtiva]
     );
 
-    // ✅ ADICIONADO CONFIGURAÇÃO DE COR PARA O PAGAMENTO
     const STATUS_CONFIG = {
         aguardando_pagamento: { title: '💲 Pagamento', color: 'border-l-yellow-500', countColor: 'bg-yellow-500' },
         recebido: { title: '📥 Recebido', color: 'border-l-red-500', countColor: 'bg-red-500' },
