@@ -633,10 +633,20 @@ function Menu() {
 
                             {!isRetirada && (
                                 <>
-                                    <div className="flex gap-2">
-                                        <input className="flex-1 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-                                        <input className="w-24 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
-                                    </div>
+<div className="grid grid-cols-4 gap-2">
+    <input 
+        className="col-span-3 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none w-full" 
+        placeholder="Rua *" 
+        value={rua} 
+        onChange={e => setRua(e.target.value)} 
+    />
+    <input 
+        className="col-span-1 p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none w-full text-center" 
+        placeholder="Nº *" 
+        value={numero} 
+        onChange={e => setNumero(e.target.value)} 
+    />
+</div>
                                     <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
                                     <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
                                     <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 focus:border-green-500 focus:outline-none" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
