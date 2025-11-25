@@ -1,14 +1,20 @@
 // src/context/PaymentContext.jsx
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useMemo } from 'react';
 
 // Se não usar Firebase aqui para gravar, pode remover estas linhas
 // import { db } from '../firebase'; 
 // import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
-const PaymentContext = createContext();
+// 1. CRIAÇÃO COM VALOR PADRÃO SEGURO (Evita crash se chamado fora do Provider)
+const PaymentContext = createContext({});
 
 export const usePayment = () => {
-  return useContext(PaymentContext);
+    const context = useContext(PaymentContext);
+    if (!context) {
+        console.warn("⚠️ usePayment foi chamado fora do PaymentProvider. Verifique o App.js.");
+        return {}; // Retorna objeto vazio para não quebrar a tela
+    }
+    return context;
 };
 
 export const PaymentProvider = ({ children }) => {
@@ -25,12 +31,13 @@ export const PaymentProvider = ({ children }) => {
     loaded: true
   });
 
-  const paymentMethods = [
+  // Usar useMemo na lista estática evita recriação a cada render
+  const paymentMethods = useMemo(() => [
     { id: 1, name: 'PIX', type: 'pix', icon: '💠', enabled: true },
     { id: 2, name: 'Cartão de Crédito', type: 'credit_card', icon: '💳', enabled: true },
     { id: 3, name: 'Cartão de Débito', type: 'debit_card', icon: '💳', enabled: true },
     { id: 4, name: 'Dinheiro', type: 'cash', icon: '💵', enabled: true }
-  ];
+  ], []);
 
   // ==========================================
   // 🧠 LÓGICA MANUAL DE GERAÇÃO DO PIX (BR CODE)
@@ -58,22 +65,19 @@ export const PaymentProvider = ({ children }) => {
     return `${id}${size}${value}`;
   };
 
-  // 🛡️ FUNÇÃO BLINDADA: Converte tudo para string antes de processar
+  // 🛡️ FUNÇÃO BLINDADA
   const generatePixPayload = (chave, nome, cidade, valor, txId) => {
     try {
-        // 1. Garante que tudo é string para não dar Tela Branca
         const chaveS = String(chave || '').trim();
         const nomeS = String(nome || 'Pagamento');
         const cidadeS = String(cidade || 'Brasil');
         const valorS = String(parseFloat(valor || 0).toFixed(2));
         const txIdS = String(txId || '***');
 
-        // 2. Tratamento de caracteres (Remove acentos)
         const nomeLimpo = nomeS.normalize("NFD").replace(/[\u0300-\u036f]/g, "").substring(0, 25);
         const cidadeLimpa = cidadeS.normalize("NFD").replace(/[\u0300-\u036f]/g, "").substring(0, 15);
         const txIdLimpo = txIdS.replace(/[^a-zA-Z0-9]/g, '').substring(0, 25) || '***';
 
-        // 3. Montagem do Payload
         let payload = 
           formatEMV('00', '01') +
           formatEMV('01', '12') +
@@ -101,9 +105,6 @@ export const PaymentProvider = ({ children }) => {
     }
   };
 
-  // ==========================================
-  // 🚀 AÇÃO CHAMADA PELO MODAL
-  // ==========================================
   const generatePixCode = async (amount, orderId, customKey = null) => {
     setPaymentLoading(true);
     try {
@@ -111,11 +112,8 @@ export const PaymentProvider = ({ children }) => {
 
       if (!chaveAtiva) {
         console.error("❌ ERRO: Nenhuma chave PIX detectada!");
-      } else {
-        console.log(`🔑 Gerando Payload PIX para chave: ${chaveAtiva}`);
       }
 
-      // Gera o payload com proteção
       const payloadPix = generatePixPayload(
         chaveAtiva || 'chave-indisponivel', 
         pixConfig.nome, 
@@ -126,7 +124,6 @@ export const PaymentProvider = ({ children }) => {
 
       if (!payloadPix) throw new Error("Falha ao gerar string do PIX");
 
-      // Gera a URL do QR Code
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payloadPix)}`;
 
       setPixCode({
@@ -149,20 +146,20 @@ export const PaymentProvider = ({ children }) => {
   const submitOrder = async (orderData) => {
     setPaymentLoading(true);
     try {
-       // Simulando delay de rede
        await new Promise(resolve => setTimeout(resolve, 1000));
        return { success: true, id: orderData.orderId };
     } catch (error) {
-        console.error("Erro ao enviar pedido:", error);
-        return { success: false, error };
+       console.error("Erro ao enviar pedido:", error);
+       return { success: false, error };
     } finally {
-        setPaymentLoading(false);
+       setPaymentLoading(false);
     }
   };
 
   const formatCPF = (v) => v; 
 
-  const value = {
+  // 2. USEMEMO NO VALUE (Estabilidade)
+  const value = useMemo(() => ({
     paymentMethods,
     selectedPayment,
     setSelectedPayment,
@@ -174,7 +171,13 @@ export const PaymentProvider = ({ children }) => {
     setPixConfig,
     submitOrder,
     formatCPF
-  };
+  }), [
+    paymentMethods, 
+    selectedPayment, 
+    paymentLoading, 
+    pixCode, 
+    pixConfig
+  ]);
 
   return (
     <PaymentContext.Provider value={value}>

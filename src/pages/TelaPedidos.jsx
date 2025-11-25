@@ -8,8 +8,6 @@ import {
     updateDoc, 
     collection, 
     serverTimestamp, 
-    query, 
-    where,
     writeBatch
 } from 'firebase/firestore'; 
 import { useAuth } from '../context/AuthContext';
@@ -18,8 +16,7 @@ import {
     IoArrowBack, IoCart, IoSearch, IoAdd,
     IoRemove, IoRestaurant, 
     IoCheckmark, IoClose, IoPerson,
-    IoPencil, IoAddCircle, IoRemoveCircle, 
-    IoCheckmarkCircle
+    IoPencil, IoAddCircle, IoCheckmarkCircle, IoPersonAdd
 } from 'react-icons/io5';
 
 // --- COMPONENTE PRINCIPAL ---
@@ -43,9 +40,15 @@ const TelaPedidos = () => {
     const [ocupantes, setOcupantes] = useState(['Mesa']); 
     const [clienteSelecionado, setClienteSelecionado] = useState('Mesa');
     
-    // Estados para edição de nome
+    // Estados para edição de nome e feedback
     const [editandoNomeIndex, setEditandoNomeIndex] = useState(null);
     const [novoNomeTemp, setNovoNomeTemp] = useState('');
+    const [mostrarDicaAdd, setMostrarDicaAdd] = useState(true);
+
+    // --- NOVOS ESTADOS PARA O MODAL DE OPÇÕES ---
+    const [produtoEmSelecao, setProdutoEmSelecao] = useState(null);
+    const [opcaoSelecionada, setOpcaoSelecionada] = useState(null);
+    const [observacaoItem, setObservacaoItem] = useState('');
 
     const fetchData = useCallback(async () => {
         if (!estabelecimentoId) return;
@@ -60,20 +63,44 @@ const TelaPedidos = () => {
                 
                 if (mesaData.nomesOcupantes && mesaData.nomesOcupantes.length > 0) {
                     setOcupantes(mesaData.nomesOcupantes);
-                    // Seleciona o primeiro que não seja "Mesa"
                     const primeiroCliente = mesaData.nomesOcupantes.find(n => n !== 'Mesa');
                     setClienteSelecionado(primeiroCliente || 'Mesa');
                 }
             }
 
             // Carregar cardápio
-            const snap = await getDocs(query(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio'), where('ativo', '==', true)));
-            const produtos = snap.docs.map(d => ({...d.data(), id: d.id}));
-            setCardapio(produtos);
-            setCategorias(['Todos', ...new Set(produtos.map(p => p.categoria).filter(Boolean))]);
+            const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
+            const categoriasSnap = await getDocs(categoriasRef);
+            
+            let todosProdutos = [];
+            let listaCategorias = ['Todos'];
+
+            for (const categoriaDoc of categoriasSnap.docs) {
+                const categoriaData = categoriaDoc.data(); 
+                
+                if (categoriaData.ativo === false) continue;
+
+                const nomeCategoria = categoriaData.nome || categoriaDoc.id;
+                listaCategorias.push(nomeCategoria);
+
+                const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaDoc.id, 'itens');
+                const itensSnap = await getDocs(itensRef);
+
+                const produtosDestaCategoria = itensSnap.docs.map(docItem => ({
+                    ...docItem.data(),
+                    id: docItem.id,
+                    categoria: nomeCategoria
+                }));
+
+                todosProdutos = [...todosProdutos, ...produtosDestaCategoria];
+            }
+
+            setCardapio(todosProdutos);
+            setCategorias([...new Set(listaCategorias)]); 
 
         } catch (error) { 
-            toast.error("Erro ao carregar dados", { position: "bottom-center" }); 
+            console.error("Erro cardapio:", error);
+            toast.error("Erro ao carregar cardápio", { position: "bottom-center" }); 
         } finally { 
             setLoading(false); 
         }
@@ -81,23 +108,100 @@ const TelaPedidos = () => {
 
     useEffect(() => { 
         fetchData(); 
+        const timer = setTimeout(() => setMostrarDicaAdd(false), 5000);
+        return () => clearTimeout(timer);
     }, [fetchData]);
 
-    // Função para salvar nome no Firebase
+    // --- LÓGICA DE SELEÇÃO DE PRODUTO (MODAL) ---
+
+    // Helper para identificar as opções independente do nome do campo no banco
+    const getOpcoesProduto = (produto) => {
+        if (!produto) return [];
+        return produto.opcoes || produto.variacoes || produto.tamanhos || [];
+    };
+
+    const abrirModalOpcoes = (produto) => {
+        setProdutoEmSelecao(produto);
+        setObservacaoItem('');
+        setOpcaoSelecionada(null);
+        
+        const opcoes = getOpcoesProduto(produto);
+
+        // Se NÃO tiver opções, seleciona automaticamente o padrão para liberar o botão
+        if (opcoes.length === 0) {
+            setOpcaoSelecionada({ 
+                nome: 'Padrão', 
+                preco: parseFloat(produto.preco) 
+            });
+        }
+    };
+
+    const fecharModalOpcoes = () => {
+        setProdutoEmSelecao(null);
+        setOpcaoSelecionada(null);
+        setObservacaoItem('');
+    };
+
+    const confirmarAdicaoAoCarrinho = () => {
+        if (!produtoEmSelecao || !opcaoSelecionada) {
+            toast.warning("Selecione uma opção!");
+            return;
+        }
+
+        const precoFinal = parseFloat(opcaoSelecionada.preco);
+        const opcoes = getOpcoesProduto(produtoEmSelecao);
+        
+        const nomeFinal = opcoes.length > 0 
+            ? `${produtoEmSelecao.nome} - ${opcaoSelecionada.nome}`
+            : produtoEmSelecao.nome;
+
+        const idUnicoItem = `${produtoEmSelecao.id}_${opcaoSelecionada.nome.replace(/\s+/g, '')}`;
+
+        const itemParaAdicionar = {
+            ...produtoEmSelecao,
+            id: idUnicoItem, 
+            produtoIdOriginal: produtoEmSelecao.id, 
+            nome: nomeFinal,
+            preco: precoFinal,
+            observacao: observacaoItem,
+            quantidade: 1,
+            cliente: clienteSelecionado,
+            adicionadoEm: new Date(),
+            status: 'pendente'
+        };
+
+        setResumoPedido(prev => {
+            const itemExistente = prev.find(item => 
+                item.id === idUnicoItem && 
+                item.cliente === clienteSelecionado &&
+                item.observacao === observacaoItem && 
+                (item.status === 'pendente' || !item.status)
+            ); 
+            
+            if (itemExistente) {
+                return prev.map(item => 
+                    (item === itemExistente) 
+                        ? { ...item, quantidade: item.quantidade + 1 } 
+                        : item
+                );
+            }
+            
+            return [...prev, itemParaAdicionar];
+        });
+
+        toast.success(`+1 ${nomeFinal}`, { autoClose: 1000, position: "bottom-center", hideProgressBar: true });
+        fecharModalOpcoes();
+    };
+
+    // --- FUNÇÕES AUXILIARES ---
     const salvarNomePessoa = async (index, novoNome) => {
         if (!novoNome.trim()) return;
-        
         const novosOcupantes = [...ocupantes];
         const nomeAntigo = novosOcupantes[index];
         novosOcupantes[index] = novoNome;
-        
         setOcupantes(novosOcupantes);
         setEditandoNomeIndex(null);
-        
-        if (clienteSelecionado === nomeAntigo) {
-            setClienteSelecionado(novoNome);
-        }
-
+        if (clienteSelecionado === nomeAntigo) setClienteSelecionado(novoNome);
         try {
             const novosItensCarrinho = resumoPedido.map(item => {
                 if (item.cliente === nomeAntigo) return { ...item, cliente: novoNome };
@@ -106,47 +210,29 @@ const TelaPedidos = () => {
                 return item;
             });
             setResumoPedido(novosItensCarrinho);
-
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
                 nomesOcupantes: novosOcupantes,
                 itens: novosItensCarrinho,
                 updatedAt: serverTimestamp()
             });
-            toast.success(`Renomeado para ${novoNome}`, { position: "bottom-center", autoClose: 1000 });
+            if(nomeAntigo.startsWith("Pessoa")) {
+                toast.success(`👋 Olá, ${novoNome}!`, { position: "top-center", autoClose: 2000 });
+            } else {
+                toast.success(`Renomeado para ${novoNome}`, { position: "bottom-center", autoClose: 1000 });
+            }
         } catch(e) { 
             toast.error('Erro ao salvar nome', { position: "bottom-center" });
         }
     };
 
-    const adicionarItem = useCallback((produto) => {
-        setResumoPedido(prev => {
-            // Verifica se já existe esse item para esse cliente E se ainda não foi enviado
-            const itemExistente = prev.find(item => 
-                item.id === produto.id && 
-                item.cliente === clienteSelecionado &&
-                (item.status === 'pendente' || !item.status)
-            ); 
-            
-            if (itemExistente) {
-                return prev.map(item => 
-                    (item.id === produto.id && item.cliente === clienteSelecionado && (item.status === 'pendente' || !item.status)) 
-                        ? { ...item, quantidade: item.quantidade + 1 } 
-                        : item
-                );
-            }
-            
-            return [...prev, { 
-                ...produto, 
-                quantidade: 1, 
-                preco: parseFloat(produto.preco), 
-                nome: produto.nomeCompleto || produto.nome,
-                cliente: clienteSelecionado,
-                adicionadoEm: new Date(),
-                status: 'pendente'
-            }];
-        });
-        toast.success(`+1 ${produto.nome}`, { autoClose: 1000, position: "bottom-center", hideProgressBar: true });
-    }, [clienteSelecionado]);
+    const adicionarPessoaNova = () => {
+        const n = `Pessoa ${ocupantes.length}`; 
+        const novos = [...ocupantes, n];
+        setOcupantes(novos);
+        setClienteSelecionado(n);
+        salvarNomePessoa(novos.length - 1, n);
+        setMostrarDicaAdd(false);
+    };
 
     const ajustarQuantidade = useCallback((produtoId, clienteDoItem, novaQuantidade) => {
         setResumoPedido(prev => {
@@ -234,6 +320,7 @@ const TelaPedidos = () => {
             setTimeout(() => navigate('/controle-salao'), 500);
             
         } catch (error) { 
+            console.error(error);
             toast.error("Erro ao enviar pedido", { position: "bottom-center" }); 
         } finally { setSalvando(false); }
     };
@@ -263,7 +350,6 @@ const TelaPedidos = () => {
         );
     }
 
-    // ✅ AQUI ESTÁ O TRUQUE: 'fixed inset-0 z-50' cobre a tela inteira e esconde o dashboard atrás
     return (
         <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto pb-24">
             {/* Header Fixo */}
@@ -292,69 +378,73 @@ const TelaPedidos = () => {
                     </button>
                 </div>
 
-                {/* --- BARRA DE CLIENTES --- */}
-                <div className="px-4 pb-3 flex items-center gap-2 overflow-x-auto hide-scrollbar">
-                    {ocupantes
-                        .map((nome, originalIndex) => ({ nome, originalIndex }))
-                        .filter(item => item.nome !== 'Mesa') 
-                        .map(({ nome, originalIndex }) => (
-                        <div key={originalIndex} className="relative flex-shrink-0">
-                            {editandoNomeIndex === originalIndex ? (
-                                <div className="flex items-center bg-white border-2 border-blue-500 rounded-xl p-1 shadow-lg animate-in zoom-in duration-200">
-                                    <input 
-                                        autoFocus
-                                        className="w-24 px-2 py-1.5 text-sm font-bold rounded border-none outline-none text-gray-800 bg-transparent"
-                                        value={novoNomeTemp}
-                                        onChange={(e) => setNovoNomeTemp(e.target.value)}
-                                        onBlur={() => novoNomeTemp.trim() ? salvarNomePessoa(originalIndex, novoNomeTemp.trim()) : setEditandoNomeIndex(null)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && novoNomeTemp.trim()) salvarNomePessoa(originalIndex, novoNomeTemp.trim());
-                                            if (e.key === 'Escape') setEditandoNomeIndex(null);
-                                        }}
-                                        maxLength={15}
-                                    />
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={() => setClienteSelecionado(nome)} 
-                                    onDoubleClick={() => { 
-                                        setEditandoNomeIndex(originalIndex);
-                                        setNovoNomeTemp(nome);
-                                    }}
-                                    className={`
-                                        group relative px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-all duration-200 select-none
-                                        ${clienteSelecionado === nome 
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 z-10' 
-                                            : 'bg-white text-gray-600 border-gray-100 hover:border-blue-200 hover:bg-gray-50'
-                                        }
-                                    `}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <IoPerson className={clienteSelecionado === nome ? 'text-white' : 'text-gray-400'} />
-                                        {nome}
+                <div className="px-4 pb-1">
+                    <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar py-2">
+                        {ocupantes
+                            .map((nome, originalIndex) => ({ nome, originalIndex }))
+                            .filter(item => item.nome !== 'Mesa') 
+                            .map(({ nome, originalIndex }) => (
+                            <div key={originalIndex} className="relative flex-shrink-0">
+                                {editandoNomeIndex === originalIndex ? (
+                                    <div className="flex items-center bg-white border-2 border-blue-500 rounded-xl p-1 shadow-lg animate-in zoom-in duration-200">
+                                        <input 
+                                            autoFocus
+                                            className="w-24 px-2 py-1.5 text-sm font-bold rounded border-none outline-none text-gray-800 bg-transparent"
+                                            value={novoNomeTemp}
+                                            onChange={(e) => setNovoNomeTemp(e.target.value)}
+                                            onBlur={() => novoNomeTemp.trim() ? salvarNomePessoa(originalIndex, novoNomeTemp.trim()) : setEditandoNomeIndex(null)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && novoNomeTemp.trim()) salvarNomePessoa(originalIndex, novoNomeTemp.trim());
+                                                if (e.key === 'Escape') setEditandoNomeIndex(null);
+                                            }}
+                                            maxLength={15}
+                                        />
                                     </div>
-                                    {clienteSelecionado === nome && (
-                                        <span className="absolute -top-1 -right-1 bg-white text-blue-600 rounded-full p-0.5 shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <IoPencil className="text-[8px]" />
-                                        </span>
-                                    )}
-                                </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setClienteSelecionado(nome)} 
+                                        onDoubleClick={() => { 
+                                            setEditandoNomeIndex(originalIndex);
+                                            setNovoNomeTemp(nome);
+                                        }}
+                                        className={`
+                                            group relative px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-all duration-200 select-none
+                                            ${clienteSelecionado === nome 
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 z-10' 
+                                                : 'bg-white text-gray-600 border-gray-100 hover:border-blue-200 hover:bg-gray-50'
+                                            }
+                                        `}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <IoPerson className={clienteSelecionado === nome ? 'text-white' : 'text-gray-400'} />
+                                            {nome}
+                                        </div>
+                                        {clienteSelecionado === nome && (
+                                            <span className="absolute -top-1 -right-1 bg-white text-blue-600 rounded-full p-0.5 shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <IoPencil className="text-[8px]" />
+                                            </span>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+
+                        <div className="relative flex-shrink-0">
+                            <button 
+                                onClick={adicionarPessoaNova}
+                                className="w-11 h-11 rounded-xl bg-gray-50 border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center transition-all active:scale-95"
+                            >
+                                <IoPersonAdd className="text-xl"/>
+                            </button>
+
+                            {mostrarDicaAdd && ocupantes.length <= 2 && (
+                                <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] font-bold px-2 py-1 rounded w-max animate-bounce z-20">
+                                    Adicionar pessoa
+                                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+                                </div>
                             )}
                         </div>
-                    ))}
-
-                    <button 
-                        onClick={() => { 
-                            const n = `Pessoa ${ocupantes.length}`; 
-                            const novos = [...ocupantes, n];
-                            setOcupantes(novos);
-                            setClienteSelecionado(n);
-                            salvarNomePessoa(novos.length - 1, n);
-                        }} 
-                        className="w-11 h-11 flex-shrink-0 rounded-xl bg-gray-50 border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center transition-all active:scale-95"
-                    >
-                        <IoAdd className="text-xl"/>
-                    </button>
+                    </div>
                 </div>
 
                 {/* Busca e Filtros */}
@@ -390,17 +480,15 @@ const TelaPedidos = () => {
                 </div>
             </header>
 
-            {/* --- LISTA DE PRODUTOS (MODO LISTA FORÇADO) --- */}
             <main className="p-4">
                 {produtosFiltrados.length > 0 ? (
                     <div className="space-y-3">
-                        {produtosFiltrados.map(produto => (
+                        {produtosFiltrados.map((produto, idx) => (
                             <div 
-                                key={produto.id} 
-                                onClick={() => adicionarItem(produto)} 
+                                key={`${produto.id}-${idx}`} 
+                                onClick={() => abrirModalOpcoes(produto)} 
                                 className="bg-white p-3 rounded-xl border border-gray-200 flex gap-3 active:scale-[0.98] transition-transform cursor-pointer shadow-sm hover:shadow-md"
                             >
-                                {/* Imagem do Produto */}
                                 {produto.imageUrl ? (
                                     <img src={produto.imageUrl} className="w-20 h-20 rounded-lg object-cover bg-gray-100 flex-shrink-0" alt=""/>
                                 ) : (
@@ -409,25 +497,19 @@ const TelaPedidos = () => {
                                     </div>
                                 )}
                                 
-                                {/* Detalhes */}
                                 <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
                                     <div>
                                         <h3 className="font-bold text-gray-900 text-sm leading-tight mb-1 truncate">{produto.nome}</h3>
                                         <p className="text-xs text-gray-500 line-clamp-2 leading-tight">{produto.descricao}</p>
                                     </div>
                                     <div className="flex items-center justify-between mt-2">
-                                        <p className="text-blue-600 font-black text-sm">R$ {parseFloat(produto.preco).toFixed(2)}</p>
+                                        <p className="text-blue-600 font-black text-sm">
+                                            R$ {parseFloat(produto.preco || 0).toFixed(2)}
+                                        </p>
                                         
-                                        {/* Indicador se já tem no carrinho para essa pessoa */}
-                                        {resumoPedido.some(item => item.id.startsWith(produto.id) && item.cliente === clienteSelecionado) ? (
-                                            <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
-                                                <IoCheckmark className="text-xs"/> Add
-                                            </span>
-                                        ) : (
-                                            <button className="bg-blue-50 text-blue-600 p-1.5 rounded-lg hover:bg-blue-100 transition-colors">
-                                                <IoAddCircle className="text-xl"/>
-                                            </button>
-                                        )}
+                                        <button className="bg-blue-50 text-blue-600 p-1.5 rounded-lg hover:bg-blue-100 transition-colors">
+                                            <IoAddCircle className="text-xl"/>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -441,7 +523,6 @@ const TelaPedidos = () => {
                 )}
             </main>
 
-            {/* Barra Inferior Total */}
             {resumoPedido.length > 0 && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 pb-8 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-40">
                     <div className="flex justify-between items-center max-w-4xl mx-auto">
@@ -464,128 +545,233 @@ const TelaPedidos = () => {
                     </div>
                 </div>
             )}
-{showOrderSummary && (
-    <>
-        <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
-        <div className="fixed bottom-0 left-0 right-0 bg-white z-50 rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
-            {/* Header Modal */}
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-3xl">
-                <div>
-                    <h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2>
-                    <p className="text-xs text-gray-500">Confira os itens de cada pessoa</p>
-                </div>
-                <button onClick={() => setShowOrderSummary(false)} className="bg-white p-2 rounded-full shadow-sm text-gray-500 hover:text-red-500 transition-colors">
-                    <IoClose className="text-xl"/>
-                </button>
-            </div>
 
-            {/* Lista de Itens (Agrupados por Pessoa) - ESTILO DA IMAGEM */}
-            <div className="overflow-y-auto p-4 space-y-6 flex-1">
-                {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
-                    <div key={nomePessoa} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                        {/* Cabeçalho da Pessoa */}
-                        <div className="bg-gray-900 text-white px-4 py-3">
-                            <h3 className="font-bold text-lg">{nomePessoa}</h3>
-                        </div>
+            {/* --- MODAL DE OPÇÕES DO PRODUTO (CORRIGIDO) --- */}
+            {produtoEmSelecao && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onClick={fecharModalOpcoes}></div>
+                    
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden relative z-10 animate-in zoom-in-95 duration-200">
                         
-                        {/* Lista de Itens - ESTILO TABELA */}
-                        <div className="divide-y divide-gray-100">
-                            {itens.map((item, idx) => (
-                                <div key={idx} className="p-4">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="flex-1">
-                                            <p className="font-bold text-gray-900 text-base">
-                                                {item.quantidade}x {item.nome}
-                                            </p>
-                                            <p className="text-sm text-gray-500 mt-1">
-                                                {item.status || 'enviado'}
-                                            </p>
-                                            <p className="text-sm text-gray-500">
-                                                R$ {item.preco.toFixed(2)} un
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-gray-900 text-lg">
-                                                R$ {(item.preco * item.quantidade).toFixed(2)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Controles de Quantidade - apenas para itens não enviados */}
-                                    {(item.status === 'pendente' || !item.status) && (
-                                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                                            <span className="text-sm text-gray-600">Ajustar quantidade:</span>
-                                            <div className="flex items-center gap-2">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        ajustarQuantidade(item.id, item.cliente, item.quantidade - 1);
-                                                    }}
-                                                    className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                                >
-                                                    <IoRemove className="text-sm"/>
-                                                </button>
-                                                <span className="font-bold text-gray-900 w-6 text-center">{item.quantidade}</span>
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        ajustarQuantidade(item.id, item.cliente, item.quantidade + 1);
-                                                    }}
-                                                    className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                                                >
-                                                    <IoAdd className="text-sm"/>
-                                                </button>
+                        <div className="bg-amber-500 p-4 text-white relative">
+                            <button onClick={fecharModalOpcoes} className="absolute top-4 right-4 text-white/80 hover:text-white">
+                                <IoClose className="text-2xl" />
+                            </button>
+                            <h2 className="text-sm font-medium uppercase opacity-90">Escolha a opção</h2>
+                            <h1 className="text-2xl font-black mt-1 leading-tight">{produtoEmSelecao.nome}</h1>
+                        </div>
+
+                        <div className="p-5 max-h-[60vh] overflow-y-auto">
+                            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                                {produtoEmSelecao.descricao || "Sem descrição disponível."}
+                            </p>
+
+                            {/* AQUI ESTÁ A CORREÇÃO: PROCURA POR opcoes OU variacoes */}
+                            {(() => {
+                                const opcoesRender = getOpcoesProduto(produtoEmSelecao);
+                                
+                                if (opcoesRender.length > 0) {
+                                    return (
+                                        <div className="mb-6">
+                                            <h3 className="font-bold text-gray-800 mb-3 text-sm">Selecione uma opção:</h3>
+                                            <div className="space-y-2">
+                                                {opcoesRender.map((opcao, idx) => (
+                                                    <label 
+                                                        key={idx} 
+                                                        className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                                                            opcaoSelecionada?.nome === opcao.nome 
+                                                                ? 'border-amber-500 bg-amber-50' 
+                                                                : 'border-gray-100 hover:border-gray-200'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                                                opcaoSelecionada?.nome === opcao.nome ? 'border-amber-500' : 'border-gray-300'
+                                                            }`}>
+                                                                {opcaoSelecionada?.nome === opcao.nome && (
+                                                                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                                                                )}
+                                                            </div>
+                                                            <span className="font-medium text-gray-700">{opcao.nome}</span>
+                                                        </div>
+                                                        <span className="font-bold text-amber-600">
+                                                            R$ {parseFloat(opcao.preco).toFixed(2)}
+                                                        </span>
+                                                        <input 
+                                                            type="radio" 
+                                                            name="opcaoProduto" 
+                                                            className="hidden"
+                                                            onChange={() => setOpcaoSelecionada({ nome: opcao.nome, preco: parseFloat(opcao.preco) })}
+                                                            checked={opcaoSelecionada?.nome === opcao.nome}
+                                                        />
+                                                    </label>
+                                                ))}
                                             </div>
                                         </div>
-                                    )}
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            <div>
+                                <h3 className="font-bold text-gray-800 mb-2 text-sm text-amber-800">Observações</h3>
+                                <textarea
+                                    value={observacaoItem}
+                                    onChange={(e) => setObservacaoItem(e.target.value)}
+                                    placeholder="Ex: Sem cebola, ponto da carne, gelo e limão..."
+                                    className="w-full p-3 bg-yellow-50/50 border border-yellow-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none text-sm min-h-[80px] text-gray-700 placeholder-gray-400"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
+                            <div className="flex justify-between items-center px-2">
+                                <span className="text-gray-600 font-bold">Total:</span>
+                                <span className="text-2xl font-black text-amber-600">
+                                    R$ {opcaoSelecionada ? parseFloat(opcaoSelecionada.preco).toFixed(2) : parseFloat(produtoEmSelecao.preco || 0).toFixed(2)}
+                                </span>
+                            </div>
+                            
+                            <div className="flex gap-3 h-12">
+                                <button 
+                                    onClick={fecharModalOpcoes}
+                                    className="flex-1 rounded-xl font-bold text-gray-500 bg-gray-200 hover:bg-gray-300 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={confirmarAdicaoAoCarrinho}
+                                    disabled={getOpcoesProduto(produtoEmSelecao).length > 0 && !opcaoSelecionada}
+                                    className={`flex-1 rounded-xl font-bold text-white transition-all ${
+                                        (getOpcoesProduto(produtoEmSelecao).length > 0 && !opcaoSelecionada)
+                                            ? 'bg-gray-300 cursor-not-allowed'
+                                            : 'bg-green-500 hover:bg-green-600 shadow-lg shadow-green-200 active:scale-95'
+                                    }`}
+                                >
+                                    Continuar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showOrderSummary && (
+                <>
+                    <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
+                    <div className="fixed bottom-0 left-0 right-0 bg-white z-50 rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
+                        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-3xl">
+                            <div>
+                                <h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2>
+                                <p className="text-xs text-gray-500">Confira os itens de cada pessoa</p>
+                            </div>
+                            <button onClick={() => setShowOrderSummary(false)} className="bg-white p-2 rounded-full shadow-sm text-gray-500 hover:text-red-500 transition-colors">
+                                <IoClose className="text-xl"/>
+                            </button>
+                        </div>
+
+                        <div className="overflow-y-auto p-4 space-y-6 flex-1">
+                            {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
+                                <div key={nomePessoa} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                                    <div className="bg-gray-900 text-white px-4 py-3">
+                                        <h3 className="font-bold text-lg">{nomePessoa}</h3>
+                                    </div>
+                                    <div className="divide-y divide-gray-100">
+                                        {itens.map((item, idx) => (
+                                            <div key={idx} className="p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-gray-900 text-base">
+                                                            {item.quantidade}x {item.nome}
+                                                        </p>
+                                                        {item.observacao && (
+                                                            <p className="text-xs text-amber-600 font-medium mt-0.5 bg-amber-50 inline-block px-1.5 py-0.5 rounded">
+                                                                Obs: {item.observacao}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-sm text-gray-500 mt-1">
+                                                            {item.status || 'enviado'}
+                                                        </p>
+                                                        <p className="text-sm text-gray-500">
+                                                            R$ {item.preco.toFixed(2)} un
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="font-bold text-gray-900 text-lg">
+                                                            R$ {(item.preco * item.quantidade).toFixed(2)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {(item.status === 'pendente' || !item.status) && (
+                                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                                                        <span className="text-sm text-gray-600">Ajustar quantidade:</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    ajustarQuantidade(item.id, item.cliente, item.quantidade - 1);
+                                                                }}
+                                                                className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                            >
+                                                                <IoRemove className="text-sm"/>
+                                                            </button>
+                                                            <span className="font-bold text-gray-900 w-6 text-center">{item.quantidade}</span>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    ajustarQuantidade(item.id, item.cliente, item.quantidade + 1);
+                                                                }}
+                                                                className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                                                            >
+                                                                <IoAdd className="text-sm"/>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-gray-700">Subtotal {nomePessoa}:</span>
+                                            <span className="font-black text-blue-600 text-lg">
+                                                R$ {itens.reduce((sum, item) => sum + (item.preco * item.quantidade), 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
 
-                        {/* Subtotal da Pessoa */}
-                        <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                        <div className="bg-gray-900 text-white p-4">
                             <div className="flex justify-between items-center">
-                                <span className="font-bold text-gray-700">Subtotal {nomePessoa}:</span>
-                                <span className="font-black text-blue-600 text-lg">
-                                    R$ {itens.reduce((sum, item) => sum + (item.preco * item.quantidade), 0).toFixed(2)}
-                                </span>
+                                <span className="text-lg font-bold">TOTAL GERAL</span>
+                                <span className="text-2xl font-black">R$ {totalPedido.toFixed(2)}</span>
                             </div>
                         </div>
+
+                        <div className="p-4 border-t border-gray-100 bg-white safe-area-bottom">
+                            <button 
+                                onClick={salvarAlteracoes}
+                                disabled={salvando}
+                                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                            >
+                                {salvando ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        Enviando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <IoCheckmarkCircle className="text-xl"/>
+                                        Confirmar e Enviar Pedido
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
-                ))}
-            </div>
-
-            {/* Total Geral */}
-            <div className="bg-gray-900 text-white p-4">
-                <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold">TOTAL GERAL</span>
-                    <span className="text-2xl font-black">R$ {totalPedido.toFixed(2)}</span>
-                </div>
-            </div>
-
-            {/* Footer Modal */}
-            <div className="p-4 border-t border-gray-100 bg-white safe-area-bottom">
-                <button 
-                    onClick={salvarAlteracoes}
-                    disabled={salvando}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
-                >
-                    {salvando ? (
-                        <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Enviando para cozinha...
-                        </>
-                    ) : (
-                        <>
-                            <IoCheckmarkCircle className="text-xl"/>
-                            Confirmar e Enviar Pedido
-                        </>
-                    )}
-                </button>
-            </div>
-        </div>
-    </>
-)}
+                </>
+            )}
             <style jsx>{`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
