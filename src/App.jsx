@@ -116,7 +116,6 @@ function App() {
                     </PrivateRoute>
                   } 
                 />
-
                 {/* ✅ GRUPO DE ROTAS QUE USAM O LAYOUT PRINCIPAL (COM HEADER) */}
                 <Route element={<Layout />}>
                   {/* --- Rotas Públicas/Clientes --- */}

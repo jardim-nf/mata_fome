@@ -16,42 +16,11 @@ import { IoTime } from "react-icons/io5";
 // 🧩 COMPONENTES AUXILIARES
 // ==========================================
 
-// 🎯 Componente de Debug
-const DebugInfo = ({ pedidos, estabelecimentoId }) => {
-  const [showDebug, setShowDebug] = useState(false);
-  return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <button 
-        onClick={() => setShowDebug(!showDebug)}
-        className="bg-red-500 text-white p-3 rounded-full shadow-lg hover:bg-red-600 transition-colors"
-      >
-        🐛
-      </button>
-      
-      {showDebug && (
-        <div className="absolute bottom-16 right-0 bg-white p-4 rounded-lg shadow-xl border border-red-200 text-xs max-w-sm">
-           <p><strong>Total Pedidos:</strong> {Object.values(pedidos).flat().length}</p>
-           <p><strong>Estabelecimento:</strong> {estabelecimentoId}</p>
-           <div className="mt-2 max-h-40 overflow-y-auto">
-             {Object.values(pedidos).flat().slice(0, 5).map(p => (
-                 <div key={p.id} className="border-b py-1">
-                     {p.id.slice(0,5)}... ({p.source}) - {p.status}
-                 </div>
-             ))}
-           </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// 🎯 Componente de Agrupamento por Mesa
 const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
   const pedidosAgrupados = useMemo(() => {
     const grupos = {};
     pedidos.forEach(pedido => {
       const chave = `${pedido.mesaNumero}-${pedido.loteHorario || 'principal'}`;
-      
       if (!grupos[chave]) {
         grupos[chave] = {
           mesaNumero: pedido.mesaNumero,
@@ -68,9 +37,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
     return Object.values(grupos);
   }, [pedidos]);
 
-  if (pedidosAgrupados.length === 0) {
-    return <div className="text-center py-12 text-amber-600 opacity-60">Nenhum pedido</div>;
-  }
+  if (pedidosAgrupados.length === 0) return <div className="text-center py-4 text-gray-400">Sem pedidos na cozinha</div>;
 
   return (
     <div className="space-y-4">
@@ -87,7 +54,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
              </div>
              <span className="text-xs font-semibold text-gray-500">{grupo.totalItens} itens</span>
           </div>
-          
           <div className="p-4 space-y-3">
             {grupo.pedidos.map(pedido => (
               <PedidoCard
@@ -118,7 +84,7 @@ function Painel() {
     // --- ESTADOS ---
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ 
-        aguardando_pagamento: [], recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] 
+        recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] 
     });
     const [loading, setLoading] = useState(true);
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -126,71 +92,47 @@ function Painel() {
     const [newOrderIds, setNewOrderIds] = useState(new Set());
     const [abaAtiva, setAbaAtiva] = useState('delivery');
     
-    // Controle de Concorrência
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
 
-    // --- SELEÇÃO DE ESTABELECIMENTO AUTOMÁTICA ---
+    // SELEÇÃO AUTOMÁTICA DE ESTABELECIMENTO
     const estabelecimentoAtivo = useMemo(() => {
-        // Se não tiver lista ou ela for vazia, retorna null
         if (!estabelecimentosGerenciados || estabelecimentosGerenciados.length === 0) return null;
-        
-        // CORREÇÃO: Pega automaticamente o primeiro ID da lista de permissões do usuário
-        // Isso resolve o problema de ficar preso a um ID antigo
         return estabelecimentosGerenciados[0]; 
     }, [estabelecimentosGerenciados]);
 
     // --- FUNÇÕES DE AÇÃO ---
-
-    // 1. EXCLUIR PEDIDO
     const handleExcluirPedido = useCallback(async (pedidoId, source) => {
-        if (!window.confirm("Tem certeza que deseja cancelar/excluir este pedido?")) return;
-
+        if (!window.confirm("Cancelar este pedido?")) return;
         try {
-            console.log(`🗑️ Excluindo pedido ${pedidoId} (Origem: ${source})`);
-            
             const pedidoRef = source === 'salao'
                 ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
                 : doc(db, 'pedidos', pedidoId);
-
             await deleteDoc(pedidoRef);
-            toast.success("Pedido excluído com sucesso!");
+            toast.success("Pedido excluído!");
         } catch (error) {
-            console.error("❌ Erro ao excluir:", error);
             toast.error("Erro ao excluir: " + error.message);
         }
     }, [estabelecimentoAtivo]);
 
-    // 2. ATUALIZAR STATUS
     const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
-        if (isUpdatingRef.current) return;
-        if (bloqueioAtualizacao.has(pedidoId)) return;
-
+        if (isUpdatingRef.current || bloqueioAtualizacao.has(pedidoId)) return;
         try {
             isUpdatingRef.current = true;
             setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
             
-            console.log(`🔄 Movendo ${pedidoId} para ${newStatus}`);
-
             const allPedidos = Object.values(pedidos).flat();
             const pedidoData = allPedidos.find(p => p.id === pedidoId);
-            
             if (!pedidoData) throw new Error("Pedido não encontrado na memória.");
 
             const pedidoRef = pedidoData.source === 'salao'
                 ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
                 : doc(db, 'pedidos', pedidoId);
 
-            await updateDoc(pedidoRef, { 
-                status: newStatus,
-                atualizadoEm: serverTimestamp()
-            });
-            
-            toast.success(`Pedido movido para ${newStatus.replace(/_/g, ' ')}!`);
-
+            await updateDoc(pedidoRef, { status: newStatus, atualizadoEm: serverTimestamp() });
+            toast.success(`Movido para ${newStatus.replace(/_/g, ' ')}!`);
         } catch (error) { 
-            console.error('❌ Erro ao mover:', error); 
             toast.error(`Falha ao mover: ${error.message}`); 
         } finally {
             setTimeout(() => {
@@ -204,41 +146,29 @@ function Painel() {
         }
     }, [pedidos, estabelecimentoAtivo, bloqueioAtualizacao]);
 
-    // --- LISTENERS (Escuta em Tempo Real) ---
+    // --- LISTENERS ---
     useEffect(() => {
         if (authLoading) return;
-        if (!estabelecimentoAtivo) {
-            setLoading(false);
-            return;
-        }
+        if (!estabelecimentoAtivo) { setLoading(false); return; }
 
         let unsubscribers = [];
-        console.log(`🚀 Iniciando Listeners para Estabelecimento: ${estabelecimentoAtivo}`);
-
         const setupPainel = async () => {
             try {
-                // Info do Estabelecimento
                 const estDocRef = doc(db, 'estabelecimentos', estabelecimentoAtivo);
-                getDoc(estDocRef).then(snap => {
-                    if (snap.exists()) setEstabelecimentoInfo(snap.data());
-                });
+                getDoc(estDocRef).then(snap => { if (snap.exists()) setEstabelecimentoInfo(snap.data()); });
 
-                // 1. Listener SALÃO (Sub-coleção)
+                // LISTENER SALÃO
                 const qSalao = query(
                     collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
-                    // Status 'aguardando_pagamento' incluído aqui
-                    where('status', 'in', ['aguardando_pagamento', 'recebido', 'preparo', 'pronto_para_servir', 'finalizado']),
+                    // Removido 'aguardando_pagamento'
+                    where('status', 'in', ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']),
                     orderBy('dataPedido', 'asc')
                 );
                 
                 unsubscribers.push(onSnapshot(qSalao, (snapshot) => {
-                    const pedidosSalao = snapshot.docs.map(d => ({
-                        id: d.id, ...d.data(), source: 'salao', tipo: 'salao'
-                    }));
-                    
+                    const pedidosSalao = snapshot.docs.map(d => ({ id: d.id, ...d.data(), source: 'salao', tipo: 'salao' }));
                     setPedidos(prev => ({
                         ...prev,
-                        aguardando_pagamento: [...prev.aguardando_pagamento.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'aguardando_pagamento')],
                         recebido: [...prev.recebido.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'recebido')],
                         preparo: [...prev.preparo.filter(p => p.source !== 'salao'), ...pedidosSalao.filter(p => p.status === 'preparo')],
                         pronto_para_servir: pedidosSalao.filter(p => p.status === 'pronto_para_servir'),
@@ -246,60 +176,44 @@ function Painel() {
                     }));
                 }));
 
-                // 2. Listener DELIVERY (Coleção Raiz)
+                // LISTENER DELIVERY
                 const qGlobal = query(
                     collection(db, 'pedidos'), 
                     where('estabelecimentoId', '==', estabelecimentoAtivo),
-                    // Status 'aguardando_pagamento' incluído aqui
-                    where('status', 'in', ['aguardando_pagamento', 'recebido', 'preparo', 'em_entrega', 'finalizado']),
+                    // Removido 'aguardando_pagamento'
+                    where('status', 'in', ['recebido', 'preparo', 'em_entrega', 'finalizado']),
                     orderBy('createdAt', 'asc')
                 );
                 
                 unsubscribers.push(onSnapshot(qGlobal, (snapshot) => {
-                    const pedidosDelivery = snapshot.docs.map(d => ({ 
-                        id: d.id, ...d.data(), source: 'global', tipo: d.data().tipo || 'delivery'
-                    }));
-                    
+                    const pedidosDelivery = snapshot.docs.map(d => ({ id: d.id, ...d.data(), source: 'global', tipo: d.data().tipo || 'delivery' }));
                     setPedidos(prev => ({
                         ...prev,
-                        aguardando_pagamento: [...prev.aguardando_pagamento.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'aguardando_pagamento')],
                         recebido: [...prev.recebido.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'recebido')],
                         preparo: [...prev.preparo.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'preparo')],
                         em_entrega: pedidosDelivery.filter(p => p.status === 'em_entrega'),
                         finalizado: [...prev.finalizado.filter(p => p.source !== 'global'), ...pedidosDelivery.filter(p => p.status === 'finalizado')]
                     }));
                 }));
-                
                 setLoading(false);
-
             } catch (error) {
-                console.error("❌ Erro no setupPainel:", error);
-                toast.error("Erro ao carregar pedidos.");
+                console.error("❌ Erro:", error);
                 setLoading(false);
             }
         };
-
         setupPainel();
-
         return () => unsubscribers.forEach(u => u());
     }, [estabelecimentoAtivo, authLoading]);
 
-    // --- ÁUDIO E NOTIFICAÇÕES ---
+    // Áudio
     useEffect(() => {
         const currentRecebidos = pedidos.recebido;
-        // Se a quantidade de pedidos recebidos aumentou
         if (currentRecebidos.length > prevRecebidosRef.current.length) {
             const newOrders = currentRecebidos.filter(c => !prevRecebidosRef.current.some(p => p.id === c.id));
-            
             if (newOrders.length > 0) {
                 const newIds = newOrders.map(order => order.id);
                 setNewOrderIds(prev => new Set([...prev, ...newIds]));
-
-                if (notificationsEnabled && userInteracted) {
-                    audioRef.current?.play().catch(e => console.log("Erro áudio:", e));
-                }
-                
-                // Limpa destaque após 15s
+                if (notificationsEnabled && userInteracted) audioRef.current?.play().catch(() => {});
                 setTimeout(() => {
                     setNewOrderIds(prev => {
                         const updated = new Set(prev);
@@ -315,7 +229,6 @@ function Painel() {
     const toggleNotifications = () => {
         const novoStatus = !notificationsEnabled;
         setNotificationsEnabled(novoStatus);
-        
         if (novoStatus) {
             toast.success('🔔 Som Ativado!');
             if (userInteracted) audioRef.current?.play().catch(() => {});
@@ -325,26 +238,18 @@ function Painel() {
     };
 
     useEffect(() => {
-        const unlockAudio = () => {
-            setUserInteracted(true);
-            window.removeEventListener('click', unlockAudio);
-        };
+        const unlockAudio = () => { setUserInteracted(true); window.removeEventListener('click', unlockAudio); };
         window.addEventListener('click', unlockAudio);
         return () => window.removeEventListener('click', unlockAudio);
     }, []);
 
-    // --- RENDERIZAÇÃO ---
-    
-    // Configuração das colunas
-    const colunas = useMemo(() => 
-        abaAtiva === 'cozinha' 
-            ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
-            : ['aguardando_pagamento', 'recebido', 'preparo', 'em_entrega', 'finalizado'],
-        [abaAtiva]
-    );
+    // COLUNAS CONFIGURADAS (SEM PAGAMENTO)
+    const colunas = useMemo(() => abaAtiva === 'cozinha' 
+        ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado']
+        : ['recebido', 'preparo', 'em_entrega', 'finalizado'],
+    [abaAtiva]);
 
     const STATUS_CONFIG = {
-        aguardando_pagamento: { title: '💲 Pagamento', color: 'border-l-yellow-500', countColor: 'bg-yellow-500' },
         recebido: { title: '📥 Recebido', color: 'border-l-red-500', countColor: 'bg-red-500' },
         preparo: { title: '👨‍🍳 Em Preparo', color: 'border-l-orange-500', countColor: 'bg-orange-500' },
         em_entrega: { title: '🛵 Em Entrega', color: 'border-l-blue-500', countColor: 'bg-blue-500' },
@@ -352,130 +257,68 @@ function Painel() {
         finalizado: { title: '📦 Finalizado', color: 'border-l-gray-500', countColor: 'bg-gray-500' }
     };
 
-    if (loading || authLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
-                    <p className="text-gray-500">Carregando painel...</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading || authLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">Carregando painel...</div>;
 
-    if (!estabelecimentoAtivo) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <div className="text-center p-8 bg-white rounded-2xl shadow-lg">
-                    <h2 className="text-xl font-bold mb-2">Nenhum Estabelecimento Selecionado</h2>
-                    <p className="text-gray-500 mb-4">Por favor, selecione um estabelecimento no dashboard.</p>
-                    <Link to="/dashboard" className="bg-amber-500 text-white px-6 py-2 rounded-lg font-bold">Voltar</Link>
-                </div>
-            </div>
-        );
-    }
+    if (!estabelecimentoAtivo) return <div className="p-10 text-center">Nenhum estabelecimento selecionado.</div>;
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex flex-col">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
-            <DebugInfo pedidos={pedidos} estabelecimentoId={estabelecimentoAtivo} />
-
             {/* HEADER */}
             <header className="bg-white shadow-lg border-b border-amber-200 p-4 sticky top-0 z-30">
-                <div className="max-w-7xl mx-auto flex justify-between items-center">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
                     <div className="flex gap-4 items-center">
-                        <button 
-                            onClick={toggleNotifications}
-                            className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${
-                                notificationsEnabled ? 'bg-green-500 text-white shadow' : 'bg-amber-100 text-amber-800'
-                            }`}
-                        >
+                        <button onClick={toggleNotifications} className={`px-4 py-2 rounded-xl font-bold transition-all ${notificationsEnabled ? 'bg-green-500 text-white' : 'bg-amber-100 text-amber-800'}`}>
                             {notificationsEnabled ? '🔔 Som ON' : '🔕 Som OFF'}
                         </button>
-                        <div className="hidden md:block text-sm text-gray-500">
-                            ID: {estabelecimentoAtivo.slice(0, 8)}...
-                        </div>
                     </div>
 
-                    {/* Tabs Centrais */}
                     <div className="flex bg-gray-100 p-1 rounded-xl">
-                        <button 
-                            onClick={() => setAbaAtiva('delivery')} 
-                            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-                                abaAtiva === 'delivery' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            🛵 Delivery
-                        </button>
-                        <button 
-                            onClick={() => setAbaAtiva('cozinha')} 
-                            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-                                abaAtiva === 'cozinha' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            👨‍🍳 Cozinha
-                        </button>
+                        <button onClick={() => setAbaAtiva('delivery')} className={`px-4 py-2 rounded-lg font-semibold ${abaAtiva === 'delivery' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500'}`}>🛵 Delivery</button>
+                        <button onClick={() => setAbaAtiva('cozinha')} className={`px-4 py-2 rounded-lg font-semibold ${abaAtiva === 'cozinha' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500'}`}>👨‍🍳 Cozinha</button>
                     </div>
-
-                    <button onClick={logout} className="text-gray-500 hover:text-red-500 font-bold px-4">
-                        Sair
-                    </button>
                 </div>
             </header>
 
-            {/* MAIN CONTENT (GRID) */}
-            <main className="flex-grow p-4 md:p-6 overflow-x-auto">
-                <div className="flex gap-4 min-w-[1200px] h-full">
+            {/* MAIN CONTENT - LAYOUT RESPONSIVO */}
+            <main className="flex-grow p-4 overflow-x-hidden">
+                <div className="flex flex-col md:flex-row gap-4 h-auto md:h-full w-full">
                     {colunas.map(status => {
                         const config = STATUS_CONFIG[status];
                         const allPedidosStatus = pedidos[status] || [];
-                        
-                        // Filtro Principal: Salão vs Delivery
-                        const pedidosFiltrados = allPedidosStatus.filter(p => {
-                            if (abaAtiva === 'cozinha') return p.source === 'salao';
-                            return p.source === 'global';
-                        });
+                        const pedidosFiltrados = allPedidosStatus.filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
 
                         return (
-                            <div key={status} className={`flex-1 min-w-[300px] rounded-2xl shadow-lg border border-amber-100 border-l-4 ${config.color} bg-white flex flex-col max-h-[calc(100vh-140px)]`}>
-                                {/* Header da Coluna */}
+                            <div key={status} className={`flex-1 rounded-2xl shadow-lg border border-amber-100 border-l-4 ${config.color} bg-white flex flex-col h-auto md:h-[calc(100vh-140px)] min-h-[300px]`}>
                                 <div className="p-4 border-b border-amber-100 flex justify-between items-center bg-gray-50 rounded-tr-xl">
                                     <h2 className="font-bold text-gray-800 text-lg">{config.title}</h2>
-                                    <span className={`${config.countColor} text-white text-xs font-bold px-3 py-1 rounded-full`}>
-                                        {pedidosFiltrados.length}
-                                    </span>
+                                    <span className={`${config.countColor} text-white text-xs font-bold px-3 py-1 rounded-full`}>{pedidosFiltrados.length}</span>
                                 </div>
-
-                                {/* Lista de Pedidos (Scrollável) */}
-                                <div className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
+                                <div className="p-4 space-y-4 md:overflow-y-auto flex-1 custom-scrollbar">
                                     {pedidosFiltrados.length > 0 ? (
-                                        abaAtiva === 'cozinha' ? (
-                                            // Modo Agrupado (Cozinha)
-                                            <GrupoPedidosMesa
-                                                pedidos={pedidosFiltrados}
-                                                onUpdateStatus={handleUpdateStatusAndNotify}
-                                                onExcluir={handleExcluirPedido}
-                                                newOrderIds={newOrderIds}
-                                                estabelecimentoInfo={estabelecimentoInfo}
-                                            />
-                                        ) : (
-                                            // Modo Lista Simples (Delivery)
+                                        abaAtiva === 'cozinha' ? 
+                                            <GrupoPedidosMesa 
+                                                pedidos={pedidosFiltrados} 
+                                                onUpdateStatus={handleUpdateStatusAndNotify} 
+                                                onExcluir={handleExcluirPedido} 
+                                                newOrderIds={newOrderIds} 
+                                                estabelecimentoInfo={estabelecimentoInfo} 
+                                            /> 
+                                            : 
                                             pedidosFiltrados.map(ped => (
-                                                <PedidoCard
-                                                    key={ped.id}
-                                                    item={ped}
-                                                    onUpdateStatus={handleUpdateStatusAndNotify}
-                                                    onExcluir={handleExcluirPedido}
-                                                    newOrderIds={newOrderIds}
-                                                    estabelecimentoInfo={estabelecimentoInfo}
+                                                <PedidoCard 
+                                                    key={ped.id} 
+                                                    item={ped} 
+                                                    onUpdateStatus={handleUpdateStatusAndNotify} 
+                                                    onExcluir={handleExcluirPedido} 
+                                                    newOrderIds={newOrderIds} 
+                                                    estabelecimentoInfo={estabelecimentoInfo} 
                                                 />
                                             ))
-                                        )
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50">
-                                            <div className="text-4xl mb-2">🍃</div>
-                                            <p>Vazio</p>
+                                        <div className="flex flex-col items-center justify-center py-10 md:h-full text-gray-400 opacity-50">
+                                            <div className="text-4xl mb-2">🍃</div><p>Vazio</p>
                                         </div>
                                     )}
                                 </div>

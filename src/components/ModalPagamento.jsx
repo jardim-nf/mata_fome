@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import './ModalPagamento.css';
+import { IoReceiptOutline, IoFastFoodOutline } from 'react-icons/io5';
 
 const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
   const [etapa, setEtapa] = useState(1);
@@ -9,160 +10,137 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
   const [carregando, setCarregando] = useState(false);
   const [modoEdicao, setModoEdicao] = useState(false);
 
-  // ✅ DEBUG - Ver estrutura completa da mesa
-  console.log('🔍 ESTRUTURA COMPLETA DA MESA:', mesa);
-  console.log('📦 Propriedades da mesa:', mesa ? Object.keys(mesa) : 'Mesa vazia');
-  console.log('🍽️ Itens da mesa:', mesa?.itens);
-  console.log('💰 Total da mesa:', mesa?.total);
-
-  // ✅ CORREÇÃO: Usar mesa.itens em vez de mesa.pedidos
-  const calcularTotalPedidos = (itens) => {
-    console.log('📋 Itens recebidos para cálculo:', itens);
-    
-    if (!itens || itens.length === 0) {
-      console.log('⚠️ Nenhum item encontrado na mesa!');
-      return 0;
-    }
-    
-    const total = itens.reduce((total, item) => {
-      return total + (item.preco * item.quantidade);
-    }, 0);
-    
-    console.log('💰 Total calculado:', total);
-    return total;
+  // Helper para calcular total de uma lista de itens
+  const calcularTotalItens = (itens) => {
+    if (!itens || itens.length === 0) return 0;
+    return itens.reduce((total, item) => total + (item.preco * item.quantidade), 0);
   };
 
-  // Inicializar pagamentos com os dados da mesa
+  // ✅ 1. LÓGICA INTELIGENTE DE INICIALIZAÇÃO
+  // Agrupa os itens por pessoa e calcula o valor exato de cada um
   useEffect(() => {
     if (mesa && mesa.itens) {
-      const total = calcularTotalPedidos(mesa.itens);
-      const pessoas = mesa.clientes || ['Cliente 1'];
-      
       const pagamentosIniciais = {};
-      pessoas.forEach(pessoa => {
-        pagamentosIniciais[pessoa] = {
-          valor: total / pessoas.length,
-          formaPagamento: 'dinheiro',
-          status: 'pendente'
-        };
+      
+      // Itera sobre cada item do pedido
+      mesa.itens.forEach(item => {
+        // Identifica o dono (se não tiver, vai para "Mesa/Geral")
+        // IMPORTANTE: Normaliza o nome para evitar duplicatas (trim)
+        const dono = item.destinatario || item.clienteNome || 'Mesa';
+        
+        if (!pagamentosIniciais[dono]) {
+          pagamentosIniciais[dono] = {
+            valor: 0,
+            formaPagamento: 'dinheiro',
+            status: 'pendente',
+            itens: [] // Guardamos os itens para exibir na tela
+          };
+        }
+
+        // Soma o valor deste item para este dono
+        pagamentosIniciais[dono].valor += (item.preco * item.quantidade);
+        pagamentosIniciais[dono].itens.push(item);
       });
-      
-      // Adicionar opção "Mesa" para pagamento único
-      pagamentosIniciais['Mesa'] = {
-        valor: total,
-        formaPagamento: 'dinheiro',
-        status: 'pendente'
-      };
-      
+
+      // Se por acaso a mesa estiver vazia (sem itens), cria um padrão
+      if (Object.keys(pagamentosIniciais).length === 0) {
+        pagamentosIniciais['Cliente 1'] = { valor: 0, formaPagamento: 'dinheiro', status: 'pendente', itens: [] };
+      }
+
       setPagamentos(pagamentosIniciais);
     }
   }, [mesa]);
 
-// ✅ CORREÇÃO - Calcular apenas pagamentos individuais OU mesa, nunca ambos
-const calcularTotalPagamentos = () => {
-  console.log('📊 Calculando total dos pagamentos:', pagamentos);
-  
-  // Verifica se existe pagamento da mesa
-  const pagamentoMesa = pagamentos['Mesa'];
-  
-  if (pagamentoMesa && pagamentoMesa.valor > 0) {
-    // ✅ MODO PAGAMENTO ÚNICO - usa apenas o valor da mesa
-    console.log('💳 Modo Pagamento Único - Valor:', pagamentoMesa.valor);
-    return pagamentoMesa.valor;
-  } else {
-    // ✅ MODO DIVISÃO INDIVIDUAL - soma apenas os clientes
-    const totalIndividual = Object.entries(pagamentos).reduce((total, [pessoa, dados]) => {
-      // Ignora a "Mesa" e soma apenas clientes reais
-      if (pessoa !== 'Mesa') {
-        return total + dados.valor;
-      }
-      return total;
-    }, 0);
-    
-    console.log('👥 Modo Divisão Individual - Valor:', totalIndividual);
-    return totalIndividual;
-  }
-};
-  // ✅ FUNÇÃO PARA EDITAR FORMA DE PAGAMENTO
+  // Calcula quanto já foi distribuído nos pagamentos
+  const calcularTotalPagamentos = () => {
+    return Object.values(pagamentos).reduce((total, dados) => total + dados.valor, 0);
+  };
+
+  const calcularTotalMesa = () => {
+    return calcularTotalItens(mesa.itens);
+  };
+
+  // Funções de Edição
   const editarFormaPagamento = (pessoaId, novaForma) => {
     setPagamentos(prev => ({
       ...prev,
-      [pessoaId]: {
-        ...prev[pessoaId],
-        formaPagamento: novaForma
-      }
+      [pessoaId]: { ...prev[pessoaId], formaPagamento: novaForma }
     }));
   };
 
-  // ✅ FUNÇÃO PARA EDITAR VALOR
   const editarValorPagamento = (pessoaId, novoValor) => {
     setPagamentos(prev => ({
       ...prev,
-      [pessoaId]: {
-        ...prev[pessoaId],
-        valor: parseFloat(novoValor) || 0
-      }
+      [pessoaId]: { ...prev[pessoaId], valor: parseFloat(novoValor) || 0 }
     }));
   };
 
-  // ✅ FUNÇÃO PARA REDISTRIBUIR VALORES IGUALMENTE
-  const redistribuirValores = () => {
-    const total = calcularTotalPedidos(mesa.itens);
-    const pessoas = Object.keys(pagamentos).filter(key => key !== 'Mesa');
+  const adicionarPessoa = () => {
+    const novaPessoa = `Cliente ${Object.keys(pagamentos).length + 1}`;
+    setPagamentos(prev => ({
+      ...prev,
+      [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', status: 'pendente', itens: [] }
+    }));
+  };
+
+  const removerPessoa = (pessoaId) => {
+    if (Object.keys(pagamentos).length <= 1) {
+      alert('Precisa ter pelo menos um pagante.');
+      return;
+    }
+    setPagamentos(prev => {
+      const novos = { ...prev };
+      delete novos[pessoaId];
+      return novos;
+    });
+  };
+
+  // Funções de Redistribuição (Úteis se o cliente quiser mudar a lógica na hora)
+  const dividirIgualmente = () => {
+    const total = calcularTotalMesa();
+    const pessoas = Object.keys(pagamentos);
     const valorPorPessoa = total / pessoas.length;
     
     setPagamentos(prev => {
-      const novosPagamentos = { ...prev };
-      pessoas.forEach(pessoa => {
-        novosPagamentos[pessoa] = {
-          ...novosPagamentos[pessoa],
-          valor: valorPorPessoa
-        };
+      const novos = { ...prev };
+      pessoas.forEach(p => {
+        novos[p].valor = valorPorPessoa;
+        // Mantém os itens visuais, mas o valor muda
       });
-      novosPagamentos['Mesa'] = {
-        ...novosPagamentos['Mesa'],
-        valor: total
-      };
-      return novosPagamentos;
+      return novos;
     });
   };
 
-  // ✅ FUNÇÃO PARA ADICIONAR NOVA PESSOA
-  const adicionarPessoa = () => {
-    const novaPessoa = `Cliente ${Object.keys(pagamentos).length}`;
-    setPagamentos(prev => ({
-      ...prev,
-      [novaPessoa]: {
-        valor: 0,
+  const pagarTudoUmCliente = () => {
+    const total = calcularTotalMesa();
+    const nomes = Object.keys(pagamentos);
+    const pagante = nomes[0]; // Pega o primeiro
+
+    setPagamentos({
+      [pagante]: {
+        valor: total,
         formaPagamento: 'dinheiro',
-        status: 'pendente'
+        status: 'pendente',
+        itens: mesa.itens // Atribui todos os itens visualmente a ele
       }
-    }));
-  };
-
-  // ✅ FUNÇÃO PARA REMOVER PESSOA
-  const removerPessoa = (pessoaId) => {
-    if (Object.keys(pagamentos).length <= 2) {
-      alert('É necessário ter pelo menos uma pessoa para pagar!');
-      return;
-    }
-    
-    setPagamentos(prev => {
-      const novosPagamentos = { ...prev };
-      delete novosPagamentos[pessoaId];
-      return novosPagamentos;
     });
   };
 
-  // ✅ FUNÇÃO PARA FINALIZAR PAGAMENTO
+  // Finalizar Pagamento
   const finalizarPagamento = async () => {
     setCarregando(true);
-    
     try {
-      console.log('🔍 DEBUG - Iniciando pagamento...');
-      console.log('👤 Usuário logado:', auth.currentUser);
-      console.log('📁 Estabelecimento ID:', estabelecimentoId);
-      console.log('💳 Dados pagamentos:', pagamentos);
+      // Verifica divergência de valores
+      const totalPago = calcularTotalPagamentos();
+      const totalMesa = calcularTotalMesa();
+      
+      // Aceita uma margem de erro de 10 centavos para arredondamentos
+      if (Math.abs(totalPago - totalMesa) > 0.10) {
+        if(!window.confirm(`O valor total (R$ ${totalPago.toFixed(2)}) é diferente do total da mesa (R$ ${totalMesa.toFixed(2)}). Deseja fechar mesmo assim?`)) {
+            setCarregando(false);
+            return;
+        }
+      }
 
       const dadosVenda = {
         mesaId: mesa.id,
@@ -170,125 +148,94 @@ const calcularTotalPagamentos = () => {
         estabelecimentoId: estabelecimentoId,
         itens: mesa.itens,
         pagamentos: pagamentos,
-        total: calcularTotalPedidos(mesa.itens),
+        total: totalMesa,
         status: 'pago',
         criadoEm: new Date(),
-        criadoPor: auth.currentUser.uid,
-        funcionario: auth.currentUser.displayName || 'Garçom'
+        criadoPor: auth.currentUser?.uid,
+        funcionario: auth.currentUser?.displayName || 'Garçom'
       };
 
-      console.log('💾 Tentando salvar venda...');
+      const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
 
-      const docRef = await addDoc(
-        collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), 
-        dadosVenda
-      );
-
-      console.log('✅ Venda salva com ID:', docRef.id);
-
+      // Limpa a mesa
       if (mesa.id) {
         await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
           status: 'livre',
           clientes: [],
+          nomesOcupantes: ["Mesa"], // Reseta nomes
           itens: [],
           total: 0,
+          pagamentos: {},
           ultimaAtualizacao: new Date()
         });
       }
 
-      console.log('✅ Mesa liberada com sucesso!');
-      
-      if (onSucesso) {
-        onSucesso({
-          vendaId: docRef.id,
-          total: dadosVenda.total,
-          mesa: mesa.numero
-        });
-      }
-      
+      if (onSucesso) onSucesso({ vendaId: docRef.id });
       onClose();
 
     } catch (error) {
-      console.error('❌ ERRO ao processar pagamento:', error);
-      console.error('📋 Detalhes:', error.message, error.code);
-      alert('Erro ao processar pagamento: ' + error.message);
+      console.error('Erro:', error);
+      alert('Erro ao processar: ' + error.message);
     } finally {
       setCarregando(false);
     }
   };
 
-  // Renderizar etapa 1 - Seleção de pessoas
+  // --- RENDERIZADORES ---
+
   const renderizarEtapa1 = () => (
     <div className="etapa">
-      <h3>👥 Divisão da Conta</h3>
-      <p>Selecione como a conta será dividida:</p>
+      <h3>👥 Conferência de Valores</h3>
+      <p>O sistema calculou o valor individual baseado no que cada um pediu.</p>
       
       <div className="opcoes-divisao">
-        <button 
-          className="opcao-grande"
-          onClick={() => {
-            console.log('🎯 Clicou em Pagamento Único');
-            const total = calcularTotalPedidos(mesa.itens);
-            setPagamentos({
-              'Mesa': {
-                valor: total,
-                formaPagamento: 'dinheiro',
-                status: 'pendente'
-              }
-            });
-            setEtapa(2);
-          }}
-        >
-          <strong>💳 Pagamento Único</strong>
-          <span>Uma pessoa paga toda a conta</span>
+        {/* Opção Padrão: Cada um paga o seu */}
+        <button className="opcao-grande destaque" onClick={() => setEtapa(2)}>
+          <strong>🧾 Cobrar por Consumo</strong>
+          <span>Seguir o pedido de cada um</span>
         </button>
         
-        <button 
-          className="opcao-grande"
-          onClick={() => {
-            console.log('🎯 Clicou em Divisão Igual');
-            const total = calcularTotalPedidos(mesa.itens);
-            const pessoas = ['Cliente 1', 'Cliente 2'];
-            const valorPorPessoa = total / pessoas.length;
-            
-            const novosPagamentos = {};
-            pessoas.forEach(pessoa => {
-              novosPagamentos[pessoa] = {
-                valor: valorPorPessoa,
-                formaPagamento: 'dinheiro',
-                status: 'pendente'
-              };
-            });
-            
-            novosPagamentos['Mesa'] = {
-              valor: total,
-              formaPagamento: 'dinheiro',
-              status: 'pendente'
-            };
-            
-            setPagamentos(novosPagamentos);
-            setEtapa(2);
-          }}
-        >
-          <strong>🔢 Divisão Igual</strong>
-          <span>Valor dividido igualmente</span>
-        </button>
+        {/* Opções Extras de Divisão */}
+        <div className="botoes-extras-divisao">
+            <button className="btn-secundario" onClick={() => { dividirIgualmente(); setEtapa(2); }}>
+                🔢 Dividir Igualmente
+            </button>
+            <button className="btn-secundario" onClick={() => { pagarTudoUmCliente(); setEtapa(2); }}>
+                👤 Um Pagante (Total)
+            </button>
+        </div>
       </div>
     </div>
   );
 
-  // Renderizar etapa 2 - Formas de pagamento
   const renderizarEtapa2 = () => (
     <div className="etapa">
       <h3>💳 Formas de Pagamento</h3>
       <p>Defina como cada pessoa irá pagar:</p>
       
-      <div className="lista-pagamentos">
+      <div className="lista-pagamentos custom-scrollbar">
         {Object.entries(pagamentos).map(([pessoa, dados]) => (
           <div key={pessoa} className="item-pagamento">
-            <div className="info-pessoa">
-              <strong>{pessoa}</strong>
-              <span>R$ {dados.valor.toFixed(2)}</span>
+            
+            <div className="info-topo">
+                <div className="info-pessoa">
+                <strong>{pessoa}</strong>
+                {/* 🔴 AQUI ESTÁ A LISTA DE ITENS EMBAIXO DO NOME */}
+                {dados.itens && dados.itens.length > 0 ? (
+                    <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-1">
+                        {dados.itens.map((item, idx) => (
+                            <span key={idx} className="bg-gray-100 px-1.5 rounded">
+                                {item.quantidade}x {item.nome}
+                            </span>
+                        ))}
+                    </div>
+                ) : (
+                    <span className="text-xs text-gray-400 italic">Sem itens registrados</span>
+                )}
+                </div>
+                <div className="valor-pessoa">
+                    R$ {dados.valor.toFixed(2)}
+                </div>
             </div>
             
             <div className="formas-pagamento">
@@ -302,25 +249,23 @@ const calcularTotalPagamentos = () => {
                   {forma === 'credito' && '💳'}
                   {forma === 'debito' && '🏦'}
                   {forma === 'pix' && '📱'}
-                  {forma}
+                  <span className="ml-1 capitalize">{forma}</span>
                 </button>
               ))}
             </div>
             
-            {pessoa !== 'Mesa' && (
-              <button 
-                className="btn-remover"
-                onClick={() => removerPessoa(pessoa)}
-              >
-                ❌
-              </button>
+            {/* Remove apenas se tiver mais de 1 pessoa na lista */}
+            {Object.keys(pagamentos).length > 1 && (
+                <button className="btn-remover-texto" onClick={() => removerPessoa(pessoa)}>
+                    Remover Pagante
+                </button>
             )}
           </div>
         ))}
       </div>
       
       <button className="btn-adicionar" onClick={adicionarPessoa}>
-        ➕ Adicionar Pessoa
+        ➕ Adicionar Outro Pagante
       </button>
       
       <div className="botoes-navegacao">
@@ -330,118 +275,92 @@ const calcularTotalPagamentos = () => {
     </div>
   );
 
-  // Renderizar etapa 3 - Confirmação e edição
-  const renderizarEtapa3 = () => (
-    <div className="etapa">
-      <h3>✅ Confirmar Pagamentos</h3>
-      
-      <div className="resumo-pagamento">
-        <div className="total-geral">
-          <strong>Total da Mesa: R$ {calcularTotalPedidos(mesa.itens).toFixed(2)}</strong>
-          <span>Total dos Pagamentos: R$ {calcularTotalPagamentos().toFixed(2)}</span>
-        </div>
+  const renderizarEtapa3 = () => {
+      const totalMesa = calcularTotalMesa();
+      const totalPagamentos = calcularTotalPagamentos();
+      const diferenca = totalPagamentos - totalMesa;
+      const batendo = Math.abs(diferenca) < 0.10;
+
+      return (
+        <div className="etapa">
+        <h3>✅ Confirmar e Finalizar</h3>
         
-        {modoEdicao ? (
-          <div className="modo-edicao">
-            <h4>✏️ Editando Pagamentos</h4>
-            
-            {Object.entries(pagamentos).map(([pessoa, dados]) => (
-              <div key={pessoa} className="item-edicao">
-                <div className="info-edicao">
-                  <strong>{pessoa}</strong>
-                  
-                  <div className="controles-edicao">
-                    <input 
-                      type="number"
-                      value={dados.valor}
-                      onChange={(e) => editarValorPagamento(pessoa, e.target.value)}
-                      step="0.01"
-                      min="0"
-                    />
-                    
-                    <select 
-                      value={dados.formaPagamento}
-                      onChange={(e) => editarFormaPagamento(pessoa, e.target.value)}
-                    >
-                      <option value="dinheiro">💵 Dinheiro</option>
-                      <option value="credito">💳 Crédito</option>
-                      <option value="debito">🏦 Débito</option>
-                      <option value="pix">📱 PIX</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            <div className="botoes-edicao">
-              <button onClick={redistribuirValores}>
-                🔄 Dividir Igualmente
-              </button>
-              <button onClick={() => setModoEdicao(false)}>
-                ✅ Concluir Edição
-              </button>
+        <div className="resumo-pagamento">
+            <div className="total-linha">
+                <span>Total da Mesa:</span>
+                <strong>R$ {totalMesa.toFixed(2)}</strong>
             </div>
-          </div>
-        ) : (
-          <div className="lista-confirmacao">
-            {Object.entries(pagamentos).map(([pessoa, dados]) => (
-              <div key={pessoa} className="item-confirmacao">
-                <div className="info-confirmacao">
-                  <span className="pessoa">{pessoa}</span>
-                  <span className="valor">R$ {dados.valor.toFixed(2)}</span>
-                  <span className="forma">
-                    {dados.formaPagamento === 'dinheiro' && '💵 Dinheiro'}
-                    {dados.formaPagamento === 'credito' && '💳 Crédito'}
-                    {dados.formaPagamento === 'debito' && '🏦 Débito'}
-                    {dados.formaPagamento === 'pix' && '📱 PIX'}
-                  </span>
+            <div className="total-linha">
+                <span>Total Recebido:</span>
+                <strong style={{ color: batendo ? '#16a34a' : '#dc2626' }}>
+                    R$ {totalPagamentos.toFixed(2)}
+                </strong>
+            </div>
+            
+            {!batendo && (
+                <div className="aviso-erro">
+                    {diferenca > 0 
+                        ? `Sobrando R$ ${diferenca.toFixed(2)}` 
+                        : `Faltando R$ ${Math.abs(diferenca).toFixed(2)}`
+                    }
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      
-      <div className="botoes-acao">
-        {!modoEdicao && (
-          <button 
-            className="btn-editar"
-            onClick={() => setModoEdicao(true)}
-          >
-            ✏️ Editar Pagamentos
-          </button>
-        )}
-        
-        <button 
-          className="btn-finalizar"
-          onClick={finalizarPagamento}
-          disabled={carregando || calcularTotalPagamentos() !== calcularTotalPedidos(mesa.itens)}
-        >
-          {carregando ? '💾 Processando...' : '✅ Finalizar Pagamento'}
-        </button>
-        
-        <button onClick={() => setEtapa(2)}>
-          ⬅️ Voltar
-        </button>
-      </div>
-      
-      {calcularTotalPagamentos() !== calcularTotalPedidos(mesa.itens) && (
-        <div className="aviso">
-          ⚠️ O total dos pagamentos (R$ {calcularTotalPagamentos().toFixed(2)}) 
-          não confere com o total da mesa (R$ {calcularTotalPedidos(mesa.itens).toFixed(2)})
+            )}
+
+            {modoEdicao ? (
+                 <div className="modo-edicao">
+                    {Object.entries(pagamentos).map(([pessoa, dados]) => (
+                    <div key={pessoa} className="item-edicao">
+                        <strong>{pessoa}</strong>
+                        <input 
+                            type="number" 
+                            value={dados.valor} 
+                            onChange={(e) => editarValorPagamento(pessoa, e.target.value)}
+                        />
+                    </div>
+                    ))}
+                    <button onClick={() => setModoEdicao(false)} className="btn-ok">Concluir Edição</button>
+                </div>
+            ) : (
+                <div className="lista-confirmacao custom-scrollbar">
+                    {Object.entries(pagamentos).map(([pessoa, dados]) => (
+                    <div key={pessoa} className="item-confirmacao">
+                        <div className="flex flex-col">
+                            <span className="font-bold">{pessoa}</span>
+                            <span className="text-xs text-gray-500">{dados.formaPagamento}</span>
+                        </div>
+                        <strong>R$ {dados.valor.toFixed(2)}</strong>
+                    </div>
+                    ))}
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+        
+        <div className="botoes-acao">
+            <button className="btn-editar" onClick={() => setModoEdicao(!modoEdicao)}>
+                {modoEdicao ? 'Cancelar Edição' : '✏️ Ajustar Valores'}
+            </button>
+            
+            <button 
+                className={`btn-finalizar ${!batendo && !modoEdicao ? 'btn-aviso' : ''}`}
+                onClick={finalizarPagamento}
+                disabled={carregando}
+            >
+                {carregando ? 'Processando...' : batendo ? '✅ Finalizar Mesa' : '⚠️ Finalizar com Diferença'}
+            </button>
+
+            <button onClick={() => setEtapa(2)} className="btn-voltar-simples">Voltar</button>
+        </div>
+        </div>
+      );
+  };
 
   return (
     <div className="modal-overlay">
       <div className="modal-pagamento">
         <div className="modal-header">
-          <h2>💳 Pagamento - Mesa {mesa?.numero}</h2>
+          <h2>Pagamento - Mesa {mesa?.numero}</h2>
           <button className="btn-fechar" onClick={onClose}>✕</button>
         </div>
-        
         <div className="modal-body">
           {etapa === 1 && renderizarEtapa1()}
           {etapa === 2 && renderizarEtapa2()}
