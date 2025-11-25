@@ -1,4 +1,4 @@
-// src/App.jsx - WIDGET DE IA REMOVIDO
+// src/App.jsx - VERSÃO FINAL MESCLADA (PDV + CARRINHO FLUTUANTE)
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, PrivateRoute } from './context/AuthContext';
@@ -19,6 +19,9 @@ import ClientOrderHistory from './pages/ClientOrderHistory';
 import HomeRedirector from './pages/HomeRedirector';
 import ComandaParaImpressao from "./components/ComandaParaImpressao";
 import PaginaImpressao from './pages/PaginaImpressao';
+
+// ✅ PÁGINA DO PDV (MANTIDA)
+import PdvScreen from './pages/admin/PdvScreen';
 
 // PÁGINA DE CHECKOUT COM PAGAMENTO
 import CheckoutPage from './pages/CheckoutPage';
@@ -62,7 +65,9 @@ import AdminPlansManagement from './pages/admin/AdminPlansManagement';
 
 // Componentes AI
 import AIChatAssistant from './components/AIChatAssistant';
-// import AIWidgetButton from './components/AIWidgetButton'; // Removido uso do botão flutuante
+
+// ✅ 1. IMPORT DO CARRINHO FLUTUANTE (ADICIONADO)
+import CarrinhoFlutuante from './components/CarrinhoFlutuante';
 
 function App() {
   return (
@@ -72,10 +77,8 @@ function App() {
           <PaymentProvider>
             <Router>
               
-              {/* REMOVIDO: Botão flutuante e Widget Global de IA 
-                 <AIWidgetButtonGlobal />
-                 <AIWidgetGlobal />
-              */}
+              {/* ✅ 2. COMPONENTE ADICIONADO AQUI (Global) */}
+              <CarrinhoFlutuante />
 
               <Routes>
                 {/* Rotas que NÃO usam o Layout principal */}
@@ -98,7 +101,7 @@ function App() {
                   } 
                 />
 
-                {/* 🔥 PÁGINA STANDALONE DO ASSISTENTE VIRTUAL (Mantida se quiser acessar via link direto) */}
+                {/* 🔥 PÁGINA STANDALONE DO ASSISTENTE VIRTUAL */}
                 <Route 
                   path="/assistente-virtual" 
                   element={
@@ -116,11 +119,22 @@ function App() {
                     </PrivateRoute>
                   } 
                 />
+                
                 {/* ✅ GRUPO DE ROTAS QUE USAM O LAYOUT PRINCIPAL (COM HEADER) */}
                 <Route element={<Layout />}>
                   {/* --- Rotas Públicas/Clientes --- */}
                   <Route path="/planos" element={<Planos />} />
                   <Route path="/painel-inicial" element={<HomeRedirector />} />
+                  
+                  {/* ✅ ROTA DO PDV (MANTIDA) */}
+                  <Route
+                    path="/pdv"
+                    element={
+                      <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                        <PdvScreen />
+                      </PrivateRoute>
+                    }
+                  />
 
                   {/* --- Rotas de Administrador de Estabelecimento --- */}
                   <Route

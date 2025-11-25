@@ -443,3 +443,6 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
 
     return children;
 }
+
+// 🔥 EXPORTAÇÃO DO CONTEXTO ADICIONADA AQUI:
+export { AuthContext };

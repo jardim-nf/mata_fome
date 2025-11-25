@@ -49,63 +49,74 @@ const TelaPedidos = () => {
     const [produtoEmSelecao, setProdutoEmSelecao] = useState(null);
     const [opcaoSelecionada, setOpcaoSelecionada] = useState(null);
     const [observacaoItem, setObservacaoItem] = useState('');
+// Em src/pages/TelaPedidos.jsx
 
-    const fetchData = useCallback(async () => {
-        if (!estabelecimentoId) return;
-        try {
-            setLoading(true);
-            const mesaSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId));
+const fetchData = useCallback(async () => {
+    if (!estabelecimentoId) return;
+    try {
+        setLoading(true);
+        
+        // 1. Buscamos Mesa e Categorias em paralelo (primeiro nível de otimização)
+        const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+        const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
+        
+        const [mesaSnap, categoriasSnap] = await Promise.all([
+            getDoc(mesaRef),
+            getDocs(categoriasRef)
+        ]);
 
-            if (mesaSnap.exists()) {
-                const mesaData = mesaSnap.data();
-                setMesa(mesaData);
-                setResumoPedido(mesaData.itens || []);
-                
-                if (mesaData.nomesOcupantes && mesaData.nomesOcupantes.length > 0) {
-                    setOcupantes(mesaData.nomesOcupantes);
-                    const primeiroCliente = mesaData.nomesOcupantes.find(n => n !== 'Mesa');
-                    setClienteSelecionado(primeiroCliente || 'Mesa');
-                }
+        // Processar Mesa
+        if (mesaSnap.exists()) {
+            const mesaData = mesaSnap.data();
+            setMesa(mesaData);
+            setResumoPedido(mesaData.itens || []);
+            if (mesaData.nomesOcupantes?.length > 0) {
+                setOcupantes(mesaData.nomesOcupantes);
+                const primeiroCliente = mesaData.nomesOcupantes.find(n => n !== 'Mesa');
+                setClienteSelecionado(primeiroCliente || 'Mesa');
             }
-
-            // Carregar cardápio
-            const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
-            const categoriasSnap = await getDocs(categoriasRef);
-            
-            let todosProdutos = [];
-            let listaCategorias = ['Todos'];
-
-            for (const categoriaDoc of categoriasSnap.docs) {
-                const categoriaData = categoriaDoc.data(); 
-                
-                if (categoriaData.ativo === false) continue;
-
-                const nomeCategoria = categoriaData.nome || categoriaDoc.id;
-                listaCategorias.push(nomeCategoria);
-
-                const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaDoc.id, 'itens');
-                const itensSnap = await getDocs(itensRef);
-
-                const produtosDestaCategoria = itensSnap.docs.map(docItem => ({
-                    ...docItem.data(),
-                    id: docItem.id,
-                    categoria: nomeCategoria
-                }));
-
-                todosProdutos = [...todosProdutos, ...produtosDestaCategoria];
-            }
-
-            setCardapio(todosProdutos);
-            setCategorias([...new Set(listaCategorias)]); 
-
-        } catch (error) { 
-            console.error("Erro cardapio:", error);
-            toast.error("Erro ao carregar cardápio", { position: "bottom-center" }); 
-        } finally { 
-            setLoading(false); 
         }
-    }, [estabelecimentoId, mesaId]);
 
+        // 2. Processar Categorias e preparar promessas de busca de itens
+        let listaCategorias = ['Todos'];
+        const categoriasAtivas = [];
+
+        categoriasSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.ativo !== false) {
+                const nome = data.nome || doc.id;
+                listaCategorias.push(nome);
+                categoriasAtivas.push({ id: doc.id, nome });
+            }
+        });
+
+        // 3. O GRANDE TRUQUE: Disparar todas as buscas de itens AO MESMO TEMPO
+        const promessasItens = categoriasAtivas.map(async (cat) => {
+            const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens');
+            const snapshot = await getDocs(itensRef);
+            return snapshot.docs.map(doc => ({
+                ...doc.data(),
+                id: doc.id,
+                categoria: cat.nome
+            }));
+        });
+
+        // Aguarda todas as buscas terminarem juntas
+        const resultadosItens = await Promise.all(promessasItens);
+        
+        // "Achata" o array de arrays em um único array de produtos
+        const todosProdutos = resultadosItens.flat();
+
+        setCardapio(todosProdutos);
+        setCategorias([...new Set(listaCategorias)]); // Remove duplicatas se houver
+
+    } catch (error) { 
+        console.error("Erro cardapio:", error);
+        toast.error("Erro ao carregar cardápio"); 
+    } finally { 
+        setLoading(false); 
+    }
+}, [estabelecimentoId, mesaId]);
     useEffect(() => { 
         fetchData(); 
         const timer = setTimeout(() => setMostrarDicaAdd(false), 5000);
