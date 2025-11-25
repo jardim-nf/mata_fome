@@ -464,93 +464,128 @@ const TelaPedidos = () => {
                     </div>
                 </div>
             )}
+{showOrderSummary && (
+    <>
+        <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
+        <div className="fixed bottom-0 left-0 right-0 bg-white z-50 rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
+            {/* Header Modal */}
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-3xl">
+                <div>
+                    <h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2>
+                    <p className="text-xs text-gray-500">Confira os itens de cada pessoa</p>
+                </div>
+                <button onClick={() => setShowOrderSummary(false)} className="bg-white p-2 rounded-full shadow-sm text-gray-500 hover:text-red-500 transition-colors">
+                    <IoClose className="text-xl"/>
+                </button>
+            </div>
 
-            {/* --- MODAL RESUMO DO PEDIDO (BOTTOM SHEET) --- */}
-            {showOrderSummary && (
-                <>
-                    <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
-                    <div className="fixed bottom-0 left-0 right-0 bg-white z-50 rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
-                        {/* Header Modal */}
-                        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-3xl">
-                            <div>
-                                <h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2>
-                                <p className="text-xs text-gray-500">Confira os itens de cada pessoa</p>
-                            </div>
-                            <button onClick={() => setShowOrderSummary(false)} className="bg-white p-2 rounded-full shadow-sm text-gray-500 hover:text-red-500 transition-colors">
-                                <IoClose className="text-xl"/>
-                            </button>
+            {/* Lista de Itens (Agrupados por Pessoa) - ESTILO DA IMAGEM */}
+            <div className="overflow-y-auto p-4 space-y-6 flex-1">
+                {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
+                    <div key={nomePessoa} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                        {/* Cabeçalho da Pessoa */}
+                        <div className="bg-gray-900 text-white px-4 py-3">
+                            <h3 className="font-bold text-lg">{nomePessoa}</h3>
                         </div>
-
-                        {/* Lista de Itens (Agrupados por Pessoa) */}
-                        <div className="overflow-y-auto p-4 space-y-4 flex-1">
-                            {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
-                                <div key={nomePessoa} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                                                {nomePessoa.charAt(0).toUpperCase()}
-                                            </div>
-                                            <span className="font-bold text-gray-700 text-sm">{nomePessoa}</span>
+                        
+                        {/* Lista de Itens - ESTILO TABELA */}
+                        <div className="divide-y divide-gray-100">
+                            {itens.map((item, idx) => (
+                                <div key={idx} className="p-4">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex-1">
+                                            <p className="font-bold text-gray-900 text-base">
+                                                {item.quantidade}x {item.nome}
+                                            </p>
+                                            <p className="text-sm text-gray-500 mt-1">
+                                                {item.status || 'enviado'}
+                                            </p>
+                                            <p className="text-sm text-gray-500">
+                                                R$ {item.preco.toFixed(2)} un
+                                            </p>
                                         </div>
-                                        <span className="text-xs font-bold text-gray-400">{itens.length} itens</span>
+                                        <div className="text-right">
+                                            <p className="font-bold text-gray-900 text-lg">
+                                                R$ {(item.preco * item.quantidade).toFixed(2)}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="divide-y divide-gray-50">
-                                        {itens.map((item, idx) => (
-                                            <div key={idx} className="p-3 flex justify-between items-center">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="font-bold text-gray-900 text-sm">{item.nome}</p>
-                                                        {item.status === 'enviado' && (
-                                                            <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">Enviado</span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-xs text-gray-500">R$ {item.preco.toFixed(2)} un</p>
-                                                </div>
-                                                <div className="flex items-center gap-3 bg-gray-50 p-1 rounded-lg">
-                                                    <button 
-                                                        onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)}
-                                                        className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-red-500 active:scale-90"
-                                                    >
-                                                        <IoRemove className="text-xs"/>
-                                                    </button>
-                                                    <span className="font-bold text-sm w-4 text-center">{item.quantidade}</span>
-                                                    <button 
-                                                        onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade + 1)}
-                                                        className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-green-500 active:scale-90"
-                                                    >
-                                                        <IoAdd className="text-xs"/>
-                                                    </button>
-                                                </div>
+                                    
+                                    {/* Controles de Quantidade - apenas para itens não enviados */}
+                                    {(item.status === 'pendente' || !item.status) && (
+                                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                                            <span className="text-sm text-gray-600">Ajustar quantidade:</span>
+                                            <div className="flex items-center gap-2">
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        ajustarQuantidade(item.id, item.cliente, item.quantidade - 1);
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                >
+                                                    <IoRemove className="text-sm"/>
+                                                </button>
+                                                <span className="font-bold text-gray-900 w-6 text-center">{item.quantidade}</span>
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        ajustarQuantidade(item.id, item.cliente, item.quantidade + 1);
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                                                >
+                                                    <IoAdd className="text-sm"/>
+                                                </button>
                                             </div>
-                                        ))}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
 
-                        {/* Footer Modal */}
-                        <div className="p-4 border-t border-gray-100 bg-white safe-area-bottom">
-                            <div className="flex justify-between items-center mb-4">
-                                <span className="text-gray-500 font-medium">Total Geral</span>
-                                <span className="text-2xl font-black text-gray-900">R$ {totalPedido.toFixed(2)}</span>
+                        {/* Subtotal da Pessoa */}
+                        <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                            <div className="flex justify-between items-center">
+                                <span className="font-bold text-gray-700">Subtotal {nomePessoa}:</span>
+                                <span className="font-black text-blue-600 text-lg">
+                                    R$ {itens.reduce((sum, item) => sum + (item.preco * item.quantidade), 0).toFixed(2)}
+                                </span>
                             </div>
-                            <button 
-                                onClick={salvarAlteracoes}
-                                disabled={salvando}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
-                            >
-                                {salvando ? 'Enviando...' : (
-                                    <>
-                                        <IoCheckmarkCircle className="text-xl"/>
-                                        Confirmar e Enviar Pedido
-                                    </>
-                                )}
-                            </button>
                         </div>
                     </div>
-                </>
-            )}
-            
+                ))}
+            </div>
+
+            {/* Total Geral */}
+            <div className="bg-gray-900 text-white p-4">
+                <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold">TOTAL GERAL</span>
+                    <span className="text-2xl font-black">R$ {totalPedido.toFixed(2)}</span>
+                </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 border-t border-gray-100 bg-white safe-area-bottom">
+                <button 
+                    onClick={salvarAlteracoes}
+                    disabled={salvando}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                >
+                    {salvando ? (
+                        <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Enviando para cozinha...
+                        </>
+                    ) : (
+                        <>
+                            <IoCheckmarkCircle className="text-xl"/>
+                            Confirmar e Enviar Pedido
+                        </>
+                    )}
+                </button>
+            </div>
+        </div>
+    </>
+)}
             <style jsx>{`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

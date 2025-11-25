@@ -11,7 +11,7 @@ import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
 import VariacoesModal from '../components/VariacoesModal';
 import { v4 as uuidv4 } from 'uuid';
-import { IoChatbubbleEllipses, IoCart, IoClose, IoChevronUp, IoChevronDown } from 'react-icons/io5';
+import { IoChatbubbleEllipses, IoCart, IoClose, IoChevronUp, IoChevronDown, IoGrid, IoList } from 'react-icons/io5';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 import PaymentModal from '../components/PaymentModal';
 
@@ -76,6 +76,9 @@ function Menu() {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null);
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
+
+    // NOVO ESTADO: Visualização do Menu (Grid/Lista)
+    const [visualizacaoMenu, setVisualizacaoMenu] = useState('grid'); // 'grid' ou 'lista'
 
     // CORES
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
@@ -564,17 +567,39 @@ function Menu() {
                         onChange={e => setSearchTerm(e.target.value)}
                         className="w-full p-3 mb-4 bg-gray-800 rounded-lg border border-gray-600 focus:outline-none focus:border-green-500"
                     />
-                    <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
-                        {ordenarCategorias(availableCategories, estabelecimentoInfo?.ordemCategorias).map(cat => (
+                    
+                    {/* CONTROLES DE VISUALIZAÇÃO */}
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex overflow-x-auto gap-2 flex-1">
+                            {ordenarCategorias(availableCategories, estabelecimentoInfo?.ordemCategorias).map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${selectedCategory === cat ? 'text-white transform scale-105 shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+                                    style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : '' }}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
+                        
+                        {/* BOTÕES DE VISUALIZAÇÃO */}
+                        <div className="flex ml-4 border border-gray-600 rounded-lg overflow-hidden">
                             <button
-                                key={cat}
-                                onClick={() => setSelectedCategory(cat)}
-                                className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${selectedCategory === cat ? 'text-white transform scale-105 shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-                                style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : '' }}
+                                onClick={() => setVisualizacaoMenu('grid')}
+                                className={`p-2 transition ${visualizacaoMenu === 'grid' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+                                title="Visualização em Grid"
                             >
-                                {cat}
+                                <IoGrid className="text-lg" />
                             </button>
-                        ))}
+                            <button
+                                onClick={() => setVisualizacaoMenu('lista')}
+                                className={`p-2 transition ${visualizacaoMenu === 'lista' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
+                                title="Visualização em Lista"
+                            >
+                                <IoList className="text-lg" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -593,7 +618,12 @@ function Menu() {
                                     {cat} <span className="text-sm font-normal bg-gray-800 px-3 py-1 rounded-full text-gray-400">{items.length}</span>
                                 </h2>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* VISUALIZAÇÃO DINÂMICA - GRID OU LISTA */}
+                                <div className={
+                                    visualizacaoMenu === 'grid' 
+                                        ? "grid grid-cols-1 md:grid-cols-2 gap-4" 
+                                        : "grid grid-cols-1 gap-3"
+                                }>
                                     {items.slice(0, visible).map(item => (
                                         <CardapioItem 
                                             key={item.id} 
@@ -601,6 +631,7 @@ function Menu() {
                                             onAddItem={handleAbrirModalProduto}
                                             onQuickAdd={handleAdicionarRapido}
                                             coresEstabelecimento={coresEstabelecimento}
+                                            layout={visualizacaoMenu} // Passa o layout para o componente
                                         />
                                     ))}
                                 </div>
@@ -609,7 +640,7 @@ function Menu() {
                                         onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)}
                                         className="w-full mt-4 py-3 text-sm font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition"
                                     >
-                                        {visible >= items.length ? 'Ver menos' : `Ver mais (${items.length - visible})`}
+                                        {visible >= items.length ? 'Ver menos' : `Ver mais ${items.length - visible} itens...`}
                                     </button>
                                 )}
                             </div>
