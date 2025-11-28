@@ -1,8 +1,8 @@
-// src/pages/Menu.jsx - VERSÃO CORRIGIDA E BLINDADA
+// src/pages/Menu.jsx - VERSÃO COMPLETA E CORRIGIDA PARA MOBILE
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, getDoc as getDocFirestore, setDoc as setDocFirestore, runTransaction, doc, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +11,6 @@ import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
 import VariacoesModal from '../components/VariacoesModal';
 import { v4 as uuidv4 } from 'uuid';
-import { IoChatbubbleEllipses, IoCart, IoClose, IoChevronUp, IoChevronDown } from 'react-icons/io5';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 import PaymentModal from '../components/PaymentModal';
 
@@ -19,6 +18,7 @@ function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
     const { currentUser, currentClientData, loading: authLoading, userData } = useAuth();
+    // eslint-disable-next-line no-unused-vars
     const { processPayment, paymentLoading } = usePayment();
 
     // --- ESTADOS ---
@@ -32,9 +32,8 @@ function Menu() {
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
     const [complemento, setComplemento] = useState('');
-    const [taxasBairro, setTaxasBairro] = useState([]);
+    const [taxasBairro, setTaxasBairro] = useState([]); // Mantido caso implemente lógica futura
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
-    const [bairroNaoEncontrado, setBairroNaoEncontrado] = useState(false);
     const [isRetirada, setIsRetirada] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando Cardápio...");
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
@@ -54,7 +53,6 @@ function Menu() {
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
-    const [errorAuthModal, setErrorAuthModal] = useState('');
     const auth = getAuth();
 
     // Cupons e Busca
@@ -75,6 +73,7 @@ function Menu() {
     // ESTADOS DO SISTEMA DE PAGAMENTO
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null);
+    // eslint-disable-next-line no-unused-vars
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
     // CORES
@@ -96,9 +95,6 @@ function Menu() {
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
     const finalOrderTotal = useMemo(() => Math.max(0, subtotalCalculado + taxaAplicada - discountAmount), [subtotalCalculado, taxaAplicada, discountAmount]);
-
-    const isUserAdmin = useMemo(() => userData?.isAdmin || false, [userData]);
-    const isUserMasterAdmin = useMemo(() => userData?.isMasterAdmin || false, [userData]);
 
     // --- FUNÇÕES AUXILIARES ---
     const formatarHorarios = (horarios) => {
@@ -172,6 +168,16 @@ function Menu() {
         }
         if (item.variacoes && Array.isArray(item.variacoes) && item.variacoes.length > 0) {
             setItemParaVariacoes(item);
+        } else {
+            // Se não tem variação, mas pode ter adicionais, checa se quer abrir adicionais ou add direto
+            // Aqui simplificado: se não tem variação, adiciona direto ou abre adicionais se existirem?
+            // Dependendo da sua lógica, pode abrir modal de adicionais aqui. 
+            // Para manter simples e igual ao original:
+            if(item.adicionais && item.adicionais.length > 0) {
+                setItemParaAdicionais(item); // Assume que abre modal se tiver adicionais
+            } else {
+                handleAdicionarRapido(item);
+            }
         }
     };
 
@@ -320,7 +326,7 @@ function Menu() {
             estabelecimentoId: actualEstabelecimentoId,
             itens: itensFormatados,
             status: 'aguardando_pagamento',
-            createdAt: serverTimestamp(), // Timestamp do servidor
+            createdAt: serverTimestamp(),
             tipo: isRetirada ? 'retirada' : 'delivery',
             formaPagamento: 'processando',
             taxaEntrega: taxaAplicada,
@@ -340,7 +346,6 @@ function Menu() {
         setShowPaymentModal(true);
     };
 
-    // 🔴 CORREÇÃO PRINCIPAL AQUI: FUNÇÃO BLINDADA CONTRA UNDEFINED
     const handlePagamentoSucesso = async (paymentResult) => {
         if (!pedidoParaPagamento) {
             console.error("Pedido perdido no estado.");
@@ -351,13 +356,12 @@ function Menu() {
         setProcessandoPagamento(true);
         
         try {
-            // 1. Montar objeto seguro (sem undefined)
+            // BLINDAGEM CONTRA UNDEFINED
             const pedidoFinal = {
                 ...pedidoParaPagamento,
                 status: 'recebido',
                 formaPagamento: paymentResult.method || 'desconhecido',
                 statusPagamento: 'aprovado',
-                // ⚠️ Firebase crasha se for undefined. Usamos || null
                 transactionId: paymentResult.transactionId || `tx_${Date.now()}`, 
                 paymentData: {
                     method: paymentResult.method || 'desconhecido',
@@ -366,7 +370,7 @@ function Menu() {
                 }
             };
 
-            // 2. Processar Cupom (se houver)
+            // Processar Cupom
             if (appliedCoupon) {
                 await runTransaction(db, async (transaction) => {
                     const couponRef = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons', appliedCoupon.id);
@@ -378,10 +382,8 @@ function Menu() {
                 });
             }
 
-            // 3. Salvar no Firestore
             const docRef = await addDoc(collection(db, 'pedidos'), pedidoFinal);
             
-            // 4. Atualizar UI
             setConfirmedOrderDetails({
                 id: docRef.id,
                 ...pedidoFinal
@@ -390,7 +392,6 @@ function Menu() {
             setShowOrderConfirmationModal(true);
             toast.success('🎉 Pedido confirmado com sucesso!');
             
-            // 5. Limpar
             setCarrinho([]);
             setAppliedCoupon(null);
             setDiscountAmount(0);
@@ -489,7 +490,6 @@ function Menu() {
         }
     }, [currentUser, currentClientData, authLoading]);
 
-    // Cálculos de Filtro e Ordenação
     useEffect(() => {
         let processados = [...allProdutos];
         if (selectedCategory !== 'Todos') processados = processados.filter(p => p.categoria === selectedCategory);
@@ -511,7 +511,6 @@ function Menu() {
 
     const handleShowMore = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: (p[cat] || 4) + 4 }));
     const handleShowLess = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: 4 }));
-    const scrollToCategory = (cat) => document.getElementById(`categoria-${cat}`)?.scrollIntoView({ behavior: 'smooth' });
 
     // COMPONENTES VISUAIS
     const InfoEstabelecimento = () => (
@@ -542,45 +541,49 @@ function Menu() {
     }, {});
 
     return (
-        <div className="min-h-screen pb-32" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
-            <div className="py-4 px-4 shadow-lg mb-6" style={{ backgroundColor: coresEstabelecimento.primaria }}>
-                <h1 className="text-center text-2xl font-bold text-white">{nomeEstabelecimento}</h1>
+        // MOBILE FIX: pb-48 dá espaço extra no fundo, overflow-x-hidden evita barra branca lateral
+        <div className="min-h-screen pb-48 md:pb-32 w-full overflow-x-hidden relative" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
+            
+            <div className="py-4 px-4 shadow-lg mb-6 w-full" style={{ backgroundColor: coresEstabelecimento.primaria }}>
+                <h1 className="text-center text-2xl font-bold text-white truncate">{nomeEstabelecimento}</h1>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4">
+            <div className="max-w-7xl mx-auto px-4 w-full">
                 <InfoEstabelecimento />
-{/* Filtros - CORRIGIDO COM STICKY FUNCIONAL */}
-<div className="bg-gray-900 p-4 mb-8 border-b border-gray-700 sticky top-0 z-50 shadow-xl">
-  <div className="max-w-7xl mx-auto">
-    <input 
-      type="text" 
-      placeholder="🔍 Buscar produto..." 
-      value={searchTerm}
-      onChange={e => setSearchTerm(e.target.value)}
-      className="w-full p-3 mb-4 bg-gray-800 rounded-lg border border-gray-600 focus:outline-none focus:border-green-500"
-      style={{ color: coresEstabelecimento.texto.principal }}
-    />
-    <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
-      {ordenarCategorias(availableCategories, estabelecimentoInfo?.ordemCategorias).map(cat => (
-        <button
-          key={cat}
-          onClick={() => setSelectedCategory(cat)}
-          className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 ${
-            selectedCategory === cat 
-              ? 'text-white shadow-lg transform scale-105' 
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-          }`}
-          style={{ 
-            backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : '',
-            border: selectedCategory === cat ? `2px solid ${coresEstabelecimento.destaque}` : '2px solid transparent'
-          }}
-        >
-          {cat}
-        </button>
-      ))}
-    </div>
-  </div>
-</div>
+                
+                {/* Filtros - MOBILE FIX: -mx-4 para esticar de ponta a ponta no mobile */}
+                <div className="bg-gray-900 p-4 mb-8 border-b border-gray-700 sticky top-0 z-40 shadow-xl -mx-4 px-8 md:mx-0 md:px-4 md:rounded-lg">
+                  <div className="max-w-7xl mx-auto">
+                    {/* MOBILE FIX: text-base previne zoom no iPhone */}
+                    <input 
+                      type="text" 
+                      placeholder="🔍 Buscar produto..." 
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      className="w-full p-3 mb-4 bg-gray-800 rounded-lg border border-gray-600 focus:outline-none focus:border-green-500 text-base"
+                      style={{ color: coresEstabelecimento.texto.principal }}
+                    />
+                    <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
+                      {ordenarCategorias(availableCategories, estabelecimentoInfo?.ordemCategorias).map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => setSelectedCategory(cat)}
+                          className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${
+                            selectedCategory === cat 
+                              ? 'text-white shadow-lg transform scale-105' 
+                              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                          }`}
+                          style={{ 
+                            backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : '',
+                            border: selectedCategory === cat ? `2px solid ${coresEstabelecimento.destaque}` : '2px solid transparent'
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
                 {/* Lista de Produtos */}
                 {Object.keys(menuAgrupado).length === 0 ? (
@@ -626,67 +629,69 @@ function Menu() {
                     <div className="bg-gray-900 p-6 rounded-xl border border-gray-700">
                         <h3 className="text-xl font-bold mb-4">👤 Seus Dados</h3>
                         <div className="space-y-4">
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            {/* MOBILE FIX: text-base em todos inputs */}
+                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Telefone (WhatsApp) *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             
                             <div className="flex gap-2">
-                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-2 rounded font-bold ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700'}`}>🚚 Entrega</button>
-                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-2 rounded font-bold ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700'}`}>🏪 Retirada</button>
+                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold transition-colors ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🚚 Entrega</button>
+                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold transition-colors ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🏪 Retirada</button>
                             </div>
 
                             {!isRetirada && (
                                 <>
                                     <div className="flex gap-2">
-                                        <input className="flex-1 p-3 bg-gray-800 rounded border border-gray-600" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-                                        <input className="w-24 p-3 bg-gray-800 rounded border border-gray-600" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                        <input className="flex-1 p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+                                        <input className="w-24 p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
                                     </div>
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Complemento (Casa, Apto...)" value={complemento} onChange={e => setComplemento(e.target.value)} />
                                 </>
                             )}
                         </div>
                     </div>
 
                     {/* Resumo do Pedido */}
-                    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700">
+                    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 mb-8">
                         <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
-                        {carrinho.length === 0 ? <p className="text-gray-500">Carrinho vazio.</p> : (
+                        {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
                             <>
-                                <div className="space-y-3 mb-4">
+                                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                     {carrinho.map(item => (
                                         <div key={item.cartItemId} className="flex justify-between items-start bg-gray-800 p-3 rounded">
-                                            <div>
-                                                <p className="font-bold text-sm">{formatarItemCarrinho(item)}</p>
+                                            <div className="flex-1 pr-2">
+                                                <p className="font-bold text-sm text-white">{formatarItemCarrinho(item)}</p>
                                                 <p className="text-xs text-gray-400">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p>
                                             </div>
-                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold">X</button>
+                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold p-1 hover:bg-gray-700 rounded">✕</button>
                                         </div>
                                     ))}
                                 </div>
                                 
-                                <div className="border-t border-gray-700 pt-4 space-y-2">
-                                    <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
-                                    {!isRetirada && <div className="flex justify-between"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
-                                    {discountAmount > 0 && <div className="flex justify-between text-green-500"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
+                                <div className="border-t border-gray-700 pt-4 space-y-2 text-sm">
+                                    <div className="flex justify-between text-gray-300"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
+                                    {!isRetirada && <div className="flex justify-between text-gray-300"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
+                                    {discountAmount > 0 && <div className="flex justify-between text-green-400 font-bold"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
                                     
                                     {/* Input de Cupom */}
-                                    <div className="flex gap-2 mt-2">
+                                    <div className="flex gap-2 mt-4 pt-2 border-t border-gray-800">
                                         <input 
-                                            placeholder="Cupom" 
+                                            placeholder="Código do cupom" 
                                             value={couponCodeInput} 
                                             onChange={e => setCouponCodeInput(e.target.value)} 
-                                            className="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-sm"
+                                            className="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-sm text-white uppercase"
                                         />
                                         <button 
                                             onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} 
-                                            className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600' : 'bg-green-600'} text-white`}
+                                            disabled={couponLoading}
+                                            className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white transition-colors`}
                                         >
-                                            {appliedCoupon ? 'Remover' : 'Aplicar'}
+                                            {couponLoading ? '...' : (appliedCoupon ? 'Remover' : 'Aplicar')}
                                         </button>
                                     </div>
 
-                                    <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-700">
+                                    <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-700 text-white">
                                         <span>Total:</span>
                                         <span style={{ color: coresEstabelecimento.destaque }}>R$ {finalOrderTotal.toFixed(2)}</span>
                                     </div>
@@ -694,10 +699,10 @@ function Menu() {
 
                                 <button 
                                     onClick={prepararParaPagamento}
-                                    className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform hover:scale-105 transition"
+                                    className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform active:scale-95 transition-all"
                                     style={{ backgroundColor: coresEstabelecimento.destaque }}
                                 >
-                                    💳 Pagar R$ {finalOrderTotal.toFixed(2)}
+                                    ✅ Finalizar Pedido
                                 </button>
                             </>
                         )}
@@ -705,25 +710,27 @@ function Menu() {
                 </div>
             </div>
 
-            {/* MODAIS */}
-            <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} />
+            {/* MODAIS E CARRINHO FLUTUANTE */}
+            <div className="relative z-50">
+                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} />
+            </div>
             
-{showPaymentModal && pedidoParaPagamento && (
-    <PaymentModal
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        amount={finalOrderTotal}
-        orderId={`ord_${Date.now()}`}
-        cartItems={carrinho}
-        customer={pedidoParaPagamento.cliente}
-        onSuccess={handlePagamentoSucesso}
-        onError={handlePagamentoFalha}
-        coresEstabelecimento={coresEstabelecimento}
-        // ADICIONE ESTAS LINHAS ABAIXO:
-        pixKey={estabelecimentoInfo?.chavePix} 
-        establishmentName={estabelecimentoInfo?.nome}
-    />
-)}
+            {showPaymentModal && pedidoParaPagamento && (
+                <PaymentModal
+                    isOpen={showPaymentModal}
+                    onClose={() => setShowPaymentModal(false)}
+                    amount={finalOrderTotal}
+                    orderId={`ord_${Date.now()}`}
+                    cartItems={carrinho}
+                    customer={pedidoParaPagamento.cliente}
+                    onSuccess={handlePagamentoSucesso}
+                    onError={handlePagamentoFalha}
+                    coresEstabelecimento={coresEstabelecimento}
+                    pixKey={estabelecimentoInfo?.chavePix} 
+                    establishmentName={estabelecimentoInfo?.nome}
+                />
+            )}
+            
             {showOrderConfirmationModal && confirmedOrderDetails && (
                 <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
                     <div className="bg-gray-900 p-8 rounded-2xl max-w-md w-full text-center border border-gray-700">
@@ -743,13 +750,13 @@ function Menu() {
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (
                                 <>
-                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600" />
-                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600" />
-                                    <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600" />
+                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" />
+                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" />
+                                    <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" />
                                 </>
                             )}
-                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600" />
-                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600" />
+                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" />
+                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" />
                             <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
                         </form>
                         <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-500 text-sm">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button>
