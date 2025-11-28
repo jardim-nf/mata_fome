@@ -646,26 +646,58 @@ return (
                 {/* Dados do Cliente e Carrinho */}
                 <div className="grid md:grid-cols-2 gap-8 mt-12 pb-12">
                     {/* Formulário Cliente */}
-                    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700">
+{/* Formulário Cliente - CORRIGIDO PARA MOBILE */}
+                    <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 w-full max-w-full overflow-hidden">
                         <h3 className="text-xl font-bold mb-4">👤 Seus Dados</h3>
                         <div className="space-y-4">
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Telefone (WhatsApp) *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            {/* Nome */}
+                            <input 
+                                className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" 
+                                placeholder="Nome *" 
+                                value={nomeCliente} 
+                                onChange={e => setNomeCliente(e.target.value)} 
+                            />
                             
-                            <div className="flex gap-2">
-                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold transition-colors ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🚚 Entrega</button>
-                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold transition-colors ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🏪 Retirada</button>
+                            {/* Telefone */}
+                            <input 
+                                className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" 
+                                placeholder="Telefone (WhatsApp) *" 
+                                type="tel" 
+                                value={telefoneCliente} 
+                                onChange={e => setTelefoneCliente(e.target.value)} 
+                            />
+                            
+                            {/* Botões Entrega/Retirada */}
+                            <div className="flex gap-2 w-full">
+                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🚚 Entrega</button>
+                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🏪 Retirada</button>
                             </div>
 
                             {!isRetirada && (
                                 <>
-                                    <div className="flex gap-2">
-                                        <input className="flex-1 p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-                                        <input className="w-24 p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                    {/* Linha Rua e Numero */}
+                                    <div className="flex gap-2 w-full">
+                                        <div className="flex-1 min-w-0"> {/* min-w-0 é crucial aqui */}
+                                            <input 
+                                                className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" 
+                                                placeholder="Rua *" 
+                                                value={rua} 
+                                                onChange={e => setRua(e.target.value)} 
+                                            />
+                                        </div>
+                                        <div className="w-20 md:w-24 flex-shrink-0">
+                                            <input 
+                                                className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base text-center" 
+                                                placeholder="Nº *" 
+                                                value={numero} 
+                                                onChange={e => setNumero(e.target.value)} 
+                                            />
+                                        </div>
                                     </div>
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
+
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Complemento (Casa, Apto...)" value={complemento} onChange={e => setComplemento(e.target.value)} />
                                 </>
                             )}
                         </div>
