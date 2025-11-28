@@ -109,50 +109,63 @@ function Menu() {
             .join(' | ');
     };
 
-    // CARREGAMENTO RÁPIDO
+// CARREGAMENTO OTIMIZADO (Prioriza busca direta)
     const carregarProdutosRapido = async (estabId) => {
         try {
-            const todasCategoriasRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
-            const categoriasSnapshot = await getDocs(todasCategoriasRef);
             let todosProdutos = [];
-            const promessas = [];
 
-            if (!categoriasSnapshot.empty) {
-                categoriasSnapshot.docs.forEach(catDoc => {
-                    const categoriaData = catDoc.data();
-                    const categoriaId = catDoc.id;
-                    const promessa = getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', categoriaId, 'itens'))
-                        .then(itensSnapshot => {
-                            if (!itensSnapshot.empty) {
-                                return itensSnapshot.docs.map(itemDoc => ({
-                                    ...itemDoc.data(),
-                                    id: itemDoc.id,
-                                    categoria: categoriaData.nome || 'Geral',
-                                    categoriaId: categoriaId
-                                }));
-                            }
-                            return [];
-                        }).catch(() => []);
-                    promessas.push(promessa);
-                });
-                const resultados = await Promise.all(promessas);
-                todosProdutos = resultados.flat();
-            }
+            // 1. TENTATIVA RÁPIDA: Busca direta na coleção 'cardapio' (onde costumam ficar os itens ativos)
+            // Isso evita o loop de categorias se os produtos estiverem na raiz
+            const cardapioDiretoRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
+            // Busca itens que tenham nome E preço (para evitar pegar documentos que são só categorias)
+            const qDireta = query(cardapioDiretoRef, where('ativo', '==', true)); 
+            
+            const snapshotDireto = await getDocs(qDireta);
 
-            if (todosProdutos.length === 0) {
-                const cardapioDiretoRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
-                const qAtivos = query(cardapioDiretoRef, where('ativo', '==', true));
-                const snapshotDireto = await getDocs(qAtivos);
-                if (!snapshotDireto.empty) {
-                    todosProdutos = snapshotDireto.docs.map(doc => ({
+            if (!snapshotDireto.empty) {
+                // Filtra apenas o que parece ser produto (tem preço)
+                todosProdutos = snapshotDireto.docs
+                    .map(doc => ({
                         ...doc.data(),
                         id: doc.id,
                         categoria: doc.data().categoria || 'Geral',
                         categoriaId: 'direto'
-                    }));
-                }
+                    }))
+                    .filter(item => item.preco !== undefined || item.precoFinal !== undefined); // Garante que é produto
             }
+
+            // 2. Se a busca rápida retornou produtos, ótimo. Retorna eles.
+            if (todosProdutos.length > 0) {
+                return todosProdutos;
+            }
+
+            // 3. FALLBACK: Se não achou nada, tenta o método antigo (Lento: Categorias -> Subcoleções)
+            // Só entra aqui se o método rápido falhar
+            console.log("Tentando carregamento profundo (subcoleções)...");
+            const categoriasSnapshot = await getDocs(cardapioDiretoRef);
+            
+            if (!categoriasSnapshot.empty) {
+                const promessas = categoriasSnapshot.docs.map(catDoc => {
+                    const categoriaId = catDoc.id;
+                    const categoriaData = catDoc.data();
+                    // Se o documento da categoria tem 'preco', ele é um produto, não pasta. Já pegamos no passo 1.
+                    if (categoriaData.preco) return Promise.resolve([]); 
+
+                    return getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', categoriaId, 'itens'))
+                        .then(itensSnapshot => itensSnapshot.docs.map(itemDoc => ({
+                            ...itemDoc.data(),
+                            id: itemDoc.id,
+                            categoria: categoriaData.nome || 'Geral',
+                            categoriaId: categoriaId
+                        })));
+                });
+
+                const resultados = await Promise.all(promessas);
+                todosProdutos = resultados.flat();
+            }
+
             return todosProdutos;
+
         } catch (error) {
             console.error("Erro carregamento:", error);
             return [];
@@ -540,9 +553,17 @@ function Menu() {
         return acc;
     }, {});
 
-    return (
-        // MOBILE FIX: pb-48 dá espaço extra no fundo, overflow-x-hidden evita barra branca lateral
-        <div className="min-h-screen pb-48 md:pb-32 w-full overflow-x-hidden relative" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal }}>
+return (
+        // MUDANÇA AQUI: style com pb-200px força o scroll passar por baixo de tudo
+        <div 
+            className="w-full relative overflow-x-hidden" 
+            style={{ 
+                backgroundColor: coresEstabelecimento.background, 
+                color: coresEstabelecimento.texto.principal,
+                minHeight: '100vh',
+                paddingBottom: '200px' // Força bruta para não cortar no mobile
+            }}
+        >
             
             <div className="py-4 px-4 shadow-lg mb-6 w-full" style={{ backgroundColor: coresEstabelecimento.primaria }}>
                 <h1 className="text-center text-2xl font-bold text-white truncate">{nomeEstabelecimento}</h1>
@@ -551,10 +572,9 @@ function Menu() {
             <div className="max-w-7xl mx-auto px-4 w-full">
                 <InfoEstabelecimento />
                 
-                {/* Filtros - MOBILE FIX: -mx-4 para esticar de ponta a ponta no mobile */}
+                {/* Filtros */}
                 <div className="bg-gray-900 p-4 mb-8 border-b border-gray-700 sticky top-0 z-40 shadow-xl -mx-4 px-8 md:mx-0 md:px-4 md:rounded-lg">
                   <div className="max-w-7xl mx-auto">
-                    {/* MOBILE FIX: text-base previne zoom no iPhone */}
                     <input 
                       type="text" 
                       placeholder="🔍 Buscar produto..." 
@@ -624,12 +644,11 @@ function Menu() {
                 )}
 
                 {/* Dados do Cliente e Carrinho */}
-                <div className="grid md:grid-cols-2 gap-8 mt-12">
+                <div className="grid md:grid-cols-2 gap-8 mt-12 pb-12">
                     {/* Formulário Cliente */}
                     <div className="bg-gray-900 p-6 rounded-xl border border-gray-700">
                         <h3 className="text-xl font-bold mb-4">👤 Seus Dados</h3>
                         <div className="space-y-4">
-                            {/* MOBILE FIX: text-base em todos inputs */}
                             <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Telefone (WhatsApp) *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             
@@ -646,7 +665,7 @@ function Menu() {
                                     </div>
                                     <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
                                     <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Complemento (Casa, Apto...)" value={complemento} onChange={e => setComplemento(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
                                 </>
                             )}
                         </div>
@@ -674,10 +693,9 @@ function Menu() {
                                     {!isRetirada && <div className="flex justify-between text-gray-300"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
                                     {discountAmount > 0 && <div className="flex justify-between text-green-400 font-bold"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
                                     
-                                    {/* Input de Cupom */}
                                     <div className="flex gap-2 mt-4 pt-2 border-t border-gray-800">
                                         <input 
-                                            placeholder="Código do cupom" 
+                                            placeholder="CUPOM" 
                                             value={couponCodeInput} 
                                             onChange={e => setCouponCodeInput(e.target.value)} 
                                             className="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-sm text-white uppercase"
@@ -685,7 +703,7 @@ function Menu() {
                                         <button 
                                             onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} 
                                             disabled={couponLoading}
-                                            className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white transition-colors`}
+                                            className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600' : 'bg-green-600'} text-white`}
                                         >
                                             {couponLoading ? '...' : (appliedCoupon ? 'Remover' : 'Aplicar')}
                                         </button>
@@ -730,7 +748,8 @@ function Menu() {
                     establishmentName={estabelecimentoInfo?.nome}
                 />
             )}
-            
+
+            {/* Resto dos modais (Login, Variacoes, Confirmation) ficam aqui igual antes... */}
             {showOrderConfirmationModal && confirmedOrderDetails && (
                 <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
                     <div className="bg-gray-900 p-8 rounded-2xl max-w-md w-full text-center border border-gray-700">
