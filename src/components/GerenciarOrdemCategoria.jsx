@@ -2,6 +2,11 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 
+/**
+ * IMPORTANTE: No componente PAI onde você chama este componente,
+ * lembre-se de adicionar a prop 'key' para forçar a recriação ao trocar de loja:
+ * <GerenciarOrdemCategoria key={estabelecimentoId} ... />
+ */
 const GerenciarOrdemCategoria = ({ 
   estabelecimentoId, 
   categorias, 
@@ -12,32 +17,41 @@ const GerenciarOrdemCategoria = ({
   const [items, setItems] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Inicializar itens - Corrigido para observar estabelecimentoId
+  // Inicializar itens - Lógica reforçada para troca de estabelecimento
   useEffect(() => {
-    // Definimos uma função para montar a lista para evitar duplicidade de código
-    const montarLista = () => {
-      if (ordemAtual && ordemAtual.length > 0) {
-        // Se já existe uma ordem salva para este estabelecimento
-        return ordemAtual.map((categoria, index) => ({
-          id: `categoria-${index}-${estabelecimentoId}`, // Adicionei ID único para garantir renderização correta
-          name: categoria
-        }));
-      } else if (categorias && categorias.length > 0) {
-        // Se não tem ordem, pega as categorias padrão
-        // Opcional: Aqui você pode ordenar alfabeticamente se for a primeira vez
-        return categorias.map((categoria, index) => ({
-          id: `categoria-${index}-${estabelecimentoId}`,
-          name: categoria
-        }));
-      }
-      return [];
-    };
+    // 1. Limpa o estado imediatamente para evitar dados "fantasmas" da loja anterior
+    setItems([]);
 
-    setItems(montarLista());
-    
-  }, [categorias, ordemAtual, estabelecimentoId]); // <--- AQUI ESTÁ A CORREÇÃO PRINCIPAL
+    // 2. Monta a nova lista
+    let novosItens = [];
 
-  // Funções de Drag and Drop
+    // Verificação de segurança: Se não tem estabelecimentoId, não monta nada
+    if (!estabelecimentoId) return;
+
+    if (ordemAtual && ordemAtual.length > 0) {
+      // Cenário 1: Já existe uma ordem salva
+      novosItens = ordemAtual.map((categoria, index) => ({
+        // O ID inclui o estabelecimentoId para garantir unicidade absoluta
+        id: `cat-${index}-${estabelecimentoId}-${categoria}`, 
+        name: categoria
+      }));
+    } else if (categorias && categorias.length > 0) {
+      // Cenário 2: Primeira vez, usa a lista de categorias padrão
+      // Sugestão: Ordenar alfabeticamente na primeira vez para facilitar
+      const categoriasOrdenadas = [...categorias].sort((a, b) => a.localeCompare(b));
+      
+      novosItens = categoriasOrdenadas.map((categoria, index) => ({
+        id: `cat-${index}-${estabelecimentoId}-${categoria}`,
+        name: categoria
+      }));
+    }
+
+    // Atualiza o estado
+    setItems(novosItens);
+
+  }, [categorias, ordemAtual, estabelecimentoId]); 
+
+  // --- Funções de Drag and Drop ---
   const handleDragStart = (e, index) => {
     e.dataTransfer.setData('text/plain', index);
     setIsDragging(true);
@@ -64,7 +78,7 @@ const GerenciarOrdemCategoria = ({
     
     const oldIndex = parseInt(e.dataTransfer.getData('text/plain'));
     
-    if (oldIndex !== newIndex) {
+    if (oldIndex !== newIndex && oldIndex >= 0 && oldIndex < items.length) {
       const newItems = [...items];
       const [movedItem] = newItems.splice(oldIndex, 1);
       newItems.splice(newIndex, 0, movedItem);
@@ -84,13 +98,13 @@ const GerenciarOrdemCategoria = ({
     });
   };
 
-  // Salvar ordem
+  // --- Ações ---
   const handleSave = async () => {
     try {
       const novaOrdem = items.map(item => item.name);
       
       if (onSave) {
-        // Passamos o estabelecimentoId junto caso sua função precise confirmar
+        // Passamos o ID também para garantir que está salvando no lugar certo
         await onSave(novaOrdem, estabelecimentoId);
       } else {
         toast.success('Ordem das categorias salva com sucesso!');
@@ -101,25 +115,31 @@ const GerenciarOrdemCategoria = ({
     }
   };
 
-  // Resetar ordem
   const handleReset = () => {
-    if (!categorias) return;
+    if (!categorias || !estabelecimentoId) return;
     
     const ordemOriginal = categorias.map((categoria, index) => ({
-      id: `categoria-${index}-${estabelecimentoId}`,
-      name: categoria
+       id: `cat-${index}-${estabelecimentoId}-${categoria}`,
+       name: categoria
     }));
-    // Ordena alfabeticamente ao resetar (opcional, remova o .sort se não quiser)
+    // Reseta ordenando alfabeticamente
     setItems(ordemOriginal.sort((a, b) => a.name.localeCompare(b.name)));
   };
 
-  if (!items.length) {
+  // --- Renderização ---
+
+  // Se não houver itens, exibe mensagem
+  if (!items || items.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-500">Nenhuma categoria encontrada no cardápio.</p>
+        <p className="text-gray-500">
+          {categorias && categorias.length > 0 
+            ? "Carregando categorias..." 
+            : "Nenhuma categoria encontrada no cardápio."}
+        </p>
         <button
           onClick={onClose}
-          className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
         >
           Voltar
         </button>
@@ -132,12 +152,12 @@ const GerenciarOrdemCategoria = ({
       {/* Instruções */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <p className="text-yellow-800 text-sm">
-          💡 <strong>Como ordenar:</strong> Arraste e solte as categorias para definir a ordem de exibição no cardápio.
+          💡 <strong>Como ordenar:</strong> Arraste e solte as categorias para definir a ordem de exibição no cardápio do seu Delivery.
         </p>
       </div>
 
       {/* Lista de categorias */}
-      <div className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+      <div className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto bg-gray-50">
         {items.map((item, index) => (
           <div
             key={item.id}
@@ -150,7 +170,7 @@ const GerenciarOrdemCategoria = ({
             onDragEnd={handleDragEnd}
             className={`
               flex items-center justify-between p-4 border-b border-gray-100 bg-white
-              cursor-move transition-all duration-200
+              cursor-move transition-all duration-200 select-none
               ${isDragging ? 'opacity-50' : 'hover:bg-gray-50'}
             `}
           >
@@ -160,20 +180,20 @@ const GerenciarOrdemCategoria = ({
               </div>
               <span className="font-medium text-gray-900">{item.name}</span>
             </div>
-            <div className="text-gray-400 cursor-grab active:cursor-grabbing">
+            <div className="text-gray-400 cursor-grab active:cursor-grabbing p-2 hover:text-gray-600">
               ⋮⋮
             </div>
           </div>
         ))}
       </div>
 
-      {/* Ações */}
+      {/* Botões de Ação */}
       <div className="flex flex-col sm:flex-row gap-3 justify-end pt-4 border-t border-gray-200">
         <button
           onClick={handleReset}
           className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
         >
-          Resetar Ordem (Alfabético)
+          Resetar Ordem
         </button>
         <button
           onClick={onClose}
@@ -183,20 +203,19 @@ const GerenciarOrdemCategoria = ({
         </button>
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center gap-2"
         >
-          Salvar Ordem
+          <span>Salvar Ordem</span>
         </button>
       </div>
 
-      {/* Preview da ordem (Opcional - pode remover se ocupar muito espaço) */}
-      <div className="bg-gray-50 rounded-lg p-4 mt-4">
-        <h3 className="font-medium text-gray-900 mb-2 text-xs uppercase tracking-wider">Preview:</h3>
-        <div className="text-sm text-gray-600 flex flex-wrap gap-2">
+      {/* Preview Simplificado */}
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <p className="text-xs text-gray-400 mb-2 uppercase tracking-wider font-semibold">Preview da sequência:</p>
+        <div className="text-xs text-gray-500 flex flex-wrap gap-x-2 gap-y-1">
           {items.map((item, index) => (
-            <span key={item.id} className="inline-flex items-center">
-              <span className="font-semibold">{index + 1}.</span>&nbsp;{item.name}
-              {index < items.length - 1 && <span className="text-gray-400 ml-2">→</span>}
+            <span key={`preview-${item.id}`} className="inline-flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100">
+              <span className="font-bold text-gray-400 mr-1">{index + 1}.</span> {item.name}
             </span>
           ))}
         </div>
