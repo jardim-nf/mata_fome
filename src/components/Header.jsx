@@ -124,26 +124,6 @@ function Header() {
                     </div>
 
                     {/* Lado Direito - Logo do Sistema (CORRIGIDO) */}
-                    <div className="flex items-center space-x-4">
-                        <Link to={homeLink} className="flex items-center space-x-2 group">
-                            {/* Logo Ícone */}
-                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm group-hover:bg-blue-700 transition-colors">
-                                <span className="text-white font-bold text-xs tracking-tighter">DF</span>
-                            </div>
-                            {/* Nome do Sistema (Sem MeGusta) */}
-                            <span className="font-bold text-gray-800 text-lg tracking-tight group-hover:text-blue-600 transition-colors">
-                                Deu<span className="text-blue-600">Fome</span>
-                            </span>
-                        </Link>
-
-                        {/* Menu Mobile */}
-                        <button
-                            onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
-                        >
-                            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                        </button>
-                    </div>
                 </div>
 
                 {/* BARRA INFERIOR (TÍTULO) - Condicional e Compacta */}
