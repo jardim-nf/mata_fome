@@ -1,21 +1,21 @@
-// src/components/Header.jsx - VERSÃO PADRONIZADA
+// src/components/Header.jsx - VERSÃO COMPACTA E CORRIGIDA (LUCIDE & PATHS)
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useHeader } from '../context/HeaderContext';
+import { useAuth } from '../context/AuthContext.jsx';
+import { useHeader } from '../context/HeaderContext.jsx';
 import { toast } from 'react-toastify';
 import { 
-    IoMenu, 
-    IoClose, 
-    IoArrowBack,
-    IoHome,
-    IoChevronForward
-} from 'react-icons/io5';
+    Menu, 
+    X, 
+    ArrowLeft, 
+    Home, 
+    ChevronRight 
+} from 'lucide-react';
 
 function Header() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { currentUser, currentClientData, isAdmin, isMasterAdmin, logout } = useAuth();
+    const { currentUser, isAdmin, isMasterAdmin, logout } = useAuth();
     const { headerActions, headerTitle, headerSubtitle } = useHeader();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -25,6 +25,7 @@ function Header() {
         else if (isAdmin) homeLink = "/dashboard";
     }
 
+    // Define se é página interna para mostrar botão de voltar/breadcrumbs
     const isInternalPage = !['/', '/login', '/register', '/master-dashboard', '/dashboard'].includes(location.pathname);
 
     const getBreadcrumbs = () => {
@@ -37,43 +38,22 @@ function Header() {
             const isLast = index === paths.length - 1;
             
             let label = path;
+            // Traduções simples para breadcrumb
             switch(path) {
-                case 'admin':
-                    label = 'Administração';
-                    break;
-                case 'menu':
-                    label = 'Cardápio';
-                    break;
-                case 'orders':
-                    label = 'Pedidos';
-                    break;
-                case 'tables':
-                    label = 'Mesas';
-                    break;
-                case 'gerenciar-cardapio':
-                    label = 'Gerenciar Cardápio';
-                    break;
-                case 'controle-salao':
-                    label = 'Controle de Salão';
-                    break;
-                case 'painel':
-                    label = 'Painel de Pedidos';
-                    break;
-                case 'dashboard':
-                    label = 'Dashboard';
-                    break;
-                case 'master':
-                    label = 'Master';
-                    break;
-                default:
-                    label = path.charAt(0).toUpperCase() + path.slice(1).replace(/-/g, ' ');
+                case 'admin': label = 'Admin'; break;
+                case 'menu': label = 'Cardápio'; break;
+                case 'gerenciar-cardapio': label = 'Cardápio'; break;
+                case 'controle-salao': label = 'Salão'; break;
+                case 'painel': label = 'Painel'; break;
+                case 'dashboard': label = 'Dashboard'; break;
+                case 'master': label = 'Master'; break;
+                case 'reports': label = 'Relatórios'; break;
+                case 'analytics': label = 'Dados'; break;
+                case 'ordenar-categorias': label = 'Categorias'; break;
+                default: label = path.charAt(0).toUpperCase() + path.slice(1).replace(/-/g, ' ');
             }
             
-            breadcrumbs.push({
-                label,
-                path: currentPath,
-                isLast
-            });
+            breadcrumbs.push({ label, path: currentPath, isLast });
         });
         
         return breadcrumbs;
@@ -84,69 +64,56 @@ function Header() {
             await logout();
             toast.info('Você foi desconectado.');
         } catch (error) {
-            toast.error('Não foi possível fazer logout.');
+            toast.error('Erro ao sair.');
         }
     };
 
-    // 🆕 FUNÇÃO PARA OBTER TÍTULO DINÂMICO
     const getDynamicTitle = () => {
-        // Prioridade 1: Título do contexto
         if (headerTitle) return headerTitle;
-        
-        // Prioridade 2: Título baseado na rota
         return getPageTitle(location.pathname);
     };
 
-    // 🆕 FUNÇÃO PARA OBTER SUBTÍTULO DINÂMICO
     const getDynamicSubtitle = () => {
-        // Prioridade 1: Subtítulo do contexto
         if (headerSubtitle) return headerSubtitle;
-        
-        // Prioridade 2: Subtítulo baseado na rota
         return getPageSubtitle(location.pathname);
     };
 
     return (
+        // Reduzi o padding vertical geral e removi bordas desnecessárias se quiser mais limpo
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                {/* HEADER SUPERIOR COM BREADCRUMB */}
-                <div className="flex justify-between items-center py-4">
+                
+                {/* LINHA SUPERIOR COMPACTA */}
+                {/* Mudei py-4 para py-2 para diminuir a altura branca */}
+                <div className="flex justify-between items-center py-2 md:py-3">
+                    
                     {/* Lado Esquerdo - Navegação */}
-                    <div className="flex items-center space-x-4">
-                        {/* Botão Voltar para páginas internas */}
+                    <div className="flex items-center space-x-3">
+                        {/* Botão Voltar */}
                         {isInternalPage && (
                             <button
                                 onClick={() => navigate(-1)}
-                                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors p-2 rounded-lg hover:bg-gray-100"
+                                className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Voltar"
                             >
-                                <IoArrowBack className="text-xl" />
-                                <span className="hidden sm:block text-sm font-medium">Voltar</span>
+                                <ArrowLeft className="w-5 h-5" />
                             </button>
                         )}
                         
-                        {/* Breadcrumb */}
+                        {/* Breadcrumb Compacto */}
                         {isInternalPage && getBreadcrumbs().length > 0 && (
-                            <div className="hidden md:flex items-center space-x-2 text-sm text-gray-500">
-                                <Link 
-                                    to={homeLink}
-                                    className="flex items-center space-x-1 text-amber-600 hover:text-amber-800 transition-colors"
-                                >
-                                    <IoHome className="text-lg" />
-                                    <span>Início</span>
+                            <div className="hidden md:flex items-center space-x-2 text-xs md:text-sm text-gray-500">
+                                <Link to={homeLink} className="hover:text-blue-600 transition-colors">
+                                    <Home className="w-4 h-4" />
                                 </Link>
                                 
                                 {getBreadcrumbs().map((crumb, index) => (
                                     <div key={index} className="flex items-center space-x-2">
-                                        <IoChevronForward className="text-gray-400 text-xs" />
+                                        <ChevronRight className="w-3 h-3 text-gray-300" />
                                         {crumb.isLast ? (
-                                            <span className="text-gray-900 font-medium">
-                                                {crumb.label}
-                                            </span>
+                                            <span className="text-gray-800 font-semibold">{crumb.label}</span>
                                         ) : (
-                                            <Link 
-                                                to={crumb.path}
-                                                className="text-gray-600 hover:text-gray-900 transition-colors"
-                                            >
+                                            <Link to={crumb.path} className="hover:text-blue-600 transition-colors">
                                                 {crumb.label}
                                             </Link>
                                         )}
@@ -156,40 +123,47 @@ function Header() {
                         )}
                     </div>
 
-                    {/* Lado Direito - Logo e Menu */}
+                    {/* Lado Direito - Logo do Sistema (CORRIGIDO) */}
                     <div className="flex items-center space-x-4">
-                        <Link to={homeLink} className="flex items-center space-x-2">
-                            <div className="w-8 h-8 bg-gradient-to-r from-yellow-400 to-amber-500 rounded-lg flex items-center justify-center">
-                                <span className="text-black font-bold text-sm">MG</span>
+                        <Link to={homeLink} className="flex items-center space-x-2 group">
+                            {/* Logo Ícone */}
+                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm group-hover:bg-blue-700 transition-colors">
+                                <span className="text-white font-bold text-xs tracking-tighter">DF</span>
                             </div>
-                            <span className="font-bold text-gray-900 text-lg">MeGusta</span>
+                            {/* Nome do Sistema (Sem MeGusta) */}
+                            <span className="font-bold text-gray-800 text-lg tracking-tight group-hover:text-blue-600 transition-colors">
+                                Deu<span className="text-blue-600">Fome</span>
+                            </span>
                         </Link>
 
                         {/* Menu Mobile */}
                         <button
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="md:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
                         >
-                            {isMenuOpen ? <IoClose className="text-xl" /> : <IoMenu className="text-xl" />}
+                            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                         </button>
                     </div>
                 </div>
 
-                {/* 🆕 BARRA INFERIOR COM CONTEXTO DINÂMICO */}
+                {/* BARRA INFERIOR (TÍTULO) - Condicional e Compacta */}
                 {isInternalPage && (
-                    <div className="border-t border-gray-100 py-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div className="border-t border-gray-100 py-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div>
-                                <h1 className="text-xl font-bold text-gray-900">
+                                <h1 className="text-lg font-bold text-gray-900 leading-tight">
                                     {getDynamicTitle()}
                                 </h1>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    {getDynamicSubtitle()}
-                                </p>
+                                {/* Subtítulo opcional, se não tiver, não ocupa espaço */}
+                                {getDynamicSubtitle() && (
+                                    <p className="text-xs text-gray-500 hidden sm:block">
+                                        {getDynamicSubtitle()}
+                                    </p>
+                                )}
                             </div>
                             
-                            {/* AÇÕES ESPECÍFICAS DA PÁGINA */}
-                            <div className="mt-3 sm:mt-0 flex space-x-3">
+                            {/* Ações da Página */}
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
                                 {headerActions}
                             </div>
                         </div>
@@ -199,11 +173,11 @@ function Header() {
 
             {/* Menu Mobile Dropdown */}
             {isMenuOpen && (
-                <div className="md:hidden bg-white border-t border-gray-200 py-2">
-                    <nav className="px-4 space-y-2">
+                <div className="md:hidden bg-white border-t border-gray-200 py-2 absolute w-full shadow-lg">
+                    <nav className="px-4 space-y-1">
                         <Link 
                             to={homeLink}
-                            className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                            className="block py-3 px-2 text-gray-700 font-medium hover:bg-gray-50 rounded-lg"
                             onClick={() => setIsMenuOpen(false)}
                         >
                             Início
@@ -211,9 +185,9 @@ function Header() {
                         {currentUser && (
                             <button
                                 onClick={handleLogout}
-                                className="block w-full text-left py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                                className="block w-full text-left py-3 px-2 text-red-600 font-medium hover:bg-red-50 rounded-lg"
                             >
-                                Sair
+                                Sair do Sistema
                             </button>
                         )}
                     </nav>
@@ -223,47 +197,34 @@ function Header() {
     );
 }
 
-// Funções auxiliares para títulos padrão
+// Funções auxiliares para títulos
 const getPageTitle = (pathname) => {
     const titles = {
-        '/admin/gerenciar-cardapio': 'Gerenciar Cardápio',
-        '/controle-salao': 'Controle de Salão',
-        '/painel': 'Painel de Pedidos',
+        '/admin/gerenciar-cardapio': 'Cardápio',
+        '/controle-salao': 'Salão',
+        '/painel': 'Pedidos',
         '/dashboard': 'Dashboard',
-        '/master-dashboard': 'Painel Master',
-        '/admin/taxas-de-entrega': 'Taxas de Entrega',
-        '/admin/gerenciar-estabelecimentos': 'Gerenciar Estabelecimentos',
-        '/admin/cupons': 'Cupons de Desconto',
-        '/nossos-clientes': 'Nossos Clientes',
-        '/admin/reports': 'Relatórios',
-        '/admin/analytics': 'Analytics',
-        '/master/estabelecimentos': 'Estabelecimentos',
-        '/master/pedidos': 'Pedidos',
-        '/master/usuarios': 'Usuários'
+        '/master-dashboard': 'Admin Master',
+        '/admin/taxas-de-entrega': 'Taxas',
+        '/admin/gerenciar-estabelecimentos': 'Estabelecimento',
+        '/admin/cupons': 'Cupons',
+        '/nossos-clientes': 'Clientes',
+        '/admin/reports': 'Financeiro',
+        '/admin/analytics': 'Estatísticas',
+        '/admin/ordenar-categorias': 'Categorias'
     };
-    
     return titles[pathname] || 'Dashboard';
 };
 
 const getPageSubtitle = (pathname) => {
+    // Retornando string vazia para economizar espaço se não for crítico
     const subtitles = {
-        '/admin/gerenciar-cardapio': 'Gerencie produtos, estoque e preços',
-        '/controle-salao': 'Mesas, pedidos e ocupação do salão',
-        '/painel': 'Acompanhe e gerencie pedidos',
-        '/dashboard': 'Visão geral do seu estabelecimento',
-        '/master-dashboard': 'Administração completa do sistema',
-        '/admin/taxas-de-entrega': 'Configure valores de entrega por região',
-        '/admin/gerenciar-estabelecimentos': 'Configure seu estabelecimento',
-        '/admin/cupons': 'Crie e gerencie cupons de desconto',
-        '/nossos-clientes': 'Clientes e histórico de pedidos',
-        '/admin/reports': 'Relatórios detalhados de vendas',
-        '/admin/analytics': 'Métricas e análises do negócio',
-        '/master/estabelecimentos': 'Gerencie todos os estabelecimentos',
-        '/master/pedidos': 'Visualize todos os pedidos do sistema',
-        '/master/usuarios': 'Gerencie usuários e permissões'
+        '/admin/gerenciar-cardapio': 'Gerencie seus produtos',
+        '/controle-salao': 'Mapa de mesas',
+        '/painel': 'Fila de produção',
+        '/admin/reports': 'Extrato financeiro',
     };
-    
-    return subtitles[pathname] || 'Gerencie seu estabelecimento';
+    return subtitles[pathname] || '';
 };
 
 export default Header;

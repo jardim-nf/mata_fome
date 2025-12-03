@@ -1,91 +1,178 @@
-// src/components/DashboardSummary.jsx - VERSÃO 3: EXPANSÍVEL
-import React, { useState } from "react";
+import React, { useState, useEffect } from 'react';
+import { collection, query, where, getDocs, orderBy, getDoc, doc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
+import { 
+  IoStatsChart, 
+  IoCart, 
+  IoRestaurant, 
+  IoCash
+} from 'react-icons/io5';
 
-const DashboardSummary = () => {
-  const [expanded, setExpanded] = useState(false);
+// Componente visual do Card
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, loading }) => (
+  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col justify-between">
+    <div className="flex items-start justify-between mb-4">
+      <div>
+        <p className="text-gray-500 text-sm font-medium mb-1">{title}</p>
+        {loading ? (
+          <div className="h-8 w-24 bg-gray-200 rounded animate-pulse"></div>
+        ) : (
+          <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
+        )}
+      </div>
+      <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10`}>
+        <Icon className={`text-2xl ${colorClass.replace('bg-', 'text-')}`} />
+      </div>
+    </div>
+    {subtext && <p className="text-xs text-gray-400 mt-auto">{subtext}</p>}
+  </div>
+);
+
+const DashBoardSummary = () => {
+  // ✅ CORREÇÃO: Pega o ID do contexto em vez de usar string fixa
+  const { primeiroEstabelecimento } = useAuth(); 
+  
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    pedidosHoje: 0,
+    faturamentoHoje: 0,
+    pedidosSalao: 0,
+    tempoMedio: '0 min',
+    ticketMedio: 0,
+    nomeEstabelecimento: ''
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      // Trava de segurança
+      if (!primeiroEstabelecimento) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        // 1. Buscar Nome do Estabelecimento (Visual)
+        const estabRef = doc(db, 'estabelecimentos', primeiroEstabelecimento);
+        const estabSnap = await getDoc(estabRef);
+        let nomeEstab = '';
+        if (estabSnap.exists()) {
+            nomeEstab = estabSnap.data().nome;
+        }
+
+        // 2. Buscar Pedidos do Dia
+        const pedidosRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'pedidos');
+        const qHoje = query(
+          pedidosRef,
+          where('createdAt', '>=', hoje),
+          orderBy('createdAt', 'desc')
+        );
+
+        const snapshot = await getDocs(qHoje);
+        
+        let totalFaturamento = 0;
+        let countSalao = 0;
+        let countDelivery = 0;
+        let somaTempos = 0;
+        let countTempos = 0;
+
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          
+          // Ignora cancelados
+          if (data.status !== 'cancelado') {
+            totalFaturamento += Number(data.total || 0);
+          }
+
+          // Separação Salão/Delivery
+          if (data.tipo === 'salao' || data.mesaIndex !== undefined) {
+            countSalao++;
+          } else {
+            countDelivery++;
+          }
+
+          // Tempo médio
+          if (data.tempoPreparo) {
+             somaTempos += Number(data.tempoPreparo);
+             countTempos++;
+          }
+        });
+
+        const totalPedidos = snapshot.size;
+        const ticketMedio = totalPedidos > 0 ? totalFaturamento / totalPedidos : 0;
+        const tempoMedio = countTempos > 0 ? Math.round(somaTempos / countTempos) : 35;
+
+        setStats({
+          pedidosHoje: totalPedidos,
+          faturamentoHoje: totalFaturamento,
+          pedidosSalao: countSalao,
+          tempoMedio: `${tempoMedio} min`,
+          ticketMedio: ticketMedio,
+          nomeEstabelecimento: nomeEstab
+        });
+
+      } catch (error) {
+        console.error("Erro ao carregar stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [primeiroEstabelecimento]); // Recarrega se mudar a loja
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* Cabeçalho Cliqueável */}
-      <div 
-        className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <h2 className="text-lg font-semibold text-gray-900">Resumo do Dia</h2>
-            <div className="hidden sm:flex items-center space-x-4 text-sm text-gray-500">
-              <span>•</span>
-              <span>Atualizado: 16:53</span>
-              <span>•</span>
-              <span>Atualiza a cada 30s</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            {/* Dados Resumidos */}
-            <div className="text-right">
-              <div className="text-xl font-bold text-blue-700">R$ 156,50</div>
-              <div className="text-xs text-gray-600">Faturamento Total</div>
-            </div>
-            
-            {/* Ícone de Expansão */}
-            <div className={`transform transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}>
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Conteúdo Expansível */}
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-100 pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Faturamento Total */}
-            <div className="text-center p-4 bg-blue-50 rounded-xl border border-blue-100">
-              <div className="text-2xl font-bold text-blue-700">R$ 156,50</div>
-              <div className="text-sm text-gray-600 mt-1">Faturamento Total Hoje</div>
-            </div>
-
-            {/* Vendas Delivery */}
-            <div className="text-center p-4 bg-red-50 rounded-xl border border-red-100">
-              <div className="text-xl font-bold text-red-700">0</div>
-              <div className="text-sm text-gray-600 mt-1">Vendas Delivery</div>
-              <div className="text-lg font-semibold text-red-600 mt-2">R$ 0,00</div>
-              <div className="text-xs text-gray-500">Faturamento Delivery</div>
-            </div>
-
-            {/* Vendas Salão */}
-            <div className="text-center p-4 bg-green-50 rounded-xl border border-green-100">
-              <div className="text-xl font-bold text-green-700">1</div>
-              <div className="text-sm text-gray-600 mt-1">Vendas Salão</div>
-              <div className="text-lg font-semibold text-green-600 mt-2">R$ 156,50</div>
-              <div className="text-xs text-gray-500">Faturamento Salão</div>
-            </div>
-
-            {/* Total Geral */}
-            <div className="text-center p-4 bg-purple-50 rounded-xl border border-purple-100">
-              <div className="text-xl font-bold text-purple-700">1</div>
-              <div className="text-sm text-gray-600 mt-1">Total de Vendas Hoje</div>
-              <div className="text-xs text-gray-500 mt-2">Atualizado às 16:53</div>
-              <div className="text-xs text-gray-400">Próxima atualização em 30s</div>
-            </div>
-
-          </div>
+    <div className="space-y-4 mb-8">
+      {/* Badge de Identificação da Loja */}
+      {stats.nomeEstabelecimento && (
+        <div className="inline-flex items-center space-x-2 text-sm text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 shadow-sm">
+          <IoRestaurant className="text-blue-600" />
+          <span>Loja Ativa: <strong>{stats.nomeEstabelecimento}</strong></span>
         </div>
       )}
 
-      {/* Versão Mobile do Status */}
-      <div className="sm:hidden px-4 pb-3 border-t border-gray-100 pt-3">
-        <div className="text-center text-sm text-gray-500">
-          Atualizado: 16:53 • Atualiza a cada 30s
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Faturamento Hoje"
+          value={`R$ ${stats.faturamentoHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          subtext={`${stats.pedidosHoje} pedidos realizados`}
+          icon={IoCash}
+          colorClass="bg-green-500"
+          loading={loading}
+        />
+        
+        <StatCard
+          title="Delivery"
+          value={stats.pedidosHoje - stats.pedidosSalao}
+          subtext="Pedidos via App/Site"
+          icon={IoCart}
+          colorClass="bg-blue-500"
+          loading={loading}
+        />
+
+        <StatCard
+          title="Salão"
+          value={stats.pedidosSalao}
+          subtext="Mesas atendidas hoje"
+          icon={IoRestaurant}
+          colorClass="bg-orange-500"
+          loading={loading}
+        />
+
+        <StatCard
+          title="Ticket Médio"
+          value={`R$ ${stats.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          subtext={`Tempo médio: ${stats.tempoMedio}`}
+          icon={IoStatsChart}
+          colorClass="bg-purple-500"
+          loading={loading}
+        />
       </div>
     </div>
   );
 };
 
-export default DashboardSummary;
+export default DashBoardSummary;

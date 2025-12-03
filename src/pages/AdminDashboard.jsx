@@ -1,17 +1,16 @@
-// src/pages/AdminDashboard.jsx - VERSÃO COM ALTURA FIXA E ALINHADA
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import DashboardSummary from "../components/DashBoardSummary";
+// Correção: Nome do componente ajustado para coincidir com o arquivo (B maiúsculo)
+import DashBoardSummary from "../components/DashBoardSummary";
 import withAuth from "../hocs/withAuth";
 import { IoStatsChart, IoShareSocial, IoColorPalette } from "react-icons/io5";
 import { FaUsers } from 'react-icons/fa';
 
-// 1. CORREÇÃO: Altura Fixa e Flexível
-// Adicionei 'h-full' para ocupar toda a célula e removi alturas variáveis
-const ActionButton = ({ to, title, subtitle, icon, colorClass, onClick }) => (
+// Componente ActionButton com altura total (h-full)
+const ActionButton = ({ title, subtitle, icon, colorClass, onClick }) => (
   <div
     onClick={onClick}
-    className={`group relative p-6 h-full rounded-2xl border border-gray-200 bg-white flex flex-col justify-between transition-all duration-300 transform hover:scale-105 hover:shadow-lg cursor-pointer ${colorClass}`}
+    className={`group relative p-6 h-full rounded-2xl border border-gray-200 bg-white flex flex-col justify-between transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg cursor-pointer ${colorClass}`}
   >
     <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl"></div>
 
@@ -69,12 +68,13 @@ const AdminDashboard = () => {
           </button>
         </div>
 
-        <DashboardSummary />
+        {/* Resumo Estatístico */}
+        <DashBoardSummary />
 
-        {/* 2. CORREÇÃO: Grid com 'auto-rows-fr' para forçar altura igual */}
+        {/* Grid de Ações - Usando grid-auto-rows para alturas iguais */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
           
-          <Link to="/painel">
+          <Link to="/painel" className="h-full">
             <ActionButton
               title="Painel de Pedidos"
               subtitle="Acompanhe pedidos de Delivery e Salão em tempo real"
@@ -83,7 +83,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/controle-salao">
+          <Link to="/controle-salao" className="h-full">
             <ActionButton
               title="Controle de Salão"
               subtitle="Mapa de mesas, comandas e pedidos presenciais"
@@ -92,8 +92,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          {/* O Card do PDV agora terá a mesma altura automaticamente */}
-          <Link to="/pdv">
+          <Link to="/pdv" className="h-full">
             <ActionButton
               title="Frente de Loja (PDV)"
               subtitle="Caixa rápido, vendas de balcão e emissão de NFC-e"
@@ -102,7 +101,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/gerenciar-cardapio">
+          <Link to="/admin/gerenciar-cardapio" className="h-full">
             <ActionButton
               title="Cardápio Digital"
               subtitle="Cadastre produtos, fotos, preços e categorias"
@@ -111,7 +110,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/cores">
+          <Link to="/admin/cores" className="h-full">
             <ActionButton
               title="Identidade Visual"
               subtitle="Personalize as cores e o tema do seu app"
@@ -120,7 +119,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/ordenar-categorias">
+          <Link to="/admin/ordenar-categorias" className="h-full">
             <ActionButton
               title="Ordenar Categorias"
               subtitle="Organize a sequência de exibição no cardápio"
@@ -129,7 +128,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/analytics">
+          <Link to="/admin/analytics" className="h-full">
             <ActionButton
               title="Produtividade"
               subtitle="Gráficos de vendas, faturamento e desempenho"
@@ -138,7 +137,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/multi-platform">
+          <Link to="/admin/multi-platform" className="h-full">
             <ActionButton
               title="Integrações"
               subtitle="Conecte com iFood, WhatsApp e impressoras"
@@ -147,7 +146,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/taxas-de-entrega">
+          <Link to="/admin/taxas-de-entrega" className="h-full">
             <ActionButton
               title="Taxas de Entrega"
               subtitle="Configure valores por bairro ou raio de distância"
@@ -156,7 +155,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/cupons">
+          <Link to="/admin/cupons" className="h-full">
             <ActionButton
               title="Cupons de Desconto"
               subtitle="Crie promoções e códigos para atrair clientes"
@@ -165,7 +164,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/gestao-funcionarios">
+          <Link to="/admin/gestao-funcionarios" className="h-full">
             <ActionButton
               title="Equipe e Acessos"
               subtitle="Gerencie garçons, caixas e administradores"
@@ -174,7 +173,7 @@ const AdminDashboard = () => {
             />
           </Link>
 
-          <Link to="/admin/reports">
+          <Link to="/admin/reports" className="h-full">
             <ActionButton
               title="Relatórios Fiscais"
               subtitle="Extratos detalhados para contabilidade"

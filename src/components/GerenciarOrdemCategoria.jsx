@@ -2,6 +2,11 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 
+/**
+ * IMPORTANTE: No componente PAI onde você chama este componente,
+ * lembre-se de adicionar a prop 'key' para forçar a recriação ao trocar de loja:
+ * <GerenciarOrdemCategoria key={estabelecimentoId} ... />
+ */
 const GerenciarOrdemCategoria = ({ 
   estabelecimentoId, 
   categorias, 
@@ -12,39 +17,41 @@ const GerenciarOrdemCategoria = ({
   const [items, setItems] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Inicializar itens
+  // Inicializar itens - Lógica reforçada para troca de estabelecimento
   useEffect(() => {
-    // DIAGNÓSTICO: Verifique isso no console do navegador (F12)
-    console.log("🛠️ GerenciarOrdemCategoria recebeu ID:", estabelecimentoId);
-
-    // 1. Limpa estado anterior
+    // 1. Limpa o estado imediatamente para evitar dados "fantasmas" da loja anterior
     setItems([]);
 
-    if (!estabelecimentoId) return;
-
+    // 2. Monta a nova lista
     let novosItens = [];
 
-    // Cenário 1: Já existe ordem salva
+    // Verificação de segurança: Se não tem estabelecimentoId, não monta nada
+    if (!estabelecimentoId) return;
+
     if (ordemAtual && ordemAtual.length > 0) {
+      // Cenário 1: Já existe uma ordem salva
       novosItens = ordemAtual.map((categoria, index) => ({
+        // O ID inclui o estabelecimentoId para garantir unicidade absoluta
         id: `cat-${index}-${estabelecimentoId}-${categoria}`, 
         name: categoria
       }));
-    } 
-    // Cenário 2: Usa ordem padrão do cardápio
-    else if (categorias && categorias.length > 0) {
+    } else if (categorias && categorias.length > 0) {
+      // Cenário 2: Primeira vez, usa a lista de categorias padrão
+      // Sugestão: Ordenar alfabeticamente na primeira vez para facilitar
       const categoriasOrdenadas = [...categorias].sort((a, b) => a.localeCompare(b));
+      
       novosItens = categoriasOrdenadas.map((categoria, index) => ({
         id: `cat-${index}-${estabelecimentoId}-${categoria}`,
         name: categoria
       }));
     }
 
+    // Atualiza o estado
     setItems(novosItens);
 
   }, [categorias, ordemAtual, estabelecimentoId]); 
 
-  // --- Drag and Drop ---
+  // --- Funções de Drag and Drop ---
   const handleDragStart = (e, index) => {
     e.dataTransfer.setData('text/plain', index);
     setIsDragging(true);
@@ -91,46 +98,65 @@ const GerenciarOrdemCategoria = ({
     });
   };
 
-  // --- Salvar ---
+  // --- Ações ---
   const handleSave = async () => {
     try {
       const novaOrdem = items.map(item => item.name);
+      
       if (onSave) {
-        // Envia o ID junto para garantir
+        // Passamos o ID também para garantir que está salvando no lugar certo
         await onSave(novaOrdem, estabelecimentoId);
       } else {
-        toast.success('Ordem salva!');
+        toast.success('Ordem das categorias salva com sucesso!');
       }
     } catch (error) {
-      console.error('Erro:', error);
-      toast.error('Erro ao salvar.');
+      console.error('Erro ao salvar ordem:', error);
+      toast.error('Erro ao salvar ordem das categorias');
     }
   };
 
   const handleReset = () => {
-    if (!categorias) return;
+    if (!categorias || !estabelecimentoId) return;
+    
     const ordemOriginal = categorias.map((categoria, index) => ({
        id: `cat-${index}-${estabelecimentoId}-${categoria}`,
        name: categoria
     }));
+    // Reseta ordenando alfabeticamente
     setItems(ordemOriginal.sort((a, b) => a.name.localeCompare(b.name)));
   };
 
+  // --- Renderização ---
+
+  // Se não houver itens, exibe mensagem
   if (!items || items.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-500">Carregando ou sem categorias...</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-500 text-white rounded">Voltar</button>
+        <p className="text-gray-500">
+          {categorias && categorias.length > 0 
+            ? "Carregando categorias..." 
+            : "Nenhuma categoria encontrada no cardápio."}
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+        >
+          Voltar
+        </button>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* Instruções */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <p className="text-yellow-800 text-sm">💡 Arraste para ordenar.</p>
+        <p className="text-yellow-800 text-sm">
+          💡 <strong>Como ordenar:</strong> Arraste e solte as categorias para definir a ordem de exibição no cardápio do seu Delivery.
+        </p>
       </div>
 
+      {/* Lista de categorias */}
       <div className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto bg-gray-50">
         {items.map((item, index) => (
           <div
@@ -142,21 +168,57 @@ const GerenciarOrdemCategoria = ({
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, index)}
             onDragEnd={handleDragEnd}
-            className={`flex items-center justify-between p-4 border-b bg-white cursor-move ${isDragging ? 'opacity-50' : 'hover:bg-gray-50'}`}
+            className={`
+              flex items-center justify-between p-4 border-b border-gray-100 bg-white
+              cursor-move transition-all duration-200 select-none
+              ${isDragging ? 'opacity-50' : 'hover:bg-gray-50'}
+            `}
           >
             <div className="flex items-center space-x-4">
-              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">{index + 1}</div>
+              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
+                {index + 1}
+              </div>
               <span className="font-medium text-gray-900">{item.name}</span>
             </div>
-            <div className="text-gray-400">⋮⋮</div>
+            <div className="text-gray-400 cursor-grab active:cursor-grabbing p-2 hover:text-gray-600">
+              ⋮⋮
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <button onClick={handleReset} className="px-4 py-2 text-gray-600 bg-gray-100 rounded">Resetar</button>
-        <button onClick={onClose} className="px-4 py-2 text-gray-600 bg-gray-100 rounded">Cancelar</button>
-        <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded shadow-sm">Salvar Ordem</button>
+      {/* Botões de Ação */}
+      <div className="flex flex-col sm:flex-row gap-3 justify-end pt-4 border-t border-gray-200">
+        <button
+          onClick={handleReset}
+          className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          Resetar Ordem
+        </button>
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center gap-2"
+        >
+          <span>Salvar Ordem</span>
+        </button>
+      </div>
+
+      {/* Preview Simplificado */}
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <p className="text-xs text-gray-400 mb-2 uppercase tracking-wider font-semibold">Preview da sequência:</p>
+        <div className="text-xs text-gray-500 flex flex-wrap gap-x-2 gap-y-1">
+          {items.map((item, index) => (
+            <span key={`preview-${item.id}`} className="inline-flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100">
+              <span className="font-bold text-gray-400 mr-1">{index + 1}.</span> {item.name}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
