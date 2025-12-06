@@ -1,15 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy, getDoc, doc } from 'firebase/firestore';
+// src/components/DashBoardSummary.jsx
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, query, where, orderBy, doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { 
-  IoStatsChart, 
-  IoCart, 
-  IoRestaurant, 
-  IoCash
-} from 'react-icons/io5';
+import { IoStatsChart, IoCart, IoRestaurant, IoCash, IoBicycle, IoEye, IoEyeOff } from 'react-icons/io5';
 
-// Componente visual do Card
 const StatCard = ({ title, value, subtext, icon: Icon, colorClass, loading }) => (
   <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col justify-between">
     <div className="flex items-start justify-between mb-4">
@@ -30,147 +25,218 @@ const StatCard = ({ title, value, subtext, icon: Icon, colorClass, loading }) =>
 );
 
 const DashBoardSummary = () => {
-  // ✅ CORREÇÃO: Pega o ID do contexto em vez de usar string fixa
   const { primeiroEstabelecimento } = useAuth(); 
-  
   const [loading, setLoading] = useState(true);
+  const [nomeEstabelecimento, setNomeEstabelecimento] = useState('');
+  
+  const [isExpanded, setIsExpanded] = useState(true);
+  
   const [stats, setStats] = useState({
-    pedidosHoje: 0,
-    faturamentoHoje: 0,
-    pedidosSalao: 0,
-    tempoMedio: '0 min',
-    ticketMedio: 0,
-    nomeEstabelecimento: ''
+    pedidosHoje: 0, faturamentoHoje: 0, pedidosSalao: 0, pedidosDelivery: 0,
+    faturamentoSalao: 0, faturamentoDelivery: 0, tempoMedio: '0 min',
+    ticketMedio: 0, entregadoresAtivos: [], totalTaxasEntregadores: 0
   });
 
+  const [pedidosDelivery, setPedidosDelivery] = useState([]);
+  const [pedidosSalao, setPedidosSalao] = useState([]);
+
+  const showEndOfDayStats = useMemo(() => {
+    const HOUR_CUTOFF = 18; 
+    const now = new Date();
+    return now.getHours() >= HOUR_CUTOFF;
+  }, []);
+
+  // Função para converter timestamp
+  const converterTimestampParaDate = (timestamp) => {
+    if (!timestamp) return null;
+    try {
+      if (timestamp.seconds) return new Date(timestamp.seconds * 1000);
+      if (timestamp.toDate) return timestamp.toDate();
+      if (timestamp instanceof Date) return timestamp;
+    } catch (error) { console.error(error); }
+    return null;
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      // Trava de segurança
-      if (!primeiroEstabelecimento) {
+    if (!primeiroEstabelecimento) { setLoading(false); return; }
+
+    getDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento)).then(snap => {
+        if (snap.exists()) setNomeEstabelecimento(snap.data().nome);
+    });
+
+    // DELIVERY
+    const qDelivery = query(
+        collection(db, 'pedidos'),
+        where('estabelecimentoId', '==', primeiroEstabelecimento),
+        orderBy('createdAt', 'desc')
+    );
+
+    const unsubDelivery = onSnapshot(qDelivery, (snapshot) => {
+        const pedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'delivery' }));
+        setPedidosDelivery(pedidos);
+    });
+
+    // SALÃO
+    const qSalao = query(
+        collection(db, 'estabelecimentos', primeiroEstabelecimento, 'pedidos'),
+        orderBy('dataPedido', 'desc')
+    );
+
+    const unsubSalao = onSnapshot(qSalao, (snapshot) => {
+        const pedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'salao' }));
+        setPedidosSalao(pedidos);
         setLoading(false);
-        return;
+    });
+
+    return () => { unsubDelivery(); unsubSalao(); };
+  }, [primeiroEstabelecimento]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    // Inicialização das variáveis
+    let totalFat = 0, fatSalao = 0, fatDelivery = 0;
+    let countSalao = 0, countDelivery = 0;
+    let somaTempos = 0, countTempos = 0;
+    const motoboyMap = {};
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const processarPedido = (pedido, origem) => {
+      // --- LÓGICA DE DATA ---
+      let dataBase = pedido.createdAt;
+      if (origem === 'salao' || pedido.tipo === 'salao') {
+            dataBase = pedido.dataPedido || pedido.updatedAt || pedido.createdAt; 
+      }
+      const dataPedido = converterTimestampParaDate(dataBase);
+      const isHoje = dataPedido && dataPedido >= hoje;
+
+      // FILTRO: Se não for de hoje, ignora o pedido
+      if (!isHoje) return;
+
+      if (pedido.status === 'cancelado') return;
+
+      // --- CÁLCULO DE VALOR ---
+      let valorTotal = 0;
+
+      if (pedido.totalFinal !== undefined && pedido.totalFinal !== null) {
+        valorTotal = Number(pedido.totalFinal);
+      } else if (pedido.total !== undefined && pedido.total !== null) {
+        valorTotal = Number(pedido.total);
+      } 
+      
+      if (valorTotal <= 0 || isNaN(valorTotal)) { 
+        if (pedido.itens && Array.isArray(pedido.itens)) {
+            valorTotal = pedido.itens.reduce((acc, item) => {
+                if (!item) return acc;
+                const preco = parseFloat(item.preco) || Number(item.preco) || 0; 
+                const qtd = parseFloat(item.quantidade) || Number(item.quantidade) || 1; 
+                return acc + (preco * qtd);
+            }, 0);
+        }
+      }
+      
+      valorTotal = isNaN(valorTotal) ? 0 : valorTotal; 
+
+      // --- SOMA NOS TOTAIS ---
+      if (pedido.tempoPreparo) {
+        somaTempos += Number(pedido.tempoPreparo);
+        countTempos++;
       }
 
-      try {
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-
-        // 1. Buscar Nome do Estabelecimento (Visual)
-        const estabRef = doc(db, 'estabelecimentos', primeiroEstabelecimento);
-        const estabSnap = await getDoc(estabRef);
-        let nomeEstab = '';
-        if (estabSnap.exists()) {
-            nomeEstab = estabSnap.data().nome;
-        }
-
-        // 2. Buscar Pedidos do Dia
-        const pedidosRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'pedidos');
-        const qHoje = query(
-          pedidosRef,
-          where('createdAt', '>=', hoje),
-          orderBy('createdAt', 'desc')
-        );
-
-        const snapshot = await getDocs(qHoje);
+      if (origem === 'salao' || pedido.tipo === 'salao') {
+        fatSalao += valorTotal;
+        countSalao++;
+      } else {
+        fatDelivery += valorTotal;
+        countDelivery++;
         
-        let totalFaturamento = 0;
-        let countSalao = 0;
-        let countDelivery = 0;
-        let somaTempos = 0;
-        let countTempos = 0;
+        // Lógica de Taxas (apenas delivery)
+        let taxa = 0;
+        if (pedido.taxaEntrega !== undefined) taxa = Number(pedido.taxaEntrega);
+        else if (pedido.deliveryFee !== undefined) taxa = Number(pedido.deliveryFee);
+        
+        if (isNaN(taxa)) taxa = 0;
+        if (taxa === 0 && pedido.paymentData?.deliveryFee) taxa = Number(pedido.paymentData.deliveryFee);
 
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          
-          // Ignora cancelados
-          if (data.status !== 'cancelado') {
-            totalFaturamento += Number(data.total || 0);
-          }
-
-          // Separação Salão/Delivery
-          if (data.tipo === 'salao' || data.mesaIndex !== undefined) {
-            countSalao++;
-          } else {
-            countDelivery++;
-          }
-
-          // Tempo médio
-          if (data.tempoPreparo) {
-             somaTempos += Number(data.tempoPreparo);
-             countTempos++;
-          }
-        });
-
-        const totalPedidos = snapshot.size;
-        const ticketMedio = totalPedidos > 0 ? totalFaturamento / totalPedidos : 0;
-        const tempoMedio = countTempos > 0 ? Math.round(somaTempos / countTempos) : 35;
-
-        setStats({
-          pedidosHoje: totalPedidos,
-          faturamentoHoje: totalFaturamento,
-          pedidosSalao: countSalao,
-          tempoMedio: `${tempoMedio} min`,
-          ticketMedio: ticketMedio,
-          nomeEstabelecimento: nomeEstab
-        });
-
-      } catch (error) {
-        console.error("Erro ao carregar stats:", error);
-      } finally {
-        setLoading(false);
+        if (pedido.motoboyId || pedido.motoboyNome) {
+          const key = pedido.motoboyId || pedido.motoboyNome; 
+          if (!motoboyMap[key]) motoboyMap[key] = { nome: pedido.motoboyNome || '?', qtd: 0, total: 0, id: key, taxaMedia: 0 };
+          motoboyMap[key].qtd++;
+          motoboyMap[key].total += taxa;
+        }
       }
     };
 
-    fetchStats();
-  }, [primeiroEstabelecimento]); // Recarrega se mudar a loja
+    // Processa as listas
+    pedidosSalao.forEach(pedido => processarPedido(pedido, 'salao'));
+    pedidosDelivery.forEach(pedido => processarPedido(pedido, 'delivery'));
+
+    // Atualiza totais (sem redeclarar com const)
+    totalFat = fatSalao + fatDelivery; 
+    
+    const totalPedidos = countSalao + countDelivery;
+    
+    Object.keys(motoboyMap).forEach(key => {
+      if (motoboyMap[key].qtd > 0) motoboyMap[key].taxaMedia = motoboyMap[key].total / motoboyMap[key].qtd;
+    });
+    const totalTaxasEntregadores = Object.values(motoboyMap).reduce((acc, moto) => acc + moto.total, 0);
+    
+    setStats({
+      pedidosHoje: totalPedidos,
+      faturamentoHoje: totalFat,
+      pedidosSalao: countSalao,
+      faturamentoSalao: fatSalao,
+      pedidosDelivery: countDelivery,
+      faturamentoDelivery: fatDelivery,
+      tempoMedio: countTempos > 0 ? `${Math.round(somaTempos / countTempos)} min` : '0 min',
+      ticketMedio: totalPedidos > 0 ? totalFat / totalPedidos : 0,
+      nomeEstabelecimento: nomeEstabelecimento,
+      entregadoresAtivos: Object.values(motoboyMap).sort((a,b) => b.qtd - a.qtd),
+      totalTaxasEntregadores: totalTaxasEntregadores
+    });
+
+  }, [pedidosDelivery, pedidosSalao, nomeEstabelecimento, loading]);
+
+  const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
 
   return (
-    <div className="space-y-4 mb-8">
-      {/* Badge de Identificação da Loja */}
-      {stats.nomeEstabelecimento && (
-        <div className="inline-flex items-center space-x-2 text-sm text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 shadow-sm">
-          <IoRestaurant className="text-blue-600" />
-          <span>Loja Ativa: <strong>{stats.nomeEstabelecimento}</strong></span>
+    <div className="space-y-6 mb-8">
+      <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+        <h2 className="text-lg font-bold text-gray-800">Resumo de Vendas Hoje</h2>
+        <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-blue-600 hover:bg-blue-50 transition-colors">
+          {isExpanded ? <><IoEyeOff className="text-xl" /> Ocultar Detalhes</> : <><IoEye className="text-xl" /> Mostrar Detalhes</>}
+        </button>
+      </div>
+
+      {isExpanded && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard title="Faturamento Hoje" value={formatarMoeda(stats.faturamentoHoje)} subtext={`${stats.pedidosHoje} pedidos totais`} icon={IoCash} colorClass="bg-green-500" loading={loading} />
+          <StatCard title="Delivery" value={formatarMoeda(stats.faturamentoDelivery)} subtext={`${stats.pedidosDelivery} pedidos via App`} icon={IoCart} colorClass="bg-blue-500" loading={loading} />
+          <StatCard title="Salão" value={formatarMoeda(stats.faturamentoSalao)} subtext={`${stats.pedidosSalao} mesas atendidas`} icon={IoRestaurant} colorClass="bg-orange-500" loading={loading} />
+          <StatCard title="Ticket Médio" value={formatarMoeda(stats.ticketMedio)} subtext={`Tempo médio: ${stats.tempoMedio}`} icon={IoStatsChart} colorClass="bg-purple-500" loading={loading} />
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Faturamento Hoje"
-          value={`R$ ${stats.faturamentoHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-          subtext={`${stats.pedidosHoje} pedidos realizados`}
-          icon={IoCash}
-          colorClass="bg-green-500"
-          loading={loading}
-        />
-        
-        <StatCard
-          title="Delivery"
-          value={stats.pedidosHoje - stats.pedidosSalao}
-          subtext="Pedidos via App/Site"
-          icon={IoCart}
-          colorClass="bg-blue-500"
-          loading={loading}
-        />
-
-        <StatCard
-          title="Salão"
-          value={stats.pedidosSalao}
-          subtext="Mesas atendidas hoje"
-          icon={IoRestaurant}
-          colorClass="bg-orange-500"
-          loading={loading}
-        />
-
-        <StatCard
-          title="Ticket Médio"
-          value={`R$ ${stats.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-          subtext={`Tempo médio: ${stats.tempoMedio}`}
-          icon={IoStatsChart}
-          colorClass="bg-purple-500"
-          loading={loading}
-        />
-      </div>
+      {isExpanded && showEndOfDayStats ? (
+        stats.entregadoresAtivos.length > 0 ? (
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="text-gray-700 font-bold mb-4 flex items-center gap-2"><IoBicycle className="text-orange-600" /> Entregadores Hoje ({stats.entregadoresAtivos.reduce((acc, m) => acc + m.qtd, 0)})</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {stats.entregadoresAtivos.map((moto, index) => (
+                      <div key={index} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex justify-between items-center shadow-sm">
+                          <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex justify-center items-center font-bold text-xs">{moto.nome ? moto.nome.charAt(0) : '?'}</div>
+                              <div><span className="font-bold text-gray-800 text-sm">{moto.nome}</span><br/><span className="text-xs text-gray-500">{moto.qtd} entregas</span></div>
+                          </div>
+                          <div className="text-right ml-4"><span className="block font-bold text-green-600">{formatarMoeda(moto.total)}</span></div>
+                      </div>
+                  ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between text-sm"><div className="text-gray-600 font-bold">Total taxas:</div><span className="font-bold text-green-600 text-lg">{formatarMoeda(stats.totalTaxasEntregadores)}</span></div>
+          </div>
+        ) : <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 text-sm text-gray-600">Sem entregadores ativos.</div>
+      ) : <div className="bg-gray-100 border border-gray-200 rounded-2xl p-6 text-sm text-gray-600">Estatísticas de entregadores disponíveis após às 18:00.</div>}
     </div>
   );
 };

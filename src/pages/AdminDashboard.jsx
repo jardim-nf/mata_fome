@@ -1,10 +1,9 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-// Correção: Nome do componente ajustado para coincidir com o arquivo (B maiúsculo)
 import DashBoardSummary from "../components/DashBoardSummary";
 import withAuth from "../hocs/withAuth";
 import { IoStatsChart, IoShareSocial, IoColorPalette } from "react-icons/io5";
-import { FaUsers } from 'react-icons/fa';
+import { FaUsers, FaMotorcycle } from 'react-icons/fa'; // ✅ Adicionado FaMotorcycle
 
 // Componente ActionButton com altura total (h-full)
 const ActionButton = ({ title, subtitle, icon, colorClass, onClick }) => (
@@ -170,6 +169,16 @@ const AdminDashboard = () => {
               subtitle="Gerencie garçons, caixas e administradores"
               icon={<FaUsers className="text-blue-600" />}
               colorClass="hover:border-blue-600 hover:bg-blue-50"
+            />
+          </Link>
+
+          {/* ✅ NOVO BOTÃO: Entregadores */}
+          <Link to="/admin/entregadores" className="h-full">
+            <ActionButton
+              title="Entregadores"
+              subtitle="Gerencie motoboys, rotas e comissões"
+              icon={<FaMotorcycle className="text-orange-600" />}
+              colorClass="hover:border-orange-600 hover:bg-orange-50"
             />
           </Link>
 

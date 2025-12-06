@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/AuthContext"; // Importação Corrigida
 import { useHeader } from '../context/HeaderContext';
 import { toast } from 'react-toastify';
 import MesaCard from "../components/MesaCard";
@@ -11,49 +11,47 @@ import ModalPagamento from "../components/ModalPagamento";
 import { 
     IoPeople, 
     IoPersonAdd, 
-    IoRefresh, 
-    IoAdd, 
     IoArrowBack, 
+    IoAdd, 
     IoRestaurantOutline, 
     IoReceiptOutline,
-    IoStatsChart,
     IoGrid,
     IoPieChart,
     IoTime,
     IoAlertCircle
 } from "react-icons/io5";
 
-// --- MODAL ABRIR MESA (Design Premium) ---
+// --- MODAL ABRIR MESA (Design Sutil) ---
 const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     const [quantidade, setQuantidade] = useState(2);
     
     if (!isOpen) return null;
     
     return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-lg transition-all duration-300">
-            <div className="bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-2xl p-8 w-full max-w-md animate-in fade-in zoom-in duration-300 border border-gray-200/60 transform hover:scale-[1.01] transition-transform">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm transition-all duration-300">
+            <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md animate-in fade-in zoom-in duration-300 border border-gray-100 transform hover:scale-[1.01] transition-transform">
                 <div className="text-center mb-8">
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
-                        <IoPersonAdd className="text-4xl text-white" />
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
+                        <IoPersonAdd className="text-3xl text-white" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Abrir Mesa {mesaNumero}</h3>
+                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Abrir Mesa {mesaNumero}</h3>
                     <p className="text-gray-500">Quantos clientes vão sentar nesta mesa?</p>
                 </div>
                 
-                <div className="flex items-center justify-between bg-white rounded-2xl p-6 mb-8 border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between bg-gray-50 rounded-2xl p-6 mb-8 border border-gray-100 shadow-sm">
                     <button 
                         onClick={() => setQuantidade(q => Math.max(1, q - 1))} 
-                        className="w-14 h-14 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-2xl transition-all hover:text-blue-600 active:scale-95 shadow-sm"
+                        className="w-12 h-12 rounded-2xl bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 font-bold text-xl transition-all hover:text-blue-600 active:scale-95 shadow-sm"
                     >
                         -
                     </button>
                     <div className="text-center">
-                        <span className="text-5xl font-black text-gray-900 block">{quantidade}</span>
+                        <span className="text-4xl sm:text-5xl font-black text-gray-900 block">{quantidade}</span>
                         <span className="text-sm text-gray-500 font-medium">{quantidade === 1 ? 'pessoa' : 'pessoas'}</span>
                     </div>
                     <button 
                         onClick={() => setQuantidade(q => q + 1)} 
-                        className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 shadow-lg shadow-blue-500/30 text-white font-bold text-2xl transition-all hover:shadow-xl hover:from-blue-700 hover:to-blue-800 active:scale-95"
+                        className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 shadow-lg shadow-blue-500/30 text-white font-bold text-xl transition-all hover:shadow-xl hover:from-blue-700 hover:to-blue-800 active:scale-95"
                     >
                         +
                     </button>
@@ -62,13 +60,13 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
                 <div className="grid grid-cols-2 gap-4">
                     <button 
                         onClick={onClose} 
-                        className="py-4 px-4 bg-white border-2 border-gray-300 text-gray-700 rounded-2xl font-bold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 active:scale-95"
+                        className="py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 active:scale-95"
                     >
                         Cancelar
                     </button>
                     <button 
                         onClick={() => onConfirm(quantidade)} 
-                        className="py-4 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-blue-800 transition-all transform active:scale-95 relative overflow-hidden group"
+                        className="py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-blue-800 transition-all transform active:scale-95 relative overflow-hidden group"
                     >
                         <span className="relative z-10">Confirmar</span>
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-800 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
@@ -79,50 +77,51 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     );
 };
 
-// --- STAT CARD PREMIUM ---
+// --- STAT CARD PREMIUM (Sutilizado) ---
 const StatCard = ({ label, value, icon, theme, subtitle }) => {
     const themes = {
+        // Cores de Fundo e Borda SUAVIZADAS
         blue: { 
-            bg: 'bg-gradient-to-br from-blue-50 to-blue-100/50', 
+            bg: 'bg-gradient-to-br from-blue-50/50 to-white', 
             text: 'text-blue-600', 
             value: 'text-blue-900',
             iconBg: 'bg-gradient-to-br from-blue-500 to-blue-600',
-            border: 'border-blue-200'
+            border: 'border-blue-100' // Mais claro
         },
         purple: { 
-            bg: 'bg-gradient-to-br from-purple-50 to-purple-100/50', 
+            bg: 'bg-gradient-to-br from-purple-50/50 to-white', 
             text: 'text-purple-600', 
             value: 'text-purple-900',
             iconBg: 'bg-gradient-to-br from-purple-500 to-purple-600',
-            border: 'border-purple-200'
+            border: 'border-purple-100'
         },
         green: { 
-            bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50', 
+            bg: 'bg-gradient-to-br from-emerald-50/50 to-white', 
             text: 'text-emerald-600', 
             value: 'text-emerald-900',
             iconBg: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
-            border: 'border-emerald-200'
+            border: 'border-emerald-100'
         },
         orange: { 
-            bg: 'bg-gradient-to-br from-orange-50 to-orange-100/50', 
+            bg: 'bg-gradient-to-br from-orange-50/50 to-white', 
             text: 'text-orange-600', 
             value: 'text-orange-900',
             iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600',
-            border: 'border-orange-200'
+            border: 'border-orange-100'
         },
         gray: { 
-            bg: 'bg-gradient-to-br from-gray-50 to-gray-100/50', 
+            bg: 'bg-gradient-to-br from-gray-50/50 to-white', 
             text: 'text-gray-600', 
             value: 'text-gray-900',
             iconBg: 'bg-gradient-to-br from-gray-500 to-gray-600',
-            border: 'border-gray-200'
+            border: 'border-gray-100'
         },
     };
     
     const t = themes[theme] || themes.gray;
 
     return (
-        <div className={`p-6 rounded-3xl border-2 ${t.border} ${t.bg} backdrop-blur-sm hover:shadow-lg transition-all duration-300 group hover:scale-[1.02]`}>
+        <div className={`p-6 rounded-3xl border ${t.border} ${t.bg} backdrop-blur-sm hover:shadow-md transition-all duration-300 group hover:scale-[1.01]`}>
             <div className="flex items-center justify-between">
                 <div className="flex-1">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">{label}</p>
@@ -155,35 +154,38 @@ export default function ControleSalao() {
     const { setActions, clearActions } = useHeader();
     const navigate = useNavigate();
     
-const [mesas, setMesas] = useState([]);
-const [loading, setLoading] = useState(true);
-const [erroCarregamento, setErroCarregamento] = useState(false);
-const [isModalOpen, setIsModalOpen] = useState(false);
-const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false); // ✅ Já existe
-const [mesaParaPagamento, setMesaParaPagamento] = useState(null); // ✅ Já existe
-const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
-const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
+    const [mesas, setMesas] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [erroCarregamento, setErroCarregamento] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);
+    const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
+    const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
+    const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
 
     const estabelecimentoId = useMemo(() => userData?.estabelecimentosGerenciados?.[0] || null, [userData]);
 
-    // 🎯 HEADER ACTIONS PREMIUM
+    // 🎯 HEADER ACTIONS (Ajuste para Mobile/Sutileza)
     useEffect(() => {
         setActions(
             <div className="flex gap-3">
+                {/* Botão Voltar: Compacto no mobile */}
                 <button 
                     onClick={() => navigate('/dashboard')} 
-                    className="px-5 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-semibold transition-all duration-200 flex items-center gap-2 border-2 border-gray-200 hover:border-gray-300 active:scale-95"
+                    className="p-3 text-gray-600 hover:bg-gray-100 rounded-full font-semibold transition-all duration-200 flex items-center justify-center border-2 border-gray-200 hover:border-gray-300 active:scale-95 w-12 h-12 sm:w-auto sm:h-auto sm:px-5 sm:py-3 sm:rounded-2xl"
                 >
-                    <IoArrowBack className="text-lg"/>
+                    <IoArrowBack className="text-xl sm:text-lg"/>
                     <span className="hidden sm:inline">Voltar</span>
                 </button>
+                {/* Botão Nova Mesa: Compacto no mobile */}
                 <button 
                     onClick={() => setIsModalOpen(true)} 
-                    className="bg-gradient-to-r from-gray-900 to-black hover:from-black hover:to-gray-900 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-2xl hover:shadow-3xl flex items-center gap-2 active:scale-95 group relative overflow-hidden"
+                    className="bg-gradient-to-r from-gray-900 to-black hover:from-black hover:to-gray-900 text-white font-bold py-3 px-4 sm:px-6 rounded-2xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 active:scale-95 group relative overflow-hidden"
                 >
                     <span className="relative z-10 flex items-center gap-2">
-                        <IoAdd className="text-lg"/>
+                        <IoAdd className="text-xl sm:text-lg"/>
                         <span className="hidden sm:inline">Nova Mesa</span>
+                        <span className="inline sm:hidden">Novo</span> {/* Texto compacto para mobile */}
                     </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
@@ -228,7 +230,7 @@ const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
         return () => unsubscribe();
     }, [estabelecimentoId, userData]);
 
-    // 🎯 FUNÇÕES (mantidas iguais)
+    // 🎯 FUNÇÕES
     const handleAdicionarMesa = async (numeroMesa) => {
         if (!numeroMesa) { toast.warning("Digite o número"); return; }
         try {
@@ -314,55 +316,55 @@ const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
         } catch (error) { toast.error(`❌ Erro: ${error.message}`); }
     };
 
-const handleConfirmarPagamento = async (resultadoPagamento) => {
-  try {
-    if (!mesaParaPagamento) return;
-    
-    console.log('💰 Processando pagamento para mesa:', mesaParaPagamento.numero);
-    console.log('📊 Dados do pagamento:', resultadoPagamento);
+    const handleConfirmarPagamento = async (resultadoPagamento) => {
+        try {
+            if (!mesaParaPagamento) return;
+            
+            console.log('💰 Processando pagamento para mesa:', mesaParaPagamento.numero);
+            console.log('📊 Dados do pagamento:', resultadoPagamento);
 
-    // Aqui você processa o pagamento baseado nos dados do modal
-    const batch = writeBatch(db);
-    const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaPagamento.id);
-    
-    // Criar registro de venda
-    if (mesaParaPagamento.itens && mesaParaPagamento.itens.length > 0) {
-      await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'vendas'), {
-        mesaNumero: mesaParaPagamento.numero,
-        mesaId: mesaParaPagamento.id,
-        total: mesaParaPagamento.total || 0,
-        itens: mesaParaPagamento.itens || [],
-        pagamentos: resultadoPagamento.pagamentos || {},
-        dataFechamento: serverTimestamp(),
-        tipo: 'salao',
-        status: 'pago',
-        createdAt: serverTimestamp(),
-        pessoas: mesaParaPagamento.pessoas || 1,
-        estabelecimentoId
-      });
-    }
-    
-    // Liberar mesa
-    batch.update(mesaRef, {
-      status: 'livre',
-      total: 0,
-      pessoas: 0,
-      itens: [],
-      encerradaEm: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+            // Processamento de pagamento e liberação da mesa
+            const batch = writeBatch(db);
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaPagamento.id);
+            
+            // Criar registro de venda
+            if (mesaParaPagamento.itens && mesaParaPagamento.itens.length > 0) {
+                await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'vendas'), {
+                    mesaNumero: mesaParaPagamento.numero,
+                    mesaId: mesaParaPagamento.id,
+                    total: mesaParaPagamento.total || 0,
+                    itens: mesaParaPagamento.itens || [],
+                    pagamentos: resultadoPagamento.pagamentos || {},
+                    dataFechamento: serverTimestamp(),
+                    tipo: 'salao',
+                    status: 'pago',
+                    createdAt: serverTimestamp(),
+                    pessoas: mesaParaPagamento.pessoas || 1,
+                    estabelecimentoId
+                });
+            }
+            
+            // Liberar mesa
+            batch.update(mesaRef, {
+                status: 'livre',
+                total: 0,
+                pessoas: 0,
+                itens: [],
+                encerradaEm: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
 
-    await batch.commit();
-    
-    toast.success(`💰 Mesa ${mesaParaPagamento.numero} paga com sucesso!`);
-    setIsModalPagamentoOpen(false);
-    setMesaParaPagamento(null);
-    
-  } catch (error) {
-    console.error('❌ Erro ao processar pagamento:', error);
-    toast.error(`Erro ao processar pagamento: ${error.message}`);
-  }
-};
+            await batch.commit();
+            
+            toast.success(`💰 Mesa ${mesaParaPagamento.numero} paga com sucesso!`);
+            setIsModalPagamentoOpen(false);
+            setMesaParaPagamento(null);
+            
+        } catch (error) {
+            console.error('❌ Erro ao processar pagamento:', error);
+            toast.error(`Erro ao processar pagamento: ${error.message}`);
+        }
+    };
 
     // 🎯 CORREÇÃO AUTOMÁTICA
     const corrigirMesasExistentes = useCallback(async () => {
@@ -420,38 +422,39 @@ const handleConfirmarPagamento = async (resultadoPagamento) => {
     );
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/20 to-purple-50/10 p-6">
+        <div className="min-h-screen bg-gray-50/50 p-4 sm:p-6">
             <div className="max-w-[1600px] mx-auto">
                 {/* MODAIS */}
-<AdicionarMesaModal 
-  isOpen={isModalOpen} 
-  onClose={() => setIsModalOpen(false)} 
-  onSave={handleAdicionarMesa}
-  mesasExistentes={mesas} // ← ADICIONE ESTA LINHA
-/>                <ModalAbrirMesa isOpen={isModalAbrirMesaOpen} onClose={() => { setIsModalAbrirMesaOpen(false); setMesaParaAbrir(null); }} onConfirm={handleConfirmarAbertura} mesaNumero={mesaParaAbrir?.numero} />
-{isModalPagamentoOpen && mesaParaPagamento && (
-  <ModalPagamento 
-    mesa={mesaParaPagamento}
-    estabelecimentoId={estabelecimentoId}
-    onClose={() => {
-      setIsModalPagamentoOpen(false);
-      setMesaParaPagamento(null);
-    }}
-    onSucesso={handleConfirmarPagamento}
-  />
-)}
-                {/* HEADER DASHBOARD PREMIUM */}
-                <div className="mb-10">
+                <AdicionarMesaModal 
+                    isOpen={isModalOpen} 
+                    onClose={() => setIsModalOpen(false)} 
+                    onSave={handleAdicionarMesa}
+                    mesasExistentes={mesas}
+                />
+                <ModalAbrirMesa isOpen={isModalAbrirMesaOpen} onClose={() => { setIsModalAbrirMesaOpen(false); setMesaParaAbrir(null); }} onConfirm={handleConfirmarAbertura} mesaNumero={mesaParaAbrir?.numero} />
+                {isModalPagamentoOpen && mesaParaPagamento && (
+                    <ModalPagamento 
+                        mesa={mesaParaPagamento}
+                        estabelecimentoId={estabelecimentoId}
+                        onClose={() => {
+                            setIsModalPagamentoOpen(false);
+                            setMesaParaPagamento(null);
+                        }}
+                        onSucesso={handleConfirmarPagamento}
+                    />
+                )}
+                {/* HEADER DASHBOARD (Ajuste para Mobile/Sutileza) */}
+                <div className="mb-8 sm:mb-10">
                     <div className="flex items-center gap-4 mb-4">
-                        <div className="w-3 h-12 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full"></div>
+                        <div className="w-2 sm:w-3 h-10 sm:h-12 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full"></div>
                         <div>
-                            <h1 className="text-4xl font-black text-gray-900 tracking-tight">Controle de Salão</h1>
-                            <p className="text-gray-500 mt-1 text-lg">Gerencie a ocupação e os pedidos em tempo real</p>
+                            <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Controle de Salão</h1>
+                            <p className="text-sm sm:text-lg text-gray-500 mt-1">Gerencie a ocupação e os pedidos em tempo real</p>
                         </div>
                     </div>
                     
-                    {/* BARRA DE STATUS */}
-                    <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-200/60 shadow-sm">
+                    {/* BARRA DE STATUS (Ajuste para Sutileza) */}
+                    <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-gray-700">{stats.livres} Livres</span>
@@ -469,106 +472,114 @@ const handleConfirmarPagamento = async (resultadoPagamento) => {
                     </div>
                 </div>
 
-                {/* ESTATÍSTICAS PREMIUM */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6 mb-12">
-                    <StatCard 
-                        label="Ocupação Atual" 
-                        value={`${stats.ocupadas}/${stats.total}`} 
-                        subtitle={`${stats.ocupacaoPercent}% ocupado`}
-                        theme="blue" 
-                        icon={<IoGrid className="text-2xl"/>} 
-                    />
-                    <StatCard 
-                        label="Taxa de Ocupação" 
-                        value={`${stats.ocupacaoPercent}%`} 
-                        subtitle="Capacidade do salão"
-                        theme="purple" 
-                        icon={<IoPieChart className="text-2xl"/>} 
-                    />
-                    <StatCard 
-                        label="Clientes no Salão" 
-                        value={stats.pessoas} 
-                        subtitle="Pessoas atendidas"
-                        theme="green" 
-                        icon={<IoPeople className="text-2xl"/>} 
-                    />
-                    <StatCard 
-                        label="Mesas Disponíveis" 
-                        value={stats.livres} 
-                        subtitle="Prontas para uso"
-                        theme="gray" 
-                        icon={<IoRestaurantOutline className="text-2xl"/>} 
-                    />
-                    <StatCard 
-                        label="Pedidos Pendentes" 
-                        value={stats.itensPendentes} 
-                        subtitle="Aguardando envio"
-                        theme="orange" 
-                        icon={<IoReceiptOutline className="text-2xl"/>} 
-                    />
-                </div>
-
-{/* ÁREA DO SALÃO PREMIUM */}
-<div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-2xl border border-gray-200/60 min-h-[600px]">
-    <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-10 gap-6">
-        <div>
-            <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3 mb-2">
-                <div className="w-3 h-8 bg-gradient-to-b from-amber-500 to-orange-500 rounded-full"></div>
-                Salão Principal
-            </h2>
-            <p className="text-gray-500 ml-6">Visualize e gerencie todas as mesas do estabelecimento</p>
+ {/* INFORMAÇÕES DE STATUS COMPACTAS */}
+<div className="flex flex-wrap items-center gap-4 mb-8 sm:mb-10 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
+    <div className="flex items-center gap-3">
+        <div className="relative">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                <IoGrid className="text-white text-lg" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-700 text-white text-xs font-black rounded-full flex items-center justify-center">
+                {stats.ocupacaoPercent}%
+            </div>
         </div>
-        
-        {/* LEGENDA DE STATUS MELHORADA */}
-        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold bg-white px-6 py-3 rounded-2xl border-2 border-gray-200 shadow-sm">
-            <span className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-green-500 rounded-full shadow-sm"></span>
-                <span className="text-gray-700">Livre</span>
-            </span>
-            <span className="w-px h-4 bg-gray-300"></span>
-            <span className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-red-500 rounded-full shadow-sm animate-pulse"></span>
-                <span className="text-gray-700">Ocupada</span>
-            </span>
-            <span className="w-px h-4 bg-gray-300"></span>
-            <span className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-orange-500 rounded-full shadow-sm animate-pulse"></span>
-                <span className="text-gray-700">Com Pedido</span>
-            </span>
+        <div>
+            <p className="text-sm font-bold text-gray-700">Ocupação</p>
+            <p className="text-lg font-black text-gray-900">{stats.ocupadas}/{stats.total} mesas</p>
         </div>
     </div>
+    
+    <div className="h-8 w-px bg-gray-300"></div>
+    
+    <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-emerald-50 rounded-full flex items-center justify-center border border-emerald-200">
+            <IoPeople className="text-emerald-600 text-lg" />
+        </div>
+        <div>
+            <p className="text-sm font-bold text-gray-700">Clientes</p>
+            <p className="text-lg font-black text-gray-900">{stats.pessoas}</p>
+        </div>
+    </div>
+    
+    <div className="h-8 w-px bg-gray-300"></div>
+    
+    <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-gradient-to-br from-orange-100 to-orange-50 rounded-full flex items-center justify-center border border-orange-200 relative">
+            <IoReceiptOutline className="text-orange-600 text-lg" />
+            {stats.itensPendentes > 0 && (
+                <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-black rounded-full flex items-center justify-center animate-pulse">
+                    {stats.itensPendentes}
+                </div>
+            )}
+        </div>
+        <div>
+            <p className="text-sm font-bold text-gray-700">Pendentes</p>
+            <p className="text-lg font-black text-gray-900">{stats.itensPendentes}</p>
+        </div>
+    </div>
+</div>       
 
-    {mesas.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6">
-            {mesas.map(mesa => (
-                <MesaCard 
-                    key={mesa.id} 
-                    mesa={mesa} 
-                    onClick={() => handleMesaClick(mesa)} 
-                    onExcluir={() => handleExcluirMesa(mesa.id, mesa.numero)}
-                    onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
-                    onEnviarCozinha={() => handleEnviarParaCozinha(mesa)}
-                />
-            ))}
-        </div>
-    ) : (
-        <div className="flex flex-col items-center justify-center py-32 text-center">
-            <div className="w-32 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-8 shadow-lg">
-                <IoRestaurantOutline className="text-5xl text-gray-400" />
-            </div>
-            <h3 className="text-2xl font-black text-gray-900 mb-4">Nenhuma mesa configurada</h3>
-            <p className="text-gray-500 mb-8 max-w-md mx-auto text-lg">
-                Comece adicionando mesas para organizar e visualizar o mapa completo do seu salão.
-            </p>
-            <button 
-                onClick={() => setIsModalOpen(true)} 
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-black py-4 px-12 rounded-2xl shadow-2xl hover:shadow-3xl transition-all transform hover:scale-105 active:scale-95 text-lg"
-            >
-                + Criar Primeira Mesa
-            </button>
-        </div>
-    )}
-</div>
+                {/* ÁREA DO SALÃO PREMIUM (Ajuste de Sutileza) */}
+                <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 min-h-[600px] transition-shadow duration-300 hover:shadow-2xl">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 sm:mb-10 gap-4 sm:gap-6">
+                        <div>
+                            <h2 className="text-xl sm:text-2xl font-black text-gray-900 flex items-center gap-3 mb-2">
+                                <div className="w-2 h-6 sm:w-3 sm:h-8 bg-gradient-to-b from-amber-500 to-orange-500 rounded-full"></div>
+                                Salão Principal
+                            </h2>
+                            <p className="text-xs sm:text-sm text-gray-500 ml-5 sm:ml-6">Visualize e gerencie todas as mesas do estabelecimento</p>
+                        </div>
+                        
+                        {/* LEGENDA DE STATUS MELHORADA */}
+                        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold bg-white px-4 sm:px-6 py-3 rounded-2xl border-2 border-gray-200 shadow-sm">
+                            <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 bg-green-500 rounded-full shadow-sm"></span>
+                                <span className="text-gray-700">Livre</span>
+                            </span>
+                            <span className="w-px h-4 bg-gray-300"></span>
+                            <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 bg-red-500 rounded-full shadow-sm animate-pulse"></span>
+                                <span className="text-gray-700">Ocupada</span>
+                            </span>
+                            <span className="w-px h-4 bg-gray-300"></span>
+                            <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 bg-orange-500 rounded-full shadow-sm animate-pulse"></span>
+                                <span className="text-gray-700">Com Pedido</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    {mesas.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 sm:gap-6">
+                            {mesas.map(mesa => (
+                                <MesaCard 
+                                    key={mesa.id} 
+                                    mesa={mesa} 
+                                    onClick={() => handleMesaClick(mesa)} 
+                                    onExcluir={() => handleExcluirMesa(mesa.id, mesa.numero)}
+                                    onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
+                                    onEnviarCozinha={() => handleEnviarParaCozinha(mesa)}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-20 sm:py-32 text-center">
+                            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-6 sm:mb-8 shadow-lg">
+                                <IoRestaurantOutline className="text-4xl sm:text-5xl text-gray-400" />
+                            </div>
+                            <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-3 sm:mb-4">Nenhuma mesa configurada</h3>
+                            <p className="text-sm sm:text-lg text-gray-500 mb-6 sm:mb-8 max-w-md mx-auto">
+                                Comece adicionando mesas para organizar e visualizar o mapa completo do seu salão.
+                            </p>
+                            <button 
+                                onClick={() => setIsModalOpen(true)} 
+                                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-black py-4 px-10 sm:px-12 rounded-2xl shadow-2xl hover:shadow-3xl transition-all transform hover:scale-105 active:scale-95 text-lg"
+                            >
+                                + Criar Primeira Mesa
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

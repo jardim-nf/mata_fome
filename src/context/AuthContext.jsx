@@ -20,16 +20,15 @@ export function useAuth() {
     return useContext(AuthContext);
 }
 
-// 🛑 FUNÇÃO AUXILIAR: Converte Map/Objeto lido do Firestore (para regras) para Array (para JS/UI)
+// FUNÇÃO AUXILIAR: Converte Map/Objeto para Array
 const mapToArray = (data) => {
     if (!data) return [];
     
-    // Se for um objeto e não um array, pega as chaves (os IDs)
+    // Se for um objeto (mapa do Firestore) e não um array, pega as chaves (os IDs)
     if (typeof data === 'object' && !Array.isArray(data)) {
         return Object.keys(data);
     }
     
-    // Caso contrário, retorna o array existente ou um array vazio
     return Array.isArray(data) ? data : [];
 };
 
@@ -100,6 +99,7 @@ export function AuthProvider({ children }) {
                 let tokenResult;
                 let claims = {};
                 try {
+                    // 🔥 FORÇA O REFRESH DO TOKEN - CHAVE PARA REGRAS DO FIRESTORE
                     tokenResult = await user.getIdTokenResult(true); 
                     claims = tokenResult.claims || {};
                     console.log("🔐 Token Claims recebidas:", claims);
@@ -109,11 +109,11 @@ export function AuthProvider({ children }) {
                 
                 const firestoreData = await getFirestoreUserData(user);
                 
-                // ✅ CORREÇÃO CRÍTICA: Se é Master Admin pelas claims, mas não tem dados no Firestore
-                // Vamos criar/atualizar os dados no Firestore para manter consistência
+                // Define Master/Admin pela claims
                 const isMasterAdminFromClaims = Boolean(claims.isMasterAdmin);
                 const isAdminFromClaims = Boolean(claims.isAdmin);
                 
+                // CRIA OU ATUALIZA DOCUMENTO NO FIRESTORE SE FOR ADMIN E NÃO EXISTIR
                 if ((isMasterAdminFromClaims || isAdminFromClaims) && !firestoreData) {
                     console.log("🔄 Master/Admin detectado pelas claims, mas sem dados no Firestore. Criando documento...");
                     
@@ -139,13 +139,13 @@ export function AuthProvider({ children }) {
                     }
                 }
 
-                // ✅ Converte os Maps lidos do Firestore para Arrays
+                // Converte Maps lidos (Firestore ou Claims) para Arrays
                 const docEstabs = mapToArray(firestoreData?.estabelecimentos);
                 const docEstabsGerenciados = mapToArray(firestoreData?.estabelecimentosGerenciados);
                 const claimEstabs = mapToArray(claims.estabelecimentos);
                 const claimEstabsGerenciados = mapToArray(claims.estabelecimentosGerenciados);
                 
-                // 🔥 Se é Master Admin, busca TODOS os estabelecimentos
+                // Unifica IDs de estabelecimentos
                 let allEstabs = [...new Set([
                     ...docEstabs, 
                     ...docEstabsGerenciados, 
@@ -157,10 +157,8 @@ export function AuthProvider({ children }) {
                 if (isMasterAdminFromClaims && allEstabs.length === 0) {
                     console.log("🔍 Master Admin sem estabelecimentos, buscando todos...");
                     try {
-                        // Buscar todos os estabelecimentos (limitado para performance)
                         const estabelecimentosSnapshot = await getDocs(collection(db, 'estabelecimentos'));
-                        const allEstabelecimentosIds = estabelecimentosSnapshot.docs.map(doc => doc.id);
-                        allEstabs = allEstabelecimentosIds;
+                        allEstabs = estabelecimentosSnapshot.docs.map(doc => doc.id);
                         console.log("🏪 Todos os estabelecimentos do sistema:", allEstabs);
                     } catch (error) {
                         console.error("❌ Erro ao buscar estabelecimentos:", error);
@@ -169,9 +167,11 @@ export function AuthProvider({ children }) {
 
                 console.log("🏪 IDs de estabelecimentos unificados:", allEstabs);
 
-                // Define isMasterAdmin e isAdmin com prioridade CORRETA (claims primeiro)
+                // Define isMasterAdmin e isAdmin (Claims têm prioridade)
                 const isMasterAdmin = isMasterAdminFromClaims || Boolean(firestoreData?.isMasterAdmin);
-                const isAdmin = isAdminFromClaims || Boolean(firestoreData?.isAdmin) || allEstabs.length > 0;
+                // Define isAdmin: Claim, Firestore, OU (se não for Master) se gerencia > 0
+                const isAdmin = isAdminFromClaims || Boolean(firestoreData?.isAdmin) || (allEstabs.length > 0 && !isMasterAdmin);
+
 
                 // Combina dados do Firestore e Claims
                 const combinedData = {
@@ -180,7 +180,7 @@ export function AuthProvider({ children }) {
                     nome: firestoreData?.nome || user.displayName || user.email.split('@')[0],
                     ...firestoreData, // Mantém todos os dados do Firestore
                     
-                    // 🔥 Sobrescreve com valores das claims (que são a fonte da verdade)
+                    // Sobrescreve com valores processados
                     isAdmin,
                     isMasterAdmin,
                     
@@ -190,7 +190,6 @@ export function AuthProvider({ children }) {
                     estabelecimentoIdClaim: claims.estabelecimentoId || null,
                     dataAtualizacao: new Date(),
                     
-                    // Mantém as claims originais para referência
                     _claims: claims
                 };
 
@@ -252,6 +251,7 @@ export function AuthProvider({ children }) {
         currentUser, 
         userData, 
         currentClientData,
+        // ... (login/signup functions here)
         signup: async (email, password, additionalData = {}) => {
             try {
                 console.log("📝 Iniciando cadastro para:", email);
@@ -297,30 +297,38 @@ export function AuthProvider({ children }) {
                 throw error;
             }
         },
-        login: async (email, password) => {
-            console.log("🔐 Iniciando login para:", email);
-            try {
-                await setPersistence(auth, browserSessionPersistence);
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                console.log("✅ Login realizado com sucesso");
-                return userCredential;
-            } catch (error) {
-                console.error("❌ Erro no login:", error);
-                throw error;
-            }
-        },
+// Dentro de AuthContext.jsx, na função 'login'
+login: async (email, password) => {
+    console.log("🔐 Iniciando login para:", email);
+    try {
+        await setPersistence(auth, browserSessionPersistence);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // APÓS LOGIN, FORÇA O REFRESH PARA OBTER OS CLAIMS MAIS RÁPIDO
+        if (userCredential.user) {
+            // Chamada direta para garantir a atualização do token e recarga da página
+            // O 'value' deve ser acessível aqui (pode precisar de uma ref para a função)
+            await userCredential.user.getIdToken(true); // Garante o novo token no Auth SDK
+            window.location.reload(); // Força a recarga para o onAuthStateChanged usar o token novo
+        }
+
+        console.log("✅ Login realizado com sucesso");
+        return userCredential;
+    } catch (error) {
+        console.error("❌ Erro no login:", error);
+        throw error;
+    }
+},
         logout,
         updateUserProfile: async (updates) => {
             try {
                 if (auth.currentUser) {
                     console.log("✏️ Atualizando perfil do usuário:", updates);
                     
-                    // Atualiza no Firebase Auth
                     if (updates.nome) {
                         await updateProfile(auth.currentUser, { displayName: updates.nome });
                     }
                     
-                    // Atualiza no Firestore
                     const updateData = {};
                     if (updates.nome) updateData.nome = updates.nome;
                     if (updates.email) updateData.email = updates.email;
@@ -330,7 +338,6 @@ export function AuthProvider({ children }) {
                         await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), updateData);
                     }
                     
-                    // Atualiza estado local
                     setUserData(prev => prev ? { ...prev, ...updateData } : null);
                     
                     return true;
@@ -344,9 +351,9 @@ export function AuthProvider({ children }) {
         reloadUserData: async () => {
             if (auth.currentUser) {
                 console.log("🔄 Recarregando dados do usuário...");
-                // Força refresh do token para atualizar claims
+                // Força refresh do token para atualizar claims e dispara o onAuthStateChanged
                 await auth.currentUser.getIdToken(true);
-                window.location.reload();
+                window.location.reload(); 
             }
         },
         loading,
@@ -366,9 +373,8 @@ export function AuthProvider({ children }) {
     );
 }
 
-// -----------------------------------------------------------
-// usePermissions e PrivateRoute
-// -----------------------------------------------------------
+// ... usePermissions e PrivateRoute permanecem iguais ...
+
 export function usePermissions() {
     const { currentUser, userData, loading, isAdmin, isMasterAdmin, estabelecimentosGerenciados } = useAuth();
     
@@ -411,7 +417,6 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Aguarda a verificação completa da autenticação
     if (loading || !authChecked) { 
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -444,5 +449,4 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
     return children;
 }
 
-// 🔥 EXPORTAÇÃO DO CONTEXTO ADICIONADA AQUI:
 export { AuthContext };

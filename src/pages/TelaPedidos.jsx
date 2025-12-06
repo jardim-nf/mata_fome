@@ -14,10 +14,64 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { 
     IoArrowBack, IoCart, IoSearch, IoAdd,
-    IoRemove, IoRestaurant, 
-    IoCheckmark, IoClose, IoPerson,
-    IoPencil, IoAddCircle, IoCheckmarkCircle, IoPersonAdd
+    IoRemove, IoRestaurant, IoCheckmark, IoClose, 
+    IoPerson, IoPencil, IoAddCircle, IoCheckmarkCircle, 
+    IoPersonAdd, IoPricetag
 } from 'react-icons/io5';
+
+// IMPORTS DOS MODAIS
+import VariacoesModal from '../components/VariacoesModal';
+import AdicionaisModal from '../components/AdicionaisModal';
+
+// --- COMPONENTE AUXILIAR PARA RENDERIZAR PRODUTO ---
+const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
+    const hasOpcoes = useMemo(() => {
+        const opcoes = produto.opcoes || produto.variacoes || produto.tamanhos || [];
+        return opcoes.length > 0;
+    }, [produto]);
+
+    const precoExibicao = useMemo(() => {
+        return parseFloat(produto.preco || 0).toFixed(2);
+    }, [produto.preco]);
+
+    return (
+        <div 
+            onClick={() => abrirModalOpcoes(produto)} 
+            className="bg-white p-3 rounded-xl border border-gray-200 flex gap-3 active:scale-[0.98] transition-transform cursor-pointer shadow-sm hover:shadow-md"
+        >
+            {produto.imageUrl ? (
+                <img src={produto.imageUrl} className="w-20 h-20 rounded-lg object-cover bg-gray-100 flex-shrink-0" alt={produto.nome}/>
+            ) : (
+                <div className="w-20 h-20 rounded-lg bg-gray-50 flex items-center justify-center text-gray-300 flex-shrink-0">
+                    <IoRestaurant className="text-2xl"/>
+                </div>
+            )}
+            
+            <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+                <div>
+                    <h3 className="font-bold text-gray-900 text-sm leading-tight mb-1 truncate">{produto.nome}</h3>
+                    <p className="text-xs text-gray-500 line-clamp-2 leading-tight">{produto.descricao}</p>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                    {/* Preço com a cor de destaque */}
+                    <p className="font-black text-sm flex items-center gap-1" style={{ color: cores.destaque }}>
+                        R$ {precoExibicao}
+                        {!hasOpcoes && <IoPricetag className="text-xs opacity-60"/>}
+                    </p>
+                    
+                    {/* Botão + com cor de destaque */}
+                    <button 
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: cores.destaque, backgroundColor: `${cores.destaque}15` }}
+                    >
+                        <IoAddCircle className="text-xl"/>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+});
+
 
 // --- COMPONENTE PRINCIPAL ---
 const TelaPedidos = () => {
@@ -40,141 +94,188 @@ const TelaPedidos = () => {
     const [ocupantes, setOcupantes] = useState(['Mesa']); 
     const [clienteSelecionado, setClienteSelecionado] = useState('Mesa');
     
-    // Estados para edição de nome e feedback
+    // Estados para edição de nome
     const [editandoNomeIndex, setEditandoNomeIndex] = useState(null);
     const [novoNomeTemp, setNovoNomeTemp] = useState('');
     const [mostrarDicaAdd, setMostrarDicaAdd] = useState(true);
 
     // --- NOVOS ESTADOS PARA O MODAL DE OPÇÕES ---
     const [produtoEmSelecao, setProdutoEmSelecao] = useState(null);
-    const [opcaoSelecionada, setOpcaoSelecionada] = useState(null);
-    const [observacaoItem, setObservacaoItem] = useState('');
-// Em src/pages/TelaPedidos.jsx
+    
+    // CORES
+    const [coresEstabelecimento, setCoresEstabelecimento] = useState({
+        primaria: '#111827', 
+        destaque: '#059669', 
+        background: '#f9fafb',
+        texto: { principal: '#111827', secundario: '#6b7280' }
+    });
 
-const fetchData = useCallback(async () => {
-    if (!estabelecimentoId) return;
-    try {
-        setLoading(true);
-        
-        // 1. Buscamos Mesa e Categorias em paralelo (primeiro nível de otimização)
-        const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-        const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
-        
-        const [mesaSnap, categoriasSnap] = await Promise.all([
-            getDoc(mesaRef),
-            getDocs(categoriasRef)
-        ]);
+    // 1. ESTADO PARA A ORDEM DAS CATEGORIAS
+    const [ordemCategorias, setOrdemCategorias] = useState([]);
 
-        // Processar Mesa
-        if (mesaSnap.exists()) {
-            const mesaData = mesaSnap.data();
-            setMesa(mesaData);
-            setResumoPedido(mesaData.itens || []);
-            if (mesaData.nomesOcupantes?.length > 0) {
-                setOcupantes(mesaData.nomesOcupantes);
-                const primeiroCliente = mesaData.nomesOcupantes.find(n => n !== 'Mesa');
-                setClienteSelecionado(primeiroCliente || 'Mesa');
+    const fetchData = useCallback(async () => {
+        if (!estabelecimentoId) return;
+        try {
+            setLoading(true);
+            
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
+            const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
+            
+            const [mesaSnap, categoriasSnap, estabSnap] = await Promise.all([
+                getDoc(mesaRef),
+                getDocs(categoriasRef),
+                getDoc(estabRef)
+            ]);
+
+            // CARREGA AS CORES E A ORDEM DO BANCO
+            if (estabSnap.exists()) {
+                const dadosEstab = estabSnap.data();
+                if (dadosEstab.cores) {
+                    setCoresEstabelecimento({
+                        primaria: dadosEstab.cores.primaria || '#111827',
+                        destaque: dadosEstab.cores.destaque || '#059669',
+                        background: dadosEstab.cores.background || '#f9fafb',
+                        texto: dadosEstab.cores.texto || { principal: '#111827', secundario: '#6b7280' }
+                    });
+                }
+                if (dadosEstab.ordemCategorias) {
+                    setOrdemCategorias(dadosEstab.ordemCategorias);
+                }
             }
+
+            if (mesaSnap.exists()) {
+                const mesaData = mesaSnap.data();
+                setMesa(mesaData);
+                setResumoPedido(mesaData.itens || []);
+                if (mesaData.nomesOcupantes?.length > 0) {
+                    setOcupantes(mesaData.nomesOcupantes);
+                    const primeiroCliente = mesaData.nomesOcupantes.find(n => n !== 'Mesa');
+                    setClienteSelecionado(primeiroCliente || 'Mesa');
+                }
+            }
+
+            let listaCategorias = ['Todos'];
+            const categoriasAtivas = [];
+
+            categoriasSnap.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.ativo !== false) {
+                    const nome = data.nome || doc.id;
+                    listaCategorias.push(nome);
+                    categoriasAtivas.push({ id: doc.id, nome });
+                }
+            });
+
+            const promessasItens = categoriasAtivas.map(async (cat) => {
+                const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens');
+                const snapshot = await getDocs(itensRef);
+                return snapshot.docs.map(doc => ({
+                    ...doc.data(),
+                    id: doc.id,
+                    categoria: cat.nome
+                }));
+            });
+
+            const resultadosItens = await Promise.all(promessasItens);
+            const todosProdutos = resultadosItens.flat();
+
+            setCardapio(todosProdutos);
+            setCategorias([...new Set(listaCategorias)]);
+
+        } catch (error) { 
+            console.error("Erro:", error);
+            toast.error("Erro ao carregar dados"); 
+        } finally { 
+            setLoading(false); 
         }
+    }, [estabelecimentoId, mesaId]);
 
-        // 2. Processar Categorias e preparar promessas de busca de itens
-        let listaCategorias = ['Todos'];
-        const categoriasAtivas = [];
-
-        categoriasSnap.docs.forEach(doc => {
-            const data = doc.data();
-            if (data.ativo !== false) {
-                const nome = data.nome || doc.id;
-                listaCategorias.push(nome);
-                categoriasAtivas.push({ id: doc.id, nome });
-            }
-        });
-
-        // 3. O GRANDE TRUQUE: Disparar todas as buscas de itens AO MESMO TEMPO
-        const promessasItens = categoriasAtivas.map(async (cat) => {
-            const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens');
-            const snapshot = await getDocs(itensRef);
-            return snapshot.docs.map(doc => ({
-                ...doc.data(),
-                id: doc.id,
-                categoria: cat.nome
-            }));
-        });
-
-        // Aguarda todas as buscas terminarem juntas
-        const resultadosItens = await Promise.all(promessasItens);
-        
-        // "Achata" o array de arrays em um único array de produtos
-        const todosProdutos = resultadosItens.flat();
-
-        setCardapio(todosProdutos);
-        setCategorias([...new Set(listaCategorias)]); // Remove duplicatas se houver
-
-    } catch (error) { 
-        console.error("Erro cardapio:", error);
-        toast.error("Erro ao carregar cardápio"); 
-    } finally { 
-        setLoading(false); 
-    }
-}, [estabelecimentoId, mesaId]);
     useEffect(() => { 
         fetchData(); 
         const timer = setTimeout(() => setMostrarDicaAdd(false), 5000);
         return () => clearTimeout(timer);
     }, [fetchData]);
 
-    // --- LÓGICA DE SELEÇÃO DE PRODUTO (MODAL) ---
+    // 2. ORDENAÇÃO DOS BOTÕES DE CATEGORIA
+    const categoriasOrdenadas = useMemo(() => {
+        return [...categorias].sort((a, b) => {
+            if (a === 'Todos') return -1;
+            if (b === 'Todos') return 1;
+            if (!ordemCategorias || ordemCategorias.length === 0) return a.localeCompare(b);
 
-    // Helper para identificar as opções independente do nome do campo no banco
+            const indexA = ordemCategorias.indexOf(a);
+            const indexB = ordemCategorias.indexOf(b);
+
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            return a.localeCompare(b);
+        });
+    }, [categorias, ordemCategorias]);
+
+    // 3. ORDENAÇÃO E FILTRAGEM DOS PRODUTOS (AGORA RESPEITA A ORDEM DAS CATEGORIAS)
+    const produtosFiltrados = useMemo(() => {
+        // Primeiro filtra
+        const filtrados = cardapio.filter(p => 
+            (!termoBusca || p.nome.toLowerCase().includes(termoBusca.toLowerCase())) && 
+            (categoriaAtiva === 'Todos' || p.categoria === categoriaAtiva)
+        );
+
+        // Depois ordena
+        return filtrados.sort((a, b) => {
+            // Se estamos vendo "Todos", a prioridade é a ordem da Categoria
+            if (categoriaAtiva === 'Todos') {
+                const indexA = ordemCategorias.indexOf(a.categoria);
+                const indexB = ordemCategorias.indexOf(b.categoria);
+
+                // Se categorias são diferentes, usa a ordem definida
+                if (a.categoria !== b.categoria) {
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB; // Ambos na lista
+                    if (indexA !== -1) return -1; // Só A na lista
+                    if (indexB !== -1) return 1;  // Só B na lista
+                    // Nenhum na lista (alfabético da categoria)
+                    return a.categoria.localeCompare(b.categoria);
+                }
+            }
+
+            // Desempate (ou se for a mesma categoria): Ordem Alfabética do Produto
+            return a.nome.localeCompare(b.nome);
+        });
+    }, [cardapio, termoBusca, categoriaAtiva, ordemCategorias]);
+
+    // --- LÓGICA DE PRODUTOS ---
     const getOpcoesProduto = (produto) => {
         if (!produto) return [];
         return produto.opcoes || produto.variacoes || produto.tamanhos || [];
     };
 
     const abrirModalOpcoes = (produto) => {
-        setProdutoEmSelecao(produto);
-        setObservacaoItem('');
-        setOpcaoSelecionada(null);
-        
         const opcoes = getOpcoesProduto(produto);
-
-        // Se NÃO tiver opções, seleciona automaticamente o padrão para liberar o botão
         if (opcoes.length === 0) {
-            setOpcaoSelecionada({ 
-                nome: 'Padrão', 
-                preco: parseFloat(produto.preco) 
-            });
+            const itemConfigurado = { ...produto, precoFinal: parseFloat(produto.preco), quantidade: 1 };
+            confirmarAdicaoAoCarrinho(itemConfigurado);
+        } else {
+            setProdutoEmSelecao(produto);
         }
     };
 
-    const fecharModalOpcoes = () => {
-        setProdutoEmSelecao(null);
-        setOpcaoSelecionada(null);
-        setObservacaoItem('');
-    };
+    const fecharModalOpcoes = () => setProdutoEmSelecao(null);
 
-    const confirmarAdicaoAoCarrinho = () => {
-        if (!produtoEmSelecao || !opcaoSelecionada) {
-            toast.warning("Selecione uma opção!");
-            return;
-        }
+    const confirmarAdicaoAoCarrinho = (itemConfigurado) => {
+        const { nome, variacaoSelecionada, observacao, precoFinal } = itemConfigurado;
+        let nomeFinal = nome;
+        if (variacaoSelecionada) nomeFinal = `${nome} - ${variacaoSelecionada.nome}`;
 
-        const precoFinal = parseFloat(opcaoSelecionada.preco);
-        const opcoes = getOpcoesProduto(produtoEmSelecao);
-        
-        const nomeFinal = opcoes.length > 0 
-            ? `${produtoEmSelecao.nome} - ${opcaoSelecionada.nome}`
-            : produtoEmSelecao.nome;
-
-        const idUnicoItem = `${produtoEmSelecao.id}_${opcaoSelecionada.nome.replace(/\s+/g, '')}`;
+        const idUnicoItem = `${itemConfigurado.id}_${variacaoSelecionada ? variacaoSelecionada.nome : 'padrao'}_${(observacao || '').replace(/\s+/g, '')}`;
 
         const itemParaAdicionar = {
-            ...produtoEmSelecao,
+            ...itemConfigurado,
             id: idUnicoItem, 
-            produtoIdOriginal: produtoEmSelecao.id, 
+            produtoIdOriginal: itemConfigurado.id, 
             nome: nomeFinal,
             preco: precoFinal,
-            observacao: observacaoItem,
+            observacao: observacao || '',
             quantidade: 1,
             cliente: clienteSelecionado,
             adicionadoEm: new Date(),
@@ -183,20 +284,13 @@ const fetchData = useCallback(async () => {
 
         setResumoPedido(prev => {
             const itemExistente = prev.find(item => 
-                item.id === idUnicoItem && 
-                item.cliente === clienteSelecionado &&
-                item.observacao === observacaoItem && 
-                (item.status === 'pendente' || !item.status)
+                item.id === idUnicoItem && item.cliente === clienteSelecionado &&
+                item.observacao === (observacao || '') && (item.status === 'pendente' || !item.status)
             ); 
             
             if (itemExistente) {
-                return prev.map(item => 
-                    (item === itemExistente) 
-                        ? { ...item, quantidade: item.quantidade + 1 } 
-                        : item
-                );
+                return prev.map(item => (item === itemExistente) ? { ...item, quantidade: item.quantidade + 1 } : item);
             }
-            
             return [...prev, itemParaAdicionar];
         });
 
@@ -204,9 +298,15 @@ const fetchData = useCallback(async () => {
         fecharModalOpcoes();
     };
 
-    // --- FUNÇÕES AUXILIARES ---
+    // --- AUXILIARES ---
+    const iniciarEdicaoNome = (nome, index) => {
+        setClienteSelecionado(nome);
+        setEditandoNomeIndex(index);
+        setNovoNomeTemp(nome);
+    };
+
     const salvarNomePessoa = async (index, novoNome) => {
-        if (!novoNome.trim()) return;
+        if (!novoNome.trim()) { setEditandoNomeIndex(null); return; }
         const novosOcupantes = [...ocupantes];
         const nomeAntigo = novosOcupantes[index];
         novosOcupantes[index] = novoNome;
@@ -214,33 +314,24 @@ const fetchData = useCallback(async () => {
         setEditandoNomeIndex(null);
         if (clienteSelecionado === nomeAntigo) setClienteSelecionado(novoNome);
         try {
-            const novosItensCarrinho = resumoPedido.map(item => {
+            const novosItens = resumoPedido.map(item => {
                 if (item.cliente === nomeAntigo) return { ...item, cliente: novoNome };
                 if (item.destinatario === nomeAntigo) return { ...item, destinatario: novoNome };
                 if (item.clienteNome === nomeAntigo) return { ...item, clienteNome: novoNome };
                 return item;
             });
-            setResumoPedido(novosItensCarrinho);
+            setResumoPedido(novosItens);
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
-                nomesOcupantes: novosOcupantes,
-                itens: novosItensCarrinho,
-                updatedAt: serverTimestamp()
+                nomesOcupantes: novosOcupantes, itens: novosItens, updatedAt: serverTimestamp()
             });
-            if(nomeAntigo.startsWith("Pessoa")) {
-                toast.success(`👋 Olá, ${novoNome}!`, { position: "top-center", autoClose: 2000 });
-            } else {
-                toast.success(`Renomeado para ${novoNome}`, { position: "bottom-center", autoClose: 1000 });
-            }
-        } catch(e) { 
-            toast.error('Erro ao salvar nome', { position: "bottom-center" });
-        }
+        } catch(e) { toast.error('Erro ao salvar nome'); }
     };
 
     const adicionarPessoaNova = () => {
         const n = `Pessoa ${ocupantes.length}`; 
         const novos = [...ocupantes, n];
         setOcupantes(novos);
-        setClienteSelecionado(n);
+        iniciarEdicaoNome(n, novos.length - 1); 
         salvarNomePessoa(novos.length - 1, n);
         setMostrarDicaAdd(false);
     };
@@ -248,21 +339,14 @@ const fetchData = useCallback(async () => {
     const ajustarQuantidade = useCallback((produtoId, clienteDoItem, novaQuantidade) => {
         setResumoPedido(prev => {
             const itemAlvo = prev.find(item => item.id === produtoId && item.cliente === clienteDoItem);
-            
             if (itemAlvo && (itemAlvo.status === 'enviado' || itemAlvo.status === 'entregue')) {
                 toast.info("Item já enviado para cozinha", { position: "bottom-center" });
                 return prev;
             }
-
             if (novaQuantidade < 1) {
                 return prev.filter(item => !(item.id === produtoId && item.cliente === clienteDoItem));
             }
-            
-            return prev.map(item => 
-                (item.id === produtoId && item.cliente === clienteDoItem) 
-                    ? { ...item, quantidade: novaQuantidade } 
-                    : item
-            );
+            return prev.map(item => (item.id === produtoId && item.cliente === clienteDoItem) ? { ...item, quantidade: novaQuantidade } : item);
         });
     }, []);
 
@@ -274,9 +358,7 @@ const fetchData = useCallback(async () => {
 
             if (itensNovos.length === 0) {
                 await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
-                    itens: resumoPedido,
-                    total: totalGeral,
-                    updatedAt: serverTimestamp()
+                    itens: resumoPedido, total: totalGeral, updatedAt: serverTimestamp()
                 });
                 navigate('/controle-salao');
                 return;
@@ -288,63 +370,35 @@ const fetchData = useCallback(async () => {
             const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoCozinha);
 
             batch.set(pedidoRef, {
-                id: idPedidoCozinha,
-                mesaId: mesaId,
-                mesaNumero: mesa?.numero,
-                itens: itensNovos.map(item => ({ 
-                    ...item, 
-                    status: 'recebido',
-                    clienteNome: item.cliente || 'Mesa', 
-                    destinatario: item.cliente || 'Mesa'
-                })),
-                status: 'recebido',
-                total: itensNovos.reduce((acc, item) => acc + (item.preco * item.quantidade), 0),
-                dataPedido: serverTimestamp(),
-                source: 'salao',
-                updatedAt: serverTimestamp()
+                id: idPedidoCozinha, mesaId: mesaId, mesaNumero: mesa?.numero,
+                itens: itensNovos.map(item => ({ ...item, status: 'recebido', clienteNome: item.cliente || 'Mesa', destinatario: item.cliente || 'Mesa' })),
+                status: 'recebido', total: itensNovos.reduce((acc, item) => acc + (item.preco * item.quantidade), 0),
+                dataPedido: serverTimestamp(), source: 'salao', updatedAt: serverTimestamp()
             });
 
             const itensMesaAtualizados = resumoPedido.map(item => {
                 if (item.status === 'pendente' || !item.status) {
-                    return { 
-                        ...item, 
-                        status: 'enviado', 
-                        pedidoCozinhaId: idPedidoCozinha,
-                        clienteNome: item.cliente,
-                        destinatario: item.cliente 
-                    };
+                    return { ...item, status: 'enviado', pedidoCozinhaId: idPedidoCozinha, clienteNome: item.cliente, destinatario: item.cliente };
                 }
                 return item;
             });
 
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-            batch.update(mesaRef, {
-                itens: itensMesaAtualizados,
-                status: 'com_pedido',
-                total: totalGeral,
-                updatedAt: serverTimestamp()
-            });
+            batch.update(mesaRef, { itens: itensMesaAtualizados, status: 'com_pedido', total: totalGeral, updatedAt: serverTimestamp() });
 
             await batch.commit();
             toast.success(`Pedido enviado! 🚀`, { position: "bottom-center" });
             setShowOrderSummary(false);
             setTimeout(() => navigate('/controle-salao'), 500);
-            
-        } catch (error) { 
-            console.error(error);
-            toast.error("Erro ao enviar pedido", { position: "bottom-center" }); 
-        } finally { setSalvando(false); }
+        } catch (error) { toast.error("Erro ao enviar pedido"); } 
+        finally { setSalvando(false); }
     };
-
-    const produtosFiltrados = cardapio.filter(p => 
-        (!termoBusca || p.nome.toLowerCase().includes(termoBusca.toLowerCase())) && 
-        (categoriaAtiva === 'Todos' || p.categoria === categoriaAtiva)
-    );
 
     const totalPedido = resumoPedido.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
     const totalItens = resumoPedido.reduce((acc, item) => acc + item.quantidade, 0);
 
     const itensAgrupados = useMemo(() => {
+        if (!Array.isArray(resumoPedido) || resumoPedido.length === 0) return {};
         return resumoPedido.reduce((acc, item) => {
             const nome = item.cliente || item.destinatario || 'Mesa';
             if (!acc[nome]) acc[nome] = [];
@@ -353,13 +407,7 @@ const fetchData = useCallback(async () => {
         }, {});
     }, [resumoPedido]);
 
-    if (loading) {
-        return (
-            <div className="fixed inset-0 bg-gray-50 z-50 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-            </div>
-        );
-    }
+    if (loading) return <div className="fixed inset-0 bg-gray-50 flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div></div>;
 
     return (
         <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto pb-24">
@@ -372,13 +420,15 @@ const fetchData = useCallback(async () => {
                     <div className="flex-1">
                         <h1 className="font-black text-lg text-gray-900 leading-none">Mesa {mesa?.numero}</h1>
                         <p className="text-xs text-gray-500 mt-0.5">
-                            Pedindo para: <span className="font-bold text-blue-600">{clienteSelecionado}</span>
+                            Cliente: <span className="font-bold" style={{ color: coresEstabelecimento.destaque }}>{clienteSelecionado}</span>
                         </p>
                     </div>
                     
+                    {/* Botão Carrinho */}
                     <button 
                         onClick={() => setShowOrderSummary(true)} 
-                        className="relative bg-blue-600 text-white p-2.5 rounded-xl shadow-md active:scale-95 transition-all"
+                        className="relative text-white p-2.5 rounded-xl shadow-md active:scale-95 transition-all"
+                        style={{ backgroundColor: coresEstabelecimento.destaque }}
                     >
                         <IoCart className="text-xl"/>
                         {totalItens > 0 && (
@@ -390,6 +440,7 @@ const fetchData = useCallback(async () => {
                 </div>
 
                 <div className="px-4 pb-1">
+                    {/* Lista de Pessoas */}
                     <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar py-2">
                         {ocupantes
                             .map((nome, originalIndex) => ({ nome, originalIndex }))
@@ -397,41 +448,40 @@ const fetchData = useCallback(async () => {
                             .map(({ nome, originalIndex }) => (
                             <div key={originalIndex} className="relative flex-shrink-0">
                                 {editandoNomeIndex === originalIndex ? (
-                                    <div className="flex items-center bg-white border-2 border-blue-500 rounded-xl p-1 shadow-lg animate-in zoom-in duration-200">
-                                        <input 
-                                            autoFocus
-                                            className="w-24 px-2 py-1.5 text-sm font-bold rounded border-none outline-none text-gray-800 bg-transparent"
-                                            value={novoNomeTemp}
-                                            onChange={(e) => setNovoNomeTemp(e.target.value)}
-                                            onBlur={() => novoNomeTemp.trim() ? salvarNomePessoa(originalIndex, novoNomeTemp.trim()) : setEditandoNomeIndex(null)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && novoNomeTemp.trim()) salvarNomePessoa(originalIndex, novoNomeTemp.trim());
-                                                if (e.key === 'Escape') setEditandoNomeIndex(null);
-                                            }}
-                                            maxLength={15}
-                                        />
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+                                        <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-in zoom-in duration-200">
+                                            <h3 className="font-bold text-lg text-gray-900 mb-4">Renomear Cliente</h3>
+                                            <input 
+                                                autoFocus
+                                                className="w-full px-3 py-2.5 text-base font-bold rounded-xl border border-gray-300 outline-none text-gray-800 focus:ring-2"
+                                                style={{ borderColor: coresEstabelecimento.destaque, '--tw-ring-color': coresEstabelecimento.destaque }}
+                                                value={novoNomeTemp}
+                                                onChange={(e) => setNovoNomeTemp(e.target.value)}
+                                                onBlur={() => novoNomeTemp.trim() ? salvarNomePessoa(originalIndex, novoNomeTemp.trim()) : setEditandoNomeIndex(null)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && novoNomeTemp.trim()) salvarNomePessoa(originalIndex, novoNomeTemp.trim());
+                                                    if (e.key === 'Escape') setEditandoNomeIndex(null);
+                                                }}
+                                                maxLength={15}
+                                            />
+                                            <div className="flex gap-3 mt-4">
+                                                <button onClick={() => setEditandoNomeIndex(null)} className="flex-1 py-2 rounded-xl bg-gray-200 text-gray-700 font-bold hover:bg-gray-300">Cancelar</button>
+                                                <button onClick={() => novoNomeTemp.trim() ? salvarNomePessoa(originalIndex, novoNomeTemp.trim()) : setEditandoNomeIndex(null)} className="flex-1 py-2 rounded-xl text-white font-bold" style={{ backgroundColor: coresEstabelecimento.destaque }}>Salvar</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 ) : (
                                     <button
-                                        onClick={() => setClienteSelecionado(nome)} 
-                                        onDoubleClick={() => { 
-                                            setEditandoNomeIndex(originalIndex);
-                                            setNovoNomeTemp(nome);
-                                        }}
-                                        className={`
-                                            group relative px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-all duration-200 select-none
-                                            ${clienteSelecionado === nome 
-                                                ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 z-10' 
-                                                : 'bg-white text-gray-600 border-gray-100 hover:border-blue-200 hover:bg-gray-50'
-                                            }
-                                        `}
+                                        onClick={() => iniciarEdicaoNome(nome, originalIndex)}
+                                        className={`group relative px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-all duration-200 select-none ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105 z-10' : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'}`}
+                                        style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}
                                     >
                                         <div className="flex items-center gap-2">
                                             <IoPerson className={clienteSelecionado === nome ? 'text-white' : 'text-gray-400'} />
                                             {nome}
                                         </div>
                                         {clienteSelecionado === nome && (
-                                            <span className="absolute -top-1 -right-1 bg-white text-blue-600 rounded-full p-0.5 shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <span className="absolute -top-1 -right-1 bg-white rounded-full p-0.5 shadow-sm border border-gray-100" style={{ color: coresEstabelecimento.destaque }}>
                                                 <IoPencil className="text-[8px]" />
                                             </span>
                                         )}
@@ -441,24 +491,14 @@ const fetchData = useCallback(async () => {
                         ))}
 
                         <div className="relative flex-shrink-0">
-                            <button 
-                                onClick={adicionarPessoaNova}
-                                className="w-11 h-11 rounded-xl bg-gray-50 border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 flex items-center justify-center transition-all active:scale-95"
-                            >
+                            <button onClick={adicionarPessoaNova} className="w-11 h-11 rounded-xl bg-gray-50 border-2 border-dashed border-gray-300 text-gray-400 hover:text-white flex items-center justify-center transition-all active:scale-95" style={{ '--hover-color': coresEstabelecimento.destaque }} onMouseEnter={(e) => {e.currentTarget.style.borderColor=coresEstabelecimento.destaque; e.currentTarget.style.backgroundColor=coresEstabelecimento.destaque}} onMouseLeave={(e) => {e.currentTarget.style.borderColor='#D1D5DB'; e.currentTarget.style.backgroundColor='#F9FAFB'}}>
                                 <IoPersonAdd className="text-xl"/>
                             </button>
-
-                            {mostrarDicaAdd && ocupantes.length <= 2 && (
-                                <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] font-bold px-2 py-1 rounded w-max animate-bounce z-20">
-                                    Adicionar pessoa
-                                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
 
-                {/* Busca e Filtros */}
+                {/* Filtros de Categoria (ORDENADOS) */}
                 <div className="px-4 pb-3 border-t border-gray-50 pt-3 bg-white">
                     <div className="flex gap-2 mb-3">
                         <div className="flex-1 relative">
@@ -468,21 +508,19 @@ const fetchData = useCallback(async () => {
                                 placeholder="Buscar no cardápio..." 
                                 value={termoBusca} 
                                 onChange={e => setTermoBusca(e.target.value)} 
-                                className="w-full pl-9 pr-4 py-2.5 bg-gray-100 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
+                                className="w-full pl-9 pr-4 py-2.5 bg-gray-100 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:border-transparent text-sm transition-all"
+                                style={{ '--tw-ring-color': coresEstabelecimento.destaque }}
                             />
                         </div>
                     </div>
                     
                     <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-                        {categorias.map(cat => (
+                        {categoriasOrdenadas.map(cat => (
                             <button 
                                 key={cat} 
                                 onClick={() => setCategoriaAtiva(cat)}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
-                                    categoriaAtiva === cat 
-                                        ? 'bg-gray-900 text-white border-gray-900' 
-                                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                                }`}
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${categoriaAtiva === cat ? 'text-white' : 'bg-white text-gray-600 border-gray-200'}`}
+                                style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria, borderColor: coresEstabelecimento.primaria } : {}}
                             >
                                 {cat}
                             </button>
@@ -494,36 +532,14 @@ const fetchData = useCallback(async () => {
             <main className="p-4">
                 {produtosFiltrados.length > 0 ? (
                     <div className="space-y-3">
+                        {/* AQUI ESTÁ A LISTA DE PRODUTOS JÁ ORDENADA PELO USEMEMO */}
                         {produtosFiltrados.map((produto, idx) => (
-                            <div 
+                            <CardapioItem 
                                 key={`${produto.id}-${idx}`} 
-                                onClick={() => abrirModalOpcoes(produto)} 
-                                className="bg-white p-3 rounded-xl border border-gray-200 flex gap-3 active:scale-[0.98] transition-transform cursor-pointer shadow-sm hover:shadow-md"
-                            >
-                                {produto.imageUrl ? (
-                                    <img src={produto.imageUrl} className="w-20 h-20 rounded-lg object-cover bg-gray-100 flex-shrink-0" alt=""/>
-                                ) : (
-                                    <div className="w-20 h-20 rounded-lg bg-gray-50 flex items-center justify-center text-gray-300 flex-shrink-0">
-                                        <IoRestaurant className="text-2xl"/>
-                                    </div>
-                                )}
-                                
-                                <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                                    <div>
-                                        <h3 className="font-bold text-gray-900 text-sm leading-tight mb-1 truncate">{produto.nome}</h3>
-                                        <p className="text-xs text-gray-500 line-clamp-2 leading-tight">{produto.descricao}</p>
-                                    </div>
-                                    <div className="flex items-center justify-between mt-2">
-                                        <p className="text-blue-600 font-black text-sm">
-                                            R$ {parseFloat(produto.preco || 0).toFixed(2)}
-                                        </p>
-                                        
-                                        <button className="bg-blue-50 text-blue-600 p-1.5 rounded-lg hover:bg-blue-100 transition-colors">
-                                            <IoAddCircle className="text-xl"/>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                                produto={produto} 
+                                abrirModalOpcoes={abrirModalOpcoes}
+                                cores={coresEstabelecimento}
+                            />
                         ))}
                     </div>
                 ) : (
@@ -543,7 +559,8 @@ const fetchData = useCallback(async () => {
                         </div>
                         <button 
                             onClick={() => setShowOrderSummary(true)} 
-                            className="bg-gray-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center gap-3 shadow-lg active:scale-95 transition-all"
+                            className="text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center gap-3 shadow-lg active:scale-95 transition-all"
+                            style={{ backgroundColor: coresEstabelecimento.destaque }}
                         >
                             <div className="flex items-center gap-2">
                                 <IoCart className="text-lg"/>
@@ -557,114 +574,13 @@ const fetchData = useCallback(async () => {
                 </div>
             )}
 
-            {/* --- MODAL DE OPÇÕES DO PRODUTO (CORRIGIDO) --- */}
             {produtoEmSelecao && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onClick={fecharModalOpcoes}></div>
-                    
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden relative z-10 animate-in zoom-in-95 duration-200">
-                        
-                        <div className="bg-amber-500 p-4 text-white relative">
-                            <button onClick={fecharModalOpcoes} className="absolute top-4 right-4 text-white/80 hover:text-white">
-                                <IoClose className="text-2xl" />
-                            </button>
-                            <h2 className="text-sm font-medium uppercase opacity-90">Escolha a opção</h2>
-                            <h1 className="text-2xl font-black mt-1 leading-tight">{produtoEmSelecao.nome}</h1>
-                        </div>
-
-                        <div className="p-5 max-h-[60vh] overflow-y-auto">
-                            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-                                {produtoEmSelecao.descricao || "Sem descrição disponível."}
-                            </p>
-
-                            {/* AQUI ESTÁ A CORREÇÃO: PROCURA POR opcoes OU variacoes */}
-                            {(() => {
-                                const opcoesRender = getOpcoesProduto(produtoEmSelecao);
-                                
-                                if (opcoesRender.length > 0) {
-                                    return (
-                                        <div className="mb-6">
-                                            <h3 className="font-bold text-gray-800 mb-3 text-sm">Selecione uma opção:</h3>
-                                            <div className="space-y-2">
-                                                {opcoesRender.map((opcao, idx) => (
-                                                    <label 
-                                                        key={idx} 
-                                                        className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                                                            opcaoSelecionada?.nome === opcao.nome 
-                                                                ? 'border-amber-500 bg-amber-50' 
-                                                                : 'border-gray-100 hover:border-gray-200'
-                                                        }`}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                                                opcaoSelecionada?.nome === opcao.nome ? 'border-amber-500' : 'border-gray-300'
-                                                            }`}>
-                                                                {opcaoSelecionada?.nome === opcao.nome && (
-                                                                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                                                                )}
-                                                            </div>
-                                                            <span className="font-medium text-gray-700">{opcao.nome}</span>
-                                                        </div>
-                                                        <span className="font-bold text-amber-600">
-                                                            R$ {parseFloat(opcao.preco).toFixed(2)}
-                                                        </span>
-                                                        <input 
-                                                            type="radio" 
-                                                            name="opcaoProduto" 
-                                                            className="hidden"
-                                                            onChange={() => setOpcaoSelecionada({ nome: opcao.nome, preco: parseFloat(opcao.preco) })}
-                                                            checked={opcaoSelecionada?.nome === opcao.nome}
-                                                        />
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })()}
-
-                            <div>
-                                <h3 className="font-bold text-gray-800 mb-2 text-sm text-amber-800">Observações</h3>
-                                <textarea
-                                    value={observacaoItem}
-                                    onChange={(e) => setObservacaoItem(e.target.value)}
-                                    placeholder="Ex: Sem cebola, ponto da carne, gelo e limão..."
-                                    className="w-full p-3 bg-yellow-50/50 border border-yellow-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none text-sm min-h-[80px] text-gray-700 placeholder-gray-400"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
-                            <div className="flex justify-between items-center px-2">
-                                <span className="text-gray-600 font-bold">Total:</span>
-                                <span className="text-2xl font-black text-amber-600">
-                                    R$ {opcaoSelecionada ? parseFloat(opcaoSelecionada.preco).toFixed(2) : parseFloat(produtoEmSelecao.preco || 0).toFixed(2)}
-                                </span>
-                            </div>
-                            
-                            <div className="flex gap-3 h-12">
-                                <button 
-                                    onClick={fecharModalOpcoes}
-                                    className="flex-1 rounded-xl font-bold text-gray-500 bg-gray-200 hover:bg-gray-300 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button 
-                                    onClick={confirmarAdicaoAoCarrinho}
-                                    disabled={getOpcoesProduto(produtoEmSelecao).length > 0 && !opcaoSelecionada}
-                                    className={`flex-1 rounded-xl font-bold text-white transition-all ${
-                                        (getOpcoesProduto(produtoEmSelecao).length > 0 && !opcaoSelecionada)
-                                            ? 'bg-gray-300 cursor-not-allowed'
-                                            : 'bg-green-500 hover:bg-green-600 shadow-lg shadow-green-200 active:scale-95'
-                                    }`}
-                                >
-                                    Continuar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <VariacoesModal
+                    item={produtoEmSelecao}
+                    onConfirm={confirmarAdicaoAoCarrinho}
+                    onClose={fecharModalOpcoes}
+                    coresEstabelecimento={coresEstabelecimento}
+                />
             )}
 
             {showOrderSummary && (
@@ -684,7 +600,7 @@ const fetchData = useCallback(async () => {
                         <div className="overflow-y-auto p-4 space-y-6 flex-1">
                             {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
                                 <div key={nomePessoa} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                                    <div className="bg-gray-900 text-white px-4 py-3">
+                                    <div className="text-white px-4 py-3" style={{ backgroundColor: coresEstabelecimento.primaria }}>
                                         <h3 className="font-bold text-lg">{nomePessoa}</h3>
                                     </div>
                                     <div className="divide-y divide-gray-100">
@@ -696,12 +612,12 @@ const fetchData = useCallback(async () => {
                                                             {item.quantidade}x {item.nome}
                                                         </p>
                                                         {item.observacao && (
-                                                            <p className="text-xs text-amber-600 font-medium mt-0.5 bg-amber-50 inline-block px-1.5 py-0.5 rounded">
+                                                            <p className="text-xs font-medium mt-0.5 bg-gray-100 inline-block px-1.5 py-0.5 rounded" style={{ color: coresEstabelecimento.destaque }}>
                                                                 Obs: {item.observacao}
                                                             </p>
                                                         )}
-                                                        <p className="text-sm text-gray-500 mt-1">
-                                                            {item.status || 'enviado'}
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            Status: <span className="capitalize">{item.status || 'pendente'}</span> 
                                                         </p>
                                                         <p className="text-sm text-gray-500">
                                                             R$ {item.preco.toFixed(2)} un
@@ -718,20 +634,14 @@ const fetchData = useCallback(async () => {
                                                         <span className="text-sm text-gray-600">Ajustar quantidade:</span>
                                                         <div className="flex items-center gap-2">
                                                             <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    ajustarQuantidade(item.id, item.cliente, item.quantidade - 1);
-                                                                }}
+                                                                onClick={(e) => { e.stopPropagation(); ajustarQuantidade(item.id, item.cliente, item.quantidade - 1); }}
                                                                 className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
                                                             >
                                                                 <IoRemove className="text-sm"/>
                                                             </button>
                                                             <span className="font-bold text-gray-900 w-6 text-center">{item.quantidade}</span>
                                                             <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    ajustarQuantidade(item.id, item.cliente, item.quantidade + 1);
-                                                                }}
+                                                                onClick={(e) => { e.stopPropagation(); ajustarQuantidade(item.id, item.cliente, item.quantidade + 1); }}
                                                                 className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
                                                             >
                                                                 <IoAdd className="text-sm"/>
@@ -745,7 +655,7 @@ const fetchData = useCallback(async () => {
                                     <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
                                         <div className="flex justify-between items-center">
                                             <span className="font-bold text-gray-700">Subtotal {nomePessoa}:</span>
-                                            <span className="font-black text-blue-600 text-lg">
+                                            <span className="font-black text-lg" style={{ color: coresEstabelecimento.destaque }}>
                                                 R$ {itens.reduce((sum, item) => sum + (item.preco * item.quantidade), 0).toFixed(2)}
                                             </span>
                                         </div>
@@ -754,7 +664,7 @@ const fetchData = useCallback(async () => {
                             ))}
                         </div>
 
-                        <div className="bg-gray-900 text-white p-4">
+                        <div className="text-white p-4" style={{ backgroundColor: coresEstabelecimento.primaria }}>
                             <div className="flex justify-between items-center">
                                 <span className="text-lg font-bold">TOTAL GERAL</span>
                                 <span className="text-2xl font-black">R$ {totalPedido.toFixed(2)}</span>
@@ -765,7 +675,8 @@ const fetchData = useCallback(async () => {
                             <button 
                                 onClick={salvarAlteracoes}
                                 disabled={salvando}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                                className="w-full text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                                style={{ backgroundColor: coresEstabelecimento.destaque, boxShadow: `0 10px 15px -3px ${coresEstabelecimento.destaque}40` }}
                             >
                                 {salvando ? (
                                     <>
@@ -783,7 +694,7 @@ const fetchData = useCallback(async () => {
                     </div>
                 </>
             )}
-            <style jsx>{`
+            <style>{`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
                 @keyframes slide-up {

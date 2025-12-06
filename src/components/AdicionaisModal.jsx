@@ -1,156 +1,99 @@
-// src/components/AdicionaisModal.jsx
+import React, { useState, useEffect } from 'react';
+import { IoClose, IoAdd, IoRemove, IoCheckmarkCircle } from 'react-icons/io5';
 
-import React, { useState, useMemo } from 'react';
-
-function AdicionaisModal({ item, onConfirm, onClose }) {
-  const [adicionaisSelecionados, setAdicionaisSelecionados] = useState([]);
-  // NOVO ESTADO: para controlar os ingredientes que o cliente quer manter
-  const [ingredientesAtuais, setIngredientesAtuais] = useState(item.ingredientes || []);
-  // NOVO ESTADO: para guardar a observação do cliente
-  const [observacao, setObservacao] = useState('');
-
-  // Calcula o preço total em tempo real
-  const precoTotal = useMemo(() => {
-    const precoDosAdicionais = adicionaisSelecionados.reduce((total, ad) => total + ad.preco, 0);
-    return item.preco + precoDosAdicionais;
-  }, [item.preco, adicionaisSelecionados]);
-
-  // Função para lidar com a seleção de um adicional
-  const handleAdicionalChange = (adicional, isChecked) => {
-    if (isChecked) {
-      setAdicionaisSelecionados([...adicionaisSelecionados, adicional]);
-    } else {
-      setAdicionaisSelecionados(adicionaisSelecionados.filter(ad => ad.id !== adicional.id));
-    }
-  };
-
-  // NOVA FUNÇÃO: Lida com a desmarcação de ingredientes
-  const handleIngredienteChange = (ingrediente, isChecked) => {
-    if (isChecked) {
-        // Se marcou, adiciona o ingrediente de volta à lista
-        setIngredientesAtuais([...ingredientesAtuais, ingrediente]);
-    } else {
-        // Se desmarcou, remove o ingrediente da lista
-        setIngredientesAtuais(ingredientesAtuais.filter(ing => ing !== ingrediente));
-    }
-  };
-
-  // Função chamada ao clicar no botão principal do modal
-  const handleConfirmarPedido = () => {
-    // Calcula quais ingredientes foram removidos pelo cliente
-    const ingredientesOriginais = item.ingredientes || [];
-    const ingredientesRemovidos = ingredientesOriginais.filter(ing => !ingredientesAtuais.includes(ing));
-
-    // Cria um novo objeto de item, combinando o item original com as escolhas do usuário
-    const itemConfigurado = {
-      ...item,
-      adicionais: adicionaisSelecionados,
-      removidos: ingredientesRemovidos,   // Salva a lista de ingredientes removidos
-      observacao: observacao.trim(),      // Salva a observação (removendo espaços em branco)
-      precoFinal: precoTotal,
+const AdicionaisModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
+    const cores = coresEstabelecimento || {
+        primaria: '#0b0b0b',
+        destaque: '#059669',
+        background: '#111827',
+        texto: { principal: '#ffffff', secundario: '#9ca3af' }
     };
-    // Chama a função onConfirm (que estará no Menu.jsx) para adicionar ao carrinho
-    onConfirm(itemConfigurado);
-  };
 
-  // Variáveis para verificar se as seções devem ser exibidas
-  const temIngredientes = Array.isArray(item.ingredientes) && item.ingredientes.length > 0;
-  const temAdicionais = Array.isArray(item.adicionais) && item.adicionais.length > 0;
+    const [adicionaisSelecionados, setAdicionaisSelecionados] = useState(
+        item.adicionais.reduce((acc, ad) => ({ ...acc, [ad.nome]: 0 }), {})
+    );
+    const [total, setTotal] = useState(0);
+    const [observacao, setObservacao] = useState('');
 
-  return (
-    // Fundo escuro semi-transparente que cobre a tela inteira
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-[2000]">
-      {/* O container branco do modal */}
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full relative animate-fade-in-up max-h-[90vh] flex flex-col">
-        {/* Botão de Fechar */}
-        <button 
-          onClick={onClose} 
-          className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-2xl"
-          aria-label="Fechar modal"
-        >
-          &times;
-        </button>
+    useEffect(() => {
+        let somaAdicionais = 0;
+        item.adicionais.forEach(ad => {
+            const qtd = adicionaisSelecionados[ad.nome] || 0;
+            somaAdicionais += qtd * Number(ad.preco);
+        });
+        const precoBase = item.precoFinal || Number(item.preco) || 0;
+        setTotal(precoBase + somaAdicionais);
+    }, [adicionaisSelecionados, item]);
 
-        {/* Detalhes do Produto Principal */}
-        <h2 className="text-2xl font-bold text-[var(--marrom-escuro)] mb-2">{item.nome}</h2>
-        <p className="text-gray-600 mb-4">{item.descricao}</p>
+    const updateQtd = (nome, delta) => {
+        setAdicionaisSelecionados(prev => {
+            const novaQtd = Math.max(0, (prev[nome] || 0) + delta);
+            return { ...prev, [nome]: novaQtd };
+        });
+    };
 
-        {/* Conteúdo rolável */}
-        <div className="space-y-4 overflow-y-auto pr-2">
-            
-            {/* SEÇÃO PARA REMOVER INGREDIENTES */}
-            {temIngredientes && (
-                <div>
-                    <h3 className="text-lg font-semibold text-[var(--marrom-escuro)] mb-3 border-t pt-4">Ingredientes (desmarque para remover):</h3>
-                    <div className="space-y-2">
-                        {item.ingredientes.map((ingrediente, index) => (
-                            <label key={index} className="flex items-center bg-gray-50 p-3 rounded-md cursor-pointer hover:bg-gray-100">
-                                <span className="font-medium text-gray-800 flex-grow">{ingrediente}</span>
-                                <input
-                                    type="checkbox"
-                                    className="h-5 w-5 rounded border-gray-400 text-red-600 focus:ring-red-500"
-                                    checked={ingredientesAtuais.includes(ingrediente)}
-                                    onChange={(e) => handleIngredienteChange(ingrediente, e.target.checked)}
-                                />
-                            </label>
-                        ))}
+    const handleConfirm = () => {
+        const adicionaisFinais = item.adicionais
+            .filter(ad => adicionaisSelecionados[ad.nome] > 0)
+            .map(ad => ({ ...ad, quantidade: adicionaisSelecionados[ad.nome] }));
+
+        onConfirm({ ...item, adicionais: adicionaisFinais, precoFinal: total, observacao: observacao });
+    };
+
+    const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: '#111827', color: 'white' }}>
+                
+                <div className="p-4 flex justify-between items-center shrink-0" style={{ backgroundColor: cores.primaria }}>
+                    <div>
+                        <span className="text-xs font-bold opacity-80 uppercase tracking-wider text-white">Turbine seu pedido</span>
+                        <h2 className="text-xl font-extrabold text-white mt-1">{item.nome}</h2>
                     </div>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/20 text-white"><IoClose size={24} /></button>
                 </div>
-            )}
 
-            {/* SEÇÃO PARA OBSERVAÇÕES */}
-            <div>
-                <h3 className="text-lg font-semibold text-[var(--marrom-escuro)] mb-3 border-t pt-4">Observações:</h3>
-                <textarea
-                    className="w-full border border-gray-300 rounded-md p-2 text-gray-700 focus:ring-2 focus:ring-[var(--vermelho-principal)]"
-                    rows="3"
-                    placeholder="Ex: Ponto da carne mal passado, sem picles, capricha no molho..."
-                    value={observacao}
-                    onChange={(e) => setObservacao(e.target.value)}
-                />
-            </div>
-
-            {/* SEÇÃO PARA ADICIONAR EXTRAS */}
-            {temAdicionais && (
-                <div>
-                    <h3 className="text-lg font-semibold text-[var(--marrom-escuro)] mb-3 border-t pt-4">Adicionar Extras:</h3>
+                <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
+                    <h3 className="font-bold mb-3 text-sm uppercase tracking-wide text-gray-300">Adicionais:</h3>
                     <div className="space-y-3">
-                        {item.adicionais.map((adicional) => (
-                        <label key={adicional.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md cursor-pointer hover:bg-gray-100 transition-colors">
-                            <div>
-                                <span className="font-medium text-gray-800">{adicional.nome}</span>
-                                <span className="text-green-600 font-semibold ml-2">
-                                    + R$ {adicional.preco.toFixed(2).replace('.', ',')}
-                                </span>
-                            </div>
-                            <input
-                                type="checkbox"
-                                className="h-5 w-5 rounded border-gray-300 text-[var(--vermelho-principal)] focus:ring-[var(--vermelho-principal)]"
-                                onChange={(e) => handleAdicionalChange(adicional, e.target.checked)}
-                            />
-                        </label>
-                        ))}
+                        {item.adicionais.map((ad, index) => {
+                            const qtd = adicionaisSelecionados[ad.nome] || 0;
+                            const isSelected = qtd > 0;
+                            return (
+                                <div key={index} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${isSelected ? 'bg-gray-800 border-gray-600' : 'border-gray-800'}`}>
+                                    <div className="flex-1">
+                                        <p className="font-medium text-white">{ad.nome}</p>
+                                        <p className="text-sm font-bold" style={{ color: cores.destaque }}>+ {formatarMoeda(ad.preco)}</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-gray-900 rounded-lg p-1 border border-gray-700">
+                                        <button onClick={() => updateQtd(ad.nome, -1)} className={`w-8 h-8 flex items-center justify-center rounded-md ${qtd === 0 ? 'text-gray-600 cursor-not-allowed' : 'text-red-400 hover:bg-gray-800'}`} disabled={qtd === 0}><IoRemove /></button>
+                                        <span className="font-bold w-6 text-center text-white">{qtd}</span>
+                                        <button onClick={() => updateQtd(ad.nome, 1)} className="w-8 h-8 flex items-center justify-center rounded-md text-green-400 hover:bg-gray-800"><IoAdd /></button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="mt-6">
+                        <label className="block text-sm font-bold mb-2 text-gray-300">Observações:</label>
+                        <textarea className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 focus:outline-none text-white placeholder-gray-500 resize-none" rows="3" placeholder="Alguma preferência?" value={observacao} onChange={(e) => setObservacao(e.target.value)} />
                     </div>
                 </div>
-            )}
-        </div>
 
-        {/* Rodapé com Total e Botão de Confirmação */}
-        <div className="mt-6 pt-4 border-t">
-          <div className="flex justify-between items-center text-xl font-bold mb-4">
-            <span className="text-[var(--marrom-escuro)]">Total do Item:</span>
-            <span className="text-[var(--vermelho-principal)]">R$ {precoTotal.toFixed(2).replace('.', ',')}</span>
-          </div>
-          <button
-            onClick={handleConfirmarPedido}
-            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors shadow-lg"
-          >
-            Adicionar ao Pedido
-          </button>
+                <div className="p-4 border-t border-gray-800 bg-gray-900 shrink-0">
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="text-gray-400">Total Final:</span>
+                        <span className="text-2xl font-black" style={{ color: cores.destaque }}>{formatarMoeda(total)}</span>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700">Cancelar</button>
+                        <button onClick={handleConfirm} className="flex-1 py-3 rounded-xl font-bold text-white shadow-lg flex justify-center items-center gap-2 hover:brightness-110" style={{ backgroundColor: cores.destaque }}><IoCheckmarkCircle size={20}/> Confirmar</button>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
-}
+    );
+};
 
 export default AdicionaisModal;

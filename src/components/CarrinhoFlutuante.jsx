@@ -1,64 +1,50 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+// src/components/CarrinhoFlutuante.jsx
+import React from 'react';
 import { IoCart, IoArrowForward } from 'react-icons/io5';
-import useCarrinho from '../hooks/useCarrinho';
 
-const CarrinhoFlutuante = () => {
-    const navigate = useNavigate();
-    const location = useLocation();
-    
-    // 1. Usamos o hook diretamente para garantir dados sincronizados
-    const { carrinho, totalItens } = useCarrinho(); 
-    
-    const [isPulsing, setIsPulsing] = useState(false);
-    
-    // Efeito de pulso quando a quantidade de itens muda
-    useEffect(() => {
-        if (carrinho.length > 0) {
-            setIsPulsing(true);
-            const timer = setTimeout(() => setIsPulsing(false), 2000);
-            return () => clearTimeout(timer);
-        }
-    }, [totalItens]);
+const CarrinhoFlutuante = ({ carrinho, coresEstabelecimento, onClick }) => {
+    // 🛑 SE O CARRINHO ESTIVER VAZIO OU FOR NULO, NÃO RENDERIZA NADA
+    if (!carrinho || carrinho.length === 0) return null;
 
-    // 2. Não exibir se carrinho vazio OU se já estiver na página de checkout
-    if (carrinho.length === 0 || location.pathname === '/checkout') return null;
+    // Cálculos
+    const qtdTotal = carrinho.reduce((acc, item) => acc + item.qtd, 0);
+    const subtotal = carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0);
 
-    const handleCheckout = () => {
-        navigate('/checkout');
-    };
+    // Estilos
+    const corFundo = coresEstabelecimento?.destaque || '#059669'; // Verde padrão se não tiver cor
+    const corTexto = '#ffffff';
 
     return (
-        <div className="fixed bottom-6 right-6 z-[1000] animate-in slide-in-from-bottom-4 fade-in duration-500">
-            <button
-                onClick={handleCheckout}
-                className={`
-                    group
-                    bg-gradient-to-r from-green-600 to-green-700 text-white 
-                    rounded-2xl shadow-xl hover:shadow-2xl hover:shadow-green-900/20
-                    transition-all duration-300 transform hover:-translate-y-1 active:scale-95
-                    flex items-center gap-3 px-5 py-3.5 pr-6
-                    ${isPulsing ? 'animate-bounce ring-4 ring-green-400/30' : ''}
-                `}
-                title="Ir para pagamento"
+        <div className="fixed bottom-0 left-0 w-full z-[9999] p-4 pointer-events-none">
+            <div 
+                onClick={onClick}
+                className="pointer-events-auto cursor-pointer max-w-7xl mx-auto rounded-xl shadow-2xl flex items-center justify-between p-4 transform transition-transform hover:scale-[1.02] active:scale-95 animate-bounce-in"
+                style={{ backgroundColor: corFundo }}
             >
-                <div className="relative">
-                    <IoCart className="text-2xl group-hover:rotate-12 transition-transform" />
-                    <span className="absolute -top-2.5 -right-2.5 bg-red-600 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white shadow-sm">
-                        {totalItens}
-                    </span>
-                </div>
-                
-                <div className="flex flex-col items-start text-left">
-                    <span className="text-[10px] uppercase font-bold tracking-wider opacity-80 leading-none mb-0.5">
-                        Finalizar
-                    </span>
-                    <div className="flex items-center gap-1 font-bold text-base leading-none">
-                        Meu Pedido
-                        <IoArrowForward className="text-sm group-hover:translate-x-1 transition-transform" />
+                {/* Lado Esquerdo: Ícone e Qtd */}
+                <div className="flex items-center gap-3">
+                    <div className="bg-black/20 p-2 rounded-lg text-white relative">
+                        <IoCart size={24} color={corTexto} />
+                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+                            {qtdTotal}
+                        </span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>
+                            Total do Pedido
+                        </span>
+                        <span className="text-lg font-bold" style={{ color: corTexto }}>
+                            R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
                     </div>
                 </div>
-            </button>
+
+                {/* Lado Direito: Ver Sacola */}
+                <div className="flex items-center gap-2 font-bold text-sm bg-black/10 px-4 py-2 rounded-lg hover:bg-black/20 transition-colors" style={{ color: corTexto }}>
+                    <span>VER CARRINHO</span>
+                    <IoArrowForward size={18} />
+                </div>
+            </div>
         </div>
     );
 };
