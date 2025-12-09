@@ -160,12 +160,39 @@ function AdminEstabelecimentoCadastro() {
         setFormError('');
 
         // Validação de campos obrigatórios
-        if (formData.adminUID === '') {
-            setFormError('Por favor, selecione um administrador para o estabelecimento.');
-            setLoadingForm(false);
-            return;
+// ... código anterior ...
+
+// ... código anterior ...
+
+// 4. Vincular o Estabelecimento ao Administrador
+if (formData.adminUID) {
+    const adminRef = doc(db, 'usuarios', formData.adminUID);
+    const adminSnap = await getDoc(adminRef);
+    
+    if (adminSnap.exists()) {
+        const adminData = adminSnap.data();
+        
+        // CORREÇÃO AQUI: Verificação defensiva de Array
+        let currentManagedEstabs = adminData.estabelecimentosGerenciados;
+        
+        // Se não for um array (undefined, null, objeto, string), forçamos ser um array vazio
+        if (!Array.isArray(currentManagedEstabs)) {
+            currentManagedEstabs = [];
         }
 
+        if (!currentManagedEstabs.includes(newEstabId)) {
+            await updateDoc(adminRef, {
+                // Agora é seguro usar o spread operator
+                estabelecimentosGerenciados: [...currentManagedEstabs, newEstabId]
+            });
+            toast.info('Vínculo de estabelecimento com admin atualizado.');
+        }
+    }
+}
+
+// ... restante do código ...
+
+// ... restante do código ...
         let finalLogoUrl = formData.imageUrl;
 
         try {

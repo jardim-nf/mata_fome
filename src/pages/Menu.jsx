@@ -78,13 +78,19 @@ function Menu() {
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null); 
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
-    const [coresEstabelecimento, setCoresEstabelecimento] = useState({
-        primaria: '#0b0b0bff',
+const [coresEstabelecimento, setCoresEstabelecimento] = useState({
+        primaria: '#ffffff',
         destaque: '#059669',
-        background: '#000000',
-        texto: { principal: '#FFFFFF', secundario: '#9CA3AF', placeholder: '#6B7280', destaque: '#FBBF24', erro: '#EF4444', sucesso: '#10B981' }
+        background: '#f9fafb', // Fundo claro
+        texto: { 
+            principal: '#111827', // Texto escuro
+            secundario: '#4B5563', 
+            placeholder: '#9CA3AF', 
+            destaque: '#FBBF24', 
+            erro: '#EF4444', 
+            sucesso: '#10B981' 
+        }
     });
-
     // CÁLCULOS
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
