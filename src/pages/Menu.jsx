@@ -19,7 +19,10 @@ import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline } from 'react-icons/io
 function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
-    const { currentUser, currentClientData, loading: authLoading } = useAuth();
+    
+    // 1. Atualizamos o useAuth para trazer isAdmin, isMasterAdmin e logout
+    const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
+    
     // eslint-disable-next-line no-unused-vars
     const { processPayment, paymentLoading } = usePayment();
 
@@ -145,14 +148,15 @@ function Menu() {
     // Função de Logout
     const handleLogout = async () => {
         try {
-            await signOut(auth);
-            toast.info('Você saiu da conta.');
+            await logout(); // Usa a função do contexto para limpar tudo corretamente
             setNomeCliente('');
             setTelefoneCliente('');
             setRua('');
             setNumero('');
             setBairro('');
             setCidade('');
+            setCarrinho([]);
+            window.location.reload(); // Força recarga para limpar qualquer estado residual
         } catch (error) {
             console.error("Erro ao sair", error);
         }
@@ -235,9 +239,8 @@ function Menu() {
         }
     };
 
-    // CARRINHO ACTIONS
+    // CARRINHO ACTIONS - 🔒 PROTEÇÃO DE LOGIN AQUI
     
-    // Função para abrir modal ou adicionar direto (com verificação de login)
     const handleAbrirModalProduto = (item) => {
         if (!currentUser || !currentUser.uid) { 
             toast.info('Por favor, faça login para continuar.'); 
@@ -250,7 +253,6 @@ function Menu() {
         else { handleAdicionarRapido(item); }
     };
 
-    // Função para adicionar itens simples (com verificação de login)
     const handleAdicionarRapido = (item) => {
         if (!currentUser || !currentUser.uid) { 
             toast.info('Por favor, faça login para continuar.'); 
@@ -535,6 +537,7 @@ function Menu() {
         ) : null
     );
 
+    // 🔒 BLOQUEIO DE RENDERIZAÇÃO:
     if (loading || authLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900">
@@ -545,11 +548,52 @@ function Menu() {
             </div>
         );
     }
+
+    // 🛡️ 2. AQUI ESTÁ A TELA DE BLOQUEIO DE ADMIN
+    // Se o usuário estiver logado E for Admin ou Master, mostra esta tela de bloqueio.
+    if (currentUser && (isAdmin || isMasterAdmin)) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
+                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-gray-200">
+                    <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span className="text-4xl">🛡️</span>
+                    </div>
+                    
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Acesso Administrativo</h1>
+                    
+                    <p className="text-gray-600 mb-8 leading-relaxed">
+                        Você está logado como <strong>{isMasterAdmin ? 'Master Admin' : 'Administrador'}</strong> ({currentUser.email}).
+                        <br/><br/>
+                        O cardápio é exclusivo para a visão do cliente. Para fazer pedidos de teste, saia da conta administrativa.
+                    </p>
+
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => navigate(isMasterAdmin ? '/master/estabelecimentos' : '/admin/dashboard')}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                            Ir para o Painel
+                        </button>
+
+                        <button
+                            onClick={handleLogout}
+                            className="w-full bg-white hover:bg-red-50 text-red-600 py-3.5 rounded-xl font-bold border-2 border-red-100 transition-all flex items-center justify-center gap-2"
+                        >
+                            <IoLogOutOutline size={20} />
+                            Sair e Acessar como Cliente
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
     
     return (
         <div className="w-full relative overflow-x-hidden" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, minHeight: '100vh', paddingBottom: '200px' }}>
             
             <div className="max-w-7xl mx-auto px-4 w-full">
+                {/* CABEÇALHO COM LOGO LATERAL */}
                 <InfoEstabelecimento />
                 
                 <div className="bg-white p-4 mb-8 border-b border-gray-200 sticky top-0 z-40 shadow-sm -mx-4 px-8 md:mx-0 md:px-4 md:rounded-lg">
@@ -601,13 +645,20 @@ function Menu() {
                     <div className="bg-white p-4 md:p-6 rounded-xl border border-gray-200 shadow-lg w-full max-w-full overflow-hidden">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-gray-900">👤 Seus Dados</h3>
-                            {currentUser && (
+                            {currentUser ? (
                                 <button 
                                     onClick={handleLogout}
-                                    className="text-xs text-red-500 flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                                    className="text-xs text-red-500 flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors border border-red-200"
                                 >
                                     <IoLogOutOutline size={16} />
-                                    Sair
+                                    Sair ({currentUser.email})
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => setShowLoginPrompt(true)}
+                                    className="text-xs text-green-600 flex items-center gap-1 hover:bg-green-50 px-2 py-1 rounded transition-colors border border-green-200"
+                                >
+                                    Fazer Login
                                 </button>
                             )}
                         </div>
