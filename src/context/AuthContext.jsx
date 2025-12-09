@@ -21,6 +21,7 @@ export function useAuth() {
 }
 
 // FUNÇÃO AUXILIAR: Converte Map/Objeto para Array
+// Isso protege o sistema caso existam dados antigos salvos como objeto
 const mapToArray = (data) => {
     if (!data) return [];
     
@@ -99,7 +100,7 @@ export function AuthProvider({ children }) {
                 let tokenResult;
                 let claims = {};
                 try {
-                    // 🔥 FORÇA O REFRESH DO TOKEN - CHAVE PARA REGRAS DO FIRESTORE
+                    // 🔥 FORÇA O REFRESH DO TOKEN
                     tokenResult = await user.getIdTokenResult(true); 
                     claims = tokenResult.claims || {};
                     console.log("🔐 Token Claims recebidas:", claims);
@@ -123,8 +124,8 @@ export function AuthProvider({ children }) {
                         nome: user.displayName || user.email.split('@')[0],
                         isAdmin: isAdminFromClaims,
                         isMasterAdmin: isMasterAdminFromClaims,
-                        estabelecimentosGerenciados: claims.estabelecimentosGerenciados || {},
-                        estabelecimentos: claims.estabelecimentos || {},
+                        estabelecimentosGerenciados: [], // Inicializa como Array vazio
+                        estabelecimentos: [],
                         ativo: true,
                         dataCriacao: new Date(),
                         dataAtualizacao: new Date(),
@@ -139,7 +140,7 @@ export function AuthProvider({ children }) {
                     }
                 }
 
-                // Converte Maps lidos (Firestore ou Claims) para Arrays
+                // Converte Maps lidos (Firestore ou Claims) para Arrays usando a função auxiliar
                 const docEstabs = mapToArray(firestoreData?.estabelecimentos);
                 const docEstabsGerenciados = mapToArray(firestoreData?.estabelecimentosGerenciados);
                 const claimEstabs = mapToArray(claims.estabelecimentos);
@@ -184,7 +185,7 @@ export function AuthProvider({ children }) {
                     isAdmin,
                     isMasterAdmin,
                     
-                    // Usa o array processado
+                    // Usa o array processado (seguro para .includes)
                     estabelecimentosGerenciados: allEstabs,
                     
                     estabelecimentoIdClaim: claims.estabelecimentoId || null,
@@ -236,22 +237,13 @@ export function AuthProvider({ children }) {
     const isMasterAdmin = Boolean(userData?.isMasterAdmin);
     const estabelecimentosGerenciados = userData?.estabelecimentosGerenciados || [];
 
-    console.log("🔐 AuthContext valores expostos:", {
-        currentUser: !!currentUser,
-        isAdmin,
-        isMasterAdmin,
-        primeiroEstabelecimento,
-        estabelecimentosGerenciados: estabelecimentosGerenciados.length,
-        loading,
-        authChecked
-    });
-
     // --- VALORES DO CONTEXTO ---
     const value = {
         currentUser, 
         userData, 
         currentClientData,
-        // ... (login/signup functions here)
+        
+        // --- FUNÇÃO DE SIGNUP CORRIGIDA ---
         signup: async (email, password, additionalData = {}) => {
             try {
                 console.log("📝 Iniciando cadastro para:", email);
@@ -262,29 +254,21 @@ export function AuthProvider({ children }) {
                     await updateProfile(user, { displayName: additionalData.nome });
                 }
                 
-                // Converte Arrays de IDs de entrada para Maps/Objetos para o Firestore
-                const estabsGerenciadosMap = (additionalData.estabelecimentosGerenciados || []).reduce((acc, id) => {
-                    acc[id] = true;
-                    return acc;
-                }, {});
-                
-                const estabsMap = (additionalData.estabelecimentos || []).reduce((acc, id) => {
-                    acc[id] = true;
-                    return acc;
-                }, {});
-
+                // CORREÇÃO AQUI: Salvando como ARRAY direto, não como Objeto/Map.
+                // Isso evita o erro "includes is not a function" em outras partes do sistema.
                 const userDataToSave = {
                     uid: user.uid,
                     email: user.email,
                     nome: additionalData.nome || user.email.split('@')[0],
                     isAdmin: additionalData.isAdmin || false,
                     isMasterAdmin: additionalData.isMasterAdmin || false,
-                    estabelecimentosGerenciados: estabsGerenciadosMap,
-                    estabelecimentos: estabsMap,
+                    // Garante que é salvo como array
+                    estabelecimentosGerenciados: Array.isArray(additionalData.estabelecimentosGerenciados) ? additionalData.estabelecimentosGerenciados : [],
+                    estabelecimentos: Array.isArray(additionalData.estabelecimentos) ? additionalData.estabelecimentos : [],
                     ativo: true,
                     dataCriacao: new Date(),
                     criadoPor: additionalData.criadoPor || 'sistema',
-                    ...additionalData
+                    ...additionalData // Outros dados extras
                 };
                 
                 console.log("💾 Salvando dados do usuário no Firestore:", userDataToSave);
@@ -297,29 +281,30 @@ export function AuthProvider({ children }) {
                 throw error;
             }
         },
-// Dentro de AuthContext.jsx, na função 'login'
-login: async (email, password) => {
-    console.log("🔐 Iniciando login para:", email);
-    try {
-        await setPersistence(auth, browserSessionPersistence);
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        
-        // APÓS LOGIN, FORÇA O REFRESH PARA OBTER OS CLAIMS MAIS RÁPIDO
-        if (userCredential.user) {
-            // Chamada direta para garantir a atualização do token e recarga da página
-            // O 'value' deve ser acessível aqui (pode precisar de uma ref para a função)
-            await userCredential.user.getIdToken(true); // Garante o novo token no Auth SDK
-            window.location.reload(); // Força a recarga para o onAuthStateChanged usar o token novo
-        }
 
-        console.log("✅ Login realizado com sucesso");
-        return userCredential;
-    } catch (error) {
-        console.error("❌ Erro no login:", error);
-        throw error;
-    }
-},
+        // --- FUNÇÃO DE LOGIN ---
+        login: async (email, password) => {
+            console.log("🔐 Iniciando login para:", email);
+            try {
+                await setPersistence(auth, browserSessionPersistence);
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                
+                // APÓS LOGIN, FORÇA O REFRESH
+                if (userCredential.user) {
+                    await userCredential.user.getIdToken(true); 
+                    window.location.reload(); 
+                }
+
+                console.log("✅ Login realizado com sucesso");
+                return userCredential;
+            } catch (error) {
+                console.error("❌ Erro no login:", error);
+                throw error;
+            }
+        },
+
         logout,
+
         updateUserProfile: async (updates) => {
             try {
                 if (auth.currentUser) {
@@ -348,14 +333,15 @@ login: async (email, password) => {
                 throw error;
             }
         },
+
         reloadUserData: async () => {
             if (auth.currentUser) {
                 console.log("🔄 Recarregando dados do usuário...");
-                // Força refresh do token para atualizar claims e dispara o onAuthStateChanged
                 await auth.currentUser.getIdToken(true);
                 window.location.reload(); 
             }
         },
+
         loading,
         authChecked,
         primeiroEstabelecimento,
@@ -373,7 +359,9 @@ login: async (email, password) => {
     );
 }
 
-// ... usePermissions e PrivateRoute permanecem iguais ...
+// ==========================================================
+// Hooks e Rotas Privadas
+// ==========================================================
 
 export function usePermissions() {
     const { currentUser, userData, loading, isAdmin, isMasterAdmin, estabelecimentosGerenciados } = useAuth();
@@ -398,6 +386,7 @@ export function usePermissions() {
         if (!currentUser || loading) return false;
         if (isMasterAdmin) return true;
         
+        // Agora estabelecimentosGerenciados é sempre um array (tratado no useEffect)
         return isAdmin && estabelecimentosGerenciados?.includes(estabelecimentoId);
     };
 

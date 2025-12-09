@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
 import { usePayment } from '../context/PaymentContext';
@@ -14,7 +14,7 @@ import PaymentModal from '../components/PaymentModal';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 
 // Ícones
-import { IoLocationSharp, IoTime, IoCall } from 'react-icons/io5';
+import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline } from 'react-icons/io5';
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
@@ -76,20 +76,21 @@ function Menu() {
     const [itemParaAdicionais, setItemParaAdicionais] = useState(null);
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [visibleItemsCount, setVisibleItemsCount] = useState({});
+    
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null); 
     // eslint-disable-next-line no-unused-vars
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
-    // 🎨 MUDANÇA 1: Cores padrão agora são CLARAS (Branco/Cinza)
+    // 🎨 Cores padrão Claras
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
-        primaria: '#ffffff', // Branco
-        destaque: '#059669', // Verde padrão
-        background: '#f9fafb', // Fundo Cinza muito claro (quase branco)
+        primaria: '#ffffff',
+        destaque: '#059669', 
+        background: '#f9fafb',
         texto: { 
-            principal: '#111827', // Preto/Cinza Escuro
-            secundario: '#4B5563', // Cinza Médio
+            principal: '#111827',
+            secundario: '#4B5563', 
             placeholder: '#9CA3AF', 
             destaque: '#FBBF24', 
             erro: '#EF4444', 
@@ -139,6 +140,22 @@ function Menu() {
             if (!horario?.abertura || !horario?.fechamento) return `${dia}: Fechado`;
             return `${dia}: ${horario.abertura} - ${horario.fechamento}`;
         }).join(' | ');
+    };
+
+    // Função de Logout
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            toast.info('Você saiu da conta.');
+            setNomeCliente('');
+            setTelefoneCliente('');
+            setRua('');
+            setNumero('');
+            setBairro('');
+            setCidade('');
+        } catch (error) {
+            console.error("Erro ao sair", error);
+        }
     };
 
     // DELIVERY FEE
@@ -219,15 +236,28 @@ function Menu() {
     };
 
     // CARRINHO ACTIONS
+    
+    // Função para abrir modal ou adicionar direto (com verificação de login)
     const handleAbrirModalProduto = (item) => {
-        if (!currentUser) { toast.warn('Faça login para fazer o pedido.'); setShowLoginPrompt(true); return; }
+        if (!currentUser || !currentUser.uid) { 
+            toast.info('Por favor, faça login para continuar.'); 
+            setShowLoginPrompt(true); 
+            return; 
+        }
+
         if (item.variacoes && item.variacoes.length > 0) { setItemParaVariacoes(item); } 
         else if(item.adicionais && item.adicionais.length > 0) { setItemParaAdicionais(item); } 
         else { handleAdicionarRapido(item); }
     };
 
+    // Função para adicionar itens simples (com verificação de login)
     const handleAdicionarRapido = (item) => {
-        if (!currentUser) { toast.warn('Faça login para fazer o pedido.'); setShowLoginPrompt(true); return; }
+        if (!currentUser || !currentUser.uid) { 
+            toast.info('Por favor, faça login para continuar.'); 
+            setShowLoginPrompt(true); 
+            return; 
+        }
+
         const precoParaCarrinho = item.precoFinal !== undefined ? item.precoFinal : item.preco;
         setCarrinho(prev => [...prev, { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: precoParaCarrinho }]);
         toast.success(`${item.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
@@ -465,11 +495,9 @@ function Menu() {
     });
 
     // --- COMPONENTE INFO CORRIGIDO (LATERAL) ---
-    // 🎨 MUDANÇA 2: bg-gray-900 -> bg-white, border-gray-800 -> border-gray-200, texto escuro
     const InfoEstabelecimento = () => (
         estabelecimentoInfo ? (
             <div className="bg-white rounded-xl p-6 mb-6 mt-6 border border-gray-200 flex flex-row gap-6 items-center shadow-lg">
-                {/* Imagem na esquerda (Lateral) */}
                 {(estabelecimentoInfo.logoUrl || estabelecimentoInfo.imageUrl) && (
                     <img 
                         src={estabelecimentoInfo.logoUrl || estabelecimentoInfo.imageUrl} 
@@ -478,9 +506,7 @@ function Menu() {
                         alt="Logo" 
                     />
                 )}
-                {/* Texto na direita */}
                 <div className="flex-1 text-left">
-                    {/* Texto título agora usa cor principal (Preto) */}
                     <h1 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto.principal }}>{estabelecimentoInfo.nome}</h1>
                     {estabelecimentoInfo.descricao && (
                         <p className="text-sm mb-3 text-gray-500 max-w-2xl">{estabelecimentoInfo.descricao}</p>
@@ -509,19 +535,25 @@ function Menu() {
         ) : null
     );
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900">Carregando...</div>;
+    if (loading || authLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-green-600"></div>
+                    <p className="text-gray-500 font-medium animate-pulse">Carregando cardápio...</p>
+                </div>
+            </div>
+        );
+    }
     
     return (
         <div className="w-full relative overflow-x-hidden" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, minHeight: '100vh', paddingBottom: '200px' }}>
             
             <div className="max-w-7xl mx-auto px-4 w-full">
-                {/* CABEÇALHO COM LOGO LATERAL */}
                 <InfoEstabelecimento />
                 
-                {/* 🎨 MUDANÇA 3: Barra de Busca e Categorias - Fundo Branco */}
                 <div className="bg-white p-4 mb-8 border-b border-gray-200 sticky top-0 z-40 shadow-sm -mx-4 px-8 md:mx-0 md:px-4 md:rounded-lg">
                     <div className="max-w-7xl mx-auto">
-                        {/* Input claro: bg-gray-50, text-gray-900, border-gray-300 */}
                         <input 
                             type="text" 
                             placeholder="🔍 Buscar produto..." 
@@ -565,10 +597,20 @@ function Menu() {
                     })
                 }
 
-                {/* 🎨 MUDANÇA 4: Formulário de Dados e Carrinho - Fundo Branco e Inputs Claros */}
                 <div className="grid md:grid-cols-2 gap-8 mt-12 pb-12">
                     <div className="bg-white p-4 md:p-6 rounded-xl border border-gray-200 shadow-lg w-full max-w-full overflow-hidden">
-                        <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-gray-900">👤 Seus Dados</h3>
+                            {currentUser && (
+                                <button 
+                                    onClick={handleLogout}
+                                    className="text-xs text-red-500 flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                                >
+                                    <IoLogOutOutline size={16} />
+                                    Sair
+                                </button>
+                            )}
+                        </div>
                         <div className="space-y-4">
                             <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Telefone *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />

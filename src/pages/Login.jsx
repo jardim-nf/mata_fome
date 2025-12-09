@@ -18,53 +18,72 @@ function LoginPage() {
     setLoading(true);
 
     try {
-      // 🔐 Login via Firebase Auth
+      // 1. Login no Firebase Auth
       const userCredential = await login(email, password);
       const user = userCredential.user;
 
-      // 🔍 Busca os dados do Firestore (coleção 'usuarios')
-      const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
+      // 2. Busca dados brutos no Firestore para decidir o redirecionamento
+      // Fazemos isso aqui manualmente para ser mais rápido e garantir o dado atual
+      const userDocRef = doc(db, 'usuarios', user.uid);
+      const userSnap = await getDoc(userDocRef);
+      
+      const userData = userSnap.exists() ? userSnap.data() : {};
 
-      const isMaster = userData.isMasterAdmin === true;
-      const isAdminEst = userData.isAdmin === true;
-      const estabelecimentoId = userData.estabelecimentoId;
-
-      // --- DEBUG NO CONSOLE ---
       console.log('--- DEBUG LOGIN ---');
-      console.log('Email logado:', user.email);
-      console.log('userData Firestore:', userData);
-      console.log('isMaster:', isMaster);
-      console.log('isAdminEst:', isAdminEst);
-      console.log('estabelecimentoId:', estabelecimentoId);
-      console.log('--------------------');
+      console.log('Dados Firestore:', userData);
 
-      toast.success('Login realizado com sucesso!');
-
-      // 🚀 Redirecionamentos conforme o tipo de usuário
-      if (isMaster) {
-        console.log('Redirecionando para MASTER DASHBOARD');
-        navigate('/master-dashboard');
-      } else if (isAdminEst) {
-        console.log('Redirecionando para DASHBOARD DO ESTABELECIMENTO');
-        navigate('/dashboard');
-      } else {
-        console.log('Redirecionando para HOME (usuário comum)');
-        navigate('/home');
+      // 3. Lógica de Redirecionamento Inteligente
+      
+      // A) É Master Admin?
+      if (userData.isMasterAdmin === true) {
+        console.log('🚀 Redirecionando: Master Admin');
+        toast.success('Bem-vindo, Master Admin!');
+        navigate('/master/estabelecimentos'); // Ajuste para sua rota principal de Master
+        return;
       }
+
+      // B) É Admin de Estabelecimento?
+      if (userData.isAdmin === true) {
+        // TRATAMENTO DE ERRO: Verifica se é Array ou Objeto para pegar o ID
+        let listaIds = [];
+        const rawEstabs = userData.estabelecimentosGerenciados;
+
+        if (Array.isArray(rawEstabs)) {
+            listaIds = rawEstabs;
+        } else if (rawEstabs && typeof rawEstabs === 'object') {
+            listaIds = Object.keys(rawEstabs);
+        }
+
+        console.log('Estabs encontrados:', listaIds);
+
+        if (listaIds.length > 0) {
+            console.log('🚀 Redirecionando: Admin de Estabelecimento');
+            toast.success('Login realizado com sucesso!');
+            // Redireciona para o dashboard geral ou para o primeiro estabelecimento
+            navigate('/admin/dashboard'); 
+        } else {
+            // É admin mas não tem estabelecimento vinculado
+            toast.warning('Sua conta é Admin, mas não possui estabelecimentos vinculados.');
+            navigate('/admin/dashboard');
+        }
+        return;
+      }
+
+      // C) É Usuário Comum (Cliente)
+      console.log('🚀 Redirecionando: Cliente');
+      toast.success('Login realizado! Bom apetite.');
+      navigate('/'); // Vai para a Home/Cardápio
 
     } catch (error) {
       console.error('Erro no login:', error);
 
       let errorMessage = 'Falha no login. Verifique suas credenciais.';
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        errorMessage = 'Email ou senha inválidos.';
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = 'Email ou senha incorretos.';
       } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'Sua conta está desativada. Contate o suporte.';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Problema de conexão. Verifique sua internet.';
-      } else if (error.code === 'auth/quota-exceeded') {
-        errorMessage = 'Cota de autenticação excedida. Tente novamente mais tarde.';
+        errorMessage = 'Conta desativada.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Muitas tentativas. Tente novamente mais tarde.';
       }
 
       toast.error(errorMessage);
@@ -74,53 +93,71 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white shadow-lg rounded-2xl p-8 w-full max-w-md"
-      >
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">
-          Acesso ao Sistema
-        </h1>
-
-        <div className="mb-4">
-          <label htmlFor="email" className="block text-gray-700 font-medium mb-1">
-            Email:
-          </label>
-          <input
-            type="email"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="seu.email@exemplo.com"
-            required
-            className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 outline-none"
-          />
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-md border border-gray-200">
+        
+        {/* Cabeçalho */}
+        <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-yellow-500 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg transform -rotate-3">
+                <span className="text-2xl font-bold text-white">DF</span>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">Bem-vindo</h1>
+            <p className="text-gray-500 mt-2">Faça login para continuar</p>
         </div>
 
-        <div className="mb-6">
-          <label htmlFor="password" className="block text-gray-700 font-medium mb-1">
-            Senha:
-          </label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Sua senha"
-            required
-            className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 outline-none"
-          />
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="exemplo@email.com"
+              required
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all outline-none"
+            />
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-yellow-500 text-black font-semibold py-2 rounded-lg hover:bg-yellow-600 transition-colors"
-        >
-          {loading ? 'Entrando...' : 'Entrar'}
-        </button>
-      </form>
+          <div>
+            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              Senha
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all outline-none"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-3.5 rounded-xl hover:from-yellow-600 hover:to-orange-600 focus:ring-4 focus:ring-yellow-200 transition-all transform active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {loading ? (
+                <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Entrando...
+                </>
+            ) : (
+                'Entrar no Sistema'
+            )}
+          </button>
+        </form>
+
+        <div className="mt-8 text-center">
+            <p className="text-sm text-gray-500">
+                Esqueceu sua senha? <button className="text-yellow-600 font-bold hover:underline">Recuperar</button>
+            </p>
+        </div>
+      </div>
     </div>
   );
 }
