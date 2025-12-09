@@ -2,15 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
+// eslint-disable-next-line no-unused-vars
 import { toast } from 'react-toastify';
-import { IoAdd, IoOptions } from 'react-icons/io5'; // Ícones opcionais para embelezar
+import { IoAdd, IoOptions } from 'react-icons/io5';
 
 function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
-  // 🎨 Valores padrão para cores
+  // 🎨 Valores padrão para cores (Garantindo fundo claro no fallback)
   const cores = coresEstabelecimento || {
     primaria: '#DC2626',
     destaque: '#059669', 
-    background: '#FFFBEB'
+    background: '#FFFFFF'
   };
 
   // 🆕 ESTADOS PARA CONTROLE DE IMAGEM
@@ -110,6 +111,7 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
   };
 
   const mostrarPreco = () => {
+    // Mantive cores.destaque, mas aumentei o tamanho para destaque no fundo branco
     const stylePreco = { color: cores.destaque, fontSize: '1.1rem', fontWeight: 'bold' };
     
     if (!hasVariations) {
@@ -123,7 +125,8 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
     const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
     return (
       <div className="flex flex-col items-end">
-        <span className="text-[10px] text-gray-400 uppercase tracking-wide">A partir de</span>
+        {/* MUDANÇA: text-gray-400 para text-gray-500 para melhor leitura */}
+        <span className="text-[10px] text-gray-500 uppercase tracking-wide">A partir de</span>
         <p style={stylePreco}>R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
       </div>
     );
@@ -149,17 +152,19 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
   return (
     <div 
         onClick={() => !podeAdicionarDireto() && onAddItem(safeItem)}
-        className={`bg-gray-800 rounded-xl border border-gray-700 p-3 hover:border-gray-500 transition-all duration-300 group cursor-pointer relative overflow-hidden ${!isAvailable ? 'opacity-50 grayscale' : ''}`}
+        // MUDANÇA: bg-gray-800 -> bg-white | border-gray-700 -> border-gray-200 | shadow-sm
+        className={`bg-white rounded-xl border border-gray-200 p-3 hover:border-gray-300 hover:shadow-md transition-all duration-300 group cursor-pointer relative overflow-hidden ${!isAvailable ? 'opacity-60 grayscale bg-gray-50' : ''}`}
     >
       <div className="flex gap-4">
-        {/* 📸 IMAGEM - AUMENTADA PARA w-28 (112px) no Mobile e w-32 no Desktop */}
+        {/* 📸 IMAGEM */}
         <div className="flex-shrink-0">
-          <div className="w-28 h-28 md:w-32 md:h-32 bg-gray-900 rounded-lg overflow-hidden flex items-center justify-center relative shadow-lg">
-             {/* Badge Promoção (Opcional) */}
+          {/* MUDANÇA: bg-gray-900 -> bg-gray-100 (fundo cinza claro para imagem) */}
+          <div className="w-28 h-28 md:w-32 md:h-32 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center relative shadow-sm">
+             {/* Badge Promoção */}
              {safeItem.promo && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 z-10">OFERTA</div>}
 
             {imageLoading && !imageError && displayImageUrl ? (
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
             ) : imageError || !displayImageUrl ? (
               <span className="text-4xl filter grayscale opacity-50">{getPlaceholderEmoji()}</span>
             ) : (
@@ -179,27 +184,31 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
         <div className="flex-1 flex flex-col justify-between min-w-0 py-1">
           <div>
             <div className="flex justify-between items-start">
-                <h3 className="font-bold text-white text-lg leading-tight mb-1 line-clamp-2 group-hover:text-green-400 transition-colors">
+                {/* MUDANÇA: text-white -> text-gray-900 (Cor preta para o título) */}
+                <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1 line-clamp-2 transition-colors" style={{ ':hover': { color: cores.destaque } }}>
                 {safeItem.nome}
                 </h3>
             </div>
             
             {safeItem.descricao && (
-              <p className="text-gray-400 text-sm leading-relaxed line-clamp-2 mb-2">
+              // MUDANÇA: text-gray-400 -> text-gray-500
+              <p className="text-gray-500 text-sm leading-relaxed line-clamp-2 mb-2">
                 {safeItem.descricao}
               </p>
             )}
 
             {/* Badges de Variação */}
             {!podeAdicionarDireto() && (
-                <span className="inline-block px-2 py-0.5 rounded text-[10px] bg-gray-700 text-gray-300 border border-gray-600 mb-2">
+                // MUDANÇA: Cores mais claras para o badge
+                <span className="inline-block px-2 py-0.5 rounded text-[10px] bg-gray-100 text-gray-600 border border-gray-200 mb-2">
                     {safeItem.variacoes.filter(v => v.ativo).length} opções
                 </span>
             )}
           </div>
 
           {/* PREÇO E BOTÃO */}
-          <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-700/50">
+          {/* MUDANÇA: border-gray-700 -> border-gray-100 */}
+          <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-100">
             <div>
                 {mostrarPreco()}
             </div>
@@ -207,10 +216,10 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
             <button
               onClick={handleButtonClick}
               disabled={botaoConfig.disabled}
-              style={{ backgroundColor: botaoConfig.disabled ? '#374151' : botaoConfig.cor, color: botaoConfig.textoCor }}
+              style={{ backgroundColor: botaoConfig.disabled ? '#E5E7EB' : botaoConfig.cor, color: botaoConfig.textoCor }}
               className={`
-                px-4 py-2 rounded-lg font-bold text-sm shadow-lg transition-transform active:scale-95 flex items-center gap-1
-                ${botaoConfig.disabled ? 'cursor-not-allowed opacity-50' : 'hover:brightness-110'}
+                px-4 py-2 rounded-lg font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1
+                ${botaoConfig.disabled ? 'cursor-not-allowed opacity-50' : 'hover:brightness-105'}
               `}
             >
               {botaoConfig.icone}

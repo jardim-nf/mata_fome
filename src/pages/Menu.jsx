@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import PaymentModal from '../components/PaymentModal';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 
-// Ícones para deixar mais bonito
+// Ícones
 import { IoLocationSharp, IoTime, IoCall } from 'react-icons/io5';
 
 function Menu() {
@@ -39,6 +39,7 @@ function Menu() {
     
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
+    // eslint-disable-next-line no-unused-vars
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
@@ -57,6 +58,7 @@ function Menu() {
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
+    // eslint-disable-next-line no-unused-vars
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
     const auth = getAuth();
 
@@ -67,6 +69,7 @@ function Menu() {
     const [couponLoading, setCouponLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
+    // eslint-disable-next-line no-unused-vars
     const [availableCategories, setAvailableCategories] = useState([]);
     
     // Modals
@@ -76,21 +79,24 @@ function Menu() {
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null); 
+    // eslint-disable-next-line no-unused-vars
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
-const [coresEstabelecimento, setCoresEstabelecimento] = useState({
-        primaria: '#ffffff',
-        destaque: '#059669',
-        background: '#f9fafb', // Fundo claro
+    // 🎨 MUDANÇA 1: Cores padrão agora são CLARAS (Branco/Cinza)
+    const [coresEstabelecimento, setCoresEstabelecimento] = useState({
+        primaria: '#ffffff', // Branco
+        destaque: '#059669', // Verde padrão
+        background: '#f9fafb', // Fundo Cinza muito claro (quase branco)
         texto: { 
-            principal: '#111827', // Texto escuro
-            secundario: '#4B5563', 
+            principal: '#111827', // Preto/Cinza Escuro
+            secundario: '#4B5563', // Cinza Médio
             placeholder: '#9CA3AF', 
             destaque: '#FBBF24', 
             erro: '#EF4444', 
             sucesso: '#10B981' 
         }
     });
+
     // CÁLCULOS
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
     const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
@@ -459,9 +465,10 @@ const [coresEstabelecimento, setCoresEstabelecimento] = useState({
     });
 
     // --- COMPONENTE INFO CORRIGIDO (LATERAL) ---
+    // 🎨 MUDANÇA 2: bg-gray-900 -> bg-white, border-gray-800 -> border-gray-200, texto escuro
     const InfoEstabelecimento = () => (
         estabelecimentoInfo ? (
-            <div className="bg-gray-900 rounded-xl p-6 mb-6 mt-6 border border-gray-800 flex flex-row gap-6 items-center shadow-xl">
+            <div className="bg-white rounded-xl p-6 mb-6 mt-6 border border-gray-200 flex flex-row gap-6 items-center shadow-lg">
                 {/* Imagem na esquerda (Lateral) */}
                 {(estabelecimentoInfo.logoUrl || estabelecimentoInfo.imageUrl) && (
                     <img 
@@ -473,12 +480,13 @@ const [coresEstabelecimento, setCoresEstabelecimento] = useState({
                 )}
                 {/* Texto na direita */}
                 <div className="flex-1 text-left">
+                    {/* Texto título agora usa cor principal (Preto) */}
                     <h1 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto.principal }}>{estabelecimentoInfo.nome}</h1>
                     {estabelecimentoInfo.descricao && (
-                        <p className="text-sm mb-3 text-gray-400 max-w-2xl">{estabelecimentoInfo.descricao}</p>
+                        <p className="text-sm mb-3 text-gray-500 max-w-2xl">{estabelecimentoInfo.descricao}</p>
                     )}
                     
-                    <div className="flex flex-col gap-1 text-sm" style={{ color: coresEstabelecimento.texto.secundario }}>
+                    <div className="flex flex-col gap-1 text-sm text-gray-600">
                         {estabelecimentoInfo.endereco?.rua && (
                             <div className="flex items-center gap-2">
                                 <IoLocationSharp className="text-red-500" />
@@ -491,7 +499,6 @@ const [coresEstabelecimento, setCoresEstabelecimento] = useState({
                                 <p>{estabelecimentoInfo.telefone}</p>
                             </div>
                         )}
-                        {/* Exibe horário se existir, senão mostra 'Consulte' */}
                         <div className="flex items-center gap-2">
                             <IoTime className="text-blue-500" />
                             <p>{estabelecimentoInfo.horarioFuncionamento ? formatarHorarios(estabelecimentoInfo.horarioFuncionamento) : "Aberto"}</p>
@@ -502,7 +509,7 @@ const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         ) : null
     );
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-black text-white">Carregando...</div>;
+    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900">Carregando...</div>;
     
     return (
         <div className="w-full relative overflow-x-hidden" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, minHeight: '100vh', paddingBottom: '200px' }}>
@@ -511,12 +518,34 @@ const [coresEstabelecimento, setCoresEstabelecimento] = useState({
                 {/* CABEÇALHO COM LOGO LATERAL */}
                 <InfoEstabelecimento />
                 
-                <div className="bg-gray-900 p-4 mb-8 border-b border-gray-700 sticky top-0 z-40 shadow-xl -mx-4 px-8 md:mx-0 md:px-4 md:rounded-lg">
+                {/* 🎨 MUDANÇA 3: Barra de Busca e Categorias - Fundo Branco */}
+                <div className="bg-white p-4 mb-8 border-b border-gray-200 sticky top-0 z-40 shadow-sm -mx-4 px-8 md:mx-0 md:px-4 md:rounded-lg">
                     <div className="max-w-7xl mx-auto">
-                        <input type="text" placeholder="🔍 Buscar produto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 bg-gray-800 rounded-lg border border-gray-600 focus:outline-none focus:border-green-500 text-base" style={{ color: coresEstabelecimento.texto.principal }} />
+                        {/* Input claro: bg-gray-50, text-gray-900, border-gray-300 */}
+                        <input 
+                            type="text" 
+                            placeholder="🔍 Buscar produto..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            className="w-full p-3 mb-4 bg-gray-50 rounded-lg border border-gray-300 focus:outline-none focus:border-green-500 text-base text-gray-900 placeholder-gray-400 shadow-inner" 
+                        />
                         <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                             {['Todos', ...categoriasOrdenadas].map(cat => (
-                                <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${selectedCategory === cat ? 'text-white shadow-lg transform scale-105' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : '', border: selectedCategory === cat ? `2px solid ${coresEstabelecimento.destaque}` : '2px solid transparent' }}>{cat}</button>
+                                <button 
+                                    key={cat} 
+                                    onClick={() => setSelectedCategory(cat)} 
+                                    className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${
+                                        selectedCategory === cat 
+                                            ? 'text-white shadow-md transform scale-105' 
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
+                                    }`} 
+                                    style={{ 
+                                        backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : undefined, 
+                                        border: selectedCategory === cat ? `2px solid ${coresEstabelecimento.destaque}` : undefined 
+                                    }}
+                                >
+                                    {cat}
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -528,46 +557,47 @@ const [coresEstabelecimento, setCoresEstabelecimento] = useState({
                         const visible = visibleItemsCount[cat] || 4;
                         return (
                             <div key={cat} id={`categoria-${cat}`} className="mb-8">
-                                <h2 className="text-2xl font-bold mb-4 flex justify-between items-center">{cat} <span className="text-sm font-normal bg-gray-800 px-2 py-1 rounded text-gray-400">{items.length}</span></h2>
+                                <h2 className="text-2xl font-bold mb-4 flex justify-between items-center text-gray-900">{cat} <span className="text-sm font-normal bg-gray-100 px-2 py-1 rounded text-gray-500 border border-gray-200">{items.length}</span></h2>
                                 <div className="grid gap-4">{items.slice(0, visible).map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />)}</div>
-                                {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-2 py-2 text-sm font-bold text-gray-400 hover:text-white bg-gray-800 rounded-lg transition">{visible >= items.length ? 'Ver menos' : `Ver mais (${items.length - visible})`}</button>}
+                                {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-2 py-2 text-sm font-bold text-gray-500 hover:text-gray-900 bg-gray-100 border border-gray-200 hover:bg-gray-200 rounded-lg transition shadow-sm">{visible >= items.length ? 'Ver menos' : `Ver mais (${items.length - visible})`}</button>}
                             </div>
                         );
                     })
                 }
 
+                {/* 🎨 MUDANÇA 4: Formulário de Dados e Carrinho - Fundo Branco e Inputs Claros */}
                 <div className="grid md:grid-cols-2 gap-8 mt-12 pb-12">
-                    <div className="bg-gray-900 p-4 md:p-6 rounded-xl border border-gray-700 w-full max-w-full overflow-hidden">
-                        <h3 className="text-xl font-bold mb-4">👤 Seus Dados</h3>
+                    <div className="bg-white p-4 md:p-6 rounded-xl border border-gray-200 shadow-lg w-full max-w-full overflow-hidden">
+                        <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
                         <div className="space-y-4">
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Telefone *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Telefone *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             <div className="flex gap-2 w-full">
-                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🚚 Entrega</button>
-                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🏪 Retirada</button>
+                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base shadow-sm ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>🚚 Entrega</button>
+                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base shadow-sm ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>🏪 Retirada</button>
                             </div>
                             {!isRetirada && (
                                 <>
-                                    <div className="flex gap-2 w-full"><div className="flex-1 min-w-0"><input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /></div><div className="w-20 md:w-24 flex-shrink-0"><input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base text-center" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div></div>
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base min-w-0" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
+                                    <div className="flex gap-2 w-full"><div className="flex-1 min-w-0"><input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /></div><div className="w-20 md:w-24 flex-shrink-0"><input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-center text-gray-900 placeholder-gray-400" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div></div>
+                                    <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
+                                    <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
                                 </>
                             )}
                         </div>
                     </div>
 
-                    <div id="resumo-carrinho" className="bg-gray-900 p-6 rounded-xl border border-gray-700 mb-8">
-                        <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
+                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border border-gray-200 shadow-lg mb-8">
+                        <h3 className="text-xl font-bold mb-4 text-gray-900">🛒 Resumo</h3>
                         {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
                             <>
-                                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">{carrinho.map(item => (<div key={item.cartItemId} className="flex justify-between items-start bg-gray-800 p-3 rounded"><div className="flex-1 pr-2"><p className="font-bold text-sm text-white">{formatarItemCarrinho(item)}</p><p className="text-xs text-gray-400">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p></div><button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold p-1 hover:bg-gray-700 rounded">✕</button></div>))}</div>
-                                <div className="border-t border-gray-700 pt-4 space-y-2 text-sm">
-                                    <div className="flex justify-between text-gray-300"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
-                                    {!isRetirada && <div className="flex justify-between text-gray-300"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
-                                    {discountAmount > 0 && <div className="flex justify-between text-green-400 font-bold"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
-                                    <div className="flex gap-2 mt-4 pt-2 border-t border-gray-800"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-sm text-white uppercase" /><button onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} disabled={couponLoading} className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600' : 'bg-green-600'} text-white`}>{couponLoading ? '...' : (appliedCoupon ? 'Remover' : 'Aplicar')}</button></div>
-                                    <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-700 text-white"><span>Total:</span><span style={{ color: coresEstabelecimento.destaque }}>R$ {finalOrderTotal.toFixed(2)}</span></div>
+                                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">{carrinho.map(item => (<div key={item.cartItemId} className="flex justify-between items-start bg-gray-50 border border-gray-200 p-3 rounded"><div className="flex-1 pr-2"><p className="font-bold text-sm text-gray-900">{formatarItemCarrinho(item)}</p><p className="text-xs text-gray-500">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p></div><button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold p-1 hover:bg-red-50 rounded">✕</button></div>))}</div>
+                                <div className="border-t border-gray-200 pt-4 space-y-2 text-sm">
+                                    <div className="flex justify-between text-gray-600"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
+                                    {!isRetirada && <div className="flex justify-between text-gray-600"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
+                                    {discountAmount > 0 && <div className="flex justify-between text-green-600 font-bold"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
+                                    <div className="flex gap-2 mt-4 pt-2 border-t border-gray-200"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 bg-gray-50 p-2 rounded border border-gray-300 text-sm text-gray-900 uppercase" /><button onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} disabled={couponLoading} className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600' : 'bg-green-600'} text-white shadow-sm`}>{couponLoading ? '...' : (appliedCoupon ? 'Remover' : 'Aplicar')}</button></div>
+                                    <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-200 text-gray-900"><span>Total:</span><span style={{ color: coresEstabelecimento.destaque }}>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
                                 <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>✅ Finalizar Pedido</button>
                             </>
@@ -578,8 +608,8 @@ const [coresEstabelecimento, setCoresEstabelecimento] = useState({
 
             <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
-            {showOrderConfirmationModal && confirmedOrderDetails && <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"><div className="bg-gray-900 p-8 rounded-2xl max-w-md w-full text-center border border-gray-700"><div className="text-6xl mb-4">🎉</div><h2 className="text-3xl font-bold text-white mb-2">Pedido Confirmado!</h2><p className="text-gray-400 mb-6">ID: {confirmedOrderDetails.id}</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
-            {showLoginPrompt && <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 px-4"><div className="bg-gray-900 p-6 rounded-2xl w-full max-w-md border border-gray-700 relative"><button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 text-2xl">&times;</button><h2 className="text-2xl font-bold text-white mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2><form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">{isRegisteringInModal && <><input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" /><input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" /><input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" /></>}<input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" /><input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-800 rounded border border-gray-600 text-base" /><button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button></form><button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-500 text-sm">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button></div></div>}
+            {showOrderConfirmationModal && confirmedOrderDetails && <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"><div className="bg-white p-8 rounded-2xl max-w-md w-full text-center border border-gray-200 shadow-2xl"><div className="text-6xl mb-4">🎉</div><h2 className="text-3xl font-bold text-gray-900 mb-2">Pedido Confirmado!</h2><p className="text-gray-500 mb-6">ID: {confirmedOrderDetails.id}</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
+            {showLoginPrompt && <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4"><div className="bg-white p-6 rounded-2xl w-full max-w-md border border-gray-200 shadow-2xl relative"><button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 text-2xl hover:text-gray-600">&times;</button><h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2><form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">{isRegisteringInModal && <><input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /></>}<input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold shadow-md">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button></form><button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm font-semibold">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button></div></div>}
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
         </div>
