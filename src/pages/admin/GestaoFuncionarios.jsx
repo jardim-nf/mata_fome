@@ -425,12 +425,6 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
     const handleSubmit = (e) => {
         e.preventDefault();
         
-        console.log('📝 Enviando dados do formulário:', {
-            nome, email, cargo, telefone, 
-            temSenha: !!senha,
-            permissoes
-        });
-        
         if (!nome.trim() || !email.trim() || !cargo.trim()) {
             alert("Preencha Nome, Email e Cargo.");
             return;
@@ -447,11 +441,15 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
         onSave({ 
             nome: nome.trim(), 
             email: email.trim(), 
-            cargo, 
+            // 🚨 CONVERTE PARA MINÚSCULO PARA BATER COM O CHECK DE ROTAS (App.jsx)
+            cargo: cargo.toLowerCase(), 
             telefone: telefone.trim() || null, 
-            permissoes,
+            permissoes, // Salva o array de permissões
             senha: funcionario ? undefined : senha,
-            status: funcionario?.status || 'ativo'
+            status: funcionario?.status || 'ativo',
+            // 🚨 FORÇA O USUÁRIO A SER FUNCIONÁRIO, NÃO ADMIN
+            isAdmin: false, 
+            isMasterAdmin: false 
         });
     };
 

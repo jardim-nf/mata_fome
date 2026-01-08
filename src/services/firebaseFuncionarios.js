@@ -1,4 +1,4 @@
-// src/services/firebaseFuncionarios.js - VERSÃO CORRIGIDA
+// src/services/firebaseFuncionarios.js - CORREÇÃO DE LOGIN AUTOMÁTICO
 import { 
     collection, 
     doc, 
@@ -10,9 +10,11 @@ import {
     setDoc,
     where 
 } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { initializeApp, getApp, deleteApp } from 'firebase/app'; // 🆕 Necessário para o truque
 import { db } from '../firebase'; 
 
+// Auth principal (Admin logado)
 const auth = getAuth();
 
 // Buscar todos os funcionários do estabelecimento
@@ -36,47 +38,52 @@ export const getFuncionarios = async (estabelecimentoId) => {
     }
 };
 
-// Adicionar novo funcionário - VERSÃO CORRIGIDA
+// Adicionar novo funcionário - COM "APP SECUNDÁRIO"
 export const addFuncionario = async (estabelecimentoId, funcionarioData) => {
-    const { email, senha, permissoes, ...dataRestante } = funcionarioData;
+    const { email, senha, permissoes, cargo, isAdmin, ...dataRestante } = funcionarioData;
 
-    console.log('🔧 Iniciando cadastro com dados:', {
-        estabelecimentoId,
-        email,
-        temSenha: !!senha,
-        nome: dataRestante.nome
-    });
+    console.log('🔧 Iniciando cadastro com App Secundário...');
 
-    if (!senha) {
-        throw new Error("A senha é obrigatória para criar um novo funcionário.");
+    if (!senha || senha.length < 6) {
+        throw new Error("A senha é obrigatória e deve ter no mínimo 6 caracteres.");
     }
 
-    if (senha.length < 6) {
-        throw new Error("A senha deve ter no mínimo 6 caracteres.");
-    }
+    // 1. 🎩 O TRUQUE: Criar uma instância secundária do Firebase
+    // Isso evita que o Admin seja deslogado ao criar o novo usuário
+    const appPrincipal = getApp();
+    const firebaseConfig = appPrincipal.options; // Pega a config do app atual
+    const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+    const secondaryAuth = getAuth(secondaryApp);
 
     try {
-        console.log('🚀 1. Criando usuário no Firebase Auth...');
+        console.log('🚀 1. Criando usuário no Auth Secundário...');
         
-        // 1. 🔑 CRIAR CONTA NO FIREBASE AUTHENTICATION
-        const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
+        // Cria o usuário na instância secundária (não desloga o Admin)
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
         const uid = userCredential.user.uid;
         
-        console.log('✅ Usuário criado no Auth com UID:', uid);
+        console.log('✅ Usuário criado. UID:', uid);
 
-        // 2. 📝 SALVAR DADOS NA COLEÇÃO PRINCIPAL DE USUÁRIOS
+        // Importante: Deslogar da instância secundária para limpar memória
+        await signOut(secondaryAuth);
+        
+        // 2. 📝 SALVAR DADOS NO FIRESTORE (Usando o `db` principal, pois o Admin tem permissão de escrita)
         console.log('💾 2. Salvando dados em /usuarios...');
+        
         const usuarioData = {
-            isAdmin: true, 
+            isAdmin: false, // Força false para funcionários
             isMasterAdmin: false,
             email: email,
             nome: dataRestante.nome,
+            cargo: cargo,
+            permissoes: permissoes || [],
             estabelecimentosGerenciados: { 
                 [estabelecimentoId]: true 
             },
             criadoEm: new Date(),
         };
         
+        // Usa o `db` global (onde o Admin está autenticado) para escrever
         await setDoc(doc(db, 'usuarios', uid), usuarioData);
         console.log('✅ Dados salvos em /usuarios');
 
@@ -87,43 +94,31 @@ export const addFuncionario = async (estabelecimentoId, funcionarioData) => {
         const dadosFuncionario = {
             nome: dataRestante.nome,
             email: email,
-            cargo: dataRestante.cargo,
+            cargo: cargo,
             telefone: dataRestante.telefone || '',
             permissoes: permissoes || [],
             status: 'ativo',
             criadoEm: new Date(),
             atualizadoEm: new Date(),
-            uid: uid // Adiciona o UID como referência
+            uid: uid
         };
         
         await setDoc(funcionarioRef, dadosFuncionario);
-        console.log('✅ Dados salvos na subcoleção funcionários');
         console.log('🎉 Funcionário cadastrado com sucesso!');
         
-        return { 
-            id: uid,
-            ...dadosFuncionario
-        };
+        return { id: uid, ...dadosFuncionario };
         
     } catch (error) {
-        console.error('❌ ERRO DETALHADO NO CADASTRO:', {
-            code: error.code,
-            message: error.message,
-            stack: error.stack
-        });
+        console.error('❌ ERRO NO CADASTRO:', error);
         
-        // Mensagens de erro mais amigáveis
         if (error.code === 'auth/email-already-in-use') {
             throw new Error('Este email já está em uso por outro usuário.');
-        } else if (error.code === 'auth/invalid-email') {
-            throw new Error('O email fornecido é inválido.');
-        } else if (error.code === 'auth/weak-password') {
-            throw new Error('A senha é muito fraca. Use pelo menos 6 caracteres.');
-        } else if (error.code === 'auth/network-request-failed') {
-            throw new Error('Erro de conexão. Verifique sua internet.');
         } else {
-            throw new Error(`Erro ao cadastrar funcionário: ${error.message}`);
+            throw new Error(`Erro ao cadastrar: ${error.message}`);
         }
+    } finally {
+        // Limpa a instância secundária para não pesar no navegador
+        await deleteApp(secondaryApp);
     }
 };
 
@@ -132,49 +127,26 @@ export const updateFuncionario = async (estabelecimentoId, funcionarioId, update
     try {
         console.log('✏️ Atualizando funcionário:', funcionarioId);
         
-        // 1. Atualizar subcoleção de funcionário
         const funcionarioRef = doc(db, 'estabelecimentos', estabelecimentoId, 'funcionarios', funcionarioId);
         await updateDoc(funcionarioRef, {
             ...updateData,
             atualizadoEm: new Date()
         });
 
-        // 2. Atualizar documento /usuarios (se nome foi alterado)
-        if (updateData.nome) {
-            const usuarioRef = doc(db, 'usuarios', funcionarioId);
-            await updateDoc(usuarioRef, {
-                nome: updateData.nome,
-                atualizadoEm: new Date()
-            });
-        }
+        // Atualizar também na coleção global /usuarios
+        const usuarioRef = doc(db, 'usuarios', funcionarioId);
+        const updatesUsuario = { atualizadoEm: new Date() };
+        
+        if (updateData.nome) updatesUsuario.nome = updateData.nome;
+        if (updateData.cargo) updatesUsuario.cargo = updateData.cargo;
+        if (updateData.permissoes) updatesUsuario.permissoes = updateData.permissoes;
+        if (updateData.status === 'inativo') updatesUsuario.isAdmin = false;
 
-        console.log('✅ Funcionário atualizado com sucesso');
+        await updateDoc(usuarioRef, updatesUsuario);
+
         return true;
     } catch (error) {
         console.error('❌ Erro ao atualizar funcionário:', error);
-        throw error;
-    }
-};
-
-// Desativar funcionário
-export const deleteFuncionario = async (estabelecimentoId, funcionarioId) => {
-    try {
-        const funcionarioRef = doc(db, 'estabelecimentos', estabelecimentoId, 'funcionarios', funcionarioId);
-        await updateDoc(funcionarioRef, {
-            status: 'inativo',
-            atualizadoEm: new Date()
-        });
-        
-        // Desativar no /usuarios
-        const usuarioRef = doc(db, 'usuarios', funcionarioId);
-        await updateDoc(usuarioRef, {
-            isAdmin: false,
-            atualizadoEm: new Date()
-        });
-
-        return true;
-    } catch (error) {
-        console.error('❌ Erro ao desativar funcionário:', error);
         throw error;
     }
 };
@@ -184,19 +156,15 @@ export const excluirFuncionarioPermanentemente = async (estabelecimentoId, funci
     try {
         console.log('🗑️ Excluindo permanentemente funcionário:', funcionarioId);
         
-        // 1. Excluir da subcoleção de funcionários
+        // 1. Excluir da subcoleção
         const funcionarioRef = doc(db, 'estabelecimentos', estabelecimentoId, 'funcionarios', funcionarioId);
         await deleteDoc(funcionarioRef);
 
-        // 2. Excluir da coleção /usuarios
+        // 2. Excluir da coleção global /usuarios
         const usuarioRef = doc(db, 'usuarios', funcionarioId);
         await deleteDoc(usuarioRef);
         
         console.log('✅ Funcionário excluído do Firestore');
-        
-        // 3. ⚠️ Para excluir do Auth, precisa de Cloud Function
-        console.log('ℹ️ Para excluir do Auth, implemente uma Cloud Function');
-        
         return true;
     } catch (error) {
         console.error('❌ Erro ao excluir funcionário:', error);

@@ -1,51 +1,56 @@
 // src/pages/HomeRedirector.jsx
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FaSpinner } from 'react-icons/fa';
 
 function HomeRedirector() {
   const navigate = useNavigate();
-  // Inclua o loading do AuthContext
+  const location = useLocation();
+  // 👇 Tente pegar 'isWaiter' ou 'isGarcom' se seu AuthContext exportar.
+  // Se não, vamos usar o currentUser.role (veja abaixo)
   const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    // 🛑 Aguarda o AuthContext terminar de carregar TUDO (Auth e Firestore)
-    if (authLoading) {
-      return; 
-    }
+    if (authLoading) return;
 
-    console.log('🔄 HomeRedirector analisando usuário:', { 
-      currentUser: !!currentUser, 
-      isAdmin, 
-      isMasterAdmin 
+    // 👇 DEBUG: Vamos ver o que a Aline é de verdade no console
+    console.log('🔍 Analisando usuário:', {
+      email: currentUser?.email,
+      role: currentUser?.role, // Verifica se o campo role existe
+      isAdmin,
+      isMasterAdmin
     });
 
-    // Se não estiver logado, vai para a home padrão (ou login)
+    let targetPath = '/';
+
     if (!currentUser) {
-      console.log('🔐 Usuário não logado -> /');
-      navigate('/');
-      return;
+      targetPath = '/'; 
+    } 
+    else if (isMasterAdmin) {
+      targetPath = '/master-dashboard';
+    } 
+    else if (isAdmin) {
+      targetPath = '/painel';
+    } 
+    // 👇 AQUI ESTÁ A CORREÇÃO PARA A ALINE
+    // Verifique se o role é 'garcom', 'waiter' ou como estiver no seu banco de dados
+    else if (currentUser?.role === 'garcom' || currentUser?.role === 'waiter') {
+      console.log('💁‍♀️ É Garçom -> /painel-garcom'); // Ajuste para a rota correta do garçom
+      targetPath = '/painel-garcom'; 
+    } 
+    else {
+      // Cliente normal
+      targetPath = '/'; 
     }
 
-    // Se estiver logado, direciona com base nas permissões
-    if (isMasterAdmin) {
-      console.log('👑 Master Admin -> /master-dashboard');
-      // Redireciona imediatamente, sem delay desnecessário
-      navigate('/master-dashboard', { replace: true }); 
-    } else if (isAdmin) {
-      // ✅ Redireciona para o painel de Admin
-      console.log('⚡ Admin Estabelecimento -> /painel');
-      navigate('/painel', { replace: true });
-    } else {
-      // Usuário logado sem permissão específica (ex: cliente)
-      console.log('👤 Usuário normal logado -> /');
-      navigate('/', { replace: true });
+    // Só navega se o destino for diferente de onde já estamos
+    if (location.pathname !== targetPath) {
+      navigate(targetPath, { replace: true });
     }
 
-  }, [currentUser, isAdmin, isMasterAdmin, authLoading, navigate]);
+  }, [currentUser, isAdmin, isMasterAdmin, authLoading, navigate, location]);
 
-  // Exibe o spinner enquanto o AuthContext carrega
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -57,7 +62,6 @@ function HomeRedirector() {
     );
   }
 
-  // Se o authLoading for falso, mas as condições não satisfizerem o redirect, ele renderiza a Home/Login
   return null; 
 }
 

@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx - CORRIGIDO E COMPLETO
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, PrivateRoute } from './context/AuthContext';
@@ -43,7 +43,7 @@ import ClientManagement from './pages/ClientManagement';
 import AdminOrderCategories from './pages/AdminOrderCategories';
 import GestaoFuncionarios from "./pages/admin/GestaoFuncionarios";
 import AdminEntregadores from './pages/admin/AdminEntregadores';
-import RelatorioEntregas from './pages/admin/RelatorioEntregas'; // ✅ IMPORTADO AQUI
+import RelatorioEntregas from './pages/admin/RelatorioEntregas'; 
 import AdminPaymentSettings from './pages/admin/AdminPaymentSettings';
 import AdminColorSettings from './pages/AdminColorSettings'; 
 
@@ -121,30 +121,37 @@ function App() {
                           </PrivateRoute>
                         }
                       />
+                      
+                      {/* ✅ CONTROLE DE SALÃO: LIBERADO PARA GARÇOM (COM E SEM CEDILHA) */}
                       <Route
                         path="/controle-salao"
                         element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}>
                             <ControleSalao />
                           </PrivateRoute>
                         }
                       />
+                      
+                      {/* ✅ TELA DE PEDIDOS (DENTRO DA MESA): LIBERADO PARA GARÇOM (COM E SEM CEDILHA) */}
                       <Route
                         path="/estabelecimento/:estabelecimentoId/mesa/:id"
                         element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}>
                             <TelaPedidos />
                           </PrivateRoute>
                         }
                       />
+                      
+                      {/* ✅ PAINEL: LIBERADO PARA GARÇOM E COZINHA */}
                       <Route
                         path="/painel"
                         element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}>
                             <Painel />
                           </PrivateRoute>
                         }
                       />
+
                       <Route
                         path="/admin-dashboard" 
                         element={
@@ -153,14 +160,17 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                        <Route
+
+                      {/* ⚠️ CORREÇÃO PRINCIPAL AQUI: LIBERADO PARA GARÇOM/COZINHA */}
+                      <Route
                         path="/dashboard"
                         element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}>
                             <AdminDashboard />
                           </PrivateRoute>
                         }
                       />
+
                       <Route
                         path="/admin/gerenciar-cardapio"
                         element={
@@ -292,7 +302,7 @@ function App() {
                         }
                       />
 
-                      {/* ✅ NOVA ROTA: RELATÓRIO DE ENTREGAS */}
+                      {/* RELATÓRIO DE ENTREGAS */}
                       <Route
                         path="/admin/relatorio-entregas"
                         element={
@@ -412,6 +422,7 @@ function App() {
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
 
+                    {/* Rota para o histórico de pedidos (acessada pelo botão do Dashboard) */}
                     <Route path="/historico-pedidos" element={<PrivateRoute><ClientOrderHistory /></PrivateRoute>} />
                   </Routes>
                   

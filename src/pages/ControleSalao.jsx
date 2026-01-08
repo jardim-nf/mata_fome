@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
-import { useAuth } from "../context/AuthContext"; // Importação Corrigida
+import { useAuth } from "../context/AuthContext"; 
 import { useHeader } from '../context/HeaderContext';
 import { toast } from 'react-toastify';
 import MesaCard from "../components/MesaCard";
@@ -77,65 +77,6 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     );
 };
 
-// --- STAT CARD PREMIUM (Sutilizado) ---
-const StatCard = ({ label, value, icon, theme, subtitle }) => {
-    const themes = {
-        // Cores de Fundo e Borda SUAVIZADAS
-        blue: { 
-            bg: 'bg-gradient-to-br from-blue-50/50 to-white', 
-            text: 'text-blue-600', 
-            value: 'text-blue-900',
-            iconBg: 'bg-gradient-to-br from-blue-500 to-blue-600',
-            border: 'border-blue-100' // Mais claro
-        },
-        purple: { 
-            bg: 'bg-gradient-to-br from-purple-50/50 to-white', 
-            text: 'text-purple-600', 
-            value: 'text-purple-900',
-            iconBg: 'bg-gradient-to-br from-purple-500 to-purple-600',
-            border: 'border-purple-100'
-        },
-        green: { 
-            bg: 'bg-gradient-to-br from-emerald-50/50 to-white', 
-            text: 'text-emerald-600', 
-            value: 'text-emerald-900',
-            iconBg: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
-            border: 'border-emerald-100'
-        },
-        orange: { 
-            bg: 'bg-gradient-to-br from-orange-50/50 to-white', 
-            text: 'text-orange-600', 
-            value: 'text-orange-900',
-            iconBg: 'bg-gradient-to-br from-orange-500 to-orange-600',
-            border: 'border-orange-100'
-        },
-        gray: { 
-            bg: 'bg-gradient-to-br from-gray-50/50 to-white', 
-            text: 'text-gray-600', 
-            value: 'text-gray-900',
-            iconBg: 'bg-gradient-to-br from-gray-500 to-gray-600',
-            border: 'border-gray-100'
-        },
-    };
-    
-    const t = themes[theme] || themes.gray;
-
-    return (
-        <div className={`p-6 rounded-3xl border ${t.border} ${t.bg} backdrop-blur-sm hover:shadow-md transition-all duration-300 group hover:scale-[1.01]`}>
-            <div className="flex items-center justify-between">
-                <div className="flex-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">{label}</p>
-                    <p className={`text-3xl font-black ${t.value} tracking-tight mb-1`}>{value}</p>
-                    {subtitle && <p className="text-xs font-medium text-gray-500">{subtitle}</p>}
-                </div>
-                <div className={`w-14 h-14 rounded-2xl ${t.iconBg} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    {icon}
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // --- LOADING SPINNER PREMIUM ---
 const LoadingSpinner = () => (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50/30">
@@ -165,18 +106,10 @@ export default function ControleSalao() {
 
     const estabelecimentoId = useMemo(() => userData?.estabelecimentosGerenciados?.[0] || null, [userData]);
 
-    // 🎯 HEADER ACTIONS (Ajuste para Mobile/Sutileza)
+    // 🎯 HEADER ACTIONS (Mantido para Mobile/Layout Global)
     useEffect(() => {
         setActions(
             <div className="flex gap-3">
-                {/* Botão Voltar: Compacto no mobile */}
-                <button 
-                    onClick={() => navigate('/dashboard')} 
-                    className="p-3 text-gray-600 hover:bg-gray-100 rounded-full font-semibold transition-all duration-200 flex items-center justify-center border-2 border-gray-200 hover:border-gray-300 active:scale-95 w-12 h-12 sm:w-auto sm:h-auto sm:px-5 sm:py-3 sm:rounded-2xl"
-                >
-                    <IoArrowBack className="text-xl sm:text-lg"/>
-                    <span className="hidden sm:inline">Voltar</span>
-                </button>
                 {/* Botão Nova Mesa: Compacto no mobile */}
                 <button 
                     onClick={() => setIsModalOpen(true)} 
@@ -185,7 +118,7 @@ export default function ControleSalao() {
                     <span className="relative z-10 flex items-center gap-2">
                         <IoAdd className="text-xl sm:text-lg"/>
                         <span className="hidden sm:inline">Nova Mesa</span>
-                        <span className="inline sm:hidden">Novo</span> {/* Texto compacto para mobile */}
+                        <span className="inline sm:hidden">Novo</span>
                     </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
@@ -323,11 +256,9 @@ export default function ControleSalao() {
             console.log('💰 Processando pagamento para mesa:', mesaParaPagamento.numero);
             console.log('📊 Dados do pagamento:', resultadoPagamento);
 
-            // Processamento de pagamento e liberação da mesa
             const batch = writeBatch(db);
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaPagamento.id);
             
-            // Criar registro de venda
             if (mesaParaPagamento.itens && mesaParaPagamento.itens.length > 0) {
                 await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'vendas'), {
                     mesaNumero: mesaParaPagamento.numero,
@@ -344,7 +275,6 @@ export default function ControleSalao() {
                 });
             }
             
-            // Liberar mesa
             batch.update(mesaRef, {
                 status: 'livre',
                 total: 0,
@@ -366,7 +296,6 @@ export default function ControleSalao() {
         }
     };
 
-    // 🎯 CORREÇÃO AUTOMÁTICA
     const corrigirMesasExistentes = useCallback(async () => {
         try {
             for (const mesa of mesas) {
@@ -379,7 +308,6 @@ export default function ControleSalao() {
 
     useEffect(() => { if (mesas.length > 0) corrigirMesasExistentes(); }, [mesas, corrigirMesasExistentes]);
 
-    // 🎯 ESTATÍSTICAS MELHORADAS
     const stats = useMemo(() => {
         const mesasOcupadas = mesas.filter(m => m.status === 'ocupada' || m.status === 'com_pedido');
         const totalVendas = mesasOcupadas.reduce((acc, m) => acc + (m.total || 0), 0);
@@ -400,7 +328,6 @@ export default function ControleSalao() {
         };
     }, [mesas]);
 
-    // 🎯 RENDERS CONDICIONAIS
     if (loading) return <LoadingSpinner />;
     
     if (erroCarregamento) return (
@@ -424,7 +351,6 @@ export default function ControleSalao() {
     return (
         <div className="min-h-screen bg-gray-50/50 p-4 sm:p-6">
             <div className="max-w-[1600px] mx-auto">
-                {/* MODAIS */}
                 <AdicionarMesaModal 
                     isOpen={isModalOpen} 
                     onClose={() => setIsModalOpen(false)} 
@@ -443,17 +369,29 @@ export default function ControleSalao() {
                         onSucesso={handleConfirmarPagamento}
                     />
                 )}
-                {/* HEADER DASHBOARD (Ajuste para Mobile/Sutileza) */}
+
+                {/* HEADER DASHBOARD */}
                 <div className="mb-8 sm:mb-10">
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-2 sm:w-3 h-10 sm:h-12 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full"></div>
-                        <div>
-                            <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Controle de Salão</h1>
-                            <p className="text-sm sm:text-lg text-gray-500 mt-1">Gerencie a ocupação e os pedidos em tempo real</p>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-2 sm:w-3 h-10 sm:h-12 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full"></div>
+                            <div>
+                                <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Controle de Salão</h1>
+                                <p className="text-sm sm:text-lg text-gray-500 mt-1">Gerencie a ocupação e os pedidos em tempo real</p>
+                            </div>
                         </div>
+                        
+                        {/* BOTÃO VOLTAR ADICIONADO AQUI */}
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="group flex items-center gap-2 px-5 py-3 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 font-bold shadow-sm transition-all active:scale-95"
+                        >
+                            <IoArrowBack className="text-xl group-hover:-translate-x-1 transition-transform" /> 
+                            <span>Voltar ao Dashboard</span>
+                        </button>
                     </div>
                     
-                    {/* BARRA DE STATUS (Ajuste para Sutileza) */}
+                    {/* BARRA DE STATUS */}
                     <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
@@ -472,54 +410,54 @@ export default function ControleSalao() {
                     </div>
                 </div>
 
- {/* INFORMAÇÕES DE STATUS COMPACTAS */}
-<div className="flex flex-wrap items-center gap-4 mb-8 sm:mb-10 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
-    <div className="flex items-center gap-3">
-        <div className="relative">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                <IoGrid className="text-white text-lg" />
-            </div>
-            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-700 text-white text-xs font-black rounded-full flex items-center justify-center">
-                {stats.ocupacaoPercent}%
-            </div>
-        </div>
-        <div>
-            <p className="text-sm font-bold text-gray-700">Ocupação</p>
-            <p className="text-lg font-black text-gray-900">{stats.ocupadas}/{stats.total} mesas</p>
-        </div>
-    </div>
-    
-    <div className="h-8 w-px bg-gray-300"></div>
-    
-    <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-emerald-50 rounded-full flex items-center justify-center border border-emerald-200">
-            <IoPeople className="text-emerald-600 text-lg" />
-        </div>
-        <div>
-            <p className="text-sm font-bold text-gray-700">Clientes</p>
-            <p className="text-lg font-black text-gray-900">{stats.pessoas}</p>
-        </div>
-    </div>
-    
-    <div className="h-8 w-px bg-gray-300"></div>
-    
-    <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-gradient-to-br from-orange-100 to-orange-50 rounded-full flex items-center justify-center border border-orange-200 relative">
-            <IoReceiptOutline className="text-orange-600 text-lg" />
-            {stats.itensPendentes > 0 && (
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-black rounded-full flex items-center justify-center animate-pulse">
-                    {stats.itensPendentes}
-                </div>
-            )}
-        </div>
-        <div>
-            <p className="text-sm font-bold text-gray-700">Pendentes</p>
-            <p className="text-lg font-black text-gray-900">{stats.itensPendentes}</p>
-        </div>
-    </div>
-</div>       
+                {/* INFORMAÇÕES DE STATUS COMPACTAS */}
+                <div className="flex flex-wrap items-center gap-4 mb-8 sm:mb-10 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                                <IoGrid className="text-white text-lg" />
+                            </div>
+                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-700 text-white text-xs font-black rounded-full flex items-center justify-center">
+                                {stats.ocupacaoPercent}%
+                            </div>
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-gray-700">Ocupação</p>
+                            <p className="text-lg font-black text-gray-900">{stats.ocupadas}/{stats.total} mesas</p>
+                        </div>
+                    </div>
+                    
+                    <div className="h-8 w-px bg-gray-300"></div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-emerald-50 rounded-full flex items-center justify-center border border-emerald-200">
+                            <IoPeople className="text-emerald-600 text-lg" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-gray-700">Clientes</p>
+                            <p className="text-lg font-black text-gray-900">{stats.pessoas}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="h-8 w-px bg-gray-300"></div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-orange-100 to-orange-50 rounded-full flex items-center justify-center border border-orange-200 relative">
+                            <IoReceiptOutline className="text-orange-600 text-lg" />
+                            {stats.itensPendentes > 0 && (
+                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-black rounded-full flex items-center justify-center animate-pulse">
+                                    {stats.itensPendentes}
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-gray-700">Pendentes</p>
+                            <p className="text-lg font-black text-gray-900">{stats.itensPendentes}</p>
+                        </div>
+                    </div>
+                </div>       
 
-                {/* ÁREA DO SALÃO PREMIUM (Ajuste de Sutileza) */}
+                {/* ÁREA DO SALÃO PREMIUM */}
                 <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 min-h-[600px] transition-shadow duration-300 hover:shadow-2xl">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 sm:mb-10 gap-4 sm:gap-6">
                         <div>
@@ -530,7 +468,7 @@ export default function ControleSalao() {
                             <p className="text-xs sm:text-sm text-gray-500 ml-5 sm:ml-6">Visualize e gerencie todas as mesas do estabelecimento</p>
                         </div>
                         
-                        {/* LEGENDA DE STATUS MELHORADA */}
+                        {/* LEGENDA DE STATUS */}
                         <div className="flex flex-wrap items-center gap-3 text-sm font-semibold bg-white px-4 sm:px-6 py-3 rounded-2xl border-2 border-gray-200 shadow-sm">
                             <span className="flex items-center gap-2">
                                 <span className="w-3 h-3 bg-green-500 rounded-full shadow-sm"></span>
