@@ -15,16 +15,20 @@ const AdicionaisModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => 
     const [total, setTotal] = useState(0);
     const [observacao, setObservacao] = useState('');
 
-    useEffect(() => {
-        let somaAdicionais = 0;
-        item.adicionais.forEach(ad => {
-            const qtd = adicionaisSelecionados[ad.nome] || 0;
-            somaAdicionais += qtd * Number(ad.preco);
-        });
-        const precoBase = item.precoFinal || Number(item.preco) || 0;
-        setTotal(precoBase + somaAdicionais);
-    }, [adicionaisSelecionados, item]);
+useEffect(() => {
+    let somaAdicionais = 0;
+    item.adicionais.forEach(ad => {
+        const qtd = adicionaisSelecionados[ad.nome] || 0;
+        somaAdicionais += qtd * Number(ad.preco);
+    });
 
+    // CORREÇÃO: Não use item.precoFinal aqui!
+    const precoBaseReal = item.variacaoSelecionada 
+        ? Number(item.variacaoSelecionada.preco) 
+        : (Number(item.preco) || 0);
+
+    setTotal(precoBaseReal + somaAdicionais);
+}, [adicionaisSelecionados, item]);
     const updateQtd = (nome, delta) => {
         setAdicionaisSelecionados(prev => {
             const novaQtd = Math.max(0, (prev[nome] || 0) + delta);

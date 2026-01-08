@@ -20,7 +20,6 @@ function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
     
-    // 1. Atualizamos o useAuth para trazer isAdmin, isMasterAdmin e logout
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     
     // eslint-disable-next-line no-unused-vars
@@ -52,7 +51,7 @@ function Menu() {
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
     
-    // Auth States
+    // Auth States (Modal)
     const [emailAuthModal, setEmailAuthModal] = useState('');
     const [passwordAuthModal, setPasswordAuthModal] = useState('');
     const [nomeAuthModal, setNomeAuthModal] = useState('');
@@ -148,7 +147,7 @@ function Menu() {
     // Função de Logout
     const handleLogout = async () => {
         try {
-            await logout(); // Usa a função do contexto para limpar tudo corretamente
+            await logout(); 
             setNomeCliente('');
             setTelefoneCliente('');
             setRua('');
@@ -156,7 +155,7 @@ function Menu() {
             setBairro('');
             setCidade('');
             setCarrinho([]);
-            window.location.reload(); // Força recarga para limpar qualquer estado residual
+            window.location.reload(); 
         } catch (error) {
             console.error("Erro ao sair", error);
         }
@@ -239,7 +238,7 @@ function Menu() {
         }
     };
 
-    // CARRINHO ACTIONS - 🔒 PROTEÇÃO DE LOGIN AQUI
+    // CARRINHO ACTIONS
     
     const handleAbrirModalProduto = (item) => {
         if (!currentUser || !currentUser.uid) { 
@@ -404,6 +403,7 @@ function Menu() {
         try { await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); toast.success('Login OK'); setShowLoginPrompt(false); }
         catch { toast.error("Erro no login"); }
     };
+    
     const handleRegisterModal = async (e) => {
         e.preventDefault();
         try { 
@@ -550,7 +550,6 @@ function Menu() {
     }
 
     // 🛡️ 2. AQUI ESTÁ A TELA DE BLOQUEIO DE ADMIN
-    // Se o usuário estiver logado E for Admin ou Master, mostra esta tela de bloqueio.
     if (currentUser && (isAdmin || isMasterAdmin)) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
@@ -700,9 +699,45 @@ function Menu() {
             </div>
 
             <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
+            
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
+            
             {showOrderConfirmationModal && confirmedOrderDetails && <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"><div className="bg-white p-8 rounded-2xl max-w-md w-full text-center border border-gray-200 shadow-2xl"><div className="text-6xl mb-4">🎉</div><h2 className="text-3xl font-bold text-gray-900 mb-2">Pedido Confirmado!</h2><p className="text-gray-500 mb-6">ID: {confirmedOrderDetails.id}</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
-            {showLoginPrompt && <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4"><div className="bg-white p-6 rounded-2xl w-full max-w-md border border-gray-200 shadow-2xl relative"><button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 text-2xl hover:text-gray-600">&times;</button><h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2><form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">{isRegisteringInModal && <><input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /></>}<input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" /><button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold shadow-md">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button></form><button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm font-semibold">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button></div></div>}
+            
+            {/* --- MODAL DE LOGIN / CRIAR CONTA ATUALIZADO --- */}
+            {showLoginPrompt && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md border border-gray-200 shadow-2xl relative">
+                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 text-2xl hover:text-gray-600">&times;</button>
+                        
+                        <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
+                        
+                        <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
+                            {isRegisteringInModal && (
+                                <>
+                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    
+                                    {/* --- CAMPOS ADICIONADOS PARA ENDEREÇO COMPLETO --- */}
+                                    <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    <div className="flex gap-2">
+                                        <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-1/3 p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                        <input placeholder="Bairro" value={bairroAuthModal} onChange={e => setBairroAuthModal(e.target.value)} className="w-2/3 p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    </div>
+                                    <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                </>
+                            )}
+                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                            
+                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold shadow-md">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                        </form>
+                        
+                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm font-semibold">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button>
+                    </div>
+                </div>
+            )}
+
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
         </div>

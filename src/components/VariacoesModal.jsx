@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { IoClose, IoCheckmarkCircle } from 'react-icons/io5';
 
 const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
-    // Força o tema escuro se não vier cor do banco
+    // Configuração de cores com fallback para tema escuro
     const cores = coresEstabelecimento || {
         primaria: '#0b0b0b', // Preto
         destaque: '#059669', // Verde
@@ -17,10 +17,12 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     // Atualiza o total do rodapé
     useEffect(() => {
         if (selectedOption) {
-            const valorBase = Number(item.preco) || 0;
-            const valorVariacao = Number(selectedOption.preco) || 0;
-            setTotal(valorBase + valorVariacao);
+            // MUDANÇA AQUI: Usa o preço da variação como valor final (Substituição)
+            // Se o seu sistema usasse "adicionais" (ex: + R$ 2,00), seria uma soma (+ valorBase).
+            // Como são tamanhos/tipos inteiros, usamos o valor cheio da variação.
+            setTotal(Number(selectedOption.preco) || 0);
         } else {
+            // Se nada selecionado, mostra o preço base do item
             setTotal(Number(item.preco) || 0);
         }
     }, [selectedOption, item]);
@@ -34,7 +36,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
             nome: item.nome,
             variacaoSelecionada: selectedOption,
             observacao: observacao,
-            precoFinal: total
+            precoFinal: total // Envia o total calculado corretamente
         };
 
         onConfirm(itemConfigurado);
@@ -69,10 +71,10 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                         {item.variacoes?.map((variacao, index) => {
                             const isSelected = selectedOption?.nome === variacao.nome;
                             
-                            // --- CORREÇÃO DO VALOR ---
-                            const precoBase = Number(item.preco) || 0;
-                            const precoVariacao = Number(variacao.preco) || 0;
-                            const precoFinalExibicao = precoBase + precoVariacao;
+                            // MUDANÇA AQUI: Exibição na lista
+                            // Removemos a soma (precoBase + precoVariacao)
+                            // Agora mostra exatamente o preço cadastrado na variação
+                            const precoFinalExibicao = Number(variacao.preco) || 0;
 
                             return (
                                 <div 
@@ -88,6 +90,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                                     }}
                                 >
                                     <div className="flex items-center gap-3">
+                                        {/* Radio Button Visual */}
                                         <div 
                                             className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? '' : 'border-gray-500'}`}
                                             style={{ 
@@ -103,7 +106,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                                         </span>
                                     </div>
                                     
-                                    {/* EXIBE O VALOR TOTAL (R$ 13,00) */}
+                                    {/* Preço da Variação */}
                                     <span className="font-bold text-sm" style={{ color: isSelected ? cores.destaque : '#9ca3af' }}>
                                         {formatarMoeda(precoFinalExibicao)}
                                     </span>
@@ -116,7 +119,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                         <label className="block text-sm font-bold mb-2 text-gray-300">Observações:</label>
                         <textarea
                             className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 focus:outline-none focus:ring-1 text-white placeholder-gray-500 resize-none"
-                            style={{ focusRingColor: cores.destaque }}
+                            style={{ '--tw-ring-color': cores.destaque }} // Correção para usar a cor dinâmica no focus ring
                             rows="3"
                             placeholder="Alguma preferência?"
                             value={observacao}

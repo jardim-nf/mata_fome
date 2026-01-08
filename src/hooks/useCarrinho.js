@@ -20,18 +20,31 @@ const useCarrinho = () => {
 
   const adicionarAoCarrinho = (produto, quantidade = 1, adicionais = [], observacao = '') => {
     setCarrinho(prevCarrinho => {
-      // Cria uma assinatura única do item para verificar se ele já existe (mesmo produto + mesmas opções + obs)
-      // Isso agrupa itens idênticos visualmente
+      // 1. Calcular preço final UNITÁRIO (Base + Adicionais)
+      // Se tiver variação, usa o preço da variação. Se não, usa o preço do produto.
+      const precoBase = produto.variacaoSelecionada 
+        ? Number(produto.variacaoSelecionada.preco) 
+        : (Number(produto.preco) || 0);
+
+      const precoAdicionais = adicionais.reduce((total, ad) => total + (Number(ad.preco) || 0), 0);
+      
+      // Preço final de UMA unidade
+      const precoFinalUnitario = precoBase + precoAdicionais;
+
+      // 2. Criar Assinatura Única (ID + Variação + Adicionais + Obs)
+      // Adicionei 'variacao' aqui para diferenciar itens com variações diferentes (ex: P e G)
       const assinaturaItem = JSON.stringify({
         id: produto.id,
-        adicionais: adicionais.sort((a, b) => a.nome.localeCompare(b.nome)), // Ordena para evitar duplicatas por ordem diferente
+        variacao: produto.variacaoSelecionada?.nome || '', // IMPORTANTE: Agrupa por variação
+        adicionais: adicionais.sort((a, b) => a.nome.localeCompare(b.nome)),
         observacao: observacao.trim()
       });
 
-      // Tenta encontrar um item idêntico já no carrinho
+      // 3. Verificar se já existe item igual
       const itemExistenteIndex = prevCarrinho.findIndex(item => {
         const assinaturaExistente = JSON.stringify({
           id: item.id,
+          variacao: item.variacaoSelecionada?.nome || '',
           adicionais: item.adicionais ? item.adicionais.sort((a, b) => a.nome.localeCompare(b.nome)) : [],
           observacao: item.observacao ? item.observacao.trim() : ''
         });
@@ -39,36 +52,33 @@ const useCarrinho = () => {
       });
 
       if (itemExistenteIndex >= 0) {
-        // Se existe igualzinho, apenas aumenta a quantidade do existente
+        // Se existe, soma a quantidade e atualiza o preço unitário (caso tenha mudado)
         const novoCarrinho = [...prevCarrinho];
         novoCarrinho[itemExistenteIndex].quantidade += quantidade;
+        novoCarrinho[itemExistenteIndex].precoFinal = precoFinalUnitario;
         return novoCarrinho;
       } else {
-        // Se é novo, adiciona com um ID único de carrinho (_cartId)
-        const precoAdicionais = adicionais.reduce((total, ad) => total + (Number(ad.preco) || 0), 0);
-        const precoFinal = (Number(produto.preco) || 0) + precoAdicionais;
-
+        // Se é novo, cria um objeto limpo
         return [
           ...prevCarrinho,
           {
             ...produto,
-            _cartId: generateId(), // ID EXCLUSIVO DESTE ITEM NO CARRINHO
+            _cartId: generateId(), // ID exclusivo para controle do carrinho
             quantidade,
             adicionais,
             observacao,
-            precoFinal
+            preco: precoBase, // Guarda o preço base real
+            precoFinal: precoFinalUnitario // Guarda o preço final unitário calculado
           }
         ];
       }
     });
   };
 
-  // AGORA REMOVEMOS PELO ID ÚNICO DO CARRINHO (MUITO MAIS SEGURO)
   const removerDoCarrinho = (cartId) => {
     setCarrinho(prevCarrinho => prevCarrinho.filter(item => item._cartId !== cartId));
   };
   
-  // ATUALIZAMOS QUANTIDADE PELO ID ÚNICO TAMBÉM
   const atualizarQuantidade = (cartId, novaQuantidade) => {
     if (novaQuantidade <= 0) {
         removerDoCarrinho(cartId);
@@ -88,6 +98,7 @@ const useCarrinho = () => {
     localStorage.removeItem('carrinho');
   };
 
+  // Cálculo total: (Preço Unitário * Quantidade) de cada item
   const subtotal = carrinho.reduce((total, item) => total + (item.precoFinal * item.quantidade), 0);
   const totalItens = carrinho.reduce((total, item) => total + item.quantidade, 0);
 
@@ -102,4 +113,5 @@ const useCarrinho = () => {
   };
 };
 
+// ESTA LINHA É FUNDAMENTAL PARA CORRIGIR O ERRO "does not provide an export named 'default'"
 export default useCarrinho;
