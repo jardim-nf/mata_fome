@@ -101,7 +101,6 @@ const AdminReports = () => {
             'online': 'Online'
         };
         
-        // Retorna a tradução ou o original capitalizado se não achar
         return mapa[metodo.toLowerCase()] || mapa[metodo] || metodo;
     };
 
@@ -132,7 +131,7 @@ const AdminReports = () => {
             tipo: origem === 'mesa' ? 'mesa' : (data.tipo || 'delivery'),
             origem: origem,
             status: data.status || (origem === 'mesa' ? 'finalizada' : 'recebido'),
-            formaPagamento: data.formaPagamento || 'N/A', // Mantém original aqui, traduz na exibição
+            formaPagamento: data.formaPagamento || 'N/A',
             mesaNumero: data.mesaNumero || data.numeroMesa || null,
             loteHorario: data.loteHorario || '',
             itens: itens,
@@ -244,6 +243,8 @@ const AdminReports = () => {
         const totalTaxas = filteredPedidos.reduce((acc, p) => acc + (p.taxaEntrega || 0), 0);
         
         const byDay = {}, byPayment = {}, byType = {}, byHour = {}, itemsCount = {}, motoboyStats = {}, bairrosStats = {};
+        const clientsStats = {}; // Novo objeto para clientes
+
         const mesaVendas = filteredPedidos.filter(p => p.tipo === 'mesa');
         const cancelados = filteredPedidos.filter(p => p.status === 'cancelado');
 
@@ -256,7 +257,6 @@ const AdminReports = () => {
             const hourKey = format(p.data, 'HH:00');
             byHour[hourKey] = (byHour[hourKey] || 0) + 1;
 
-            // 🔥 TRADUÇÃO DE PAGAMENTO AQUI
             const payKey = traduzirPagamento(p.formaPagamento);
             byPayment[payKey] = (byPayment[payKey] || 0) + p.totalFinal;
 
@@ -277,12 +277,23 @@ const AdminReports = () => {
             if (p.tipo !== 'mesa' && p.bairro) {
                 bairrosStats[p.bairro] = (bairrosStats[p.bairro] || 0) + 1;
             }
+
+            // Lógica Top Clientes (Delivery)
+            if (p.tipo !== 'mesa') {
+                const cNome = p.clienteNome && p.clienteNome !== 'Cliente' ? p.clienteNome : 'Não Identificado';
+                if (!clientsStats[cNome]) {
+                    clientsStats[cNome] = { nome: cNome, count: 0, total: 0, bairro: p.bairro };
+                }
+                clientsStats[cNome].count += 1;
+                clientsStats[cNome].total += p.totalFinal;
+            }
         });
 
         const sortedDays = Object.keys(byDay).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
         const topItems = Object.entries(itemsCount).sort(([,a], [,b]) => b - a).slice(0, 5);
         const topMotoboys = Object.values(motoboyStats).sort((a, b) => b.count - a.count);
         const topBairros = Object.entries(bairrosStats).sort(([,a], [,b]) => b - a).slice(0, 5);
+        const topClients = Object.values(clientsStats).sort((a, b) => b.total - a.total).slice(0, 5); // Top 5 Clientes
 
         return {
             totalVendas,
@@ -295,6 +306,7 @@ const AdminReports = () => {
             topItems,
             topMotoboys,
             topBairros,
+            topClients, // Adicionado ao retorno
             mesaMetrics: {
                 total: mesaVendas.reduce((acc, m) => acc + m.totalFinal, 0),
                 count: mesaVendas.length
@@ -446,14 +458,14 @@ const AdminReports = () => {
                             <StatCard title="Pedidos Válidos" value={metrics.count} subtitle={`${metrics.mesaMetrics.count} mesas`} icon={<IoReceiptOutline/>} color="blue" />
                         </div>
 
-                        {/* ANALISE DE PERDA E BAIRROS */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <Card title={<><IoAlertCircleOutline className="text-red-600"/> Saúde da Operação (Cancelamentos)</>}>
+                        {/* ANALISE DE PERDA, BAIRROS E CLIENTES */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                            <Card title={<><IoAlertCircleOutline className="text-red-600"/> Saúde da Operação</>}>
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <p className="text-gray-500 text-sm">Valor Perdido</p>
+                                        <p className="text-gray-500 text-sm">Cancelamentos</p>
                                         <p className="text-2xl font-bold text-red-600">{metrics.cancelamentos.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                        <p className="text-xs text-gray-400 mt-1">{metrics.cancelamentos.qtd} cancelados</p>
+                                        <p className="text-xs text-gray-400 mt-1">{metrics.cancelamentos.qtd} pedidos</p>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xl font-bold text-red-600">{metrics.cancelamentos.taxa}%</div>
@@ -463,7 +475,7 @@ const AdminReports = () => {
                                 <div className="mt-4 bg-gray-200 rounded-full h-2"><div className="bg-red-600 h-2 rounded-full" style={{width: `${Math.min(metrics.cancelamentos.taxa, 100)}%`}}></div></div>
                             </Card>
 
-                            <Card title={<><IoMapOutline className="text-orange-600"/> Top Bairros (Delivery)</>}>
+                            <Card title={<><IoMapOutline className="text-orange-600"/> Top Bairros</>}>
                                 <div className="space-y-2">
                                     {metrics.topBairros.length > 0 ? metrics.topBairros.map(([b, q], i) => (
                                         <div key={b} className="flex justify-between border-b pb-1 last:border-0">
@@ -471,6 +483,42 @@ const AdminReports = () => {
                                             <span className="font-bold text-blue-600 text-sm">{q}</span>
                                         </div>
                                     )) : <p className="text-gray-400 text-center text-sm">Sem dados de endereço</p>}
+                                </div>
+                            </Card>
+
+                            <Card title={<><IoPeopleOutline className="text-purple-600"/> Top Clientes</>}>
+                                <div className="space-y-3">
+                                    {metrics.topClients.length > 0 ? (
+                                        metrics.topClients.map((client, index) => (
+                                            <div key={index} className="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`
+                                                        w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold
+                                                        ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 
+                                                          index === 1 ? 'bg-gray-200 text-gray-700' :
+                                                          index === 2 ? 'bg-orange-100 text-orange-800' : 'bg-purple-50 text-purple-600'}
+                                                    `}>
+                                                        {index + 1}º
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-800 truncate w-[100px] sm:w-[120px]" title={client.nome}>
+                                                            {client.nome}
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-500">
+                                                            {client.count} ped. {client.bairro ? `• ${client.bairro.substring(0,10)}...` : ''}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-bold text-green-600">
+                                                        {client.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-gray-400 text-center text-sm py-4">Sem dados de clientes.</p>
+                                    )}
                                 </div>
                             </Card>
                         </div>

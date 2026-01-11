@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx - VERSÃO FINAL (SEM ERRO DE RENDERIZAÇÃO)
+// src/context/AuthContext.jsx - CORRIGIDO (Exportando ID do Estabelecimento)
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import {
     createUserWithEmailAndPassword,
@@ -9,9 +9,9 @@ import {
     setPersistence,
     browserSessionPersistence
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase'; 
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'; 
+import { Navigate, useLocation } from 'react-router-dom'; 
 import { toast } from 'react-toastify'; 
 
 const AuthContext = createContext();
@@ -20,7 +20,7 @@ export function useAuth() {
     return useContext(AuthContext);
 }
 
-// FUNÇÃO AUXILIAR: Converte Map/Objeto para Array (Evita erros de .includes)
+// FUNÇÃO AUXILIAR: Converte Map/Objeto para Array
 const mapToArray = (data) => {
     if (!data) return [];
     if (typeof data === 'object' && !Array.isArray(data)) {
@@ -84,7 +84,7 @@ export function AuthProvider({ children }) {
                 const isMasterAdminFromClaims = Boolean(claims.isMasterAdmin);
                 const isAdminFromClaims = Boolean(claims.isAdmin);
                 
-                // Normaliza os IDs dos estabelecimentos (aceita Map ou Array)
+                // Normaliza os IDs dos estabelecimentos
                 const docEstabs = mapToArray(firestoreData?.estabelecimentos);
                 const docEstabsGerenciados = mapToArray(firestoreData?.estabelecimentosGerenciados);
                 const claimEstabs = mapToArray(claims.estabelecimentos);
@@ -101,9 +101,6 @@ export function AuthProvider({ children }) {
                 }
 
                 const isMasterAdmin = isMasterAdminFromClaims || Boolean(firestoreData?.isMasterAdmin);
-                
-                // ⚠️ CORREÇÃO: Respeita estritamente o valor do banco.
-                // Se no banco diz isAdmin: false, então é false (mesmo tendo loja vinculada).
                 const isAdmin = isAdminFromClaims || (firestoreData?.isAdmin === true);
 
                 const combinedData = {
@@ -140,11 +137,21 @@ export function AuthProvider({ children }) {
         return unsubscribe;
     }, []);
     
+    // 🔥 CORREÇÃO PRINCIPAL AQUI:
+    // Pega o primeiro estabelecimento da lista para usar como padrão nas queries
+    const activeEstab = userData?.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 0 
+        ? userData.estabelecimentosGerenciados[0] 
+        : null;
+
     const value = {
         currentUser, userData, currentClientData, loading, authChecked,
         isAdmin: Boolean(userData?.isAdmin),
         isMasterAdmin: Boolean(userData?.isMasterAdmin),
         estabelecimentosGerenciados: userData?.estabelecimentosGerenciados || [],
+        
+        // 👇 ESTES DOIS CAMPOS ESTAVAM FALTANDO:
+        primeiroEstabelecimento: activeEstab, // Usado pelo DashBoardSummary
+        estabelecimentoIdPrincipal: activeEstab, // Usado pelo AdminReports
         
         signup: async (email, password, additionalData = {}) => {
             const uc = await createUserWithEmailAndPassword(auth, email, password);
@@ -189,7 +196,6 @@ export function usePermissions() {
         if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) return true;
         
         const userCargo = currentUser.cargo || '';
-        // Normaliza string (remove acentos e põe minúsculo) para evitar erro garcom/garçom
         const userCargoNorm = userCargo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
         return requiredRoles.some(role => {
@@ -210,13 +216,12 @@ export function usePermissions() {
     return { canAccess, canManageEstabelecimento };
 }
 
-// ⚠️ CORREÇÃO: Removido toast.error daqui para evitar erro de loop no React
 export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecimento = null }) {
     const { currentUser, loading, authChecked } = useAuth();
     const { canAccess, canManageEstabelecimento } = usePermissions();
     const location = useLocation();
 
-    if (loading || !authChecked) return <div className="flex items-center justify-center min-h-screen">Wait...</div>;
+    if (loading || !authChecked) return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
 
     if (!currentUser) {
         if (allowedRoles.includes('admin') || allowedRoles.includes('masterAdmin')) {
@@ -225,7 +230,6 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
         return <Navigate to="/" replace />;
     }
 
-    // Se não tiver permissão, redireciona silenciosamente para o Dashboard
     if (!canAccess(allowedRoles)) {
         return <Navigate to="/dashboard" replace />;
     }

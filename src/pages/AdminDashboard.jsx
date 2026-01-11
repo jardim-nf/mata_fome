@@ -130,29 +130,7 @@ const AdminDashboard = () => {
             </Link>
           )}
 
-          {/* BOTÃO 3: Histórico de Pedidos (Garçom) */}
-          {temPermissao('ver-historico') && (
-            <Link to="/historico-pedidos" className="h-full">
-              <ActionButton
-                title="Histórico de Pedidos"
-                subtitle="Meus pedidos finalizados, conferência e totais"
-                icon={<FaHistory className="text-indigo-500" />}
-                colorClass="hover:border-indigo-500 hover:bg-indigo-50"
-              />
-            </Link>
-          )}
-
-          {/* BOTÃO 4: Cardápio Digital */}
-          {temPermissao('visualizar-cardapio') && (
-            <Link to="/admin/gerenciar-cardapio" className="h-full">
-              <ActionButton
-                title="Cardápio Digital"
-                subtitle="Cadastre produtos, fotos, preços e categorias"
-                icon="🍔"
-                colorClass="hover:border-orange-500 hover:bg-orange-50"
-              />
-            </Link>
-          )}
+       
 
           {/* BOTÃO 5: PDV (Admin) */}
           {isRealAdmin && (
@@ -165,7 +143,17 @@ const AdminDashboard = () => {
               />
             </Link>
           )}
-
+   {/* BOTÃO 4: Cardápio Digital */}
+          {temPermissao('visualizar-cardapio') && (
+            <Link to="/admin/gerenciar-cardapio" className="h-full">
+              <ActionButton
+                title="Cardápio Digital"
+                subtitle="Cadastre produtos, fotos, preços e categorias"
+                icon="🍔"
+                colorClass="hover:border-orange-500 hover:bg-orange-50"
+              />
+            </Link>
+          )}
           {/* --- BLOCO EXCLUSIVO DE ADMIN --- */}
           {isRealAdmin && (
             <>

@@ -80,22 +80,15 @@ const ComandaParaImpressao = () => {
         buscarPedido();
     }, [id, authLoading, primeiroEstabelecimento, origemUrl, estabIdUrl]);
 
-    // --- LÓGICA DE IMPRESSÃO E FECHAMENTO AUTOMÁTICO ---
     useEffect(() => {
         if (pedido && !loading && !erro) {
+            console.log("DADOS DO PEDIDO PARA DEBUG:", pedido); // <--- OLHE AQUI NO CONSOLE
             document.title = `Comanda ${pedido.mesaNumero || pedido.id.slice(0,4)}`;
             
-            // Fecha a janela assim que a impressão terminar (ou for cancelada)
-            const handleAfterPrint = () => {
-                window.close();
-            };
-            
+            const handleAfterPrint = () => { window.close(); };
             window.addEventListener("afterprint", handleAfterPrint);
 
-            // Dispara a impressão quase instantaneamente (50ms)
-            const timer = setTimeout(() => {
-                window.print();
-            }, 50);
+            const timer = setTimeout(() => { window.print(); }, 500); // Aumentei um pouco o tempo para garantir renderização
             
             return () => {
                 clearTimeout(timer);
@@ -104,7 +97,7 @@ const ComandaParaImpressao = () => {
         }
     }, [pedido, loading, erro]);
 
-    if (loading) return <div className="flex items-center justify-center h-screen font-bold text-xl">Abrindo Comanda ...</div>;
+    if (loading) return <div className="flex items-center justify-center h-screen font-bold text-xl">Abrindo Comanda...</div>;
 
     if (erro) return (
         <div className="flex flex-col items-center justify-center h-screen text-red-600 p-4 text-center">
@@ -115,13 +108,19 @@ const ComandaParaImpressao = () => {
 
     if (!pedido) return null;
 
+    // --- CORREÇÃO DO ENDEREÇO ---
+    // Tenta pegar o endereço na raiz OU dentro do objeto cliente
+    const enderecoFinal = pedido.endereco || pedido.cliente?.endereco || null;
+    const nomeCliente = pedido.clienteNome || pedido.cliente?.nome || 'Cliente';
+    const telefoneCliente = pedido.telefone || pedido.cliente?.telefone || null;
+
     return (
         <div className="bg-white min-h-screen p-1 text-black font-mono text-sm max-w-[80mm] mx-auto">
-            {/* Oculta botão na impressão */}
             <button onClick={() => window.print()} className="print:hidden fixed top-2 right-2 bg-gray-200 p-2 rounded-full">
                 <IoPrint size={20} />
             </button>
 
+            {/* CABEÇALHO */}
             <div className="text-center border-b-2 border-dashed border-black pb-2 mb-2">
                 <h2 className="text-2xl font-black uppercase">
                     {pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}
@@ -132,22 +131,51 @@ const ComandaParaImpressao = () => {
                 <p className="text-[10px] font-bold">#{pedido.id.slice(0, 6).toUpperCase()}</p>
             </div>
 
+            {/* DADOS DO CLIENTE E ENDEREÇO */}
             <div className="mb-3 border-b border-dashed border-black pb-2">
-                <p className="font-bold text-base truncate">
-                    {pedido.clienteNome || pedido.cliente?.nome || 'Cliente'}
+                <p className="font-bold text-base uppercase truncate">
+                    {nomeCliente}
                 </p>
-                {pedido.endereco && (
-                    <p className="text-xs mt-1">
-                        {pedido.endereco.rua}, {pedido.endereco.numero} - {pedido.endereco.bairro}
-                    </p>
+                
+                {/* LÓGICA DE EXIBIÇÃO DO ENDEREÇO */}
+                {enderecoFinal ? (
+                    <div className="text-xs mt-1 border-t border-dotted border-gray-400 pt-1">
+                        <p className="font-bold text-sm">
+                            {enderecoFinal.rua}, {enderecoFinal.numero}
+                        </p>
+                        <p>
+                            {enderecoFinal.bairro} 
+                            {enderecoFinal.cidade ? ` - ${enderecoFinal.cidade}` : ''}
+                        </p>
+                        
+                        {(enderecoFinal.complemento || enderecoFinal.referencia) && (
+                            <p className="mt-1 font-bold">
+                                {enderecoFinal.complemento ? `Comp: ${enderecoFinal.complemento} ` : ''}
+                                {enderecoFinal.referencia ? `Ref: ${enderecoFinal.referencia}` : ''}
+                            </p>
+                        )}
+                        
+                        {telefoneCliente && (
+                            <p className="mt-1 font-bold">Tel: {telefoneCliente}</p>
+                        )}
+                    </div>
+                ) : (
+                    !pedido.mesaNumero && (
+                        <div className="mt-2 border-2 border-black p-1 text-center font-bold">
+                            RETIRADA NO BALCÃO
+                            {telefoneCliente && <div className="text-xs font-normal mt-1">{telefoneCliente}</div>}
+                        </div>
+                    )
                 )}
+
                 {pedido.motoboyNome && (
-                    <p className="mt-1 font-bold text-xs bg-black text-white inline-block px-1">
-                        MOTO: {pedido.motoboyNome}
+                    <p className="mt-2 font-bold text-xs bg-black text-white inline-block px-1">
+                        ENTREGADOR: {pedido.motoboyNome.toUpperCase()}
                     </p>
                 )}
             </div>
 
+            {/* LISTA DE ITENS */}
             <div className="space-y-2 mb-4">
                 {pedido.itens.map((item, index) => (
                     <div key={index} className="border-b border-dotted border-gray-400 pb-1">
@@ -159,25 +187,36 @@ const ComandaParaImpressao = () => {
                         <div className="pl-4 text-xs">
                             {item.variacaoSelecionada && <p>- {item.variacaoSelecionada.nome}</p>}
                             {item.adicionais?.map((ad, i) => <p key={i}>+ {ad.nome}</p>)}
-                            {item.observacao && <p className="font-bold mt-0.5">OBS: {item.observacao}</p>}
+                            {item.observacao && <p className="font-bold mt-0.5 uppercase">OBS: {item.observacao}</p>}
                         </div>
                     </div>
                 ))}
             </div>
 
+            {/* TOTAIS */}
             <div className="border-t-2 border-black pt-2">
-                {pedido.taxaEntrega > 0 && (
+                {Number(pedido.taxaEntrega) > 0 && (
                     <div className="flex justify-between text-xs mb-1">
-                        <span>Taxa</span>
+                        <span>Taxa de Entrega</span>
                         <span>{Number(pedido.taxaEntrega).toFixed(2)}</span>
                     </div>
                 )}
-                <div className="flex justify-between text-xl font-black">
+                
+                {pedido.desconto > 0 && (
+                     <div className="flex justify-between text-xs mb-1">
+                        <span>Desconto</span>
+                        <span>-{Number(pedido.desconto).toFixed(2)}</span>
+                    </div>
+                )}
+
+                <div className="flex justify-between text-xl font-black mt-2">
                     <span>TOTAL</span>
                     <span>R$ {Number(pedido.total || pedido.totalFinal).toFixed(2)}</span>
                 </div>
+                
                 <div className="mt-2 text-xs font-bold uppercase text-center border border-black p-1">
-                    {pedido.formaPagamento || 'Dinheiro'}
+                    PAGAMENTO: {pedido.formaPagamento || 'Dinheiro'} 
+                    {pedido.trocoPara ? ` (Troco p/ ${pedido.trocoPara})` : ''}
                 </div>
             </div>
             

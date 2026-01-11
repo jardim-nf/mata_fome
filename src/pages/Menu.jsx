@@ -264,22 +264,50 @@ function Menu() {
         toast.success(`${item.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
     };
 
+    // --- FUNÇÕES DE CONFIRMAÇÃO CORRIGIDAS ---
     const handleConfirmarVariacoes = (itemConfigurado) => {
+        // CORREÇÃO: Forçar o uso do preço da variação como preço base
+        let precoBaseReal = Number(itemConfigurado.preco);
+        
+        if (itemConfigurado.variacaoSelecionada && itemConfigurado.variacaoSelecionada.preco) {
+            precoBaseReal = Number(itemConfigurado.variacaoSelecionada.preco);
+        }
+
+        // Cria um objeto atualizado onde o 'preco' base agora é o da variação
+        const itemAtualizado = {
+            ...itemConfigurado,
+            preco: precoBaseReal, // Isso garante que o modal de adicionais calcule corretamente
+            precoFinal: precoBaseReal
+        };
+
         if (itemConfigurado.adicionais && itemConfigurado.adicionais.length > 0) {
-            setItemParaAdicionais(itemConfigurado);
+            setItemParaAdicionais(itemAtualizado);
             setItemParaVariacoes(null);
         } else {
-            setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: itemConfigurado.precoSelecionado || itemConfigurado.preco }]);
+            setCarrinho(prev => [...prev, { 
+                ...itemAtualizado, 
+                qtd: 1, 
+                cartItemId: uuidv4(), 
+                precoFinal: precoBaseReal 
+            }]);
+            
             toast.success(`${itemConfigurado.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
             setItemParaVariacoes(null);
         }
     };
 
     const handleConfirmarAdicionais = (itemConfigurado) => {
-        setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: itemConfigurado.precoFinal || itemConfigurado.precoSelecionado || itemConfigurado.preco }]);
+        setCarrinho(prev => [...prev, { 
+            ...itemConfigurado, 
+            qtd: 1, 
+            cartItemId: uuidv4(), 
+            // Usa o precoFinal que vem calculado do modal de adicionais
+            precoFinal: Number(itemConfigurado.precoFinal || itemConfigurado.preco) 
+        }]);
         toast.success(`${itemConfigurado.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
         setItemParaAdicionais(null);
     };
+    // ------------------------------------------
 
     const removerDoCarrinho = (cartItemId) => {
         const item = carrinho.find((p) => p.cartItemId === cartItemId);

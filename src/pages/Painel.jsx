@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; 
 import { 
     collection, query, where, orderBy, onSnapshot, 
     doc, updateDoc, deleteDoc, getDoc,
@@ -9,7 +10,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { IoTime } from "react-icons/io5";
+import { IoTime, IoArrowBack, IoCalendarOutline } from "react-icons/io5"; // Adicionei ícone de calendário
 
 // ==========================================
 // 📦 COMPONENTE DE GRUPO (MESA/COZINHA)
@@ -65,7 +66,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                                 estabelecimentoInfo={estabelecimentoInfo}
                                 showMesaInfo={false}
                                 isAgrupado={true}
-                                // Mesas não precisam de motoboy
                                 motoboysDisponiveis={[]}
                                 onAtribuirMotoboy={null}
                             />
@@ -81,6 +81,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
 // 🚀 COMPONENTE PRINCIPAL (PAINEL)
 // ==========================================
 function Painel() {
+    const navigate = useNavigate(); 
     const audioRef = useRef(null);
     const { logout, loading: authLoading, estabelecimentosGerenciados } = useAuth();
     
@@ -96,6 +97,10 @@ function Painel() {
     const [abaAtiva, setAbaAtiva] = useState('delivery');
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
+    
+    // DATA DE HOJE PARA EXIBIÇÃO
+    const dataHojeFormatada = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
 
@@ -105,9 +110,7 @@ function Painel() {
         return estabelecimentosGerenciados[0]; 
     }, [estabelecimentosGerenciados]);
 
-    // ============================================================
     // RESETAR DADOS QUANDO ESTABELECIMENTO MUDAR
-    // ============================================================
     useEffect(() => {
         setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
         setMotoboys([]);
@@ -116,9 +119,7 @@ function Painel() {
         setLoading(true);
     }, [estabelecimentoAtivo]);
 
-    // ============================================================
     // FUNÇÃO PARA LIMPAR DADOS DO CLIENTE
-    // ============================================================
     const limparDadosCliente = useCallback((clienteData) => {
         if (!clienteData) return { nome: 'Cliente', telefone: '', endereco: {} };
         
@@ -137,9 +138,7 @@ function Painel() {
         return { nome: 'Cliente', telefone: '', endereco: {} };
     }, []);
 
-    // ============================================================
     // FUNÇÃO PARA CRIAR PEDIDO FALLBACK
-    // ============================================================
     const criarPedidoFallback = useCallback((id, source) => ({
         id: id || `fallback-${Date.now()}`,
         cliente: { nome: 'Cliente', telefone: '' },
@@ -152,9 +151,7 @@ function Painel() {
         dataPedido: new Date()
     }), []);
 
-    // ============================================================
     // BUSCAR MOTOBOYS
-    // ============================================================
     useEffect(() => {
         if (!estabelecimentoAtivo) {
             setMotoboys([]);
@@ -192,9 +189,7 @@ function Painel() {
         }
     }, [estabelecimentoAtivo]);
 
-    // ============================================================
     // ATRIBUIR MOTOBOY
-    // ============================================================
     const handleAtribuirMotoboy = useCallback(async (pedidoId, motoboyId, motoboyNome, source) => {
         if (!pedidoId || !motoboyId || !motoboyNome) {
             toast.error("Dados incompletos para atribuição");
@@ -219,18 +214,6 @@ function Painel() {
             toast.error("Erro ao atribuir motoboy. Verifique as permissões.");
         }
     }, [estabelecimentoAtivo]);
-
-    // ============================================================
-    // TOTAL DAS TAXAS DOS MOTOBOYS (MANTIDO PARA DEBUG INTERNO)
-    // ============================================================
-    const totalTaxasEntrega = useMemo(() => {
-        const total = motoboys.reduce((total, moto) => {
-            return total + (Number(moto.taxaEntrega) || 0);
-        }, 0);
-        return total;
-    }, [motoboys]);
-
-    // ... (Funções handleExcluirPedido e handleUpdateStatusAndNotify) ...
 
     const handleExcluirPedido = useCallback(async (pedidoId, source) => {
         if (!pedidoId || !source) {
@@ -320,7 +303,7 @@ function Painel() {
         };
     }, [limparDadosCliente, criarPedidoFallback]);
 
-    // --- LISTENERS DE PEDIDOS ---
+    // LISTENERS DE PEDIDOS
     useEffect(() => {
         if (authLoading) return;
         if (!estabelecimentoAtivo) { 
@@ -328,6 +311,21 @@ function Painel() {
             setLoading(false); 
             return; 
         }
+
+        // --- DEFINIÇÃO DO INÍCIO DO DIA (00:00) ---
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        // Helper para checar se é de hoje
+        const isPedidoDeHoje = (timestamp) => {
+            if (!timestamp) return true; // Se acabou de criar pode estar sem timestamp, assume hoje
+            let date;
+            if (timestamp.toDate) date = timestamp.toDate();
+            else if (timestamp.seconds) date = new Date(timestamp.seconds * 1000);
+            else date = new Date(timestamp);
+            
+            return date >= startOfToday;
+        };
 
         let unsubscribers = [];
         const setupPainel = async () => {
@@ -344,16 +342,20 @@ function Painel() {
                 });
 
                 // LISTENER SALÃO
-                // ✅ CORREÇÃO: Removendo o filtro de status que estava descartando pedidos
                 const qSalao = query(
                     collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
-                    orderBy('dataPedido', 'asc') // Usando dataPedido para ordenação
+                    orderBy('dataPedido', 'asc')
                 );
                 
                 unsubscribers.push(onSnapshot(qSalao, (snapshot) => {
                     const pedidosSalao = snapshot.docs.map(d => {
                         const data = d.data();
                         if (!data) return null;
+                        
+                        // FILTRO DE DATA NO LADO DO CLIENTE
+                        const dataRef = data.dataPedido || data.createdAt;
+                        if (!isPedidoDeHoje(dataRef)) return null;
+
                         return processarDadosPedido({ id: d.id, ...data }, 'salao', 'salao');
                     }).filter(p => p !== null);
                     
@@ -383,6 +385,11 @@ function Painel() {
                     const pedidosDelivery = snapshot.docs.map(d => {
                         const data = d.data();
                         if (!data) return null;
+
+                        // FILTRO DE DATA NO LADO DO CLIENTE
+                        const dataRef = data.createdAt;
+                        if (!isPedidoDeHoje(dataRef)) return null;
+
                         return processarDadosPedido({ id: d.id, ...data }, 'global', data.tipo || 'delivery');
                     }).filter(p => p !== null);
                     
@@ -418,7 +425,7 @@ function Painel() {
         };
     }, [estabelecimentoAtivo, authLoading, processarDadosPedido]);
 
-    // --- SONS E NOTIFICAÇÕES ---
+    // SONS E NOTIFICAÇÕES
     useEffect(() => {
         const currentRecebidos = pedidos.recebido;
         if (currentRecebidos.length > prevRecebidosRef.current.length) {
@@ -514,11 +521,24 @@ function Painel() {
                 <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
                     <div className="flex gap-4 items-center">
                         <button 
+                            onClick={() => navigate('/admin-dashboard')}
+                            className="px-4 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all flex items-center gap-2"
+                        >
+                            <IoArrowBack /> Voltar
+                        </button>
+
+                        <button 
                             onClick={toggleNotifications} 
                             className={`px-4 py-2 rounded-xl font-bold transition-all ${notificationsEnabled ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
                         >
                             {notificationsEnabled ? '🔔 Som ON' : '🔕 Som OFF'}
                         </button>
+
+                        {/* DATA DE HOJE ADICIONADA AQUI */}
+                        <div className="hidden md:flex items-center gap-2 bg-amber-50 text-amber-800 px-4 py-2 rounded-xl border border-amber-200">
+                            <IoCalendarOutline className="text-lg" />
+                            <span className="font-bold capitalize">{dataHojeFormatada}</span>
+                        </div>
                     </div>
 
                     <div className="flex bg-gray-100 p-1 rounded-xl">
@@ -538,8 +558,6 @@ function Painel() {
                 </div>
             </header>
 
-            {/* REMOVIDO: DEBUG INFO BAR */}
-            
             {/* MAIN CONTENT */}
             <main className="flex-grow p-4 overflow-x-hidden">
                 <div className="flex flex-col md:flex-row gap-4 h-auto md:h-full w-full max-w-7xl mx-auto">
