@@ -207,7 +207,7 @@ const PedidoCard = ({
     const showMotoboySelect = item.status === 'preparo' && item.tipo !== 'salao' && item.tipo !== 'mesa';
 
     return (
-        <div className={`relative bg-white rounded-xl transition-all duration-200 flex-col sm:flex-row border shadow-sm ${isNew ? 'ring-2 ring-red-400 border-red-200 animate-pulse' : 'border-gray-200'} ${item.status === 'finalizado' ? 'opacity-75' : ''}`}>
+        <div className={`relative bg-white rounded-xl transition-all duration-200 w-full border shadow-sm ${isNew ? 'ring-2 ring-red-400 border-red-200 animate-pulse' : 'border-gray-200'} ${item.status === 'finalizado' ? 'opacity-75' : ''}`}>
             
             {/* HEADER */}
             <div className={`px-4 py-3 ${showMesaInfo && !isAgrupado ? 'bg-gray-50' : 'bg-white'} border-b border-gray-100 rounded-t-xl`}>
@@ -283,7 +283,7 @@ const PedidoCard = ({
                 </div>
                 
                 {item.itens?.length > 3 && (
-                    <button onClick={() => setIsExpanded(!isExpanded)} className="flex-col sm:flex-row text-center text-xs font-semibold text-gray-400 py-1 mb-2 hover:text-gray-600 transition-colors">
+                    <button onClick={() => setIsExpanded(!isExpanded)} className="w-full text-center text-xs font-semibold text-gray-400 py-1 mb-2 hover:text-gray-600 transition-colors">
                         {isExpanded ? '▲ Ver menos' : `▼ Ver mais ${item.itens.length - 3} itens`}
                     </button>
                 )}
@@ -300,7 +300,7 @@ const PedidoCard = ({
                                 <select 
                                     value={selectedMotoboyId} 
                                     onChange={(e) => setSelectedMotoboyId(e.target.value)} 
-                                    className={`flex-col sm:flex-row text-sm rounded-md shadow-sm py-2 px-3 mb-2 ${!selectedMotoboyId ? 'border-red-300 bg-red-50 text-red-800 focus:ring-red-500' : 'border-gray-300 bg-white text-gray-700 focus:ring-blue-500'}`}
+                                    className={`w-full text-sm rounded-md shadow-sm py-2 px-3 mb-2 ${!selectedMotoboyId ? 'border-red-300 bg-red-50 text-red-800 focus:ring-red-500' : 'border-gray-300 bg-white text-gray-700 focus:ring-blue-500'}`}
                                 >
                                     <option value="">-- Selecione o Motoboy --</option>
                                     {motoboysDisponiveis.map(moto => (
@@ -322,7 +322,7 @@ const PedidoCard = ({
                                 </div>
                                 <button 
                                     onClick={() => { if (window.confirm("Avançar sem motoboy?")) handleAction(); }}
-                                    className="flex-col sm:flex-row text-xs bg-blue-100 text-blue-700 py-2 rounded border border-blue-300 font-bold hover:bg-blue-200 transition-colors"
+                                    className="w-full text-xs bg-blue-100 text-blue-700 py-2 rounded border border-blue-300 font-bold hover:bg-blue-200 transition-colors"
                                 >
                                     Avançar sem Motoboy
                                 </button>

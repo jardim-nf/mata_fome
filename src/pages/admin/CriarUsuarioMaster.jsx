@@ -59,7 +59,7 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
                 onChange={onChange}
                 type={type}
                 required={required}
-                className="mt-1 block flex-col sm:flex-row rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 transition-colors duration-300"
+                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 transition-colors duration-300"
                 {...props}
             />
             {helpText && <p className="mt-1 text-xs text-gray-500">{helpText}</p>}
@@ -256,7 +256,7 @@ function CriarUsuarioMaster() {
 
             <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8 border border-gray-100">
                 {/* Título da Página e Botão Voltar */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                <div className="flex w-full justify-between items-start sm:items-center mb-8 gap-4">
                     <h1 className="text-3xl font-extrabold text-black text-center sm:text-left">
                         Criar Novo Usuário
                         <div className="w-24 h-1 bg-yellow-500 mx-auto sm:mx-0 mt-2 rounded-full"></div>
@@ -313,7 +313,7 @@ function CriarUsuarioMaster() {
                     />
 
                     {/* Checkboxes para Papéis */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-8 mt-5">
+                    <div className="flex w-full items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-8 mt-5">
                         <label className="flex items-center cursor-pointer group">
                             <input
                                 type="checkbox"
@@ -354,7 +354,7 @@ function CriarUsuarioMaster() {
                                 value={formData.estabelecimentosGerenciados}
                                 onChange={handleEstabelecimentoChange}
                                 required={formData.isAdmin}
-                                className="mt-1 block flex-col sm:flex-row rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 h-48 transition-colors duration-300"
+                                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 h-48 transition-colors duration-300"
                             >
                                 {loadingEstabelecimentos ? (
                                     <option disabled>Carregando estabelecimentos...</option>
@@ -398,7 +398,7 @@ function CriarUsuarioMaster() {
                     <button
                         type="submit"
                         disabled={loadingForm}
-                        className="flex-col sm:flex-row px-6 py-3 bg-black text-white text-lg font-bold rounded-lg shadow-md hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300 mt-8 flex items-center justify-center"
+                        className="w-full px-6 py-3 bg-black text-white text-lg font-bold rounded-lg shadow-md hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300 mt-8 flex items-center justify-center"
                     >
                         {loadingForm ? (
                             <>

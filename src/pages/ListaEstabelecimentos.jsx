@@ -135,14 +135,14 @@ const ListaEstabelecimentos = () => {
 
                 {/* Search and Actions Bar */}
                 <div className="flex flex-col lg:flex-row gap-4 justify-between items-center mb-8">
-                    <div className="relative flex-1 max-w-2xl flex-col sm:flex-row">
+                    <div className="relative flex-1 max-w-2xl w-full">
                         <IoSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
                         <input
                             type="text"
                             placeholder="Buscar estabelecimentos por nome, categoria ou endereço..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="flex-col sm:flex-row pl-12 pr-4 py-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 bg-white shadow-sm"
+                            className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 bg-white shadow-sm"
                         />
                     </div>
 
@@ -172,10 +172,10 @@ const ListaEstabelecimentos = () => {
                                         <img
                                             src={estabelecimento.imageUrl}
                                             alt={estabelecimento.nome}
-                                            className="flex-col sm:flex-row h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                         />
                                     ) : (
-                                        <div className="flex-col sm:flex-row h-full flex items-center justify-center">
+                                        <div className="w-full h-full flex items-center justify-center">
                                             <IoRestaurant className="text-4xl text-blue-400" />
                                         </div>
                                     )}

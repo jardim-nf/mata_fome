@@ -262,7 +262,7 @@ function ListarEstabelecimentos() {
       
       <div className="max-w-7xl mx-auto">
         {/* Cabeçalho e Ações */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-6">
+        <div className="flex w-full justify-between items-start sm:items-center mb-8 gap-6">
           <div className="flex-1">
             <h1 className="text-4xl font-bold text-gray-900 text-center sm:text-left">
               Gerenciar Estabelecimentos
@@ -273,7 +273,7 @@ function ListarEstabelecimentos() {
             <div className="w-32 h-1 bg-gradient-to-r from-yellow-500 to-orange-500 mx-auto sm:mx-0 mt-4 rounded-full"></div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex w-full gap-3">
             <Link
               to="/admin/cadastrar-estabelecimento"
               className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold px-6 py-3 rounded-xl hover:from-yellow-600 hover:to-orange-600 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
@@ -326,7 +326,7 @@ function ListarEstabelecimentos() {
                 <input
                   type="text"
                   id="searchTerm"
-                  className="flex-col sm:flex-row rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 text-gray-800 bg-gray-50 border-0 focus:bg-white transition-all duration-300 pl-12"
+                  className="w-full rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 text-gray-800 bg-gray-50 border-0 focus:bg-white transition-all duration-300 pl-12"
                   placeholder="Digite para pesquisar..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -341,7 +341,7 @@ function ListarEstabelecimentos() {
               <div className="relative">
                 <select
                   id="filterStatus"
-                  className="flex-col sm:flex-row rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 bg-gray-50 text-gray-800 border-0 focus:bg-white transition-all duration-300 appearance-none pl-4 pr-12"
+                  className="w-full rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 bg-gray-50 text-gray-800 border-0 focus:bg-white transition-all duration-300 appearance-none pl-4 pr-12"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                 >

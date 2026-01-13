@@ -214,7 +214,7 @@ function ClientManagement() {
                             </div>
 
                             <textarea
-                                className="flex-col sm:flex-row p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-4 resize-none transition duration-150"
+                                className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-4 resize-none transition duration-150"
                                 rows="6"
                                 placeholder={`Digite a mensagem que será enviada para todos os clientes via WhatsApp. Ex: "Prezado cliente, informamos que ${estabelecimentoNome} terá horário especial neste feriado..."`}
                                 value={message}
@@ -222,7 +222,7 @@ function ClientManagement() {
                                 disabled={isSending || loadingCount}
                             />
                             
-                            <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="flex w-full gap-3">
                                 <button
                                     onClick={handleSendEstablishmentMessage}
                                     disabled={isSending || loadingCount || !message.trim() || clientCount === 0}
@@ -287,7 +287,7 @@ function ClientManagement() {
                                         key={index}
                                         onClick={() => setMessage(template.message)}
                                         disabled={isSending}
-                                        className="flex-col sm:flex-row text-left p-3 text-sm bg-gray-50 hover:bg-blue-50 rounded-lg border border-gray-200 transition duration-200 hover:border-blue-300"
+                                        className="w-full text-left p-3 text-sm bg-gray-50 hover:bg-blue-50 rounded-lg border border-gray-200 transition duration-200 hover:border-blue-300"
                                     >
                                         <div className="font-medium text-gray-800">{template.title}</div>
                                         <div className="text-gray-600 text-xs mt-1 truncate">

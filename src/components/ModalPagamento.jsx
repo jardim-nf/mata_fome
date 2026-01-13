@@ -209,7 +209,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         setTipoPagamento('unico');
                         setEtapa(2);
                     }}
-                    className="flex-col sm:flex-row bg-white rounded-2xl p-5 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all duration-200 active:scale-95 group"
+                    className="w-full bg-white rounded-2xl p-5 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all duration-200 active:scale-95 group"
                 >
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -232,7 +232,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         setTipoPagamento('individual');
                         setEtapa(2);
                     }}
-                    className="flex-col sm:flex-row bg-white rounded-2xl p-5 border-2 border-green-200 hover:border-green-400 hover:shadow-lg transition-all duration-200 active:scale-95 group"
+                    className="w-full bg-white rounded-2xl p-5 border-2 border-green-200 hover:border-green-400 hover:shadow-lg transition-all duration-200 active:scale-95 group"
                 >
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -399,7 +399,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 {tipoPagamento === 'individual' && (
                     <button 
                         onClick={adicionarPessoa}
-                        className="flex-col sm:flex-row p-4 border-2 border-dashed border-gray-300 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-all flex items-center justify-center gap-3 text-gray-600 hover:text-blue-600 group"
+                        className="w-full p-4 border-2 border-dashed border-gray-300 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-all flex items-center justify-center gap-3 text-gray-600 hover:text-blue-600 group"
                     >
                         <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
                             <IoAdd className="text-blue-600 text-lg" />
@@ -411,7 +411,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 {/* Botão Continuar */}
                 <button 
                     onClick={() => setEtapa(3)}
-                    className="flex-col sm:flex-row bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-3"
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-3"
                 >
                     <span>Continuar</span>
                     <IoChevronForward className="text-lg" />

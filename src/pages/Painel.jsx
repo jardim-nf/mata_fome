@@ -560,7 +560,7 @@ function Painel() {
 
             {/* MAIN CONTENT */}
             <main className="flex-grow p-4 overflow-x-hidden">
-                <div className="flex flex-col md:flex-row gap-4 h-auto md:h-full flex-col sm:flex-row max-w-7xl mx-auto">
+                <div className="flex flex-col md:flex-row gap-4 h-auto md:h-full w-full max-w-7xl mx-auto">
                     {colunas.map(status => {
                         const config = STATUS_CONFIG[status];
                         const allPedidosStatus = pedidos[status] || [];

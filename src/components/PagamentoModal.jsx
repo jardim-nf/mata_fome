@@ -13,7 +13,7 @@ export default function PagamentoModal({ isOpen, onClose, onConfirm }) {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-xl flex-col sm:flex-row max-w-sm">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
                 <h2 className="text-xl font-bold mb-4">Forma de Pagamento</h2>
                 <div className="space-y-3">
                     <label className="flex items-center"><input type="radio" name="payment" value="cartao" checked={formaPagamento === 'cartao'} onChange={e => setFormaPagamento(e.target.value)} className="mr-2" /> Cartão (Crédito/Débito)</label>

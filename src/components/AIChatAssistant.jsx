@@ -84,8 +84,8 @@ const AIChatAssistant = ({ estabelecimentoInfo, onClose, mode = 'widget' }) => {
     : 'fixed inset-0 bg-black bg-opacity-50 flex items-end justify-end z-[1000] p-4 md:p-6';
 
   const contentClass = mode === 'widget'
-    ? 'flex-col sm:flex-row h-full rounded-2xl shadow-2xl flex flex-col'
-    : 'bg-white rounded-2xl shadow-2xl flex-col sm:flex-row max-w-md h-[80vh] max-h-[600px] flex flex-col';
+    ? 'w-full h-full rounded-2xl shadow-2xl flex flex-col'
+    : 'bg-white rounded-2xl shadow-2xl w-full max-w-md h-[80vh] max-h-[600px] flex flex-col';
 
   return (
     <div className={containerClass}>

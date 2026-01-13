@@ -355,7 +355,7 @@ const AdminReports = () => {
 
     const DetailedTable = () => (
         <div className="overflow-x-auto">
-            <table className="min-flex-col sm:flex-row divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                     <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
@@ -408,7 +408,7 @@ const AdminReports = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-            <div className="max-w-7xl mx-auto mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="max-w-7xl mx-auto mb-6 flex w-full justify-between items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">📊 Relatórios de Gestão</h1>
                     <p className="text-gray-600">Financeiro, Operacional e Logística</p>
@@ -440,7 +440,7 @@ const AdminReports = () => {
                         </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t">
-                         <input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="p-2 border rounded flex-col sm:flex-row"/>
+                         <input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="p-2 border rounded w-full"/>
                          <div className="flex gap-2 items-center bg-gray-100 p-1 rounded">
                              <button onClick={() => setViewMode('charts')} className={`flex-1 p-1 rounded ${viewMode === 'charts' ? 'bg-white shadow' : ''}`}><IoAnalyticsOutline className="mx-auto"/> Gráficos</button>
                              <button onClick={() => setViewMode('table')} className={`flex-1 p-1 rounded ${viewMode === 'table' ? 'bg-white shadow' : ''}`}><IoListOutline className="mx-auto"/> Lista</button>

@@ -48,7 +48,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
             <div 
-                className="flex-col sm:flex-row max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
                 style={{ backgroundColor: '#111827', color: 'white' }}
             >
                 {/* CABEÇALHO */}
@@ -118,7 +118,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                     <div className="mt-6">
                         <label className="block text-sm font-bold mb-2 text-gray-300">Observações:</label>
                         <textarea
-                            className="flex-col sm:flex-row p-3 rounded-xl bg-gray-800 border border-gray-700 focus:outline-none focus:ring-1 text-white placeholder-gray-500 resize-none"
+                            className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 focus:outline-none focus:ring-1 text-white placeholder-gray-500 resize-none"
                             style={{ '--tw-ring-color': cores.destaque }} // Correção para usar a cor dinâmica no focus ring
                             rows="3"
                             placeholder="Alguma preferência?"

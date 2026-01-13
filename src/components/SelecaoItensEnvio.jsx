@@ -41,7 +41,7 @@ const SelecaoItensEnvio = ({ mesa, onEnviarLote, onCancelar }) => {
     if (itensPendentes.length === 0) {
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-2xl p-6 max-w-md flex-col sm:flex-row mx-4">
+                <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
                     <div className="text-center">
                         <IoRestaurant className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-lg font-bold mb-2">Nenhum item pendente</h3>
@@ -62,7 +62,7 @@ const SelecaoItensEnvio = ({ mesa, onEnviarLote, onCancelar }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-lg flex-col sm:flex-row mx-4 max-h-[80vh] flex flex-col">
+            <div className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
                 {/* CABEÇALHO */}
                 <div className="flex justify-between items-center mb-4">
                     <div>

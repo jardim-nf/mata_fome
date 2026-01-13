@@ -370,7 +370,7 @@ export default function TaxasDeEntrega() {
                             : "Você não tem permissão para acessar esta página."
                         }
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
+                    <div className="flex w-full gap-3 justify-center mt-6">
                         <button
                             onClick={() => navigate('/dashboard')}
                             className="inline-flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
@@ -498,7 +498,7 @@ export default function TaxasDeEntrega() {
                                         id="nomeBairro"
                                         value={nomeBairro}
                                         onChange={(e) => setNomeBairro(e.target.value)}
-                                        className="pl-12 flex-col sm:flex-row p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
+                                        className="pl-12 w-full p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
                                         placeholder="Ex: Centro, Jardim das Flores..."
                                         required
                                     />
@@ -515,7 +515,7 @@ export default function TaxasDeEntrega() {
                                         id="valorTaxa"
                                         value={valorTaxa}
                                         onChange={(e) => setValorTaxa(e.target.value.replace(/[^0-9,]/g, ''))}
-                                        className="pl-12 flex-col sm:flex-row p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
+                                        className="pl-12 w-full p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
                                         placeholder="Ex: 5,00"
                                         required
                                     />
@@ -527,7 +527,7 @@ export default function TaxasDeEntrega() {
                             </div>
                         </div>
                         
-                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                        <div className="flex w-full gap-4 pt-4">
                             <button
                                 type="submit"
                                 disabled={formLoading}

@@ -449,11 +449,11 @@ const TelaPedidos = () => {
                             <div key={originalIndex} className="relative flex-shrink-0">
                                 {editandoNomeIndex === originalIndex ? (
                                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-                                        <div className="bg-white p-6 rounded-2xl shadow-xl flex-col sm:flex-row max-w-sm animate-in zoom-in duration-200">
+                                        <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-in zoom-in duration-200">
                                             <h3 className="font-bold text-lg text-gray-900 mb-4">Renomear Cliente</h3>
                                             <input 
                                                 autoFocus
-                                                className="flex-col sm:flex-row px-3 py-2.5 text-base font-bold rounded-xl border border-gray-300 outline-none text-gray-800 focus:ring-2"
+                                                className="w-full px-3 py-2.5 text-base font-bold rounded-xl border border-gray-300 outline-none text-gray-800 focus:ring-2"
                                                 style={{ borderColor: coresEstabelecimento.destaque, '--tw-ring-color': coresEstabelecimento.destaque }}
                                                 value={novoNomeTemp}
                                                 onChange={(e) => setNovoNomeTemp(e.target.value)}
@@ -476,7 +476,7 @@ const TelaPedidos = () => {
                                         className={`group relative px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-all duration-200 select-none ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105 z-10' : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'}`}
                                         style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}
                                     >
-                                       <div className="flex flex-col sm:flex-row gap-4">
+                                       <div className="flex w-full gap-4">
 
                                             <IoPerson className={clienteSelecionado === nome ? 'text-white' : 'text-gray-400'} />
                                             {nome}
@@ -509,7 +509,7 @@ const TelaPedidos = () => {
                                 placeholder="Buscar no cardápio..." 
                                 value={termoBusca} 
                                 onChange={e => setTermoBusca(e.target.value)} 
-                                className="flex-col sm:flex-row pl-9 pr-4 py-2.5 bg-gray-100 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:border-transparent text-sm transition-all"
+                                className="w-full pl-9 pr-4 py-2.5 bg-gray-100 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:border-transparent text-sm transition-all"
                                 style={{ '--tw-ring-color': coresEstabelecimento.destaque }}
                             />
                         </div>
@@ -563,7 +563,7 @@ const TelaPedidos = () => {
                             className="text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center gap-3 shadow-lg active:scale-95 transition-all"
                             style={{ backgroundColor: coresEstabelecimento.destaque }}
                         >
-                           <div className="flex flex-col sm:flex-row gap-4">
+                           <div className="flex w-full gap-4">
 
                                 <IoCart className="text-lg"/>
                                 Ver Pedido
@@ -634,7 +634,7 @@ const TelaPedidos = () => {
                                                 {(item.status === 'pendente' || !item.status) && (
                                                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                                                         <span className="text-sm text-gray-600">Ajustar quantidade:</span>
-                                                       <div className="flex flex-col sm:flex-row gap-4">
+                                                       <div className="flex w-full gap-4">
 
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); ajustarQuantidade(item.id, item.cliente, item.quantidade - 1); }}
@@ -678,7 +678,7 @@ const TelaPedidos = () => {
                             <button 
                                 onClick={salvarAlteracoes}
                                 disabled={salvando}
-                                className="flex-col sm:flex-row text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                                className="w-full text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
                                 style={{ backgroundColor: coresEstabelecimento.destaque, boxShadow: `0 10px 15px -3px ${coresEstabelecimento.destaque}40` }}
                             >
                                 {salvando ? (

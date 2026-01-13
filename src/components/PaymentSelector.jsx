@@ -105,7 +105,7 @@ const PaymentSelector = ({ amount, orderId, onPaymentSuccess }) => {
       <button
         onClick={handlePayment}
         disabled={paymentLoading || !selectedPayment}
-        className={`flex-col sm:flex-row py-3 px-4 rounded-lg font-semibold text-white transition ${
+        className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition ${
           paymentLoading || !selectedPayment
             ? 'bg-gray-400 cursor-not-allowed'
             : 'bg-[#FF6B35] hover:bg-[#e55a2b]'

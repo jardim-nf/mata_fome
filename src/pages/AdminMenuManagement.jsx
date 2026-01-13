@@ -41,7 +41,7 @@ const SkeletonLoader = () => (
     {[...Array(6)].map((_, i) => (
       <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 animate-pulse">
         <div className="flex flex-col space-y-3">
-          <div className="flex-col sm:flex-row h-40 md:h-48 bg-gray-300 rounded-xl"></div>
+          <div className="w-full h-40 md:h-48 bg-gray-300 rounded-xl"></div>
           <div className="space-y-2">
             <div className="h-5 bg-gray-300 rounded w-3/4"></div>
             <div className="h-3 bg-gray-200 rounded w-1/2"></div>
@@ -130,10 +130,10 @@ const ProductGridCard = ({
           <img 
             src={produto.imageUrl} 
             alt={produto.nome}
-            className="flex-col sm:flex-row h-40 md:h-48 object-cover rounded-t-2xl"
+            className="w-full h-40 md:h-48 object-cover rounded-t-2xl"
           />
         ) : (
-          <div className="flex-col sm:flex-row h-40 md:h-48 bg-gradient-to-br from-gray-100 to-gray-200 rounded-t-2xl flex items-center justify-center">
+          <div className="w-full h-40 md:h-48 bg-gradient-to-br from-gray-100 to-gray-200 rounded-t-2xl flex items-center justify-center">
             <IoImageOutline className="text-gray-400 text-3xl md:text-4xl" />
           </div>
         )}
@@ -793,7 +793,7 @@ const stockStatistics = useMemo(() => {
             <div className="flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
                     <IoSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
-                    <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="flex-col sm:flex-row pl-12 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="p-3 border rounded-2xl bg-white">
                     {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -856,7 +856,7 @@ const stockStatistics = useMemo(() => {
         {/* Modal Formulário */}
         {showItemForm && (
             <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                <div className="bg-white rounded-3xl shadow-2xl flex-col sm:flex-row max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                     <div className="flex justify-between items-center p-6 border-b">
                         <h2 className="text-2xl font-bold">{editingItem ? 'Editar Item' : 'Novo Item'}</h2>
                         <button onClick={closeItemForm}><IoClose size={24} /></button>
@@ -864,15 +864,15 @@ const stockStatistics = useMemo(() => {
                     <form onSubmit={handleSaveItem} className="p-6 space-y-6">
                         <div>
                             <label className="block font-medium mb-2">Nome *</label>
-                            <input type="text" name="nome" value={formData.nome} onChange={handleFormChange} className="flex-col sm:flex-row p-4 border rounded-2xl" required />
+                            <input type="text" name="nome" value={formData.nome} onChange={handleFormChange} className="w-full p-4 border rounded-2xl" required />
                         </div>
                         <div>
                             <label className="block font-medium mb-2">Descrição</label>
-                            <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} className="flex-col sm:flex-row p-4 border rounded-2xl" rows="3" />
+                            <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} className="w-full p-4 border rounded-2xl" rows="3" />
                         </div>
                         <div>
                             <label className="block font-medium mb-2">Categoria *</label>
-                            <input type="text" name="categoria" value={formData.categoria} onChange={handleFormChange} list="cat-list" className="flex-col sm:flex-row p-4 border rounded-2xl" required disabled={!!editingItem} />
+                            <input type="text" name="categoria" value={formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-4 border rounded-2xl" required disabled={!!editingItem} />
                             <datalist id="cat-list">{categories.map(c => <option key={c.id} value={c.nome} />)}</datalist>
                         </div>
 
@@ -904,30 +904,30 @@ const stockStatistics = useMemo(() => {
                                             {(variacoes.length > 1 || v.nome !== 'Padrão') && (
                                                 <div className="col-span-1 md:col-span-2">
                                                     <label className="text-xs font-bold text-gray-500">Nome</label>
-                                                    <input type="text" value={v.nome} onChange={e => atualizarVariacao(v.id, 'nome', e.target.value)} className="flex-col sm:flex-row p-2 border rounded-lg" placeholder="Ex: Grande" />
+                                                    <input type="text" value={v.nome} onChange={e => atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Ex: Grande" />
                                                 </div>
                                             )}
                                             <div className="flex-1">
                                                 <label className="text-xs font-bold text-gray-500">Preço (R$)</label>
-                                                <input type="number" value={v.preco} onChange={e => atualizarVariacao(v.id, 'preco', e.target.value)} className="flex-col sm:flex-row p-2 border rounded-lg" placeholder="0.00" step="0.01" />
+                                                <input type="number" value={v.preco} onChange={e => atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full p-2 border rounded-lg" placeholder="0.00" step="0.01" />
                                             </div>
 
                                             {/* ✅ ATUALIZADO: Custo por variação */}
                                             <div>
                                                 <label className="text-xs font-bold text-gray-500">Custo (R$)</label>
-                                                <input type="number" value={v.custo} onChange={e => atualizarVariacao(v.id, 'custo', e.target.value)} className="flex-col sm:flex-row p-2 border rounded-lg" placeholder="0.00" step="0.01" />
+                                                <input type="number" value={v.custo} onChange={e => atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-2 border rounded-lg" placeholder="0.00" step="0.01" />
                                             </div>
 
                                             {/* ✅ NOVO: Estoque Atual por variação */}
                                             <div>
                                                 <label className="text-xs font-bold text-gray-500">Estoque Atual</label>
-                                                <input type="number" value={v.estoque} onChange={e => atualizarVariacao(v.id, 'estoque', e.target.value)} className="flex-col sm:flex-row p-2 border rounded-lg" placeholder="0" min="0" />
+                                                <input type="number" value={v.estoque} onChange={e => atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-2 border rounded-lg" placeholder="0" min="0" />
                                             </div>
 
                                             {/* ✅ NOVO: Estoque Mínimo por variação */}
                                             <div>
                                                 <label className="text-xs font-bold text-gray-500">Estoque Mínimo</label>
-                                                <input type="number" value={v.estoqueMinimo} onChange={e => atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} className="flex-col sm:flex-row p-2 border rounded-lg" placeholder="0" min="0" />
+                                                <input type="number" value={v.estoqueMinimo} onChange={e => atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} className="w-full p-2 border rounded-lg" placeholder="0" min="0" />
                                             </div>
                                         </div>
                                         {(variacoes.length > 1 || v.nome !== 'Padrão') && (

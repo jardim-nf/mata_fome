@@ -46,7 +46,7 @@ const ProductCard = ({ item, onImageUpload, uploadingItemId }) => {
         <img 
           src={item.imageUrl || '/images/placeholder-food.jpg'} 
           alt={item.nome} 
-          className="flex-col sm:flex-row h-32 object-cover rounded border border-gray-200"
+          className="w-full h-32 object-cover rounded border border-gray-200"
           onError={(e) => {
             e.target.src = '/images/placeholder-food.jpg';
           }}
@@ -68,7 +68,7 @@ const ProductCard = ({ item, onImageUpload, uploadingItemId }) => {
       {/* Botão de Upload */}
       <label 
         htmlFor={`file-${item.id}`}
-        className={`flex items-center justify-center space-x-2 flex-col sm:flex-row px-3 py-2 rounded text-sm font-medium cursor-pointer ${
+        className={`flex items-center justify-center space-x-2 w-full px-3 py-2 rounded text-sm font-medium cursor-pointer ${
           isUploadingThisItem
             ? 'bg-gray-400 text-white cursor-not-allowed'
             : 'bg-yellow-500 text-white hover:bg-yellow-600'
@@ -263,7 +263,7 @@ function AdminImageAssociation() {
             <select
               value={selectedEstabelecimentoId}
               onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
-              className="flex-col sm:flex-row px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 bg-white"
             >
               <option value="">Selecione um estabelecimento</option>
               {estabelecimentos.map(est => (
@@ -284,7 +284,7 @@ function AdminImageAssociation() {
                 placeholder="Buscar produtos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-col sm:flex-row pl-3 pr-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                className="w-full pl-3 pr-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
                 disabled={!selectedEstabelecimentoId}
               />
             </div>

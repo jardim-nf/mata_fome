@@ -222,7 +222,7 @@ const GestaoFuncionarios = ({ estabelecimentoPrincipal }) => {
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="flex-col sm:flex-row">
+                            <table className="w-full">
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -358,7 +358,7 @@ const GestaoFuncionarios = ({ estabelecimentoPrincipal }) => {
                 {/* Modal de Confirmação de Exclusão */}
                 {funcionarioParaExcluir && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-xl max-w-md flex-col sm:flex-row p-6">
+                        <div className="bg-white rounded-xl max-w-md w-full p-6">
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="p-2 bg-red-100 rounded-lg">
                                     <FaExclamationTriangle className="text-red-600 text-xl" />
@@ -455,7 +455,7 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[100]">
-            <div className="bg-white rounded-xl max-w-lg flex-col sm:flex-row p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">
                     {funcionario ? 'Editar Funcionário' : 'Adicionar Novo Funcionário'}
                 </h2>
@@ -471,7 +471,7 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
                                 value={nome} 
                                 onChange={(e) => setNome(e.target.value)} 
                                 required 
-                                className="flex-col sm:flex-row border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Digite o nome completo"
                             />
                         </div>
@@ -487,7 +487,7 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
                                 onChange={(e) => setEmail(e.target.value)} 
                                 required
                                 disabled={!!funcionario}
-                                className="flex-col sm:flex-row border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                 placeholder="exemplo@email.com"
                             />
                             {funcionario && (
@@ -506,7 +506,7 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
                                 value={cargo} 
                                 onChange={(e) => setCargo(e.target.value)} 
                                 required
-                                className="flex-col sm:flex-row border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                             >
                                 {cargos.map(c => (
                                     <option key={c} value={c}>{c}</option>
@@ -523,7 +523,7 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
                                 type="tel" 
                                 value={telefone} 
                                 onChange={(e) => setTelefone(e.target.value)} 
-                                className="flex-col sm:flex-row border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="(11) 99999-9999"
                             />
                         </div>
@@ -540,7 +540,7 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
                                     onChange={(e) => setSenha(e.target.value)} 
                                     required
                                     minLength={6}
-                                    className="flex-col sm:flex-row border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     placeholder="Digite a senha"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">

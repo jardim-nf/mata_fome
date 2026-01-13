@@ -81,7 +81,7 @@ const AdminDashboard = () => {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
+          <div className="flex w-full gap-3 mt-4 md:mt-0">
             {/* BOTÃO VOLTAR PARA O SITE */}
             <button
               onClick={() => navigate('/home')}

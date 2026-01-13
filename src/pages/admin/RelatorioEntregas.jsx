@@ -114,7 +114,7 @@ const RelatorioEntregas = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-<div className="flex-col sm:flex-row text-sm sm:text-base lg:max-w-6xl lg:mx-auto">
+<div className="w-full text-sm sm:text-base lg:max-w-6xl lg:mx-auto">
                 
                 {/* HEADER COM FILTROS */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -187,7 +187,7 @@ const RelatorioEntregas = () => {
                         relatorio.map((moto) => (
                             <div key={moto.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                                 {/* Cabeçalho do Motoboy */}
-                                <div className="bg-gray-50 p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <div className="bg-gray-50 p-4 border-b border-gray-200 flex w-full justify-between items-center gap-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-bold">
                                             {moto.nome.charAt(0)}
@@ -216,7 +216,7 @@ const RelatorioEntregas = () => {
 
                                 {/* Lista de Pedidos Expandida */}
                                 <div className="p-4 overflow-x-auto">
-                                    <table className="flex-col sm:flex-row text-sm text-left">
+                                    <table className="w-full text-sm text-left">
                                         <thead>
                                             <tr className="text-gray-500 border-b border-gray-100">
                                                 <th className="pb-2 font-medium">Pedido</th>

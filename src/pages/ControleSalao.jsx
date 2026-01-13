@@ -29,7 +29,7 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm transition-all duration-300">
-            <div className="bg-white rounded-3xl shadow-xl p-8 flex-col sm:flex-row max-w-md animate-in fade-in zoom-in duration-300 border border-gray-100 transform hover:scale-[1.01] transition-transform">
+            <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md animate-in fade-in zoom-in duration-300 border border-gray-100 transform hover:scale-[1.01] transition-transform">
                 <div className="text-center mb-8">
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
                         <IoPersonAdd className="text-3xl text-white" />
@@ -393,19 +393,19 @@ export default function ControleSalao() {
                     
                     {/* BARRA DE STATUS */}
                     <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex w-full gap-4">
 
                             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-gray-700">{stats.livres} Livres</span>
                         </div>
                         <div className="w-px h-4 bg-gray-300"></div>
-                       <div className="flex flex-col sm:flex-row gap-4">
+                       <div className="flex w-full gap-4">
 
                             <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-gray-700">{stats.ocupadas} Ocupadas</span>
                         </div>
                         <div className="w-px h-4 bg-gray-300"></div>
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex w-full gap-4">
 
                             <IoTime className="text-orange-500 text-lg" />
                             <span className="text-sm font-medium text-gray-700">{stats.itensPendentes} Itens Pendentes</span>

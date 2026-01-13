@@ -20,7 +20,7 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
                 onChange={onChange}
                 type={type}
                 {...props}
-                className="mt-1 block flex-col sm:flex-row rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
             />
             {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
         </div>
@@ -299,7 +299,7 @@ function EditarEstabelecimentoMaster() {
             <div className="max-w-4xl mx-auto">
                 <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Cabeçalho com Ações */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <div className="flex w-full justify-between items-start sm:items-center mb-6 gap-4">
                         <div>
                             <Link
                                 to="/master/estabelecimentos"
@@ -310,7 +310,7 @@ function EditarEstabelecimentoMaster() {
                             </Link>
                             <h1 className="text-3xl font-bold text-slate-800">Editar Estabelecimento</h1>
                         </div>
-                        <button type="submit" disabled={formLoading} className="flex-col sm:flex-row sm:w-auto px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
+                        <button type="submit" disabled={formLoading} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
                             {formLoading ? 'Salvando...' : 'Salvar Alterações'}
                         </button>
                     </div>
@@ -341,7 +341,7 @@ function EditarEstabelecimentoMaster() {
                                     name="logoUpload"
                                     accept="image/*"
                                     onChange={handleInputChange}
-                                    className="flex-col sm:flex-row border-slate-300 rounded-lg p-1"
+                                    className="w-full border-slate-300 rounded-lg p-1"
                                 />
                                 {(logoPreview || formData.imageUrl) && (
                                     <div className="mt-2 flex items-center gap-4">
@@ -372,7 +372,7 @@ function EditarEstabelecimentoMaster() {
                                     value={formData.adminUID || ''}
                                     onChange={handleInputChange}
                                     required
-                                    className="mt-1 block flex-col sm:flex-row rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
                                 >
                                     <option value="">Selecione um administrador...</option>
                                     {loadingAdmins ? (
@@ -402,7 +402,7 @@ function EditarEstabelecimentoMaster() {
                                     value={formData.currentPlanId || ''}
                                     onChange={handleInputChange}
                                     required
-                                    className="mt-1 block flex-col sm:flex-row rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
                                 >
                                     <option value="">Selecione um plano...</option>
                                     {loadingPlans ? (
@@ -432,7 +432,7 @@ function EditarEstabelecimentoMaster() {
                                     name="nextBillingDate"
                                     value={formData.nextBillingDate ? formData.nextBillingDate.toISOString().split('T')[0] : ''}
                                     onChange={handleInputChange}
-                                    className="mt-1 block flex-col sm:flex-row rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
                                 />
                                 <p className="mt-1 text-xs text-slate-500">Define a data da próxima cobrança de assinatura. Deixe vazio para não definir.</p>
                             </div>

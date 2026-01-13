@@ -54,7 +54,7 @@ function ImageDisplay({ imagePath }) {
         <img
             src={imageUrl}
             alt="Imagem do Firebase Storage"
-            className="flex-col sm:flex-row h-auto object-cover rounded-md shadow-md"
+            className="w-full h-auto object-cover rounded-md shadow-md"
             // Adicione estilos ou classes conforme necessário
         />
     );

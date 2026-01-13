@@ -46,7 +46,7 @@ function Planos() {
                   <li>✅ Suporte Básico</li>
                 </ul>
               </div>
-              <button className="flex-col sm:flex-row bg-[var(--vermelho-principal)] text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition duration-300">
+              <button className="w-full bg-[var(--vermelho-principal)] text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition duration-300">
                 Começar Agora
               </button>
             </div>
@@ -66,7 +66,7 @@ function Planos() {
                   <li>✅ Suporte Prioritário</li>
                 </ul>
               </div>
-              <button className="flex-col sm:flex-row bg-[var(--marrom-escuro)] text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition duration-300">
+              <button className="w-full bg-[var(--marrom-escuro)] text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition duration-300">
                 Escolher Plano
               </button>
             </div>
@@ -86,7 +86,7 @@ function Planos() {
                   <li>✅ Suporte Dedicado 24/7</li>
                 </ul>
               </div>
-              <button className="flex-col sm:flex-row bg-[var(--verde-destaque)] text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition duration-300">
+              <button className="w-full bg-[var(--verde-destaque)] text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition duration-300">
                 Fale Conosco
               </button>
             </div>

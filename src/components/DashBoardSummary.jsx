@@ -185,7 +185,7 @@ const DashBoardSummary = () => {
     <div className="space-y-6 mb-8">
       
       {/* CABEÇALHO DO RESUMO */}
-      <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm gap-4">
+      <div className="flex w-full justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm gap-4">
         <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
                 <IoCalendarOutline size={20} />

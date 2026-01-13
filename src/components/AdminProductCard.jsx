@@ -239,7 +239,7 @@ export default function AdminProductCard({
                     <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-2 min-w-[120px]">
                       <button
                         onClick={handleLongPress}
-                        className="flex-col sm:flex-row text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded flex items-center space-x-2"
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded flex items-center space-x-2"
                       >
                         <IoPencil size={14} />
                         <span>Editar Estoque</span>
@@ -249,7 +249,7 @@ export default function AdminProductCard({
                           setNewStockValue((produto.estoque || 0) + 1);
                           handleSaveStock();
                         }}
-                        className="flex-col sm:flex-row text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50 rounded flex items-center space-x-2"
+                        className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50 rounded flex items-center space-x-2"
                       >
                         <span>+1</span>
                         <span>Adicionar 1</span>

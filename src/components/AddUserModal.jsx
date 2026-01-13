@@ -99,7 +99,7 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg flex-col sm:flex-row relative">
+      <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full relative">
         <button onClick={() => { onClose(); setAddUserError(''); setAddingUser(false); }}
                 className="absolute top-2 right-3 text-gray-600 hover:text-red-600 text-2xl">
           &times;
@@ -110,17 +110,17 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nome *</label>
             <input type="text" id="name" name="name" value={formData.name} onChange={handleChange} required
-                   className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email *</label>
             <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} required
-                   className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">Senha * (mín. 6 caracteres)</label>
             <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} required
-                   className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
 
           {/* Permissões */}
@@ -142,38 +142,38 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
           <div>
             <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">Telefone</label>
             <input type="tel" id="phoneNumber" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange}
-                   className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
           <div>
             <label htmlFor="addressStreet" className="block text-sm font-medium text-gray-700">Rua</label>
             <input type="text" id="addressStreet" name="addressStreet" value={formData.addressStreet} onChange={handleChange}
-                   className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label htmlFor="addressNumber" className="block text-sm font-medium text-gray-700">Número</label>
               <input type="text" id="addressNumber" name="addressNumber" value={formData.addressNumber} onChange={handleChange}
-                     className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
             </div>
             <div>
               <label htmlFor="addressNeighborhood" className="block text-sm font-medium text-gray-700">Bairro</label>
               <input type="text" id="addressNeighborhood" name="addressNeighborhood" value={formData.addressNeighborhood} onChange={handleChange}
-                     className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
             </div>
           </div>
           <div>
             <label htmlFor="addressCity" className="block text-sm font-medium text-gray-700">Cidade</label>
             <input type="text" id="addressCity" name="addressCity" value={formData.addressCity} onChange={handleChange}
-                   className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
           <div>
             <label htmlFor="addressComplement" className="block text-sm font-medium text-gray-700">Complemento</label>
             <input type="text" id="addressComplement" name="addressComplement" value={formData.addressComplement} onChange={handleChange}
-                   className="mt-1 block flex-col sm:flex-row rounded-md border-gray-300 shadow-sm p-2" />
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
 
           <button type="submit" disabled={addingUser}
-                  className="flex-col sm:flex-row py-3 px-4 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 font-semibold text-lg">
+                  className="w-full py-3 px-4 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 font-semibold text-lg">
             {addingUser ? 'Cadastrando...' : 'Cadastrar Usuário'}
           </button>
         </form>

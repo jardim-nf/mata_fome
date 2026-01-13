@@ -188,7 +188,7 @@ const GerenciarOrdemCategoria = ({
       </div>
 
       {/* Botões de Ação */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-end pt-4 border-t border-gray-200">
+      <div className="flex w-full gap-3 justify-end pt-4 border-t border-gray-200">
         <button
           onClick={handleReset}
           className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"

@@ -321,7 +321,7 @@ const PdvScreen = () => {
     if (!produtoParaSelecao) return null;
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl max-w-lg flex-col sm:flex-row overflow-hidden animate-fade-in-up">
+            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden animate-fade-in-up">
                 <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
                     <h3 className="font-bold text-lg">{produtoParaSelecao.name}</h3>
                     <button onClick={() => setProdutoParaSelecao(null)} className="text-white hover:bg-blue-700 rounded-full p-1">✕</button>
@@ -352,8 +352,8 @@ const PdvScreen = () => {
     if (!mostrarRecibo || !dadosRecibo) return null;
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div className="bg-white flex-col sm:flex-row max-w-sm shadow-2xl overflow-hidden relative animate-bounce-in">
-          <div className="h-4 flex-col sm:flex-row bg-gray-800 absolute top-0 left-0"></div>
+        <div className="bg-white w-full max-w-sm shadow-2xl overflow-hidden relative animate-bounce-in">
+          <div className="h-4 w-full bg-gray-800 absolute top-0 left-0"></div>
           <div className="p-8 pt-10 font-mono text-sm text-gray-700">
             <div className="text-center mb-6 border-b-2 border-dashed border-gray-300 pb-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl">✅</div>
@@ -379,7 +379,7 @@ const PdvScreen = () => {
               <button onClick={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} className="py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg">✨ Nova</button>
             </div>
           </div>
-          <div className="bg-gray-100 h-6 flex-col sm:flex-row relative -bottom-3" style={{backgroundImage: 'linear-gradient(45deg, transparent 50%, white 50%), linear-gradient(-45deg, transparent 50%, white 50%)', backgroundSize: '20px 20px', backgroundRepeat: 'repeat-x'}}></div>
+          <div className="bg-gray-100 h-6 w-full relative -bottom-3" style={{backgroundImage: 'linear-gradient(45deg, transparent 50%, white 50%), linear-gradient(-45deg, transparent 50%, white 50%)', backgroundSize: '20px 20px', backgroundRepeat: 'repeat-x'}}></div>
         </div>
       </div>
     );
@@ -389,7 +389,7 @@ const PdvScreen = () => {
     if (!mostrarFinalizacao || !vendaAtual) return null;
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md flex-col sm:flex-row">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
           <div className="bg-green-600 p-6 rounded-t-2xl text-center text-white"><h2 className="text-2xl font-bold">💰 Finalizar</h2></div>
           <div className="p-6 border-b text-center"><div className="text-3xl font-bold">R$ {vendaAtual.total.toFixed(2)}</div></div>
           <div className="p-6 border-b">
@@ -403,7 +403,7 @@ const PdvScreen = () => {
           {formaPagamento === 'dinheiro' && (
             <div className="p-6 bg-gray-50 border-b">
               <label className="block font-bold mb-2">Valor Recebido</label>
-              <input type="number" step="0.01" className="flex-col sm:flex-row p-3 border rounded-xl text-xl text-center font-bold" value={valorRecebido} onChange={e => setValorRecebido(e.target.value)} autoFocus />
+              <input type="number" step="0.01" className="w-full p-3 border rounded-xl text-xl text-center font-bold" value={valorRecebido} onChange={e => setValorRecebido(e.target.value)} autoFocus />
               {troco > 0 && <div className="mt-3 text-center text-green-700 font-bold">Troco: R$ {troco.toFixed(2)}</div>}
             </div>
           )}
@@ -431,7 +431,7 @@ const PdvScreen = () => {
           </div>
 
           <div className="bg-white p-4 rounded-2xl shadow-sm space-y-4">
-            <input ref={inputBuscaRef} type="text" placeholder="Buscar produto (F1)..." className="flex-col sm:flex-row p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={busca} onChange={e => setBusca(e.target.value)} />
+            <input ref={inputBuscaRef} type="text" placeholder="Buscar produto (F1)..." className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={busca} onChange={e => setBusca(e.target.value)} />
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               {categorias.map(cat => (
                 <button key={cat.id} onClick={() => setCategoriaAtiva(cat.name === 'Todos' ? 'todos' : cat.name)} className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium transition flex gap-2 ${((categoriaAtiva==='todos'&&cat.name==='Todos')||categoriaAtiva===cat.name)?'bg-blue-600 text-white shadow':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
@@ -458,7 +458,7 @@ const PdvScreen = () => {
                      <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full mb-1 font-bold">Opções</span>
                   )}
 
-                  <div className="mt-auto pt-2 flex-col sm:flex-row flex justify-between items-center">
+                  <div className="mt-auto pt-2 w-full flex justify-between items-center">
                     <div className="flex flex-col">
                         {produto.temVariacoes && <span className="text-[10px] text-gray-500">A partir de</span>}
                         <span className="font-bold text-green-600">R$ {produto.price.toFixed(2)}</span>

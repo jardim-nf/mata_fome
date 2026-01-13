@@ -21,7 +21,7 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
                 onChange={onChange}
                 type={type}
                 required={required}
-                className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 {...props}
             />
             {helpText && <p className="text-xs text-gray-500 mt-1">{helpText}</p>}
@@ -370,7 +370,7 @@ if (formData.adminUID) {
                             <label className="block text-sm font-semibold text-gray-700">
                                 Logo do Estabelecimento
                             </label>
-                            <div className="flex flex-col sm:flex-row gap-6 items-start">
+                            <div className="flex w-full gap-6 items-start">
                                 <div className="flex-1">
                                     <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center transition-all duration-300 hover:border-yellow-400 hover:bg-yellow-50">
                                         <input 
@@ -443,7 +443,7 @@ if (formData.adminUID) {
                                     value={formData.adminUID} 
                                     onChange={handleInputChange} 
                                     required
-                                    className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                                 >
                                     <option value="">Selecione um administrador...</option>
                                     {availableAdmins.map(admin => (
@@ -470,7 +470,7 @@ if (formData.adminUID) {
                                     name="currentPlanId" 
                                     value={formData.currentPlanId} 
                                     onChange={handleInputChange}
-                                    className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                                 >
                                     <option value="">Nenhum Plano (Definir depois)</option>
                                     {availablePlans.map(plan => (
@@ -567,7 +567,7 @@ if (formData.adminUID) {
                     </FormSection>
 
                     {/* BOTÕES DE AÇÃO */}
-                    <div className="flex flex-col sm:flex-row gap-4 justify-end pt-6">
+                    <div className="flex w-full gap-4 justify-end pt-6">
                         <Link
                             to="/master/estabelecimentos"
                             className="px-8 py-4 bg-white text-gray-700 border border-gray-300 rounded-xl font-bold hover:bg-gray-50 transition-all duration-300 flex items-center justify-center gap-3 shadow-md hover:shadow-lg"

@@ -251,7 +251,7 @@ function AdminEntregadores() {
         {/* Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl flex-col sm:flex-row max-w-md overflow-hidden animate-fade-in-up">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
               <div className="bg-orange-600 p-6 flex justify-between items-center">
                 <h3 className="text-white text-xl font-bold flex items-center gap-2">
                   {editingId ? <IoPencil /> : <IoAdd />}
@@ -269,7 +269,7 @@ function AdminEntregadores() {
                     <IoPerson className="absolute left-3 top-3 text-gray-400" />
                     <input 
                       type="text" 
-                      className="flex-col sm:flex-row pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
                       placeholder="Ex: João da Silva"
                       value={formData.nome}
                       onChange={e => setFormData({...formData, nome: e.target.value})}
@@ -284,7 +284,7 @@ function AdminEntregadores() {
                     <IoCall className="absolute left-3 top-3 text-gray-400" />
                     <input 
                       type="tel" 
-                      className="flex-col sm:flex-row pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
                       placeholder="(00) 00000-0000"
                       value={formData.telefone}
                       onChange={e => setFormData({...formData, telefone: e.target.value})}
@@ -297,7 +297,7 @@ function AdminEntregadores() {
                     <label className="block text-sm font-bold text-gray-700 mb-1">Placa (Opcional)</label>
                     <input 
                       type="text" 
-                      className="flex-col sm:flex-row px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none uppercase"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none uppercase"
                       placeholder="ABC-1234"
                       value={formData.placa}
                       onChange={e => setFormData({...formData, placa: e.target.value})}
@@ -308,7 +308,7 @@ function AdminEntregadores() {
                     <input 
                       type="number" 
                       step="0.50"
-                      className="flex-col sm:flex-row px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
                       placeholder="0.00 (opcional)"
                       value={formData.taxaFixa}
                       onChange={e => setFormData({...formData, taxaFixa: e.target.value})}

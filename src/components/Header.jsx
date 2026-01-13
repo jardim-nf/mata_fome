@@ -141,7 +141,7 @@ function Header() {
                 {/* BARRA INFERIOR (TÍTULO) */}
                 {isInternalPage && (
                     <div className="border-t border-gray-100 py-2">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex w-full sm:items-center sm:justify-between gap-2">
                             <div>
                                 <h1 className="text-lg font-bold text-gray-900 leading-tight">
                                     {getDynamicTitle()}
@@ -162,7 +162,7 @@ function Header() {
 
             {/* --- 3. MENU MOBILE PROTEGIDO --- */}
             {isMenuOpen && (
-                <div className="md:hidden bg-white border-t border-gray-200 py-2 absolute flex-col sm:flex-row shadow-lg">
+                <div className="md:hidden bg-white border-t border-gray-200 py-2 absolute w-full shadow-lg">
                     <nav className="px-4 space-y-1">
                         
                         {/* Link de Início (Já inteligente, leva p/ Salão se for garçom) */}
@@ -212,7 +212,7 @@ function Header() {
                         {currentUser && (
                             <button
                                 onClick={handleLogout}
-                                className="block flex-col sm:flex-row text-left py-3 px-2 text-red-600 font-medium hover:bg-red-50 rounded-lg border-t border-gray-100 mt-2"
+                                className="block w-full text-left py-3 px-2 text-red-600 font-medium hover:bg-red-50 rounded-lg border-t border-gray-100 mt-2"
                             >
                                 Sair do Sistema
                             </button>

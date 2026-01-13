@@ -207,7 +207,7 @@ function ClientDetails() {
                 name="nome" 
                 value={formData.nome || ''} 
                 onChange={handleInputChange} 
-                className="flex-col sm:flex-row border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             ) : (
               <p className="text-gray-700">{clientData.nome || 'Não informado'}</p>
@@ -227,7 +227,7 @@ function ClientDetails() {
                 name="telefone" 
                 value={formData.telefone || ''} 
                 onChange={handleInputChange} 
-                className="flex-col sm:flex-row border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             ) : (
               <p className="text-gray-700">{clientData.telefone || 'Não informado'}</p>
@@ -252,7 +252,7 @@ function ClientDetails() {
                     name="endereco.rua" 
                     value={formData.endereco?.rua || ''} 
                     onChange={handleInputChange} 
-                    className="flex-col sm:flex-row border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 ) : (
                   <p className="text-gray-700">{clientData.endereco.rua || 'Não informado'}</p>
@@ -267,7 +267,7 @@ function ClientDetails() {
                         name="endereco.numero" 
                         value={formData.endereco?.numero || ''} 
                         onChange={handleInputChange} 
-                        className="flex-col sm:flex-row border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     ) : (
                       <p className="text-gray-700">{clientData.endereco.numero || 'Não informado'}</p>
@@ -281,7 +281,7 @@ function ClientDetails() {
                         name="endereco.bairro" 
                         value={formData.endereco?.bairro || ''} 
                         onChange={handleInputChange} 
-                        className="flex-col sm:flex-row border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     ) : (
                       <p className="text-gray-700">{clientData.endereco.bairro || 'Não informado'}</p>
@@ -296,7 +296,7 @@ function ClientDetails() {
                     name="endereco.complemento" 
                     value={formData.endereco?.complemento || ''} 
                     onChange={handleInputChange} 
-                    className="flex-col sm:flex-row border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 ) : (
                   <p className="text-gray-700">{clientData.endereco.complemento || 'Não informado'}</p>
@@ -310,7 +310,7 @@ function ClientDetails() {
                     name="endereco.cidade" 
                     value={formData.endereco?.cidade || ''} 
                     onChange={handleInputChange} 
-                    className="flex-col sm:flex-row border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 ) : (
                   <p className="text-gray-700">{clientData.endereco.cidade || 'Não informado'}</p>

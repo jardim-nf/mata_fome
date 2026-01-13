@@ -63,7 +63,7 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-6 max-w-5xl flex-col sm:flex-row mx-4 max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="bg-white rounded-2xl p-6 max-w-5xl w-full mx-4 max-h-[90vh] flex flex-col shadow-2xl">
                 {/* CABEÇALHO */}
                 <div className="flex justify-between items-center mb-6 border-b pb-4">
                     <div>
@@ -134,7 +134,7 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
                     </div>
 
                     {/* COLUNA DIREITA: DETALHES DO SELEÇÃO */}
-                    <div className="flex-col sm:flex-row lg:w-96 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto">
+                    <div className="w-full lg:w-96 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto">
                         {produtoSelecionado ? (
                             <div className="space-y-6">
                                 {/* INFO PRODUTO */}
@@ -189,7 +189,7 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
                                         value={observacoes}
                                         onChange={(e) => setObservacoes(e.target.value)}
                                         placeholder="Ex: Sem cebola, ponto da carne..."
-                                        className="flex-col sm:flex-row px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none bg-gray-50 text-sm"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none bg-gray-50 text-sm"
                                         rows="3"
                                     />
                                 </div>
@@ -205,7 +205,7 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
 
                                     <button
                                         onClick={handleAdicionar}
-                                        className="flex-col sm:flex-row bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95"
+                                        className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95"
                                     >
                                         <IoCart className="w-6 h-6" />
                                         Confirmar para {clienteSelecionado}
