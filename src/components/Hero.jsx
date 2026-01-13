@@ -18,11 +18,11 @@ function Home() {
         <div className="absolute inset-0 bg-black bg-opacity-40"></div>
         <div className="relative z-10 container mx-auto h-full flex flex-col justify-center items-center px-4">
           <h2 className="text-white text-3xl font-bold mb-4 drop-shadow-lg">Nunca foi tão fácil pedir mercado</h2>
-          <div className="w-full sm:w-2/3 md:w-1/2">
+          <div className="flex-col sm:flex-row sm:w-2/3 md:w-1/2">
             <input
               type="text"
               placeholder="Digite seu endereço ou restaurante"
-              className="w-full px-4 py-3 rounded-lg focus:outline-none"
+              className="flex-col sm:flex-row px-4 py-3 rounded-lg focus:outline-none"
             />
           </div>
         </div>

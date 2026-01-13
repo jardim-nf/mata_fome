@@ -86,8 +86,8 @@ const FormularioPedido = ({ carrinho, total, limparCarrinho, estabelecimentoId, 
             <h2 className="text-xl font-bold mb-4">Seus Dados</h2>
             <form onSubmit={handleFinalizarPedido} className="space-y-4">
                 {/* Campos de Nome e Telefone */}
-                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome Completo *" required className="w-full p-2 border rounded"/>
-                <input type="tel" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="Telefone *" required className="w-full p-2 border rounded"/>
+                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome Completo *" required className="flex-col sm:flex-row p-2 border rounded"/>
+                <input type="tel" value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="Telefone *" required className="flex-col sm:flex-row p-2 border rounded"/>
                 
                 {/* Tipo de Entrega */}
                 <div className="flex gap-4">
@@ -98,34 +98,34 @@ const FormularioPedido = ({ carrinho, total, limparCarrinho, estabelecimentoId, 
                 {/* Campos de Endereço (condicional) */}
                 {!isRetirada && (
                     <div className="space-y-2 animate-fade-in">
-                        <input type="text" value={rua} onChange={e => setRua(e.target.value)} placeholder="Rua *" required={!isRetirada} className="w-full p-2 border rounded"/>
+                        <input type="text" value={rua} onChange={e => setRua(e.target.value)} placeholder="Rua *" required={!isRetirada} className="flex-col sm:flex-row p-2 border rounded"/>
                         <div className="flex gap-2">
                             <input type="text" value={numero} onChange={e => setNumero(e.target.value)} placeholder="Nº *" required={!isRetirada} className="w-1/3 p-2 border rounded"/>
                             <input type="text" value={bairro} onChange={e => setBairro(e.target.value)} placeholder="Bairro *" required={!isRetirada} className="w-2/3 p-2 border rounded"/>
                         </div>
-                        <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade *" required={!isRetirada} className="w-full p-2 border rounded"/>
-                        <input type="text" value={complemento} onChange={e => setComplemento(e.target.value)} placeholder="Complemento / Ponto de referência" className="w-full p-2 border rounded"/>
+                        <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade *" required={!isRetirada} className="flex-col sm:flex-row p-2 border rounded"/>
+                        <input type="text" value={complemento} onChange={e => setComplemento(e.target.value)} placeholder="Complemento / Ponto de referência" className="flex-col sm:flex-row p-2 border rounded"/>
                     </div>
                 )}
 
                 {/* Cupom */}
                 <div className="flex gap-2 pt-2">
-                    <input type="text" value={cupomInput} onChange={e => setCupomInput(e.target.value)} placeholder="Cupom de desconto" className="w-full p-2 border rounded"/>
+                    <input type="text" value={cupomInput} onChange={e => setCupomInput(e.target.value)} placeholder="Cupom de desconto" className="flex-col sm:flex-row p-2 border rounded"/>
                     <button type="button" onClick={() => onAplicarCupom(cupomInput)} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Aplicar</button>
                 </div>
                 
                 {/* Pagamento */}
-                <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)} className="w-full p-2 border rounded">
+                <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)} className="flex-col sm:flex-row p-2 border rounded">
                     <option value="pix">PIX</option>
                     <option value="cartao">Cartão na Entrega</option>
                     <option value="dinheiro">Dinheiro</option>
                 </select>
                 {formaPagamento === 'dinheiro' && (
-                    <input type="number" value={trocoPara} onChange={e => setTrocoPara(e.target.value)} placeholder="Troco para quanto?" className="w-full p-2 border rounded"/>
+                    <input type="number" value={trocoPara} onChange={e => setTrocoPara(e.target.value)} placeholder="Troco para quanto?" className="flex-col sm:flex-row p-2 border rounded"/>
                 )}
 
                 {/* Botão Finalizar */}
-                <button type="submit" disabled={isSubmitting || authLoading || !currentUser} className="w-full bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 disabled:bg-gray-400">
+                <button type="submit" disabled={isSubmitting || authLoading || !currentUser} className="flex-col sm:flex-row bg-green-600 text-white p-3 rounded-lg font-bold hover:bg-green-700 disabled:bg-gray-400">
                     {isSubmitting ? 'Enviando...' : 'Finalizar Pedido'}
                 </button>
                  {!currentUser && <p className="text-red-500 text-center text-sm">Você precisa estar logado para finalizar o pedido.</p>}

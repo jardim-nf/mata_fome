@@ -15,7 +15,7 @@ const CarrinhoFlutuante = ({ carrinho, coresEstabelecimento, onClick }) => {
     const corTexto = '#ffffff';
 
     return (
-        <div className="fixed bottom-0 left-0 w-full z-[9999] p-4 pointer-events-none">
+        <div className="fixed bottom-0 left-0 flex-col sm:flex-row z-[9999] p-4 pointer-events-none">
             <div 
                 onClick={onClick}
                 className="pointer-events-auto cursor-pointer max-w-7xl mx-auto rounded-xl shadow-2xl flex items-center justify-between p-4 transform transition-transform hover:scale-[1.02] active:scale-95 animate-bounce-in"

@@ -138,7 +138,8 @@ const MesaCard = ({
                     </div>
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row gap-4">
+
                     {hasPendingItems && (
                         <div className="flex items-center gap-1 bg-white/20 px-2 py-1 rounded-full">
                             <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
@@ -173,7 +174,7 @@ const MesaCard = ({
                                     onAdicionarComanda();
                                     document.getElementById(`actions-menu-${mesa.id}`)?.classList.add('hidden');
                                 }}
-                                className="w-full text-left px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-100 flex items-center gap-2"
+                                className="flex-col sm:flex-row text-left px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 border-b border-gray-100 flex items-center gap-2"
                             >
                                 <IoAdd className="text-lg" />
                                 <span className="text-sm font-medium">Adicionar</span>
@@ -185,7 +186,7 @@ const MesaCard = ({
                                     onEnviarCozinha();
                                     document.getElementById(`actions-menu-${mesa.id}`)?.classList.add('hidden');
                                 }}
-                                className="w-full text-left px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-b border-gray-100 flex items-center gap-2"
+                                className="flex-col sm:flex-row text-left px-4 py-3 text-gray-700 hover:bg-orange-50 hover:text-orange-600 border-b border-gray-100 flex items-center gap-2"
                             >
                                 <IoPaperPlane className="text-lg" />
                                 <span className="text-sm font-medium">Cozinha</span>
@@ -197,7 +198,7 @@ const MesaCard = ({
                                     onPagar();
                                     document.getElementById(`actions-menu-${mesa.id}`)?.classList.add('hidden');
                                 }}
-                                className="w-full text-left px-4 py-3 text-gray-700 hover:bg-green-50 hover:text-green-600 flex items-center gap-2 font-semibold"
+                                className="flex-col sm:flex-row text-left px-4 py-3 text-gray-700 hover:bg-green-50 hover:text-green-600 flex items-center gap-2 font-semibold"
                             >
                                 <IoCard className="text-lg" />
                                 <span className="text-sm">Fechar Conta</span>
@@ -260,7 +261,7 @@ const MesaCard = ({
             <div className="md:hidden border-t border-white/30">
                 <button
                     onClick={(e) => { e.stopPropagation(); onPagar(); }}
-                    className={`w-full py-3 flex items-center justify-center gap-2 text-white font-semibold ${theme.pagamentoBg} ${theme.pagamentoHover} transition-all active:scale-95`}
+                    className={`flex-col sm:flex-row py-3 flex items-center justify-center gap-2 text-white font-semibold ${theme.pagamentoBg} ${theme.pagamentoHover} transition-all active:scale-95`}
                 >
                     <IoCard className="text-lg" />
                     <span>FECHAR CONTA - {totalFormatado}</span>

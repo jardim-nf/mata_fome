@@ -307,7 +307,7 @@ function AdminAnalytics() {
     if (!primeiroEstabelecimento) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full text-center">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md flex-col sm:flex-row text-center">
                     <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <IoAlertCircle className="text-red-600 text-2xl" />
                     </div>
@@ -321,7 +321,7 @@ function AdminAnalytics() {
                     <div className="space-y-3">
                         <Link 
                             to="/dashboard" 
-                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors w-full"
+                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex-col sm:flex-row"
                         >
                             <IoArrowBack />
                             <span>Voltar ao Dashboard</span>
@@ -462,7 +462,7 @@ function AdminAnalytics() {
                                     <Link
                                         key={index}
                                         to={action.rota}
-                                        className={`w-full flex items-center space-x-3 p-4 rounded-xl border transition-all hover:shadow-md ${
+                                        className={`flex-col sm:flex-row flex items-center space-x-3 p-4 rounded-xl border transition-all hover:shadow-md ${
                                             action.cor === 'blue' ? 'border-blue-200 hover:border-blue-300' :
                                             action.cor === 'green' ? 'border-green-200 hover:border-green-300' :
                                             action.cor === 'yellow' ? 'border-yellow-200 hover:border-yellow-300' :

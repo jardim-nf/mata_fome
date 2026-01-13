@@ -76,7 +76,7 @@ const NotificationContainer = ({ notifications, onRemove }) => {
     };
 
     return (
-        <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
+        <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm flex-col sm:flex-row">
             {notifications.map((notification) => (
                 <div
                     key={notification.id}
@@ -671,7 +671,7 @@ function AdminMultiPlatform() {
                                 <p className="text-blue-700 text-sm">Atualizando dados de todas as plataformas conectadas...</p>
                             </div>
                         </div>
-                        <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
+                        <div className="mt-2 flex-col sm:flex-row bg-blue-200 rounded-full h-2">
                             <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '70%' }}></div>
                         </div>
                     </div>
@@ -991,7 +991,7 @@ function AdminMultiPlatform() {
                                 <button 
                                     onClick={syncAllPlatforms}
                                     disabled={syncStatus === 'syncing' || metrics.connectedPlatforms === 0}
-                                    className="w-full flex items-center space-x-3 p-3 rounded-lg border border-blue-200 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                                    className="flex-col sm:flex-row flex items-center space-x-3 p-3 rounded-lg border border-blue-200 hover:bg-blue-50 disabled:opacity-50 transition-colors"
                                 >
                                     <IoRefresh className={syncStatus === 'syncing' ? 'animate-spin' : ''} />
                                     <span className="font-medium text-blue-700">
@@ -1001,13 +1001,13 @@ function AdminMultiPlatform() {
                                 
                                 <button 
                                     onClick={exportReport}
-                                    className="w-full flex items-center space-x-3 p-3 rounded-lg border border-green-200 hover:bg-green-50 transition-colors"
+                                    className="flex-col sm:flex-row flex items-center space-x-3 p-3 rounded-lg border border-green-200 hover:bg-green-50 transition-colors"
                                 >
                                     <IoDocumentText className="text-green-600" />
                                     <span className="font-medium text-green-700">Exportar Relatório Completo</span>
                                 </button>
                                 
-                                <button className="w-full flex items-center space-x-3 p-3 rounded-lg border border-purple-200 hover:bg-purple-50 transition-colors">
+                                <button className="flex-col sm:flex-row flex items-center space-x-3 p-3 rounded-lg border border-purple-200 hover:bg-purple-50 transition-colors">
                                     <IoSettings className="text-purple-600" />
                                     <span className="font-medium text-purple-700">Configurações Globais</span>
                                 </button>
@@ -1017,7 +1017,7 @@ function AdminMultiPlatform() {
                                     <button 
                                         onClick={initializePlatforms}
                                         disabled={initializing}
-                                        className="w-full flex items-center space-x-3 p-3 rounded-lg border border-orange-200 hover:bg-orange-50 disabled:opacity-50 transition-colors"
+                                        className="flex-col sm:flex-row flex items-center space-x-3 p-3 rounded-lg border border-orange-200 hover:bg-orange-50 disabled:opacity-50 transition-colors"
                                     >
                                         <IoRefresh className={initializing ? 'animate-spin' : ''} />
                                         <span className="font-medium text-orange-700">
@@ -1111,7 +1111,7 @@ function AdminMultiPlatform() {
                 {/* Modal de Configuração */}
                 {showConfigModal && selectedPlatform && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-md flex-col sm:flex-row">
                             <div className="flex items-center justify-between p-6 border-b">
                                 <h3 className="text-xl font-bold text-gray-900">
                                     Configurar {selectedPlatform.name}
@@ -1135,7 +1135,7 @@ function AdminMultiPlatform() {
                                         </label>
                                         <input 
                                             type="password" 
-                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             placeholder="Insira sua chave de API"
                                             value={configData.apiKey}
                                             onChange={(e) => setConfigData(prev => ({
@@ -1151,7 +1151,7 @@ function AdminMultiPlatform() {
                                         </label>
                                         <input 
                                             type="text" 
-                                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             placeholder="ID da sua loja"
                                             value={configData.storeId}
                                             onChange={(e) => setConfigData(prev => ({

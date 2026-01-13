@@ -87,7 +87,8 @@ function LogCard({ log }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-1">Ator</p>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row gap-4">
+
                 <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-xs font-bold">
                     {log.actor?.email?.charAt(0).toUpperCase()}
@@ -365,13 +366,13 @@ function AuditLogs() {
                     type="date" 
                     value={filterStartDate} 
                     onChange={e => setFilterStartDate(e.target.value)}
-                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                    className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                   />
                   <input 
                     type="date" 
                     value={filterEndDate} 
                     onChange={e => setFilterEndDate(e.target.value)}
-                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                    className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                   />
                 </div>
               </div>
@@ -383,7 +384,7 @@ function AuditLogs() {
                 <select 
                   value={filterActionType} 
                   onChange={e => setFilterActionType(e.target.value)}
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 >
                   <option value="todos">Todos os Tipos</option>
                   {allActionTypes.map(type => (
@@ -398,7 +399,7 @@ function AuditLogs() {
                   value={filterActorEmail} 
                   onChange={e => setFilterActorEmail(e.target.value)}
                   placeholder="Filtrar por email..."
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 />
               </div>
             </div>
@@ -409,7 +410,7 @@ function AuditLogs() {
                 <select 
                   value={filterTargetType} 
                   onChange={e => setFilterTargetType(e.target.value)}
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 >
                   <option value="todos">Todos os Tipos</option>
                   <option value="estabelecimento">Estabelecimento</option>
@@ -425,7 +426,7 @@ function AuditLogs() {
                   value={filterTargetId} 
                   onChange={e => setFilterTargetId(e.target.value)}
                   placeholder="ID específico do alvo..."
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 />
               </div>
             </div>

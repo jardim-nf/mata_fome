@@ -114,7 +114,7 @@ const RelatorioEntregas = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-            <div className="max-w-6xl mx-auto">
+<div className="flex-col sm:flex-row text-sm sm:text-base lg:max-w-6xl lg:mx-auto">
                 
                 {/* HEADER COM FILTROS */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -216,7 +216,7 @@ const RelatorioEntregas = () => {
 
                                 {/* Lista de Pedidos Expandida */}
                                 <div className="p-4 overflow-x-auto">
-                                    <table className="w-full text-sm text-left">
+                                    <table className="flex-col sm:flex-row text-sm text-left">
                                         <thead>
                                             <tr className="text-gray-500 border-b border-gray-100">
                                                 <th className="pb-2 font-medium">Pedido</th>

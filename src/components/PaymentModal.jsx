@@ -190,7 +190,7 @@ const PaymentModal = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md flex-col sm:flex-row overflow-hidden animate-fade-in-up">
         
         {/* HEADER */}
         <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
@@ -301,7 +301,7 @@ const PaymentModal = ({
                 {pixCode?.payload_pix && (
                   <button
                     onClick={handleCopyPixCode}
-                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 border border-gray-300 transition-colors"
+                    className="flex-col sm:flex-row bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 border border-gray-300 transition-colors"
                   >
                     <span>📄</span> Copiar Código PIX (Copia e Cola)
                   </button>
@@ -310,7 +310,7 @@ const PaymentModal = ({
                 <button
                   onClick={handleFinishOrder}
                   disabled={paymentLoading || localLoading}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition-transform active:scale-95"
+                  className="flex-col sm:flex-row bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition-transform active:scale-95"
                 >
                   {paymentLoading || localLoading ? 'Processando...' : '✅ Enviar Comprovante no WhatsApp'}
                 </button>
@@ -333,7 +333,7 @@ const PaymentModal = ({
               <button
                 onClick={handleFinishOrder}
                 disabled={paymentLoading || localLoading}
-                className={`w-full py-3 rounded-lg font-bold text-white transition-colors ${
+                className={`flex-col sm:flex-row py-3 rounded-lg font-bold text-white transition-colors ${
                   paymentLoading || localLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'
                 }`}
               >

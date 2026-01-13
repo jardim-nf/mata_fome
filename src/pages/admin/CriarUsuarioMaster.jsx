@@ -59,7 +59,7 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
                 onChange={onChange}
                 type={type}
                 required={required}
-                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 transition-colors duration-300"
+                className="mt-1 block flex-col sm:flex-row rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 transition-colors duration-300"
                 {...props}
             />
             {helpText && <p className="mt-1 text-xs text-gray-500">{helpText}</p>}
@@ -354,7 +354,7 @@ function CriarUsuarioMaster() {
                                 value={formData.estabelecimentosGerenciados}
                                 onChange={handleEstabelecimentoChange}
                                 required={formData.isAdmin}
-                                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 h-48 transition-colors duration-300"
+                                className="mt-1 block flex-col sm:flex-row rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 h-48 transition-colors duration-300"
                             >
                                 {loadingEstabelecimentos ? (
                                     <option disabled>Carregando estabelecimentos...</option>
@@ -398,7 +398,7 @@ function CriarUsuarioMaster() {
                     <button
                         type="submit"
                         disabled={loadingForm}
-                        className="w-full px-6 py-3 bg-black text-white text-lg font-bold rounded-lg shadow-md hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300 mt-8 flex items-center justify-center"
+                        className="flex-col sm:flex-row px-6 py-3 bg-black text-white text-lg font-bold rounded-lg shadow-md hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300 mt-8 flex items-center justify-center"
                     >
                         {loadingForm ? (
                             <>

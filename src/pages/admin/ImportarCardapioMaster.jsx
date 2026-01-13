@@ -443,7 +443,7 @@ function ImportarCardapioMaster() {
                 <select
                   value={selectedEstabelecimentoId}
                   onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-4 pl-12 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0 appearance-none"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-4 pl-12 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0 appearance-none"
                   required
                 >
                   <option value="">Selecione um estabelecimento...</option>
@@ -531,7 +531,7 @@ function ImportarCardapioMaster() {
             <button
               type="submit"
               disabled={!selectedEstabelecimentoId || !file || importing}
-              className="w-full px-8 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl font-bold hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+              className="flex-col sm:flex-row px-8 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl font-bold hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
             >
               {importing ? (
                 <>

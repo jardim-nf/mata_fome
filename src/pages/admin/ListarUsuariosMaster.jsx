@@ -46,7 +46,7 @@ function DashboardHeader({ currentUser, logout, navigate }) {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-lg border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto text-sm sm:text-base lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div 
             className="flex items-center space-x-3 cursor-pointer group"
@@ -375,7 +375,7 @@ function ListarUsuariosMaster() {
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-300"
+                className="flex-col sm:flex-row pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-300"
                 placeholder="Pesquisar por nome ou e-mail..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -385,7 +385,7 @@ function ListarUsuariosMaster() {
 
           <FilterCard title="Filtrar por Papel">
             <select
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-300 bg-white"
+              className="flex-col sm:flex-row px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-300 bg-white"
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
             >
@@ -398,7 +398,7 @@ function ListarUsuariosMaster() {
 
           <FilterCard title="Filtrar por Status">
             <select
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-300 bg-white"
+              className="flex-col sm:flex-row px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-300 bg-white"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
@@ -439,7 +439,7 @@ function ListarUsuariosMaster() {
                 </button>
               </div>
             ) : (
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-flex-col sm:flex-row divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">

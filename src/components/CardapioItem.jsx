@@ -164,7 +164,7 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
               <img
                 src={displayImageUrl}
                 alt={safeItem.nome}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                className="flex-col sm:flex-row h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 onError={handleImageError}
                 onLoad={handleImageLoad}
                 loading="lazy"

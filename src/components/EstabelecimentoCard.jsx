@@ -16,11 +16,11 @@ function EstabelecimentoCard({ estabelecimento }) {
       to={`/cardapio/${estabelecimento.slug}`} // <-- MUDANÇA AQUI: de /loja/ para /cardapio/
       className="bg-white rounded-lg shadow-md hover:shadow-xl transition duration-300 transform hover:scale-105 flex flex-col overflow-hidden border border-gray-100"
     >
-      <div className="w-full h-40 overflow-hidden">
+      <div className="flex-col sm:flex-row h-40 overflow-hidden">
         <img 
           src={estabelecimento.imageUrl || defaultImageUrl} 
           alt={`Logo de ${estabelecimento.nome}`} 
-          className="w-full h-full object-cover"
+          className="flex-col sm:flex-row h-full object-cover"
         />
       </div>
       <div className="p-4 flex-grow flex flex-col justify-between">

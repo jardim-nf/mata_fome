@@ -48,7 +48,7 @@ useEffect(() => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: '#111827', color: 'white' }}>
+            <div className="flex-col sm:flex-row max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: '#111827', color: 'white' }}>
                 
                 <div className="p-4 flex justify-between items-center shrink-0" style={{ backgroundColor: cores.primaria }}>
                     <div>
@@ -81,7 +81,7 @@ useEffect(() => {
                     </div>
                     <div className="mt-6">
                         <label className="block text-sm font-bold mb-2 text-gray-300">Observações:</label>
-                        <textarea className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 focus:outline-none text-white placeholder-gray-500 resize-none" rows="3" placeholder="Alguma preferência?" value={observacao} onChange={(e) => setObservacao(e.target.value)} />
+                        <textarea className="flex-col sm:flex-row p-3 rounded-xl bg-gray-800 border border-gray-700 focus:outline-none text-white placeholder-gray-500 resize-none" rows="3" placeholder="Alguma preferência?" value={observacao} onChange={(e) => setObservacao(e.target.value)} />
                     </div>
                 </div>
 

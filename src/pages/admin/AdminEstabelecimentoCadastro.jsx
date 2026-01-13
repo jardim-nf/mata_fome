@@ -21,7 +21,7 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
                 onChange={onChange}
                 type={type}
                 required={required}
-                className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 {...props}
             />
             {helpText && <p className="text-xs text-gray-500 mt-1">{helpText}</p>}
@@ -443,7 +443,7 @@ if (formData.adminUID) {
                                     value={formData.adminUID} 
                                     onChange={handleInputChange} 
                                     required
-                                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                                    className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                                 >
                                     <option value="">Selecione um administrador...</option>
                                     {availableAdmins.map(admin => (
@@ -470,7 +470,7 @@ if (formData.adminUID) {
                                     name="currentPlanId" 
                                     value={formData.currentPlanId} 
                                     onChange={handleInputChange}
-                                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                                    className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                                 >
                                     <option value="">Nenhum Plano (Definir depois)</option>
                                     {availablePlans.map(plan => (

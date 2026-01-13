@@ -509,7 +509,7 @@ function ListarPedidosMaster() {
                 <input
                   type="text"
                   id="searchTerm"
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 pl-12 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 pl-12 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                   placeholder="ID, cliente ou estabelecimento..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -524,7 +524,7 @@ function ListarPedidosMaster() {
               <label htmlFor="filterEstabelecimento" className="block text-sm font-semibold text-gray-700 mb-3">Estabelecimento</label>
               <select
                 id="filterEstabelecimento"
-                className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 value={filterEstabelecimento}
                 onChange={(e) => setFilterEstabelecimento(e.target.value)}
               >
@@ -539,7 +539,7 @@ function ListarPedidosMaster() {
               <label htmlFor="filterStatus" className="block text-sm font-semibold text-gray-700 mb-3">Status</label>
               <select
                 id="filterStatus"
-                className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
               >
@@ -553,7 +553,7 @@ function ListarPedidosMaster() {
               <label htmlFor="filterPeriod" className="block text-sm font-semibold text-gray-700 mb-3">Período</label>
               <select
                 id="filterPeriod"
-                className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                className="flex-col sm:flex-row rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
                 value={filterPeriod}
                 onChange={(e) => setFilterPeriod(e.target.value)}
               >

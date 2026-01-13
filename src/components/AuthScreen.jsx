@@ -111,7 +111,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="flex-col sm:flex-row p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
             <input
               type="tel"
@@ -119,7 +119,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
-              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="flex-col sm:flex-row p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
             <input
               type="text"
@@ -127,7 +127,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               required
-              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="flex-col sm:flex-row p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
           </>
         )}
@@ -138,7 +138,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
+          className="flex-col sm:flex-row p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
         />
         <input
           type="password"
@@ -146,13 +146,13 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
+          className="flex-col sm:flex-row p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
         />
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-orange-500 text-white py-3 rounded-md font-bold hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-col sm:flex-row bg-orange-500 text-white py-3 rounded-md font-bold hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Carregando...' : (isRegister ? 'Cadastrar' : 'Entrar')}
         </button>
@@ -169,7 +169,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
       {onClose && (
         <button
           onClick={onClose}
-          className="mt-4 w-full bg-gray-300 text-gray-800 py-2 rounded-md font-bold hover:bg-gray-400 transition-colors duration-200"
+          className="mt-4 flex-col sm:flex-row bg-gray-300 text-gray-800 py-2 rounded-md font-bold hover:bg-gray-400 transition-colors duration-200"
         >
           Fechar
         </button>

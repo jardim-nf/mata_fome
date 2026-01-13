@@ -76,15 +76,15 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave }) {
       onClick={onClose}
     >
       <div 
-        className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md"
+        className="bg-white p-6 rounded-lg shadow-xl flex-col sm:flex-row max-w-md"
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-2xl font-bold mb-4">Novo Pedido Delivery</h2>
         <div className="space-y-4">
-          <input type="text" placeholder="Nome do Cliente" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} className="w-full p-2 border rounded" />
-          <input type="tel" placeholder="Telefone (WhatsApp)" value={telefone} onChange={e => setTelefone(e.target.value)} className="w-full p-2 border rounded" />
-          <input type="text" placeholder="Endereço de Entrega" value={endereco} onChange={e => setEndereco(e.target.value)} className="w-full p-2 border rounded" />
-          <textarea placeholder="Itens do Pedido (Ex: 2x Pizza G&#10;1x Coca 2L)" value={itens} onChange={e => setItens(e.target.value)} className="w-full p-2 border rounded" rows="4"></textarea>
+          <input type="text" placeholder="Nome do Cliente" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} className="flex-col sm:flex-row p-2 border rounded" />
+          <input type="tel" placeholder="Telefone (WhatsApp)" value={telefone} onChange={e => setTelefone(e.target.value)} className="flex-col sm:flex-row p-2 border rounded" />
+          <input type="text" placeholder="Endereço de Entrega" value={endereco} onChange={e => setEndereco(e.target.value)} className="flex-col sm:flex-row p-2 border rounded" />
+          <textarea placeholder="Itens do Pedido (Ex: 2x Pizza G&#10;1x Coca 2L)" value={itens} onChange={e => setItens(e.target.value)} className="flex-col sm:flex-row p-2 border rounded" rows="4"></textarea>
           
           <div>
             <input 
@@ -92,7 +92,7 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave }) {
               placeholder="Valor Total (R$)" 
               value={total} 
               onChange={e => handleTotalChange(e.target.value)} 
-              className={`w-full p-2 border rounded ${erroTotal ? 'border-red-500' : ''}`} 
+              className={`flex-col sm:flex-row p-2 border rounded ${erroTotal ? 'border-red-500' : ''}`} 
               step="0.01"
               min="0.01"
             />

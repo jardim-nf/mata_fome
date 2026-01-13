@@ -117,7 +117,7 @@ function ClienteLogin() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--bege-claro)] p-4">
-      <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md animate-fadeIn">
+      <div className="bg-white p-8 rounded-lg shadow-xl flex-col sm:flex-row max-w-md animate-fadeIn">
         <h2 className="text-3xl font-bold text-center text-[var(--vermelho-principal)] mb-6">
           {isRegistering ? 'Criar Conta' : 'Acessar Conta'}
         </h2>
@@ -133,7 +133,7 @@ function ClienteLogin() {
                   type="text"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                  className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                   required
                 />
               </div>
@@ -145,7 +145,7 @@ function ClienteLogin() {
                   placeholder="(99) 99999-9999"
                   value={telefone}
                   onChange={(e) => setTelefone(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                  className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                   required
                 />
               </div>
@@ -157,7 +157,7 @@ function ClienteLogin() {
                   type="text"
                   value={rua}
                   onChange={(e) => setRua(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                  className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                   required
                 />
               </div>
@@ -170,7 +170,7 @@ function ClienteLogin() {
                     type="text"
                     value={numero}
                     onChange={(e) => setNumero(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                    className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                     required
                   />
                 </div>
@@ -180,7 +180,7 @@ function ClienteLogin() {
                     type="text"
                     value={bairro}
                     onChange={(e) => setBairro(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                    className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                     required
                   />
                 </div>
@@ -193,7 +193,7 @@ function ClienteLogin() {
                    type="text"
                    value={cidade}
                    onChange={(e) => setCidade(e.target.value)}
-                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                   className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                    required
                  />
               </div>
@@ -206,7 +206,7 @@ function ClienteLogin() {
                   placeholder="Ex: Apt 101, Ao lado da padaria"
                   value={complemento}
                   onChange={(e) => setComplemento(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                  className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                 />
               </div>
               
@@ -221,7 +221,7 @@ function ClienteLogin() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+              className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
               required
             />
           </div>
@@ -233,7 +233,7 @@ function ClienteLogin() {
               placeholder={isRegistering ? "Mínimo 6 caracteres" : ""}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+              className="flex-col sm:flex-row px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
               required
             />
           </div>
@@ -246,7 +246,7 @@ function ClienteLogin() {
 
           <button
             type="submit"
-            className="w-full bg-[var(--vermelho-principal)] hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold text-lg transition duration-300 shadow-lg hover:shadow-xl transform active:scale-95"
+            className="flex-col sm:flex-row bg-[var(--vermelho-principal)] hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold text-lg transition duration-300 shadow-lg hover:shadow-xl transform active:scale-95"
           >
             {isRegistering ? 'Finalizar Cadastro' : 'Entrar'}
           </button>

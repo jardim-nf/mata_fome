@@ -101,7 +101,7 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm transition-all">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-200 scale-100">
+      <div className="bg-white rounded-2xl shadow-2xl flex-col sm:flex-row max-w-md transform transition-all duration-200 scale-100">
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -134,7 +134,7 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
                 onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={handleKeyPress}
                 placeholder="Ex: 1, 2, A, VIP..."
-                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all text-lg font-medium ${
+                className={`flex-col sm:flex-row px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all text-lg font-medium ${
                   erro 
                     ? 'border-red-300 focus:ring-red-500 bg-red-50' 
                     : numeroValido 

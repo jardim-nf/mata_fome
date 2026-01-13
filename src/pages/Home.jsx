@@ -129,10 +129,10 @@ function AuthButtonElegant({ onLoginClick }) {
 // --- Hero Section - MELHORADA ---
 function HeroSectionModern({ onExploreClick }) {
   return (
-    <section className="relative w-full overflow-hidden bg-gradient-to-br from-white to-yellow-50 pt-24 md:pt-32">
+    <section className="relative flex-col sm:flex-row overflow-hidden bg-gradient-to-br from-white to-yellow-50 pt-24 md:pt-32">
       <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between py-12 md:py-20 px-4">
         {/* Lado Esquerdo: Conteúdo de Texto */}
-        <div className="w-full lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0 z-10">
+        <div className="flex-col sm:flex-row lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0 z-10">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-black mb-4 leading-tight">
             Deu Fome? <br className="hidden md:inline"/> 
             <span className="text-yellow-500"> Peça Agora!</span>
@@ -169,15 +169,15 @@ function HeroSectionModern({ onExploreClick }) {
         </div>
 
         {/* Lado Direito: Área Visual com Imagem de Pizza e Fundo Amarelo Vibrante */}
-        <div className="relative w-full lg:w-1/2 flex justify-center items-center lg:h-[500px]">
+        <div className="relative flex-col sm:flex-row lg:w-1/2 flex justify-center items-center lg:h-[500px]">
           {/* Fundo Vibrante com gradiente */}
-          <div className="absolute inset-y-0 right-0 w-full lg:w-[120%] bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-bl-[100px] lg:rounded-bl-[150px] transform lg:translate-x-1/4"></div>
+          <div className="absolute inset-y-0 right-0 flex-col sm:flex-row lg:w-[120%] bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-bl-[100px] lg:rounded-bl-[150px] transform lg:translate-x-1/4"></div>
           
           {/* Sua Imagem da Pizza - Com animação flutuante */}
           <img
             src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/pizza.png?alt=media&token=aac1a9a6-5381-41df-b728-c394fba7b762" 
             alt="Pizza Deliciosa"
-            className="relative z-10 w-full max-w-md md:max-w-lg lg:max-w-none lg:w-auto h-auto rounded-xl shadow-2xl transform translate-y-8 lg:translate-y-0 rotate-3 animate-float"
+            className="relative z-10 flex-col sm:flex-row max-w-md md:max-w-lg lg:max-w-none lg:w-auto h-auto rounded-xl shadow-2xl transform translate-y-8 lg:translate-y-0 rotate-3 animate-float"
           />
           
           {/* Elementos decorativos */}
@@ -270,7 +270,7 @@ function LoginModal({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 animate-scale-in">
+      <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl flex-col sm:flex-row max-w-md border border-gray-200 animate-scale-in">
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-sans text-3xl font-bold text-black">
             {isRegistering ? 'Crie Sua Conta' : 'Acesse Sua Conta'}
@@ -295,7 +295,7 @@ function LoginModal({ isOpen, onClose }) {
                 placeholder="Seu Nome Completo"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
+                className="flex-col sm:flex-row px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
                 required={isRegistering}
               />
             </div>
@@ -310,7 +310,7 @@ function LoginModal({ isOpen, onClose }) {
               placeholder="seuemail@exemplo.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
+              className="flex-col sm:flex-row px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
               required
             />
           </div>
@@ -324,7 +324,7 @@ function LoginModal({ isOpen, onClose }) {
               placeholder="Mínimo 6 caracteres"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
+              className="flex-col sm:flex-row px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
               required
             />
           </div>
@@ -337,7 +337,7 @@ function LoginModal({ isOpen, onClose }) {
           
           <button
             type="submit"
-            className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-lg text-lg transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-col sm:flex-row bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-lg text-lg transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={isAuthProcessing}
           >
             {isAuthProcessing ? (
@@ -426,7 +426,7 @@ function BenefitsSection() {
               ))}
             </ul>
             
-            <button className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+            <button className="flex-col sm:flex-row bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
               Começar a Vender Mais
             </button>
           </div>
@@ -463,7 +463,7 @@ function BenefitsSection() {
               ))}
             </ul>
             
-            <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+            <button className="flex-col sm:flex-row bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
               Otimizar Operação
             </button>
           </div>
@@ -500,7 +500,7 @@ function BenefitsSection() {
               ))}
             </ul>
             
-            <button className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+            <button className="flex-col sm:flex-row bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
               Economizar Agora
             </button>
           </div>
@@ -679,7 +679,7 @@ function Home() {
               placeholder="🔍 Pesquisar estabelecimentos..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-6 py-4 bg-gray-50 border border-gray-300 rounded-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
+              className="flex-col sm:flex-row px-6 py-4 bg-gray-50 border border-gray-300 rounded-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
             />
           </div>
         </div>
@@ -714,14 +714,14 @@ function Home() {
                     <img
                       src={estabelecimento.imageUrl}
                       alt={estabelecimento.nome || 'Estabelecimento'}
-                      className="w-full h-56 object-cover object-center group-hover:scale-110 transition-transform duration-300"
+                      className="flex-col sm:flex-row h-56 object-cover object-center group-hover:scale-110 transition-transform duration-300"
                     />
                     <div className="absolute top-4 right-4 bg-yellow-500 text-black px-3 py-1 rounded-full text-sm font-semibold">
                       ⭐ {estabelecimento.rating || '4.5'}
                     </div>
                   </div>
                 ) : (
-                  <div className="w-full h-56 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400">
+                  <div className="flex-col sm:flex-row h-56 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400">
                     <svg className="w-16 h-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
                     </svg>
@@ -768,7 +768,7 @@ function Home() {
                         toast.info(`Carregando cardápio de ${estabelecimento.nome}...`);
                       }
                     }}
-                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-xl text-lg transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"
+                    className="flex-col sm:flex-row bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-xl text-lg transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"
                   >
                     🍽️ Ver Cardápio
                   </button>
@@ -787,7 +787,7 @@ function Home() {
               <div className="font-extrabold text-2xl text-white mb-4">
                 DEU FOME<span className="text-yellow-500">.</span>
               </div>
-              <p className="text-sm">
+<p className="text-sm sm:text-base">
                 Sua experiência de delivery, elevada. Conectamos você aos melhores estabelecimentos da cidade.
               </p>
             </div>

@@ -261,43 +261,43 @@ function AdminEstablishmentManagement() {
                             <div className="md:col-span-1"> {/* Garante que o nome ocupe 1 coluna em telas médias+ */}
                                 <label htmlFor="nome" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Nome do Estabelecimento *</label>
                                 <input type="text" id="nome" value={nome} onChange={(e) => setNome(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" required />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" required />
                             </div>
                             <div>
                                 <label htmlFor="slug" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Slug da URL *</label>
                                 <input type="text" id="slug" value={slug} onChange={(e) => setSlug(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="ex: meu-restaurante-online" required />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="ex: meu-restaurante-online" required />
                                 <p className="text-xs text-gray-500 mt-1">Será o link: /loja/{slug || 'nome-slug'}</p>
                             </div>
                             <div>
                                 <label htmlFor="whatsapp" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">WhatsApp (com DDD) *</label>
                                 <input type="text" id="whatsapp" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="ex: 5522999999999" required />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="ex: 5522999999999" required />
                             </div>
                             <div>
                                 <label htmlFor="chavePix" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Chave PIX (Opcional)</label>
                                 <input type="text" id="chavePix" value={chavePix} onChange={(e) => setChavePix(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="imageUrl" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">URL da Imagem/Logo (Opcional)</label>
                                 <input type="text" id="imageUrl" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="ex: https://link-da-sua-logo.png" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" placeholder="ex: https://link-da-sua-logo.png" />
                             </div>
                             <div>
                                 <label htmlFor="tipo" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Tipo (Ex: Restaurante, Pizzaria)</label>
                                 <input type="text" id="tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="valor" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Valor (Ex: $, $$, $$$)</label>
                                 <input type="text" id="valor" value={valor} onChange={(e) => setValor(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="rating" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Avaliação (1-5)</label>
                                 <input type="number" id="rating" value={rating} onChange={(e) => setRating(e.target.value)} min="1" max="5" step="0.1"
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                         </div>
 
@@ -307,44 +307,44 @@ function AdminEstablishmentManagement() {
                             <div>
                                 <label htmlFor="enderecoRua" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Rua</label>
                                 <input type="text" id="enderecoRua" value={enderecoRua} onChange={(e) => setEnderecoRua(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="enderecoNumero" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Número</label>
                                 <input type="text" id="enderecoNumero" value={enderecoNumero} onChange={(e) => setEnderecoNumero(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="enderecoBairro" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Bairro</label>
                                 <input type="text" id="enderecoBairro" value={enderecoBairro} onChange={(e) => setEnderecoBairro(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="enderecoComplemento" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Complemento</label>
                                 <input type="text" id="enderecoComplemento" value={enderecoComplemento} onChange={(e) => setEnderecoComplemento(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="enderecoCidade" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Cidade</label>
                                 <input type="text" id="enderecoCidade" value={enderecoCidade} onChange={(e) => setEnderecoCidade(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                             <div>
                                 <label htmlFor="enderecoEstado" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Estado (UF)</label>
                                 <input type="text" id="enderecoEstado" value={enderecoEstado} onChange={(e) => setEnderecoEstado(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" maxLength="2" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" maxLength="2" />
                             </div>
                             <div>
                                 <label htmlFor="enderecoCep" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">CEP</label>
                                 <input type="text" id="enderecoCep" value={enderecoCep} onChange={(e) => setEnderecoCep(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
+                                    className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]" />
                             </div>
                         </div>
 
  <div className="mb-4">
 <label htmlFor="descricao" className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Descrição</label>
  <textarea id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows="3"
- className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"></textarea>
+ className="flex-col sm:flex-row border border-gray-300 rounded-md px-3 py-2 focus:ring-[var(--vermelho-principal)] focus:border-[var(--vermelho-principal)]"></textarea>
  </div>
 
 <div className="flex gap-4 justify-end">

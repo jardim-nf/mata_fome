@@ -326,7 +326,7 @@ function ListarEstabelecimentos() {
                 <input
                   type="text"
                   id="searchTerm"
-                  className="w-full rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 text-gray-800 bg-gray-50 border-0 focus:bg-white transition-all duration-300 pl-12"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 text-gray-800 bg-gray-50 border-0 focus:bg-white transition-all duration-300 pl-12"
                   placeholder="Digite para pesquisar..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -341,7 +341,7 @@ function ListarEstabelecimentos() {
               <div className="relative">
                 <select
                   id="filterStatus"
-                  className="w-full rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 bg-gray-50 text-gray-800 border-0 focus:bg-white transition-all duration-300 appearance-none pl-4 pr-12"
+                  className="flex-col sm:flex-row rounded-xl border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-yellow-500 p-4 bg-gray-50 text-gray-800 border-0 focus:bg-white transition-all duration-300 appearance-none pl-4 pr-12"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                 >

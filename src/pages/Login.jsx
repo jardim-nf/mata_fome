@@ -94,7 +94,7 @@ function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-md border border-gray-200">
+      <div className="bg-white shadow-2xl rounded-2xl p-8 flex-col sm:flex-row max-w-md border border-gray-200">
         
         {/* Cabeçalho */}
         <div className="text-center mb-8">
@@ -117,7 +117,7 @@ function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="exemplo@email.com"
               required
-              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all outline-none"
+              className="flex-col sm:flex-row px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all outline-none"
             />
           </div>
 
@@ -132,14 +132,14 @@ function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all outline-none"
+              className="flex-col sm:flex-row px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all outline-none"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-3.5 rounded-xl hover:from-yellow-600 hover:to-orange-600 focus:ring-4 focus:ring-yellow-200 transition-all transform active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-col sm:flex-row bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-3.5 rounded-xl hover:from-yellow-600 hover:to-orange-600 focus:ring-4 focus:ring-yellow-200 transition-all transform active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
                 <>

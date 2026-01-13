@@ -544,18 +544,21 @@ function Menu() {
                     
                     <div className="flex flex-col gap-1 text-sm text-gray-600">
                         {estabelecimentoInfo.endereco?.rua && (
-                            <div className="flex items-center gap-2">
+                           <div className="flex flex-col sm:flex-row gap-4">
+
                                 <IoLocationSharp className="text-red-500" />
                                 <p>{estabelecimentoInfo.endereco.rua}, {estabelecimentoInfo.endereco.numero}</p>
                             </div>
                         )}
                         {estabelecimentoInfo.telefone && (
-                            <div className="flex items-center gap-2">
+                           <div className="flex flex-col sm:flex-row gap-4">
+
                                 <IoCall className="text-green-500" />
                                 <p>{estabelecimentoInfo.telefone}</p>
                             </div>
                         )}
-                        <div className="flex items-center gap-2">
+                       <div className="flex flex-col sm:flex-row gap-4">
+
                             <IoTime className="text-blue-500" />
                             <p>{estabelecimentoInfo.horarioFuncionamento ? formatarHorarios(estabelecimentoInfo.horarioFuncionamento) : "Aberto"}</p>
                         </div>
@@ -581,7 +584,7 @@ function Menu() {
     if (currentUser && (isAdmin || isMasterAdmin)) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
-                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-gray-200">
+                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md flex-col sm:flex-row text-center border border-gray-200">
                     <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <span className="text-4xl">🛡️</span>
                     </div>
@@ -597,7 +600,7 @@ function Menu() {
                     <div className="space-y-3">
                         <button
                             onClick={() => navigate(isMasterAdmin ? '/master/estabelecimentos' : '/admin/dashboard')}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2"
+                            className="flex-col sm:flex-row bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                             Ir para o Painel
@@ -605,7 +608,7 @@ function Menu() {
 
                         <button
                             onClick={handleLogout}
-                            className="w-full bg-white hover:bg-red-50 text-red-600 py-3.5 rounded-xl font-bold border-2 border-red-100 transition-all flex items-center justify-center gap-2"
+                            className="flex-col sm:flex-row bg-white hover:bg-red-50 text-red-600 py-3.5 rounded-xl font-bold border-2 border-red-100 transition-all flex items-center justify-center gap-2"
                         >
                             <IoLogOutOutline size={20} />
                             Sair e Acessar como Cliente
@@ -617,9 +620,9 @@ function Menu() {
     }
     
     return (
-        <div className="w-full relative overflow-x-hidden" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, minHeight: '100vh', paddingBottom: '200px' }}>
+        <div className="flex-col sm:flex-row relative overflow-x-hidden" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, minHeight: '100vh', paddingBottom: '200px' }}>
             
-            <div className="max-w-7xl mx-auto px-4 w-full">
+            <div className="max-w-7xl mx-auto px-4 flex-col sm:flex-row">
                 {/* CABEÇALHO COM LOGO LATERAL */}
                 <InfoEstabelecimento />
                 
@@ -630,7 +633,7 @@ function Menu() {
                             placeholder="🔍 Buscar produto..." 
                             value={searchTerm} 
                             onChange={e => setSearchTerm(e.target.value)} 
-                            className="w-full p-3 mb-4 bg-gray-50 rounded-lg border border-gray-300 focus:outline-none focus:border-green-500 text-base text-gray-900 placeholder-gray-400 shadow-inner" 
+                            className="flex-col sm:flex-row p-3 mb-4 bg-gray-50 rounded-lg border border-gray-300 focus:outline-none focus:border-green-500 text-base text-gray-900 placeholder-gray-400 shadow-inner" 
                         />
                         <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                             {['Todos', ...categoriasOrdenadas].map(cat => (
@@ -662,14 +665,14 @@ function Menu() {
                             <div key={cat} id={`categoria-${cat}`} className="mb-8">
                                 <h2 className="text-2xl font-bold mb-4 flex justify-between items-center text-gray-900">{cat} <span className="text-sm font-normal bg-gray-100 px-2 py-1 rounded text-gray-500 border border-gray-200">{items.length}</span></h2>
                                 <div className="grid gap-4">{items.slice(0, visible).map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />)}</div>
-                                {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-2 py-2 text-sm font-bold text-gray-500 hover:text-gray-900 bg-gray-100 border border-gray-200 hover:bg-gray-200 rounded-lg transition shadow-sm">{visible >= items.length ? 'Ver menos' : `Ver mais (${items.length - visible})`}</button>}
+                                {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="flex-col sm:flex-row mt-2 py-2 text-sm font-bold text-gray-500 hover:text-gray-900 bg-gray-100 border border-gray-200 hover:bg-gray-200 rounded-lg transition shadow-sm">{visible >= items.length ? 'Ver menos' : `Ver mais (${items.length - visible})`}</button>}
                             </div>
                         );
                     })
                 }
 
                 <div className="grid md:grid-cols-2 gap-8 mt-12 pb-12">
-                    <div className="bg-white p-4 md:p-6 rounded-xl border border-gray-200 shadow-lg w-full max-w-full overflow-hidden">
+                    <div className="bg-white p-4 md:p-6 rounded-xl border border-gray-200 shadow-lg flex-col sm:flex-row max-flex-col sm:flex-row overflow-hidden">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-gray-900">👤 Seus Dados</h3>
                             {currentUser ? (
@@ -690,18 +693,18 @@ function Menu() {
                             )}
                         </div>
                         <div className="space-y-4">
-                            <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Telefone *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
-                            <div className="flex gap-2 w-full">
+                            <input className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Telefone *" type="tel" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            <div className="flex gap-2 flex-col sm:flex-row">
                                 <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base shadow-sm ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>🚚 Entrega</button>
                                 <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold transition-colors text-sm md:text-base shadow-sm ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>🏪 Retirada</button>
                             </div>
                             {!isRetirada && (
                                 <>
-                                    <div className="flex gap-2 w-full"><div className="flex-1 min-w-0"><input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /></div><div className="w-20 md:w-24 flex-shrink-0"><input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-center text-gray-900 placeholder-gray-400" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div></div>
-                                    <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
-                                    <input className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
+                                    <div className="flex gap-2 flex-col sm:flex-row"><div className="flex-1 min-w-0"><input className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /></div><div className="w-20 md:w-24 flex-shrink-0"><input className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base text-center text-gray-900 placeholder-gray-400" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div></div>
+                                    <input className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Cidade *" value={cidade} onChange={e => setCidade(e.target.value)} />
+                                    <input className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base min-w-0 text-gray-900 placeholder-gray-400" placeholder="Complemento" value={complemento} onChange={e => setComplemento(e.target.value)} />
                                 </>
                             )}
                         </div>
@@ -719,7 +722,7 @@ function Menu() {
                                     <div className="flex gap-2 mt-4 pt-2 border-t border-gray-200"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 bg-gray-50 p-2 rounded border border-gray-300 text-sm text-gray-900 uppercase" /><button onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} disabled={couponLoading} className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600' : 'bg-green-600'} text-white shadow-sm`}>{couponLoading ? '...' : (appliedCoupon ? 'Remover' : 'Aplicar')}</button></div>
                                     <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-200 text-gray-900"><span>Total:</span><span style={{ color: coresEstabelecimento.destaque }}>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
-                                <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>✅ Finalizar Pedido</button>
+                                <button onClick={prepararParaPagamento} className="flex-col sm:flex-row mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg transform active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>✅ Finalizar Pedido</button>
                             </>
                         )}
                     </div>
@@ -730,12 +733,12 @@ function Menu() {
             
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             
-            {showOrderConfirmationModal && confirmedOrderDetails && <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"><div className="bg-white p-8 rounded-2xl max-w-md w-full text-center border border-gray-200 shadow-2xl"><div className="text-6xl mb-4">🎉</div><h2 className="text-3xl font-bold text-gray-900 mb-2">Pedido Confirmado!</h2><p className="text-gray-500 mb-6">ID: {confirmedOrderDetails.id}</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
+            {showOrderConfirmationModal && confirmedOrderDetails && <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"><div className="bg-white p-8 rounded-2xl max-w-md flex-col sm:flex-row text-center border border-gray-200 shadow-2xl"><div className="text-6xl mb-4">🎉</div><h2 className="text-3xl font-bold text-gray-900 mb-2">Pedido Confirmado!</h2><p className="text-gray-500 mb-6">ID: {confirmedOrderDetails.id}</p><button onClick={() => setShowOrderConfirmationModal(false)} className="flex-col sm:flex-row bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
             
             {/* --- MODAL DE LOGIN / CRIAR CONTA ATUALIZADO --- */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4">
-                    <div className="bg-white p-6 rounded-2xl w-full max-w-md border border-gray-200 shadow-2xl relative">
+                    <div className="bg-white p-6 rounded-2xl flex-col sm:flex-row max-w-md border border-gray-200 shadow-2xl relative">
                         <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 text-2xl hover:text-gray-600">&times;</button>
                         
                         <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
@@ -743,25 +746,25 @@ function Menu() {
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (
                                 <>
-                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
-                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                     
                                     {/* --- CAMPOS ADICIONADOS PARA ENDEREÇO COMPLETO --- */}
-                                    <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                     <div className="flex gap-2">
                                         <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-1/3 p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                         <input placeholder="Bairro" value={bairroAuthModal} onChange={e => setBairroAuthModal(e.target.value)} className="w-2/3 p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                     </div>
-                                    <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                                    <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                 </>
                             )}
-                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
-                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
+                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="flex-col sm:flex-row p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                             
-                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold shadow-md">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                            <button type="submit" className="flex-col sm:flex-row bg-green-600 text-white py-3 rounded font-bold shadow-md">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
                         </form>
                         
-                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm font-semibold">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button>
+                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="flex-col sm:flex-row mt-4 text-green-600 text-sm font-semibold">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button>
                     </div>
                 </div>
             )}

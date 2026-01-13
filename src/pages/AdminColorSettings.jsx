@@ -139,7 +139,7 @@ const AdminColorSettings = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           
           {/* Coluna da Esquerda: Controles */}
           <div className="lg:col-span-1 space-y-6">
@@ -185,22 +185,22 @@ const AdminColorSettings = () => {
                 Cores do Texto
               </h3>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <label className="text-xs font-medium text-gray-700 block mb-1">Principal</label>
-                        <input type="color" value={cores.texto.principal} onChange={(e) => updateTextColor('principal', e.target.value)} className="w-full h-8 rounded cursor-pointer" />
+                        <input type="color" value={cores.texto.principal} onChange={(e) => updateTextColor('principal', e.target.value)} className="flex-col sm:flex-row h-8 rounded cursor-pointer" />
                     </div>
                     <div>
                         <label className="text-xs font-medium text-gray-700 block mb-1">Secundário</label>
-                        <input type="color" value={cores.texto.secundario} onChange={(e) => updateTextColor('secundario', e.target.value)} className="w-full h-8 rounded cursor-pointer" />
+                        <input type="color" value={cores.texto.secundario} onChange={(e) => updateTextColor('secundario', e.target.value)} className="flex-col sm:flex-row h-8 rounded cursor-pointer" />
                     </div>
                     <div>
                         <label className="text-xs font-medium text-gray-700 block mb-1">Preço/Destaque</label>
-                        <input type="color" value={cores.texto.destaque} onChange={(e) => updateTextColor('destaque', e.target.value)} className="w-full h-8 rounded cursor-pointer" />
+                        <input type="color" value={cores.texto.destaque} onChange={(e) => updateTextColor('destaque', e.target.value)} className="flex-col sm:flex-row h-8 rounded cursor-pointer" />
                     </div>
                     <div>
                         <label className="text-xs font-medium text-gray-700 block mb-1">Placeholder</label>
-                        <input type="color" value={cores.texto.placeholder} onChange={(e) => updateTextColor('placeholder', e.target.value)} className="w-full h-8 rounded cursor-pointer" />
+                        <input type="color" value={cores.texto.placeholder} onChange={(e) => updateTextColor('placeholder', e.target.value)} className="flex-col sm:flex-row h-8 rounded cursor-pointer" />
                     </div>
                 </div>
               </div>
@@ -210,7 +210,7 @@ const AdminColorSettings = () => {
             <button
                 onClick={handleSaveColors}
                 disabled={saving}
-                className="md:hidden w-full flex justify-center items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg"
+                className="md:hidden flex-col sm:flex-row flex justify-center items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg"
             >
                 {saving ? <span>Salvando...</span> : <span>Salvar Configurações</span>}
             </button>
@@ -224,7 +224,7 @@ const AdminColorSettings = () => {
                 {/* Simulação da Tela do Celular */}
                 <div className="max-w-[375px] mx-auto border-8 border-gray-800 rounded-[3rem] overflow-hidden shadow-2xl h-[600px] relative">
                     {/* Status Bar Fake */}
-                    <div className="bg-black h-6 w-full absolute top-0 z-20"></div>
+                    <div className="bg-black h-6 flex-col sm:flex-row absolute top-0 z-20"></div>
                     
                     {/* Conteúdo do App Simulado */}
                     <div className="h-full overflow-y-auto pb-10" style={{ backgroundColor: cores.background }}>
@@ -294,8 +294,8 @@ const AdminColorSettings = () => {
                         </div>
 
                         {/* Bottom Bar */}
-                        <div className="absolute bottom-0 w-full p-4 bg-white/10 backdrop-blur-md border-t border-white/10">
-                             <div className="w-full h-12 rounded-xl flex items-center justify-center font-bold" style={{ backgroundColor: cores.primaria, color: '#FFFFFF' }}>
+                        <div className="absolute bottom-0 flex-col sm:flex-row p-4 bg-white/10 backdrop-blur-md border-t border-white/10">
+                             <div className="flex-col sm:flex-row h-12 rounded-xl flex items-center justify-center font-bold" style={{ backgroundColor: cores.primaria, color: '#FFFFFF' }}>
                                 Ver Sacola (R$ 0,00)
                              </div>
                         </div>

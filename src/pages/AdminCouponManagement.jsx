@@ -278,7 +278,7 @@ function AdminCouponManagement() {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-            <div className="max-w-6xl mx-auto">
+<div className="flex-col sm:flex-row text-sm sm:text-base lg:max-w-6xl lg:mx-auto">
                 {/* Header */}
 
                 {/* Estatísticas */}
@@ -359,7 +359,7 @@ function AdminCouponManagement() {
                                     placeholder="EXEMPLO10"
                                     disabled={!!editingCouponId}
                                     required 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all uppercase"
+                                    className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all uppercase"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
                                     {editingCouponId ? 'Código não pode ser alterado' : 'Use letras e números'}
@@ -374,7 +374,7 @@ function AdminCouponManagement() {
                                     value={tipoDesconto} 
                                     onChange={(e) => setTipoDesconto(e.target.value)} 
                                     required 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 >
                                     <option value="percentual">Percentual (%)</option>
                                     <option value="valorFixo">Valor Fixo (R$)</option>
@@ -396,7 +396,7 @@ function AdminCouponManagement() {
                                         onChange={(e) => setValorDesconto(e.target.value)} 
                                         placeholder={tipoDesconto === 'percentual' ? '10' : '5.00'}
                                         required 
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                        className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
                                         {tipoDesconto === 'percentual' ? 'Máximo: 100%' : 'Use ponto para decimais'}
@@ -415,7 +415,7 @@ function AdminCouponManagement() {
                                     value={minimoPedido} 
                                     onChange={(e) => setMinimoPedido(e.target.value)} 
                                     placeholder="0.00"
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
                                     Deixe em branco para nenhum mínimo
@@ -431,7 +431,7 @@ function AdminCouponManagement() {
                                     value={validadeInicio} 
                                     onChange={(e) => setValidadeInicio(e.target.value)} 
                                     required 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                             </div>
 
@@ -444,7 +444,7 @@ function AdminCouponManagement() {
                                     value={validadeFim} 
                                     onChange={(e) => setValidadeFim(e.target.value)} 
                                     required 
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                             </div>
 
@@ -458,7 +458,7 @@ function AdminCouponManagement() {
                                     value={usosMaximos} 
                                     onChange={(e) => setUsosMaximos(e.target.value)} 
                                     placeholder="Ilimitado"
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="flex-col sm:flex-row p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
                                     Deixe em branco para usos ilimitados

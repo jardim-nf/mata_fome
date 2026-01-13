@@ -406,7 +406,7 @@ export default function TaxasDeEntrega() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
             {/* CONTEÚDO PRINCIPAL - HEADER AGORA É GLOBAL */}
-            <div className="container mx-auto px-4 sm:px-6 py-6">
+            <div className="container mx-auto text-sm sm:text-base py-6">
                 
                 {/* Estatísticas */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -498,7 +498,7 @@ export default function TaxasDeEntrega() {
                                         id="nomeBairro"
                                         value={nomeBairro}
                                         onChange={(e) => setNomeBairro(e.target.value)}
-                                        className="pl-12 w-full p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
+                                        className="pl-12 flex-col sm:flex-row p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
                                         placeholder="Ex: Centro, Jardim das Flores..."
                                         required
                                     />
@@ -515,7 +515,7 @@ export default function TaxasDeEntrega() {
                                         id="valorTaxa"
                                         value={valorTaxa}
                                         onChange={(e) => setValorTaxa(e.target.value.replace(/[^0-9,]/g, ''))}
-                                        className="pl-12 w-full p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
+                                        className="pl-12 flex-col sm:flex-row p-4 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 bg-indigo-50/50"
                                         placeholder="Ex: 5,00"
                                         required
                                     />

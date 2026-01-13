@@ -90,7 +90,7 @@ function Header() {
 
     return (
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto text-sm sm:text-base lg:px-8">
                 
                 <div className="flex justify-between items-center py-2 md:py-3">
                     
@@ -162,7 +162,7 @@ function Header() {
 
             {/* --- 3. MENU MOBILE PROTEGIDO --- */}
             {isMenuOpen && (
-                <div className="md:hidden bg-white border-t border-gray-200 py-2 absolute w-full shadow-lg">
+                <div className="md:hidden bg-white border-t border-gray-200 py-2 absolute flex-col sm:flex-row shadow-lg">
                     <nav className="px-4 space-y-1">
                         
                         {/* Link de Início (Já inteligente, leva p/ Salão se for garçom) */}
@@ -212,7 +212,7 @@ function Header() {
                         {currentUser && (
                             <button
                                 onClick={handleLogout}
-                                className="block w-full text-left py-3 px-2 text-red-600 font-medium hover:bg-red-50 rounded-lg border-t border-gray-100 mt-2"
+                                className="block flex-col sm:flex-row text-left py-3 px-2 text-red-600 font-medium hover:bg-red-50 rounded-lg border-t border-gray-100 mt-2"
                             >
                                 Sair do Sistema
                             </button>

@@ -29,7 +29,7 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm transition-all duration-300">
-            <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md animate-in fade-in zoom-in duration-300 border border-gray-100 transform hover:scale-[1.01] transition-transform">
+            <div className="bg-white rounded-3xl shadow-xl p-8 flex-col sm:flex-row max-w-md animate-in fade-in zoom-in duration-300 border border-gray-100 transform hover:scale-[1.01] transition-transform">
                 <div className="text-center mb-8">
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
                         <IoPersonAdd className="text-3xl text-white" />
@@ -57,7 +57,7 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
                     </button>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <button 
                         onClick={onClose} 
                         className="py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 active:scale-95"
@@ -113,7 +113,7 @@ export default function ControleSalao() {
                 {/* Botão Nova Mesa: Compacto no mobile */}
                 <button 
                     onClick={() => setIsModalOpen(true)} 
-                    className="bg-gradient-to-r from-gray-900 to-black hover:from-black hover:to-gray-900 text-white font-bold py-3 px-4 sm:px-6 rounded-2xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 active:scale-95 group relative overflow-hidden"
+                    className="bg-gradient-to-r from-gray-900 to-black hover:from-black hover:to-gray-900 text-white font-bold py-3 text-sm sm:text-base rounded-2xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 active:scale-95 group relative overflow-hidden"
                 >
                     <span className="relative z-10 flex items-center gap-2">
                         <IoAdd className="text-xl sm:text-lg"/>
@@ -393,17 +393,20 @@ export default function ControleSalao() {
                     
                     {/* BARRA DE STATUS */}
                     <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row gap-4">
+
                             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-gray-700">{stats.livres} Livres</span>
                         </div>
                         <div className="w-px h-4 bg-gray-300"></div>
-                        <div className="flex items-center gap-2">
+                       <div className="flex flex-col sm:flex-row gap-4">
+
                             <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-gray-700">{stats.ocupadas} Ocupadas</span>
                         </div>
                         <div className="w-px h-4 bg-gray-300"></div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row gap-4">
+
                             <IoTime className="text-orange-500 text-lg" />
                             <span className="text-sm font-medium text-gray-700">{stats.itensPendentes} Itens Pendentes</span>
                         </div>
@@ -469,7 +472,7 @@ export default function ControleSalao() {
                         </div>
                         
                         {/* LEGENDA DE STATUS */}
-                        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold bg-white px-4 sm:px-6 py-3 rounded-2xl border-2 border-gray-200 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold bg-white text-sm sm:text-base py-3 rounded-2xl border-2 border-gray-200 shadow-sm">
                             <span className="flex items-center gap-2">
                                 <span className="w-3 h-3 bg-green-500 rounded-full shadow-sm"></span>
                                 <span className="text-gray-700">Livre</span>

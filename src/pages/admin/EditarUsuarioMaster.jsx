@@ -20,7 +20,7 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
                 onChange={onChange}
                 type={type}
                 {...props}
-                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block flex-col sm:flex-row rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
             />
             {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
         </div>
@@ -224,7 +224,7 @@ function EditarUsuarioMaster() {
                         type="button"
                         onClick={handleSendPasswordReset}
                         disabled={loadingForm}
-                        className="w-full sm:w-auto px-4 py-2 bg-yellow-500 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-yellow-600 disabled:bg-yellow-300 transition-colors duration-300"
+                        className="flex-col sm:flex-row sm:w-auto px-4 py-2 bg-yellow-500 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-yellow-600 disabled:bg-yellow-300 transition-colors duration-300"
                     >
                         {loadingForm ? 'Enviando...' : 'Enviar E-mail de Redefinição de Senha'}
                     </button>
@@ -269,7 +269,7 @@ function EditarUsuarioMaster() {
                                 multiple
                                 value={formData.estabelecimentosGerenciados}
                                 onChange={handleEstabelecimentoChange}
-                                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500 h-48"
+                                className="mt-1 block flex-col sm:flex-row rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500 h-48"
                                 disabled={loadingForm}
                             >
                                 {estabelecimentosList.map(estab => (
@@ -305,7 +305,7 @@ function EditarUsuarioMaster() {
                     <button
                         type="submit"
                         disabled={loadingForm}
-                        className="w-full px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors duration-300"
+                        className="flex-col sm:flex-row px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors duration-300"
                     >
                         {loadingForm ? 'Salvando Alterações...' : 'Salvar Alterações'}
                     </button>
