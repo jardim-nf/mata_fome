@@ -165,7 +165,14 @@ const AdminDashboard = () => {
                   colorClass="hover:border-pink-500 hover:bg-pink-50"
                 />
               </Link>
-              
+              <Link hide-from-display to="/admin/taxas-de-entrega" className="h-full">
+  <ActionButton
+    title="Taxas de Entrega"
+    subtitle="Configure valores de frete por bairro e ações em lote"
+    icon="🛵"
+    colorClass="hover:border-amber-500 hover:bg-amber-50"
+  />
+</Link>
               <Link to="/admin/analytics" className="h-full">
                 <ActionButton
                   title="Produtividade"
