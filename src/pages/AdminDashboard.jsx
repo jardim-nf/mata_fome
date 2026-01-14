@@ -1,10 +1,12 @@
+// src/pages/AdminDashboard.jsx
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
 import { useAuth } from "../context/AuthContext";
 import withAuth from "../hocs/withAuth";
 import { IoStatsChart, IoShareSocial, IoColorPalette } from "react-icons/io5";
-import { FaUsers, FaMotorcycle, FaHistory, FaArrowLeft } from 'react-icons/fa'; // Adicionei FaArrowLeft
+// Adicionei FaList na importação abaixo
+import { FaUsers, FaMotorcycle, FaArrowLeft, FaList } from 'react-icons/fa'; 
 
 // Componente visual do botão
 const ActionButton = ({ title, subtitle, icon, colorClass, onClick }) => (
@@ -16,6 +18,7 @@ const ActionButton = ({ title, subtitle, icon, colorClass, onClick }) => (
 
     <div className="relative z-10 flex flex-col h-full">
       <div className="flex items-start justify-between mb-4">
+        {/* Ajuste para aceitar ícones diretos ou strings */}
         <div className="text-4xl sm:text-5xl transform group-hover:scale-110 transition-transform duration-300">
           {icon}
         </div>
@@ -40,7 +43,6 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
 
-  // 1. Evita tela branca enquanto carrega o usuário
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -56,7 +58,6 @@ const AdminDashboard = () => {
     navigate("/home");
   };
 
-  // 2. Verifica permissões de forma segura
   const temPermissao = (permissaoNecessaria) => {
       if (!currentUser) return false;
       const ehAdmin = currentUser.isAdmin === true || currentUser.isMasterAdmin === true;
@@ -82,7 +83,6 @@ const AdminDashboard = () => {
           </div>
 
           <div className="flex w-full gap-3 mt-4 md:mt-0">
-            {/* BOTÃO VOLTAR PARA O SITE */}
             <button
               onClick={() => navigate('/home')}
               className="flex items-center justify-center gap-2 px-6 py-2.5 text-gray-700 bg-gray-100 border border-gray-200 rounded-xl hover:bg-gray-200 font-bold transition-all"
@@ -90,7 +90,6 @@ const AdminDashboard = () => {
               <FaArrowLeft /> Voltar
             </button>
 
-            {/* BOTÃO SAIR */}
             <button
               onClick={handleLogout}
               className="flex items-center justify-center gap-2 px-6 py-2.5 text-red-600 bg-red-50 border border-red-100 rounded-xl hover:bg-red-100 font-bold transition-all"
@@ -130,9 +129,7 @@ const AdminDashboard = () => {
             </Link>
           )}
 
-       
-
-          {/* BOTÃO 5: PDV (Admin) */}
+          {/* BOTÃO 3: PDV (Admin) */}
           {isRealAdmin && (
             <Link to="/pdv" className="h-full">
               <ActionButton
@@ -143,7 +140,8 @@ const AdminDashboard = () => {
               />
             </Link>
           )}
-   {/* BOTÃO 4: Cardápio Digital */}
+
+          {/* BOTÃO 4: Cardápio Digital */}
           {temPermissao('visualizar-cardapio') && (
             <Link to="/admin/gerenciar-cardapio" className="h-full">
               <ActionButton
@@ -154,6 +152,20 @@ const AdminDashboard = () => {
               />
             </Link>
           )}
+
+          {/* --- NOVO BOTÃO: ORDENAR CATEGORIAS --- */}
+          {/* Exibe para quem tem permissão de cardápio ou é Admin */}
+          {(temPermissao('visualizar-cardapio') || isRealAdmin) && (
+            <Link to="/admin/ordenar-categorias" className="h-full">
+              <ActionButton
+                title="Ordenar Categorias"
+                subtitle="Organize a ordem de exibição das categorias"
+                icon={<FaList className="text-teal-600" />}
+                colorClass="hover:border-teal-500 hover:bg-teal-50"
+              />
+            </Link>
+          )}
+
           {/* --- BLOCO EXCLUSIVO DE ADMIN --- */}
           {isRealAdmin && (
             <>
@@ -165,14 +177,16 @@ const AdminDashboard = () => {
                   colorClass="hover:border-pink-500 hover:bg-pink-50"
                 />
               </Link>
-              <Link hide-from-display to="/admin/taxas-de-entrega" className="h-full">
-  <ActionButton
-    title="Taxas de Entrega"
-    subtitle="Configure valores de frete por bairro e ações em lote"
-    icon="🛵"
-    colorClass="hover:border-amber-500 hover:bg-amber-50"
-  />
-</Link>
+              
+              <Link to="/admin/taxas-de-entrega" className="h-full">
+                <ActionButton
+                  title="Taxas de Entrega"
+                  subtitle="Configure valores de frete por bairro e ações em lote"
+                  icon="🛵"
+                  colorClass="hover:border-amber-500 hover:bg-amber-50"
+                />
+              </Link>
+
               <Link to="/admin/analytics" className="h-full">
                 <ActionButton
                   title="Produtividade"
@@ -223,7 +237,7 @@ const AdminDashboard = () => {
 
         <div className="text-center pt-8 border-t border-gray-200">
           <p className="text-gray-400 text-sm">
-            DeuFome System • Versão 2.7
+            DeuFome System • Versão 2.8
           </p>
         </div>
       </div>

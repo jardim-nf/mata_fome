@@ -3,15 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, doc, getDoc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../context/AuthContext'; // <--- 1. Importar AuthContext
+import { useAuth } from '../context/AuthContext';
 import GerenciarOrdemCategoria from '../components/GerenciarOrdemCategoria';
 import { toast } from 'react-toastify';
+import { FaPlus, FaTrash } from 'react-icons/fa'; // Ícones para interface
 
 const AdminOrderCategories = () => {
   const navigate = useNavigate();
-  const { estabelecimentosGerenciados } = useAuth(); // <--- 2. Pegar a lista do contexto
+  const { estabelecimentosGerenciados } = useAuth();
   
-  // 3. Definir o ID corretamente (pega o primeiro da lista)
   const estabelecimentoId = estabelecimentosGerenciados && estabelecimentosGerenciados.length > 0 
     ? estabelecimentosGerenciados[0] 
     : null;
@@ -20,101 +20,83 @@ const AdminOrderCategories = () => {
   const [ordemAtual, setOrdemAtual] = useState([]);
   const [loading, setLoading] = useState(true);
   const [nomeEstabelecimento, setNomeEstabelecimento] = useState('');
+  
+  // NOVO STATE: Para o input de nova categoria
+  const [novaCategoria, setNovaCategoria] = useState('');
 
-  // Buscar dados do estabelecimento e categorias
   useEffect(() => {
     const fetchData = async () => {
-      // 4. Verificação de segurança
       if (!estabelecimentoId) {
-        console.warn('⚠️ Nenhum estabelecimento gerenciado encontrado.');
         setLoading(false);
         return;
       }
-
-      console.log('🎯 Buscando dados para estabelecimento:', estabelecimentoId);
-
       try {
-        // Buscar dados do estabelecimento
         const estabelecimentoRef = doc(db, 'estabelecimentos', estabelecimentoId);
         const estabelecimentoDoc = await getDoc(estabelecimentoRef);
 
         if (estabelecimentoDoc.exists()) {
           const data = estabelecimentoDoc.data();
-          console.log('✅ Estabelecimento:', data.nome);
-          setNomeEstabelecimento(data.nome); // Salva o nome para exibir na tela
-          
-          // Se já existe ordem definida, usar ela
-          if (data.ordemCategorias && data.ordemCategorias.length > 0) {
-            console.log('📋 Ordem atual encontrada:', data.ordemCategorias);
-            setOrdemAtual(data.ordemCategorias);
-          }
+          setNomeEstabelecimento(data.nome);
         }
 
-        // Buscar categorias do cardápio usando o ID correto
         await fetchCategoriasDoCardapio(estabelecimentoId);
 
       } catch (error) {
-        console.error('💥 Erro ao buscar dados:', error);
-        toast.error('Erro ao carregar dados do estabelecimento');
-        
-        // Fallback
-        const categoriasMock = getCategoriasMock();
-        setCategoriasDisponiveis(categoriasMock);
-        setOrdemAtual(categoriasMock);
+        console.error('💥 Erro:', error);
+        toast.error('Erro ao carregar dados');
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [estabelecimentoId, navigate]); // <--- 5. Recarrega se o ID mudar
+  }, [estabelecimentoId, navigate]);
 
-  // Buscar categorias reais do cardápio
   const fetchCategoriasDoCardapio = async (idDoEstabelecimento) => {
     try {
-      console.log('🔍 Buscando categorias reais do cardápio...');
-      
+      // 1. Buscar categorias que JÁ EXISTEM nos produtos
       const cardapioRef = collection(db, 'estabelecimentos', idDoEstabelecimento, 'cardapio');
       const snapshot = await getDocs(cardapioRef);
       
-      console.log('📊 Categorias encontradas:', snapshot.size);
-      
-      const categorias = [];
-      
+      const categoriasNosProdutos = [];
       snapshot.forEach((doc) => {
         const categoriaData = doc.data();
         if (categoriaData.nome) {
-          categorias.push(categoriaData.nome.trim());
+            categoriasNosProdutos.push(categoriaData.nome.trim());
         }
       });
 
-      if (categorias.length === 0) {
-        toast.info('Nenhuma categoria encontrada no cardápio.');
+      // 2. Buscar a ordem salva (que pode ter categorias vazias criadas manualmente)
+      const estabelecimentoRef = doc(db, 'estabelecimentos', idDoEstabelecimento);
+      const estabelecimentoDoc = await getDoc(estabelecimentoRef);
+      
+      let categoriasSalvasNoBanco = [];
+      if (estabelecimentoDoc.exists()) {
+        const data = estabelecimentoDoc.data();
+        if (data.ordemCategorias && Array.isArray(data.ordemCategorias)) {
+            categoriasSalvasNoBanco = data.ordemCategorias;
+        }
+      }
+
+      // 3. MERGE INTELIGENTE: Junta o que tem produtos + o que foi salvo manualmente
+      // Isso impede que categorias vazias sumam
+      const todasCategoriasUnicas = [...new Set([...categoriasNosProdutos, ...categoriasSalvasNoBanco])];
+
+      if (todasCategoriasUnicas.length === 0) {
+        toast.info('Nenhuma categoria encontrada.');
         setCategoriasDisponiveis([]);
         return;
       }
 
-      const categoriasUnicas = [...new Set(categorias)];
-      setCategoriasDisponiveis(categoriasUnicas);
+      setCategoriasDisponiveis(todasCategoriasUnicas);
 
-      // Buscar ordem atual atualizada
-      const estabelecimentoRef = doc(db, 'estabelecimentos', idDoEstabelecimento);
-      const estabelecimentoDoc = await getDoc(estabelecimentoRef);
-      
-      if (estabelecimentoDoc.exists()) {
-        const data = estabelecimentoDoc.data();
-        
-        if (data.ordemCategorias && data.ordemCategorias.length > 0) {
-          const ordemFiltrada = data.ordemCategorias.filter(categoria => 
-            categoriasUnicas.includes(categoria)
-          );
-          const categoriasNovas = categoriasUnicas.filter(categoria => 
-            !ordemFiltrada.includes(categoria)
-          );
-          setOrdemAtual([...ordemFiltrada, ...categoriasNovas]);
-        } else {
-          setOrdemAtual(categoriasUnicas.sort((a, b) => a.localeCompare(b)));
-        }
+      // Se existir uma ordem salva, usamos ela como base e adicionamos as novas no final
+      if (categoriasSalvasNoBanco.length > 0) {
+        const novasQueNaoEstavamNaOrdem = todasCategoriasUnicas.filter(cat => !categoriasSalvasNoBanco.includes(cat));
+        setOrdemAtual([...categoriasSalvasNoBanco, ...novasQueNaoEstavamNaOrdem]);
+      } else {
+        // Se não tem ordem salva, ordena alfabeticamente
+        setOrdemAtual(todasCategoriasUnicas.sort((a, b) => a.localeCompare(b)));
       }
 
     } catch (error) {
@@ -123,19 +105,34 @@ const AdminOrderCategories = () => {
     }
   };
 
-  const getCategoriasMock = () => {
-    return ["BEBIDAS", "PETISCOS", "LANCHES", "COMBOS"];
-  };
-
-  const salvarOrdemNoFirebase = async (novaOrdem) => {
-    if (!estabelecimentoId) {
-      toast.error('ID do estabelecimento não encontrado');
+  // NOVA FUNÇÃO: Adicionar categoria manualmente
+  const handleAddCategoria = () => {
+    if (!novaCategoria.trim()) {
+      toast.warning('Digite o nome da categoria');
       return;
     }
 
+    const novaFormatada = novaCategoria.trim().toUpperCase(); // Padroniza para maiúsculo
+
+    if (categoriasDisponiveis.includes(novaFormatada)) {
+      toast.warning('Esta categoria já existe!');
+      return;
+    }
+
+    // Adiciona na lista local e na ordem atual
+    const novasCategorias = [...categoriasDisponiveis, novaFormatada];
+    const novaOrdem = [novaFormatada, ...ordemAtual]; // Adiciona no TOPO para facilitar ver
+
+    setCategoriasDisponiveis(novasCategorias);
+    setOrdemAtual(novaOrdem);
+    setNovaCategoria(''); // Limpa o input
+    toast.success(`Categoria "${novaFormatada}" adicionada! Lembre de salvar.`);
+  };
+
+  const salvarOrdemNoFirebase = async (novaOrdem) => {
+    if (!estabelecimentoId) return;
+
     try {
-      console.log('💾 Salvando ordem no Firebase:', novaOrdem);
-      
       const estabelecimentoRef = doc(db, 'estabelecimentos', estabelecimentoId);
       await updateDoc(estabelecimentoRef, {
         ordemCategorias: novaOrdem,
@@ -143,7 +140,7 @@ const AdminOrderCategories = () => {
       });
       
       setOrdemAtual(novaOrdem);
-      toast.success('✅ Ordem salva com sucesso!');
+      toast.success('✅ Ordem e novas categorias salvas!');
       
       await atualizarOrdemNosProdutos(novaOrdem);
       
@@ -154,12 +151,12 @@ const AdminOrderCategories = () => {
   };
 
   const atualizarOrdemNosProdutos = async (novaOrdem) => {
+    // Mantive sua lógica original aqui
     try {
       const cardapioRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
       const snapshot = await getDocs(cardapioRef);
-      const updates = []; // Array de Promises
+      const updates = [];
       
-      // Criar um mapa de ordem para acesso rápido: { "BEBIDAS": 1, "LANCHES": 2 }
       const ordemMap = {};
       novaOrdem.forEach((cat, index) => {
         ordemMap[cat] = index + 1;
@@ -167,12 +164,11 @@ const AdminOrderCategories = () => {
       
       snapshot.forEach((docSnapshot) => {
         const produto = docSnapshot.data();
-        const novaPosicao = ordemMap[produto.nome]; // produto.nome é a Categoria (baseado na sua lógica)
-        
-        if (novaPosicao !== undefined) {
+        // Verifica se a categoria do produto está no mapa
+        if (produto.nome && ordemMap[produto.nome]) {
            updates.push(
              updateDoc(docSnapshot.ref, { 
-               ordem: novaPosicao,
+               ordem: ordemMap[produto.nome],
                atualizadoEm: new Date() 
              })
            );
@@ -181,9 +177,7 @@ const AdminOrderCategories = () => {
       
       if (updates.length > 0) {
         await Promise.all(updates);
-        console.log(`📦 Ordem atualizada em ${updates.length} produtos/categorias.`);
       }
-      
     } catch (error) {
       console.error('❌ Erro não-crítico ao atualizar produtos:', error);
     }
@@ -193,16 +187,7 @@ const AdminOrderCategories = () => {
     navigate('/dashboard');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-10 text-center">Carregando...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -210,8 +195,8 @@ const AdminOrderCategories = () => {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Ordenar Categorias</h1>
-              <p className="text-gray-600 mt-1">Arraste para definir a ordem no cardápio</p>
+              <h1 className="text-2xl font-bold text-gray-900">Gerenciar Categorias</h1>
+              <p className="text-gray-600 mt-1">Crie novas categorias ou reordene as existentes</p>
             </div>
             <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
               Voltar
@@ -220,18 +205,40 @@ const AdminOrderCategories = () => {
 
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
             <h3 className="font-semibold text-green-900">
-              🎯 Estabelecimento: {nomeEstabelecimento || 'Carregando...'}
+              🎯 Estabelecimento: {nomeEstabelecimento}
             </h3>
-            <p className="text-green-700 text-sm">
-              {categoriasDisponiveis.length} categorias encontradas
+          </div>
+
+          {/* --- NOVA ÁREA DE CRIAÇÃO --- */}
+          <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Criar Nova Categoria</label>
+            <div className="flex gap-2">
+              <input 
+                type="text"
+                value={novaCategoria}
+                onChange={(e) => setNovaCategoria(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddCategoria()}
+                placeholder="Ex: PROMOÇÕES, BURGERS..."
+                className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase"
+              />
+              <button 
+                onClick={handleAddCategoria}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors"
+              >
+                <FaPlus /> Adicionar
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              * A categoria será criada vazia. Você poderá adicionar produtos a ela depois.
             </p>
           </div>
+          {/* --------------------------- */}
 
           {categoriasDisponiveis.length > 0 ? (
             <GerenciarOrdemCategoria
-              key={estabelecimentoId} // <--- Força recriar se mudar o estabelecimento
+              key={estabelecimentoId}
               estabelecimentoId={estabelecimentoId}
-              categorias={categoriasDisponiveis}
+              categorias={categoriasDisponiveis} // Passa todas (produtos + manuais)
               ordemAtual={ordemAtual}
               onClose={handleClose}
               onSave={salvarOrdemNoFirebase}
@@ -239,9 +246,6 @@ const AdminOrderCategories = () => {
           ) : (
             <div className="text-center py-8">
               <p className="text-gray-500 mb-4">Nenhuma categoria encontrada.</p>
-              <button onClick={() => navigate('/admin/gerenciar-cardapio')} className="px-4 py-2 bg-blue-600 text-white rounded-lg">
-                Gerenciar Cardápio
-              </button>
             </div>
           )}
         </div>
