@@ -57,7 +57,7 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
                     </button>
                 </div>
                 
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <button 
                         onClick={onClose} 
                         className="py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 active:scale-95"
@@ -106,11 +106,10 @@ export default function ControleSalao() {
 
     const estabelecimentoId = useMemo(() => userData?.estabelecimentosGerenciados?.[0] || null, [userData]);
 
-    // 🎯 HEADER ACTIONS (Mantido para Mobile/Layout Global)
+    // 🎯 HEADER ACTIONS (Opcional: Mantive para caso use layout mobile, mas adicionei o botão na tela principal também)
     useEffect(() => {
         setActions(
             <div className="flex gap-3">
-                {/* Botão Nova Mesa: Compacto no mobile */}
                 <button 
                     onClick={() => setIsModalOpen(true)} 
                     className="bg-gradient-to-r from-gray-900 to-black hover:from-black hover:to-gray-900 text-white font-bold py-3 text-sm sm:text-base rounded-2xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 active:scale-95 group relative overflow-hidden"
@@ -381,32 +380,42 @@ export default function ControleSalao() {
                             </div>
                         </div>
                         
-                        {/* BOTÃO VOLTAR ADICIONADO AQUI */}
-                        <button
-                            onClick={() => navigate('/dashboard')}
-                            className="group flex items-center gap-2 px-5 py-3 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 font-bold shadow-sm transition-all active:scale-95"
-                        >
-                            <IoArrowBack className="text-xl group-hover:-translate-x-1 transition-transform" /> 
-                            <span>Voltar ao Dashboard</span>
-                        </button>
+                        {/* BOTÕES DE AÇÃO: VOLTAR E NOVA MESA */}
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => navigate('/dashboard')}
+                                className="group flex items-center gap-2 px-5 py-3 text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 font-bold shadow-sm transition-all active:scale-95"
+                            >
+                                <IoArrowBack className="text-xl group-hover:-translate-x-1 transition-transform" /> 
+                                <span className="hidden sm:inline">Voltar</span>
+                            </button>
+
+                            <button 
+                                onClick={() => setIsModalOpen(true)} 
+                                className="bg-gradient-to-r from-gray-900 to-black hover:from-black hover:to-gray-900 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2 active:scale-95 group relative overflow-hidden"
+                            >
+                                <span className="relative z-10 flex items-center gap-2">
+                                    <IoAdd className="text-xl"/>
+                                    <span>Nova Mesa</span>
+                                </span>
+                                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                            </button>
+                        </div>
                     </div>
                     
                     {/* BARRA DE STATUS */}
                     <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-100 shadow-xs">
                         <div className="flex w-full gap-4">
-
                             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-gray-700">{stats.livres} Livres</span>
                         </div>
                         <div className="w-px h-4 bg-gray-300"></div>
-                       <div className="flex w-full gap-4">
-
+                        <div className="flex w-full gap-4">
                             <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-gray-700">{stats.ocupadas} Ocupadas</span>
                         </div>
                         <div className="w-px h-4 bg-gray-300"></div>
                         <div className="flex w-full gap-4">
-
                             <IoTime className="text-orange-500 text-lg" />
                             <span className="text-sm font-medium text-gray-700">{stats.itensPendentes} Itens Pendentes</span>
                         </div>
