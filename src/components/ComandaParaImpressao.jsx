@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react'; // Adicionei useMemo
 import { useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -82,13 +82,12 @@ const ComandaParaImpressao = () => {
 
     useEffect(() => {
         if (pedido && !loading && !erro) {
-            console.log("DADOS DO PEDIDO PARA DEBUG:", pedido); // <--- OLHE AQUI NO CONSOLE
             document.title = `Comanda ${pedido.mesaNumero || pedido.id.slice(0,4)}`;
             
             const handleAfterPrint = () => { window.close(); };
             window.addEventListener("afterprint", handleAfterPrint);
 
-            const timer = setTimeout(() => { window.print(); }, 500); // Aumentei um pouco o tempo para garantir renderização
+            const timer = setTimeout(() => { window.print(); }, 500);
             
             return () => {
                 clearTimeout(timer);
@@ -96,6 +95,29 @@ const ComandaParaImpressao = () => {
             };
         }
     }, [pedido, loading, erro]);
+
+    // --- NOVA LÓGICA DE AGRUPAMENTO POR PESSOA ---
+    const itensAgrupados = useMemo(() => {
+        if (!pedido || !pedido.itens) return {};
+
+        // Se for delivery (sem mesa), agrupa tudo como "Pedido" ou usa lógica simples
+        if (!pedido.mesaNumero) {
+            return { 'Itens': pedido.itens };
+        }
+
+        // Se for mesa, agrupa pelo nome do cliente
+        return pedido.itens.reduce((acc, item) => {
+            // Tenta achar o nome em várias propriedades possíveis que vieram do TelaPedidos
+            const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
+            
+            if (!acc[nomePessoa]) {
+                acc[nomePessoa] = [];
+            }
+            acc[nomePessoa].push(item);
+            return acc;
+        }, {});
+    }, [pedido]);
+    // ---------------------------------------------
 
     if (loading) return <div className="flex items-center justify-center h-screen font-bold text-xl">Abrindo Comanda...</div>;
 
@@ -108,10 +130,8 @@ const ComandaParaImpressao = () => {
 
     if (!pedido) return null;
 
-    // --- CORREÇÃO DO ENDEREÇO ---
-    // Tenta pegar o endereço na raiz OU dentro do objeto cliente
     const enderecoFinal = pedido.endereco || pedido.cliente?.endereco || null;
-    const nomeCliente = pedido.clienteNome || pedido.cliente?.nome || 'Cliente';
+    const nomeClientePrincipal = pedido.clienteNome || pedido.cliente?.nome || 'Cliente';
     const telefoneCliente = pedido.telefone || pedido.cliente?.telefone || null;
 
     return (
@@ -131,13 +151,15 @@ const ComandaParaImpressao = () => {
                 <p className="text-[10px] font-bold">#{pedido.id.slice(0, 6).toUpperCase()}</p>
             </div>
 
-            {/* DADOS DO CLIENTE E ENDEREÇO */}
+            {/* DADOS GERAIS (Endereço se delivery, ou Cliente Principal se mesa) */}
             <div className="mb-3 border-b border-dashed border-black pb-2">
-                <p className="font-bold text-base uppercase truncate">
-                    {nomeCliente}
-                </p>
+                {/* Se for mesa, o nome das pessoas vai aparecer nos itens, então aqui mostramos infos gerais se precisar */}
+                {!pedido.mesaNumero && (
+                    <p className="font-bold text-base uppercase truncate">
+                        {nomeClientePrincipal}
+                    </p>
+                )}
                 
-                {/* LÓGICA DE EXIBIÇÃO DO ENDEREÇO */}
                 {enderecoFinal ? (
                     <div className="text-xs mt-1 border-t border-dotted border-gray-400 pt-1">
                         <p className="font-bold text-sm">
@@ -147,14 +169,12 @@ const ComandaParaImpressao = () => {
                             {enderecoFinal.bairro} 
                             {enderecoFinal.cidade ? ` - ${enderecoFinal.cidade}` : ''}
                         </p>
-                        
                         {(enderecoFinal.complemento || enderecoFinal.referencia) && (
                             <p className="mt-1 font-bold">
                                 {enderecoFinal.complemento ? `Comp: ${enderecoFinal.complemento} ` : ''}
                                 {enderecoFinal.referencia ? `Ref: ${enderecoFinal.referencia}` : ''}
                             </p>
                         )}
-                        
                         {telefoneCliente && (
                             <p className="mt-1 font-bold">Tel: {telefoneCliente}</p>
                         )}
@@ -175,25 +195,46 @@ const ComandaParaImpressao = () => {
                 )}
             </div>
 
-            {/* LISTA DE ITENS */}
-            <div className="space-y-2 mb-4">
-                {pedido.itens.map((item, index) => (
-                    <div key={index} className="border-b border-dotted border-gray-400 pb-1">
-                        <div className="flex justify-between font-bold text-sm">
-                            <span>{item.quantidade}x {item.nome || item.produto?.nome}</span>
-                            <span>{(Number(item.precoFinal || item.preco) * item.quantidade).toFixed(2)}</span>
+            {/* LISTA DE ITENS AGRUPADA POR PESSOA */}
+            <div className="space-y-4 mb-4">
+                {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
+                    <div key={nomePessoa} className="border-b border-black pb-2">
+                        {/* Se for Mesa e o nome não for "Geral" ou "Mesa", exibe o cabeçalho do nome */}
+                        {pedido.mesaNumero && (
+                            <div className="font-black bg-gray-200 px-1 text-xs uppercase mb-1 flex items-center justify-between">
+                                <span>👤 {nomePessoa}</span>
+                            </div>
+                        )}
+
+                        {/* Itens dessa pessoa */}
+                        <div className="space-y-2">
+                            {itens.map((item, index) => (
+                                <div key={index} className="border-b border-dotted border-gray-300 pb-1 last:border-0">
+                                    <div className="flex justify-between font-bold text-sm">
+                                        <span>{item.quantidade}x {item.nome || item.produto?.nome}</span>
+                                        <span>{(Number(item.precoFinal || item.preco) * item.quantidade).toFixed(2)}</span>
+                                    </div>
+                                    
+                                    <div className="pl-4 text-xs text-gray-600">
+                                        {item.variacaoSelecionada && <p>- {item.variacaoSelecionada.nome}</p>}
+                                        {item.adicionais?.map((ad, i) => <p key={i}>+ {ad.nome}</p>)}
+                                        {item.observacao && <p className="font-bold text-black mt-0.5 uppercase">OBS: {item.observacao}</p>}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                         
-                        <div className="pl-4 text-xs">
-                            {item.variacaoSelecionada && <p>- {item.variacaoSelecionada.nome}</p>}
-                            {item.adicionais?.map((ad, i) => <p key={i}>+ {ad.nome}</p>)}
-                            {item.observacao && <p className="font-bold mt-0.5 uppercase">OBS: {item.observacao}</p>}
-                        </div>
+                        {/* Subtotal da Pessoa (Opcional, se quiser mostrar quanto deu pra cada um na comanda) */}
+                        {pedido.mesaNumero && (
+                            <div className="text-right text-xs font-bold mt-1">
+                                Sub: R$ {itens.reduce((acc, i) => acc + (Number(i.precoFinal || i.preco) * i.quantidade), 0).toFixed(2)}
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
 
-            {/* TOTAIS */}
+            {/* TOTAIS GERAIS */}
             <div className="border-t-2 border-black pt-2">
                 {Number(pedido.taxaEntrega) > 0 && (
                     <div className="flex justify-between text-xs mb-1">
