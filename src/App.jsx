@@ -19,7 +19,9 @@ import ClientOrderHistory from './pages/ClientOrderHistory';
 import HomeRedirector from './pages/HomeRedirector';
 import ComandaParaImpressao from "./components/ComandaParaImpressao";
 import PaginaImpressao from './pages/PaginaImpressao';
-
+// ... outros imports
+import AdminSettings from './pages/AdminSettings'; 
+import RelatorioCancelamentos from './pages/admin/RelatorioCancelamentos';
 // Páginas de Checkout/PDV
 import PdvScreen from './pages/admin/PdvScreen';
 import CheckoutPage from './pages/CheckoutPage';
@@ -160,6 +162,17 @@ function App() {
                           </PrivateRoute>
                         }
                       />
+                      {/* ROTA DE CONFIGURAÇÕES GERAIS (SENHA MASTER) */}
+                      <Route
+                        path="/admin/configuracoes"
+                        element={
+                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                            <AdminSettings />
+                          </PrivateRoute>
+                        }
+                      />
+
+                      {/* ... */}
 
                       {/* ⚠️ CORREÇÃO PRINCIPAL AQUI: LIBERADO PARA GARÇOM/COZINHA */}
                       <Route
@@ -301,6 +314,15 @@ function App() {
                           </PrivateRoute>
                         }
                       />
+
+                      <Route
+  path="/admin/relatorio-cancelamentos"
+  element={
+    <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+      <RelatorioCancelamentos />
+    </PrivateRoute>
+  }
+/>
 
                       {/* RELATÓRIO DE ENTREGAS */}
                       <Route

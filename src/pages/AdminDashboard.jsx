@@ -4,8 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
 import { useAuth } from "../context/AuthContext";
 import withAuth from "../hocs/withAuth";
-import { IoStatsChart, IoShareSocial, IoColorPalette } from "react-icons/io5";
-// Adicionei FaList na importação abaixo
+// Adicionei IoTrashBin na importação abaixo
+import { IoStatsChart, IoShareSocial, IoColorPalette, IoSettings, IoTrashBin } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaArrowLeft, FaList } from 'react-icons/fa'; 
 
 // Componente visual do botão
@@ -153,8 +153,7 @@ const AdminDashboard = () => {
             </Link>
           )}
 
-          {/* --- NOVO BOTÃO: ORDENAR CATEGORIAS --- */}
-          {/* Exibe para quem tem permissão de cardápio ou é Admin */}
+          {/* BOTÃO 5: Ordenar Categorias */}
           {(temPermissao('visualizar-cardapio') || isRealAdmin) && (
             <Link to="/admin/ordenar-categorias" className="h-full">
               <ActionButton
@@ -169,6 +168,26 @@ const AdminDashboard = () => {
           {/* --- BLOCO EXCLUSIVO DE ADMIN --- */}
           {isRealAdmin && (
             <>
+              {/* CONFIGURAÇÕES GERAIS (SENHA MASTER) */}
+              <Link to="/admin/configuracoes" className="h-full">
+                <ActionButton
+                  title="Configurações Gerais"
+                  subtitle="Senha Master e definições de segurança"
+                  icon={<IoSettings className="text-gray-700" />}
+                  colorClass="hover:border-gray-500 hover:bg-gray-50"
+                />
+              </Link>
+
+              {/* RELATÓRIO DE CANCELAMENTOS (NOVO) */}
+              <Link to="/admin/relatorio-cancelamentos" className="h-full">
+                <ActionButton
+                    title="Cancelamentos"
+                    subtitle="Relatório de itens excluídos via senha master"
+                    icon={<IoTrashBin className="text-red-600" />}
+                    colorClass="hover:border-red-500 hover:bg-red-50"
+                />
+              </Link>
+
               <Link to="/admin/cores" className="h-full">
                 <ActionButton
                   title="Identidade Visual"
@@ -222,7 +241,7 @@ const AdminDashboard = () => {
                   colorClass="hover:border-orange-600 hover:bg-orange-50"
                 />
               </Link>
-
+              
               <Link to="/admin/reports" className="h-full">
                 <ActionButton
                   title="Relatórios Fiscais"

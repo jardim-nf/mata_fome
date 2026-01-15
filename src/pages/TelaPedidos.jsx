@@ -8,7 +8,8 @@ import {
     updateDoc, 
     collection, 
     serverTimestamp, 
-    writeBatch
+    writeBatch,
+    // addDoc removido pois usaremos batch.set
 } from 'firebase/firestore'; 
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -16,12 +17,11 @@ import {
     IoArrowBack, IoCart, IoSearch, IoAdd,
     IoRemove, IoRestaurant, IoCheckmark, IoClose, 
     IoPerson, IoPencil, IoAddCircle, IoCheckmarkCircle, 
-    IoPersonAdd, IoPricetag
+    IoPersonAdd, IoPricetag, IoTrash 
 } from 'react-icons/io5';
 
 // IMPORTS DOS MODAIS
 import VariacoesModal from '../components/VariacoesModal';
-import AdicionaisModal from '../components/AdicionaisModal';
 
 // --- COMPONENTE AUXILIAR PARA RENDERIZAR PRODUTO ---
 const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
@@ -53,13 +53,11 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
                     <p className="text-xs text-gray-500 line-clamp-2 leading-tight">{produto.descricao}</p>
                 </div>
                 <div className="flex items-center justify-between mt-2">
-                    {/* Preço com a cor de destaque */}
                     <p className="font-black text-sm flex items-center gap-1" style={{ color: cores.destaque }}>
                         R$ {precoExibicao}
                         {!hasOpcoes && <IoPricetag className="text-xs opacity-60"/>}
                     </p>
                     
-                    {/* Botão + com cor de destaque */}
                     <button 
                         className="p-1.5 rounded-lg transition-colors"
                         style={{ color: cores.destaque, backgroundColor: `${cores.destaque}15` }}
@@ -99,19 +97,25 @@ const TelaPedidos = () => {
     const [novoNomeTemp, setNovoNomeTemp] = useState('');
     const [mostrarDicaAdd, setMostrarDicaAdd] = useState(true);
 
-    // --- NOVOS ESTADOS PARA O MODAL DE OPÇÕES ---
+    // Modal de Opções
     const [produtoEmSelecao, setProdutoEmSelecao] = useState(null);
     
-    // CORES
+    // CORES E CONFIGURAÇÕES
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#111827', 
         destaque: '#059669', 
         background: '#f9fafb',
         texto: { principal: '#111827', secundario: '#6b7280' }
     });
-
-    // 1. ESTADO PARA A ORDEM DAS CATEGORIAS
     const [ordemCategorias, setOrdemCategorias] = useState([]);
+    
+    // --- NOVO: SENHA MASTER DO ESTABELECIMENTO ---
+    const [senhaMasterEstabelecimento, setSenhaMasterEstabelecimento] = useState(''); 
+    
+    // --- ESTADOS PARA EXCLUSÃO ---
+    const [modalSenhaAberto, setModalSenhaAberto] = useState(false);
+    const [itemParaExcluir, setItemParaExcluir] = useState(null);
+    const [senhaDigitada, setSenhaDigitada] = useState('');
 
     const fetchData = useCallback(async () => {
         if (!estabelecimentoId) return;
@@ -128,7 +132,7 @@ const TelaPedidos = () => {
                 getDoc(estabRef)
             ]);
 
-            // CARREGA AS CORES E A ORDEM DO BANCO
+            // CARREGA DADOS DO ESTABELECIMENTO (CORES, ORDEM E SENHA)
             if (estabSnap.exists()) {
                 const dadosEstab = estabSnap.data();
                 if (dadosEstab.cores) {
@@ -141,6 +145,10 @@ const TelaPedidos = () => {
                 }
                 if (dadosEstab.ordemCategorias) {
                     setOrdemCategorias(dadosEstab.ordemCategorias);
+                }
+                // PEGA A SENHA MASTER DO BANCO
+                if (dadosEstab.senhaMaster) {
+                    setSenhaMasterEstabelecimento(String(dadosEstab.senhaMaster));
                 }
             }
 
@@ -197,7 +205,6 @@ const TelaPedidos = () => {
         return () => clearTimeout(timer);
     }, [fetchData]);
 
-    // 2. ORDENAÇÃO DOS BOTÕES DE CATEGORIA
     const categoriasOrdenadas = useMemo(() => {
         return [...categorias].sort((a, b) => {
             if (a === 'Todos') return -1;
@@ -214,37 +221,27 @@ const TelaPedidos = () => {
         });
     }, [categorias, ordemCategorias]);
 
-    // 3. ORDENAÇÃO E FILTRAGEM DOS PRODUTOS (AGORA RESPEITA A ORDEM DAS CATEGORIAS)
     const produtosFiltrados = useMemo(() => {
-        // Primeiro filtra
         const filtrados = cardapio.filter(p => 
             (!termoBusca || p.nome.toLowerCase().includes(termoBusca.toLowerCase())) && 
             (categoriaAtiva === 'Todos' || p.categoria === categoriaAtiva)
         );
 
-        // Depois ordena
         return filtrados.sort((a, b) => {
-            // Se estamos vendo "Todos", a prioridade é a ordem da Categoria
             if (categoriaAtiva === 'Todos') {
                 const indexA = ordemCategorias.indexOf(a.categoria);
                 const indexB = ordemCategorias.indexOf(b.categoria);
-
-                // Se categorias são diferentes, usa a ordem definida
                 if (a.categoria !== b.categoria) {
-                    if (indexA !== -1 && indexB !== -1) return indexA - indexB; // Ambos na lista
-                    if (indexA !== -1) return -1; // Só A na lista
-                    if (indexB !== -1) return 1;  // Só B na lista
-                    // Nenhum na lista (alfabético da categoria)
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB; 
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
                     return a.categoria.localeCompare(b.categoria);
                 }
             }
-
-            // Desempate (ou se for a mesma categoria): Ordem Alfabética do Produto
             return a.nome.localeCompare(b.nome);
         });
     }, [cardapio, termoBusca, categoriaAtiva, ordemCategorias]);
 
-    // --- LÓGICA DE PRODUTOS ---
     const getOpcoesProduto = (produto) => {
         if (!produto) return [];
         return produto.opcoes || produto.variacoes || produto.tamanhos || [];
@@ -298,7 +295,6 @@ const TelaPedidos = () => {
         fecharModalOpcoes();
     };
 
-    // --- AUXILIARES ---
     const iniciarEdicaoNome = (nome, index) => {
         setClienteSelecionado(nome);
         setEditandoNomeIndex(index);
@@ -339,8 +335,8 @@ const TelaPedidos = () => {
     const ajustarQuantidade = useCallback((produtoId, clienteDoItem, novaQuantidade) => {
         setResumoPedido(prev => {
             const itemAlvo = prev.find(item => item.id === produtoId && item.cliente === clienteDoItem);
-            if (itemAlvo && (itemAlvo.status === 'enviado' || itemAlvo.status === 'entregue')) {
-                toast.info("Item já enviado para cozinha", { position: "bottom-center" });
+            if (itemAlvo && (itemAlvo.status === 'enviado' || itemAlvo.status === 'entregue' || itemAlvo.status === 'recebido')) {
+                toast.info("Item já enviado. Use a opção de excluir.", { position: "bottom-center" });
                 return prev;
             }
             if (novaQuantidade < 1) {
@@ -349,6 +345,89 @@ const TelaPedidos = () => {
             return prev.map(item => (item.id === produtoId && item.cliente === clienteDoItem) ? { ...item, quantidade: novaQuantidade } : item);
         });
     }, []);
+
+    // --- FUNÇÕES DE EXCLUSÃO COM SENHA (LOTE ATÔMICO) ---
+    const solicitarExclusaoItem = (item) => {
+        setItemParaExcluir(item);
+        setSenhaDigitada('');
+        setModalSenhaAberto(true);
+    };
+
+    const confirmarExclusaoComSenha = async () => {
+        // Valida se a senha está correta (comparando com a do banco)
+        if (!senhaMasterEstabelecimento) {
+            toast.error("Erro de configuração: Estabelecimento sem Senha Master.");
+            return;
+        }
+
+        if (senhaDigitada !== senhaMasterEstabelecimento) {
+            toast.error("Senha incorreta!");
+            return;
+        }
+
+        if (!itemParaExcluir) return;
+
+        try {
+            setSalvando(true); // Reutiliza o estado de loading
+
+            // 1. Remove o item específico da lista local
+            const novaListaItens = resumoPedido.filter(item => item !== itemParaExcluir);
+            
+            // 2. Recalcula o total
+            const novoTotal = novaListaItens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
+
+            // --- INÍCIO DO LOTE (BATCH) ---
+            const batch = writeBatch(db);
+
+            // Ação 1: Atualiza a Mesa (Remove item)
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            batch.update(mesaRef, {
+                itens: novaListaItens,
+                total: novoTotal,
+                updatedAt: serverTimestamp()
+            });
+
+            // Ação 2: Cria o Log na coleção auditLogs
+            // Como batch não tem add(), criamos a referência antes
+            const logRef = doc(collection(db, 'estabelecimentos', estabelecimentoId, 'auditLogs'));
+            batch.set(logRef, {
+                tipo: 'cancelamento_item',
+                item: {
+                    nome: itemParaExcluir.nome,
+                    preco: itemParaExcluir.preco,
+                    quantidade: itemParaExcluir.quantidade,
+                    observacao: itemParaExcluir.observacao || ''
+                },
+                mesaId: mesaId,
+                mesaNumero: mesa?.numero || '?',
+                motivo: 'Exclusão via Senha Master',
+                data: serverTimestamp(),
+                usuario: 'Admin/Gerente', 
+                valorTotalCancelado: itemParaExcluir.preco * itemParaExcluir.quantidade
+            });
+
+            // Executa tudo junto
+            await batch.commit();
+            // ------------------------------
+
+            // Atualiza estado local
+            setResumoPedido(novaListaItens);
+            toast.success("Item excluído com sucesso!");
+            setModalSenhaAberto(false);
+            setItemParaExcluir(null);
+
+        } catch (error) {
+            console.error("Erro ao excluir:", error);
+            // Mensagem mais clara se for erro de permissão
+            if (error.code === 'permission-denied') {
+                toast.error("Sem permissão para salvar o log. Verifique as Regras do Firebase.");
+            } else {
+                toast.error("Erro ao excluir item.");
+            }
+        } finally {
+            setSalvando(false);
+        }
+    };
 
     const salvarAlteracoes = async () => {
         setSalvando(true);
@@ -477,7 +556,6 @@ const TelaPedidos = () => {
                                         style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}
                                     >
                                        <div className="flex w-full gap-4">
-
                                             <IoPerson className={clienteSelecionado === nome ? 'text-white' : 'text-gray-400'} />
                                             {nome}
                                         </div>
@@ -533,7 +611,6 @@ const TelaPedidos = () => {
             <main className="p-4">
                 {produtosFiltrados.length > 0 ? (
                     <div className="space-y-3">
-                        {/* AQUI ESTÁ A LISTA DE PRODUTOS JÁ ORDENADA PELO USEMEMO */}
                         {produtosFiltrados.map((produto, idx) => (
                             <CardapioItem 
                                 key={`${produto.id}-${idx}`} 
@@ -564,7 +641,6 @@ const TelaPedidos = () => {
                             style={{ backgroundColor: coresEstabelecimento.destaque }}
                         >
                            <div className="flex w-full gap-4">
-
                                 <IoCart className="text-lg"/>
                                 Ver Pedido
                             </div>
@@ -615,11 +691,11 @@ const TelaPedidos = () => {
                                                         </p>
                                                         {item.observacao && (
                                                             <p className="text-xs font-medium mt-0.5 bg-gray-100 inline-block px-1.5 py-0.5 rounded" style={{ color: coresEstabelecimento.destaque }}>
-                                                                Obs: {item.observacao}
+                                                                    Obs: {item.observacao}
                                                             </p>
                                                         )}
                                                         <p className="text-xs text-gray-500 mt-1">
-                                                            Status: <span className="capitalize">{item.status || 'pendente'}</span> 
+                                                            Status: <span className="capitalize font-bold">{item.status || 'pendente'}</span> 
                                                         </p>
                                                         <p className="text-sm text-gray-500">
                                                             R$ {item.preco.toFixed(2)} un
@@ -631,27 +707,49 @@ const TelaPedidos = () => {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                {(item.status === 'pendente' || !item.status) && (
-                                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                                                        <span className="text-sm text-gray-600">Ajustar quantidade:</span>
-                                                       <div className="flex w-full gap-4">
 
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); ajustarQuantidade(item.id, item.cliente, item.quantidade - 1); }}
-                                                                className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                {/* LÓGICA DO RODAPÉ DO ITEM (BOTOES OU LIXEIRA) */}
+                                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                                                    
+                                                    {/* CASO 1: Item Pendente (Ainda pode editar livremente) */}
+                                                    {(item.status === 'pendente' || !item.status) ? (
+                                                        <>
+                                                            <span className="text-sm text-gray-600">Ajustar quantidade:</span>
+                                                            <div className="flex w-full gap-4 max-w-[120px] ml-auto">
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); ajustarQuantidade(item.id, item.cliente, item.quantidade - 1); }}
+                                                                    className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                                >
+                                                                    <IoRemove className="text-sm"/>
+                                                                </button>
+                                                                <span className="font-bold text-gray-900 flex-1 flex items-center justify-center">{item.quantidade}</span>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); ajustarQuantidade(item.id, item.cliente, item.quantidade + 1); }}
+                                                                    className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                                                                >
+                                                                    <IoAdd className="text-sm"/>
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        /* CASO 2: Item Enviado (Precisa de Senha para excluir) */
+                                                        <div className="w-full flex justify-between items-center bg-red-50 p-2 rounded-lg border border-red-100">
+                                                            <span className="text-xs font-bold text-red-600 uppercase flex items-center gap-1">
+                                                                <IoCheckmarkCircle className="text-lg"/>
+                                                                Enviado
+                                                            </span>
+                                                            
+                                                            <button
+                                                                onClick={() => solicitarExclusaoItem(item)}
+                                                                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-md shadow-sm active:scale-95 transition-transform hover:bg-red-50"
                                                             >
-                                                                <IoRemove className="text-sm"/>
-                                                            </button>
-                                                            <span className="font-bold text-gray-900 w-6 text-center">{item.quantidade}</span>
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); ajustarQuantidade(item.id, item.cliente, item.quantidade + 1); }}
-                                                                className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                                                            >
-                                                                <IoAdd className="text-sm"/>
+                                                                <IoTrash className="text-sm" />
+                                                                Excluir
                                                             </button>
                                                         </div>
-                                                    </div>
-                                                )}
+                                                    )}
+                                                </div>
+
                                             </div>
                                         ))}
                                     </div>
@@ -697,6 +795,58 @@ const TelaPedidos = () => {
                     </div>
                 </>
             )}
+
+            {/* --- MODAL DE SENHA PARA EXCLUSÃO --- */}
+            {modalSenhaAberto && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-xs relative overflow-hidden">
+                        
+                        <div className="absolute top-0 left-0 right-0 h-2 bg-red-500"></div>
+
+                        <div className="text-center mb-6 mt-2">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <IoTrash className="text-3xl text-red-500" />
+                            </div>
+                            <h3 className="font-black text-xl text-gray-900">Excluir Item?</h3>
+                            <p className="text-sm text-gray-500 mt-1">Este item já foi enviado. Digite a Senha Master para remover.</p>
+                            <div className="mt-2 text-xs font-bold bg-gray-100 py-1 px-2 rounded inline-block text-gray-700">
+                                {itemParaExcluir?.quantidade}x {itemParaExcluir?.nome}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Senha Master</label>
+                                <input 
+                                    type="password"
+                                    inputMode="numeric" 
+                                    autoFocus
+                                    className="w-full text-center text-2xl font-black tracking-widest p-3 border-2 border-gray-200 rounded-xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all"
+                                    placeholder="••••"
+                                    value={senhaDigitada}
+                                    onChange={(e) => setSenhaDigitada(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => { setModalSenhaAberto(false); setItemParaExcluir(null); }}
+                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={confirmarExclusaoComSenha}
+                                    className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg shadow-red-200 transition-colors"
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
