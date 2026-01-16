@@ -62,7 +62,7 @@ import CriarUsuarioMaster from './pages/admin/CriarUsuarioMaster';
 import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
-
+import FinanceiroMaster from './pages/admin/FinanceiroMaster'; // Importe no topo
 function App() {
   return (
     <AuthProvider>
@@ -367,6 +367,14 @@ function App() {
                           </PrivateRoute>
                         }
                       />
+<Route
+  path="/master/financeiro"
+  element={
+    <PrivateRoute allowedRoles={['masterAdmin']}> {/* <--- PADRÃO CORRETO */}
+      <FinanceiroMaster />
+    </PrivateRoute>
+  }
+/>
                       <Route
                         path="/master/pedidos"
                         element={
