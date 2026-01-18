@@ -1,4 +1,3 @@
-// src/pages/Menu.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -31,7 +30,6 @@ function Menu() {
     // eslint-disable-next-line no-unused-vars
     const { processPayment, paymentLoading } = usePayment();
 
-    // 🔥 A IA ABRE AUTOMATICAMENTE NO CENTRO (true)
     // eslint-disable-next-line no-unused-vars
     const { isWidgetOpen } = useAI();
     const [showAICenter, setShowAICenter] = useState(true);
@@ -59,8 +57,6 @@ function Menu() {
     
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
-    
-    // 🔥 ESTADOS DE LOGIN
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
     
@@ -289,7 +285,6 @@ function Menu() {
         }
     };
 
-    // CARRINHO ACTIONS
     const handleAbrirModalProduto = (item) => {
         if (!currentUser || !currentUser.uid) { 
             toast.info('Por favor, faça login para continuar.'); 
@@ -314,18 +309,117 @@ function Menu() {
         toast.success(`${item.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
     };
 
-    const handleAdicionarPorIA = (nomeProduto) => {
+    const handleAdicionarPorIA = (comandoCompleto) => {
+        console.log("🤖 Processing AI Command:", comandoCompleto);
+
+        let nomeProduto = comandoCompleto;
+        let nomeOpcao = null;
+        let observacaoIA = '';
+        let quantidadeIA = 1;
+
+        // 1. CLEANUP: Remove common AI mistakes like price or 'x 3' from the start
+        // This regex removes "(R$ ...)" and "x 3" from the string if the AI put it in the name
+        nomeProduto = nomeProduto.replace(/\(R\$.*?\)/g, '').replace(/\s*x\s*\d+$/i, '').trim();
+
+        // 2. Extract Quantity (-- Qtd:)
+        if (comandoCompleto.includes('-- Qtd:')) {
+            const partesQtd = comandoCompleto.split('-- Qtd:');
+            // Reprocess the left part to get name/option, right part is quantity
+            const leftPart = partesQtd[0].trim();
+            quantidadeIA = parseInt(partesQtd[1].trim()) || 1;
+            
+            // Update nomeProduto to process options next
+            nomeProduto = leftPart;
+        }
+
+        // 3. Extract Option (-- Opcao:)
+        if (nomeProduto.includes('-- Opcao:')) {
+            const splitOpcao = nomeProduto.split('-- Opcao:');
+            nomeProduto = splitOpcao[0].trim();
+            const resto = splitOpcao[1];
+            
+            if (resto.includes('-- Obs:')) {
+                const splitObs = resto.split('-- Obs:');
+                nomeOpcao = splitObs[0].trim();
+                observacaoIA = splitObs[1].trim();
+            } else {
+                nomeOpcao = resto.trim();
+            }
+        } 
+        else if (nomeProduto.includes('-- Obs:')) {
+            const splitObs = nomeProduto.split('-- Obs:');
+            nomeProduto = splitObs[0].trim();
+            observacaoIA = splitObs[1].trim();
+        }
+
+        // Final cleanup of the name just in case
+        nomeProduto = nomeProduto.replace(/\(R\$.*?\)/g, '').trim();
+
         const termo = normalizarTexto(nomeProduto);
+        console.log(`🔍 Searching: "${termo}" | Option: "${nomeOpcao}" | Qty: ${quantidadeIA}`);
+
         const produtoEncontrado = allProdutos.find(p => 
             normalizarTexto(p.nome) === termo || 
-            normalizarTexto(p.nome).includes(termo)
+            normalizarTexto(p.nome).includes(termo) ||
+            termo.includes(normalizarTexto(p.nome)) // Reverse check help
         );
 
         if (produtoEncontrado) {
-            handleAdicionarRapido(produtoEncontrado); 
-            return true;
+            console.log("✅ Product Found:", produtoEncontrado.nome);
+
+            // CASE A: Option provided by AI
+            if (nomeOpcao) {
+                // Try to find the variation
+                const variacaoEncontrada = produtoEncontrado.variacoes?.find(v => 
+                    normalizarTexto(v.nome) === normalizarTexto(nomeOpcao) ||
+                    normalizarTexto(v.nome).includes(normalizarTexto(nomeOpcao)) ||
+                    normalizarTexto(nomeOpcao).includes(normalizarTexto(v.nome))
+                );
+
+                if (variacaoEncontrada) {
+                    const itemPronto = {
+                        ...produtoEncontrado,
+                        variacaoSelecionada: variacaoEncontrada,
+                        precoFinal: Number(variacaoEncontrada.preco), 
+                        observacao: observacaoIA,
+                        qtd: quantidadeIA
+                    };
+                    
+                    // Add directly manually to respect quantity
+                    setCarrinho(prev => [...prev, { ...itemPronto, cartItemId: uuidv4() }]);
+                    toast.success(`${quantidadeIA}x ${itemPronto.nome} added!`);
+                    return 'ADDED';
+                }
+            }
+
+            // CASE B: Product needs options but AI didn't send valid one -> OPEN MODAL
+            const temVariacoes = produtoEncontrado.variacoes && produtoEncontrado.variacoes.length > 0;
+            const temAdicionais = produtoEncontrado.adicionais && produtoEncontrado.adicionais.length > 0;
+
+            if ((temVariacoes && !nomeOpcao) || temAdicionais) {
+                setShowAICenter(false);
+                const itemParaModal = {
+                    ...produtoEncontrado,
+                    observacao: observacaoIA 
+                };
+                handleAbrirModalProduto(itemParaModal);
+                return 'MODAL'; // Blocks PAY command
+            }
+
+            // CASE C: Simple Product
+            const itemComObs = {
+                ...produtoEncontrado,
+                observacao: observacaoIA,
+                qtd: quantidadeIA
+            };
+            
+            setCarrinho(prev => [...prev, { ...itemComObs, cartItemId: uuidv4(), precoFinal: itemComObs.preco }]);
+            toast.success(`${quantidadeIA}x ${itemComObs.nome} added!`);
+            return 'ADDED';
         }
-        return false;
+        
+        console.warn("❌ Product NOT found after cleanup:", nomeProduto);
+        return 'NOT_FOUND';
     };
 
     const handleConfirmarVariacoes = (itemConfigurado) => {
@@ -498,7 +592,6 @@ function Menu() {
         } catch { toast.error("Erro ao criar conta."); }
     };
 
-    // EFFECTS
     useEffect(() => {
         if (!actualEstabelecimentoId) return;
         const unsub = onSnapshot(doc(db, 'estabelecimentos', actualEstabelecimentoId), (d) => { if(d.exists() && d.data().cores) setCoresEstabelecimento(d.data().cores); });
@@ -778,8 +871,7 @@ function Menu() {
                         </form>
                         
                         <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm font-semibold hover:underline">
-                            {isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}
-                        </button>
+                            {isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}</button>
                     </div>
                 </div>
             )}

@@ -10,21 +10,14 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   
-  // 🔥 CORREÇÃO DO BUG DO CARRINHO VAZIO:
-  // Criamos uma referência que SEMPRE aponta para a função de checkout mais atual (com o carrinho cheio)
+  // Referência para garantir que o checkout use o estado mais atual
   const checkoutRef = useRef(onCheckout);
-
-  // Toda vez que o onCheckout muda (porque o carrinho mudou), atualizamos a referência
-  useEffect(() => {
-    checkoutRef.current = onCheckout;
-  }, [onCheckout]);
+  useEffect(() => { checkoutRef.current = onCheckout; }, [onCheckout]);
   
   const { conversation, aiThinking, sendMessage, closeWidget } = useAI();
 
-  // Define se é Visitante ou Cliente
   const primeiroNome = clienteNome ? clienteNome.split(' ')[0] : null;
 
-  // Mensagem Inicial
   const greetingMessage = primeiroNome 
     ? {
         id: 'greeting-user',
@@ -52,50 +45,60 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
       }
   }, [isOpen]);
 
-  // Monitora comandos ||ADD|| e ||PAY||
   useEffect(() => {
     if (conversation.length === 0) return;
     const lastMsg = conversation[conversation.length - 1];
 
     if (lastMsg.type === 'ai' && lastMsg.id !== lastProcessedMsgId) {
         
-        // 1. ADICIONAR ITEM (Atualiza o carrinho no React)
         const regexAdd = /\|\|ADD:(.*?)\|\|/g;
         let matchAdd;
         while ((matchAdd = regexAdd.exec(lastMsg.text)) !== null) {
             if (onAddDirect) onAddDirect(matchAdd[1].trim());
         }
 
-        // 2. PAGAMENTO
         if (lastMsg.text.includes('||PAY||')) {
-            // Espera 1.5s para dar tempo do React atualizar o carrinho
             setTimeout(() => {
                 if (mode === 'widget') closeWidget();
                 else onClose?.(); 
-                
-                // 🔥 AQUI ESTÁ O PULO DO GATO:
-                // Chamamos a função via .current para pegar a versão atualizada (com itens no carrinho)
-                if (checkoutRef.current) {
-                    checkoutRef.current(); 
-                }
+                if (checkoutRef.current) checkoutRef.current(); 
             }, 1500);
         }
         setLastProcessedMsgId(lastMsg.id);
     }
-  }, [conversation, lastProcessedMsgId, onAddDirect, closeWidget, onClose, mode]); // Removemos onCheckout das dependências diretas para não loopar
+  }, [conversation, lastProcessedMsgId, onAddDirect, closeWidget, onClose, mode]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
+    
+    // Bloqueia envio se estiver vazio ou pensando, mas NÃO desabilita o input
     if (!message.trim() || aiThinking) return;
+    
     const textoUsuario = message;
     setMessage('');
+
+    // 🔥 FIX: Mantém o foco no input e o teclado aberto no celular
+    setTimeout(() => {
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, 10);
 
     if (!clienteNome && onRequestLogin) {
         onRequestLogin(); 
     }
 
     const produtosTexto = produtos 
-        ? produtos.slice(0, 50).map(p => `- ${p.nome} (R$ ${p.precoFinal || p.preco})`).join('\n')
+        ? produtos.slice(0, 50).map(p => {
+            let linha = `- ${p.nome}`;
+            if (p.variacoes && p.variacoes.length > 0) {
+                const opcoes = p.variacoes.map(v => `${v.nome} (R$${v.preco})`).join(', ');
+                linha += ` [Opções: ${opcoes}]`;
+            } else {
+                linha += ` (R$ ${p.precoFinal || p.preco})`;
+            }
+            return linha;
+        }).join('\n')
         : "Cardápio indisponível.";
 
     const historicoRecente = conversation.slice(-6).map(msg => ({
@@ -126,14 +129,15 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
     }, 300);
   };
 
-  // Limpa o texto das tags e remove linhas em branco excessivas
   const renderMessageText = (text) => {
       return text
         .replace(/\|\|ADD:.*?\|\|/g, '')
         .replace(/\|\|PAY\|\|/g, '')
-        .replace(/\n\s*\n/g, '\n') // Remove buracos vazios no texto
+        .replace(/-- Qtd:\s*\d+/g, '') 
+        .replace(/-- Opcao:.*?(?=--|$)/g, '')
+        .replace(/\n\s*\n/g, '\n')
         .trim();
-  }; 
+  };
 
   if (!isOpen) return null;
 
@@ -163,7 +167,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
 
         {/* CHAT AREA */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 scrollbar-thin">
-          
           {messagesDisplay.map((msg) => (
             <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
               <div className={`max-w-[85%] rounded-2xl px-5 py-3 text-sm shadow-sm ${msg.type === 'user' ? (isCenter ? 'bg-gray-900 text-white' : 'bg-red-600 text-white') : 'bg-white text-gray-800 border border-gray-100'}`}>
@@ -198,8 +201,8 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder={isCenter ? "Ex: Quero uma pizza de calabresa..." : "Digite sua dúvida..."}
+            // 🔥 REMOVIDO: disabled={aiThinking} -> Isso que fechava o teclado!
             className="flex-1 bg-gray-100 text-gray-800 border-0 rounded-full px-6 py-4 focus:ring-2 focus:ring-gray-400 focus:bg-white transition-all outline-none"
-            disabled={aiThinking}
           />
           <button type="submit" disabled={!message.trim() || aiThinking} className={`w-14 h-14 text-white rounded-full flex items-center justify-center hover:scale-105 transition-all shadow-md ${isCenter ? 'bg-gray-900 hover:bg-black' : 'bg-red-600 hover:bg-red-700'}`}>
             {aiThinking ? <IoTime className="animate-spin" /> : <IoSend size={20} />}
