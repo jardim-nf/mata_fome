@@ -10,12 +10,21 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   
+  // 🔥 CORREÇÃO DO BUG DO CARRINHO VAZIO:
+  // Criamos uma referência que SEMPRE aponta para a função de checkout mais atual (com o carrinho cheio)
+  const checkoutRef = useRef(onCheckout);
+
+  // Toda vez que o onCheckout muda (porque o carrinho mudou), atualizamos a referência
+  useEffect(() => {
+    checkoutRef.current = onCheckout;
+  }, [onCheckout]);
+  
   const { conversation, aiThinking, sendMessage, closeWidget } = useAI();
 
   // Define se é Visitante ou Cliente
   const primeiroNome = clienteNome ? clienteNome.split(' ')[0] : null;
 
-  // 🔥 MENSAGEM INICIAL INTELIGENTE
+  // Mensagem Inicial
   const greetingMessage = primeiroNome 
     ? {
         id: 'greeting-user',
@@ -27,7 +36,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
         id: 'greeting-guest',
         type: 'ai',
         text: `Olá! 👋 Bem-vindo ao ${estabelecimento?.nome}.\nPara fazer seu pedido, preciso saber quem é você.`,
-        isLoginRequest: true, // Ativa o botão de login
+        isLoginRequest: true, 
         time: new Date().toISOString()
       };
 
@@ -50,24 +59,30 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
 
     if (lastMsg.type === 'ai' && lastMsg.id !== lastProcessedMsgId) {
         
+        // 1. ADICIONAR ITEM (Atualiza o carrinho no React)
         const regexAdd = /\|\|ADD:(.*?)\|\|/g;
         let matchAdd;
         while ((matchAdd = regexAdd.exec(lastMsg.text)) !== null) {
             if (onAddDirect) onAddDirect(matchAdd[1].trim());
         }
 
+        // 2. PAGAMENTO
         if (lastMsg.text.includes('||PAY||')) {
-            if (onCheckout) {
-                setTimeout(() => {
-                    if (mode === 'widget') closeWidget();
-                    else onClose?.(); 
-                    onCheckout(); 
-                }, 1500);
-            }
+            // Espera 1.5s para dar tempo do React atualizar o carrinho
+            setTimeout(() => {
+                if (mode === 'widget') closeWidget();
+                else onClose?.(); 
+                
+                // 🔥 AQUI ESTÁ O PULO DO GATO:
+                // Chamamos a função via .current para pegar a versão atualizada (com itens no carrinho)
+                if (checkoutRef.current) {
+                    checkoutRef.current(); 
+                }
+            }, 1500);
         }
         setLastProcessedMsgId(lastMsg.id);
     }
-  }, [conversation, lastProcessedMsgId, onAddDirect, onCheckout, closeWidget, onClose, mode]);
+  }, [conversation, lastProcessedMsgId, onAddDirect, closeWidget, onClose, mode]); // Removemos onCheckout das dependências diretas para não loopar
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -75,12 +90,8 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
     const textoUsuario = message;
     setMessage('');
 
-    // 🔥 TRAVA DE SEGURANÇA:
-    // Se for visitante e tentar falar, abrimos o login na cara dele
     if (!clienteNome && onRequestLogin) {
         onRequestLogin(); 
-        // Não impedimos a mensagem de ir (para a IA responder dúvidas), 
-        // mas o login vai pular na frente para ele se cadastrar.
     }
 
     const produtosTexto = produtos 
@@ -115,7 +126,14 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
     }, 300);
   };
 
-  const renderMessageText = (text) => text.replace(/\|\|ADD:.*?\|\|/g, '').replace(/\|\|PAY\|\|/g, ''); 
+  // Limpa o texto das tags e remove linhas em branco excessivas
+  const renderMessageText = (text) => {
+      return text
+        .replace(/\|\|ADD:.*?\|\|/g, '')
+        .replace(/\|\|PAY\|\|/g, '')
+        .replace(/\n\s*\n/g, '\n') // Remove buracos vazios no texto
+        .trim();
+  }; 
 
   if (!isOpen) return null;
 
@@ -151,7 +169,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, onClose, onAddDirect, onCh
               <div className={`max-w-[85%] rounded-2xl px-5 py-3 text-sm shadow-sm ${msg.type === 'user' ? (isCenter ? 'bg-gray-900 text-white' : 'bg-red-600 text-white') : 'bg-white text-gray-800 border border-gray-100'}`}>
                 <div className="whitespace-pre-wrap leading-relaxed">{renderMessageText(msg.text)}</div>
                 
-                {/* 🔥 BOTÃO DE LOGIN DENTRO DA MENSAGEM (Só aparece se for visitante) */}
                 {msg.isLoginRequest && (
                     <button 
                         onClick={onRequestLogin}
