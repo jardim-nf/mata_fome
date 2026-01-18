@@ -27,10 +27,8 @@ function Menu() {
     const navigate = useNavigate();
     
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
-    // eslint-disable-next-line no-unused-vars
     const { processPayment, paymentLoading } = usePayment();
 
-    // eslint-disable-next-line no-unused-vars
     const { isWidgetOpen } = useAI();
     const [showAICenter, setShowAICenter] = useState(true);
 
@@ -317,22 +315,15 @@ function Menu() {
         let observacaoIA = '';
         let quantidadeIA = 1;
 
-        // 1. CLEANUP: Remove common AI mistakes like price or 'x 3' from the start
-        // This regex removes "(R$ ...)" and "x 3" from the string if the AI put it in the name
         nomeProduto = nomeProduto.replace(/\(R\$.*?\)/g, '').replace(/\s*x\s*\d+$/i, '').trim();
 
-        // 2. Extract Quantity (-- Qtd:)
         if (comandoCompleto.includes('-- Qtd:')) {
             const partesQtd = comandoCompleto.split('-- Qtd:');
-            // Reprocess the left part to get name/option, right part is quantity
             const leftPart = partesQtd[0].trim();
             quantidadeIA = parseInt(partesQtd[1].trim()) || 1;
-            
-            // Update nomeProduto to process options next
             nomeProduto = leftPart;
         }
 
-        // 3. Extract Option (-- Opcao:)
         if (nomeProduto.includes('-- Opcao:')) {
             const splitOpcao = nomeProduto.split('-- Opcao:');
             nomeProduto = splitOpcao[0].trim();
@@ -352,24 +343,23 @@ function Menu() {
             observacaoIA = splitObs[1].trim();
         }
 
-        // Final cleanup of the name just in case
         nomeProduto = nomeProduto.replace(/\(R\$.*?\)/g, '').trim();
 
         const termo = normalizarTexto(nomeProduto);
-        console.log(`🔍 Searching: "${termo}" | Option: "${nomeOpcao}" | Qty: ${quantidadeIA}`);
-
         const produtoEncontrado = allProdutos.find(p => 
             normalizarTexto(p.nome) === termo || 
             normalizarTexto(p.nome).includes(termo) ||
-            termo.includes(normalizarTexto(p.nome)) // Reverse check help
+            termo.includes(normalizarTexto(p.nome))
         );
 
         if (produtoEncontrado) {
             console.log("✅ Product Found:", produtoEncontrado.nome);
 
-            // CASE A: Option provided by AI
+            // 🔥 CORREÇÃO: DETECÇÃO AUTOMÁTICA DE PRODUTO ÚNICO
+            const variacaoUnica = produtoEncontrado.variacoes?.length === 1 && 
+                                 (normalizarTexto(produtoEncontrado.variacoes[0].nome).includes('unico') || !nomeOpcao);
+
             if (nomeOpcao) {
-                // Try to find the variation
                 const variacaoEncontrada = produtoEncontrado.variacoes?.find(v => 
                     normalizarTexto(v.nome) === normalizarTexto(nomeOpcao) ||
                     normalizarTexto(v.nome).includes(normalizarTexto(nomeOpcao)) ||
@@ -384,17 +374,29 @@ function Menu() {
                         observacao: observacaoIA,
                         qtd: quantidadeIA
                     };
-                    
-                    // Add directly manually to respect quantity
                     setCarrinho(prev => [...prev, { ...itemPronto, cartItemId: uuidv4() }]);
-                    toast.success(`${quantidadeIA}x ${itemPronto.nome} added!`);
+                    toast.success(`${quantidadeIA}x ${itemPronto.nome} adicionado!`);
                     return 'ADDED';
                 }
             }
 
-            // CASE B: Product needs options but AI didn't send valid one -> OPEN MODAL
             const temVariacoes = produtoEncontrado.variacoes && produtoEncontrado.variacoes.length > 0;
             const temAdicionais = produtoEncontrado.adicionais && produtoEncontrado.adicionais.length > 0;
+
+            // Se for ÚNICO (Conforme sua imagem), adiciona direto sem abrir modal
+            if (variacaoUnica && !temAdicionais) {
+                const v = produtoEncontrado.variacoes[0];
+                const itemPronto = {
+                    ...produtoEncontrado,
+                    variacaoSelecionada: v,
+                    precoFinal: Number(v.preco),
+                    observacao: observacaoIA,
+                    qtd: quantidadeIA
+                };
+                setCarrinho(prev => [...prev, { ...itemPronto, cartItemId: uuidv4() }]);
+                toast.success(`${quantidadeIA}x ${itemPronto.nome} adicionado!`);
+                return 'ADDED';
+            }
 
             if ((temVariacoes && !nomeOpcao) || temAdicionais) {
                 setShowAICenter(false);
@@ -403,10 +405,9 @@ function Menu() {
                     observacao: observacaoIA 
                 };
                 handleAbrirModalProduto(itemParaModal);
-                return 'MODAL'; // Blocks PAY command
+                return 'MODAL';
             }
 
-            // CASE C: Simple Product
             const itemComObs = {
                 ...produtoEncontrado,
                 observacao: observacaoIA,
@@ -414,11 +415,10 @@ function Menu() {
             };
             
             setCarrinho(prev => [...prev, { ...itemComObs, cartItemId: uuidv4(), precoFinal: itemComObs.preco }]);
-            toast.success(`${quantidadeIA}x ${itemComObs.nome} added!`);
+            toast.success(`${quantidadeIA}x ${itemComObs.nome} adicionado!`);
             return 'ADDED';
         }
         
-        console.warn("❌ Product NOT found after cleanup:", nomeProduto);
         return 'NOT_FOUND';
     };
 
@@ -885,11 +885,13 @@ function Menu() {
                     estabelecimento={estabelecimentoInfo} 
                     produtos={allProdutos} 
                     onAddDirect={handleAdicionarPorIA} 
-                    onCheckout={prepararParaPagamento}
+                    onCheckout={scrollToResumo} // ✅ Chamando o resumo ao clicar em ver carrinho no Chat
                     mode="center"
                     onClose={() => setShowAICenter(false)}
                     clienteNome={nomeCliente}
                     onRequestLogin={() => setShowLoginPrompt(true)}
+                    carrinho={carrinho}  // 🔥 ESSA LINHA É A CHAVE DO PROBLEMA
+                    onClick={prepararParaPagamento} 
                 />
             )}
 
@@ -899,10 +901,13 @@ function Menu() {
                     estabelecimento={estabelecimentoInfo} 
                     produtos={allProdutos} 
                     onAddDirect={handleAdicionarPorIA} 
-                    onCheckout={prepararParaPagamento}
+                    onCheckout={scrollToResumo} // ✅ Chamando o resumo ao clicar em ver carrinho no Chat
                     mode="widget"
                     clienteNome={nomeCliente}
+                                        onClose={() => setShowAICenter(false)}
                     onRequestLogin={() => setShowLoginPrompt(true)}
+                    carrinho={carrinho}  // 🔥 ESSA LINHA É A CHAVE DO PROBLEMA
+                    onClick={prepararParaPagamento} 
                 />
             )}
             

@@ -1,87 +1,71 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import { defineSecret } from "firebase-functions/params"; // 🔥 Importação essencial
+import { defineSecret } from "firebase-functions/params"; 
 import OpenAI from "openai";
 
-// 🔥 Define que vamos usar a chave segura do cofre
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
 
 export const chatAgent = onCall({ 
     cors: true,
-    secrets: [openAiApiKey] // 🔥 Libera o acesso ao segredo para esta função
+    secrets: [openAiApiKey] 
 }, async (request) => {
     
-    // Inicializa a OpenAI usando a chave segura
     const openai = new OpenAI({
         apiKey: openAiApiKey.value(), 
     });
 
-    // Dados da requisição
     const data = request.data || {};
-    const message = data.message;
-    const context = data.context || {};
+    const { message, context = {} } = data;
     const sessionId = data.sessionId || 'unknown';
     const history = context.history || []; 
 
-    // Validação básica
     if (!message) {
         throw new HttpsError('invalid-argument', 'Mensagem vazia.');
     }
 
     try {
-        // O Cérebro da IA (Instruções Rigorosas)
         const systemPrompt = `
             Você é o GARÇOM DIGITAL do restaurante ${context.estabelecimentoNome || 'MataFome'}.
-            Você está atendendo o cliente: ${context.clienteNome || 'Cliente'}.
+            Você está atendendo: ${context.clienteNome || 'Cliente'}.
             
             SUA MISSÃO:
-            Vender, tirar dúvidas e FINALIZAR O PEDIDO.
-            Baseie-se EXCLUSIVAMENTE no cardápio abaixo.
+            Vender, tirar dúvidas e LEVAR O CLIENTE PARA O PAGAMENTO.
 
-            IMPORTANTE - REGRAS DE COMANDO (SINTAXE RIGOROSA):
-            Quando o cliente confirmar o pedido, envie o comando ||ADD...|| usando EXATAMENTE a estrutura abaixo.
-            NUNCA coloque preços (R$) ou cálculos dentro do nome do item.
+            🚨 REGRAS DE COMANDO (SINTAXE OBRIGATÓRIA):
+            1. ADICIONAR ITEM SIMPLES OU "ÚNICO":
+               Use para produtos sem variações ou que o cardápio indique "Único".
+               Exemplo: ||ADD: Coca Cola 1,5L -- Opcao: Único -- Qtd: 1||
 
-            1. PARA ITEM SIMPLES (1 unidade):
-               ||ADD: Nome do Produto -- Qtd: 1||
+            2. ITEM COM VARIAÇÃO (TAMANHO/SABOR):
+               ||ADD: Pizza Calabresa -- Opcao: Grande -- Qtd: 1||
 
-            2. PARA ITEM COM OPÇÃO E QUANTIDADE:
-               Use os separadores "-- Opcao:", "-- Obs:" e "-- Qtd:".
-               
-               Exemplo 1: "Quero 3 pizzas de Calabresa Grande"
-               Comando CORRETO: ||ADD: Calabresa -- Opcao: Grande -- Qtd: 3||
-               
-               Exemplo 2: "Me vê 2 X-Bacon sem cebola"
-               Comando CORRETO: ||ADD: X-Bacon -- Obs: Sem cebola -- Qtd: 2||
-               
-               (ERRO COMUM: Não escreva "Calabresa x 3" ou "Calabresa (R$40)". O nome deve ser limpo).
-
-            3. PARA FINALIZAR:
+            3. FINALIZAR/PAGAR:
                ||PAY||
 
-            REGRA DE PAGAMENTO:
-            - Se o cliente disser "fechar", "conta", "finalizar", envie ||PAY||.
-            - Se você acabou de adicionar um item que pode ter aberto uma janela de escolha (opções), espere o cliente confirmar antes de mandar pagar.
+            🚨 REGRAS DE COMPORTAMENTO DETERMINÍSTICO:
+            - NUNCA diga que não tem acesso ao carrinho. Baseie o resumo no que VOCÊ adicionou nesta conversa.
+            - Sempre que o cliente quiser "ver carrinho", "fechar", "pagar" ou "finalizar":
+              1. Liste os itens adicionados: "Com certeza! Adicionamos [Item A] e [Item B]."
+              2. Informe o valor total aproximado (se disponível).
+              3. Envie OBRIGATORIAMENTE o comando ||PAY|| no final da frase.
+            
+            🚨 ZERO REPETIÇÃO:
+            - Não repita o comando ||ADD...|| para o mesmo item se ele já foi confirmado anteriormente no histórico.
+            - Mantenha os nomes dos produtos EXATAMENTE como aparecem no cardápio, sem preços (R$) dentro das barras.
 
-            DADOS:
+            CARDÁPIO ATUALIZADO:
+            ${context.produtosPopulares}
+
+            INFORMAÇÕES ADICIONAIS:
             - Horários: ${context.horarios}
             - Endereço: ${context.endereco}
-            
-            CARDÁPIO:
-            ${context.produtosPopulares}
         `;
-
-        const messagesToSend = [
-            { role: "system", content: systemPrompt },
-            ...history, 
-            { role: "user", content: message }
-        ];
 
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            messages: messagesToSend,
-            temperature: 0.2, // Baixa criatividade para seguir as regras estritamente
-            max_tokens: 350,
+            messages: [{ role: "system", content: systemPrompt }, ...history, { role: "user", content: message }],
+            temperature: 0, // 🔥 DETERMINÍSTICO: Essencial para evitar triplicação e erros de sintaxe
+            max_tokens: 400,
         });
 
         const respostaIA = completion.choices[0].message.content;

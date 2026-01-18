@@ -153,118 +153,119 @@ function AdminEstabelecimentoCadastro() {
         }
     };
 
-    // --- FUNÇÃO PRINCIPAL DE SUBMISSÃO ---
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoadingForm(true);
-        setFormError('');
+// --- FUNÇÃO PRINCIPAL DE SUBMISSÃO (CORRIGIDA) ---
+const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoadingForm(true);
+    setFormError('');
 
-        // Validação de campos obrigatórios
-// ... código anterior ...
-
-// ... código anterior ...
-
-// 4. Vincular o Estabelecimento ao Administrador
-if (formData.adminUID) {
-    const adminRef = doc(db, 'usuarios', formData.adminUID);
-    const adminSnap = await getDoc(adminRef);
-    
-    if (adminSnap.exists()) {
-        const adminData = adminSnap.data();
-        
-        // CORREÇÃO AQUI: Verificação defensiva de Array
-        let currentManagedEstabs = adminData.estabelecimentosGerenciados;
-        
-        // Se não for um array (undefined, null, objeto, string), forçamos ser um array vazio
-        if (!Array.isArray(currentManagedEstabs)) {
-            currentManagedEstabs = [];
-        }
-
-        if (!currentManagedEstabs.includes(newEstabId)) {
-            await updateDoc(adminRef, {
-                // Agora é seguro usar o spread operator
-                estabelecimentosGerenciados: [...currentManagedEstabs, newEstabId]
-            });
-            toast.info('Vínculo de estabelecimento com admin atualizado.');
-        }
+    // --- Validação Inicial ---
+    if (!formData.nome) {
+        setFormError('O nome do estabelecimento é obrigatório.');
+        setLoadingForm(false);
+        return;
     }
-}
 
-// ... restante do código ...
+    if (!formData.adminUID) {
+        setFormError('É necessário selecionar um Administrador responsável.');
+        setLoadingForm(false);
+        return;
+    }
 
-// ... restante do código ...
-        let finalLogoUrl = formData.imageUrl;
+    let finalLogoUrl = formData.imageUrl;
 
-        try {
-            // 1. Upload de Logo (se houver)
-            if (logoImage) {
-                const logoName = `establishment_logos/${formData.slug || Date.now()}_${logoImage.name}`;
-                finalLogoUrl = await uploadFile(logoImage, logoName);
-                toast.success('Logo enviado com sucesso!');
-            }
+    try {
+        // 1. Upload de Logo (se houver nova imagem)
+        if (logoImage) {
+            const logoName = `establishment_logos/${formData.slug || Date.now()}_${logoImage.name}`;
+            finalLogoUrl = await uploadFile(logoImage, logoName);
+            toast.success('Logo enviado com sucesso!');
+        }
 
-            // 2. Validação de Slug (Unicidade)
-            const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
-            const slugSnapshot = await getDocs(slugQuery);
-            if (!slugSnapshot.empty) {
-                setFormError('Este slug (URL) já está em uso. Por favor, escolha outro.');
-                setLoadingForm(false);
-                return;
-            }
+        // 2. Validação de Slug (Unicidade)
+        const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
+        const slugSnapshot = await getDocs(slugQuery);
+        if (!slugSnapshot.empty) {
+            setFormError('Este slug (URL) já está em uso. Por favor, escolha outro.');
+            setLoadingForm(false);
+            return;
+        }
 
-            // 3. Preparar e Criar o Documento do Estabelecimento
-            const newEstabRef = doc(collection(db, 'estabelecimentos'));
-            const newEstabId = newEstabRef.id;
+        // 3. Preparar e Criar o Documento do Estabelecimento
+        // ✅ AQUI NASCE O ID (newEstabId)
+        const newEstabRef = doc(collection(db, 'estabelecimentos'));
+        const newEstabId = newEstabRef.id; 
 
-            const nextBilling = new Date();
-            nextBilling.setMonth(nextBilling.getMonth() + 1); 
+        const nextBilling = new Date();
+        nextBilling.setMonth(nextBilling.getMonth() + 1);
 
-            const planIdToSave = formData.currentPlanId === '' ? null : formData.currentPlanId;
+        const planIdToSave = formData.currentPlanId === '' ? null : formData.currentPlanId;
 
-            await setDoc(newEstabRef, {
-                ...formData,
-                id: newEstabId,
-                imageUrl: finalLogoUrl,
-                currentPlanId: planIdToSave,
-                criadoEm: new Date(),
-                rating: Number(formData.rating),
-                nextBillingDate: nextBilling,
-            });
+        // Salva no Firestore
+        await setDoc(newEstabRef, {
+            ...formData,
+            id: newEstabId,
+            imageUrl: finalLogoUrl,
+            currentPlanId: planIdToSave,
+            criadoEm: new Date(),
+            rating: Number(formData.rating),
+            nextBillingDate: nextBilling,
+        });
 
-            // 4. Vincular o Estabelecimento ao Administrador
-            if (formData.adminUID) {
-                const adminRef = doc(db, 'usuarios', formData.adminUID);
-                const adminSnap = await getDoc(adminRef); 
-                if (adminSnap.exists()) {
-                    const adminData = adminSnap.data();
-                    const currentManagedEstabs = adminData.estabelecimentosGerenciados || [];
-                    if (!currentManagedEstabs.includes(newEstabId)) {
-                        await updateDoc(adminRef, {
-                            estabelecimentosGerenciados: [...currentManagedEstabs, newEstabId]
-                        });
-                        toast.info('Vínculo de estabelecimento com admin atualizado.');
-                    }
+        // 4. Vincular o Estabelecimento ao Administrador
+        // ✅ AGORA SIM podemos usar newEstabId, pois ele foi criado no passo 3
+        if (formData.adminUID) {
+            const adminRef = doc(db, 'usuarios', formData.adminUID);
+            const adminSnap = await getDoc(adminRef);
+
+            if (adminSnap.exists()) {
+                const adminData = adminSnap.data();
+
+                // Verificação defensiva de Array
+                let currentManagedEstabs = adminData.estabelecimentosGerenciados;
+                if (!Array.isArray(currentManagedEstabs)) {
+                    currentManagedEstabs = [];
+                }
+
+                if (!currentManagedEstabs.includes(newEstabId)) {
+                    await updateDoc(adminRef, {
+                        estabelecimentosGerenciados: [...currentManagedEstabs, newEstabId]
+                    });
+                    toast.info('Vínculo de estabelecimento com admin atualizado.');
                 }
             }
-
-            // 5. Log de Auditoria e Redirecionamento
-            auditLogger('ESTABELECIMENTO_CRIADO', { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, { type: 'estabelecimento', id: newEstabId, name: formData.nome }, { ...formData, rating: Number(formData.rating), imageUrl: finalLogoUrl });
-            toast.success('Estabelecimento cadastrado com sucesso!');
-            
-            // Limpa formulário antes de redirecionar
-            setFormData({ nome: '', slug: '', chavePix: '', imageUrl: '', rating: 0, adminUID: '', ativo: true, currentPlanId: '', nextBillingDate: null, endereco: { rua: '', numero: '', bairro: '', cidade: '' }, informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' } });
-            setLogoImage(null); 
-            setLogoPreview('');
-            
-            navigate('/master/estabelecimentos'); 
-        } catch (err) {
-            console.error("Erro ao cadastrar estabelecimento:", err);
-            setFormError(`Erro ao cadastrar: ${err.message}`);
-            toast.error(`Erro ao cadastrar: ${err.message}`);
-        } finally {
-            setLoadingForm(false);
         }
-    };
+
+        // 5. Log de Auditoria e Redirecionamento
+        auditLogger(
+            'ESTABELECIMENTO_CRIADO', 
+            { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, 
+            { type: 'estabelecimento', id: newEstabId, name: formData.nome }, 
+            { ...formData, rating: Number(formData.rating), imageUrl: finalLogoUrl }
+        );
+
+        toast.success('Estabelecimento cadastrado com sucesso!');
+
+        // Limpa formulário
+        setFormData({ 
+            nome: '', slug: '', chavePix: '', imageUrl: '', rating: 0, 
+            adminUID: '', ativo: true, currentPlanId: '', nextBillingDate: null, 
+            endereco: { rua: '', numero: '', bairro: '', cidade: '' }, 
+            informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' } 
+        });
+        setLogoImage(null);
+        setLogoPreview('');
+
+        navigate('/master/estabelecimentos');
+
+    } catch (err) {
+        console.error("Erro ao cadastrar estabelecimento:", err);
+        setFormError(`Erro ao cadastrar: ${err.message}`);
+        toast.error(`Erro ao cadastrar: ${err.message}`);
+    } finally {
+        setLoadingForm(false);
+    }
+};
 
     if (authLoading || loadingAdmins || loadingPlans) {
         return (
