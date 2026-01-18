@@ -1,8 +1,9 @@
+// src/pages/Menu.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
 import { usePayment } from '../context/PaymentContext';
@@ -12,6 +13,12 @@ import VariacoesModal from '../components/VariacoesModal';
 import { v4 as uuidv4 } from 'uuid';
 import PaymentModal from '../components/PaymentModal';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
+import RaspadinhaModal from '../components/RaspadinhaModal';
+
+// 🔥 IMPORTS DA INTELIGÊNCIA ARTIFICIAL
+import { useAI } from '../context/AIContext';
+import AIChatAssistant from '../components/AIChatAssistant';
+import AIWidgetButton from '../components/AIWidgetButton';
 
 // Ícones
 import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline } from 'react-icons/io5';
@@ -21,9 +28,13 @@ function Menu() {
     const navigate = useNavigate();
     
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
-    
     // eslint-disable-next-line no-unused-vars
     const { processPayment, paymentLoading } = usePayment();
+
+    // 🔥 A IA ABRE AUTOMATICAMENTE NO CENTRO (true)
+    // eslint-disable-next-line no-unused-vars
+    const { isWidgetOpen } = useAI();
+    const [showAICenter, setShowAICenter] = useState(true);
 
     // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
@@ -41,17 +52,18 @@ function Menu() {
     
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
-    // eslint-disable-next-line no-unused-vars
+    
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
     
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
+    
+    // 🔥 ESTADOS DE LOGIN
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
     
-    // Auth States (Modal)
     const [emailAuthModal, setEmailAuthModal] = useState('');
     const [passwordAuthModal, setPasswordAuthModal] = useState('');
     const [nomeAuthModal, setNomeAuthModal] = useState('');
@@ -60,21 +72,21 @@ function Menu() {
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
-    // eslint-disable-next-line no-unused-vars
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
     const auth = getAuth();
 
-    // Coupon & Search
     const [couponCodeInput, setCouponCodeInput] = useState('');
     const [appliedCoupon, setAppliedCoupon] = useState(null);
     const [discountAmount, setDiscountAmount] = useState(0);
     const [couponLoading, setCouponLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
-    // eslint-disable-next-line no-unused-vars
     const [availableCategories, setAvailableCategories] = useState([]);
+
+    const [showRaspadinha, setShowRaspadinha] = useState(false);
+    const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
+    const [premioRaspadinha, setPremioRaspadinha] = useState(null);
     
-    // Modals
     const [itemParaAdicionais, setItemParaAdicionais] = useState(null);
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [visibleItemsCount, setVisibleItemsCount] = useState({});
@@ -82,10 +94,8 @@ function Menu() {
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null); 
-    // eslint-disable-next-line no-unused-vars
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
-    // 🎨 Cores padrão Claras
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#ffffff',
         destaque: '#059669', 
@@ -100,12 +110,54 @@ function Menu() {
         }
     });
 
-    // CÁLCULOS
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
-    const taxaAplicada = isRetirada ? 0 : taxaEntregaCalculada;
-    const finalOrderTotal = useMemo(() => Math.max(0, subtotalCalculado + taxaAplicada - discountAmount), [subtotalCalculado, taxaAplicada, discountAmount]);
+    
+    useEffect(() => {
+        if (subtotalCalculado >= 100 && !jaJogouRaspadinha && !premioRaspadinha) {
+            const timer = setTimeout(() => {
+                setShowRaspadinha(true);
+            }, 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [subtotalCalculado, jaJogouRaspadinha, premioRaspadinha]);
 
-    // --- FUNÇÕES AUXILIARES ---
+    const handleGanharRaspadinha = (premio) => {
+        setShowRaspadinha(false);
+        setJaJogouRaspadinha(true);
+        setPremioRaspadinha(premio);
+        
+        if (premio.type === 'brinde') {
+            const brindeItem = {
+                ...premio.produto,
+                id: 'brinde-' + uuidv4(),
+                cartItemId: uuidv4(),
+                qtd: 1,
+                preco: 0,
+                precoFinal: 0,
+                observacao: '🎁 Ganho na Raspadinha'
+            };
+            setCarrinho(prev => [...prev, brindeItem]);
+            toast.success(`🎁 Parabéns! Você ganhou: ${premio.label}`);
+        } else {
+            toast.success(`🎉 Parabéns! Você ganhou: ${premio.label}`);
+        }
+    };
+
+    const taxaAplicada = useMemo(() => {
+        if (isRetirada) return 0;
+        if (premioRaspadinha?.type === 'frete') return 0; 
+        return taxaEntregaCalculada;
+    }, [isRetirada, taxaEntregaCalculada, premioRaspadinha]);
+
+    const finalOrderTotal = useMemo(() => {
+        let total = subtotalCalculado + taxaAplicada - discountAmount;
+        if (premioRaspadinha?.type === 'desconto') {
+            const valorDesconto = subtotalCalculado * (premioRaspadinha.valor / 100);
+            total -= valorDesconto;
+        }
+        return Math.max(0, total);
+    }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
+
     const cleanData = (obj) => {
         if (obj === null || obj === undefined) return obj;
         return Object.entries(obj).reduce((acc, [key, value]) => {
@@ -144,7 +196,6 @@ function Menu() {
         }).join(' | ');
     };
 
-    // Função de Logout
     const handleLogout = async () => {
         try {
             await logout(); 
@@ -239,7 +290,6 @@ function Menu() {
     };
 
     // CARRINHO ACTIONS
-    
     const handleAbrirModalProduto = (item) => {
         if (!currentUser || !currentUser.uid) { 
             toast.info('Por favor, faça login para continuar.'); 
@@ -264,33 +314,32 @@ function Menu() {
         toast.success(`${item.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
     };
 
-    // --- FUNÇÕES DE CONFIRMAÇÃO CORRIGIDAS ---
+    const handleAdicionarPorIA = (nomeProduto) => {
+        const termo = normalizarTexto(nomeProduto);
+        const produtoEncontrado = allProdutos.find(p => 
+            normalizarTexto(p.nome) === termo || 
+            normalizarTexto(p.nome).includes(termo)
+        );
+
+        if (produtoEncontrado) {
+            handleAdicionarRapido(produtoEncontrado); 
+            return true;
+        }
+        return false;
+    };
+
     const handleConfirmarVariacoes = (itemConfigurado) => {
-        // CORREÇÃO: Forçar o uso do preço da variação como preço base
         let precoBaseReal = Number(itemConfigurado.preco);
-        
         if (itemConfigurado.variacaoSelecionada && itemConfigurado.variacaoSelecionada.preco) {
             precoBaseReal = Number(itemConfigurado.variacaoSelecionada.preco);
         }
-
-        // Cria um objeto atualizado onde o 'preco' base agora é o da variação
-        const itemAtualizado = {
-            ...itemConfigurado,
-            preco: precoBaseReal, // Isso garante que o modal de adicionais calcule corretamente
-            precoFinal: precoBaseReal
-        };
+        const itemAtualizado = { ...itemConfigurado, preco: precoBaseReal, precoFinal: precoBaseReal };
 
         if (itemConfigurado.adicionais && itemConfigurado.adicionais.length > 0) {
             setItemParaAdicionais(itemAtualizado);
             setItemParaVariacoes(null);
         } else {
-            setCarrinho(prev => [...prev, { 
-                ...itemAtualizado, 
-                qtd: 1, 
-                cartItemId: uuidv4(), 
-                precoFinal: precoBaseReal 
-            }]);
-            
+            setCarrinho(prev => [...prev, { ...itemAtualizado, qtd: 1, cartItemId: uuidv4(), precoFinal: precoBaseReal }]);
             toast.success(`${itemConfigurado.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
             setItemParaVariacoes(null);
         }
@@ -301,13 +350,11 @@ function Menu() {
             ...itemConfigurado, 
             qtd: 1, 
             cartItemId: uuidv4(), 
-            // Usa o precoFinal que vem calculado do modal de adicionais
             precoFinal: Number(itemConfigurado.precoFinal || itemConfigurado.preco) 
         }]);
         toast.success(`${itemConfigurado.nome} adicionado!`, { autoClose: 1000, hideProgressBar: true });
         setItemParaAdicionais(null);
     };
-    // ------------------------------------------
 
     const removerDoCarrinho = (cartItemId) => {
         const item = carrinho.find((p) => p.cartItemId === cartItemId);
@@ -325,7 +372,6 @@ function Menu() {
         return nome;
     };
 
-    // CUPOM
     const handleApplyCoupon = async () => {
         if (!currentUser) { toast.warn('Faça login.'); setShowLoginPrompt(true); return; }
         if (!couponCodeInput.trim()) return toast.warn('Digite o código.');
@@ -352,10 +398,9 @@ function Menu() {
 
     const removeAppliedCoupon = () => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); };
 
-    // PAGAMENTO
     const prepararParaPagamento = () => {
         if (!currentUser) return setShowLoginPrompt(true);
-        if (!actualEstabelecimentoId || !nomeCliente.trim() || !telefoneCliente.trim() || carrinho.length === 0) return toast.warn('Dados incompletos.');
+        if (!actualEstabelecimentoId || !nomeCliente.trim() || !telefoneCliente.trim() || carrinho.length === 0) return toast.warn('Carrinho vazio.');
         if (!isRetirada && (!rua.trim() || !numero.trim() || !bairro.trim() || !cidade.trim())) return toast.warn('Endereço incompleto.');
 
         const itensFormatados = carrinho.map(item => ({
@@ -381,7 +426,12 @@ function Menu() {
             formaPagamento: 'processando',
             taxaEntrega: Number(taxaAplicada || 0),
             totalFinal: Number(finalOrderTotal || 0),
-            cupomAplicado: appliedCoupon ? { ...appliedCoupon, descontoCalculado: discountAmount } : null
+            cupomAplicado: appliedCoupon ? { ...appliedCoupon, descontoCalculado: discountAmount } : null,
+            premioRaspadinha: premioRaspadinha ? {
+                tipo: premioRaspadinha.type,
+                label: premioRaspadinha.label,
+                valor: premioRaspadinha.valor || 0
+            } : null
         };
 
         setPedidoParaPagamento(pedidoRaw); 
@@ -416,7 +466,10 @@ function Menu() {
             setConfirmedOrderDetails({ id: docRef.id, ...pedidoFinal });
             setShowOrderConfirmationModal(true);
             toast.success('Pedido confirmado!');
-            setCarrinho([]); setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); setShowPaymentModal(false); setPedidoParaPagamento(null);
+            
+            setCarrinho([]); setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); 
+            setShowPaymentModal(false); setPedidoParaPagamento(null); setPremioRaspadinha(null); setJaJogouRaspadinha(false);
+
         } catch (e) { console.error("Error saving order:", e); toast.error(`Erro: ${e.message}`); } 
         finally { setProcessandoPagamento(false); }
     };
@@ -468,10 +521,7 @@ function Menu() {
             setActualEstabelecimentoId(id);
             setNomeEstabelecimento(data.nome);
             if (data.cores) setCoresEstabelecimento(data.cores);
-            
-            if (data.ordemCategorias) {
-                setOrdemCategorias(data.ordemCategorias);
-            }
+            if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
 
             setAllProdutos(prods);
             setAvailableCategories(['Todos', ...new Set(prods.map(p => p.categoria).filter(Boolean))]);
@@ -504,7 +554,6 @@ function Menu() {
     const handleShowMore = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: (p[cat] || 4) + 4 }));
     const handleShowLess = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: 4 }));
 
-    // --- AGRUPAMENTO E ORDENAÇÃO DE CATEGORIAS ---
     const menuAgrupado = produtosFiltrados.reduce((acc, p) => { 
         const cat = p.categoria || 'Outros'; 
         if (!acc[cat]) acc[cat] = []; 
@@ -524,41 +573,29 @@ function Menu() {
         return a.localeCompare(b);
     });
 
-    // --- COMPONENTE INFO CORRIGIDO (LATERAL) ---
     const InfoEstabelecimento = () => (
         estabelecimentoInfo ? (
             <div className="bg-white rounded-xl p-6 mb-6 mt-6 border border-gray-200 flex flex-row gap-6 items-center shadow-lg">
                 {(estabelecimentoInfo.logoUrl || estabelecimentoInfo.imageUrl) && (
-                    <img 
-                        src={estabelecimentoInfo.logoUrl || estabelecimentoInfo.imageUrl} 
-                        className="w-24 h-24 rounded-xl object-cover border-2 shrink-0" 
-                        style={{ borderColor: coresEstabelecimento.primaria }} 
-                        alt="Logo" 
-                    />
+                    <img src={estabelecimentoInfo.logoUrl || estabelecimentoInfo.imageUrl} className="w-24 h-24 rounded-xl object-cover border-2 shrink-0" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />
                 )}
                 <div className="flex-1 text-left">
                     <h1 className="text-3xl font-bold mb-2" style={{ color: coresEstabelecimento.texto.principal }}>{estabelecimentoInfo.nome}</h1>
-                    {estabelecimentoInfo.descricao && (
-                        <p className="text-sm mb-3 text-gray-500 max-w-2xl">{estabelecimentoInfo.descricao}</p>
-                    )}
-                    
+                    {estabelecimentoInfo.descricao && <p className="text-sm mb-3 text-gray-500 max-w-2xl">{estabelecimentoInfo.descricao}</p>}
                     <div className="flex flex-col gap-1 text-sm text-gray-600">
                         {estabelecimentoInfo.endereco?.rua && (
                            <div className="flex w-full gap-4">
-
                                 <IoLocationSharp className="text-red-500" />
                                 <p>{estabelecimentoInfo.endereco.rua}, {estabelecimentoInfo.endereco.numero}</p>
                             </div>
                         )}
                         {estabelecimentoInfo.telefone && (
                            <div className="flex w-full gap-4">
-
                                 <IoCall className="text-green-500" />
                                 <p>{estabelecimentoInfo.telefone}</p>
                             </div>
                         )}
                        <div className="flex w-full gap-4">
-
                             <IoTime className="text-blue-500" />
                             <p>{estabelecimentoInfo.horarioFuncionamento ? formatarHorarios(estabelecimentoInfo.horarioFuncionamento) : "Aberto"}</p>
                         </div>
@@ -568,7 +605,6 @@ function Menu() {
         ) : null
     );
 
-    // 🔒 BLOQUEIO DE RENDERIZAÇÃO:
     if (loading || authLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900">
@@ -580,7 +616,6 @@ function Menu() {
         );
     }
 
-    // 🛡️ 2. AQUI ESTÁ A TELA DE BLOQUEIO DE ADMIN
     if (currentUser && (isAdmin || isMasterAdmin)) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
@@ -588,31 +623,15 @@ function Menu() {
                     <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <span className="text-4xl">🛡️</span>
                     </div>
-                    
                     <h1 className="text-2xl font-bold text-gray-900 mb-2">Acesso Administrativo</h1>
-                    
                     <p className="text-gray-600 mb-8 leading-relaxed">
                         Você está logado como <strong>{isMasterAdmin ? 'Master Admin' : 'Administrador'}</strong> ({currentUser.email}).
                         <br/><br/>
                         O cardápio é exclusivo para a visão do cliente. Para fazer pedidos de teste, saia da conta administrativa.
                     </p>
-
                     <div className="space-y-3">
-                        <button
-                            onClick={() => navigate(isMasterAdmin ? '/master/estabelecimentos' : '/admin/dashboard')}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
-                            Ir para o Painel
-                        </button>
-
-                        <button
-                            onClick={handleLogout}
-                            className="w-full bg-white hover:bg-red-50 text-red-600 py-3.5 rounded-xl font-bold border-2 border-red-100 transition-all flex items-center justify-center gap-2"
-                        >
-                            <IoLogOutOutline size={20} />
-                            Sair e Acessar como Cliente
-                        </button>
+                        <button onClick={() => navigate(isMasterAdmin ? '/master/estabelecimentos' : '/admin/dashboard')} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2">Ir para o Painel</button>
+                        <button onClick={handleLogout} className="w-full bg-white hover:bg-red-50 text-red-600 py-3.5 rounded-xl font-bold border-2 border-red-100 transition-all flex items-center justify-center gap-2"><IoLogOutOutline size={20} /> Sair e Acessar como Cliente</button>
                     </div>
                 </div>
             </div>
@@ -623,33 +642,16 @@ function Menu() {
         <div className="w-full relative overflow-x-hidden" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, minHeight: '100vh', paddingBottom: '200px' }}>
             
             <div className="max-w-7xl mx-auto px-4 w-full">
-                {/* CABEÇALHO COM LOGO LATERAL */}
                 <InfoEstabelecimento />
                 
                 <div className="bg-white p-4 mb-8 border-b border-gray-200 sticky top-0 z-40 shadow-sm -mx-4 px-8 md:mx-0 md:px-4 md:rounded-lg">
                     <div className="max-w-7xl mx-auto">
-                        <input 
-                            type="text" 
-                            placeholder="🔍 Buscar produto..." 
-                            value={searchTerm} 
-                            onChange={e => setSearchTerm(e.target.value)} 
-                            className="w-full p-3 mb-4 bg-gray-50 rounded-lg border border-gray-300 focus:outline-none focus:border-green-500 text-base text-gray-900 placeholder-gray-400 shadow-inner" 
-                        />
+                        <input type="text" placeholder="🔍 Buscar produto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 bg-gray-50 rounded-lg border border-gray-300 focus:outline-none focus:border-green-500 text-base text-gray-900 placeholder-gray-400 shadow-inner" />
                         <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                             {['Todos', ...categoriasOrdenadas].map(cat => (
-                                <button 
-                                    key={cat} 
-                                    onClick={() => setSelectedCategory(cat)} 
-                                    className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${
-                                        selectedCategory === cat 
-                                            ? 'text-white shadow-md transform scale-105' 
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
-                                    }`} 
-                                    style={{ 
-                                        backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : undefined, 
-                                        border: selectedCategory === cat ? `2px solid ${coresEstabelecimento.destaque}` : undefined 
-                                    }}
-                                >
+                                <button key={cat} onClick={() => setSelectedCategory(cat)} 
+                                    className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 flex-shrink-0 ${selectedCategory === cat ? 'text-white shadow-md transform scale-105' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'}`} 
+                                    style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.primaria : undefined, border: selectedCategory === cat ? `2px solid ${coresEstabelecimento.destaque}` : undefined }}>
                                     {cat}
                                 </button>
                             ))}
@@ -676,20 +678,9 @@ function Menu() {
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-gray-900">👤 Seus Dados</h3>
                             {currentUser ? (
-                                <button 
-                                    onClick={handleLogout}
-                                    className="text-xs text-red-500 flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors border border-red-200"
-                                >
-                                    <IoLogOutOutline size={16} />
-                                    Sair ({currentUser.email})
-                                </button>
+                                <button onClick={handleLogout} className="text-xs text-red-500 flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors border border-red-200"><IoLogOutOutline size={16} /> Sair ({currentUser.email})</button>
                             ) : (
-                                <button 
-                                    onClick={() => setShowLoginPrompt(true)}
-                                    className="text-xs text-green-600 flex items-center gap-1 hover:bg-green-50 px-2 py-1 rounded transition-colors border border-green-200"
-                                >
-                                    Fazer Login
-                                </button>
+                                <button onClick={() => setShowLoginPrompt(true)} className="text-xs text-green-600 flex items-center gap-1 hover:bg-green-50 px-2 py-1 rounded transition-colors border border-green-200">Fazer Login</button>
                             )}
                         </div>
                         <div className="space-y-4">
@@ -719,6 +710,20 @@ function Menu() {
                                     <div className="flex justify-between text-gray-600"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
                                     {!isRetirada && <div className="flex justify-between text-gray-600"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
                                     {discountAmount > 0 && <div className="flex justify-between text-green-600 font-bold"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
+                                    
+                                    {premioRaspadinha && premioRaspadinha.type === 'desconto' && (
+                                        <div className="flex justify-between text-purple-600 font-bold animate-pulse">
+                                            <span>🎁 Desconto Raspadinha:</span> 
+                                            <span>- R$ {(subtotalCalculado * (premioRaspadinha.valor / 100)).toFixed(2)}</span>
+                                        </div>
+                                    )}
+                                    {premioRaspadinha && premioRaspadinha.type === 'frete' && (
+                                        <div className="flex justify-between text-purple-600 font-bold animate-pulse">
+                                            <span>🎁 Frete Grátis Raspadinha:</span> 
+                                            <span>Aplicado</span>
+                                        </div>
+                                    )}
+
                                     <div className="flex gap-2 mt-4 pt-2 border-t border-gray-200"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 bg-gray-50 p-2 rounded border border-gray-300 text-sm text-gray-900 uppercase" /><button onClick={appliedCoupon ? removeAppliedCoupon : handleApplyCoupon} disabled={couponLoading} className={`px-3 rounded text-sm font-bold ${appliedCoupon ? 'bg-red-600' : 'bg-green-600'} text-white shadow-sm`}>{couponLoading ? '...' : (appliedCoupon ? 'Remover' : 'Aplicar')}</button></div>
                                     <div className="flex justify-between text-xl font-bold mt-4 pt-4 border-t border-gray-200 text-gray-900"><span>Total:</span><span style={{ color: coresEstabelecimento.destaque }}>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
@@ -735,10 +740,17 @@ function Menu() {
             
             {showOrderConfirmationModal && confirmedOrderDetails && <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"><div className="bg-white p-8 rounded-2xl max-w-md w-full text-center border border-gray-200 shadow-2xl"><div className="text-6xl mb-4">🎉</div><h2 className="text-3xl font-bold text-gray-900 mb-2">Pedido Confirmado!</h2><p className="text-gray-500 mb-6">ID: {confirmedOrderDetails.id}</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
             
-            {/* --- MODAL DE LOGIN / CRIAR CONTA ATUALIZADO --- */}
+            {showRaspadinha && (
+                <RaspadinhaModal 
+                    onGanhar={handleGanharRaspadinha} 
+                    onClose={() => setShowRaspadinha(false)} 
+                />
+            )}
+            
+            {/* 🔥 MODAL DE LOGIN/CADASTRO */}
             {showLoginPrompt && (
-                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4">
-                    <div className="bg-white p-6 rounded-2xl w-full max-w-md border border-gray-200 shadow-2xl relative">
+                <div className="fixed inset-0 z-[4000] bg-black bg-opacity-80 flex items-center justify-center px-4">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md border border-gray-200 shadow-2xl relative animate-fade-in-up">
                         <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-gray-400 text-2xl hover:text-gray-600">&times;</button>
                         
                         <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
@@ -749,7 +761,6 @@ function Menu() {
                                     <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                     <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                     
-                                    {/* --- CAMPOS ADICIONADOS PARA ENDEREÇO COMPLETO --- */}
                                     <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                                     <div className="flex gap-2">
                                         <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-1/3 p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
@@ -761,16 +772,49 @@ function Menu() {
                             <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                             <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-base text-gray-900" />
                             
-                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold shadow-md">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold shadow-md transform active:scale-95 transition-all">
+                                {isRegisteringInModal ? 'Cadastrar' : 'Entrar'}
+                            </button>
                         </form>
                         
-                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm font-semibold">{isRegisteringInModal ? 'Já tenho conta' : 'Criar conta'}</button>
+                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm font-semibold hover:underline">
+                            {isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}
+                        </button>
                     </div>
                 </div>
             )}
 
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
+            
+            {/* 🔥 IA NO MODO CENTRAL (MODAL) */}
+            {showAICenter && estabelecimentoInfo && (
+                <AIChatAssistant 
+                    estabelecimento={estabelecimentoInfo} 
+                    produtos={allProdutos} 
+                    onAddDirect={handleAdicionarPorIA} 
+                    onCheckout={prepararParaPagamento}
+                    mode="center"
+                    onClose={() => setShowAICenter(false)}
+                    clienteNome={nomeCliente}
+                    onRequestLogin={() => setShowLoginPrompt(true)}
+                />
+            )}
+
+            {/* 🔥 IA NO MODO WIDGET (FLUTUANTE) */}
+            {estabelecimentoInfo && !showAICenter && (
+                <AIChatAssistant 
+                    estabelecimento={estabelecimentoInfo} 
+                    produtos={allProdutos} 
+                    onAddDirect={handleAdicionarPorIA} 
+                    onCheckout={prepararParaPagamento}
+                    mode="widget"
+                    clienteNome={nomeCliente}
+                    onRequestLogin={() => setShowLoginPrompt(true)}
+                />
+            )}
+            
+            <AIWidgetButton />
         </div>
     );
 }

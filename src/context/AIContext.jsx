@@ -1,153 +1,111 @@
-// context/AIContext.jsx - VERSÃO DINÂMICA
-import React, { createContext, useContext, useState, useCallback } from 'react';
+// src/context/AIContext.jsx
+import React, { createContext, useState, useContext } from 'react';
+// Importações do Firebase Functions
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { v4 as uuidv4 } from 'uuid';
 
 const AIContext = createContext();
 
-export const useAI = () => {
-  const context = useContext(AIContext);
-  if (!context) {
-    throw new Error('useAI must be used within an AIProvider');
-  }
-  return context;
-};
+export const useAI = () => useContext(AIContext);
 
 export const AIProvider = ({ children }) => {
-  const [aiThinking, setAiThinking] = useState(false);
-  const [conversation, setConversation] = useState([]);
-  const [isWidgetOpen, setIsWidgetOpen] = useState(false); // 🔥 NOVO: Estado do widget
-  const [widgetPosition, setWidgetPosition] = useState({ bottom: 20, right: 20 }); // 🔥 NOVO: Posição do widget
+    const [isWidgetOpen, setIsWidgetOpen] = useState(false);
+    const [conversation, setConversation] = useState([]);
+    const [aiThinking, setAiThinking] = useState(false);
 
-  // 🔥 NOVO: Alternar visibilidade do widget
-  const toggleWidget = useCallback(() => {
-    setIsWidgetOpen(prev => !prev);
-  }, []);
+    // ID da sessão para manter o contexto da conversa
+    const [sessionId] = useState(() => uuidv4());
 
-  // 🔥 NOVO: Fechar widget
-  const closeWidget = useCallback(() => {
-    setIsWidgetOpen(false);
-  }, []);
+    const toggleWidget = () => setIsWidgetOpen(prev => !prev);
+    const closeWidget = () => setIsWidgetOpen(false);
+    const openWidget = () => setIsWidgetOpen(true);
 
-  // 🔥 NOVO: Abrir widget
-  const openWidget = useCallback(() => {
-    setIsWidgetOpen(true);
-  }, []);
+    const sendMessage = async (text, context = {}) => {
+        if (!text.trim()) return;
 
-  // 🔥 IA ESPECIALIZADA EM ATENDIMENTO DE PEDIDOS
-  const simulateAIResponse = async (userMessage, context) => {
-    setAiThinking(true);
-    
-    // Simula processamento
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const lowerMessage = userMessage.toLowerCase();
-    
-    // RESPOSTAS ESPECÍFICAS PARA CARDÁPIO
-    const responses = {
-      // ... (mantenha as mesmas respostas do código anterior)
-      'oi': `Olá! Bem-vindo ao ${context.estabelecimentoNome}. Sou seu assistente virtual! 😊
-      
-Posso ajudar você com:
-• 📋 Informações sobre produtos
-• ⏰ Tempo de preparo
-• 🚚 Informações de entrega
-• 💳 Formas de pagamento
-• 📞 Contato do estabelecimento
+        // 1. Adiciona mensagem do usuário na tela imediatamente
+        const userMsg = {
+            id: uuidv4(),
+            text: text,
+            type: 'user',
+            time: new Date().toISOString()
+        };
 
-Em que posso ajudar?`,
+        setConversation(prev => [...prev, userMsg]);
+        setAiThinking(true);
 
-      'ola': `Olá! Bem-vindo ao ${context.estabelecimentoNome}. Sou seu assistente virtual! 😊
+        console.log("🚀 AIContext: Enviando para Backend...", { message: text, context });
 
-Posso ajudar você com:
-• 📋 Informações sobre produtos
-• ⏰ Tempo de preparo
-• 🚚 Informações de entrega
-• 💳 Formas de pagamento
-• 📞 Contato do estabelecimento
+        try {
+            // ==========================================================
+            // CONFIGURAÇÃO DA CONEXÃO COM O SERVIDOR (CLOUD FUNCTION)
+            // ==========================================================
+            
+            const functions = getFunctions();
+            
+            // ⚠️ IMPORTANTE: 'chatAgent' deve ser o nome EXATO da exportação no seu functions/index.js
+            // Exemplo no backend: exports.chatAgent = onCall(...)
+            const chatFunction = httpsCallable(functions, 'chatAgent'); 
+            
+            const response = await chatFunction({
+                message: text,
+                context: context,
+                sessionId: sessionId
+            });
+            
+            console.log("✅ Resposta do Backend:", response.data);
 
-Em que posso ajudar?`,
+            // Tenta pegar a resposta em vários formatos possíveis
+            const aiReplyText = response.data?.reply || response.data?.message || response.data?.text || "Resposta vazia da IA.";
 
-      // ... (demais respostas permanecem iguais)
-      'default': `🤖 **Assistente Virtual**
-Não entendi completamente, mas posso ajudar com:
+            const aiMsg = {
+                id: uuidv4(),
+                text: aiReplyText,
+                type: 'ai',
+                time: new Date().toISOString()
+            };
 
-• 📋 Cardápio e produtos
-• ⏰ Horários e prazos  
-• 🚚 Entregas e taxas
-• 💳 Pagamentos
-• 📞 Contato
+            setConversation(prev => [...prev, aiMsg]);
 
-O que você gostaria de saber? 😊`
+        } catch (error) {
+            // 🔥 LOG DE ERRO REAL (Verifique isso no F12 se der erro)
+            console.error("❌ ERRO NO AI CONTEXT:", error);
+            console.error("Código do erro:", error.code);
+            console.error("Mensagem:", error.message);
+
+            // Mensagem amigável para o usuário, mas diferente dependendo do erro
+            let msgErro = "Erro interno no assistente.";
+            
+            if (error.code === 'functions/not-found') {
+                msgErro = "Erro de configuração: Função de IA não encontrada no servidor.";
+            } else if (error.code === 'functions/unavailable') {
+                msgErro = "Servidor indisponível ou sem conexão.";
+            }
+
+            const errorMsg = {
+                id: uuidv4(),
+                text: `⚠️ ${msgErro}`,
+                type: 'ai',
+                time: new Date().toISOString(),
+                isError: true
+            };
+            setConversation(prev => [...prev, errorMsg]);
+        } finally {
+            setAiThinking(false);
+        }
     };
 
-    // LÓGICA DE DETECÇÃO DE INTENÇÃO
-    let response = responses.default;
-
-    if (lowerMessage.includes('oi') || lowerMessage.includes('olá')) response = responses.oi;
-    else if (lowerMessage.includes('horário') || lowerMessage.includes('funcionamento')) response = responses.horario;
-    else if (lowerMessage.includes('telefone') || lowerMessage.includes('fone') || lowerMessage.includes('contato')) response = responses.telefone;
-    else if (lowerMessage.includes('endereço') || lowerMessage.includes('local')) response = responses.endereco;
-    else if (lowerMessage.includes('pagamento') || lowerMessage.includes('pagar') || lowerMessage.includes('cartão')) response = responses.pagamento;
-    else if (lowerMessage.includes('pix')) response = responses.pix;
-    else if (lowerMessage.includes('entrega') || lowerMessage.includes('delivery')) response = responses.entrega;
-    else if (lowerMessage.includes('taxa') || lowerMessage.includes('frete')) response = responses.taxa;
-    else if (lowerMessage.includes('tempo') || lowerMessage.includes('demora') || lowerMessage.includes('prazo')) response = responses.tempo;
-    else if (lowerMessage.includes('cardápio') || lowerMessage.includes('menu')) response = responses.cardapio;
-    else if (lowerMessage.includes('recomenda') || lowerMessage.includes('sugestão') || lowerMessage.includes('popular')) response = responses.recomendacao;
-    else if (lowerMessage.includes('problema') || lowerMessage.includes('erro') || lowerMessage.includes('errado')) response = responses.problema;
-    else if (lowerMessage.includes('cancelar') || lowerMessage.includes('cancelamento')) response = responses.cancelar;
-
-    setAiThinking(false);
-    return response;
-  };
-
-  const sendMessage = useCallback(async (userMessage, context) => {
-    if (!userMessage.trim()) return;
-
-    // Adiciona mensagem do usuário
-    const userMsg = { 
-      type: 'user', 
-      text: userMessage, 
-      time: new Date(),
-      id: Date.now() + Math.random()
-    };
-    
-    setConversation(prev => [...prev.slice(-9), userMsg]); // Mantém apenas últimas 10 mensagens
-
-    // Simula resposta da IA
-    const aiText = await simulateAIResponse(userMessage, context);
-    const aiMsg = { 
-      type: 'ai', 
-      text: aiText, 
-      time: new Date(),
-      id: Date.now() + Math.random()
-    };
-    
-    setConversation(prev => [...prev, aiMsg]);
-    return aiText;
-  }, []);
-
-  const clearConversation = useCallback(() => {
-    setConversation([]);
-  }, []);
-
-  const value = {
-    aiThinking,
-    conversation,
-    sendMessage,
-    clearConversation,
-    setAiThinking,
-    // 🔥 NOVOS: Controles do widget
-    isWidgetOpen,
-    toggleWidget,
-    closeWidget,
-    openWidget,
-    widgetPosition,
-    setWidgetPosition
-  };
-
-  return (
-    <AIContext.Provider value={value}>
-      {children}
-    </AIContext.Provider>
-  );
+    return (
+        <AIContext.Provider value={{
+            isWidgetOpen,
+            toggleWidget,
+            closeWidget,
+            openWidget,
+            conversation,
+            sendMessage,
+            aiThinking
+        }}>
+            {children}
+        </AIContext.Provider>
+    );
 };
