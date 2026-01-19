@@ -1,17 +1,16 @@
+// src/components/AIChatAssistant.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { IoClose, IoSend, IoTime, IoRestaurant, IoLogIn, IoCartOutline, IoMic } from 'react-icons/io5';
+import { IoClose, IoSend, IoTime, IoRestaurant, IoCartOutline, IoMic } from 'react-icons/io5';
 import ReactMarkdown from 'react-markdown'; 
 import { useAI } from '../context/AIContext';
 
 // ============================================================================
-// 1. CONFIGURAÇÕES & CÉREBRO 🧠
+// 1. CONFIGURAÇÕES & CÉREBRO
 // ============================================================================
 
-// 🔥 LAYOUT HÍBRIDO SEGURO:
-// Mobile: Gaveta fixa no fundo, altura 85vh (funciona em todos), z-index máximo.
-// Desktop: Flutuante no canto.
-const ESTILO_MOBILE = "fixed inset-x-0 bottom-0 w-full h-[85vh] rounded-t-3xl shadow-[0_-5px_30px_rgba(0,0,0,0.2)] flex flex-col";
-const ESTILO_DESKTOP = "sm:fixed sm:bottom-6 sm:right-6 sm:w-96 sm:h-[650px] sm:rounded-2xl sm:shadow-2xl sm:flex sm:flex-col";
+// 🔥 ESTILO GAVETA (Usado apenas se NÃO for o card central)
+const ESTILO_WIDGET_MOBILE = "fixed inset-x-0 bottom-0 w-full h-[85vh] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.4)] flex flex-col border-t border-gray-200";
+const ESTILO_WIDGET_DESKTOP = "sm:fixed sm:bottom-6 sm:right-6 sm:w-96 sm:h-[650px] sm:rounded-2xl sm:shadow-[0_0_50px_rgba(0,0,0,0.25)] sm:flex sm:flex-col sm:border sm:border-gray-200";
 
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
   🚨 INSTRUÇÃO: VOCÊ É O JUCLEILDO, GARÇOM DO ${nomeLoja}.
@@ -46,11 +45,11 @@ const formatarCardapio = (lista) => {
 const cleanText = (text) => text?.replace(/\|\|ADD:.*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
 
 // ============================================================================
-// 2. SUB-COMPONENTES (COM LETRAS MAIORES)
+// 2. SUB-COMPONENTES
 // ============================================================================
 
 const MiniCart = ({ itens, onClose, onCheckout }) => (
-  <div className="absolute inset-0 z-50 bg-gray-50 flex flex-col animate-fade-in rounded-t-3xl sm:rounded-2xl overflow-hidden">
+  <div className="absolute inset-0 z-[2147483647] bg-gray-50 flex flex-col animate-fade-in rounded-t-3xl sm:rounded-2xl overflow-hidden">
     <div className="p-5 bg-white border-b border-gray-200 flex justify-between items-center shadow-sm">
       <span className="font-bold text-gray-800 flex items-center gap-2 text-xl"><IoCartOutline/> Seu Pedido</span>
       <button onClick={onClose} className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-gray-600 active:scale-95"><IoClose size={28}/></button>
@@ -78,15 +77,19 @@ const MiniCart = ({ itens, onClose, onCheckout }) => (
 const ChatHeader = ({ onClose, statusText }) => (
   <div className="px-6 py-5 flex items-center justify-between bg-white border-b border-gray-200 shadow-sm shrink-0 rounded-t-3xl sm:rounded-t-2xl">
     <div className="flex items-center gap-4">
-      <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-        <IoRestaurant className="text-2xl"/>
+      <div className="w-14 h-14 bg-red-600 text-white rounded-full flex items-center justify-center border-4 border-red-100 shadow-md">
+        <IoRestaurant className="text-3xl"/>
       </div>
       <div className="text-left">
         <p className="font-bold text-gray-900 text-xl leading-none">Jucleildo</p> 
-        <p className="text-sm text-green-600 font-medium mt-1">{statusText}</p>
+        <p className="text-sm text-green-600 font-bold mt-1 uppercase tracking-wide flex items-center gap-1">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> {statusText}
+        </p>
       </div>
     </div>
-    <button onClick={onClose} className="p-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition active:scale-90"><IoClose size={26}/></button>
+    <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition active:scale-90 shadow-sm border border-gray-200">
+      <IoClose size={24}/>
+    </button>
   </div>
 );
 
@@ -109,7 +112,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conversation, aiThinking]);
 
-  // Hook de Voz Seguro
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -167,12 +169,18 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
   if (!isOpen) return null;
 
-  // 🔥 CONFIGURAÇÃO DO LAYOUT (Z-INDEX ALTO + BG BRANCO OPACO)
+  // 🔥 LÓGICA DE LAYOUT:
+  // Se mode == 'center', ele força um CARD no meio da tela (com overlay preto), mesmo no mobile.
+  // Se mode == 'widget', ele usa o estilo de gaveta/botão flutuante.
   const layoutClasses = isCenter 
-    ? 'fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4' 
-    : `z-[9999] bg-white border-t border-gray-200 transition-all duration-300 ${ESTILO_MOBILE} ${ESTILO_DESKTOP}`;
+    ? 'fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm' 
+    : `z-[2147483647] bg-white transition-all duration-300 ${ESTILO_WIDGET_MOBILE} ${ESTILO_WIDGET_DESKTOP}`;
 
-  const containerInner = `w-full h-full flex flex-col bg-white relative overflow-hidden ${isCenter ? 'max-w-md max-h-[80vh] rounded-2xl' : 'h-full'}`;
+  // Se for center, o container interno é um card arredondado e limitado.
+  // Se for widget, ele preenche a altura definida (gaveta).
+  const containerInner = isCenter 
+    ? 'w-full max-w-md h-[80vh] flex flex-col bg-white relative overflow-hidden rounded-2xl shadow-2xl' 
+    : 'w-full h-full flex flex-col bg-white relative overflow-hidden';
 
   return (
     <div className={layoutClasses}>
@@ -186,14 +194,14 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
            <div className="flex justify-start">
              <div className="bg-white p-5 rounded-3xl rounded-tl-none shadow-sm border border-gray-200 max-w-[90%] text-gray-900 text-lg leading-relaxed">
                {clienteNome ? 
-                 <>Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 👋 Sou o Jucleildo.</> : 
+                 <>Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 👋 Sou o Jucleildo. Posso anotar seu pedido?</> : 
                  <>Olá! Sou o Jucleildo. <button onClick={onRequestLogin} className="text-red-600 font-bold underline">Entre aqui</button> para pedir.</>}
              </div>
            </div>
 
            {conversation.map(msg => (
              <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`px-5 py-4 rounded-3xl shadow-sm max-w-[90%] text-lg leading-relaxed ${
+                <div className={`px-5 py-4 rounded-3xl shadow-md max-w-[90%] text-lg leading-relaxed ${
                     msg.type === 'user' 
                     ? 'bg-red-600 text-white rounded-tr-none' 
                     : 'bg-white text-gray-900 border border-gray-200 rounded-tl-none'
@@ -208,14 +216,14 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
            <div ref={messagesEndRef} />
         </div>
 
-        <div className="bg-white border-t border-gray-200 shrink-0 pb-safe">
+        <div className="bg-white border-t border-gray-200 shrink-0 pb-safe shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
           {!aiThinking && !isListening && clienteNome && (
             <div className="pt-4 pb-3 px-5 flex gap-3 overflow-x-auto scrollbar-hide w-full">
-               <button onClick={() => setShowMiniCart(true)} className="shrink-0 px-5 py-3 bg-green-50 text-green-700 border border-green-200 text-base font-bold rounded-full flex items-center gap-2 whitespace-nowrap">
-                 <IoCartOutline size={20}/> Pedido
+               <button onClick={() => setShowMiniCart(true)} className="shrink-0 px-5 py-3 bg-green-50 text-green-700 border border-green-200 text-base font-bold rounded-full flex items-center gap-2 whitespace-nowrap shadow-sm hover:bg-green-100 transition">
+                 <IoCartOutline size={20}/> Pedido ({carrinho.length})
                </button>
                {['📜 Ver Cardápio', '🍔 Sugestão', '🔥 Promoções'].map(s => (
-                  <button key={s} onClick={() => handleSend(s)} className="shrink-0 px-5 py-3 bg-white text-gray-700 border border-gray-200 text-base font-medium rounded-full shadow-sm whitespace-nowrap">
+                  <button key={s} onClick={() => handleSend(s)} className="shrink-0 px-5 py-3 bg-gray-50 text-gray-700 border border-gray-200 text-base font-medium rounded-full shadow-sm whitespace-nowrap hover:bg-gray-100 transition">
                     {s}
                   </button>
                ))}
@@ -227,17 +235,16 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                <IoMic size={24} />
              </button>
              
-             {/* 🔥 FONTE DE 18PX (text-lg) PARA FACILITAR LEITURA E EVITAR ZOOM */}
              <input 
                type="text" 
                value={isListening ? 'Ouvindo...' : message} 
                onChange={e => setMessage(e.target.value)} 
-               placeholder={clienteNome ? "Digite aqui..." : "Faça login"} 
+               placeholder={clienteNome ? "Digite aqui..." : "Faça login para pedir"} 
                disabled={isListening || !clienteNome}
-               className="flex-1 bg-gray-100 text-gray-900 rounded-full px-6 py-4 text-lg focus:bg-white focus:ring-2 focus:ring-red-100 outline-none transition-all placeholder-gray-400 border border-transparent" 
+               className="flex-1 bg-gray-100 text-gray-900 rounded-full px-6 py-4 text-lg focus:bg-white focus:ring-2 focus:ring-red-100 outline-none transition-all placeholder-gray-400 border border-transparent shadow-inner" 
              />
              
-             <button type="submit" disabled={!message.trim() || aiThinking} className="w-14 h-14 shrink-0 bg-red-600 text-white rounded-full flex items-center justify-center shadow-md disabled:opacity-50">
+             <button type="submit" disabled={!message.trim() || aiThinking} className="w-14 h-14 shrink-0 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 active:scale-95 disabled:opacity-50 transition-all">
                {aiThinking ? <IoTime className="animate-spin" size={24} /> : <IoSend size={24}/>}
              </button>
           </form>

@@ -21,7 +21,7 @@ import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
 
 // Ícones
-import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline, IoPerson } from 'react-icons/io5';
+import { IoLocationSharp, IoTime, IoLogOutOutline, IoPerson } from 'react-icons/io5';
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
@@ -30,8 +30,9 @@ function Menu() {
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen } = useAI();
     
-    // 🔥 CORREÇÃO 1: Começa FALSE para abrir direto no cardápio
-    const [showAICenter, setShowAICenter] = useState(false);
+    // 🔥 MUDANÇA CRÍTICA AQUI:
+    // Mudei para 'true'. Agora a IA abre SOZINHA no meio da tela ao carregar.
+    const [showAICenter, setShowAICenter] = useState(true);
 
     // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
@@ -96,7 +97,7 @@ function Menu() {
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#ffffff',
         destaque: '#059669',
-        background: '#f9fafb', // Fundo padrão cinza claro
+        background: '#f3f4f6', 
         texto: {
             principal: '#111827',
             secundario: '#4B5563',
@@ -537,7 +538,6 @@ function Menu() {
 
                 {/* FILTROS E BUSCA */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
-                    {/* 🔥 CORREÇÃO ZOOM IPHONE: text-base */}
                     <input 
                         type="text" 
                         placeholder="🔍 Buscar..." 
@@ -561,8 +561,7 @@ function Menu() {
                             <h2 className="text-2xl font-bold mb-4">{cat}</h2>
                             <div className="grid gap-4 md:grid-cols-2">
                                 {items.slice(0, visible).map(item => (
-                                    /* 🔥 CORREÇÃO VISUAL: Wrapper branco para o card do produto não sumir no fundo escuro */
-                                    <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                                    <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 p-2">
                                         <CardapioItem item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />
                                     </div>
                                 ))}
@@ -582,7 +581,6 @@ function Menu() {
                         }
                         
                         <div className="space-y-4">
-                            {/* 🔥 CORREÇÃO ZOOM IPHONE: text-base em todos os inputs */}
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
@@ -633,12 +631,10 @@ function Menu() {
                 </div>
             </div>
 
-            {/* CARRINHO FLUTUANTE CONDICIONAL */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* 🔥 CORREÇÃO IA: Só aparece se o botão for clicado (isWidgetOpen) ou se showAICenter (false por padrão) for ativado */}
             {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
@@ -656,14 +652,12 @@ function Menu() {
 
             <AIWidgetButton />
 
-            {/* MODAIS */}
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
-            {/* MODAL DE LOGIN */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up">
