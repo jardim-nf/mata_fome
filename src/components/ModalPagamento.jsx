@@ -14,9 +14,12 @@ import { v4 as uuidv4 } from 'uuid';
 import PaymentModal from '../components/PaymentModal';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 import RaspadinhaModal from '../components/RaspadinhaModal';
+
+// 🔥 IMPORTS IA
 import { useAI } from '../context/AIContext';
 import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
+
 import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline } from 'react-icons/io5';
 
 function Menu() {
@@ -71,9 +74,12 @@ function Menu() {
 
     const [itemParaAdicionais, setItemParaAdicionais] = useState(null);
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
+    
+    // 🎁 RASPADINHA
     const [showRaspadinha, setShowRaspadinha] = useState(false);
     const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
     const [premioRaspadinha, setPremioRaspadinha] = useState(null);
+    
     const [ordemCategorias, setOrdemCategorias] = useState([]);
 
     const auth = getAuth();
@@ -82,7 +88,7 @@ function Menu() {
         texto: { principal: '#111827', secundario: '#4B5563', placeholder: '#9CA3AF' }
     });
 
-    // --- FUNÇÕES ---
+    // --- FUNÇÕES DE AUXÍLIO ---
 
     const scrollToResumo = useCallback(() => {
         const elementoResumo = document.getElementById('resumo-carrinho');
@@ -120,6 +126,38 @@ function Menu() {
 
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
     
+    // 🔥 LÓGICA DA RASPADINHA: Se passar de 100, exibe o modal
+    useEffect(() => {
+        if (subtotalCalculado >= 100 && !jaJogouRaspadinha && !premioRaspadinha) {
+            const timer = setTimeout(() => {
+                setShowRaspadinha(true);
+            }, 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [subtotalCalculado, jaJogouRaspadinha, premioRaspadinha]);
+
+    const handleGanharRaspadinha = (premio) => {
+        setShowRaspadinha(false);
+        setJaJogouRaspadinha(true);
+        setPremioRaspadinha(premio);
+
+        if (premio.type === 'brinde') {
+            const brindeItem = {
+                ...premio.produto,
+                id: 'brinde-' + uuidv4(),
+                cartItemId: uuidv4(),
+                qtd: 1,
+                preco: 0,
+                precoFinal: 0,
+                observacao: '🎁 Ganho na Raspadinha'
+            };
+            setCarrinho(prev => [...prev, brindeItem]);
+            toast.success(`🎁 Parabéns! Você ganhou: ${premio.label}`);
+        } else {
+            toast.success(`🎉 Parabéns! Você ganhou: ${premio.label}`);
+        }
+    };
+
     const taxaAplicada = useMemo(() => {
         if (isRetirada) return 0;
         if (premioRaspadinha?.type === 'frete') return 0;
@@ -165,9 +203,9 @@ function Menu() {
         let quantidadeIA = 1;
 
         if (comandoCompleto.includes('-- Qtd:')) {
-            const partes = comandoCompleto.split('-- Qtd:');
-            quantidadeIA = parseInt(partes[1].trim()) || 1;
-            nomeProduto = partes[0].trim();
+            const partesQtd = comandoCompleto.split('-- Qtd:');
+            quantidadeIA = parseInt(partesQtd[1].trim()) || 1;
+            nomeProduto = partesQtd[0].trim();
         }
         if (nomeProduto.includes('-- Opcao:')) {
             const split = nomeProduto.split('-- Opcao:');
@@ -249,11 +287,8 @@ function Menu() {
             toast.warn('Seu carrinho está vazio.');
             return;
         }
-        
-        // Verifica dados mínimos para entrega
         if (!isRetirada && (!rua || !numero || !bairro)) {
             toast.warn("Preencha o endereço de entrega.");
-            // Rola até o formulário
             const formElement = document.getElementById('form-dados-cliente');
             if (formElement) formElement.scrollIntoView({ behavior: 'smooth' });
             return;
@@ -271,6 +306,8 @@ function Menu() {
             itens: itensFormatados,
             totalFinal: Number(finalOrderTotal),
             taxaEntrega: Number(taxaAplicada),
+            premioRaspadinha: premioRaspadinha ? { tipo: premioRaspadinha.type, label: premioRaspadinha.label, valor: premioRaspadinha.valor || 0 } : null,
+            cupomAplicado: appliedCoupon ? { ...appliedCoupon, descontoCalculado: discountAmount } : null,
             createdAt: serverTimestamp(),
             status: 'aguardando_pagamento'
         };
@@ -285,6 +322,8 @@ function Menu() {
         setShowOrderConfirmationModal(true);
         setCarrinho([]);
         setShowPaymentModal(false);
+        setPremioRaspadinha(null); 
+        setJaJogouRaspadinha(false);
     };
 
     const handleApplyCoupon = async () => {
@@ -294,7 +333,7 @@ function Menu() {
             const q = query(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons'), where('codigo', '==', couponCodeInput.toUpperCase().trim()));
             const snap = await getDocs(q);
             if (snap.empty) throw new Error('Cupom inválido.');
-            const data = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            const data = snap.docs[0].data();
             
             let discount = 0;
             if (data.tipoDesconto === 'percentual') discount = subtotalCalculado * (data.valorDesconto / 100);
@@ -406,7 +445,7 @@ function Menu() {
 
                 {/* FILTROS */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
-                    <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 bg-gray-50 rounded-lg border text-gray-900" />
+                    <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 bg-gray-50 rounded-lg border" />
                     <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
                             <button key={cat} onClick={() => setSelectedCategory(cat)} className="px-4 py-2 rounded-full font-bold bg-gray-100 text-gray-600">{cat}</button>
@@ -414,75 +453,60 @@ function Menu() {
                     </div>
                 </div>
 
-                {/* LISTAGEM */}
-                {categoriasOrdenadas.map(cat => {
-                    const items = menuAgrupado[cat];
-                    const visible = visibleItemsCount[cat] || 4;
-                    return (
-                        <div key={cat} id={`categoria-${cat}`} className="mb-8">
-                            <h2 className="text-2xl font-bold mb-4">{cat}</h2>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                {items.slice(0, visible).map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />)}
-                            </div>
-                            {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-4 py-2 bg-gray-100 rounded-lg text-gray-500 font-bold">{visible >= items.length ? 'Ver menos' : 'Ver mais'}</button>}
-                        </div>
-                    );
-                })}
-
-                {/* DADOS E RESUMO */}
-                <div className="grid md:grid-cols-2 gap-8 mt-12">
-                    <div id="form-dados-cliente" className="bg-white p-6 rounded-xl border shadow-lg text-left">
-                        <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                        {currentUser ? <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : <button onClick={() => setShowLoginPrompt(true)} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Entrar</button>}
-                        <div className="space-y-4">
-                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
-                            {!isRetirada && (
-                                <div className="space-y-2">
-                                    <div className="flex gap-2"><input className="flex-1 p-3 rounded border text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /><input className="w-24 p-3 rounded border text-center text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div>
-                                    <input className="w-full p-3 rounded border text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🚚 Entrega</button>
-                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🏪 Retirada</button>
-                            </div>
+                {categoriasOrdenadas.map(cat => (
+                    <div key={cat} className="mb-8">
+                        <h2 className="text-2xl font-bold mb-4">{cat}</h2>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {menuAgrupado[cat].map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} coresEstabelecimento={coresEstabelecimento} />)}
                         </div>
                     </div>
+                ))}
 
-                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900">
-                        <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
-                        {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
-                            <>
-                                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
-                                    {carrinho.map(item => (
-                                        <div key={item.cartItemId} className="flex justify-between items-start border-b pb-2">
-                                            <div><p className="font-bold text-sm">{formatarItemCarrinho(item)}</p><p className="text-xs">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p></div>
-                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold">✕</button>
-                                        </div>
-                                    ))}
+                {/* RESUMO CARRINHO */}
+                <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg mt-12 text-gray-900">
+                    <h3 className="text-xl font-bold mb-4">🛒 Resumo do Pedido</h3>
+                    {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
+                        <div>
+                            {carrinho.map(item => (
+                                <div key={item.cartItemId} className="flex justify-between py-2 border-b">
+                                    <span>{formatarItemCarrinho(item)} (x{item.qtd})</span>
+                                    <span>R$ {(item.precoFinal * item.qtd).toFixed(2)}</span>
                                 </div>
-                                <div className="border-t pt-4 space-y-2 text-sm">
-                                    <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
-                                    {!isRetirada && <div className="flex justify-between"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
-                                    {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
-                                    {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
-                                    <div className="flex gap-2 mt-2"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-sm" /><button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button></div>
-                                    <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
-                                </div>
-                                <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600">✅ Finalizar Pedido</button>
-                            </>
+                            ))}
+                            <div className="text-right font-bold text-xl mt-4">Total: R$ {finalOrderTotal.toFixed(2)}</div>
+                            {premioRaspadinha && <div className="text-right text-purple-600 font-bold mt-1">🎁 Prêmio: {premioRaspadinha.label}</div>}
+                            <button onClick={prepararParaPagamento} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg">Finalizar Pedido</button>
+                        </div>
+                    )}
+                </div>
+
+                {/* DADOS DO CLIENTE */}
+                <div id="form-dados-cliente" className="bg-white p-6 rounded-xl border shadow-lg mt-8 text-left">
+                    <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
+                    {currentUser ? <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : <button onClick={() => setShowLoginPrompt(true)} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Entrar</button>}
+                    <div className="space-y-4">
+                        <input className="w-full p-3 rounded border text-gray-900" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                        <input className="w-full p-3 rounded border text-gray-900" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                        {!isRetirada && (
+                            <div className="space-y-2">
+                                <div className="flex gap-2"><input className="flex-1 p-3 rounded border text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /><input className="w-24 p-3 rounded border text-center text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div>
+                                <input className="w-full p-3 rounded border text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                            </div>
                         )}
+                        <div className="flex gap-2">
+                            <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🚚 Entrega</button>
+                            <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🏪 Retirada</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* 🔥 OCULTA CARRINHO FLUTUANTE SE IA ESTIVER ABERTA */}
+            {/* 🔥 CARRINHO FLUTUANTE CONDICIONAL */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* 🔥 IA: Passamos 'prepararParaPagamento' no 'onCheckout' para abrir o MODAL DE PAGAMENTO */}
+            {/* 🔥 IA: onCheckout abre PREPARAR PARA PAGAMENTO */}
             {estabelecimentoInfo && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
@@ -503,6 +527,7 @@ function Menu() {
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={(i) => {setCarrinho([...carrinho, {...i, cartItemId:uuidv4(), qtd:1}]); setItemParaVariacoes(null)}} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {showPaymentModal && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} cartItems={carrinho} customer={pedidoParaPagamento?.cliente} onSuccess={handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4 text-gray-900">🎉 Pedido Recebido!</h2><button onClick={() => window.location.reload()} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
+            {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             {showLoginPrompt && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4"><div className="bg-white p-6 rounded-2xl w-full max-w-md"><h2 className="text-center font-bold text-xl mb-4">Login Necessário</h2><form onSubmit={handleLoginModal}><input className="w-full p-3 border mb-3 rounded" placeholder="Email" value={emailAuthModal} onChange={e=>setEmailAuthModal(e.target.value)} /><input className="w-full p-3 border mb-3 rounded" type="password" placeholder="Senha" value={passwordAuthModal} onChange={e=>setPasswordAuthModal(e.target.value)} /><button className="w-full bg-green-600 text-white p-3 rounded">Entrar</button></form><button onClick={() => setShowLoginPrompt(false)} className="block w-full text-center text-red-500 mt-4">Fechar</button></div></div>}
         </div>
     );
