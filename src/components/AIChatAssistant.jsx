@@ -4,24 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import { useAI } from '../context/AIContext';
 
 // ============================================================================
-// 1. ESTILOS EXTRAS (Barra de rolagem invisível + Correção de Zoom)
-// ============================================================================
-const GlobalStyles = () => (
-  <style>{`
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    /* Previne zoom em inputs no iOS */
-    input, textarea, select { font-size: 16px !important; }
-  `}</style>
-);
-
-// ============================================================================
-// 2. CONFIGURAÇÕES & CÉREBRO DO JUCLEILDO 🧠
+// 1. CONFIGURAÇÕES & CÉREBRO DO JUCLEILDO 🧠
 // ============================================================================
 
 const TAMANHO_WIDGET = "w-[95vw] max-w-[400px] h-[85vh] max-h-[650px] sm:w-96 sm:h-[600px]"; 
 
-// 🔥 AQUI ESTÁ A CORREÇÃO: REGRA TÉCNICA RECOLOCADA!
+// 🔥 REGRA REFORÇADA PARA VARIAÇÕES
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
   🚨 INSTRUÇÃO SUPREMA: VOCÊ É O JUCLEILDO, GARÇOM VIRTUAL DO ${nomeLoja}.
   
@@ -56,7 +44,7 @@ const formatarCardapio = (lista) => {
   
   return Object.entries(agrupado).map(([cat, itens]) => {
     const itensTexto = itens.map(p => {
-      // Lista variações explicitamente para a IA ler
+      // Formatação clara para a IA
       if (p.variacoes?.length > 0) {
           const vars = p.variacoes.map(v => {
              const precoVar = v.preco ? Number(v.preco).toFixed(2) : '0.00';
@@ -72,17 +60,17 @@ const formatarCardapio = (lista) => {
   }).join('\n\n'); 
 };
 
-// Remove o comando técnico para não aparecer balão feio para o usuário
 const cleanText = (text) => text?.replace(/\|\|ADD:.*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
 
 // ============================================================================
-// 3. HOOK DE VOZ
+// 2. HOOK DE VOZ (COM PROTEÇÃO)
 // ============================================================================
 const useVoiceInput = (onResult) => {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRec) {
       const rec = new SpeechRec();
@@ -105,7 +93,7 @@ const useVoiceInput = (onResult) => {
 };
 
 // ============================================================================
-// 4. SUB-COMPONENTES
+// 3. SUB-COMPONENTES
 // ============================================================================
 
 const MicTooltip = () => (
@@ -159,7 +147,7 @@ const ChatHeader = ({ onClose, statusText }) => (
 );
 
 // ============================================================================
-// 5. COMPONENTE PRINCIPAL
+// 4. COMPONENTE PRINCIPAL
 // ============================================================================
 
 const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDirect, onCheckout, clienteNome, onRequestLogin, mode = 'widget' }) => {
@@ -181,7 +169,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conversation, aiThinking]);
 
-  // 🔥 DETECTOR DE COMANDOS DA IA (ADD/PAY)
   useEffect(() => {
     if (!conversation.length) return;
     const lastMsg = conversation[conversation.length - 1];
@@ -189,19 +176,15 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     if (lastMsg.type === 'ai' && !processedIdsRef.current.has(lastMsg.id)) {
         processedIdsRef.current.add(lastMsg.id);
         
-        // Procura comando ADD
         let match; 
         const regexAdd = /\|\|ADD:(.*?)\|\|/gi;
-        let found = false;
         
         while ((match = regexAdd.exec(lastMsg.text)) !== null) {
           if (onAddDirect) {
              onAddDirect(match[1].trim());
-             found = true;
           }
         }
 
-        // Procura comando PAY
         if (lastMsg.text.includes('||PAY||')) { 
             if (onCheckout) onCheckout(); 
             handleClose(); 
@@ -230,7 +213,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
-      // Passamos o cardápio com instruções claras de preço
       produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO DISPONÍVEL:\n" + formatarCardapio(produtos),
       clienteNome: clienteNome || 'Visitante',
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
@@ -249,7 +231,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
   return (
     <div className={containerClasses}>
-      <GlobalStyles />
       <div className={cardClasses}>
         
         {showMiniCart && <MiniCart itens={carrinho} onClose={() => setShowMiniCart(false)} onCheckout={() => { onCheckout?.(); handleClose(); }} />}
@@ -310,13 +291,14 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                <IoMic size={26} />
              </button>
              
-             {/* 🔥 FONTE DE 16PX AQUI PREVINE O ZOOM DO IOS */}
+             {/* 🔥 FONTE DE 16PX FORÇADA PARA EVITAR ZOOM */}
              <input 
                type="text" 
                value={isListening ? 'Ouvindo...' : message} 
                onChange={e => setMessage(e.target.value)} 
                placeholder={clienteNome ? "Digite aqui..." : "Faça login"} 
                disabled={isListening || !clienteNome}
+               style={{ fontSize: '16px' }}
                className="flex-1 bg-gray-100 text-gray-900 rounded-full px-6 py-4 text-base focus:bg-white focus:ring-2 focus:ring-red-100 focus:border-red-300 outline-none transition-all placeholder-gray-400 border border-transparent" 
              />
              

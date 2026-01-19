@@ -20,21 +20,6 @@ import AIWidgetButton from '../components/AIWidgetButton';
 
 import { IoLocationSharp, IoTime, IoLogOutOutline, IoPerson } from 'react-icons/io5';
 
-// 🔥 CORREÇÃO DE ZOOM E SCROLL (ESSENCIAL PARA MOBILE)
-const GlobalMobileFix = () => (
-  <style>{`
-    /* Esconde barra de rolagem feia */
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    
-    /* 🔥 IMPEDE O ZOOM AUTOMÁTICO NO IPHONE AO DIGITAR */
-    input, textarea, select { 
-        font-size: 16px !important; 
-        max-height: 100%;
-    }
-  `}</style>
-);
-
 function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
@@ -508,15 +493,13 @@ function Menu() {
 
     return (
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
-            {/* CSS Global Injetado para Mobile */}
-            <GlobalMobileFix />
-
+            
             <div className="max-w-7xl mx-auto px-4 w-full">
                 
-                {/* INFO E CABEÇALHO RESPONSIVO */}
+                {/* INFO E CABEÇALHO */}
                 {estabelecimentoInfo && (
                     <div className="bg-white rounded-xl p-4 md:p-6 mb-6 mt-6 border flex flex-col md:flex-row gap-4 md:gap-6 items-center shadow-lg relative text-center md:text-left">
-                        {/* Botão de Login Ajustado */}
+                        {/* Botão de Login */}
                         <div className="absolute top-3 right-3 z-10 md:top-4 md:right-4">
                              {currentUser ? (
                                 <button onClick={handleLogout} className="flex items-center gap-2 text-xs md:text-sm text-red-500 bg-red-50 px-3 py-1.5 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
@@ -545,13 +528,14 @@ function Menu() {
 
                 {/* FILTROS E BUSCA */}
                 <div className="bg-white p-3 md:p-4 mb-6 sticky top-0 z-30 shadow-sm rounded-b-xl md:rounded-lg border-b border-gray-100">
+                    {/* 🔥 STYLE: fontSize: 16px previne ZOOM no iPhone */}
                     <input 
                         type="text" 
                         placeholder="🔍 Buscar produto..." 
                         value={searchTerm} 
                         onChange={e => setSearchTerm(e.target.value)} 
-                        className="w-full p-3 mb-3 border rounded-full bg-gray-50 text-base text-gray-900 focus:bg-white focus:ring-2 outline-none transition-all" 
-                        style={{ focusRing: coresEstabelecimento.destaque }}
+                        className="w-full p-3 mb-3 border rounded-full bg-gray-50 text-gray-900 focus:bg-white focus:ring-2 outline-none transition-all" 
+                        style={{ fontSize: '16px', focusRing: coresEstabelecimento.destaque }}
                     />
                     <div className="flex overflow-x-auto gap-2 pb-1 scrollbar-hide mask-linear-fade">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
@@ -606,18 +590,18 @@ function Menu() {
                         }
                         
                         <div className="space-y-3">
-                            <input className="w-full p-3 rounded-lg border bg-gray-50 text-base text-gray-900 outline-none focus:ring-1 focus:bg-white transition" placeholder="Nome Completo *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 rounded-lg border bg-gray-50 text-base text-gray-900 outline-none focus:ring-1 focus:bg-white transition" placeholder="Telefone (WhatsApp) *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} type="tel" />
+                            <input style={{ fontSize: '16px' }} className="w-full p-3 rounded-lg border bg-gray-50 text-gray-900 outline-none focus:ring-1 focus:bg-white transition" placeholder="Nome Completo *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input style={{ fontSize: '16px' }} className="w-full p-3 rounded-lg border bg-gray-50 text-gray-900 outline-none focus:ring-1 focus:bg-white transition" placeholder="Telefone (WhatsApp) *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} type="tel" />
                             
                             {!isRetirada && (
                                 <div className="space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                                     <p className="text-xs font-bold text-gray-500 uppercase">Endereço de Entrega</p>
                                     <div className="flex gap-2">
-                                        <input className="flex-1 p-3 rounded-lg border bg-white text-base text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-                                        <input className="w-24 p-3 rounded-lg border bg-white text-center text-base text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                        <input style={{ fontSize: '16px' }} className="flex-1 p-3 rounded-lg border bg-white text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+                                        <input style={{ fontSize: '16px' }} className="w-24 p-3 rounded-lg border bg-white text-center text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
                                     </div>
-                                    <input className="w-full p-3 rounded-lg border bg-white text-base text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
-                                    <input className="w-full p-3 rounded-lg border bg-white text-base text-gray-900" placeholder="Cidade" value={cidade} onChange={e => setCidade(e.target.value)} />
+                                    <input style={{ fontSize: '16px' }} className="w-full p-3 rounded-lg border bg-white text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input style={{ fontSize: '16px' }} className="w-full p-3 rounded-lg border bg-white text-gray-900" placeholder="Cidade" value={cidade} onChange={e => setCidade(e.target.value)} />
                                 </div>
                             )}
                             
@@ -655,7 +639,7 @@ function Menu() {
                                     {premioRaspadinha && <div className="flex justify-between text-purple-600 font-bold bg-purple-50 p-2 rounded"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
                                     
                                     <div className="flex gap-2 mt-4">
-                                        <input placeholder="Código do Cupom" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded-lg uppercase text-sm bg-gray-50" />
+                                        <input style={{ fontSize: '16px' }} placeholder="Código do Cupom" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded-lg uppercase text-sm bg-gray-50" />
                                         <button onClick={handleApplyCoupon} disabled={couponLoading} className="px-4 bg-gray-800 text-white rounded-lg text-sm font-bold hover:bg-gray-900">{couponLoading ? '...' : 'Aplicar'}</button>
                                     </div>
                                     
@@ -673,7 +657,7 @@ function Menu() {
                 </div>
             </div>
 
-            {/* ELEMENTOS FLUTUANTES */}
+            {/* ELEMENTOS FLUTUANTES (Z-INDEX ALTO) */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
@@ -702,7 +686,7 @@ function Menu() {
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl animate-bounce-in"><h2 className="text-3xl font-bold mb-4 text-green-600">🎉 Pedido Recebido!</h2><p className="mb-6 text-gray-600">Acompanhe pelo seu WhatsApp ou Painel.</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
-            {/* 🔥 MODAL DE LOGIN (SCROLLABLE NO MOBILE) */}
+            {/* 🔥 MODAL DE LOGIN (Responsivo com Scroll) */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900 backdrop-blur-sm">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
@@ -716,12 +700,12 @@ function Menu() {
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (
                                 <>
-                                    <input placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required />
-                                    <input placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required type="tel" />
+                                    <input style={{ fontSize: '16px' }} placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition" required />
+                                    <input style={{ fontSize: '16px' }} placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition" required type="tel" />
                                 </>
                             )}
-                            <input type="email" placeholder="Seu E-mail" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required />
-                            <input type="password" placeholder="Sua Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required />
+                            <input style={{ fontSize: '16px' }} type="email" placeholder="Seu E-mail" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition" required />
+                            <input style={{ fontSize: '16px' }} type="password" placeholder="Sua Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition" required />
                             
                             <button type="submit" className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg active:scale-95">{isRegisteringInModal ? 'Criar Conta' : 'Entrar'}</button>
                         </form>
