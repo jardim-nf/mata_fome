@@ -20,13 +20,18 @@ import AIWidgetButton from '../components/AIWidgetButton';
 
 import { IoLocationSharp, IoTime, IoLogOutOutline, IoPerson } from 'react-icons/io5';
 
-// Estilo para esconder barra de rolagem horizontal feia no mobile
-const ScrollHideStyle = () => (
+// 🔥 CORREÇÃO DE ZOOM E SCROLL (ESSENCIAL PARA MOBILE)
+const GlobalMobileFix = () => (
   <style>{`
+    /* Esconde barra de rolagem feia */
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    /* Previne zoom em inputs no iOS */
-    input, textarea, select { font-size: 16px !important; }
+    
+    /* 🔥 IMPEDE O ZOOM AUTOMÁTICO NO IPHONE AO DIGITAR */
+    input, textarea, select { 
+        font-size: 16px !important; 
+        max-height: 100%;
+    }
   `}</style>
 );
 
@@ -50,19 +55,16 @@ function Menu() {
     const [numero, setNumero] = useState('');
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
-    // eslint-disable-next-line no-unused-vars
     const [complemento, setComplemento] = useState('');
 
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
 
-    // eslint-disable-next-line no-unused-vars
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
-    // eslint-disable-next-line no-unused-vars
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
     
     // --- ESTADOS DO LOGIN ---
@@ -77,21 +79,17 @@ function Menu() {
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
-    // eslint-disable-next-line no-unused-vars
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
     const auth = getAuth();
 
     const [couponCodeInput, setCouponCodeInput] = useState('');
-    // eslint-disable-next-line no-unused-vars
     const [appliedCoupon, setAppliedCoupon] = useState(null);
     const [discountAmount, setDiscountAmount] = useState(0);
-    // eslint-disable-next-line no-unused-vars
     const [couponLoading, setCouponLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
 
     const [showRaspadinha, setShowRaspadinha] = useState(false);
-    // eslint-disable-next-line no-unused-vars
     const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
     const [premioRaspadinha, setPremioRaspadinha] = useState(null);
 
@@ -102,7 +100,6 @@ function Menu() {
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null);
-    // eslint-disable-next-line no-unused-vars
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
@@ -173,7 +170,7 @@ function Menu() {
         }, {});
     };
 
-    // --- 2. CÁLCULOS FINANCEIROS (USEMEMO) ---
+    // --- 2. CÁLCULOS FINANCEIROS ---
 
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
 
@@ -512,14 +509,14 @@ function Menu() {
     return (
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
             {/* CSS Global Injetado para Mobile */}
-            <ScrollHideStyle />
+            <GlobalMobileFix />
 
             <div className="max-w-7xl mx-auto px-4 w-full">
                 
                 {/* INFO E CABEÇALHO RESPONSIVO */}
                 {estabelecimentoInfo && (
                     <div className="bg-white rounded-xl p-4 md:p-6 mb-6 mt-6 border flex flex-col md:flex-row gap-4 md:gap-6 items-center shadow-lg relative text-center md:text-left">
-                        {/* Botão de Login (Absoluto no Desktop, Relativo Ajustado no Mobile) */}
+                        {/* Botão de Login Ajustado */}
                         <div className="absolute top-3 right-3 z-10 md:top-4 md:right-4">
                              {currentUser ? (
                                 <button onClick={handleLogout} className="flex items-center gap-2 text-xs md:text-sm text-red-500 bg-red-50 px-3 py-1.5 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
@@ -546,7 +543,7 @@ function Menu() {
                     </div>
                 )}
 
-                {/* FILTROS E BUSCA (Sticky) */}
+                {/* FILTROS E BUSCA */}
                 <div className="bg-white p-3 md:p-4 mb-6 sticky top-0 z-30 shadow-sm rounded-b-xl md:rounded-lg border-b border-gray-100">
                     <input 
                         type="text" 
@@ -597,7 +594,7 @@ function Menu() {
                     );
                 })}
 
-                {/* DADOS E RESUMO (Grid Responsivo) */}
+                {/* DADOS E RESUMO */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mt-12 pb-10">
                     
                     {/* FORMULÁRIO DE DADOS */}
@@ -676,7 +673,7 @@ function Menu() {
                 </div>
             </div>
 
-            {/* ELEMENTOS FLUTUANTES (Z-INDEX ALTO) */}
+            {/* ELEMENTOS FLUTUANTES */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
@@ -705,7 +702,7 @@ function Menu() {
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl animate-bounce-in"><h2 className="text-3xl font-bold mb-4 text-green-600">🎉 Pedido Recebido!</h2><p className="mb-6 text-gray-600">Acompanhe pelo seu WhatsApp ou Painel.</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
-            {/* 🔥 MODAL DE LOGIN (Responsivo com Scroll) */}
+            {/* 🔥 MODAL DE LOGIN (SCROLLABLE NO MOBILE) */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900 backdrop-blur-sm">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">

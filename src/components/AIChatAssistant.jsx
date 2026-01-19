@@ -21,7 +21,7 @@ const GlobalStyles = () => (
 
 const TAMANHO_WIDGET = "w-[95vw] max-w-[400px] h-[85vh] max-h-[650px] sm:w-96 sm:h-[600px]"; 
 
-// 🔥 AQUI ESTAVA O PROBLEMA: A IA PRECISA DESSA REGRA TÉCNICA CLARA 👇
+// 🔥 AQUI ESTÁ A CORREÇÃO: REGRA TÉCNICA RECOLOCADA!
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
   🚨 INSTRUÇÃO SUPREMA: VOCÊ É O JUCLEILDO, GARÇOM VIRTUAL DO ${nomeLoja}.
   
@@ -200,10 +200,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
              found = true;
           }
         }
-        
-        if (found) {
-            // Feedback sonoro ou visual opcional poderia vir aqui
-        }
 
         // Procura comando PAY
         if (lastMsg.text.includes('||PAY||')) { 
@@ -314,6 +310,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                <IoMic size={26} />
              </button>
              
+             {/* 🔥 FONTE DE 16PX AQUI PREVINE O ZOOM DO IOS */}
              <input 
                type="text" 
                value={isListening ? 'Ouvindo...' : message} 
