@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; 
 import { db } from '../firebase';
-import { dispararAutomacaoWhatsApp } from '../services/automacaoService';
 import { 
     getDocs, 
     doc, 
