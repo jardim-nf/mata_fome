@@ -1,6 +1,5 @@
-// src/pages/admin/GestaoFuncionarios.jsx - VERSÃO CORRIGIDA
+// src/pages/admin/GestaoFuncionarios.jsx
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import withAuth from "../../hocs/withAuth";
 import { 
     getFuncionarios, 
@@ -9,6 +8,7 @@ import {
     excluirFuncionarioPermanentemente,
     verificarEmailExistente
 } from "../../services/firebaseFuncionarios";
+import { serverTimestamp } from "firebase/firestore"; // Importante para data de criação
 
 // Import dos ícones
 import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaUserPlus, FaExclamationTriangle } from 'react-icons/fa';
@@ -21,6 +21,7 @@ const GestaoFuncionarios = ({ estabelecimentoPrincipal }) => {
     const [funcionarioParaExcluir, setFuncionarioParaExcluir] = useState(null);
     const [loadingAction, setLoadingAction] = useState('');
 
+    // 🔥 GARANTE O ID DO ESTABELECIMENTO
     const estabelecimentoId = estabelecimentoPrincipal;
 
     const cargos = [
@@ -80,13 +81,24 @@ const GestaoFuncionarios = ({ estabelecimentoPrincipal }) => {
                 }
             }
 
+            // 🔥 PREPARA OS DADOS PARA SALVAR
+            const dadosParaSalvar = {
+                ...funcionarioData,
+                // Garante que o ID do estabelecimento esteja salvo no perfil do funcionário
+                estabelecimentoId: estabelecimentoId, 
+                // Também salva como array para compatibilidade futura
+                estabelecimentosGerenciados: [estabelecimentoId],
+                updatedAt: serverTimestamp()
+            };
+
             if (funcionarioEditando) {
                 // Modo Edição
-                await updateFuncionario(estabelecimentoId, funcionarioEditando.id, funcionarioData);
+                await updateFuncionario(estabelecimentoId, funcionarioEditando.id, dadosParaSalvar);
                 alert('✅ Funcionário atualizado com sucesso!');
             } else {
-                // Modo Adição
-                await addFuncionario(estabelecimentoId, funcionarioData);
+                // Modo Adição (Adiciona Data de Criação)
+                dadosParaSalvar.createdAt = serverTimestamp();
+                await addFuncionario(estabelecimentoId, dadosParaSalvar);
                 alert('✅ Funcionário adicionado com sucesso!');
             }
             
@@ -261,7 +273,7 @@ const GestaoFuncionarios = ({ estabelecimentoPrincipal }) => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
                                                     {funcionario.cargo}
                                                 </span>
                                             </td>
@@ -409,7 +421,8 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
     const [nome, setNome] = useState(funcionario?.nome || '');
     const [email, setEmail] = useState(funcionario?.email || '');
     const [senha, setSenha] = useState('');
-    const [cargo, setCargo] = useState(funcionario?.cargo || cargos[0]);
+    // Normaliza para lowercase para evitar bugs no select
+    const [cargo, setCargo] = useState(funcionario?.cargo?.toLowerCase() || cargos[0].toLowerCase());
     const [telefone, setTelefone] = useState(funcionario?.telefone || '');
     const [permissoes, setPermissoes] = useState(funcionario?.permissoes || []);
     
@@ -444,10 +457,9 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
             // 🚨 CONVERTE PARA MINÚSCULO PARA BATER COM O CHECK DE ROTAS (App.jsx)
             cargo: cargo.toLowerCase(), 
             telefone: telefone.trim() || null, 
-            permissoes, // Salva o array de permissões
+            permissoes, 
             senha: funcionario ? undefined : senha,
             status: funcionario?.status || 'ativo',
-            // 🚨 FORÇA O USUÁRIO A SER FUNCIONÁRIO, NÃO ADMIN
             isAdmin: false, 
             isMasterAdmin: false 
         });
@@ -506,10 +518,10 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
                                 value={cargo} 
                                 onChange={(e) => setCargo(e.target.value)} 
                                 required
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white capitalize"
                             >
                                 {cargos.map(c => (
-                                    <option key={c} value={c}>{c}</option>
+                                    <option key={c} value={c.toLowerCase()}>{c}</option>
                                 ))}
                             </select>
                         </div>

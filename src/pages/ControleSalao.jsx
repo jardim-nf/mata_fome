@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, writeBatch } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext"; 
 import { useHeader } from '../context/HeaderContext';
@@ -9,32 +9,32 @@ import MesaCard from "../components/MesaCard";
 import AdicionarMesaModal from "../components/AdicionarMesaModal";
 import ModalPagamento from "../components/ModalPagamento";
 import { 
-    IoPeople, 
-    IoPersonAdd, 
-    IoArrowBack, 
-    IoAdd, 
-    IoReceiptOutline,
-    IoGrid,
-    IoWalletOutline,
-    IoFilter,
-    IoRestaurant,
-    IoAlertCircle
+    IoArrowBack, IoAdd, 
+    IoGrid, IoPeople, IoWalletOutline,
+    IoRestaurant, IoSearch, IoClose, IoAlertCircle 
 } from "react-icons/io5";
 
-// --- COMPONENTE: STAT CARD ---
-const StatCard = ({ icon: Icon, label, value, subtext, colorClass, bgClass, alert }) => (
-    <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-start justify-between relative overflow-hidden group hover:shadow-md transition-all">
-        <div className="relative z-10">
-            <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
-            <h3 className="text-2xl font-black text-gray-900">{value}</h3>
-            {subtext && <p className="text-xs font-medium text-gray-500 mt-1">{subtext}</p>}
+// --- FUNÇÃO AUXILIAR PARA FORMATAR R$ (Mesma do MesaCard) ---
+const formatarReal = (valor) => {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(valor);
+};
+
+// --- STAT CARD PEQUENO ---
+const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
+    <div className="bg-white p-2 sm:p-3 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[120px]">
+        <div>
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+            {/* Ajustei o tamanho da fonte para caber o R$ */}
+            <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight">{value}</h3>
         </div>
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${bgClass} ${colorClass} group-hover:scale-110 transition-transform`}>
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${bgClass} ${colorClass}`}>
             <Icon />
         </div>
-        {alert && (
-            <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-white -mr-1 -mt-1"></div>
-        )}
     </div>
 );
 
@@ -42,75 +42,52 @@ const StatCard = ({ icon: Icon, label, value, subtext, colorClass, bgClass, aler
 const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     const [quantidade, setQuantidade] = useState(2);
     if (!isOpen) return null;
-    
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-[32px] shadow-2xl p-8 w-full max-w-md border border-gray-100 transform transition-all scale-100">
-                <div className="text-center mb-8">
-                    <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100">
-                        <IoPersonAdd className="text-3xl text-blue-600" />
-                    </div>
-                    <h3 className="text-2xl font-black text-gray-900 mb-1">Abrir Mesa {mesaNumero}</h3>
-                    <p className="text-gray-500 font-medium">Quantos clientes?</p>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100">
+                <h3 className="text-xl font-black text-gray-900 text-center mb-4">Mesa {mesaNumero}</h3>
+                <p className="text-center text-gray-500 mb-4 text-sm">Quantas pessoas?</p>
+                <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-6">
+                    <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-12 h-12 rounded-lg bg-white shadow border text-2xl font-bold hover:bg-gray-50">-</button>
+                    <span className="text-4xl font-black text-gray-900">{quantidade}</span>
+                    <button onClick={() => setQuantidade(q => q + 1)} className="w-12 h-12 rounded-lg bg-blue-600 text-white shadow text-2xl font-bold hover:bg-blue-700">+</button>
                 </div>
-                
-                <div className="flex items-center justify-between bg-gray-50 rounded-3xl p-4 mb-8 border border-gray-100">
-                    <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-14 h-14 rounded-2xl bg-white shadow-sm border border-gray-200 text-gray-700 font-bold text-2xl hover:bg-gray-50 active:scale-95 transition-all">-</button>
-                    <div className="text-center">
-                        <span className="text-5xl font-black text-gray-900 tracking-tighter">{quantidade}</span>
-                        <span className="text-xs font-bold text-gray-400 uppercase block mt-1">Pessoas</span>
-                    </div>
-                    <button onClick={() => setQuantidade(q => q + 1)} className="w-14 h-14 rounded-2xl bg-blue-600 shadow-lg shadow-blue-200 text-white font-bold text-2xl hover:bg-blue-700 active:scale-95 transition-all">+</button>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                    <button onClick={onClose} className="py-4 bg-gray-50 text-gray-600 rounded-2xl font-bold hover:bg-gray-100 transition-colors">Cancelar</button>
-                    <button onClick={() => onConfirm(quantidade)} className="py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-lg hover:bg-black transition-all transform active:scale-95">Confirmar</button>
+                <div className="grid grid-cols-2 gap-3">
+                    <button onClick={onClose} className="py-3 bg-gray-100 rounded-lg font-bold text-gray-600 hover:bg-gray-200">Cancelar</button>
+                    <button onClick={() => onConfirm(quantidade)} className="py-3 bg-gray-900 text-white rounded-lg font-bold shadow-lg hover:bg-black">Abrir Mesa</button>
                 </div>
             </div>
         </div>
     );
 };
 
-// --- LOADING SPINNER ---
-const LoadingSpinner = () => (
-    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <div className="flex flex-col items-center">
-            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-400 font-bold text-sm tracking-widest uppercase">Carregando Salão...</p>
-        </div>
-    </div>
-);
-
 export default function ControleSalao() {
     const { userData } = useAuth(); 
     const { setActions, clearActions } = useHeader();
     const navigate = useNavigate();
     
+    // Estados
     const [mesas, setMesas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtro, setFiltro] = useState('todos'); 
+    const [buscaMesa, setBuscaMesa] = useState(''); 
     const [isModalOpen, setIsModalOpen] = useState(false);
     
+    // Modais
     const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
 
-    // 1. OBTENÇÃO SEGURA DO ID DO ESTABELECIMENTO
     const estabelecimentoId = useMemo(() => {
-        return userData?.estabelecimentosGerenciados?.[0] || null;
+        return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || null;
     }, [userData]);
 
     // HEADER ACTIONS
     useEffect(() => {
         setActions(
-            <button 
-                onClick={() => setIsModalOpen(true)} 
-                className="bg-gray-900 hover:bg-black text-white font-bold py-2.5 px-5 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all"
-            >
-                <IoAdd className="text-xl"/>
-                <span className="hidden sm:inline">Adicionar Mesa</span>
+            <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                <IoAdd className="text-lg"/> <span className="hidden sm:inline">Criar Mesa</span>
             </button>
         );
         return () => clearActions();
@@ -118,19 +95,11 @@ export default function ControleSalao() {
 
     // FETCH MESAS
     useEffect(() => {
-        // Se não tem ID e o userData ainda não carregou, espera
-        if (!estabelecimentoId) { 
-            if (userData) setLoading(false);
-            return;
-        }
-        
+        if (!estabelecimentoId) { if (userData) setLoading(false); return; }
         setLoading(true); 
-        
-        const unsubscribe = onSnapshot(
-            query(collection(db, 'estabelecimentos', estabelecimentoId, 'mesas'), orderBy('numero')), 
+        const unsubscribe = onSnapshot(query(collection(db, 'estabelecimentos', estabelecimentoId, 'mesas'), orderBy('numero')), 
             (snapshot) => {
                 const mesasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
                 mesasData.sort((a, b) => {
                     const numA = parseFloat(a.numero);
                     const numB = parseFloat(b.numero);
@@ -140,17 +109,12 @@ export default function ControleSalao() {
                 setMesas(mesasData); 
                 setLoading(false);
             },
-            (error) => { 
-                console.error("Erro ao carregar mesas:", error); 
-                setLoading(false); 
-                toast.error('Erro ao carregar mesas.'); 
-            }
+            (error) => { console.error("Erro mesas:", error); setLoading(false); }
         );
         return () => unsubscribe();
     }, [estabelecimentoId, userData]);
 
-    // --- AÇÕES ---
-
+    // FUNÇÕES
     const handleAdicionarMesa = async (numeroMesa) => {
         if (!numeroMesa || !estabelecimentoId) return;
         try {
@@ -159,155 +123,138 @@ export default function ControleSalao() {
                 status: 'livre', total: 0, pessoas: 0, itens: [], tipo: 'mesa',
                 createdAt: serverTimestamp(), updatedAt: serverTimestamp()
             });
-            toast.success("Mesa criada!");
-            setIsModalOpen(false);
-        } catch (error) { toast.error("Erro ao criar mesa."); }
+            toast.success("Mesa criada!"); setIsModalOpen(false);
+        } catch (error) { toast.error("Erro ao criar."); }
     };
 
     const handleExcluirMesa = async (id) => {
-        if (!window.confirm(`Excluir mesa?`) || !estabelecimentoId) return;
-        try { await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', id)); toast.success("Mesa excluída."); } 
-        catch (error) { toast.error("Erro ao excluir."); }
+        if (!window.confirm(`Excluir mesa?`)) return;
+        try { await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', id)); toast.success("Excluída."); } 
+        catch (error) { toast.error("Erro."); }
     };
 
     const handleMesaClick = (mesa) => {
-        if (mesa.status === 'livre') { 
-            setMesaParaAbrir(mesa); setIsModalAbrirMesaOpen(true); 
-        } else { 
-            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); 
-        }
+        if (mesa.status === 'livre') { setMesaParaAbrir(mesa); setIsModalAbrirMesaOpen(true); } 
+        else { navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); }
     };
 
     const handleConfirmarAbertura = async (qtd) => {
-        if (!estabelecimentoId) return;
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
                 status: 'ocupada', pessoas: qtd, tipo: 'mesa', updatedAt: serverTimestamp()
             });
             setIsModalAbrirMesaOpen(false);
             navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
-        } catch (error) { toast.error("Erro ao abrir mesa"); }
+        } catch (error) { toast.error("Erro ao abrir"); }
     };
 
-    // ⚠️ CRÍTICO: NÃO SALVE A VENDA AQUI. O MODAL JÁ FEZ ISSO.
-    // Esta função serve apenas para fechar o modal e limpar o estado.
-    const handlePagamentoConcluido = () => {
-        setIsModalPagamentoOpen(false);
-        setMesaParaPagamento(null);
-        // O Dashboard detecta a venda automaticamente pelo listener do Firebase
-    };
+    const handlePagamentoConcluido = () => { setIsModalPagamentoOpen(false); setMesaParaPagamento(null); };
+
+    // 🔍 FILTRO OTIMIZADO
+    const mesasFiltradas = useMemo(() => {
+        return mesas.filter(m => {
+            const matchStatus = filtro === 'todos' ? true :
+                                filtro === 'livres' ? m.status === 'livre' :
+                                filtro === 'ocupadas' ? m.status !== 'livre' : true;
+            
+            const matchBusca = buscaMesa === '' ? true : String(m.numero).includes(buscaMesa);
+            return matchStatus && matchBusca;
+        });
+    }, [mesas, filtro, buscaMesa]);
 
     const stats = useMemo(() => {
-        const ocupadas = mesas.filter(m => m.status === 'ocupada' || m.status === 'com_pedido');
-        const pendentes = ocupadas.reduce((acc, m) => acc + (m.itens?.filter(i => !i.status || i.status === 'pendente').length || 0), 0);
+        const ocupadas = mesas.filter(m => m.status !== 'livre');
         const totalVendas = ocupadas.reduce((acc, m) => acc + (m.total || 0), 0);
-        
         return {
             total: mesas.length,
             ocupadas: ocupadas.length,
             livres: mesas.length - ocupadas.length,
             pessoas: ocupadas.reduce((acc, m) => acc + (m.pessoas || 0), 0),
-            pendentes,
             vendas: totalVendas,
             ocupacaoPercent: mesas.length > 0 ? Math.round((ocupadas.length / mesas.length) * 100) : 0
         };
     }, [mesas]);
 
-    const mesasFiltradas = useMemo(() => {
-        if (filtro === 'livres') return mesas.filter(m => m.status === 'livre');
-        if (filtro === 'ocupadas') return mesas.filter(m => m.status !== 'livre');
-        return mesas;
-    }, [mesas, filtro]);
-
-    // 2. BLOQUEIO DE SEGURANÇA: Se não tem ID, não mostra nada (evita o erro undefined)
-    if (loading) return <LoadingSpinner />;
-    
-    if (!estabelecimentoId) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] flex-col p-4 text-center">
-                <IoAlertCircle className="text-5xl text-red-500 mb-2"/>
-                <h2 className="text-xl font-bold text-gray-800">Estabelecimento não encontrado</h2>
-                <p className="text-gray-500">Verifique seu login ou contate o suporte.</p>
-            </div>
-        );
-    }
+    if (!estabelecimentoId && !loading) return <div className="p-10 text-center"><IoAlertCircle className="mx-auto text-4xl text-red-500 mb-2"/>Sem acesso ao estabelecimento.</div>;
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-8 pb-20">
-            <div className="max-w-[1600px] mx-auto">
+        <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 pb-20">
+            <div className="w-full max-w-[2400px] mx-auto"> 
+                
                 <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
                 <ModalAbrirMesa isOpen={isModalAbrirMesaOpen} onClose={() => setIsModalAbrirMesaOpen(false)} onConfirm={handleConfirmarAbertura} mesaNumero={mesaParaAbrir?.numero} />
-                
-                {/* 3. MODAL DE PAGAMENTO SEGURO */}
                 {isModalPagamentoOpen && mesaParaPagamento && estabelecimentoId && (
-                    <ModalPagamento 
-                        mesa={mesaParaPagamento} 
-                        estabelecimentoId={estabelecimentoId}
-                        onClose={() => setIsModalPagamentoOpen(false)} 
-                        onSucesso={handlePagamentoConcluido}
-                    />
+                    <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handlePagamentoConcluido} />
                 )}
 
-                {/* HEADER SUPERIOR */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                    <div>
-                        <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-gray-600 font-bold text-sm flex items-center gap-1 mb-1 transition-colors">
-                            <IoArrowBack /> Dashboard
-                        </button>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Salão</h1>
-                        <p className="text-gray-500">Acompanhe a ocupação em tempo real</p>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                        <div className="bg-white p-1 rounded-xl border border-gray-200 shadow-sm flex overflow-x-auto">
-                            {[
-                                { id: 'todos', label: 'Todas', count: stats.total },
-                                { id: 'livres', label: 'Livres', count: stats.livres },
-                                { id: 'ocupadas', label: 'Ocupadas', count: stats.ocupadas }
-                            ].map(tab => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setFiltro(tab.id)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
-                                        filtro === tab.id 
-                                            ? 'bg-gray-900 text-white shadow-md' 
-                                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                                    }`}
-                                >
-                                    {tab.label} <span className={`ml-1 text-xs ${filtro === tab.id ? 'opacity-80' : 'opacity-50'}`}>({tab.count})</span>
-                                </button>
-                            ))}
+                {/* --- HEADER FIXO --- */}
+                <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2">
+                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                        
+                        {/* Título e Voltar */}
+                        <div className="flex flex-col gap-1">
+                            <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-gray-600 font-bold text-xs flex items-center gap-1 w-fit">
+                                <IoArrowBack /> Voltar
+                            </button>
+                            <div className="flex items-center gap-3">
+                                <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Salão</h1>
+                                <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                                    {mesasFiltradas.length} Mesas
+                                </span>
+                            </div>
                         </div>
 
-                        <button 
-                            onClick={() => setIsModalOpen(true)} 
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all"
-                        >
-                            <IoAdd className="text-xl"/>
-                            <span className="hidden sm:inline">Nova Mesa</span>
-                        </button>
+                        {/* Stats Rápidos (Horizontal) */}
+                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
+                            <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
+                            <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
+                            {/* MUDANÇA AQUI: Usando a formatação correta no card de totais */}
+                            <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
+                        </div>
+                        
+                        {/* Controles: Busca e Filtro */}
+                        <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
+                            {/* 🔍 INPUT DE BUSCA */}
+                            <div className="relative w-full sm:w-32 md:w-48">
+                                <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                    <IoSearch className="text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="block w-full pl-8 pr-8 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 placeholder-gray-400"
+                                    placeholder="Mesa nº..."
+                                    value={buscaMesa}
+                                    onChange={(e) => setBuscaMesa(e.target.value)}
+                                />
+                                {buscaMesa && (
+                                    <button onClick={() => setBuscaMesa('')} className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-red-500">
+                                        <IoClose />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* FILTROS ABAS */}
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                {['todos', 'livres', 'ocupadas'].map(t => (
+                                    <button
+                                        key={t}
+                                        onClick={() => setFiltro(t)}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold capitalize transition-all ${
+                                            filtro === t ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* GRID DE CARDS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} subtext={`${stats.ocupadas} de ${stats.total} mesas`} bgClass="bg-blue-50" colorClass="text-blue-600" />
-                    <StatCard icon={IoPeople} label="Clientes" value={stats.pessoas} subtext="Pessoas sentadas" bgClass="bg-emerald-50" colorClass="text-emerald-600" />
-                    <StatCard icon={IoWalletOutline} label="Vendas (Aberto)" value={stats.vendas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} subtext="Consumo atual" bgClass="bg-purple-50" colorClass="text-purple-600" />
-                    <StatCard icon={IoReceiptOutline} label="Pedidos" value={stats.pendentes} subtext="Itens pendentes" bgClass="bg-orange-50" colorClass="text-orange-600" alert={stats.pendentes > 0} />
-                </div>
-
-                {/* ÁREA PRINCIPAL */}
-                <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-gray-200 shadow-sm min-h-[500px]">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <span className={`w-3 h-3 rounded-full ${filtro === 'livres' ? 'bg-green-500' : filtro === 'ocupadas' ? 'bg-orange-500' : 'bg-gray-900'}`}></span>
-                            Mesas {filtro === 'todos' ? '' : filtro === 'livres' ? 'Disponíveis' : 'Em Atendimento'}
-                        </h2>
-                    </div>
-
+                {/* --- GRID DE 100 MESAS (ALTA DENSIDADE) --- */}
+                <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh]">
                     {mesasFiltradas.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
                             {mesasFiltradas.map(mesa => (
                                 <MesaCard 
                                     key={mesa.id} 
@@ -319,20 +266,11 @@ export default function ControleSalao() {
                             ))}
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
-                            {mesas.length === 0 ? (
-                                <>
-                                    <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-4"><IoRestaurantOutline className="text-4xl text-blue-300" /></div>
-                                    <h3 className="text-xl font-bold text-gray-800 mb-2">Comece seu salão!</h3>
-                                    <p className="text-gray-500 mb-6 max-w-xs">Você ainda não tem mesas cadastradas.</p>
-                                    <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all transform hover:scale-105">+ Criar Primeira Mesa</button>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-4"><IoFilter className="text-4xl text-gray-300" /></div>
-                                    <p className="text-lg font-medium text-gray-500">Nenhuma mesa encontrada neste filtro.</p>
-                                    <button onClick={() => setFiltro('todos')} className="mt-4 text-blue-600 font-bold hover:underline">Ver todas as mesas</button>
-                                </>
+                        <div className="flex flex-col items-center justify-center py-32 text-center text-gray-400">
+                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-2"><IoRestaurant className="text-2xl text-gray-300" /></div>
+                            <p className="text-sm font-medium">Nenhuma mesa encontrada.</p>
+                            {mesas.length === 0 && (
+                                <button onClick={() => setIsModalOpen(true)} className="mt-4 text-blue-600 font-bold hover:underline text-sm">+ Adicionar Mesas</button>
                             )}
                         </div>
                     )}
