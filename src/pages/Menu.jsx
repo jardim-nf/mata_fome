@@ -30,7 +30,7 @@ function Menu() {
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen } = useAI();
     
-    // 🔥 MUDANÇA 1: Começa FALSE para não abrir nada na cara do cliente
+    // 🔥 CORREÇÃO 1: Começa FALSE para abrir direto no cardápio
     const [showAICenter, setShowAICenter] = useState(false);
 
     // --- ESTADOS ---
@@ -96,7 +96,7 @@ function Menu() {
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#ffffff',
         destaque: '#059669',
-        background: '#f9fafb',
+        background: '#f9fafb', // Fundo padrão cinza claro
         texto: {
             principal: '#111827',
             secundario: '#4B5563',
@@ -535,8 +535,9 @@ function Menu() {
                     </div>
                 )}
 
-                {/* FILTROS E BUSCA - Com text-base para evitar Zoom do iPhone */}
+                {/* FILTROS E BUSCA */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
+                    {/* 🔥 CORREÇÃO ZOOM IPHONE: text-base */}
                     <input 
                         type="text" 
                         placeholder="🔍 Buscar..." 
@@ -559,7 +560,12 @@ function Menu() {
                         <div key={cat} id={`categoria-${cat}`} className="mb-8">
                             <h2 className="text-2xl font-bold mb-4">{cat}</h2>
                             <div className="grid gap-4 md:grid-cols-2">
-                                {items.slice(0, visible).map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />)}
+                                {items.slice(0, visible).map(item => (
+                                    /* 🔥 CORREÇÃO VISUAL: Wrapper branco para o card do produto não sumir no fundo escuro */
+                                    <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                                        <CardapioItem item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />
+                                    </div>
+                                ))}
                             </div>
                             {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-4 py-2 bg-gray-100 rounded-lg text-gray-500 font-bold">{visible >= items.length ? 'Ver menos' : 'Ver mais'}</button>}
                         </div>
@@ -576,6 +582,7 @@ function Menu() {
                         }
                         
                         <div className="space-y-4">
+                            {/* 🔥 CORREÇÃO ZOOM IPHONE: text-base em todos os inputs */}
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
@@ -626,15 +633,12 @@ function Menu() {
                 </div>
             </div>
 
-            {/* CARRINHO FLUTUANTE CONDICIONAL (Só aparece se o widget da IA estiver FECHADO) */}
+            {/* CARRINHO FLUTUANTE CONDICIONAL */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* 🔥 CORREÇÃO 2: Renderização CONDICIONAL da IA.
-                Só renderiza se showAICenter for true (se quiser popup) OU se o widget estiver aberto pelo botão.
-                Isso impede que a IA carregue sozinha e cubra a tela no celular. 
-            */}
+            {/* 🔥 CORREÇÃO IA: Só aparece se o botão for clicado (isWidgetOpen) ou se showAICenter (false por padrão) for ativado */}
             {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
