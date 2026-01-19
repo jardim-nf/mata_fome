@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
@@ -13,16 +13,15 @@ import {
     IoPersonAdd, 
     IoArrowBack, 
     IoAdd, 
-    IoRestaurantOutline, 
     IoReceiptOutline,
     IoGrid,
-    IoTime,
-    IoAlertCircle,
     IoWalletOutline,
-    IoFilter
+    IoFilter,
+    IoRestaurant,
+    IoAlertCircle
 } from "react-icons/io5";
 
-// --- COMPONENTE: STAT CARD (Novo) ---
+// --- COMPONENTE: STAT CARD ---
 const StatCard = ({ icon: Icon, label, value, subtext, colorClass, bgClass, alert }) => (
     <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-start justify-between relative overflow-hidden group hover:shadow-md transition-all">
         <div className="relative z-10">
@@ -39,7 +38,7 @@ const StatCard = ({ icon: Icon, label, value, subtext, colorClass, bgClass, aler
     </div>
 );
 
-// --- MODAL ABRIR MESA (Mantido o design clean) ---
+// --- MODAL ABRIR MESA ---
 const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     const [quantidade, setQuantidade] = useState(2);
     if (!isOpen) return null;
@@ -78,7 +77,7 @@ const LoadingSpinner = () => (
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
         <div className="flex flex-col items-center">
             <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-400 font-bold text-sm tracking-widest uppercase">Carregando...</p>
+            <p className="text-gray-400 font-bold text-sm tracking-widest uppercase">Carregando Salão...</p>
         </div>
     </div>
 );
@@ -88,19 +87,20 @@ export default function ControleSalao() {
     const { setActions, clearActions } = useHeader();
     const navigate = useNavigate();
     
-    // Estados
     const [mesas, setMesas] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filtro, setFiltro] = useState('todos'); // 'todos', 'livres', 'ocupadas'
+    const [filtro, setFiltro] = useState('todos'); 
     const [isModalOpen, setIsModalOpen] = useState(false);
     
-    // Modais e Ações
     const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
 
-    const estabelecimentoId = useMemo(() => userData?.estabelecimentosGerenciados?.[0] || null, [userData]);
+    // 1. OBTENÇÃO SEGURA DO ID DO ESTABELECIMENTO
+    const estabelecimentoId = useMemo(() => {
+        return userData?.estabelecimentosGerenciados?.[0] || null;
+    }, [userData]);
 
     // HEADER ACTIONS
     useEffect(() => {
@@ -118,14 +118,19 @@ export default function ControleSalao() {
 
     // FETCH MESAS
     useEffect(() => {
-        if (!estabelecimentoId) { if (userData) setLoading(false); return; }
+        // Se não tem ID e o userData ainda não carregou, espera
+        if (!estabelecimentoId) { 
+            if (userData) setLoading(false);
+            return;
+        }
+        
         setLoading(true); 
         
         const unsubscribe = onSnapshot(
             query(collection(db, 'estabelecimentos', estabelecimentoId, 'mesas'), orderBy('numero')), 
             (snapshot) => {
                 const mesasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Ordenação numérica robusta
+                
                 mesasData.sort((a, b) => {
                     const numA = parseFloat(a.numero);
                     const numB = parseFloat(b.numero);
@@ -135,14 +140,19 @@ export default function ControleSalao() {
                 setMesas(mesasData); 
                 setLoading(false);
             },
-            (error) => { console.error(error); setLoading(false); toast.error('Erro ao carregar mesas'); }
+            (error) => { 
+                console.error("Erro ao carregar mesas:", error); 
+                setLoading(false); 
+                toast.error('Erro ao carregar mesas.'); 
+            }
         );
         return () => unsubscribe();
     }, [estabelecimentoId, userData]);
 
-    // FUNÇÕES DE AÇÃO
+    // --- AÇÕES ---
+
     const handleAdicionarMesa = async (numeroMesa) => {
-        if (!numeroMesa) return;
+        if (!numeroMesa || !estabelecimentoId) return;
         try {
             await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'mesas'), {
                 numero: !isNaN(numeroMesa) ? Number(numeroMesa) : numeroMesa,
@@ -155,7 +165,7 @@ export default function ControleSalao() {
     };
 
     const handleExcluirMesa = async (id) => {
-        if (!window.confirm(`Excluir mesa?`)) return;
+        if (!window.confirm(`Excluir mesa?`) || !estabelecimentoId) return;
         try { await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', id)); toast.success("Mesa excluída."); } 
         catch (error) { toast.error("Erro ao excluir."); }
     };
@@ -169,6 +179,7 @@ export default function ControleSalao() {
     };
 
     const handleConfirmarAbertura = async (qtd) => {
+        if (!estabelecimentoId) return;
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
                 status: 'ocupada', pessoas: qtd, tipo: 'mesa', updatedAt: serverTimestamp()
@@ -178,34 +189,14 @@ export default function ControleSalao() {
         } catch (error) { toast.error("Erro ao abrir mesa"); }
     };
 
-    const handleConfirmarPagamento = async (resultado) => {
-        if (!mesaParaPagamento) return;
-        try {
-            const batch = writeBatch(db);
-            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaPagamento.id);
-            
-            // Registra Venda
-            await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'vendas'), {
-                mesaNumero: mesaParaPagamento.numero,
-                mesaId: mesaParaPagamento.id,
-                total: mesaParaPagamento.total || 0,
-                itens: mesaParaPagamento.itens || [],
-                pagamentos: resultado.pagamentos || {},
-                dataFechamento: serverTimestamp(),
-                tipo: 'salao', status: 'pago',
-                estabelecimentoId
-            });
-            
-            // Reseta Mesa
-            batch.update(mesaRef, { status: 'livre', total: 0, pessoas: 0, itens: [], updatedAt: serverTimestamp() });
-            await batch.commit();
-            
-            toast.success(`Mesa ${mesaParaPagamento.numero} finalizada!`);
-            setIsModalPagamentoOpen(false);
-        } catch (error) { toast.error("Erro no pagamento"); }
+    // ⚠️ CRÍTICO: NÃO SALVE A VENDA AQUI. O MODAL JÁ FEZ ISSO.
+    // Esta função serve apenas para fechar o modal e limpar o estado.
+    const handlePagamentoConcluido = () => {
+        setIsModalPagamentoOpen(false);
+        setMesaParaPagamento(null);
+        // O Dashboard detecta a venda automaticamente pelo listener do Firebase
     };
 
-    // STATS & FILTROS
     const stats = useMemo(() => {
         const ocupadas = mesas.filter(m => m.status === 'ocupada' || m.status === 'com_pedido');
         const pendentes = ocupadas.reduce((acc, m) => acc + (m.itens?.filter(i => !i.status || i.status === 'pendente').length || 0), 0);
@@ -228,17 +219,32 @@ export default function ControleSalao() {
         return mesas;
     }, [mesas, filtro]);
 
+    // 2. BLOQUEIO DE SEGURANÇA: Se não tem ID, não mostra nada (evita o erro undefined)
     if (loading) return <LoadingSpinner />;
+    
+    if (!estabelecimentoId) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] flex-col p-4 text-center">
+                <IoAlertCircle className="text-5xl text-red-500 mb-2"/>
+                <h2 className="text-xl font-bold text-gray-800">Estabelecimento não encontrado</h2>
+                <p className="text-gray-500">Verifique seu login ou contate o suporte.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-8 pb-20">
             <div className="max-w-[1600px] mx-auto">
                 <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
                 <ModalAbrirMesa isOpen={isModalAbrirMesaOpen} onClose={() => setIsModalAbrirMesaOpen(false)} onConfirm={handleConfirmarAbertura} mesaNumero={mesaParaAbrir?.numero} />
-                {isModalPagamentoOpen && mesaParaPagamento && (
+                
+                {/* 3. MODAL DE PAGAMENTO SEGURO */}
+                {isModalPagamentoOpen && mesaParaPagamento && estabelecimentoId && (
                     <ModalPagamento 
-                        mesa={mesaParaPagamento} establishmentId={estabelecimentoId}
-                        onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handleConfirmarPagamento}
+                        mesa={mesaParaPagamento} 
+                        estabelecimentoId={estabelecimentoId}
+                        onClose={() => setIsModalPagamentoOpen(false)} 
+                        onSucesso={handlePagamentoConcluido}
                     />
                 )}
 
@@ -252,62 +258,46 @@ export default function ControleSalao() {
                         <p className="text-gray-500">Acompanhe a ocupação em tempo real</p>
                     </div>
                     
-                    {/* FILTROS (TABS) */}
-                    <div className="bg-white p-1 rounded-xl border border-gray-200 shadow-sm flex">
-                        {[
-                            { id: 'todos', label: 'Todas', count: stats.total },
-                            { id: 'livres', label: 'Livres', count: stats.livres },
-                            { id: 'ocupadas', label: 'Ocupadas', count: stats.ocupadas }
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setFiltro(tab.id)}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                                    filtro === tab.id 
-                                        ? 'bg-gray-900 text-white shadow-md' 
-                                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                                }`}
-                            >
-                                {tab.label} <span className={`ml-1 text-xs ${filtro === tab.id ? 'opacity-80' : 'opacity-50'}`}>({tab.count})</span>
-                            </button>
-                        ))}
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <div className="bg-white p-1 rounded-xl border border-gray-200 shadow-sm flex overflow-x-auto">
+                            {[
+                                { id: 'todos', label: 'Todas', count: stats.total },
+                                { id: 'livres', label: 'Livres', count: stats.livres },
+                                { id: 'ocupadas', label: 'Ocupadas', count: stats.ocupadas }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setFiltro(tab.id)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
+                                        filtro === tab.id 
+                                            ? 'bg-gray-900 text-white shadow-md' 
+                                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                                    }`}
+                                >
+                                    {tab.label} <span className={`ml-1 text-xs ${filtro === tab.id ? 'opacity-80' : 'opacity-50'}`}>({tab.count})</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <button 
+                            onClick={() => setIsModalOpen(true)} 
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all"
+                        >
+                            <IoAdd className="text-xl"/>
+                            <span className="hidden sm:inline">Nova Mesa</span>
+                        </button>
                     </div>
                 </div>
 
-                {/* GRID DE CARDS (KPIs) */}
+                {/* GRID DE CARDS */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <StatCard 
-                        icon={IoGrid} 
-                        label="Ocupação" 
-                        value={`${stats.ocupacaoPercent}%`} 
-                        subtext={`${stats.ocupadas} de ${stats.total} mesas`}
-                        bgClass="bg-blue-50" colorClass="text-blue-600"
-                    />
-                    <StatCard 
-                        icon={IoPeople} 
-                        label="Clientes" 
-                        value={stats.pessoas} 
-                        subtext="Pessoas sentadas"
-                        bgClass="bg-emerald-50" colorClass="text-emerald-600"
-                    />
-                    <StatCard 
-                        icon={IoWalletOutline} 
-                        label="Vendas (Aberto)" 
-                        value={stats.vendas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} 
-                        subtext="Consumo atual"
-                        bgClass="bg-purple-50" colorClass="text-purple-600"
-                    />
-                    <StatCard 
-                        icon={IoReceiptOutline} 
-                        label="Pedidos" 
-                        value={stats.pendentes} 
-                        subtext="Itens pendentes"
-                        bgClass="bg-orange-50" colorClass="text-orange-600"
-                        alert={stats.pendentes > 0}
-                    />
+                    <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} subtext={`${stats.ocupadas} de ${stats.total} mesas`} bgClass="bg-blue-50" colorClass="text-blue-600" />
+                    <StatCard icon={IoPeople} label="Clientes" value={stats.pessoas} subtext="Pessoas sentadas" bgClass="bg-emerald-50" colorClass="text-emerald-600" />
+                    <StatCard icon={IoWalletOutline} label="Vendas (Aberto)" value={stats.vendas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} subtext="Consumo atual" bgClass="bg-purple-50" colorClass="text-purple-600" />
+                    <StatCard icon={IoReceiptOutline} label="Pedidos" value={stats.pendentes} subtext="Itens pendentes" bgClass="bg-orange-50" colorClass="text-orange-600" alert={stats.pendentes > 0} />
                 </div>
 
-                {/* ÁREA PRINCIPAL DAS MESAS */}
+                {/* ÁREA PRINCIPAL */}
                 <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-gray-200 shadow-sm min-h-[500px]">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -325,20 +315,24 @@ export default function ControleSalao() {
                                     onClick={() => handleMesaClick(mesa)} 
                                     onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
                                     onExcluir={() => handleExcluirMesa(mesa.id)}
-                                    // A prop onEnviarCozinha deve ser passada se seu MesaCard a utilizar
                                 />
                             ))}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
-                            <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                <IoFilter className="text-4xl text-gray-300" />
-                            </div>
-                            <p className="text-lg font-medium text-gray-500">Nenhuma mesa encontrada neste filtro.</p>
-                            {filtro !== 'todos' && (
-                                <button onClick={() => setFiltro('todos')} className="mt-4 text-blue-600 font-bold hover:underline">
-                                    Ver todas as mesas
-                                </button>
+                            {mesas.length === 0 ? (
+                                <>
+                                    <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-4"><IoRestaurantOutline className="text-4xl text-blue-300" /></div>
+                                    <h3 className="text-xl font-bold text-gray-800 mb-2">Comece seu salão!</h3>
+                                    <p className="text-gray-500 mb-6 max-w-xs">Você ainda não tem mesas cadastradas.</p>
+                                    <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all transform hover:scale-105">+ Criar Primeira Mesa</button>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-4"><IoFilter className="text-4xl text-gray-300" /></div>
+                                    <p className="text-lg font-medium text-gray-500">Nenhuma mesa encontrada neste filtro.</p>
+                                    <button onClick={() => setFiltro('todos')} className="mt-4 text-blue-600 font-bold hover:underline">Ver todas as mesas</button>
+                                </>
                             )}
                         </div>
                     )}

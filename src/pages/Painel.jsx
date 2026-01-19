@@ -10,7 +10,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { IoTime, IoArrowBack, IoCalendarOutline } from "react-icons/io5"; // Adicionei ícone de calendário
+import { IoTime, IoArrowBack, IoCalendarOutline, IoRestaurant, IoBicycle } from "react-icons/io5";
 
 // ==========================================
 // 📦 COMPONENTE DE GRUPO (MESA/COZINHA)
@@ -21,7 +21,9 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
         pedidos.forEach(pedido => {
             if (!pedido || !pedido.id) return;
             
+            // Agrupa por Mesa + Lote (se houver) para separar rodadas diferentes
             const chave = `${pedido.mesaNumero || '0'}-${pedido.loteHorario || 'principal'}`;
+            
             if (!grupos[chave]) {
                 grupos[chave] = {
                     mesaNumero: pedido.mesaNumero || 0,
@@ -38,33 +40,43 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
         return Object.values(grupos);
     }, [pedidos]);
 
-    if (pedidosAgrupados.length === 0) return <div className="text-center py-4 text-gray-400">Sem pedidos na cozinha</div>;
+    if (pedidosAgrupados.length === 0) return (
+        <div className="flex flex-col items-center justify-center py-10 text-gray-400 opacity-60">
+            <IoRestaurant className="text-4xl mb-2" />
+            <p>Sem pedidos de mesa</p>
+        </div>
+    );
 
     return (
         <div className="space-y-4">
             {pedidosAgrupados.map((grupo, index) => (
-                <div key={`grupo-${grupo.mesaNumero}-${index}`} className="border border-amber-200 rounded-xl bg-amber-50/50 overflow-hidden">
-                    <div className="bg-white px-4 py-3 border-b border-amber-200 flex justify-between items-center">
+                <div key={`grupo-${grupo.mesaNumero}-${index}`} className="border border-amber-200 rounded-xl bg-amber-50/30 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    <div className="bg-white px-4 py-3 border-b border-amber-100 flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                            <span className="font-bold text-gray-900 text-lg">Mesa {grupo.mesaNumero}</span>
+                            <span className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                                <IoRestaurant className="text-amber-500" />
+                                Mesa {grupo.mesaNumero}
+                            </span>
                             {grupo.loteHorario && (
-                                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full flex items-center gap-1">
+                                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full flex items-center gap-1 font-mono">
                                     <IoTime className="w-3 h-3"/> {grupo.loteHorario}
                                 </span>
                             )}
                         </div>
-                        <span className="text-xs font-semibold text-gray-500">{grupo.totalItens} itens</span>
+                        <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">
+                            {grupo.totalItens} itens
+                        </span>
                     </div>
-                    <div className="p-4 space-y-3">
+                    <div className="p-3 space-y-3 bg-gray-50/50">
                         {grupo.pedidos.map(pedido => (
                             <PedidoCard
-                                key={pedido.id || `pedido-${Date.now()}-${Math.random()}`}
+                                key={pedido.id}
                                 item={pedido}
                                 onUpdateStatus={onUpdateStatus}
                                 onExcluir={onExcluir}
                                 newOrderIds={newOrderIds}
                                 estabelecimentoInfo={estabelecimentoInfo}
-                                showMesaInfo={false}
+                                showMesaInfo={false} // Já mostramos no cabeçalho do grupo
                                 isAgrupado={true}
                                 motoboysDisponiveis={[]}
                                 onAtribuirMotoboy={null}
@@ -78,7 +90,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
 };
 
 // ==========================================
-// 🚀 COMPONENTE PRINCIPAL (PAINEL)
+// 🚀 COMPONENTE PRINCIPAL (PAINEL KDS)
 // ==========================================
 function Painel() {
     const navigate = useNavigate(); 
@@ -94,23 +106,22 @@ function Painel() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [userInteracted, setUserInteracted] = useState(false);
     const [newOrderIds, setNewOrderIds] = useState(new Set());
-    const [abaAtiva, setAbaAtiva] = useState('delivery');
+    const [abaAtiva, setAbaAtiva] = useState('delivery'); // 'delivery' ou 'cozinha'
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
     
-    // DATA DE HOJE PARA EXIBIÇÃO
-    const dataHojeFormatada = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-
+    // Refs
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
 
-    // SELEÇÃO AUTOMÁTICA DE ESTABELECIMENTO
+    const dataHojeFormatada = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+    // 1. SELEÇÃO DO ESTABELECIMENTO
     const estabelecimentoAtivo = useMemo(() => {
-        if (!estabelecimentosGerenciados || estabelecimentosGerenciados.length === 0) return null;
-        return estabelecimentosGerenciados[0]; 
+        return estabelecimentosGerenciados?.[0] || null; 
     }, [estabelecimentosGerenciados]);
 
-    // RESETAR DADOS QUANDO ESTABELECIMENTO MUDAR
+    // 2. RESET
     useEffect(() => {
         setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
         setMotoboys([]);
@@ -119,173 +130,23 @@ function Painel() {
         setLoading(true);
     }, [estabelecimentoAtivo]);
 
-    // FUNÇÃO PARA LIMPAR DADOS DO CLIENTE
+    // 3. HELPERS
     const limparDadosCliente = useCallback((clienteData) => {
-        if (!clienteData) return { nome: 'Cliente', telefone: '', endereco: {} };
-        
-        if (typeof clienteData === 'object' && ('_methodName' in clienteData || 'toDate' in clienteData)) {
-             return { nome: 'Cliente', telefone: '', endereco: {} };
-        }
-        
-        if (typeof clienteData === 'object') {
-            return {
-                nome: clienteData.nome || 'Cliente',
-                telefone: clienteData.telefone || '',
-                endereco: clienteData.endereco && typeof clienteData.endereco === 'object' ? clienteData.endereco : {}
-            };
-        }
-        
-        return { nome: 'Cliente', telefone: '', endereco: {} };
+        if (!clienteData || typeof clienteData !== 'object') return { nome: 'Cliente', telefone: '', endereco: {} };
+        if ('_methodName' in clienteData || 'toDate' in clienteData) return { nome: 'Cliente', telefone: '', endereco: {} };
+        return {
+            nome: clienteData.nome || 'Cliente',
+            telefone: clienteData.telefone || '',
+            endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {}
+        };
     }, []);
 
-    // FUNÇÃO PARA CRIAR PEDIDO FALLBACK
-    const criarPedidoFallback = useCallback((id, source) => ({
-        id: id || `fallback-${Date.now()}`,
-        cliente: { nome: 'Cliente', telefone: '' },
-        endereco: {},
-        status: 'recebido',
-        itens: [],
-        source: source,
-        tipo: source === 'salao' ? 'salao' : 'delivery',
-        createdAt: new Date(),
-        dataPedido: new Date()
-    }), []);
-
-    // BUSCAR MOTOBOYS
-    useEffect(() => {
-        if (!estabelecimentoAtivo) {
-            setMotoboys([]);
-            return;
-        }
-        
-        try {
-            const qMotoboys = query(
-                collection(db, 'estabelecimentos', estabelecimentoAtivo, 'entregadores'),
-                where('ativo', '==', true)
-            );
-            
-            const unsubscribe = onSnapshot(qMotoboys, (snapshot) => {
-                const lista = snapshot.docs.map(doc => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        nome: data.nome || 'Sem nome',
-                        telefone: data.telefone || '',
-                        taxaEntrega: Number(data.taxaEntrega) || 0,
-                        ativo: data.ativo || false,
-                        ...data
-                    };
-                });
-                setMotoboys(lista);
-            }, (error) => {
-                console.error("❌ Erro ao buscar motoboys:", error);
-                setMotoboys([]);
-            });
-
-            return () => unsubscribe();
-        } catch (error) {
-            console.error("❌ Erro na query de motoboys:", error);
-            setMotoboys([]);
-        }
-    }, [estabelecimentoAtivo]);
-
-    // ATRIBUIR MOTOBOY
-    const handleAtribuirMotoboy = useCallback(async (pedidoId, motoboyId, motoboyNome, source) => {
-        if (!pedidoId || !motoboyId || !motoboyNome) {
-            toast.error("Dados incompletos para atribuição");
-            return;
-        }
-        
-        try {
-            const pedidoRef = source === 'salao'
-                ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
-                : doc(db, 'pedidos', pedidoId);
-
-            await updateDoc(pedidoRef, {
-                motoboyId: motoboyId,
-                motoboyNome: motoboyNome,
-                status: 'em_entrega',
-                atualizadoEm: serverTimestamp()
-            });
-            
-            toast.success(`🚀 ${motoboyNome} atribuído ao pedido!`);
-        } catch (error) {
-            console.error("Erro ao atribuir motoboy:", error);
-            toast.error("Erro ao atribuir motoboy. Verifique as permissões.");
-        }
-    }, [estabelecimentoAtivo]);
-
-    const handleExcluirPedido = useCallback(async (pedidoId, source) => {
-        if (!pedidoId || !source) {
-            toast.error("Dados incompletos para exclusão");
-            return;
-        }
-        
-        if (!window.confirm("Cancelar este pedido?")) return;
-        try {
-            const pedidoRef = source === 'salao'
-                ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
-                : doc(db, 'pedidos', pedidoId);
-            await deleteDoc(pedidoRef);
-            toast.success("Pedido excluído!");
-        } catch (error) {
-            console.error("Erro ao excluir pedido:", error);
-            toast.error("Erro ao excluir: " + error.message);
-        }
-    }, [estabelecimentoAtivo]);
-
-    const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
-        if (isUpdatingRef.current || bloqueioAtualizacao.has(pedidoId)) return;
-        if (!pedidoId || !newStatus) {
-            toast.error("Dados incompletos para atualização");
-            return;
-        }
-        
-        try {
-            isUpdatingRef.current = true;
-            setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
-            
-            const allPedidos = Object.values(pedidos).flat();
-            const pedidoData = allPedidos.find(p => p.id === pedidoId);
-            if (!pedidoData) {
-                throw new Error("Pedido não encontrado na memória.");
-            }
-
-            const pedidoRef = pedidoData.source === 'salao'
-                ? doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId)
-                : doc(db, 'pedidos', pedidoId);
-
-            await updateDoc(pedidoRef, { 
-                status: newStatus, 
-                atualizadoEm: serverTimestamp() 
-            });
-            
-            toast.success(`📦 Movido para ${newStatus.replace(/_/g, ' ')}!`);
-        } catch (error) { 
-            console.error("Erro ao atualizar status:", error);
-            toast.error(`❌ Falha ao mover: ${error.message}`); 
-        } finally {
-            setTimeout(() => {
-                isUpdatingRef.current = false;
-                setBloqueioAtualizacao(prev => {
-                    const novo = new Set(prev);
-                    novo.delete(pedidoId);
-                    return novo;
-                });
-            }, 1000);
-        }
-    }, [pedidos, estabelecimentoAtivo, bloqueioAtualizacao]);
-
     const processarDadosPedido = useCallback((pedidoData, source, tipo) => {
-        if (!pedidoData || !pedidoData.id) {
-            console.warn('⚠️ Pedido sem dados ou ID encontrado');
-            return criarPedidoFallback(pedidoData?.id || 'no-id', source);
-        }
+        if (!pedidoData || !pedidoData.id) return null;
         
         const clienteLimpo = limparDadosCliente(pedidoData.cliente);
         let endereco = pedidoData.endereco || {};
-        
-        if (clienteLimpo.endereco && typeof clienteLimpo.endereco === 'object') {
+        if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
             endereco = { ...endereco, ...clienteLimpo.endereco };
         }
         
@@ -301,314 +162,286 @@ function Painel() {
             mesaNumero: pedidoData.mesaNumero || 0,
             loteHorario: pedidoData.loteHorario || ''
         };
-    }, [limparDadosCliente, criarPedidoFallback]);
+    }, [limparDadosCliente]);
 
-    // LISTENERS DE PEDIDOS
+    // 4. MOTOBOYS
     useEffect(() => {
-        if (authLoading) return;
-        if (!estabelecimentoAtivo) { 
-            setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
-            setLoading(false); 
-            return; 
+        if (!estabelecimentoAtivo) return;
+        const qMotoboys = query(
+            collection(db, 'estabelecimentos', estabelecimentoAtivo, 'entregadores'),
+            where('ativo', '==', true)
+        );
+        const unsubscribe = onSnapshot(qMotoboys, (snapshot) => {
+            const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setMotoboys(lista);
+        }, (error) => console.error("Erro motoboys:", error));
+        return () => unsubscribe();
+    }, [estabelecimentoAtivo]);
+
+    // 5. AÇÕES DE PEDIDO (ATRIBUIR)
+    const handleAtribuirMotoboy = useCallback(async (pedidoId, motoboyId, motoboyNome, source) => {
+        if (!pedidoId || !motoboyId) return toast.error("Dados inválidos");
+        try {
+            const path = source === 'salao' 
+                ? `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`
+                : `pedidos/${pedidoId}`;
+                
+            await updateDoc(doc(db, path), {
+                motoboyId, motoboyNome,
+                status: 'em_entrega',
+                atualizadoEm: serverTimestamp(),
+                dataEntrega: serverTimestamp() // Salva quando saiu para entrega
+            });
+            toast.success(`🚀 ${motoboyNome} atribuído!`);
+        } catch (error) {
+            console.error("Erro ao atribuir:", error);
+            toast.error("Falha na atribuição");
         }
+    }, [estabelecimentoAtivo]);
 
-        // --- DEFINIÇÃO DO INÍCIO DO DIA (00:00) ---
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
+    // 6. EXCLUIR
+    const handleExcluirPedido = useCallback(async (pedidoId, source) => {
+        if (!window.confirm("Tem certeza que deseja cancelar este pedido?")) return;
+        try {
+            const path = source === 'salao' 
+                ? `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`
+                : `pedidos/${pedidoId}`;
+            await deleteDoc(doc(db, path));
+            toast.success("Pedido cancelado.");
+        } catch (error) {
+            console.error("Erro excluir:", error);
+            toast.error("Erro ao cancelar.");
+        }
+    }, [estabelecimentoAtivo]);
 
-        // Helper para checar se é de hoje
-        const isPedidoDeHoje = (timestamp) => {
-            if (!timestamp) return true; // Se acabou de criar pode estar sem timestamp, assume hoje
-            let date;
-            if (timestamp.toDate) date = timestamp.toDate();
-            else if (timestamp.seconds) date = new Date(timestamp.seconds * 1000);
-            else date = new Date(timestamp);
+    // 7. ATUALIZAR STATUS E SALVAR TEMPOS
+    const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
+        if (isUpdatingRef.current || bloqueioAtualizacao.has(pedidoId)) return;
+        
+        try {
+            isUpdatingRef.current = true;
+            setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
             
+            const allPedidos = Object.values(pedidos).flat();
+            const pedidoAlvo = allPedidos.find(p => p.id === pedidoId);
+            
+            if (!pedidoAlvo) throw new Error("Pedido não localizado localmente");
+
+            const path = pedidoAlvo.source === 'salao' 
+                ? `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`
+                : `pedidos/${pedidoId}`;
+
+            // --- 🔥 LÓGICA DE TEMPOS AQUI ---
+            const updatePayload = {
+                status: newStatus,
+                atualizadoEm: serverTimestamp()
+            };
+
+            // Salva o momento exato da mudança de status
+            if (newStatus === 'preparo') {
+                updatePayload.dataPreparo = serverTimestamp();
+            } else if (newStatus === 'em_entrega') {
+                updatePayload.dataEntrega = serverTimestamp();
+            } else if (newStatus === 'pronto_para_servir') {
+                updatePayload.dataPronto = serverTimestamp();
+            } else if (newStatus === 'finalizado') {
+                updatePayload.dataFinalizado = serverTimestamp();
+            }
+
+            await updateDoc(doc(db, path), updatePayload);
+            
+            toast.success(`Status atualizado para: ${newStatus.replace('_', ' ')}`);
+        } catch (error) {
+            console.error("Erro update status:", error);
+            toast.error("Erro ao mover pedido.");
+        } finally {
+            setTimeout(() => {
+                isUpdatingRef.current = false;
+                setBloqueioAtualizacao(prev => {
+                    const novo = new Set(prev);
+                    novo.delete(pedidoId);
+                    return novo;
+                });
+            }, 500);
+        }
+    }, [pedidos, estabelecimentoAtivo, bloqueioAtualizacao]);
+
+    // 8. LISTENERS
+    useEffect(() => {
+        if (authLoading || !estabelecimentoAtivo) return;
+
+        const startOfToday = new Date();
+        startOfToday.setHours(0,0,0,0);
+
+        const isToday = (timestamp) => {
+            if (!timestamp) return true;
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
             return date >= startOfToday;
         };
 
-        let unsubscribers = [];
-        const setupPainel = async () => {
-            try {
-                setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
-                
-                const estDocRef = doc(db, 'estabelecimentos', estabelecimentoAtivo);
-                getDoc(estDocRef).then(snap => { 
-                    if (snap.exists()) {
-                        setEstabelecimentoInfo(snap.data()); 
-                    }
-                }).catch(error => {
-                    console.error("Erro ao buscar dados do estabelecimento:", error);
-                });
+        const unsubscribers = [];
 
-                // LISTENER SALÃO
-                const qSalao = query(
-                    collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
-                    orderBy('dataPedido', 'asc')
-                );
-                
-                unsubscribers.push(onSnapshot(qSalao, (snapshot) => {
-                    const pedidosSalao = snapshot.docs.map(d => {
-                        const data = d.data();
-                        if (!data) return null;
-                        
-                        // FILTRO DE DATA NO LADO DO CLIENTE
-                        const dataRef = data.dataPedido || data.createdAt;
-                        if (!isPedidoDeHoje(dataRef)) return null;
+        getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo)).then(snap => {
+            if (snap.exists()) setEstabelecimentoInfo(snap.data());
+        });
 
-                        return processarDadosPedido({ id: d.id, ...data }, 'salao', 'salao');
-                    }).filter(p => p !== null);
-                    
-                    setPedidos(prev => {
-                        const novoEstado = {
-                            recebido: [...prev.recebido.filter(p => p.source === 'global'), ...pedidosSalao.filter(p => p.status === 'recebido')],
-                            preparo: [...prev.preparo.filter(p => p.source === 'global'), ...pedidosSalao.filter(p => p.status === 'preparo')],
-                            pronto_para_servir: [...prev.pronto_para_servir.filter(p => p.source === 'global'), ...pedidosSalao.filter(p => p.status === 'pronto_para_servir')],
-                            finalizado: [...prev.finalizado.filter(p => p.source === 'global'), ...pedidosSalao.filter(p => p.status === 'finalizado')],
-                            em_entrega: prev.em_entrega.filter(p => p.source === 'global')
-                        };
-                        return novoEstado;
-                    });
-                }, (error) => {
-                    console.error("❌ Erro no listener do salão:", error);
-                }));
+        // SALÃO
+        const qSalao = query(
+            collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
+            orderBy('dataPedido', 'asc')
+        );
 
-                // LISTENER DELIVERY
-                const qGlobal = query(
-                    collection(db, 'pedidos'), 
-                    where('estabelecimentoId', '==', estabelecimentoAtivo),
-                    where('status', 'in', ['recebido', 'preparo', 'em_entrega', 'finalizado']),
-                    orderBy('createdAt', 'asc')
-                );
-                
-                unsubscribers.push(onSnapshot(qGlobal, (snapshot) => {
-                    const pedidosDelivery = snapshot.docs.map(d => {
-                        const data = d.data();
-                        if (!data) return null;
+        unsubscribers.push(onSnapshot(qSalao, (snapshot) => {
+            const listaSalao = snapshot.docs
+                .map(d => processarDadosPedido({ id: d.id, ...d.data() }, 'salao', 'salao'))
+                .filter(p => p && isToday(p.dataPedido || p.createdAt));
 
-                        // FILTRO DE DATA NO LADO DO CLIENTE
-                        const dataRef = data.createdAt;
-                        if (!isPedidoDeHoje(dataRef)) return null;
+            setPedidos(prev => ({
+                ...prev,
+                recebido: [...prev.recebido.filter(p => p.source !== 'salao'), ...listaSalao.filter(p => p.status === 'recebido')],
+                preparo: [...prev.preparo.filter(p => p.source !== 'salao'), ...listaSalao.filter(p => p.status === 'preparo')],
+                pronto_para_servir: [...prev.pronto_para_servir.filter(p => p.source !== 'salao'), ...listaSalao.filter(p => p.status === 'pronto_para_servir')],
+                finalizado: [...prev.finalizado.filter(p => p.source !== 'salao'), ...listaSalao.filter(p => p.status === 'finalizado')]
+            }));
+        }));
 
-                        return processarDadosPedido({ id: d.id, ...data }, 'global', data.tipo || 'delivery');
-                    }).filter(p => p !== null);
-                    
-                    setPedidos(prev => {
-                        const novoEstado = {
-                            recebido: [...prev.recebido.filter(p => p.source === 'salao'), ...pedidosDelivery.filter(p => p.status === 'recebido')],
-                            preparo: [...prev.preparo.filter(p => p.source === 'salao'), ...pedidosDelivery.filter(p => p.status === 'preparo')],
-                            em_entrega: [...prev.em_entrega.filter(p => p.source === 'salao'), ...pedidosDelivery.filter(p => p.status === 'em_entrega')],
-                            finalizado: [...prev.finalizado.filter(p => p.source === 'salao'), ...pedidosDelivery.filter(p => p.status === 'finalizado')],
-                            pronto_para_servir: prev.pronto_para_servir.filter(p => p.source === 'salao') 
-                        };
-                        return novoEstado;
-                    });
-                }, (error) => {
-                    console.error("❌ Erro no listener do delivery:", error);
-                }));
-                
-                setLoading(false);
-            } catch (error) {
-                console.error("❌ Erro ao configurar painel:", error);
-                toast.error("Erro ao conectar ao banco de dados");
-                setLoading(false);
-            }
-        };
-        
-        setupPainel();
-        
-        return () => {
-            unsubscribers.forEach(unsubscribe => {
-                if (typeof unsubscribe === 'function') unsubscribe();
+        // DELIVERY
+        const qDelivery = query(
+            collection(db, 'pedidos'),
+            where('estabelecimentoId', '==', estabelecimentoAtivo),
+            where('status', 'in', ['recebido', 'pendente', 'aguardando_pagamento', 'preparo', 'em_entrega', 'finalizado']),
+            orderBy('createdAt', 'asc')
+        );
+
+        unsubscribers.push(onSnapshot(qDelivery, (snapshot) => {
+            const listaDelivery = snapshot.docs
+                .map(d => processarDadosPedido({ id: d.id, ...d.data() }, 'global', d.data().tipo || 'delivery'))
+                .filter(p => p && isToday(p.createdAt));
+
+            listaDelivery.forEach(p => {
+                if (['pendente', 'aguardando_pagamento'].includes(p.status)) p.status = 'recebido';
             });
-            setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
-        };
+
+            setPedidos(prev => ({
+                ...prev,
+                recebido: [...prev.recebido.filter(p => p.source !== 'global'), ...listaDelivery.filter(p => p.status === 'recebido')],
+                preparo: [...prev.preparo.filter(p => p.source !== 'global'), ...listaDelivery.filter(p => p.status === 'preparo')],
+                em_entrega: [...prev.em_entrega.filter(p => p.source !== 'global'), ...listaDelivery.filter(p => p.status === 'em_entrega')],
+                finalizado: [...prev.finalizado.filter(p => p.source !== 'global'), ...listaDelivery.filter(p => p.status === 'finalizado')]
+            }));
+            
+            setLoading(false);
+        }));
+
+        return () => unsubscribers.forEach(u => u());
     }, [estabelecimentoAtivo, authLoading, processarDadosPedido]);
 
-    // SONS E NOTIFICAÇÕES
+    // 9. SOM
     useEffect(() => {
-        const currentRecebidos = pedidos.recebido;
-        if (currentRecebidos.length > prevRecebidosRef.current.length) {
-            const newOrders = currentRecebidos.filter(c => 
-                !prevRecebidosRef.current.some(p => p.id === c.id)
-            );
-            
-            if (newOrders.length > 0) {
-                const newIds = newOrders.map(order => order.id);
-                setNewOrderIds(prev => new Set([...prev, ...newIds]));
-                
+        const novosRecebidos = pedidos.recebido;
+        if (novosRecebidos.length > prevRecebidosRef.current.length) {
+            const idsAtuais = new Set(prevRecebidosRef.current.map(p => p.id));
+            const realmenteNovos = novosRecebidos.filter(p => !idsAtuais.has(p.id));
+            if (realmenteNovos.length > 0) {
+                const novosIds = realmenteNovos.map(p => p.id);
+                setNewOrderIds(prev => new Set([...prev, ...novosIds]));
                 if (notificationsEnabled && userInteracted) {
-                    audioRef.current?.play().catch(error => {
-                        console.warn("Erro ao tocar áudio:", error);
-                    });
+                    audioRef.current?.play().catch(e => console.warn("Audio play error", e));
                 }
-                
                 setTimeout(() => {
                     setNewOrderIds(prev => {
-                        const updated = new Set(prev);
-                        newIds.forEach(id => updated.delete(id));
-                        return updated;
+                        const next = new Set(prev);
+                        novosIds.forEach(id => next.delete(id));
+                        return next;
                     });
                 }, 15000);
             }
         }
-        prevRecebidosRef.current = currentRecebidos;
+        prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
 
-    const toggleNotifications = () => {
-        const novoStatus = !notificationsEnabled;
-        setNotificationsEnabled(novoStatus);
-        if (novoStatus) {
-            toast.success('🔔 Som ON');
-        } else {
-            toast.warn('🔕 Som OFF');
-        }
-    };
-
-    useEffect(() => {
-        const unlockAudio = () => { 
-            setUserInteracted(true); 
-            window.removeEventListener('click', unlockAudio); 
-        };
-        window.addEventListener('click', unlockAudio);
-        return () => window.removeEventListener('click', unlockAudio);
-    }, []);
-
-    const colunas = useMemo(() => {
-        if (abaAtiva === 'cozinha') {
-            return ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'];
-        } else {
-            return ['recebido', 'preparo', 'em_entrega', 'finalizado'];
-        }
+    const colunasAtivas = useMemo(() => {
+        if (abaAtiva === 'cozinha') return ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'];
+        return ['recebido', 'preparo', 'em_entrega', 'finalizado'];
     }, [abaAtiva]);
 
-    const STATUS_CONFIG = {
-        recebido: { title: '📥 Recebido', color: 'border-l-red-500', countColor: 'bg-red-500' },
-        preparo: { title: '👨‍🍳 Em Preparo', color: 'border-l-orange-500', countColor: 'bg-orange-500' },
-        em_entrega: { title: '🛵 Em Entrega', color: 'border-l-blue-500', countColor: 'bg-blue-500' },
-        pronto_para_servir: { title: '✅ Pronto', color: 'border-l-green-500', countColor: 'bg-green-500' },
-        finalizado: { title: '📦 Finalizado', color: 'border-l-gray-500', countColor: 'bg-gray-500' }
+    const STATUS_UI = {
+        recebido: { title: '📥 Novos', color: 'border-l-red-500', bg: 'bg-red-500' },
+        preparo: { title: '🔥 Preparo', color: 'border-l-orange-500', bg: 'bg-orange-500' },
+        em_entrega: { title: '🛵 Entrega', color: 'border-l-blue-500', bg: 'bg-blue-500' },
+        pronto_para_servir: { title: '✅ Pronto (Mesa)', color: 'border-l-green-500', bg: 'bg-green-500' },
+        finalizado: { title: '🏁 Concluído', color: 'border-l-gray-500', bg: 'bg-gray-500' }
     };
 
-    if (loading || authLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Carregando painel...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!estabelecimentoAtivo) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center p-8 bg-white rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold text-red-600 mb-4">❌ Nenhum estabelecimento encontrado</h2>
-                    <p className="text-gray-600">Você não tem permissão para acessar nenhum estabelecimento.</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div></div>;
+    if (!estabelecimentoAtivo) return <div className="p-10 text-center">Sem estabelecimento selecionado.</div>;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex flex-col">
+        <div className="min-h-screen bg-gray-50 flex flex-col">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
             
-            {/* HEADER */}
-            <header className="bg-white shadow-lg border-b border-amber-200 p-4 sticky top-0 z-30">
-                <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
-                    <div className="flex gap-4 items-center">
-                        <button 
-                            onClick={() => navigate('/admin-dashboard')}
-                            className="px-4 py-2 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all flex items-center gap-2"
-                        >
-                            <IoArrowBack /> Voltar
-                        </button>
-
-                        <button 
-                            onClick={toggleNotifications} 
-                            className={`px-4 py-2 rounded-xl font-bold transition-all ${notificationsEnabled ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
-                        >
-                            {notificationsEnabled ? '🔔 Som ON' : '🔕 Som OFF'}
-                        </button>
-
-                        {/* DATA DE HOJE ADICIONADA AQUI */}
-                        <div className="hidden md:flex items-center gap-2 bg-amber-50 text-amber-800 px-4 py-2 rounded-xl border border-amber-200">
-                            <IoCalendarOutline className="text-lg" />
-                            <span className="font-bold capitalize">{dataHojeFormatada}</span>
-                        </div>
+            <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30 px-4 py-3">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                        <button onClick={() => navigate('/admin-dashboard')} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"><IoArrowBack size={20} /></button>
+                        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">Painel de Pedidos <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded">{dataHojeFormatada}</span></h1>
                     </div>
-
-                    <div className="flex bg-gray-100 p-1 rounded-xl">
-                        <button 
-                            onClick={() => setAbaAtiva('delivery')} 
-                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${abaAtiva === 'delivery' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            🛵 Delivery
-                        </button>
-                        <button 
-                            onClick={() => setAbaAtiva('cozinha')} 
-                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${abaAtiva === 'cozinha' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            👨‍🍳 Cozinha
-                        </button>
+                    <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button onClick={() => setAbaAtiva('delivery')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoBicycle /> Delivery</button>
+                            <button onClick={() => setAbaAtiva('cozinha')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all ${abaAtiva === 'cozinha' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoRestaurant /> Cozinha</button>
+                        </div>
+                        <button onClick={() => { setNotificationsEnabled(!notificationsEnabled); setUserInteracted(true); toast.info(notificationsEnabled ? "Som desativado" : "Som ativado"); }} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors border ${notificationsEnabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>{notificationsEnabled ? '🔔 Som ON' : '🔕 Som OFF'}</button>
                     </div>
                 </div>
             </header>
 
-            {/* MAIN CONTENT */}
-            <main className="flex-grow p-4 overflow-x-hidden">
-                <div className="flex flex-col md:flex-row gap-4 h-auto md:h-full w-full max-w-7xl mx-auto">
-                    {colunas.map(status => {
-                        const config = STATUS_CONFIG[status];
-                        const allPedidosStatus = pedidos[status] || [];
-                        const pedidosFiltrados = allPedidosStatus.filter(p => 
-                            abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global'
-                        );
+            <main className="flex-1 p-4 overflow-x-auto">
+                <div className="flex flex-col md:flex-row gap-4 min-w-full md:min-w-0 h-full">
+                    {colunasAtivas.map(statusKey => {
+                        const config = STATUS_UI[statusKey];
+                        
+                        // 1. Filtra por aba
+                        let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
+
+                        // 2. 🔥 ORDENAÇÃO: SE FOR FINALIZADO, INVERTE A ORDEM (MAIS RECENTE NO TOPO)
+                        if (statusKey === 'finalizado') {
+                            listaPedidos = [...listaPedidos].sort((a, b) => {
+                                // Usa dataFinalizado se existir, senão usa updatedAt ou createdAt
+                                const dateA = a.dataFinalizado?.seconds || a.updatedAt?.seconds || a.createdAt?.seconds || 0;
+                                const dateB = b.dataFinalizado?.seconds || b.updatedAt?.seconds || b.createdAt?.seconds || 0;
+                                return dateB - dateA; // Decrescente
+                            });
+                        }
 
                         return (
-                            <div 
-                                key={status} 
-                                className={`flex-1 rounded-2xl shadow-lg border border-amber-100 border-l-4 ${config.color} bg-white flex flex-col h-auto md:h-[calc(100vh-160px)] min-h-[300px]`}
-                            >
-                                <div className="p-4 border-b border-amber-100 flex justify-between items-center bg-gray-50 rounded-tr-xl">
-                                    <h2 className="font-bold text-gray-800 text-lg">{config.title}</h2>
-                                    <span className={`${config.countColor} text-white text-xs font-bold px-3 py-1 rounded-full`}>
-                                        {pedidosFiltrados.length}
-                                    </span>
+                            <div key={statusKey} className={`flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px] md:h-[calc(100vh-140px)] border-t-4 ${config.color.replace('border-l-', 'border-t-')}`}>
+                                <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                                    <h3 className="font-bold text-gray-700 uppercase text-sm">{config.title}</h3>
+                                    <span className={`${config.bg} text-white text-xs font-bold px-2 py-1 rounded-full`}>{listaPedidos.length}</span>
                                 </div>
-                                <div className="p-4 space-y-4 md:overflow-y-auto flex-1 custom-scrollbar">
-                                    {pedidosFiltrados.length > 0 ? (
-                                        abaAtiva === 'cozinha' ? 
-                                            <GrupoPedidosMesa 
-                                                pedidos={pedidosFiltrados} 
-                                                onUpdateStatus={handleUpdateStatusAndNotify} 
-                                                onExcluir={handleExcluirPedido} 
-                                                newOrderIds={newOrderIds} 
-                                                estabelecimentoInfo={estabelecimentoInfo} 
-                                            /> 
-                                            : 
-                                            pedidosFiltrados.map(ped => (
-                                                <PedidoCard 
-                                                    key={ped.id || `ped-${Math.random()}`} 
-                                                    item={ped} 
-                                                    onUpdateStatus={handleUpdateStatusAndNotify} 
-                                                    onExcluir={handleExcluirPedido} 
-                                                    newOrderIds={newOrderIds} 
-                                                    estabelecimentoInfo={estabelecimentoInfo}
-                                                    motoboysDisponiveis={motoboys} 
-                                                    onAtribuirMotoboy={(pedidoId, motoboyId, motoboyNome) => 
-                                                        handleAtribuirMotoboy(pedidoId, motoboyId, motoboyNome, ped.source)
-                                                    }
-                                                />
-                                            ))
+                                <div className="flex-1 p-2 overflow-y-auto custom-scrollbar bg-gray-50/30">
+                                    {listaPedidos.length === 0 ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-gray-300"><div className="text-2xl mb-1">🍃</div><span className="text-sm">Vazio</span></div>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center py-10 md:h-full text-gray-400 opacity-50">
-                                            <div className="text-4xl mb-2">🍃</div>
-                                            <p className="font-medium">Vazio</p>
-                                        </div>
+                                        abaAtiva === 'cozinha' ? (
+                                            <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} />
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {listaPedidos.map(pedido => (
+                                                    <PedidoCard 
+                                                        key={pedido.id} 
+                                                        item={pedido} 
+                                                        onUpdateStatus={handleUpdateStatusAndNotify} 
+                                                        onExcluir={handleExcluirPedido} 
+                                                        newOrderIds={newOrderIds} 
+                                                        estabelecimentoInfo={estabelecimentoInfo} 
+                                                        motoboysDisponiveis={motoboys} 
+                                                        onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} 
+                                                    />
+                                                ))}
+                                            </div>
+                                        )
                                     )}
                                 </div>
                             </div>

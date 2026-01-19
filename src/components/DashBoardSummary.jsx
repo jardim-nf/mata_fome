@@ -33,7 +33,6 @@ const StatCard = ({ title, value, subtext, icon: Icon, colorClass, loading }) =>
 const DashBoardSummary = () => {
   const { primeiroEstabelecimento } = useAuth(); 
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line no-unused-vars
   const [nomeEstabelecimento, setNomeEstabelecimento] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -45,11 +44,13 @@ const DashBoardSummary = () => {
   useEffect(() => {
     if (!primeiroEstabelecimento) { setLoading(false); return; }
 
+    // Busca nome do estabelecimento
     getDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento)).then(snap => {
         if (snap.exists()) setNomeEstabelecimento(snap.data().nome);
     });
 
-    // DELIVERY: Busca os últimos 100 pedidos (independente da data para filtrar no front)
+    // --- QUERY 1: DELIVERY (App/Site) ---
+    // Geralmente salvos na coleção raiz 'pedidos'
     const qDelivery = query(
         collection(db, 'pedidos'),
         where('estabelecimentoId', '==', primeiroEstabelecimento),
@@ -59,20 +60,23 @@ const DashBoardSummary = () => {
 
     const unsubDelivery = onSnapshot(qDelivery, (snapshot) => {
         const pedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'delivery' }));
-        console.log("🔥 [DEBUG] Pedidos Delivery Carregados:", pedidos.length);
         setPedidosDelivery(pedidos);
     });
 
-    // SALÃO
+    // --- QUERY 2: SALÃO/MESA (POS) ---
+    // 🔥 CORREÇÃO: Agora busca em 'vendas' e ordena por 'criadoEm'
     const qSalao = query(
-        collection(db, 'estabelecimentos', primeiroEstabelecimento, 'pedidos'),
-        orderBy('dataPedido', 'desc'),
+        collection(db, 'estabelecimentos', primeiroEstabelecimento, 'vendas'),
+        orderBy('criadoEm', 'desc'), // Corrigido de dataPedido para criadoEm
         limit(100)
     );
 
     const unsubSalao = onSnapshot(qSalao, (snapshot) => {
-        const pedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'salao' }));
-        setPedidosSalao(pedidos);
+        const vendas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'salao' }));
+        setPedidosSalao(vendas);
+        setLoading(false);
+    }, (error) => {
+        console.error("Erro ao ler vendas do salão:", error);
         setLoading(false);
     });
 
@@ -98,11 +102,10 @@ const DashBoardSummary = () => {
         return new Date(timestamp); 
     };
 
-    // Helper: Limpa valor monetário (Resolve problema de R$ e Vírgulas)
+    // Helper: Limpa valor monetário
     const parseCurrency = (val) => {
         if (!val) return 0;
         if (typeof val === 'number') return val;
-        // Remove 'R$', espaços e troca vírgula por ponto
         const cleanStr = String(val).replace('R$', '').replace(/\s/g, '').replace(',', '.');
         const num = parseFloat(cleanStr);
         return isNaN(num) ? 0 : num;
@@ -112,18 +115,16 @@ const DashBoardSummary = () => {
         lista.forEach(pedido => {
             if (pedido.status === 'cancelado') return;
 
-            // 1. VERIFICAÇÃO DE DATA
-            const dataPedido = getDate(pedido.createdAt || pedido.dataPedido || pedido.updatedAt);
+            // 1. VERIFICAÇÃO DE DATA (Corrigido para aceitar 'criadoEm')
+            const dataObj = pedido.createdAt || pedido.criadoEm || pedido.dataPedido || pedido.updatedAt;
+            const dataPedido = getDate(dataObj);
             
             // Se não tiver data ou a data for anterior a hoje (00:00), ignora
             if (!dataPedido || dataPedido < hoje) return;
 
-            // 2. CÁLCULO DO VALOR (BLINDADO)
-            // Tenta pegar de totalFinal, total ou valorTotal
+            // 2. CÁLCULO DO VALOR
             let valorCru = pedido.totalFinal ?? pedido.total ?? pedido.valorTotal ?? 0;
             let valor = parseCurrency(valorCru);
-
-            console.log(`💰 [DEBUG] Pedido ${pedido.id} (${origem}): R$ ${valor} (Original: ${valorCru})`);
 
             // Contagem de Tempo
             if (pedido.tempoPreparo) {
@@ -143,8 +144,7 @@ const DashBoardSummary = () => {
                 if (pedido.motoboyId || pedido.motoboyNome) {
                     const idMoto = pedido.motoboyId || pedido.motoboyNome;
                     const nomeMoto = pedido.motoboyNome || 'Desconhecido';
-                    
-                    let taxa = parseCurrency(pedido.taxaEntrega || pedido.deliveryFee || pedido.paymentData?.deliveryFee || 0);
+                    const taxa = parseCurrency(pedido.taxaEntrega || pedido.deliveryFee || 0);
 
                     if (!motoboyMap[idMoto]) {
                         motoboyMap[idMoto] = { id: idMoto, nome: nomeMoto, qtd: 0, totalTaxas: 0 };
@@ -240,7 +240,7 @@ const DashBoardSummary = () => {
         </div>
       )}
 
-      {/* SEÇÃO DE ENTREGADORES (SEMPRE VISÍVEL SE HOUVER DADOS) */}
+      {/* SEÇÃO DE ENTREGADORES */}
       {isExpanded && stats.entregadoresAtivos.length > 0 && (
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm animate-fadeIn">
             <div className="flex justify-between items-end mb-6">
@@ -250,8 +250,8 @@ const DashBoardSummary = () => {
                     <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full">{stats.entregadoresAtivos.length} ativos</span>
                 </h3>
                 <div className="text-right">
-                     <p className="text-xs text-gray-400 font-bold uppercase">Total Repasses</p>
-                     <p className="text-xl font-bold text-green-600">{formatarMoeda(stats.totalTaxasEntregadores)}</p>
+                      <p className="text-xs text-gray-400 font-bold uppercase">Total Repasses</p>
+                      <p className="text-xl font-bold text-green-600">{formatarMoeda(stats.totalTaxasEntregadores)}</p>
                 </div>
             </div>
 

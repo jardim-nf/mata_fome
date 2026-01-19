@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { 
     IoPerson, IoTrash, IoArrowForward, IoCheckmarkCircle, IoPrint,
-    IoLogoWhatsapp, IoBicycle, IoAlertCircle, IoTime
+    IoLogoWhatsapp, IoBicycle, IoAlertCircle, IoTime, IoRestaurant, IoFlag
 } from "react-icons/io5";
 import { useAuth } from '../context/AuthContext'; 
 
@@ -20,7 +20,7 @@ const PedidoCard = ({
     const [isUpdating, setIsUpdating] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
     const [selectedMotoboyId, setSelectedMotoboyId] = useState("");
-    const [isExpanded, setIsExpanded] = useState(false); // Adicionado estado faltante
+    const [isExpanded, setIsExpanded] = useState(false); // Estado para expandir itens
     
     const { estabelecimentoIdPrincipal } = useAuth();
 
@@ -41,7 +41,7 @@ const PedidoCard = ({
 
     const statusConfig = getStatusConfig(item.status);
 
-    // --- CÁLCULOS ---
+    // --- CÁLCULOS FINANCEIROS ---
     const valorTotalExibicao = useMemo(() => {
         if (item.totalFinal && Number(item.totalFinal) > 0) return Number(item.totalFinal);
         if (item.total && Number(item.total) > 0) return Number(item.total);
@@ -59,6 +59,7 @@ const PedidoCard = ({
         return somaItens + taxaEntrega;
     }, [item]);
 
+    // --- HELPERS DE DATA E TEMPO ---
     const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
 
     const formatarDataHora = (timestamp) => {
@@ -66,10 +67,49 @@ const PedidoCard = ({
         try {
             const date = timestamp?.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
             return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        } catch {
-            return '';
-        }
+        } catch { return ''; }
     };
+
+    // Calcula diferença em minutos entre dois timestamps
+    const calcDiffMin = (start, end) => {
+        if (!start || !end) return 0;
+        const d1 = start.seconds ? new Date(start.seconds * 1000) : new Date(start);
+        const d2 = end.seconds ? new Date(end.seconds * 1000) : new Date(end);
+        return Math.floor((d2 - d1) / 60000);
+    };
+
+    // --- CÁLCULO DE TEMPOS DE ETAPA ---
+    const temposEtapa = useMemo(() => {
+        const criado = item.createdAt || item.dataPedido;
+        const preparo = item.dataPreparo;
+        const entrega = item.dataEntrega || item.dataPronto;
+        const fim = item.dataFinalizado;
+
+        const tempos = [];
+
+        // Tempo de Espera (Criado -> Preparo)
+        if (criado && preparo) {
+            tempos.push({ label: 'Espera', val: calcDiffMin(criado, preparo), icon: <IoTime/>, color: 'text-red-500' });
+        }
+        
+        // Tempo de Preparo (Preparo -> Entrega/Pronto)
+        if (preparo && entrega) {
+            tempos.push({ label: 'Preparo', val: calcDiffMin(preparo, entrega), icon: <IoRestaurant/>, color: 'text-orange-500' });
+        }
+
+        // Tempo de Entrega (Entrega -> Finalizado)
+        if (entrega && fim) {
+            tempos.push({ label: 'Entrega', val: calcDiffMin(entrega, fim), icon: <IoBicycle/>, color: 'text-blue-500' });
+        }
+
+        // Tempo Total (Criado -> Agora ou Finalizado)
+        const fimTotal = fim || new Date();
+        if (criado) {
+            tempos.push({ label: 'Total', val: calcDiffMin(criado, fimTotal), icon: <IoFlag/>, color: 'text-gray-600 font-bold' });
+        }
+
+        return tempos;
+    }, [item]);
 
     const traduzirFormaPagamento = (forma) => {
         const t = { 'credit_card': 'CRÉDITO', 'debit_card': 'DÉBITO', 'cash': 'DINHEIRO', 'pix': 'PIX', 'card': 'CARTÃO' };
@@ -108,7 +148,7 @@ const PedidoCard = ({
         window.open(`https://wa.me/55${numeroFormatado}?text=${encodeURIComponent(msgFinal)}`, '_blank');
     };
 
-    // --- IMPRESSÃO OTIMIZADA (INSTANTÂNEA) ---
+    // --- IMPRESSÃO OTIMIZADA ---
     const handlePrint = useCallback(() => {
         if (!item || !item.id) return;
         setIsPrinting(true);
@@ -118,29 +158,17 @@ const PedidoCard = ({
         const left = (window.screen.width - width) / 2;
         const top = (window.screen.height - height) / 2;
 
-        // 1. Identifica se é Salão/Mesa
         const isSalao = item.source === 'salao' || item.tipo === 'salao' || item.tipo === 'mesa';
-        
-        // 2. Garante o ID do estabelecimento (Prioridade: Props > Item > Auth)
         const estabId = estabelecimentoInfo?.id || item.estabelecimentoId || estabelecimentoIdPrincipal;
 
-        // 3. Monta URL Otimizada (Passa TUDO para a comanda não precisar pensar)
         let url = `/comanda/${item.id}`;
-        
-        // Adiciona parâmetros para busca rápida (Estratégia 1 do ComandaParaImpressao)
         const params = new URLSearchParams();
         if (isSalao) params.append('origem', 'salao');
         if (estabId) params.append('estabId', estabId);
-        
         if (params.toString()) url += `?${params.toString()}`;
 
-        const printWindow = window.open(
-            url, 
-            'ImprimirComanda', 
-            `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
-        );
+        const printWindow = window.open(url, 'ImprimirComanda', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`);
 
-        // Monitora fechamento para liberar botão
         if (printWindow) {
             const timer = setInterval(() => {
                 if (printWindow.closed) {
@@ -258,6 +286,18 @@ const PedidoCard = ({
                        {traduzirFormaPagamento(item.formaPagamento)}
                     </span>
                 </div>
+
+                {/* 🔥 EXIBIÇÃO DE TEMPOS DE ETAPA */}
+                {temposEtapa.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        {temposEtapa.map((tempo, i) => (
+                            <div key={i} className={`flex items-center gap-1 text-[10px] font-medium ${tempo.color} bg-white px-2 py-1 rounded border border-gray-200 shadow-sm`}>
+                                {tempo.icon}
+                                <span>{tempo.label}: {tempo.val}min</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* LISTA DE ITENS */}
                 <div className="space-y-3 mb-4">
