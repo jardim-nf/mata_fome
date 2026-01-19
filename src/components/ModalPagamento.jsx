@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase'; 
 import { 
-    IoReceiptOutline, 
     IoClose,
     IoChevronBack,
     IoChevronForward,
@@ -24,14 +23,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [tipoPagamento, setTipoPagamento] = useState(null);
     const [pagamentos, setPagamentos] = useState({});
     const [carregando, setCarregando] = useState(false);
+    const [valorPersonalizado, setValorPersonalizado] = useState('');
 
-    // --- LÓGICA DE AGRUPAMENTO (QUEM COMEU O QUE) ---
+    // --- LÓGICA DE AGRUPAMENTO ---
     const agruparItensPorPessoa = useMemo(() => {
         if (!mesa || !mesa.itens) return {};
         
         const agrupados = {};
         mesa.itens.forEach(item => {
-            // Tenta identificar a pessoa
             let pessoa = 'Cliente 1';
             if (item.destinatario && item.destinatario !== 'Mesa') {
                 pessoa = item.destinatario;
@@ -50,7 +49,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         return agrupados;
     }, [mesa]);
 
-    // --- INICIALIZAÇÃO DOS PAGAMENTOS ---
+    // --- INICIALIZAÇÃO ---
     useEffect(() => {
         const totalMesa = mesa?.total || 0;
 
@@ -85,11 +84,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }
     }, [tipoPagamento, agruparItensPorPessoa, mesa]);
 
-    // --- CÁLCULOS ---
     const calcularTotalPagamentos = () => Object.values(pagamentos).reduce((acc, curr) => acc + curr.valor, 0);
     const calcularTotalMesa = () => mesa?.total || 0;
 
-    // --- MANIPULAÇÃO DE ESTADO ---
+    // --- MANIPULAÇÃO DE DADOS ---
     const editarFormaPagamento = (pessoaId, novaForma) => {
         setPagamentos(prev => ({
             ...prev,
@@ -121,7 +119,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         });
     };
 
-    // --- IMPRESSÃO TÉRMICA ---
+    // --- IMPRESSÃO TÉRMICA DE ALTO CONTRASTE ---
     const handleImprimirConferencia = () => {
         const totalMesa = calcularTotalMesa();
         const dadosParaImpressao = agruparItensPorPessoa; 
@@ -131,23 +129,64 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             <head>
                 <title>Comanda - Mesa ${mesa?.numero}</title>
                 <style>
-                    body { font-family: 'Courier New', monospace; font-size: 12px; width: 300px; margin: 0; padding: 10px; color: #000; }
-                    .header { text-align: center; margin-bottom: 10px; }
-                    .divider { border-top: 1px dashed #000; margin: 10px 0; }
-                    .pagante-block { margin-bottom: 8px; border-bottom: 1px dotted #ccc; padding-bottom: 5px; }
-                    .pagante-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; margin-bottom: 3px; }
-                    .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 11px; color: #333; }
-                    .total-geral { font-size: 18px; font-weight: bold; text-align: right; margin-top: 15px; }
+                    @media print {
+                        @page { margin: 0; size: auto; }
+                        body { margin: 0; padding: 0; }
+                    }
+                    body { 
+                        font-family: 'Courier New', monospace; /* Fonte padrão de impressora */
+                        font-size: 12px; 
+                        width: 300px; /* Largura padrão bobina */
+                        margin: 0; 
+                        padding: 10px 5px; 
+                        color: #000000 !important; /* PRETO PURO */
+                        background-color: #ffffff !important;
+                        font-weight: bold !important; /* FORÇA NEGRITO EM TUDO */
+                    }
+                    .header { text-align: center; margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 5px; }
+                    .header h2 { font-size: 16px; margin: 0; text-transform: uppercase; font-weight: 900; }
+                    .divider { border-top: 2px dashed #000; margin: 10px 0; display: block; }
+                    
+                    .pagante-block { margin-bottom: 10px; }
+                    .pagante-header { 
+                        display: flex; 
+                        justify-content: space-between; 
+                        font-weight: 900; 
+                        font-size: 13px; 
+                        margin-bottom: 3px; 
+                        border-bottom: 1px solid #000;
+                    }
+                    
+                    .item-row { 
+                        display: flex; 
+                        justify-content: space-between; 
+                        padding-left: 5px; 
+                        font-size: 12px; 
+                        color: #000 !important;
+                    }
+                    
+                    .total-geral { 
+                        font-size: 18px; 
+                        font-weight: 900 !important; 
+                        text-align: right; 
+                        margin-top: 15px; 
+                        border-top: 2px solid #000;
+                        padding-top: 5px;
+                    }
+                    
+                    /* Força o navegador a imprimir cores exatas (preto) */
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                 </style>
             </head>
             <body>
                 <div class="header">
-                    <h2 style="margin:0">PRÉ-CONFERÊNCIA</h2>
-                    <p style="margin:5px 0">Mesa ${mesa?.numero}</p>
+                    <h2>PRÉ-CONFERÊNCIA</h2>
+                    <p style="margin:5px 0; font-size:14px">MESA ${mesa?.numero}</p>
                     <p style="font-size:10px">${new Date().toLocaleString('pt-BR')}</p>
                 </div>
-                
-                <div class="divider"></div>
                 
                 ${Object.keys(dadosParaImpressao).length > 0 ? 
                     Object.entries(dadosParaImpressao).map(([pessoa, dados]) => `
@@ -159,7 +198,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         
                         ${dados.itens.map(item => `
                             <div class="item-row">
-                                <span>${item.quantidade}x ${item.nome}</span>
+                                <span>${item.quantidade}x ${item.nome.substring(0, 20)}</span>
                                 <span>${(item.preco * item.quantidade).toFixed(2)}</span>
                             </div>
                         `).join('')}
@@ -178,11 +217,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
                 <div class="total-geral">TOTAL: R$ ${totalMesa.toFixed(2)}</div>
                 
-                <div class="divider"></div>
-                <div style="text-align:center; font-size:10px; font-weight:bold;">
-                    *** CONFERÊNCIA DE MESA ***<br/>
+                <br/>
+                <div style="text-align:center; font-size:10px; font-weight:900;">
+                    *** NÃO É DOCUMENTO FISCAL ***<br/>
                     AGUARDAMOS SEU PAGAMENTO
                 </div>
+                <br/>
             </body>
             </html>
         `;
@@ -191,10 +231,13 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         win.document.write(conteudo);
         win.document.close();
         win.focus();
-        setTimeout(() => { win.print(); win.close(); }, 500);
+        setTimeout(() => { 
+            win.print(); 
+            win.close(); 
+        }, 500);
     };
 
-    // --- FINALIZAR PAGAMENTO ---
+    // --- FINALIZAR ---
     const finalizarPagamento = async () => {
         setCarregando(true);
         try {
@@ -202,7 +245,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             const totalMesa = calcularTotalMesa();
             
             if (Math.abs(totalPago - totalMesa) > 0.10) {
-                if(!window.confirm(`O valor total (R$ ${totalPago.toFixed(2)}) é diferente do total da mesa (R$ ${totalMesa.toFixed(2)}). Deseja fechar mesmo assim?`)) {
+                if(!window.confirm(`Diferença de valores detectada. Fechar mesmo assim?`)) {
                     setCarregando(false);
                     return;
                 }
@@ -236,24 +279,24 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 });
             }
 
-            toast.success("Pagamento realizado com sucesso!");
+            toast.success("Pagamento realizado!");
             if (onSucesso) onSucesso({ vendaId: docRef.id });
             onClose();
 
         } catch (error) {
             console.error('Erro:', error);
-            toast.error('Erro ao processar: ' + error.message);
+            toast.error('Erro: ' + error.message);
         } finally {
             setCarregando(false);
         }
     };
 
-    // --- RENDERIZADORES ---
+    // --- RENDER ETAPA 1 (AZUL / CARD) ---
     const renderizarEtapa1 = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {/* CARD DE DESTAQUE COM TOTAL E BOTÃO DE IMPRIMIR */}
-            <div className="bg-blue-500 rounded-3xl p-6 shadow-xl shadow-blue-200 text-center relative overflow-hidden">
-                {/* Efeito de fundo */}
+            {/* CARD AZUL DE DESTAQUE */}
+            <div className="bg-[#3b82f6] rounded-3xl p-6 shadow-xl shadow-blue-200 text-center relative overflow-hidden">
+                {/* Efeitos de fundo */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-black opacity-10 rounded-full -ml-10 -mb-10 blur-xl"></div>
                 
@@ -263,20 +306,19 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     </div>
                     
                     <h2 className="text-xl font-bold text-blue-100 mb-1">Total a Pagar</h2>
-                    <span className="text-4xl font-black text-white tracking-tight">
+                    <span className="text-5xl font-black text-white tracking-tight">
                         R$ {calcularTotalMesa().toFixed(2)}
                     </span>
-                    <p className="text-blue-200 text-sm font-medium mt-1 uppercase tracking-widest">Mesa {mesa?.numero}</p>
+                    <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">Mesa {mesa?.numero}</p>
 
-                    {/* --- BOTÃO DE IMPRIMIR GRANDE --- */}
+                    {/* BOTÃO BRANCO DE IMPRIMIR DENTRO DO CARD */}
                     <button 
                         onClick={handleImprimirConferencia}
-                        className="mt-6 w-full py-3 bg-white text-blue-600 rounded-xl font-black text-sm uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-blue-50 hover:scale-[1.02] transition-all shadow-lg active:scale-95"
+                        className="mt-6 w-full py-3 bg-white text-blue-600 rounded-xl font-black text-sm uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-blue-50 transition-all shadow-lg active:scale-95"
                     >
-                        <IoPrint className="text-xl" />
+                        <IoPrint className="text-lg" />
                         Imprimir Comanda
                     </button>
-                    {/* -------------------------------- */}
                 </div>
             </div>
 
@@ -314,6 +356,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         </div>
     );
 
+    // --- RENDER ETAPA 2 (MÉTODOS) ---
     const renderizarEtapa2 = () => {
         const formasPagamento = [
             { id: 'dinheiro', icon: <IoCash />, label: 'Dinheiro', color: 'bg-green-100 text-green-600' },
@@ -370,12 +413,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                         type="number" 
                                         placeholder="Valor..." 
                                         className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        onBlur={(e) => {
-                                            if(e.target.value) {
-                                                editarValorPagamento(pessoa, e.target.value);
-                                                e.target.value = '';
-                                            }
-                                        }}
+                                        onBlur={(e) => { if(e.target.value) { editarValorPagamento(pessoa, e.target.value); e.target.value = ''; } }}
                                     />
                                     <button className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold uppercase text-gray-600">Alterar</button>
                                 </div>
@@ -400,6 +438,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         );
     };
 
+    // --- RENDER ETAPA 3 (CONFIRMAÇÃO) ---
     const renderizarEtapa3 = () => {
         const totalMesa = calcularTotalMesa();
         const totalPagamentos = calcularTotalPagamentos();
@@ -456,20 +495,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-            {/* Overlay */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-            
-            {/* Modal Card */}
             <div className="relative w-full max-w-md bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-10 duration-300">
-                {/* Header Fixo */}
                 <div className="p-4 flex justify-between items-center border-b border-gray-100">
                     <span className="text-xs font-black text-gray-300 uppercase tracking-widest">BrocouSystem</span>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
                         <IoClose size={24} />
                     </button>
                 </div>
-
-                {/* Conteúdo com Scroll */}
                 <div className="flex-1 overflow-y-auto p-6 bg-[#f8faff]">
                     {etapa === 1 && renderizarEtapa1()}
                     {etapa === 2 && renderizarEtapa2()}
