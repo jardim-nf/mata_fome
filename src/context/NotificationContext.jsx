@@ -15,7 +15,7 @@ export const NotificationProvider = ({ children }) => {
     const { userData } = useAuth();
     const navigate = useNavigate();
     
-    const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
+    const audioRef = useRef(new Audio('/campainha.mp3'));
     const isFirstLoad = useRef(true);
     const [permission, setPermission] = useState(Notification.permission);
 
