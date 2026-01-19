@@ -1,4 +1,4 @@
-// src/context/HeaderContext.jsx - VERSÃO CORRIGIDA
+// src/context/HeaderContext.jsx - VERSÃO DEFINITIVA (SEM LOOP)
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 const HeaderContext = createContext();
@@ -16,28 +16,30 @@ export const HeaderProvider = ({ children }) => {
     const [headerTitle, setHeaderTitle] = useState(null);
     const [headerSubtitle, setHeaderSubtitle] = useState(null);
 
+    // ✅ CORREÇÃO DO LOOP: Só atualiza o estado se o valor for realmente diferente.
+    // Isso impede que componentes como ControleSalao fiquem recarregando infinitamente.
+    
     const setActions = useCallback((actions) => {
-        console.log('🔄 HeaderContext: Definindo ações no header', actions);
-        setHeaderActions(actions);
+        setHeaderActions(prev => {
+            if (prev === actions) return prev; // Se for igual, não faz nada
+            return actions;
+        });
     }, []);
 
     const clearActions = useCallback(() => {
-        console.log('🧹 HeaderContext: Limpando ações do header');
-        setHeaderActions(null);
+        setHeaderActions(prev => (prev === null ? prev : null));
     }, []);
 
     const setTitle = useCallback((title) => {
-        console.log('📝 HeaderContext: Definindo título:', title);
-        setHeaderTitle(title);
+        setHeaderTitle(prev => (prev === title ? prev : title));
     }, []);
 
     const setSubtitle = useCallback((subtitle) => {
-        console.log('📝 HeaderContext: Definindo subtítulo:', subtitle);
-        setHeaderSubtitle(subtitle);
+        setHeaderSubtitle(prev => (prev === subtitle ? prev : subtitle));
     }, []);
 
     const clearAll = useCallback(() => {
-        console.log('🧹 HeaderContext: Limpando tudo');
+        // Limpa tudo de uma vez sem causar múltiplos renders desnecessários
         setHeaderActions(null);
         setHeaderTitle(null);
         setHeaderSubtitle(null);

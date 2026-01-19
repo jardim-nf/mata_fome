@@ -10,30 +10,39 @@ import AdicionarMesaModal from "../components/AdicionarMesaModal";
 import ModalPagamento from "../components/ModalPagamento";
 import { 
     IoArrowBack, IoAdd, 
-    IoGrid, IoPeople, IoWalletOutline,
+    IoGrid, IoPeople, IoWalletOutline, IoReceiptOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle 
 } from "react-icons/io5";
 
-// --- FUNÇÃO AUXILIAR PARA FORMATAR R$ (Mesma do MesaCard) ---
+// --- HELPER DE FORMATAÇÃO ---
 const formatarReal = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    }).format(valor);
+    }).format(valor || 0);
 };
 
 // --- STAT CARD PEQUENO ---
 const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
-    <div className="bg-white p-2 sm:p-3 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[120px]">
+    <div className="bg-white p-2 sm:p-3 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[130px]">
         <div>
             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-            {/* Ajustei o tamanho da fonte para caber o R$ */}
             <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight">{value}</h3>
         </div>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${bgClass} ${colorClass}`}>
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg ${bgClass} ${colorClass}`}>
             <Icon />
+        </div>
+    </div>
+);
+
+// --- COMPONENTE LOADING ---
+const LoadingSpinner = () => (
+    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+        <div className="flex flex-col items-center">
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+            <p className="text-gray-400 font-bold text-xs tracking-widest uppercase">Carregando Salão...</p>
         </div>
     </div>
 );
@@ -47,14 +56,14 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
             <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100">
                 <h3 className="text-xl font-black text-gray-900 text-center mb-4">Mesa {mesaNumero}</h3>
                 <p className="text-center text-gray-500 mb-4 text-sm">Quantas pessoas?</p>
-                <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-6">
-                    <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-12 h-12 rounded-lg bg-white shadow border text-2xl font-bold hover:bg-gray-50">-</button>
+                <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-6 border border-gray-100">
+                    <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-12 h-12 rounded-lg bg-white shadow-sm border border-gray-200 text-2xl font-bold hover:bg-gray-50">-</button>
                     <span className="text-4xl font-black text-gray-900">{quantidade}</span>
-                    <button onClick={() => setQuantidade(q => q + 1)} className="w-12 h-12 rounded-lg bg-blue-600 text-white shadow text-2xl font-bold hover:bg-blue-700">+</button>
+                    <button onClick={() => setQuantidade(q => q + 1)} className="w-12 h-12 rounded-lg bg-blue-600 shadow text-white text-2xl font-bold hover:bg-blue-700">+</button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={onClose} className="py-3 bg-gray-100 rounded-lg font-bold text-gray-600 hover:bg-gray-200">Cancelar</button>
-                    <button onClick={() => onConfirm(quantidade)} className="py-3 bg-gray-900 text-white rounded-lg font-bold shadow-lg hover:bg-black">Abrir Mesa</button>
+                    <button onClick={onClose} className="py-3 bg-white border border-gray-200 rounded-lg font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
+                    <button onClick={() => onConfirm(quantidade)} className="py-3 bg-gray-900 text-white rounded-lg font-bold shadow-lg hover:bg-black">Abrir</button>
                 </div>
             </div>
         </div>
@@ -66,24 +75,21 @@ export default function ControleSalao() {
     const { setActions, clearActions } = useHeader();
     const navigate = useNavigate();
     
-    // Estados
     const [mesas, setMesas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtro, setFiltro] = useState('todos'); 
     const [buscaMesa, setBuscaMesa] = useState(''); 
     const [isModalOpen, setIsModalOpen] = useState(false);
     
-    // Modais
     const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
 
     const estabelecimentoId = useMemo(() => {
-        return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || null;
+        return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
 
-    // HEADER ACTIONS
     useEffect(() => {
         setActions(
             <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
@@ -93,7 +99,6 @@ export default function ControleSalao() {
         return () => clearActions();
     }, [setActions, clearActions]);
 
-    // FETCH MESAS
     useEffect(() => {
         if (!estabelecimentoId) { if (userData) setLoading(false); return; }
         setLoading(true); 
@@ -114,7 +119,6 @@ export default function ControleSalao() {
         return () => unsubscribe();
     }, [estabelecimentoId, userData]);
 
-    // FUNÇÕES
     const handleAdicionarMesa = async (numeroMesa) => {
         if (!numeroMesa || !estabelecimentoId) return;
         try {
@@ -150,13 +154,11 @@ export default function ControleSalao() {
 
     const handlePagamentoConcluido = () => { setIsModalPagamentoOpen(false); setMesaParaPagamento(null); };
 
-    // 🔍 FILTRO OTIMIZADO
     const mesasFiltradas = useMemo(() => {
         return mesas.filter(m => {
             const matchStatus = filtro === 'todos' ? true :
                                 filtro === 'livres' ? m.status === 'livre' :
                                 filtro === 'ocupadas' ? m.status !== 'livre' : true;
-            
             const matchBusca = buscaMesa === '' ? true : String(m.numero).includes(buscaMesa);
             return matchStatus && matchBusca;
         });
@@ -179,6 +181,7 @@ export default function ControleSalao() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 pb-20">
+            {/* Largura total para caber 100 mesas */}
             <div className="w-full max-w-[2400px] mx-auto"> 
                 
                 <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
@@ -191,7 +194,7 @@ export default function ControleSalao() {
                 <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2">
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                         
-                        {/* Título e Voltar */}
+                        {/* Título */}
                         <div className="flex flex-col gap-1">
                             <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-gray-600 font-bold text-xs flex items-center gap-1 w-fit">
                                 <IoArrowBack /> Voltar
@@ -204,17 +207,16 @@ export default function ControleSalao() {
                             </div>
                         </div>
 
-                        {/* Stats Rápidos (Horizontal) */}
+                        {/* Stats Rápidos - APLIQUEI FORMATAR REAL AQUI */}
                         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
                             <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
                             <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
-                            {/* MUDANÇA AQUI: Usando a formatação correta no card de totais */}
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
                         </div>
                         
-                        {/* Controles: Busca e Filtro */}
+                        {/* Controles */}
                         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-                            {/* 🔍 INPUT DE BUSCA */}
+                            {/* Busca */}
                             <div className="relative w-full sm:w-32 md:w-48">
                                 <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
                                     <IoSearch className="text-gray-400" />
@@ -233,7 +235,7 @@ export default function ControleSalao() {
                                 )}
                             </div>
 
-                            {/* FILTROS ABAS */}
+                            {/* Filtros */}
                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                 {['todos', 'livres', 'ocupadas'].map(t => (
                                     <button
@@ -251,10 +253,11 @@ export default function ControleSalao() {
                     </div>
                 </div>
 
-                {/* --- GRID DE 100 MESAS (ALTA DENSIDADE) --- */}
+                {/* --- GRID DE 100 MESAS (High Density) --- */}
                 <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh]">
                     {mesasFiltradas.length > 0 ? (
-                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
+                        // MANTIVE O GRID DE 3 A 12 COLUNAS PARA MONITORES ULTRA WIDE
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
                             {mesasFiltradas.map(mesa => (
                                 <MesaCard 
                                     key={mesa.id} 
