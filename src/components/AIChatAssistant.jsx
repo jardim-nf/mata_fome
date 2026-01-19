@@ -56,23 +56,51 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     }
   }, [conversation, onAddDirect, onCheckout]);
 
-  // --- FUNÇÃO DE ENVIO ---
+  // --- FORMATAÇÃO DO CARDÁPIO ---
+  const formatarCardapioParaIA = (lista) => {
+    if (!lista || lista.length === 0) return "Cardápio vazio.";
+    const agrupado = lista.reduce((acc, p) => {
+      const cat = p.categoria || 'Geral'; if (!acc[cat]) acc[cat] = []; acc[cat].push(p); return acc;
+    }, {});
+    const emojis = { 'Pizzas': '🍕', 'Bebidas': '🥤', 'Sobremesas': '🍦', 'Lanches': '🍔', 'Porções': '🍟' };
+    return Object.entries(agrupado).map(([cat, itens]) => {
+      const emoji = emojis[cat] || '🍽️';
+      const itensTexto = itens.map(p => {
+        const ops = p.variacoes?.length > 0 
+          ? p.variacoes.map(v => `${v.nome} (R$ ${Number(v.preco).toFixed(2)})`).join(', ')
+          : `R$ ${Number(p.precoFinal || p.preco).toFixed(2)}`;
+        return `- ${p.nome} | Opções: [${ops}]`;
+      }).join('\n');
+      return `### ${emoji} ${cat.toUpperCase()}\n${itensTexto}`;
+    }).join('\n\n');
+  };
+
+  // --- FUNÇÃO DE ENVIO COM BLOQUEIO DE ASSUNTOS ALEATÓRIOS ---
   const processarEnvio = async (textoParaEnviar) => {
     if (!textoParaEnviar.trim() || aiThinking) return;
-    
-    // Se não tiver cliente logado, pede login e para
-    if (!clienteNome && onRequestLogin) { 
-        onRequestLogin(); 
-        return; 
-    }
+    if (!clienteNome && onRequestLogin) { onRequestLogin(); return; }
 
+    // 🔥 AQUI ESTÁ O SEGREDO: Definimos a "Persona" e as "Regras"
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
       horarios: JSON.stringify(estabelecimento?.horarioFuncionamento),
       produtosPopulares: formatarCardapioParaIA(produtos),
       clienteNome: clienteNome || 'Visitante',
+      
+      // 🔒 REGRAS DE COMPORTAMENTO PARA A IA
+      regras: `
+        VOCÊ É UM GARÇOM DIGITAL E NADA MAIS.
+        
+        1. SEU ÚNICO OBJETIVO: Vender itens do cardápio e tirar dúvidas sobre o restaurante.
+        2. PROIBIDO: Não responda perguntas sobre matemática, política, programação, história, receitas de fora ou qualquer assunto que não seja o restaurante.
+        3. RESPOSTA PADRÃO PARA FORA DO TEMA: Se o usuário perguntar algo nada a ver (ex: "quanto é 2+2?" ou "quem descobriu o brasil?"), responda de forma simpática mas firme: "Desculpe [Nome], eu sou apenas o garçom virtual! 😅 Mas posso te recomendar uma Pizza deliciosa? 🍕"
+        4. TONE OF VOICE: Seja vendedor, simpático, use emojis e tente sempre fechar o pedido.
+        5. IMPORTANTE: Use sempre os dados fornecidos no 'produtosPopulares' para responder preços e opções.
+      `,
+
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
     };
+    
     await sendMessage(textoParaEnviar, context);
   };
 
@@ -106,30 +134,11 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
   }, []);
 
   const handleMicClick = () => {
-    if (!clienteNome) { onRequestLogin(); return; } // Pede login se tentar usar mic sem conta
+    if (!clienteNome) { onRequestLogin(); return; } 
     setShowMicHint(false); 
     if (!recognitionRef.current) return alert("Seu navegador não suporta voz.");
     if (isListening) recognitionRef.current.stop();
     else recognitionRef.current.start();
-  };
-
-  // --- FORMATAÇÃO ---
-  const formatarCardapioParaIA = (lista) => {
-    if (!lista || lista.length === 0) return "Cardápio vazio.";
-    const agrupado = lista.reduce((acc, p) => {
-      const cat = p.categoria || 'Geral'; if (!acc[cat]) acc[cat] = []; acc[cat].push(p); return acc;
-    }, {});
-    const emojis = { 'Pizzas': '🍕', 'Bebidas': '🥤', 'Sobremesas': '🍦', 'Lanches': '🍔', 'Porções': '🍟' };
-    return Object.entries(agrupado).map(([cat, itens]) => {
-      const emoji = emojis[cat] || '🍽️';
-      const itensTexto = itens.map(p => {
-        const ops = p.variacoes?.length > 0 
-          ? p.variacoes.map(v => `${v.nome} (R$ ${Number(v.preco).toFixed(2)})`).join(', ')
-          : `R$ ${Number(p.precoFinal || p.preco).toFixed(2)}`;
-        return `- ${p.nome} | Opções: [${ops}]`;
-      }).join('\n');
-      return `### ${emoji} ${cat.toUpperCase()}\n${itensTexto}`;
-    }).join('\n\n');
   };
 
   const handleManualSubmit = (e) => { e.preventDefault(); const t = message; setMessage(''); processarEnvio(t); };
@@ -176,8 +185,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
         {/* CHAT */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 scrollbar-thin text-left">
-           
-           {/* 🔥 MENSAGEM DE BOAS-VINDAS CONDICIONAL */}
            <div className="flex justify-start animate-fade-in">
              <div className="bg-white p-4 rounded-2xl shadow-sm text-sm border border-gray-100 max-w-[85%] leading-relaxed text-gray-800">
                {clienteNome ? (
@@ -253,7 +260,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
             value={isListening ? 'Ouvindo...' : message} 
             onChange={e => setMessage(e.target.value)} 
             placeholder={clienteNome ? (isListening ? "" : "Digite ou fale...") : "Faça login para pedir"} 
-            disabled={isListening || !clienteNome} // 🔥 Bloqueia se não logado
+            disabled={isListening || !clienteNome} 
             className={`flex-1 bg-gray-100 text-gray-800 border-0 rounded-full px-5 py-3.5 text-base focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all outline-none ${isListening ? 'italic text-gray-500' : ''}`} 
           />
           
