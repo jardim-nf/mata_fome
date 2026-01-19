@@ -63,7 +63,9 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
       const cat = p.categoria || 'Geral'; if (!acc[cat]) acc[cat] = []; acc[cat].push(p); return acc;
     }, {});
     const emojis = { 'Pizzas': '🍕', 'Bebidas': '🥤', 'Sobremesas': '🍦', 'Lanches': '🍔', 'Porções': '🍟' };
-    return Object.entries(agrupado).map(([cat, itens]) => {
+    
+    let textoCardapio = "";
+    Object.entries(agrupado).forEach(([cat, itens]) => {
       const emoji = emojis[cat] || '🍽️';
       const itensTexto = itens.map(p => {
         const ops = p.variacoes?.length > 0 
@@ -71,33 +73,31 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
           : `R$ ${Number(p.precoFinal || p.preco).toFixed(2)}`;
         return `- ${p.nome} | Opções: [${ops}]`;
       }).join('\n');
-      return `### ${emoji} ${cat.toUpperCase()}\n${itensTexto}`;
-    }).join('\n\n');
+      textoCardapio += `### ${emoji} ${cat.toUpperCase()}\n${itensTexto}\n\n`;
+    });
+    return textoCardapio;
   };
 
-  // --- FUNÇÃO DE ENVIO COM BLOQUEIO DE ASSUNTOS ALEATÓRIOS ---
+  // --- 🔥 FUNÇÃO DE ENVIO COM BLOQUEIO RIGOROSO ---
   const processarEnvio = async (textoParaEnviar) => {
     if (!textoParaEnviar.trim() || aiThinking) return;
     if (!clienteNome && onRequestLogin) { onRequestLogin(); return; }
 
-    // 🔥 AQUI ESTÁ O SEGREDO: Definimos a "Persona" e as "Regras"
+    // 🔥 INJEÇÃO DE REGRAS: Colocamos isso como se fosse a "alma" do bot
+    const instrucaoSuprema = `
+      🚨 INSTRUÇÃO DE SEGURANÇA: VOCÊ É APENAS UM GARÇOM.
+      1. PROIBIDO responder perguntas de matemática (ex: "quanto é 2+2?"). Se perguntarem, diga: "Sou de humanas, só sei servir mesas! 🤣 Mas a Pizza de Calabresa tá show!".
+      2. PROIBIDO falar de política, religião, história ou código.
+      3. SEU FOCO É VENDER. Se o usuário falar "oi", ofereça um produto do cardápio abaixo.
+      4. NUNCA saia do personagem de garçom do restaurante ${estabelecimento?.nome}.
+    `;
+
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
       horarios: JSON.stringify(estabelecimento?.horarioFuncionamento),
-      produtosPopulares: formatarCardapioParaIA(produtos),
+      // 🔥 Colocamos a instrução suprema ANTES dos produtos para garantir leitura
+      produtosPopulares: instrucaoSuprema + "\n\n📋 CARDÁPIO DISPONÍVEL:\n" + formatarCardapioParaIA(produtos),
       clienteNome: clienteNome || 'Visitante',
-      
-      // 🔒 REGRAS DE COMPORTAMENTO PARA A IA
-      regras: `
-        VOCÊ É UM GARÇOM DIGITAL E NADA MAIS.
-        
-        1. SEU ÚNICO OBJETIVO: Vender itens do cardápio e tirar dúvidas sobre o restaurante.
-        2. PROIBIDO: Não responda perguntas sobre matemática, política, programação, história, receitas de fora ou qualquer assunto que não seja o restaurante.
-        3. RESPOSTA PADRÃO PARA FORA DO TEMA: Se o usuário perguntar algo nada a ver (ex: "quanto é 2+2?" ou "quem descobriu o brasil?"), responda de forma simpática mas firme: "Desculpe [Nome], eu sou apenas o garçom virtual! 😅 Mas posso te recomendar uma Pizza deliciosa? 🍕"
-        4. TONE OF VOICE: Seja vendedor, simpático, use emojis e tente sempre fechar o pedido.
-        5. IMPORTANTE: Use sempre os dados fornecidos no 'produtosPopulares' para responder preços e opções.
-      `,
-
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
     };
     
@@ -233,12 +233,13 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
         {/* INPUT + MICROFONE */}
         <form onSubmit={handleManualSubmit} className="p-4 bg-white border-t border-gray-100 flex gap-2 items-center shrink-0 safe-area-bottom relative">
           
-          {/* 🔥 DICA MICROFONE (APENAS SE LOGADO) */}
+          {/* 🔥 DICA MICROFONE (POSICIONADO ACIMA DO BOTÃO, SEM COBRIR INPUT) */}
           {showMicHint && !isListening && clienteNome && (
-            <div className="absolute left-16 top-1/2 -translate-y-1/2 z-50 pointer-events-none animate-pulse">
-                <div className="bg-gray-800 text-white text-xs px-3 py-2 rounded-xl shadow-lg relative font-bold whitespace-nowrap flex items-center">
-                    <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-3 h-3 bg-gray-800 rotate-45"></div>
-                    👈 Toque para falar!
+            <div className="absolute -top-10 left-3 z-50 pointer-events-none animate-bounce">
+                <div className="bg-gray-800 text-white text-[10px] px-2 py-1 rounded-lg shadow-lg relative font-bold whitespace-nowrap flex items-center">
+                    👇 Toque para falar!
+                    {/* Seta para baixo */}
+                    <div className="absolute -bottom-1 left-3 w-2 h-2 bg-gray-800 rotate-45"></div>
                 </div>
             </div>
           )}
