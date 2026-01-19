@@ -20,7 +20,7 @@ import { useAI } from '../context/AIContext';
 import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
 
-// Ícones (Adicionei IoPerson para o botão de login)
+// Ícones
 import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline, IoPerson } from 'react-icons/io5';
 
 function Menu() {
@@ -29,7 +29,9 @@ function Menu() {
 
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen } = useAI();
-    const [showAICenter, setShowAICenter] = useState(true);
+    
+    // 🔥 MUDANÇA 1: Começa FALSE para não abrir nada na cara do cliente
+    const [showAICenter, setShowAICenter] = useState(false);
 
     // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
@@ -113,7 +115,7 @@ function Menu() {
     }, []);
 
     const handleAbrirLogin = () => {
-        setIsRegisteringInModal(false); // Reseta para login normal
+        setIsRegisteringInModal(false); 
         setShowLoginPrompt(true);
     };
 
@@ -159,7 +161,7 @@ function Menu() {
         }, {});
     };
 
-    // --- 2. CÁLCULOS FINANCEIROS (USEMEMO) ---
+    // --- 2. CÁLCULOS FINANCEIROS ---
 
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
 
@@ -508,7 +510,6 @@ function Menu() {
                 {/* INFO E CABEÇALHO */}
                 {estabelecimentoInfo && (
                     <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative">
-                        {/* 🔥 NOVO: Botão de Login no Topo */}
                         <div className="absolute top-4 right-4 z-10">
                              {currentUser ? (
                                 <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
@@ -534,9 +535,15 @@ function Menu() {
                     </div>
                 )}
 
-                {/* FILTROS */}
+                {/* FILTROS E BUSCA - Com text-base para evitar Zoom do iPhone */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
-                    <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 border rounded-lg text-gray-900" />
+                    <input 
+                        type="text" 
+                        placeholder="🔍 Buscar..." 
+                        value={searchTerm} 
+                        onChange={e => setSearchTerm(e.target.value)} 
+                        className="w-full p-3 mb-4 border rounded-lg text-gray-900 text-base" 
+                    />
                     <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
                             <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full font-bold whitespace-nowrap transition-all ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}>{cat}</button>
@@ -544,7 +551,7 @@ function Menu() {
                     </div>
                 </div>
 
-                {/* LISTAGEM */}
+                {/* LISTAGEM DE PRODUTOS */}
                 {categoriasOrdenadas.map(cat => {
                     const items = menuAgrupado[cat];
                     const visible = visibleItemsCount[cat] || 4;
@@ -563,19 +570,21 @@ function Menu() {
                 <div className="grid md:grid-cols-2 gap-8 mt-12">
                     <div className="bg-white p-6 rounded-xl border shadow-lg text-left">
                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                        {/* Botão de login redundante aqui embaixo também atualizado */}
                         {currentUser ? 
                             <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : 
                             <button type="button" onClick={handleAbrirLogin} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Fazer Login</button>
                         }
                         
                         <div className="space-y-4">
-                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
                                 <div className="space-y-2">
-                                    <div className="flex gap-2"><input className="flex-1 p-3 rounded border text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /><input className="w-24 p-3 rounded border text-center text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div>
-                                    <input className="w-full p-3 rounded border text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <div className="flex gap-2">
+                                        <input className="flex-1 p-3 rounded border text-gray-900 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+                                        <input className="w-24 p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                    </div>
+                                    <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
                                 </div>
                             )}
                             <div className="flex gap-2">
@@ -602,7 +611,12 @@ function Menu() {
                                     {!isRetirada && <div className="flex justify-between"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
                                     {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
                                     {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
-                                    <div className="flex gap-2 mt-2"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-sm" /><button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button></div>
+                                    
+                                    <div className="flex gap-2 mt-2">
+                                        <input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-gray-900 text-base" />
+                                        <button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button>
+                                    </div>
+
                                     <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
                                 <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600">✅ Finalizar Pedido</button>
@@ -612,13 +626,16 @@ function Menu() {
                 </div>
             </div>
 
-            {/* 🔥 CARRINHO FLUTUANTE CONDICIONAL */}
+            {/* CARRINHO FLUTUANTE CONDICIONAL (Só aparece se o widget da IA estiver FECHADO) */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* 🔥 IA */}
-            {estabelecimentoInfo && (
+            {/* 🔥 CORREÇÃO 2: Renderização CONDICIONAL da IA.
+                Só renderiza se showAICenter for true (se quiser popup) OU se o widget estiver aberto pelo botão.
+                Isso impede que a IA carregue sozinha e cubra a tela no celular. 
+            */}
+            {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
                     produtos={allProdutos} 
@@ -642,7 +659,7 @@ function Menu() {
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
-            {/* 🔥 MODAL DE LOGIN ATUALIZADO (Z-INDEX 5000) */}
+            {/* MODAL DE LOGIN */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up">
@@ -651,12 +668,12 @@ function Menu() {
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (
                                 <>
-                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
-                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
+                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                 </>
                             )}
-                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
-                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
+                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                             <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition-colors">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
                         </form>
                         <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block font-medium">
