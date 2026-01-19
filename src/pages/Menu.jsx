@@ -20,8 +20,8 @@ import { useAI } from '../context/AIContext';
 import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
 
-// Ícones
-import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline } from 'react-icons/io5';
+// Ícones (Adicionei IoPerson para o botão de login)
+import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline, IoPerson } from 'react-icons/io5';
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
@@ -54,6 +54,8 @@ function Menu() {
 
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
+    
+    // --- ESTADOS DO LOGIN ---
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
 
@@ -103,12 +105,17 @@ function Menu() {
         }
     });
 
-    // --- 1. FUNÇÕES AUXILIARES (Definidas antes do uso) ---
+    // --- 1. FUNÇÕES AUXILIARES ---
 
     const scrollToResumo = useCallback(() => {
         const elementoResumo = document.getElementById('resumo-carrinho');
         if (elementoResumo) elementoResumo.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, []);
+
+    const handleAbrirLogin = () => {
+        setIsRegisteringInModal(false); // Reseta para login normal
+        setShowLoginPrompt(true);
+    };
 
     const formatarHorarios = useCallback((horarios) => {
         if (!horarios || typeof horarios !== 'object') return "Horário não informado";
@@ -153,7 +160,6 @@ function Menu() {
     };
 
     // --- 2. CÁLCULOS FINANCEIROS (USEMEMO) ---
-    // 🔥 IMPORTANTE: Definidos aqui para estarem disponíveis para as funções abaixo
 
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
 
@@ -277,17 +283,21 @@ function Menu() {
         return 'MODAL';
     }, [allProdutos]);
 
-    // --- 4. AÇÕES DO USUÁRIO (CARRINHO, AUTH, ETC) ---
+    // --- 4. AÇÕES DO USUÁRIO ---
 
     const handleAbrirModalProduto = (item) => {
-        if (!currentUser) { toast.info('Faça login.'); setShowLoginPrompt(true); return; }
+        if (!currentUser) { 
+            toast.info('Faça login para continuar.'); 
+            handleAbrirLogin(); 
+            return; 
+        }
         if (item.variacoes && item.variacoes.length > 0) { setItemParaVariacoes(item); }
         else if (item.adicionais && item.adicionais.length > 0) { setItemParaAdicionais(item); }
         else { handleAdicionarRapido(item); }
     };
 
     const handleAdicionarRapido = (item) => {
-        if (!currentUser) { setShowLoginPrompt(true); return; }
+        if (!currentUser) { handleAbrirLogin(); return; }
         const preco = item.precoFinal !== undefined ? item.precoFinal : item.preco;
         setCarrinho(prev => [...prev, { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
         toast.success(`${item.nome} adicionado!`);
@@ -318,7 +328,7 @@ function Menu() {
     };
 
     const handleApplyCoupon = async () => {
-        if (!currentUser) { setShowLoginPrompt(true); return; }
+        if (!currentUser) { handleAbrirLogin(); return; }
         if (!couponCodeInput.trim()) return;
         setCouponLoading(true);
         try {
@@ -341,7 +351,7 @@ function Menu() {
     };
 
     const prepararParaPagamento = () => {
-        if (!currentUser) return setShowLoginPrompt(true);
+        if (!currentUser) return handleAbrirLogin();
         if (carrinho.length === 0) return toast.warn('Carrinho vazio.');
         
         const itensFormatados = carrinho.map(item => ({
@@ -379,11 +389,34 @@ function Menu() {
 
     const handlePagamentoFalha = (error) => toast.error(`Falha: ${error.message}`);
 
-    const handleLoginModal = async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); setShowLoginPrompt(false); } catch { toast.error("Erro no login"); } };
+    const handleLoginModal = async (e) => { 
+        e.preventDefault(); 
+        try { 
+            await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
+            setShowLoginPrompt(false); 
+        } catch { 
+            toast.error("Erro no login"); 
+        } 
+    };
     
-    const handleRegisterModal = async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal, numero: numeroAuthModal, bairro: bairroAuthModal, cidade: cidadeAuthModal }, criadoEm: Timestamp.now() }); setShowLoginPrompt(false); } catch { toast.error("Erro ao criar conta."); } };
+    const handleRegisterModal = async (e) => { 
+        e.preventDefault(); 
+        try { 
+            const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
+            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { 
+                nome: nomeAuthModal, 
+                telefone: telefoneAuthModal, 
+                email: emailAuthModal, 
+                endereco: { rua: ruaAuthModal, numero: numeroAuthModal, bairro: bairroAuthModal, cidade: cidadeAuthModal }, 
+                criadoEm: Timestamp.now() 
+            }); 
+            setShowLoginPrompt(false); 
+        } catch { 
+            toast.error("Erro ao criar conta."); 
+        } 
+    };
 
-    // --- 5. EFFECTS DE INICIALIZAÇÃO ---
+    // --- 5. EFFECTS ---
 
     useEffect(() => {
         if (!estabelecimentoSlug) return;
@@ -397,7 +430,7 @@ function Menu() {
                 const data = snap.docs[0].data();
                 const id = snap.docs[0].id;
                 
-                const prods = await carregarProdutosRapido(id); // Busca profunda
+                const prods = await carregarProdutosRapido(id);
                 
                 setEstabelecimentoInfo({ ...data, id });
                 setActualEstabelecimentoId(id);
@@ -424,7 +457,6 @@ function Menu() {
         }
     }, [currentUser, currentClientData, authLoading]);
 
-    // Cálculo da Taxa
     useEffect(() => {
         const calcularTaxa = async () => {
             if (!actualEstabelecimentoId || !bairro || isRetirada) { setTaxaEntregaCalculada(0); return; }
@@ -443,7 +475,6 @@ function Menu() {
         return () => clearTimeout(timer);
     }, [bairro, actualEstabelecimentoId, isRetirada]);
 
-    // Filtros de Categoria
     useEffect(() => {
         let p = [...allProdutos];
         if (selectedCategory !== 'Todos') p = p.filter(prod => prod.categoria === selectedCategory);
@@ -474,10 +505,25 @@ function Menu() {
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
             <div className="max-w-7xl mx-auto px-4 w-full">
                 
-                {/* INFO */}
+                {/* INFO E CABEÇALHO */}
                 {estabelecimentoInfo && (
-                    <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg">
-                        <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} />
+                    <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative">
+                        {/* 🔥 NOVO: Botão de Login no Topo */}
+                        <div className="absolute top-4 right-4 z-10">
+                             {currentUser ? (
+                                <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
+                                    <IoLogOutOutline size={18} />
+                                    <span>Sair</span>
+                                </button>
+                             ) : (
+                                <button type="button" onClick={handleAbrirLogin} className="flex items-center gap-2 text-sm font-bold text-white px-4 py-2 rounded-full shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+                                    <IoPerson size={16} />
+                                    <span>Entrar</span>
+                                </button>
+                             )}
+                        </div>
+
+                        <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />
                         <div className="flex-1">
                             <h1 className="text-3xl font-bold mb-2">{estabelecimentoInfo.nome}</h1>
                             <div className="text-sm text-gray-600">
@@ -517,7 +563,12 @@ function Menu() {
                 <div className="grid md:grid-cols-2 gap-8 mt-12">
                     <div className="bg-white p-6 rounded-xl border shadow-lg text-left">
                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                        {currentUser ? <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : <button onClick={() => setShowLoginPrompt(true)} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Entrar</button>}
+                        {/* Botão de login redundante aqui embaixo também atualizado */}
+                        {currentUser ? 
+                            <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : 
+                            <button type="button" onClick={handleAbrirLogin} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Fazer Login</button>
+                        }
+                        
                         <div className="space-y-4">
                             <input className="w-full p-3 rounded border text-gray-900" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 rounded border text-gray-900" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
@@ -576,7 +627,7 @@ function Menu() {
                     mode={showAICenter ? "center" : "widget"}
                     onClose={() => setShowAICenter(false)}
                     clienteNome={nomeCliente}
-                    onRequestLogin={() => setShowLoginPrompt(true)}
+                    onRequestLogin={handleAbrirLogin}
                     carrinho={carrinho}
                     onClick={prepararParaPagamento}
                 />
@@ -591,23 +642,24 @@ function Menu() {
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
+            {/* 🔥 MODAL DE LOGIN ATUALIZADO (Z-INDEX 5000) */}
             {showLoginPrompt && (
-                <div className="fixed inset-0 z-[4000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
-                    <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left">
-                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl">&times;</button>
+                <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up">
+                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
                         <h2 className="text-2xl font-bold mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (
                                 <>
-                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border" />
-                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border" />
+                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
+                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
                                 </>
                             )}
-                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border" />
-                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border" />
-                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
+                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
+                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition-colors">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
                         </form>
-                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block">
+                        <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block font-medium">
                             {isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}
                         </button>
                     </div>
