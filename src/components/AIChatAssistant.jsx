@@ -59,7 +59,12 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
   // --- FUNÇÃO DE ENVIO ---
   const processarEnvio = async (textoParaEnviar) => {
     if (!textoParaEnviar.trim() || aiThinking) return;
-    if (!clienteNome && onRequestLogin) { onRequestLogin(); return; }
+    
+    // Se não tiver cliente logado, pede login e para
+    if (!clienteNome && onRequestLogin) { 
+        onRequestLogin(); 
+        return; 
+    }
 
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
@@ -101,6 +106,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
   }, []);
 
   const handleMicClick = () => {
+    if (!clienteNome) { onRequestLogin(); return; } // Pede login se tentar usar mic sem conta
     setShowMicHint(false); 
     if (!recognitionRef.current) return alert("Seu navegador não suporta voz.");
     if (isListening) recognitionRef.current.stop();
@@ -170,12 +176,30 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
         {/* CHAT */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 scrollbar-thin text-left">
-           <div className="flex justify-start">
+           
+           {/* 🔥 MENSAGEM DE BOAS-VINDAS CONDICIONAL */}
+           <div className="flex justify-start animate-fade-in">
              <div className="bg-white p-4 rounded-2xl shadow-sm text-sm border border-gray-100 max-w-[85%] leading-relaxed text-gray-800">
-               Olá, <strong>{clienteNome?.split(' ')[0] || 'Visitante'}</strong>! 👋 <br/>
-               Clique no microfone 🎙️ para falar também!
+               {clienteNome ? (
+                 <>
+                   Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 👋 <br/>
+                   Clique no microfone 🎙️ para falar também!
+                 </>
+               ) : (
+                 <>
+                   Olá! 👋 Bem-vindo ao <strong>{estabelecimento?.nome || 'Restaurante'}</strong>.<br/>
+                   Para realizar seu pedido, identifique-se abaixo:
+                   <button 
+                     onClick={onRequestLogin} 
+                     className="mt-3 w-full bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-sm hover:bg-green-700 transition flex items-center justify-center gap-2"
+                   >
+                     <IoLogIn size={18} /> Entrar ou Cadastrar
+                   </button>
+                 </>
+               )}
              </div>
            </div>
+
            {conversation.map(msg => (
              <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
                 <div className={`p-3 rounded-2xl text-sm shadow-sm max-w-[85%] text-left whitespace-pre-wrap ${msg.type === 'user' ? (isCenter ? 'bg-gray-900 text-white' : 'bg-red-600 text-white') : 'bg-white text-gray-800 border border-gray-100'}`}>
@@ -189,8 +213,8 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
            <div ref={messagesEndRef} />
         </div>
 
-        {/* SUGESTÕES */}
-        {!aiThinking && !isListening && (
+        {/* SUGESTÕES (SÓ SE LOGADO) */}
+        {!aiThinking && !isListening && clienteNome && (
           <div className="px-4 py-3 flex gap-2 overflow-x-auto bg-white border-t border-gray-100 scrollbar-hide shrink-0">
             <button onClick={() => setShowMiniCart(true)} className="whitespace-nowrap px-4 py-2 bg-green-600 text-white text-xs font-bold rounded-full shadow-md flex items-center gap-1 active:scale-95 transition-all"><IoCartOutline size={16}/> Ver Carrinho</button>
             {['📜 Cardápio', '🌶️ Sugestão', '🍔 Promoções'].map(s => (
@@ -202,11 +226,10 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
         {/* INPUT + MICROFONE */}
         <form onSubmit={handleManualSubmit} className="p-4 bg-white border-t border-gray-100 flex gap-2 items-center shrink-0 safe-area-bottom relative">
           
-          {/* 🔥 BALÃO DE DICA - POSICIONADO AO LADO DO MIC (Sem cobrir botão acima) */}
-          {showMicHint && !isListening && (
+          {/* 🔥 DICA MICROFONE (APENAS SE LOGADO) */}
+          {showMicHint && !isListening && clienteNome && (
             <div className="absolute left-16 top-1/2 -translate-y-1/2 z-50 pointer-events-none animate-pulse">
                 <div className="bg-gray-800 text-white text-xs px-3 py-2 rounded-xl shadow-lg relative font-bold whitespace-nowrap flex items-center">
-                    {/* Seta apontando para a esquerda (para o microfone) */}
                     <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-3 h-3 bg-gray-800 rotate-45"></div>
                     👈 Toque para falar!
                 </div>
@@ -229,12 +252,12 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
             type="text" 
             value={isListening ? 'Ouvindo...' : message} 
             onChange={e => setMessage(e.target.value)} 
-            placeholder={isListening ? "" : "Digite ou fale..."} 
-            disabled={isListening}
+            placeholder={clienteNome ? (isListening ? "" : "Digite ou fale...") : "Faça login para pedir"} 
+            disabled={isListening || !clienteNome} // 🔥 Bloqueia se não logado
             className={`flex-1 bg-gray-100 text-gray-800 border-0 rounded-full px-5 py-3.5 text-base focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all outline-none ${isListening ? 'italic text-gray-500' : ''}`} 
           />
           
-          <button type="submit" disabled={!message.trim() || aiThinking || isListening} className={`w-12 h-12 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all ${isCenter ? 'bg-gray-900' : 'bg-red-600'}`}>
+          <button type="submit" disabled={!message.trim() || aiThinking || isListening || !clienteNome} className={`w-12 h-12 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all ${isCenter ? 'bg-gray-900' : 'bg-red-600'}`}>
             {aiThinking ? <IoTime className="animate-spin" /> : <IoSend size={20} />}
           </button>
         </form>
