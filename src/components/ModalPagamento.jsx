@@ -1,584 +1,511 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { 
-    IoReceiptOutline, 
-    IoClose,
-    IoChevronBack,
-    IoChevronForward,
-    IoCash,
-    IoCard,
-    IoPhonePortrait,
-    IoAdd,
-    IoRemove,
-    IoPencil,
-    IoCheckmark,
-    IoPerson,
-    IoPeople,
-    IoArrowDown,
-    IoWallet
-} from 'react-icons/io5';
+// src/pages/Menu.jsx
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { db } from '../firebase';
+import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import CardapioItem from '../components/CardapioItem';
+import { useAuth } from '../context/AuthContext';
+import { usePayment } from '../context/PaymentContext';
+import { toast } from 'react-toastify';
+import AdicionaisModal from '../components/AdicionaisModal';
+import VariacoesModal from '../components/VariacoesModal';
+import { v4 as uuidv4 } from 'uuid';
+import PaymentModal from '../components/PaymentModal';
+import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
+import RaspadinhaModal from '../components/RaspadinhaModal';
+import { useAI } from '../context/AIContext';
+import AIChatAssistant from '../components/AIChatAssistant';
+import AIWidgetButton from '../components/AIWidgetButton';
+import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline } from 'react-icons/io5';
 
-const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
-    const [etapa, setEtapa] = useState(1);
-    const [tipoPagamento, setTipoPagamento] = useState(null);
-    const [pagamentos, setPagamentos] = useState({});
-    const [carregando, setCarregando] = useState(false);
-    const [valorPersonalizado, setValorPersonalizado] = useState('');
+function Menu() {
+    const { estabelecimentoSlug } = useParams();
+    const navigate = useNavigate();
+    const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
+    const { isWidgetOpen } = useAI();
+    
+    // --- ESTADOS ---
+    const [allProdutos, setAllProdutos] = useState([]);
+    const [produtosFiltrados, setProdutosFiltrados] = useState([]);
+    const [carrinho, setCarrinho] = useState([]);
+    const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
+    const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('Todos');
+    const [visibleItemsCount, setVisibleItemsCount] = useState({});
+    const [showAICenter, setShowAICenter] = useState(true);
 
-    // Agrupa itens por pessoa
-    const agruparItensPorPessoa = useMemo(() => {
-        if (!mesa || !mesa.itens) return {};
-        
-        const agrupados = {};
-        
-        mesa.itens.forEach(item => {
-            let pessoa = 'Cliente 1';
-            
-            if (item.destinatario && item.destinatario !== 'Mesa') {
-                pessoa = item.destinatario;
-            } else if (mesa.nomesOcupantes && mesa.nomesOcupantes.length > 0) {
-                const index = Math.floor(Math.random() * mesa.nomesOcupantes.length);
-                pessoa = mesa.nomesOcupantes[index] || 'Cliente 1';
-            }
-            
-            if (!agrupados[pessoa]) {
-                agrupados[pessoa] = {
-                    itens: [],
-                    total: 0
-                };
-            }
-            
-            agrupados[pessoa].itens.push(item);
-            agrupados[pessoa].total += (item.preco * item.quantidade);
-        });
+    // Auth & Checkout
+    const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+    const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
+    const [emailAuthModal, setEmailAuthModal] = useState('');
+    const [passwordAuthModal, setPasswordAuthModal] = useState('');
+    const [nomeAuthModal, setNomeAuthModal] = useState('');
+    const [telefoneAuthModal, setTelefoneAuthModal] = useState('');
+    const [ruaAuthModal, setRuaAuthModal] = useState('');
+    const [numeroAuthModal, setNumeroAuthModal] = useState('');
+    const [bairroAuthModal, setBairroAuthModal] = useState('');
+    const [cidadeAuthModal, setCidadeAuthModal] = useState('');
+    
+    const [nomeCliente, setNomeCliente] = useState('');
+    const [telefoneCliente, setTelefoneCliente] = useState('');
+    const [rua, setRua] = useState('');
+    const [numero, setNumero] = useState('');
+    const [bairro, setBairro] = useState('');
+    const [cidade, setCidade] = useState('');
+    const [complemento, setComplemento] = useState('');
 
-        return agrupados;
-    }, [mesa]);
+    const [isRetirada, setIsRetirada] = useState(false);
+    const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
+    const [discountAmount, setDiscountAmount] = useState(0);
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [couponCodeInput, setCouponCodeInput] = useState('');
+    const [couponLoading, setCouponLoading] = useState(false);
 
-    // ✅ Inicializa os pagamentos
-    useEffect(() => {
-        if (tipoPagamento === 'unico') {
-            setPagamentos({
-                'Pagamento Único': {
-                    valor: calcularTotalMesa(),
-                    formaPagamento: 'dinheiro',
-                    status: 'pendente',
-                    itens: mesa?.itens || []
-                }
-            });
-        } else if (tipoPagamento === 'individual') {
-            const pagamentosIniciais = {};
-            
-            Object.entries(agruparItensPorPessoa).forEach(([pessoa, dados]) => {
-                pagamentosIniciais[pessoa] = {
-                    valor: dados.total,
-                    formaPagamento: 'dinheiro',
-                    status: 'pendente',
-                    itens: dados.itens
-                };
-            });
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null);
+    const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
+    const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
 
-            setPagamentos(pagamentosIniciais);
+    const [itemParaAdicionais, setItemParaAdicionais] = useState(null);
+    const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
+    const [showRaspadinha, setShowRaspadinha] = useState(false);
+    const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
+    const [premioRaspadinha, setPremioRaspadinha] = useState(null);
+    const [ordemCategorias, setOrdemCategorias] = useState([]);
+
+    const auth = getAuth();
+    const [coresEstabelecimento, setCoresEstabelecimento] = useState({
+        primaria: '#ffffff', destaque: '#059669', background: '#f9fafb',
+        texto: { principal: '#111827', secundario: '#4B5563', placeholder: '#9CA3AF' }
+    });
+
+    // --- FUNÇÕES ---
+
+    const scrollToResumo = useCallback(() => {
+        const elementoResumo = document.getElementById('resumo-carrinho');
+        if (elementoResumo) elementoResumo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, []);
+
+    const formatarHorarios = useCallback((horarios) => {
+        if (!horarios || typeof horarios !== 'object') return "Horário não informado";
+        return Object.entries(horarios).map(([dia, horario]) => {
+            if (!horario?.abertura || !horario?.fechamento) return `${dia}: Fechado`;
+            return `${dia}: ${horario.abertura} - ${horario.fechamento}`;
+        }).join(' | ');
+    }, []);
+
+    const superNormalizar = (t) => {
+        if (!t) return '';
+        return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    };
+
+    const formatarItemCarrinho = (item) => {
+        let nome = item.nome;
+        if (item.variacaoSelecionada?.nome) nome += ` - ${item.variacaoSelecionada.nome}`;
+        if (item.observacao) nome += ` (Obs: ${item.observacao})`;
+        return nome;
+    };
+
+    const cleanData = (obj) => {
+        if (!obj) return obj;
+        return Object.entries(obj).reduce((acc, [key, value]) => {
+            if (value === undefined) acc[key] = null;
+            else acc[key] = value;
+            return acc;
+        }, {});
+    };
+
+    const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
+    
+    const taxaAplicada = useMemo(() => {
+        if (isRetirada) return 0;
+        if (premioRaspadinha?.type === 'frete') return 0;
+        return taxaEntregaCalculada;
+    }, [isRetirada, taxaEntregaCalculada, premioRaspadinha]);
+
+    const finalOrderTotal = useMemo(() => {
+        let total = subtotalCalculado + taxaAplicada - discountAmount;
+        if (premioRaspadinha?.type === 'desconto') {
+            const valorDesconto = subtotalCalculado * (premioRaspadinha.valor / 100);
+            total -= valorDesconto;
         }
-    }, [tipoPagamento, agruparItensPorPessoa, mesa]);
+        return Math.max(0, total);
+    }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
 
-    const calcularTotalPagamentos = () => {
-        return Object.values(pagamentos).reduce((total, dados) => total + dados.valor, 0);
-    };
-
-    const calcularTotalMesa = () => {
-        return mesa?.total || 0;
-    };
-
-    // Funções de Edição
-    const editarFormaPagamento = (pessoaId, novaForma) => {
-        setPagamentos(prev => ({
-            ...prev,
-            [pessoaId]: { ...prev[pessoaId], formaPagamento: novaForma }
-        }));
-    };
-
-    const editarValorPagamento = (pessoaId, novoValor) => {
-        setPagamentos(prev => ({
-            ...prev,
-            [pessoaId]: { ...prev[pessoaId], valor: parseFloat(novoValor) || 0 }
-        }));
-    };
-
-    const adicionarPessoa = () => {
-        const novaPessoa = `Cliente ${Object.keys(pagamentos).length + 1}`;
-        setPagamentos(prev => ({
-            ...prev,
-            [novaPessoa]: { 
-                valor: 0, 
-                formaPagamento: 'dinheiro', 
-                status: 'pendente', 
-                itens: [] 
-            }
-        }));
-    };
-
-    const removerPessoa = (pessoaId) => {
-        if (Object.keys(pagamentos).length <= 1) return;
-        setPagamentos(prev => {
-            const novos = { ...prev };
-            delete novos[pessoaId];
-            return novos;
-        });
-    };
-
-    // Finalizar Pagamento
-    const finalizarPagamento = async () => {
-        setCarregando(true);
+    // --- CARREGAMENTO ---
+    const carregarProdutosRapido = async (estabId) => {
         try {
-            const totalPago = calcularTotalPagamentos();
-            const totalMesa = calcularTotalMesa();
+            const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
+            const categoriasSnapshot = await getDocs(query(cardapioRef, where('ativo', '==', true)));
             
-            if (Math.abs(totalPago - totalMesa) > 0.10) {
-                if(!window.confirm(`O valor total (R$ ${totalPago.toFixed(2)}) é diferente do total da mesa (R$ ${totalMesa.toFixed(2)}). Deseja fechar mesmo assim?`)) {
-                    setCarregando(false);
-                    return;
-                }
-            }
+            const promessas = categoriasSnapshot.docs.map(async (catDoc) => {
+                const categoriaData = catDoc.data();
+                const itensRef = collection(db, 'estabelecimentos', estabId, 'cardapio', catDoc.id, 'itens');
+                const itensSnapshot = await getDocs(query(itensRef, where('ativo', '==', true)));
+                return itensSnapshot.docs.map(itemDoc => ({
+                    ...itemDoc.data(), id: itemDoc.id, categoria: categoriaData.nome || 'Geral', categoriaId: catDoc.id
+                }));
+            });
 
-            const dadosVenda = {
-                mesaId: mesa.id,
-                mesaNumero: mesa.numero,
-                estabelecimentoId: estabelecimentoId,
-                itens: mesa.itens,
-                pagamentos: pagamentos,
-                total: totalMesa,
-                tipoPagamento: tipoPagamento,
-                status: 'pago',
-                criadoEm: new Date(),
-                criadoPor: auth.currentUser?.uid,
-                funcionario: auth.currentUser?.displayName || 'Garçom'
-            };
+            const resultados = await Promise.all(promessas);
+            const todosProdutos = resultados.flat();
+            return todosProdutos.filter(p => p.preco !== undefined || p.precoFinal !== undefined || (p.variacoes && p.variacoes.length > 0));
+        } catch (error) { console.error("Erro:", error); return []; }
+    };
 
-            const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
+    // --- IA HANDLER ---
+    const handleAdicionarPorIA = useCallback((comandoCompleto) => {
+        console.log("🤖 IA Processando:", comandoCompleto);
+        let nomeProduto = comandoCompleto;
+        let nomeOpcao = null;
+        let observacaoIA = '';
+        let quantidadeIA = 1;
 
-            // Limpa a mesa
-            if (mesa.id) {
-                await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
-                    status: 'livre',
-                    clientes: [],
-                    nomesOcupantes: ["Mesa"],
-                    itens: [],
-                    total: 0,
-                    pagamentos: {},
-                    ultimaAtualizacao: new Date()
-                });
-            }
-
-            if (onSucesso) onSucesso({ vendaId: docRef.id });
-            onClose();
-
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('Erro ao processar: ' + error.message);
-        } finally {
-            setCarregando(false);
+        if (comandoCompleto.includes('-- Qtd:')) {
+            const partes = comandoCompleto.split('-- Qtd:');
+            quantidadeIA = parseInt(partes[1].trim()) || 1;
+            nomeProduto = partes[0].trim();
         }
+        if (nomeProduto.includes('-- Opcao:')) {
+            const split = nomeProduto.split('-- Opcao:');
+            nomeProduto = split[0].trim();
+            const resto = splitOpcao[1];
+            nomeOpcao = resto.split('-- Obs:')[0].trim();
+            if (resto.includes('-- Obs:')) observacaoIA = resto.split('-- Obs:')[1].trim();
+        }
+
+        const termoBusca = superNormalizar(nomeProduto);
+        const produtoEncontrado = allProdutos.find(p => {
+            const nomeDb = superNormalizar(p.nome);
+            return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
+        });
+
+        if (!produtoEncontrado) return 'NOT_FOUND';
+
+        let variacaoSelecionada = null;
+        if (nomeOpcao) {
+            const termoOpcao = superNormalizar(nomeOpcao);
+            variacaoSelecionada = produtoEncontrado.variacoes?.find(v => superNormalizar(v.nome) === termoOpcao || superNormalizar(v.nome).includes(termoOpcao));
+        } else if (produtoEncontrado.variacoes?.length === 1) {
+            variacaoSelecionada = produtoEncontrado.variacoes[0];
+        }
+
+        if (variacaoSelecionada || (!produtoEncontrado.variacoes?.length && !produtoEncontrado.adicionais?.length)) {
+            const precoFinal = variacaoSelecionada ? Number(variacaoSelecionada.preco || variacaoSelecionada.precoFinal) : Number(produtoEncontrado.preco || produtoEncontrado.precoFinal || 0);
+            setCarrinho(prev => [...prev, { ...produtoEncontrado, variacaoSelecionada, precoFinal, observacao: observacaoIA, qtd: quantidadeIA, cartItemId: uuidv4() }]);
+            toast.success(`${quantidadeIA}x ${produtoEncontrado.nome} adicionado!`);
+            return 'ADDED';
+        }
+
+        setShowAICenter(false);
+        handleAbrirModalProduto(produtoEncontrado);
+        return 'MODAL';
+    }, [allProdutos]);
+
+    // --- ACTIONS ---
+    const handleAbrirModalProduto = (item) => {
+        if (!currentUser) { setShowLoginPrompt(true); return; }
+        if (item.variacoes?.length > 0) setItemParaVariacoes(item);
+        else if (item.adicionais?.length > 0) setItemParaAdicionais(item);
+        else handleAdicionarRapido(item);
     };
 
-    // --- RENDERIZADORES MOBILE-FIRST ---
-
-    const renderizarEtapa1 = () => (
-        <div className="space-y-6">
-            {/* Header com Total */}
-            <div className="text-center bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-blue-100">
-                    <IoWallet className="text-2xl text-blue-600" />
-                </div>
-                <h2 className="text-2xl font-black text-gray-900 mb-2">Pagamento</h2>
-                <p className="text-gray-600 mb-3">Mesa {mesa?.numero}</p>
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-blue-100">
-                    <p className="text-sm text-gray-500 font-medium">Total a pagar</p>
-                    <p className="text-3xl font-black text-blue-600">R$ {calcularTotalMesa().toFixed(2)}</p>
-                </div>
-            </div>
-
-            {/* Opções de Pagamento */}
-            <div className="space-y-4">
-                <h3 className="text-lg font-bold text-gray-900 px-2">Escolha o tipo de pagamento</h3>
-                
-                {/* PAGAMENTO ÚNICO */}
-                <button 
-                    onClick={() => {
-                        setTipoPagamento('unico');
-                        setEtapa(2);
-                    }}
-                    className="w-full bg-white rounded-2xl p-5 border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all duration-200 active:scale-95 group"
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <IoPerson className="text-white text-xl" />
-                        </div>
-                        <div className="flex-1 text-left">
-                            <h4 className="font-bold text-gray-900 text-lg">Pagamento Único</h4>
-                            <p className="text-gray-600 text-sm">Uma pessoa paga o total</p>
-                            <p className="text-blue-600 font-black text-xl mt-1">
-                                R$ {calcularTotalMesa().toFixed(2)}
-                            </p>
-                        </div>
-                        <IoChevronForward className="text-gray-400 group-hover:text-blue-600 text-xl transition-colors" />
-                    </div>
-                </button>
-
-                {/* PAGAMENTO INDIVIDUAL */}
-                <button 
-                    onClick={() => {
-                        setTipoPagamento('individual');
-                        setEtapa(2);
-                    }}
-                    className="w-full bg-white rounded-2xl p-5 border-2 border-green-200 hover:border-green-400 hover:shadow-lg transition-all duration-200 active:scale-95 group"
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <IoPeople className="text-white text-xl" />
-                        </div>
-                        <div className="flex-1 text-left">
-                            <h4 className="font-bold text-gray-900 text-lg">Pagamento Individual</h4>
-                            <p className="text-gray-600 text-sm">Cada um paga o que consumiu</p>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full">
-                                    {Object.keys(agruparItensPorPessoa).length} pessoa(s)
-                                </span>
-                            </div>
-                        </div>
-                        <IoChevronForward className="text-gray-400 group-hover:text-green-600 text-xl transition-colors" />
-                    </div>
-                </button>
-            </div>
-
-            {/* Resumo da Mesa */}
-            <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
-                <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                    <IoReceiptOutline className="text-blue-500" />
-                    Resumo da Mesa
-                </h4>
-                <div className="space-y-3">
-                    {Object.entries(agruparItensPorPessoa).map(([pessoa, dados]) => (
-                        <div key={pessoa} className="flex justify-between items-center bg-white rounded-xl p-3 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                    <span className="text-blue-600 font-bold text-sm">
-                                        {pessoa.charAt(0)}
-                                    </span>
-                                </div>
-                                <span className="font-medium text-gray-900">{pessoa}</span>
-                            </div>
-                            <span className="font-bold text-blue-600">R$ {dados.total.toFixed(2)}</span>
-                        </div>
-                    ))}
-                </div>
-                <div className="flex justify-between items-center pt-3 mt-3 border-t border-gray-300">
-                    <span className="font-black text-gray-900 text-lg">Total Geral</span>
-                    <span className="font-black text-blue-600 text-xl">
-                        R$ {calcularTotalMesa().toFixed(2)}
-                    </span>
-                </div>
-            </div>
-        </div>
-    );
-
-    const renderizarEtapa2 = () => {
-        const formasPagamento = [
-            { id: 'dinheiro', icon: <IoCash className="text-xl" />, label: 'Dinheiro', color: 'from-green-500 to-green-600', bg: 'bg-green-50' },
-            { id: 'credito', icon: <IoCard className="text-xl" />, label: 'Crédito', color: 'from-blue-500 to-blue-600', bg: 'bg-blue-50' },
-            { id: 'debito', icon: <IoCard className="text-xl" />, label: 'Débito', color: 'from-purple-500 to-purple-600', bg: 'bg-purple-50' },
-            { id: 'pix', icon: <IoPhonePortrait className="text-xl" />, label: 'PIX', color: 'from-teal-500 to-teal-600', bg: 'bg-teal-50' }
-        ];
-
-        return (
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="text-center">
-                    <button 
-                        onClick={() => setEtapa(1)}
-                        className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-4 mx-auto hover:bg-gray-200 transition-colors"
-                    >
-                        <IoChevronBack className="text-gray-600 text-lg" />
-                    </button>
-                    <h3 className="text-xl font-black text-gray-900 mb-2">
-                        {tipoPagamento === 'unico' ? '💳 Pagamento Único' : '👥 Pagamentos Individuais'}
-                    </h3>
-                    <p className="text-gray-600">
-                        {tipoPagamento === 'unico' 
-                            ? 'Escolha a forma de pagamento' 
-                            : 'Defina como cada pessoa vai pagar'
-                        }
-                    </p>
-                </div>
-
-                {/* Lista de Pagamentos */}
-                <div className="space-y-4">
-                    {Object.entries(pagamentos).map(([pessoa, dados]) => (
-                        <div key={pessoa} className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-                            {/* Cabeçalho */}
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${
-                                        tipoPagamento === 'unico' ? 'from-blue-500 to-blue-600' : 'from-purple-500 to-purple-600'
-                                    }`}>
-                                        <span className="text-white font-bold">
-                                            {tipoPagamento === 'unico' ? '💳' : pessoa.charAt(0)}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-gray-900 text-lg">{pessoa}</h4>
-                                        <p className="text-2xl font-black text-blue-600">
-                                            R$ {dados.valor.toFixed(2)}
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                {tipoPagamento === 'individual' && Object.keys(pagamentos).length > 1 && (
-                                    <button 
-                                        onClick={() => removerPessoa(pessoa)}
-                                        className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-100 transition-colors"
-                                    >
-                                        <IoRemove className="text-lg" />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Formas de Pagamento */}
-                            <div className="grid grid-cols-2 gap-3">
-                                {formasPagamento.map(forma => (
-                                    <button
-                                        key={forma.id}
-                                        onClick={() => editarFormaPagamento(pessoa, forma.id)}
-                                        className={`p-4 rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center gap-2 ${
-                                            dados.formaPagamento === forma.id 
-                                                ? `border-blue-500 ${forma.bg} shadow-md scale-105` 
-                                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${forma.color}`}>
-                                            <span className="text-white text-lg">{forma.icon}</span>
-                                        </div>
-                                        <span className="font-medium text-gray-900 text-sm">{forma.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Campo para valor personalizado */}
-                            <div className="mt-4">
-                                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                                    Valor personalizado:
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        placeholder="0,00"
-                                        value={valorPersonalizado}
-                                        onChange={(e) => setValorPersonalizado(e.target.value)}
-                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            if (valorPersonalizado) {
-                                                editarValorPagamento(pessoa, parseFloat(valorPersonalizado));
-                                                setValorPersonalizado('');
-                                            }
-                                        }}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                                    >
-                                        Aplicar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Botão para adicionar pessoa */}
-                {tipoPagamento === 'individual' && (
-                    <button 
-                        onClick={adicionarPessoa}
-                        className="w-full p-4 border-2 border-dashed border-gray-300 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-all flex items-center justify-center gap-3 text-gray-600 hover:text-blue-600 group"
-                    >
-                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                            <IoAdd className="text-blue-600 text-lg" />
-                        </div>
-                        <span className="font-medium text-lg">Adicionar Pagante</span>
-                    </button>
-                )}
-
-                {/* Botão Continuar */}
-                <button 
-                    onClick={() => setEtapa(3)}
-                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-3"
-                >
-                    <span>Continuar</span>
-                    <IoChevronForward className="text-lg" />
-                </button>
-            </div>
-        );
+    const handleAdicionarRapido = (item) => {
+        if (!currentUser) { setShowLoginPrompt(true); return; }
+        const preco = item.precoFinal !== undefined ? item.precoFinal : item.preco;
+        setCarrinho(prev => [...prev, { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
+        toast.success(`${item.nome} adicionado!`);
     };
 
-    const renderizarEtapa3 = () => {
-        const totalMesa = calcularTotalMesa();
-        const totalPagamentos = calcularTotalPagamentos();
-        const diferenca = totalPagamentos - totalMesa;
-        const batendo = Math.abs(diferenca) < 0.10;
-
-        return (
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="text-center">
-                    <button 
-                        onClick={() => setEtapa(2)}
-                        className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-4 mx-auto hover:bg-gray-200 transition-colors"
-                    >
-                        <IoChevronBack className="text-gray-600 text-lg" />
-                    </button>
-                    <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <IoCheckmark className="text-2xl text-green-600" />
-                    </div>
-                    <h3 className="text-xl font-black text-gray-900 mb-2">Confirmar Pagamento</h3>
-                    <p className="text-gray-600">Revise os valores antes de finalizar</p>
-                </div>
-
-                {/* Resumo */}
-                <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center py-2">
-                            <span className="text-gray-600">Total da Mesa:</span>
-                            <strong className="text-lg font-black text-gray-900">R$ {totalMesa.toFixed(2)}</strong>
-                        </div>
-                        <div className="flex justify-between items-center py-2 border-t border-gray-200">
-                            <span className="text-gray-600">Total Recebido:</span>
-                            <strong className={`text-lg font-black ${batendo ? 'text-green-600' : 'text-red-600'}`}>
-                                R$ {totalPagamentos.toFixed(2)}
-                            </strong>
-                        </div>
-                        
-                        {!batendo && (
-                            <div className={`py-3 px-4 rounded-xl text-center font-bold ${
-                                diferenca > 0 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                                {diferenca > 0 
-                                    ? `💰 Sobrando R$ ${diferenca.toFixed(2)}` 
-                                    : `⚠️ Faltando R$ ${Math.abs(diferenca).toFixed(2)}`
-                                }
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Detalhes dos Pagamentos */}
-                    <div className="mt-6">
-                        <h4 className="font-bold text-gray-900 mb-3">Detalhes:</h4>
-                        <div className="space-y-3">
-                            {Object.entries(pagamentos).map(([pessoa, dados]) => (
-                                <div key={pessoa} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                            <span className="text-blue-600 font-bold">
-                                                {pessoa.charAt(0)}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="font-medium text-gray-900 block">{pessoa}</span>
-                                            <span className="text-xs text-gray-500 capitalize">{dados.formaPagamento}</span>
-                                        </div>
-                                    </div>
-                                    <strong className="text-gray-900 text-lg">R$ {dados.valor.toFixed(2)}</strong>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Botões de Ação */}
-                <div className="flex gap-3">
-                    <button 
-                        onClick={() => setEtapa(2)}
-                        className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                        <IoChevronBack className="text-lg" />
-                        Voltar
-                    </button>
-                    <button 
-                        onClick={finalizarPagamento}
-                        disabled={carregando}
-                        className={`flex-1 py-4 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                            batendo 
-                                ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg shadow-green-200' 
-                                : 'bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white shadow-lg shadow-orange-200'
-                        }`}
-                    >
-                        {carregando ? (
-                            <>
-                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                Processando...
-                            </>
-                        ) : batendo ? (
-                            <>
-                                <IoCheckmark className="text-lg" />
-                                Finalizar
-                            </>
-                        ) : (
-                            <>
-                                ⚠️ Finalizar
-                            </>
-                        )}
-                    </button>
-                </div>
-            </div>
-        );
+    const handleConfirmarVariacoes = (itemConfigurado) => {
+        const preco = Number(itemConfigurado.variacaoSelecionada?.preco || itemConfigurado.preco);
+        setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
+        setItemParaVariacoes(null);
     };
+
+    const handleConfirmarAdicionais = (itemConfigurado) => {
+        const preco = Number(itemConfigurado.precoFinal || itemConfigurado.preco);
+        setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
+        setItemParaAdicionais(null);
+    };
+
+    const removerDoCarrinho = (cartItemId) => {
+        const item = carrinho.find((p) => p.cartItemId === cartItemId);
+        if (!item) return;
+        if (item.qtd === 1) setCarrinho(carrinho.filter((p) => p.cartItemId !== cartItemId));
+        else setCarrinho(carrinho.map((p) => (p.cartItemId === cartItemId ? { ...p, qtd: p.qtd - 1 } : p)));
+    };
+
+    const prepararParaPagamento = () => {
+        if (!currentUser) {
+            toast.info("Faça login para finalizar.");
+            setShowLoginPrompt(true);
+            return;
+        }
+        if (carrinho.length === 0) {
+            toast.warn('Seu carrinho está vazio.');
+            return;
+        }
+        
+        // Verifica dados mínimos para entrega
+        if (!isRetirada && (!rua || !numero || !bairro)) {
+            toast.warn("Preencha o endereço de entrega.");
+            // Rola até o formulário
+            const formElement = document.getElementById('form-dados-cliente');
+            if (formElement) formElement.scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+
+        const itensFormatados = carrinho.map(item => ({
+            nome: formatarItemCarrinho(item),
+            quantidade: item.qtd,
+            preco: Number(item.precoFinal)
+        }));
+
+        const pedidoRaw = {
+            cliente: { nome: nomeCliente, telefone: telefoneCliente, endereco: isRetirada ? null : { rua, numero, bairro, cidade }, userId: currentUser.uid },
+            estabelecimentoId: actualEstabelecimentoId,
+            itens: itensFormatados,
+            totalFinal: Number(finalOrderTotal),
+            taxaEntrega: Number(taxaAplicada),
+            createdAt: serverTimestamp(),
+            status: 'aguardando_pagamento'
+        };
+
+        setPedidoParaPagamento(pedidoRaw);
+        setShowPaymentModal(true);
+    };
+
+    const handlePagamentoSucesso = async (result) => {
+        const docRef = await addDoc(collection(db, 'pedidos'), { ...pedidoParaPagamento, status: 'recebido', transactionId: result.transactionId });
+        setConfirmedOrderDetails({ id: docRef.id });
+        setShowOrderConfirmationModal(true);
+        setCarrinho([]);
+        setShowPaymentModal(false);
+    };
+
+    const handleApplyCoupon = async () => {
+        if (!currentUser) { setShowLoginPrompt(true); return; }
+        setCouponLoading(true);
+        try {
+            const q = query(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons'), where('codigo', '==', couponCodeInput.toUpperCase().trim()));
+            const snap = await getDocs(q);
+            if (snap.empty) throw new Error('Cupom inválido.');
+            const data = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            
+            let discount = 0;
+            if (data.tipoDesconto === 'percentual') discount = subtotalCalculado * (data.valorDesconto / 100);
+            else if (data.tipoDesconto === 'valorFixo') discount = Math.min(data.valorDesconto, subtotalCalculado);
+            else if (data.tipoDesconto === 'freteGratis') discount = taxaAplicada;
+            
+            setAppliedCoupon(data);
+            setDiscountAmount(discount);
+            toast.success('Cupom aplicado!');
+        } catch (e) { toast.error(e.message); } 
+        finally { setCouponLoading(false); }
+    };
+
+    const handleLogout = async () => { try { await logout(); setCarrinho([]); window.location.reload(); } catch(e){} };
+    const handleLoginModal = async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); setShowLoginPrompt(false); } catch { toast.error("Erro no login"); } };
+    const handleRegisterModal = async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal, numero: numeroAuthModal, bairro: bairroAuthModal, cidade: cidadeAuthModal }, criadoEm: Timestamp.now() }); setShowLoginPrompt(false); } catch { toast.error("Erro ao criar conta."); } };
+
+    // --- EFFECTS ---
+    useEffect(() => {
+        if (!estabelecimentoSlug) return;
+        const load = async () => {
+            setLoading(true);
+            const q = query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug));
+            const snap = await getDocs(q);
+            if (snap.empty) { navigate('/'); return; }
+            const data = snap.docs[0].data();
+            const id = snap.docs[0].id;
+            const prods = await carregarProdutosRapido(id);
+            setEstabelecimentoInfo({ ...data, id }); setActualEstabelecimentoId(id); setNomeEstabelecimento(data.nome);
+            if (data.cores) setCoresEstabelecimento(data.cores);
+            if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
+            setAllProdutos(prods); setLoading(false);
+        };
+        load();
+    }, [estabelecimentoSlug, navigate]);
+
+    useEffect(() => {
+        if (!authLoading && currentUser && currentClientData) {
+            setNomeCliente(currentClientData.nome || ''); setTelefoneCliente(currentClientData.telefone || '');
+            if (currentClientData.endereco) {
+                setRua(currentClientData.endereco.rua || ''); setNumero(currentClientData.endereco.numero || '');
+                setBairro(currentClientData.endereco.bairro || ''); setCidade(currentClientData.endereco.cidade || '');
+            }
+        }
+    }, [currentUser, currentClientData, authLoading]);
+
+    // Cálculo da Taxa
+    useEffect(() => {
+        const calcularTaxa = async () => {
+            if (!actualEstabelecimentoId || !bairro || isRetirada) { setTaxaEntregaCalculada(0); return; }
+            try {
+                const bairroNorm = normalizarTexto(bairro);
+                const taxasSnap = await getDocs(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'taxas'));
+                let taxa = 0;
+                taxasSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (normalizarTexto(data.bairro || '').includes(bairroNorm)) taxa = Number(data.valor);
+                });
+                setTaxaEntregaCalculada(taxa);
+            } catch (e) { setTaxaEntregaCalculada(0); }
+        };
+        const timer = setTimeout(calcularTaxa, 800);
+        return () => clearTimeout(timer);
+    }, [bairro, actualEstabelecimentoId, isRetirada]);
+
+    useEffect(() => {
+        let p = [...allProdutos];
+        if (selectedCategory !== 'Todos') p = p.filter(prod => prod.categoria === selectedCategory);
+        if (searchTerm) p = p.filter(prod => prod.nome.toLowerCase().includes(searchTerm.toLowerCase()));
+        setProdutosFiltrados(p);
+    }, [allProdutos, selectedCategory, searchTerm]);
+
+    const menuAgrupado = useMemo(() => {
+        return produtosFiltrados.reduce((acc, p) => {
+            const cat = p.categoria || 'Outros';
+            if (!acc[cat]) acc[cat] = []; acc[cat].push(p); return acc;
+        }, {});
+    }, [produtosFiltrados]);
+
+    const categoriasOrdenadas = useMemo(() => Object.keys(menuAgrupado).sort((a, b) => {
+        if (!ordemCategorias.length) return a.localeCompare(b);
+        return ordemCategorias.indexOf(a) - ordemCategorias.indexOf(b);
+    }), [menuAgrupado, ordemCategorias]);
+
+    const handleShowMore = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: (p[cat] || 4) + 4 }));
+    const handleShowLess = (cat) => setVisibleItemsCount(p => ({ ...p, [cat]: 4 }));
+
+    if (loading || authLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+
+    if (currentUser && (isAdmin || isMasterAdmin)) return <div className="p-10 text-center">Acesso Admin. Saia para ver o cardápio.<button onClick={handleLogout} className="block mx-auto mt-4 bg-red-600 text-white p-2 rounded">Sair</button></div>;
 
     return (
-        <div className="fixed inset-0 z-50">
-            {/* Overlay - Fecha ao clicar fora APENAS na etapa 1 */}
-            <div 
-                className={`absolute inset-0 transition-all ${
-                    etapa === 1 ? 'bg-black/70 backdrop-blur-sm' : 'bg-black/60'
-                }`}
-                onClick={etapa === 1 ? onClose : undefined}
-            />
-            
-            {/* Modal */}
-            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl max-h-[90vh] overflow-hidden animate-slide-up">
-                {/* Header Fixo */}
-                <div className="sticky top-0 bg-white z-10 border-b border-gray-200">
-                    <div className="flex items-center justify-between p-4">
-                        <div>
-                            <h2 className="text-lg font-black text-gray-900">Pagamento - Mesa {mesa?.numero}</h2>
-                            <p className="text-sm text-gray-500">Total: R$ {calcularTotalMesa().toFixed(2)}</p>
+        <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
+            <div className="max-w-7xl mx-auto px-4 py-8">
+                
+                {/* INFO */}
+                {estabelecimentoInfo && (
+                    <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg">
+                        <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} />
+                        <div className="flex-1">
+                            <h1 className="text-3xl font-bold mb-2">{estabelecimentoInfo.nome}</h1>
+                            <div className="text-sm text-gray-600">
+                                <p className="flex items-center gap-2"><IoLocationSharp className="text-red-500" /> {estabelecimentoInfo.endereco?.rua}</p>
+                                <p className="flex items-center gap-2"><IoTime className="text-blue-500" /> {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}</p>
+                            </div>
                         </div>
-                        <button 
-                            onClick={onClose}
-                            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors"
-                        >
-                            <IoClose className="text-gray-600 text-lg" />
-                        </button>
+                    </div>
+                )}
+
+                {/* FILTROS */}
+                <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
+                    <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 bg-gray-50 rounded-lg border text-gray-900" />
+                    <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
+                        {['Todos', ...categoriasOrdenadas].map(cat => (
+                            <button key={cat} onClick={() => setSelectedCategory(cat)} className="px-4 py-2 rounded-full font-bold bg-gray-100 text-gray-600">{cat}</button>
+                        ))}
                     </div>
                 </div>
 
-                {/* Conteúdo */}
-                <div className="p-4 pb-8 overflow-y-auto max-h-[calc(90vh-80px)]">
-                    {etapa === 1 && renderizarEtapa1()}
-                    {etapa === 2 && renderizarEtapa2()}
-                    {etapa === 3 && renderizarEtapa3()}
+                {/* LISTAGEM */}
+                {categoriasOrdenadas.map(cat => {
+                    const items = menuAgrupado[cat];
+                    const visible = visibleItemsCount[cat] || 4;
+                    return (
+                        <div key={cat} id={`categoria-${cat}`} className="mb-8">
+                            <h2 className="text-2xl font-bold mb-4">{cat}</h2>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                {items.slice(0, visible).map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />)}
+                            </div>
+                            {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-4 py-2 bg-gray-100 rounded-lg text-gray-500 font-bold">{visible >= items.length ? 'Ver menos' : 'Ver mais'}</button>}
+                        </div>
+                    );
+                })}
+
+                {/* DADOS E RESUMO */}
+                <div className="grid md:grid-cols-2 gap-8 mt-12">
+                    <div id="form-dados-cliente" className="bg-white p-6 rounded-xl border shadow-lg text-left">
+                        <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
+                        {currentUser ? <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : <button onClick={() => setShowLoginPrompt(true)} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Entrar</button>}
+                        <div className="space-y-4">
+                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            {!isRetirada && (
+                                <div className="space-y-2">
+                                    <div className="flex gap-2"><input className="flex-1 p-3 rounded border text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /><input className="w-24 p-3 rounded border text-center text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div>
+                                    <input className="w-full p-3 rounded border text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🚚 Entrega</button>
+                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🏪 Retirada</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900">
+                        <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
+                        {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
+                            <>
+                                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
+                                    {carrinho.map(item => (
+                                        <div key={item.cartItemId} className="flex justify-between items-start border-b pb-2">
+                                            <div><p className="font-bold text-sm">{formatarItemCarrinho(item)}</p><p className="text-xs">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p></div>
+                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold">✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="border-t pt-4 space-y-2 text-sm">
+                                    <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
+                                    {!isRetirada && <div className="flex justify-between"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
+                                    {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
+                                    {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
+                                    <div className="flex gap-2 mt-2"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-sm" /><button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button></div>
+                                    <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
+                                </div>
+                                <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600">✅ Finalizar Pedido</button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            <style jsx>{`
-                @keyframes slide-up {
-                    from { transform: translateY(100%); }
-                    to { transform: translateY(0); }
-                }
-                .animate-slide-up {
-                    animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-                }
-            `}</style>
+            {/* 🔥 OCULTA CARRINHO FLUTUANTE SE IA ESTIVER ABERTA */}
+            {!isWidgetOpen && (
+                <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
+            )}
+
+            {/* 🔥 IA: Passamos 'prepararParaPagamento' no 'onCheckout' para abrir o MODAL DE PAGAMENTO */}
+            {estabelecimentoInfo && (
+                <AIChatAssistant 
+                    estabelecimento={estabelecimentoInfo} 
+                    produtos={allProdutos} 
+                    onAddDirect={handleAdicionarPorIA} 
+                    onCheckout={prepararParaPagamento} 
+                    mode={showAICenter ? "center" : "widget"}
+                    onClose={() => setShowAICenter(false)}
+                    clienteNome={nomeCliente}
+                    onRequestLogin={() => setShowLoginPrompt(true)}
+                    carrinho={carrinho}
+                />
+            )}
+
+            <AIWidgetButton />
+
+            {/* MODAIS */}
+            {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={(i) => {setCarrinho([...carrinho, {...i, cartItemId:uuidv4(), qtd:1}]); setItemParaVariacoes(null)}} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
+            {showPaymentModal && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} cartItems={carrinho} customer={pedidoParaPagamento?.cliente} onSuccess={handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} />}
+            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4 text-gray-900">🎉 Pedido Recebido!</h2><button onClick={() => window.location.reload()} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
+            {showLoginPrompt && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4"><div className="bg-white p-6 rounded-2xl w-full max-w-md"><h2 className="text-center font-bold text-xl mb-4">Login Necessário</h2><form onSubmit={handleLoginModal}><input className="w-full p-3 border mb-3 rounded" placeholder="Email" value={emailAuthModal} onChange={e=>setEmailAuthModal(e.target.value)} /><input className="w-full p-3 border mb-3 rounded" type="password" placeholder="Senha" value={passwordAuthModal} onChange={e=>setPasswordAuthModal(e.target.value)} /><button className="w-full bg-green-600 text-white p-3 rounded">Entrar</button></form><button onClick={() => setShowLoginPrompt(false)} className="block w-full text-center text-red-500 mt-4">Fechar</button></div></div>}
         </div>
     );
-};
+}
 
-export default ModalPagamento;
+export default Menu;

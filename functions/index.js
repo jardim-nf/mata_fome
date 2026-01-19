@@ -1,3 +1,4 @@
+// functions/index.js
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params"; 
@@ -24,48 +25,32 @@ export const chatAgent = onCall({
     }
 
     try {
-        const systemPrompt = `
-            Você é o GARÇOM DIGITAL do restaurante ${context.estabelecimentoNome || 'MataFome'}.
-            Você está atendendo: ${context.clienteNome || 'Cliente'}.
-            
-            SUA MISSÃO:
-            Vender, tirar dúvidas e LEVAR O CLIENTE PARA O PAGAMENTO.
+const systemPrompt = `
+    Você é o GARÇOM DIGITAL do restaurante ${context.estabelecimentoNome}.
+    
+    🚨 REGRA DE OURO (PROTOCOLO DE MÁQUINA):
+    O sistema é "esquecido". Sempre que você confirmar um item, mudar uma quantidade ou o cliente aceitar uma sugestão, você DEVE obrigatoriamente incluir o comando ||ADD:...|| no final da mensagem. 
+    Sem o comando entre barras duplas, o item NÃO entra no carrinho.
 
-            🚨 REGRAS DE COMANDO (SINTAXE OBRIGATÓRIA):
-            1. ADICIONAR ITEM SIMPLES OU "ÚNICO":
-               Use para produtos sem variações ou que o cardápio indique "Único".
-               Exemplo: ||ADD: Coca Cola 1,5L -- Opcao: Único -- Qtd: 1||
+    🚨 SINTAXE OBRIGATÓRIA DE COMANDO:
+    - Adicionar: ||ADD: Nome exato do produto -- Opcao: Nome exato da variação -- Qtd: Número||
+    - Exemplo: ||ADD: Coca-Cola -- Opcao: Garrafa 2 Litros -- Qtd: 1||
+    - Finalizar/Pagar: ||PAY||
 
-            2. ITEM COM VARIAÇÃO (TAMANHO/SABOR):
-               ||ADD: Pizza Calabresa -- Opcao: Grande -- Qtd: 1||
+    🚨 REGRAS DE LAYOUT:
+    - Use emojis (🍕, 🥤, 🍟) para separar as categorias.
+    - Use **Negrito** para nomes e preços.
+    - Se o cliente não especificar o tamanho (ex: "Quero uma coca"), NÃO adicione. Pergunte: "Temos Lata 350ml e 2 Litros, qual prefere?"
 
-            3. FINALIZAR/PAGAR:
-               ||PAY||
-
-            🚨 REGRAS DE COMPORTAMENTO DETERMINÍSTICO:
-            - NUNCA diga que não tem acesso ao carrinho. Baseie o resumo no que VOCÊ adicionou nesta conversa.
-            - Sempre que o cliente quiser "ver carrinho", "fechar", "pagar" ou "finalizar":
-              1. Liste os itens adicionados: "Com certeza! Adicionamos [Item A] e [Item B]."
-              2. Informe o valor total aproximado (se disponível).
-              3. Envie OBRIGATORIAMENTE o comando ||PAY|| no final da frase.
-            
-            🚨 ZERO REPETIÇÃO:
-            - Não repita o comando ||ADD...|| para o mesmo item se ele já foi confirmado anteriormente no histórico.
-            - Mantenha os nomes dos produtos EXATAMENTE como aparecem no cardápio, sem preços (R$) dentro das barras.
-
-            CARDÁPIO ATUALIZADO:
-            ${context.produtosPopulares}
-
-            INFORMAÇÕES ADICIONAIS:
-            - Horários: ${context.horarios}
-            - Endereço: ${context.endereco}
-        `;
+    CARDÁPIO ATUALIZADO:
+    ${context.produtosPopulares}
+`;
 
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [{ role: "system", content: systemPrompt }, ...history, { role: "user", content: message }],
-            temperature: 0, // 🔥 DETERMINÍSTICO: Essencial para evitar triplicação e erros de sintaxe
-            max_tokens: 400,
+            temperature: 0, 
+            max_tokens: 500, // Aumentado um pouco para acomodar o novo layout
         });
 
         const respostaIA = completion.choices[0].message.content;
@@ -75,6 +60,6 @@ export const chatAgent = onCall({
 
     } catch (error) {
         logger.error("❌ Erro OpenAI:", error);
-        return { reply: "⚠️ Ocorreu um erro ao processar sua mensagem. Tente novamente." };
+        return { reply: "⚠️ Opa! Tive um probleminha aqui. Pode repetir, por favor? 😅" };
     }
 });

@@ -1,347 +1,176 @@
 // src/components/PaymentModal.jsx
 import React, { useState, useEffect } from 'react';
-import { usePayment } from '../context/PaymentContext';
+import { IoClose, IoCard, IoCash, IoQrCode, IoCheckmarkCircle } from 'react-icons/io5';
 import { toast } from 'react-toastify';
 
-const PaymentModal = ({ 
-  isOpen, 
-  onClose, 
-  amount, 
-  orderId, 
-  cartItems = [], 
-  customer = {},  
-  onSuccess,
-  onError,
-  pixKey, 
-  establishmentName 
-}) => {
-  
-  const {
-    paymentMethods,
-    selectedPayment,
-    setSelectedPayment,
-    paymentLoading,
-    pixCode,
-    generatePixCode,
-    clearPixCode,
-    pixConfig,
-    submitOrder
-  } = usePayment();
-
-  const [localLoading, setLocalLoading] = useState(false);
-
-  // 🔎 FUNÇÃO VISUAL (Para mostrar na tela bonitinho)
-  const formatarChaveVisual = (chave) => {
-    if (!chave) return "Chave não informada";
-    if (chave.includes('@')) return chave;
-    
-    const limpa = chave.replace(/\D/g, '');
-
-    // CNPJ
-    if (limpa.length === 14) return limpa.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-    // Celular
-    if (limpa.length === 11 && limpa[2] === '9') return limpa.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-    // CPF
-    if (limpa.length === 11) return limpa.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-    
-    return chave;
-  };
-
-  // ⚙️ FUNÇÃO TÉCNICA (Para gerar o QR Code correto)
-  const prepararChaveParaApi = (chave) => {
-    if (!chave) return '';
-    
-    // Se for email, só remove espaços
-    if (chave.includes('@')) return chave.trim();
-    
-    // Se for chave aleatória (tem letras mas não é email), manda limpa
-    if (/[a-zA-Z]/.test(chave)) return chave.trim();
-
-    // Remove tudo que não for número
-    const limpa = chave.replace(/\D/g, '');
-
-    // LÓGICA DE OURO: Adicionar +55 se for celular
-    // Celular Brasil: 11 dígitos e o 3º dígito é 9
-    if (limpa.length === 11 && limpa[2] === '9') {
-        return `+55${limpa}`;
-    }
-    
-    // Telefone fixo (10 dígitos)
-    if (limpa.length === 10) {
-         return `+55${limpa}`;
-    }
-
-    // CPF (11 dígitos, mas não é celular) ou CNPJ (14), manda apenas números
-    return limpa;
-  };
-
-  // 🔥 EFEITO CORRIGIDO: Usa a chave preparada (+55) para gerar
-  useEffect(() => {
-    if (isOpen && selectedPayment === 'pix' && !pixCode && !paymentLoading) {
-      const chaveCrua = pixKey || pixConfig?.chave;
-
-      if (chaveCrua) {
-        // Prepara a chave (adiciona +55 se precisar)
-        const chaveParaApi = prepararChaveParaApi(chaveCrua);
-        
-        console.log(`🔄 Gerando PIX. Visual: ${chaveCrua} | API: ${chaveParaApi}`);
-        generatePixCode(amount, orderId, chaveParaApi);
-      } else {
-        console.warn("⚠️ Nenhuma chave PIX encontrada.");
-      }
-    }
-  }, [isOpen, selectedPayment, pixCode, amount, orderId, pixConfig, paymentLoading, generatePixCode, pixKey]);
-
-  const handleCopyPixCode = async () => {
-    if (!pixCode?.payload_pix) {
-      toast.error('❌ Código PIX não disponível');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(pixCode.payload_pix);
-      toast.success('📋 Copiado com sucesso!');
-    } catch (error) {
-      // Fallback para mobile
-      const textArea = document.createElement('textarea');
-      textArea.value = pixCode.payload_pix;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      toast.success('📋 Copiado com sucesso!');
-    }
-  };
-
-  const handleCopyPixKey = async () => {
-    const chave = pixKey || pixConfig?.chave;
-    if (!chave) return;
-    
-    try {
-      await navigator.clipboard.writeText(chave);
-      toast.success('📋 Chave copiada!');
-    } catch (error) {
-      const textArea = document.createElement('textarea');
-      textArea.value = chave;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      toast.success('📋 Chave copiada!');
-    }
-  };
-
-  const handleFinishOrder = async () => {
-    if (!selectedPayment) return toast.warn("Selecione uma forma de pagamento.");
-
-    setLocalLoading(true);
-
-    try {
-      const orderData = {
-        orderId,
-        amount,
-        paymentMethod: selectedPayment,
-        items: cartItems,
-        customer,
-        timestamp: new Date().toISOString(),
-        status: 'pending'
-      };
-
-      const result = await submitOrder(orderData);
-
-      if (result.success) {
-        const paymentResult = {
-          success: true,
-          method: selectedPayment,
-          transactionId: selectedPayment === 'pix' ? (pixCode?.transaction_id || `pix_${Date.now()}`) : `manual_${Date.now()}`,
-          amount: amount,
-          orderId: orderId,
-          date: new Date().toISOString(),
-          status: 'confirmed'
-        };
-
-        if (selectedPayment === 'pix') {
-          const zapTarget = pixCode?.whatsapp_target || pixConfig?.whatsapp || '';
-          const message = `Olá *${establishmentName || 'Restaurante'}*! Fiz o pagamento via PIX do *Pedido #${orderId}*.\nValor: R$ ${parseFloat(amount).toFixed(2)}\n\nEstou enviando o comprovante em anexo.`;
-          
-          if (zapTarget) {
-            window.open(`https://wa.me/${zapTarget}?text=${encodeURIComponent(message)}`, '_blank');
-          }
-          toast.success("✅ Pedido confirmado! Envie o comprovante.");
-        } else {
-          toast.success("✅ Pedido Enviado com Sucesso!");
-        }
-
-        if (onSuccess) onSuccess(paymentResult);
-      }
-
-    } catch (error) {
-      console.error('❌ Erro:', error);
-      if (onError) onError(error);
-      else toast.error('Erro ao processar pedido.');
-    } finally {
-      setLocalLoading(false);
-      onClose();
-    }
-  };
+const PaymentModal = ({ isOpen, onClose, amount, cartItems, customer, onSuccess, coresEstabelecimento, pixKey, establishmentName }) => {
+  const [method, setMethod] = useState('pix'); // pix, card, money
+  const [trocoPara, setTrocoPara] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [step, setStep] = useState(1); // 1: Seleção, 2: Processando/Sucesso
 
   if (!isOpen) return null;
 
-  const currentPixKey = pixKey || pixConfig?.chave;
+  const handleConfirm = async () => {
+    setProcessing(true);
+
+    // Simulação de processamento (ou integração real aqui)
+    setTimeout(() => {
+      const paymentData = {
+        method,
+        amount,
+        details: method === 'money' ? { troco: trocoPara } : {},
+        transactionId: `tx_${Date.now()}`,
+        status: 'approved',
+        date: new Date().toISOString()
+      };
+
+      setProcessing(false);
+      setStep(2); // Vai para tela de sucesso
+      
+      // Chama a função de sucesso do Menu.jsx após 1.5s
+      setTimeout(() => {
+        onSuccess(paymentData);
+      }, 1500);
+    }, 2000);
+  };
+
+  const formatCurrency = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fade-in">
+      <div className="bg-white w-full max-w-md h-[85vh] sm:h-auto rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
         
         {/* HEADER */}
-        <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
-          <h2 className="text-lg font-bold text-gray-700">Pagamento</h2>
-          <button 
-            onClick={() => { clearPixCode(); onClose(); }}
-            className="text-gray-400 hover:text-red-500 text-2xl font-bold px-2"
-          >
-            &times;
+        <div className="p-5 flex justify-between items-center border-b border-gray-100 bg-gray-50">
+          <h2 className="text-xl font-bold text-gray-800">
+            {step === 1 ? 'Forma de Pagamento' : 'Processando...'}
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition">
+            <IoClose size={24} className="text-gray-500" />
           </button>
         </div>
 
         {/* BODY */}
-        <div className="p-6">
-            <div className="text-center mb-6">
-                 <p className="text-sm text-gray-500">Total a pagar</p>
-                 <p className="text-3xl font-bold text-green-600">R$ {parseFloat(amount).toFixed(2)}</p>
-                 <p className="text-xs text-gray-400 mt-1">Pedido: {orderId}</p>
-                 {establishmentName && <p className="text-xs text-gray-500 font-semibold">{establishmentName}</p>}
-            </div>
-
-          {/* SELETOR DE MÉTODO */}
-          <div className="grid grid-cols-2 gap-2 mb-6">
-            {paymentMethods.filter(m => m.enabled).map(method => (
-              <button
-                key={method.id}
-                onClick={() => {
-                  setSelectedPayment(method.type);
-                  if (method.type !== 'pix') clearPixCode();
-                }}
-                className={`p-3 rounded-lg border text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                  selectedPayment === method.type
-                    ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-500 shadow-sm'
-                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <span>{method.icon}</span>
-                {method.name}
-              </button>
-            ))}
-          </div>
-
-          {/* 📱 ÁREA DO PIX */}
-          {selectedPayment === 'pix' && (
-            <div className="animate-fade-in">
-              <div className="flex flex-col items-center justify-center mb-4">
-                {(!pixCode || paymentLoading) ? (
-                  <div className="h-48 w-48 flex flex-col items-center justify-center bg-gray-100 rounded-lg">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mb-2"></div>
-                    <span className="text-xs text-gray-500">
-                        {currentPixKey ? 'Gerando QR Code...' : 'Aguardando Chave PIX...'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="bg-white p-4 rounded-xl border-2 border-green-500 shadow-sm relative">
-                    {pixCode.qr_code_base64 ? (
-                        <img 
-                        src={pixCode.qr_code_base64} 
-                        alt="QR Code PIX" 
-                        className="w-48 h-48 object-contain"
-                        />
-                    ) : (
-                        <div className="w-48 h-48 flex items-center justify-center text-center text-red-500 text-xs p-2">
-                            Erro ao gerar imagem. Tente copiar o código abaixo.
-                        </div>
-                    )}
-                  </div>
-                )}
+        <div className="flex-1 p-6 overflow-y-auto">
+          {step === 1 && (
+            <div className="space-y-6">
+              {/* RESUMO VALOR */}
+              <div className="text-center p-4 bg-green-50 rounded-xl border border-green-100">
+                <p className="text-sm text-green-600 mb-1">Total a pagar</p>
+                <p className="text-3xl font-black text-green-700">{formatCurrency(amount)}</p>
               </div>
 
-              {/* INFORMAÇÕES PIX */}
-              {currentPixKey && (
-                <div className="bg-gray-50 p-3 rounded-lg mb-4 border border-gray-100">
-                  <p className="text-xs text-gray-500 mb-1">Chave PIX:</p>
-                  <div className="flex items-center justify-between">
-                    <div className="overflow-hidden">
-                      <code className="text-sm font-mono font-bold text-gray-800 truncate block">
-                        {formatarChaveVisual(currentPixKey)}
-                      </code>
-                      <p className="text-xs text-gray-600 mt-1 truncate">
-                        {establishmentName || pixConfig?.nome || 'Pagamento'}
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleCopyPixKey}
-                      className="ml-2 text-green-600 hover:text-green-700 text-xs font-bold bg-green-100 px-3 py-1.5 rounded-full transition-colors whitespace-nowrap"
-                    >
-                      Copiar Chave
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ALERTA IMPORTANTE */}
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4 rounded-r">
-                <div className="flex">
-                  <div className="flex-shrink-0">⚠️</div>
-                  <div className="ml-3">
-                    <p className="text-xs text-yellow-800 font-medium">
-                      Após pagar, envie o comprovante para confirmar.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* BOTÕES PIX */}
+              {/* SELEÇÃO DE MÉTODO */}
               <div className="space-y-3">
-                {pixCode?.payload_pix && (
-                  <button
-                    onClick={handleCopyPixCode}
-                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 border border-gray-300 transition-colors"
-                  >
-                    <span>📄</span> Copiar Código PIX (Copia e Cola)
-                  </button>
-                )}
+                <p className="font-bold text-gray-700 text-sm">Escolha como pagar:</p>
                 
-                <button
-                  onClick={handleFinishOrder}
-                  disabled={paymentLoading || localLoading}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition-transform active:scale-95"
+                {/* PIX */}
+                <button 
+                  onClick={() => setMethod('pix')}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${method === 'pix' ? 'border-green-500 bg-green-50' : 'border-gray-100 hover:border-gray-200'}`}
                 >
-                  {paymentLoading || localLoading ? 'Processando...' : '✅ Enviar Comprovante no WhatsApp'}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${method === 'pix' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    <IoQrCode size={20} />
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className={`font-bold ${method === 'pix' ? 'text-green-800' : 'text-gray-700'}`}>Pix (Instantâneo)</p>
+                    <p className="text-xs text-gray-500">Aprovação imediata</p>
+                  </div>
+                  {method === 'pix' && <IoCheckmarkCircle className="text-green-500 text-xl" />}
                 </button>
+
+                {/* CARTÃO */}
+                <button 
+                  onClick={() => setMethod('card')}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${method === 'card' ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${method === 'card' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    <IoCard size={20} />
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className={`font-bold ${method === 'card' ? 'text-blue-800' : 'text-gray-700'}`}>Cartão / Maquininha</p>
+                    <p className="text-xs text-gray-500">Crédito ou Débito na entrega</p>
+                  </div>
+                  {method === 'card' && <IoCheckmarkCircle className="text-blue-500 text-xl" />}
+                </button>
+
+                {/* DINHEIRO */}
+                <button 
+                  onClick={() => setMethod('money')}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all ${method === 'money' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-100 hover:border-gray-200'}`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${method === 'money' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    <IoCash size={20} />
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className={`font-bold ${method === 'money' ? 'text-yellow-800' : 'text-gray-700'}`}>Dinheiro</p>
+                    <p className="text-xs text-gray-500">Pagamento na entrega</p>
+                  </div>
+                  {method === 'money' && <IoCheckmarkCircle className="text-yellow-500 text-xl" />}
+                </button>
+              </div>
+
+              {/* DETALHES ESPECÍFICOS */}
+              <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200 animate-fade-in">
+                {method === 'pix' && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-2">Ao confirmar, o código Pix será gerado.</p>
+                    <div className="text-xs bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full inline-block">🚀 +Rápido</div>
+                  </div>
+                )}
+
+                {method === 'money' && (
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Precisa de troco para quanto?</label>
+                    <input 
+                      type="number" 
+                      placeholder="Ex: 50,00 (Deixe vazio se não precisar)" 
+                      value={trocoPara}
+                      onChange={(e) => setTrocoPara(e.target.value)}
+                      className="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400"
+                    />
+                  </div>
+                )}
+
+                {method === 'card' && (
+                  <p className="text-sm text-gray-600 text-center">O entregador levará a maquininha até você. 💳</p>
+                )}
               </div>
             </div>
           )}
 
-          {/* CARTÃO / DINHEIRO */}
-          {selectedPayment && selectedPayment !== 'pix' && (
-            <div className="text-center py-4 animate-fade-in">
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
-                  <p className="text-blue-800 font-semibold mb-1">
-                      {selectedPayment === 'cash' ? 'Pagamento em Dinheiro' : 'Pagamento com Cartão'}
-                  </p>
-                  <p className="text-sm text-blue-600">
-                      O pagamento será realizado diretamente com o entregador.
-                  </p>
+          {step === 2 && (
+            <div className="flex flex-col items-center justify-center h-full py-10 text-center animate-fade-in">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <IoCheckmarkCircle className="text-green-600 text-5xl animate-bounce" />
               </div>
-              
-              <button
-                onClick={handleFinishOrder}
-                disabled={paymentLoading || localLoading}
-                className={`w-full py-3 rounded-lg font-bold text-white transition-colors ${
-                  paymentLoading || localLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'
-                }`}
-              >
-                {paymentLoading || localLoading ? 'Processando...' : `Finalizar Pedido - R$ ${parseFloat(amount).toFixed(2)}`}
-              </button>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Pagamento Confirmado!</h3>
+              <p className="text-gray-500">Estamos enviando seu pedido para a cozinha...</p>
             </div>
           )}
         </div>
+
+        {/* FOOTER */}
+        {step === 1 && (
+          <div className="p-5 border-t border-gray-100 bg-white">
+            <button 
+              onClick={handleConfirm}
+              disabled={processing}
+              className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition-all flex items-center justify-center gap-2
+                ${processing ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 active:scale-95'}`}
+            >
+              {processing ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Processando...
+                </>
+              ) : (
+                '✅ Confirmar Pedido'
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
