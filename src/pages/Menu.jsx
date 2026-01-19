@@ -1,12 +1,10 @@
-// src/pages/Menu.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, doc, serverTimestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
-import { usePayment } from '../context/PaymentContext';
 import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
 import VariacoesModal from '../components/VariacoesModal';
@@ -20,8 +18,17 @@ import { useAI } from '../context/AIContext';
 import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
 
-// Ícones (Adicionei IoPerson para o botão de login)
-import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline, IoPerson } from 'react-icons/io5';
+import { IoLocationSharp, IoTime, IoLogOutOutline, IoPerson } from 'react-icons/io5';
+
+// Estilo para esconder barra de rolagem horizontal feia no mobile
+const ScrollHideStyle = () => (
+  <style>{`
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    /* Previne zoom em inputs no iOS */
+    input, textarea, select { font-size: 16px !important; }
+  `}</style>
+);
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
@@ -43,16 +50,19 @@ function Menu() {
     const [numero, setNumero] = useState('');
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
+    // eslint-disable-next-line no-unused-vars
     const [complemento, setComplemento] = useState('');
 
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
 
+    // eslint-disable-next-line no-unused-vars
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
+    // eslint-disable-next-line no-unused-vars
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
     
     // --- ESTADOS DO LOGIN ---
@@ -67,18 +77,21 @@ function Menu() {
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
+    // eslint-disable-next-line no-unused-vars
     const [complementoAuthModal, setComplementoAuthModal] = useState('');
     const auth = getAuth();
 
     const [couponCodeInput, setCouponCodeInput] = useState('');
+    // eslint-disable-next-line no-unused-vars
     const [appliedCoupon, setAppliedCoupon] = useState(null);
     const [discountAmount, setDiscountAmount] = useState(0);
+    // eslint-disable-next-line no-unused-vars
     const [couponLoading, setCouponLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
-    const [availableCategories, setAvailableCategories] = useState([]);
 
     const [showRaspadinha, setShowRaspadinha] = useState(false);
+    // eslint-disable-next-line no-unused-vars
     const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
     const [premioRaspadinha, setPremioRaspadinha] = useState(null);
 
@@ -89,6 +102,7 @@ function Menu() {
     const [loading, setLoading] = useState(true);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null);
+    // eslint-disable-next-line no-unused-vars
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
@@ -113,7 +127,7 @@ function Menu() {
     }, []);
 
     const handleAbrirLogin = () => {
-        setIsRegisteringInModal(false); // Reseta para login normal
+        setIsRegisteringInModal(false); 
         setShowLoginPrompt(true);
     };
 
@@ -182,7 +196,6 @@ function Menu() {
 
     const carregarProdutosRapido = async (estabId) => {
         try {
-            console.log("🔄 Iniciando carregamento profundo...");
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const categoriasSnapshot = await getDocs(query(cardapioRef, where('ativo', '==', true)));
             
@@ -208,7 +221,6 @@ function Menu() {
                 (item.variacoes && item.variacoes.length > 0)
             );
 
-            console.log("✅ Produtos carregados:", produtosValidos.length);
             return produtosValidos;
 
         } catch (error) {
@@ -218,8 +230,6 @@ function Menu() {
     };
 
     const handleAdicionarPorIA = useCallback((comandoCompleto) => {
-        console.log("🤖 IA Processando:", comandoCompleto);
-        
         let nomeProduto = comandoCompleto;
         let nomeOpcao = null;
         let observacaoIA = '';
@@ -246,10 +256,7 @@ function Menu() {
             return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
         });
 
-        if (!produtoEncontrado) {
-            console.error("❌ Produto não encontrado:", nomeProduto);
-            return 'NOT_FOUND';
-        }
+        if (!produtoEncontrado) return 'NOT_FOUND';
 
         let variacaoSelecionada = null;
         if (nomeOpcao) {
@@ -388,6 +395,7 @@ function Menu() {
     };
 
     const handlePagamentoFalha = (error) => toast.error(`Falha: ${error.message}`);
+    const handleGanharRaspadinha = (premio) => { setPremioRaspadinha(premio); setJaJogouRaspadinha(true); };
 
     const handleLoginModal = async (e) => { 
         e.preventDefault(); 
@@ -503,121 +511,176 @@ function Menu() {
 
     return (
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
+            {/* CSS Global Injetado para Mobile */}
+            <ScrollHideStyle />
+
             <div className="max-w-7xl mx-auto px-4 w-full">
                 
-                {/* INFO E CABEÇALHO */}
+                {/* INFO E CABEÇALHO RESPONSIVO */}
                 {estabelecimentoInfo && (
-                    <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative">
-                        {/* 🔥 NOVO: Botão de Login no Topo */}
-                        <div className="absolute top-4 right-4 z-10">
+                    <div className="bg-white rounded-xl p-4 md:p-6 mb-6 mt-6 border flex flex-col md:flex-row gap-4 md:gap-6 items-center shadow-lg relative text-center md:text-left">
+                        {/* Botão de Login (Absoluto no Desktop, Relativo Ajustado no Mobile) */}
+                        <div className="absolute top-3 right-3 z-10 md:top-4 md:right-4">
                              {currentUser ? (
-                                <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
+                                <button onClick={handleLogout} className="flex items-center gap-2 text-xs md:text-sm text-red-500 bg-red-50 px-3 py-1.5 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
                                     <IoLogOutOutline size={18} />
                                     <span>Sair</span>
                                 </button>
                              ) : (
-                                <button type="button" onClick={handleAbrirLogin} className="flex items-center gap-2 text-sm font-bold text-white px-4 py-2 rounded-full shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+                                <button type="button" onClick={handleAbrirLogin} className="flex items-center gap-2 text-xs md:text-sm font-bold text-white px-3 py-1.5 md:px-4 md:py-2 rounded-full shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
                                     <IoPerson size={16} />
                                     <span>Entrar</span>
                                 </button>
                              )}
                         </div>
 
-                        <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />
-                        <div className="flex-1">
-                            <h1 className="text-3xl font-bold mb-2">{estabelecimentoInfo.nome}</h1>
-                            <div className="text-sm text-gray-600">
-                                <p className="flex items-center gap-2"><IoLocationSharp className="text-red-500" /> {estabelecimentoInfo.endereco?.rua}</p>
-                                <p className="flex items-center gap-2"><IoTime className="text-blue-500" /> {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}</p>
+                        <img src={estabelecimentoInfo.logoUrl} className="w-20 h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 shadow-sm" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />
+                        <div className="flex-1 w-full">
+                            <h1 className="text-2xl md:text-3xl font-bold mb-2 leading-tight">{estabelecimentoInfo.nome}</h1>
+                            <div className="text-sm text-gray-600 flex flex-col md:flex-row gap-2 justify-center md:justify-start items-center">
+                                <p className="flex items-center gap-1"><IoLocationSharp className="text-red-500" /> <span className="truncate max-w-[200px]">{estabelecimentoInfo.endereco?.rua}</span></p>
+                                <span className="hidden md:inline text-gray-300">|</span>
+                                <p className="flex items-center gap-1"><IoTime className="text-blue-500" /> <span className="truncate max-w-[200px]">{formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}</span></p>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* FILTROS */}
-                <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
-                    <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 border rounded-lg text-gray-900" />
-                    <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
+                {/* FILTROS E BUSCA (Sticky) */}
+                <div className="bg-white p-3 md:p-4 mb-6 sticky top-0 z-30 shadow-sm rounded-b-xl md:rounded-lg border-b border-gray-100">
+                    <input 
+                        type="text" 
+                        placeholder="🔍 Buscar produto..." 
+                        value={searchTerm} 
+                        onChange={e => setSearchTerm(e.target.value)} 
+                        className="w-full p-3 mb-3 border rounded-full bg-gray-50 text-base text-gray-900 focus:bg-white focus:ring-2 outline-none transition-all" 
+                        style={{ focusRing: coresEstabelecimento.destaque }}
+                    />
+                    <div className="flex overflow-x-auto gap-2 pb-1 scrollbar-hide mask-linear-fade">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
-                            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full font-bold whitespace-nowrap transition-all ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}>{cat}</button>
+                            <button 
+                                key={cat} 
+                                onClick={() => setSelectedCategory(cat)} 
+                                className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all shadow-sm active:scale-95 ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600 border border-transparent'}`} 
+                                style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}
+                            >
+                                {cat}
+                            </button>
                         ))}
                     </div>
                 </div>
 
-                {/* LISTAGEM */}
+                {/* LISTAGEM DE PRODUTOS */}
                 {categoriasOrdenadas.map(cat => {
                     const items = menuAgrupado[cat];
                     const visible = visibleItemsCount[cat] || 4;
                     return (
                         <div key={cat} id={`categoria-${cat}`} className="mb-8">
-                            <h2 className="text-2xl font-bold mb-4">{cat}</h2>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                {items.slice(0, visible).map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />)}
+                            <h2 className="text-xl md:text-2xl font-bold mb-4 px-1 border-l-4 pl-3" style={{ borderColor: coresEstabelecimento.destaque }}>{cat}</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {items.slice(0, visible).map(item => (
+                                    <CardapioItem 
+                                        key={item.id} 
+                                        item={item} 
+                                        onAddItem={handleAbrirModalProduto} 
+                                        onQuickAdd={handleAdicionarRapido} 
+                                        coresEstabelecimento={coresEstabelecimento} 
+                                    />
+                                ))}
                             </div>
-                            {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-4 py-2 bg-gray-100 rounded-lg text-gray-500 font-bold">{visible >= items.length ? 'Ver menos' : 'Ver mais'}</button>}
+                            {items.length > 4 && (
+                                <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-500 font-bold hover:bg-gray-100 transition-colors">
+                                    {visible >= items.length ? 'Ver menos' : `Ver mais (${items.length - visible})`}
+                                </button>
+                            )}
                         </div>
                     );
                 })}
 
-                {/* DADOS E RESUMO */}
-                <div className="grid md:grid-cols-2 gap-8 mt-12">
-                    <div className="bg-white p-6 rounded-xl border shadow-lg text-left">
-                        <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                        {/* Botão de login redundante aqui embaixo também atualizado */}
+                {/* DADOS E RESUMO (Grid Responsivo) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mt-12 pb-10">
+                    
+                    {/* FORMULÁRIO DE DADOS */}
+                    <div className="bg-white p-5 md:p-6 rounded-xl border shadow-lg text-left order-2 md:order-1">
+                        <h3 className="text-xl font-bold mb-4 text-gray-900 flex items-center gap-2"><IoPerson/> Seus Dados</h3>
                         {currentUser ? 
-                            <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : 
-                            <button type="button" onClick={handleAbrirLogin} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Fazer Login</button>
+                            <div className="mb-4 bg-green-50 text-green-700 px-3 py-2 rounded-lg text-sm border border-green-100">Logado como: <strong>{currentUser.email}</strong></div> : 
+                            <button type="button" onClick={handleAbrirLogin} className="w-full bg-blue-50 text-blue-600 border border-blue-200 py-3 rounded-lg font-bold mb-4 hover:bg-blue-100 transition">🔑 Fazer Login para agilizar</button>
                         }
                         
-                        <div className="space-y-4">
-                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                        <div className="space-y-3">
+                            <input className="w-full p-3 rounded-lg border bg-gray-50 text-base text-gray-900 outline-none focus:ring-1 focus:bg-white transition" placeholder="Nome Completo *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 rounded-lg border bg-gray-50 text-base text-gray-900 outline-none focus:ring-1 focus:bg-white transition" placeholder="Telefone (WhatsApp) *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} type="tel" />
+                            
                             {!isRetirada && (
-                                <div className="space-y-2">
-                                    <div className="flex gap-2"><input className="flex-1 p-3 rounded border text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /><input className="w-24 p-3 rounded border text-center text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div>
-                                    <input className="w-full p-3 rounded border text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                <div className="space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <p className="text-xs font-bold text-gray-500 uppercase">Endereço de Entrega</p>
+                                    <div className="flex gap-2">
+                                        <input className="flex-1 p-3 rounded-lg border bg-white text-base text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+                                        <input className="w-24 p-3 rounded-lg border bg-white text-center text-base text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                    </div>
+                                    <input className="w-full p-3 rounded-lg border bg-white text-base text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <input className="w-full p-3 rounded-lg border bg-white text-base text-gray-900" placeholder="Cidade" value={cidade} onChange={e => setCidade(e.target.value)} />
                                 </div>
                             )}
-                            <div className="flex gap-2">
-                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded font-bold ${!isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🚚 Entrega</button>
-                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded font-bold ${isRetirada ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'}`}>🏪 Retirada</button>
+                            
+                            <div className="flex gap-2 pt-2">
+                                <button onClick={() => setIsRetirada(false)} className={`flex-1 p-3 rounded-xl font-bold border-2 transition-all ${!isRetirada ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-gray-200 text-gray-400'}`}>🚚 Entrega</button>
+                                <button onClick={() => setIsRetirada(true)} className={`flex-1 p-3 rounded-xl font-bold border-2 transition-all ${isRetirada ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-gray-200 text-gray-400'}`}>🏪 Retirada</button>
                             </div>
                         </div>
                     </div>
 
-                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900">
-                        <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
-                        {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
+                    {/* RESUMO DO PEDIDO */}
+                    <div id="resumo-carrinho" className="bg-white p-5 md:p-6 rounded-xl border shadow-lg text-left text-gray-900 order-1 md:order-2 h-fit">
+                        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">🛒 Resumo do Pedido</h3>
+                        {carrinho.length === 0 ? <div className="text-center py-10 bg-gray-50 rounded-lg text-gray-400">Seu carrinho está vazio.</div> : (
                             <>
-                                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
+                                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto scrollbar-thin pr-1">
                                     {carrinho.map(item => (
-                                        <div key={item.cartItemId} className="flex justify-between items-start border-b pb-2">
-                                            <div><p className="font-bold text-sm">{formatarItemCarrinho(item)}</p><p className="text-xs">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p></div>
-                                            <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 font-bold">✕</button>
+                                        <div key={item.cartItemId} className="flex justify-between items-start border-b border-dashed pb-3 last:border-0">
+                                            <div className="flex-1 pr-2">
+                                                <p className="font-bold text-sm text-gray-800">{formatarItemCarrinho(item)}</p>
+                                                <p className="text-xs text-gray-500 mt-1">R$ {item.precoFinal.toFixed(2)} x {item.qtd}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-bold text-gray-900 text-sm">R$ {(item.precoFinal * item.qtd).toFixed(2)}</span>
+                                                <button onClick={() => removerDoCarrinho(item.cartItemId)} className="w-6 h-6 flex items-center justify-center bg-red-100 text-red-500 rounded-full text-xs font-bold hover:bg-red-200">✕</button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="border-t pt-4 space-y-2 text-sm">
-                                    <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
-                                    {!isRetirada && <div className="flex justify-between"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
-                                    {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
-                                    {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
-                                    <div className="flex gap-2 mt-2"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-sm" /><button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button></div>
-                                    <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
+                                
+                                <div className="border-t-2 border-dashed pt-4 space-y-2 text-sm">
+                                    <div className="flex justify-between text-gray-600"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
+                                    {!isRetirada && <div className="flex justify-between text-gray-600"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
+                                    {discountAmount > 0 && <div className="flex justify-between text-green-600 font-bold bg-green-50 p-2 rounded"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
+                                    {premioRaspadinha && <div className="flex justify-between text-purple-600 font-bold bg-purple-50 p-2 rounded"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
+                                    
+                                    <div className="flex gap-2 mt-4">
+                                        <input placeholder="Código do Cupom" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded-lg uppercase text-sm bg-gray-50" />
+                                        <button onClick={handleApplyCoupon} disabled={couponLoading} className="px-4 bg-gray-800 text-white rounded-lg text-sm font-bold hover:bg-gray-900">{couponLoading ? '...' : 'Aplicar'}</button>
+                                    </div>
+                                    
+                                    <div className="flex justify-between text-2xl font-bold pt-4 mt-2 border-t" style={{ color: coresEstabelecimento.destaque }}>
+                                        <span>Total:</span> 
+                                        <span>R$ {finalOrderTotal.toFixed(2)}</span>
+                                    </div>
                                 </div>
-                                <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600">✅ Finalizar Pedido</button>
+                                <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600 hover:bg-green-700 flex justify-center items-center gap-2">
+                                    ✅ Finalizar Pedido
+                                </button>
                             </>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* 🔥 CARRINHO FLUTUANTE CONDICIONAL */}
+            {/* ELEMENTOS FLUTUANTES (Z-INDEX ALTO) */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* 🔥 IA */}
             {estabelecimentoInfo && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
@@ -635,33 +698,42 @@ function Menu() {
 
             <AIWidgetButton />
 
-            {/* MODAIS */}
+            {/* MODAIS (Sistema) */}
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
-            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
+            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl animate-bounce-in"><h2 className="text-3xl font-bold mb-4 text-green-600">🎉 Pedido Recebido!</h2><p className="mb-6 text-gray-600">Acompanhe pelo seu WhatsApp ou Painel.</p><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
-            {/* 🔥 MODAL DE LOGIN ATUALIZADO (Z-INDEX 5000) */}
+            {/* 🔥 MODAL DE LOGIN (Responsivo com Scroll) */}
             {showLoginPrompt && (
-                <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
-                    <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up">
-                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
-                        <h2 className="text-2xl font-bold mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
+                <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900 backdrop-blur-sm">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
+                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-800 transition-colors bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center">&times;</button>
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl"><IoPerson/></div>
+                            <h2 className="text-2xl font-bold">{isRegisteringInModal ? 'Criar Conta' : 'Bem-vindo de volta!'}</h2>
+                            <p className="text-sm text-gray-500">Faça login para continuar seu pedido.</p>
+                        </div>
+                        
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (
                                 <>
-                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
-                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
+                                    <input placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required />
+                                    <input placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required type="tel" />
                                 </>
                             )}
-                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
-                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300" required />
-                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition-colors">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                            <input type="email" placeholder="Seu E-mail" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required />
+                            <input type="password" placeholder="Sua Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-200 outline-none transition text-base" required />
+                            
+                            <button type="submit" className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg active:scale-95">{isRegisteringInModal ? 'Criar Conta' : 'Entrar'}</button>
                         </form>
-                        <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block font-medium">
-                            {isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}
-                        </button>
+                        
+                        <div className="mt-6 pt-6 border-t text-center">
+                             <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="text-green-600 text-sm font-bold hover:underline">
+                                {isRegisteringInModal ? 'Já tem conta? Clique para entrar' : 'Não tem cadastro? Crie grátis agora'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

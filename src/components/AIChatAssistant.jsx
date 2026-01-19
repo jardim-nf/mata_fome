@@ -16,19 +16,33 @@ const GlobalStyles = () => (
 );
 
 // ============================================================================
-// 2. CONFIGURAÇÕES & PROMPT
+// 2. CONFIGURAÇÕES & CÉREBRO DO JUCLEILDO 🧠
 // ============================================================================
 
-// Aumentei um pouco a largura máxima no mobile para aproveitar a tela
 const TAMANHO_WIDGET = "w-[95vw] max-w-[400px] h-[85vh] max-h-[650px] sm:w-96 sm:h-[600px]"; 
 
+// 🔥 AQUI ESTAVA O PROBLEMA: A IA PRECISA DESSA REGRA TÉCNICA CLARA 👇
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
-  🚨 INSTRUÇÃO SUPREMA: VOCÊ É O JUCLEILDO.
-  1. IDENTIDADE: Garçom virtual do ${nomeLoja}.
-  2. IMPORTANTE: Se o produto tiver variações (ex: sabores, tamanhos), LISTE O PREÇO DE CADA UMA.
-  3. FORMATO: 
-     - Use negrito para destaques.
-     - Seja direto e simpático.
+  🚨 INSTRUÇÃO SUPREMA: VOCÊ É O JUCLEILDO, GARÇOM VIRTUAL DO ${nomeLoja}.
+  
+  1. SEU OBJETIVO: Vender! Seja simpático, breve e use emojis.
+  2. REGRAS DE PREÇO: Se o produto tiver variações (P, M, G ou sabores), LISTE O PREÇO DE CADA UMA.
+
+  ⚡ COMANDO DE VENDA (IMPORTANTE):
+  Quando o cliente escolher um item, você DEVE enviar este comando oculto no final da mensagem:
+  ||ADD: NomeProduto -- Opcao: VariaçãoEscolhida -- Obs: Observação -- Qtd: 1||
+  
+  EXEMPLOS DE USO:
+  - Cliente: "Quero uma pizza calabresa grande"
+    Sua Resposta: "Ótima escolha! 🍕 ||ADD: Pizza Calabresa -- Opcao: Grande||"
+  
+  - Cliente: "Me vê dois X-Bacon sem cebola"
+    Sua Resposta: "Saindo no capricho! 🥓 ||ADD: X-Bacon -- Obs: sem cebola -- Qtd: 2||"
+
+  - Cliente: "Quero uma Coca"
+    Sua Resposta: "Geladinha pra já! 🥤 ||ADD: Coca Cola||"
+
+  ⚠️ Se não souber a variação, pergunte antes de adicionar.
 `;
 
 const formatarCardapio = (lista) => {
@@ -42,12 +56,13 @@ const formatarCardapio = (lista) => {
   
   return Object.entries(agrupado).map(([cat, itens]) => {
     const itensTexto = itens.map(p => {
+      // Lista variações explicitamente para a IA ler
       if (p.variacoes?.length > 0) {
           const vars = p.variacoes.map(v => {
              const precoVar = v.preco ? Number(v.preco).toFixed(2) : '0.00';
              return `${v.nome} (R$${precoVar})`;
           }).join(', ');
-          return `- **${p.nome}**: ${vars}`;
+          return `- **${p.nome}**: [Opções: ${vars}]`;
       }
       const preco = Number(p.precoFinal || p.preco).toFixed(2);
       return `- **${p.nome}** (R$ ${preco})`;
@@ -57,6 +72,7 @@ const formatarCardapio = (lista) => {
   }).join('\n\n'); 
 };
 
+// Remove o comando técnico para não aparecer balão feio para o usuário
 const cleanText = (text) => text?.replace(/\|\|ADD:.*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
 
 // ============================================================================
@@ -112,6 +128,7 @@ const MiniCart = ({ itens, onClose, onCheckout }) => (
         <div key={item.cartItemId} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
           <div className="flex flex-col">
             <span className="font-semibold text-gray-900 text-base">{item.nome}</span>
+            {item.variacaoSelecionada && <span className="text-xs text-gray-500 font-bold">Opção: {item.variacaoSelecionada.nome}</span>}
             <span className="text-sm text-gray-500">Qtd: {item.qtd}</span>
           </div>
           <span className="font-bold text-green-600 text-xl">R$ {(item.precoFinal * item.qtd).toFixed(2)}</span>
@@ -164,14 +181,35 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conversation, aiThinking]);
 
+  // 🔥 DETECTOR DE COMANDOS DA IA (ADD/PAY)
   useEffect(() => {
     if (!conversation.length) return;
     const lastMsg = conversation[conversation.length - 1];
+
     if (lastMsg.type === 'ai' && !processedIdsRef.current.has(lastMsg.id)) {
         processedIdsRef.current.add(lastMsg.id);
-        let match; const regexAdd = /\|\|ADD:(.*?)\|\|/gi;
-        while ((match = regexAdd.exec(lastMsg.text)) !== null) if (onAddDirect) onAddDirect(match[1].trim());
-        if (lastMsg.text.includes('||PAY||')) { if (onCheckout) onCheckout(); handleClose(); }
+        
+        // Procura comando ADD
+        let match; 
+        const regexAdd = /\|\|ADD:(.*?)\|\|/gi;
+        let found = false;
+        
+        while ((match = regexAdd.exec(lastMsg.text)) !== null) {
+          if (onAddDirect) {
+             onAddDirect(match[1].trim());
+             found = true;
+          }
+        }
+        
+        if (found) {
+            // Feedback sonoro ou visual opcional poderia vir aqui
+        }
+
+        // Procura comando PAY
+        if (lastMsg.text.includes('||PAY||')) { 
+            if (onCheckout) onCheckout(); 
+            handleClose(); 
+        }
     }
   }, [conversation, onAddDirect, onCheckout]);
 
@@ -196,10 +234,12 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
-      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO:\n" + formatarCardapio(produtos),
+      // Passamos o cardápio com instruções claras de preço
+      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO DISPONÍVEL:\n" + formatarCardapio(produtos),
       clienteNome: clienteNome || 'Visitante',
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
     };
+    
     await sendMessage(textToSend, context);
   };
 
@@ -274,7 +314,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                <IoMic size={26} />
              </button>
              
-             {/* 🔥 INPUT AJUSTADO: text-base evita zoom e padding maior facilita toque */}
              <input 
                type="text" 
                value={isListening ? 'Ouvindo...' : message} 
