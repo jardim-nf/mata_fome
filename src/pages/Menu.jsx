@@ -30,6 +30,8 @@ function Menu() {
     
     // IA começa aberta no centro (true)
     const [showAICenter, setShowAICenter] = useState(true);
+    // Estado para lembrar se o chat deve reabrir após login
+    const [deveReabrirChat, setDeveReabrirChat] = useState(false);
 
     // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
@@ -61,13 +63,15 @@ function Menu() {
 
     const [emailAuthModal, setEmailAuthModal] = useState('');
     const [passwordAuthModal, setPasswordAuthModal] = useState('');
+    
+    // Campos de Cadastro Completo
     const [nomeAuthModal, setNomeAuthModal] = useState('');
     const [telefoneAuthModal, setTelefoneAuthModal] = useState('');
     const [ruaAuthModal, setRuaAuthModal] = useState('');
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
-    const [complementoAuthModal, setComplementoAuthModal] = useState('');
+    
     const auth = getAuth();
 
     const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -76,8 +80,8 @@ function Menu() {
     const [couponLoading, setCouponLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
-    const [availableCategories, setAvailableCategories] = useState([]);
-
+    
+    // Estados da Raspadinha
     const [showRaspadinha, setShowRaspadinha] = useState(false);
     const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
     const [premioRaspadinha, setPremioRaspadinha] = useState(null);
@@ -115,6 +119,21 @@ function Menu() {
     const handleAbrirLogin = () => {
         setIsRegisteringInModal(false); 
         setShowLoginPrompt(true);
+    };
+
+    // Login pedido pelo chat
+    const handleLoginDoChat = () => {
+        setShowAICenter(false); // Fecha o chat visualmente
+        setDeveReabrirChat(true); // Marca para reabrir
+        handleAbrirLogin(); // Abre o modal
+    };
+
+    // Verificar reabertura
+    const verificarReaberturaChat = () => {
+        if (deveReabrirChat) {
+            setShowAICenter(true);
+            setDeveReabrirChat(false);
+        }
     };
 
     const formatarHorarios = useCallback((horarios) => {
@@ -182,7 +201,6 @@ function Menu() {
 
     const carregarProdutosRapido = async (estabId) => {
         try {
-            console.log("🔄 Iniciando carregamento profundo...");
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const categoriasSnapshot = await getDocs(query(cardapioRef, where('ativo', '==', true)));
             
@@ -208,7 +226,6 @@ function Menu() {
                 (item.variacoes && item.variacoes.length > 0)
             );
 
-            console.log("✅ Produtos carregados:", produtosValidos.length);
             return produtosValidos;
 
         } catch (error) {
@@ -218,8 +235,6 @@ function Menu() {
     };
 
     const handleAdicionarPorIA = useCallback((comandoCompleto) => {
-        console.log("🤖 IA Processando:", comandoCompleto);
-        
         let nomeProduto = comandoCompleto;
         let nomeOpcao = null;
         let observacaoIA = '';
@@ -247,7 +262,6 @@ function Menu() {
         });
 
         if (!produtoEncontrado) {
-            console.error("❌ Produto não encontrado:", nomeProduto);
             return 'NOT_FOUND';
         }
 
@@ -389,30 +403,61 @@ function Menu() {
 
     const handlePagamentoFalha = (error) => toast.error(`Falha: ${error.message}`);
 
+    const handleGanharRaspadinha = (premio) => {
+        setPremioRaspadinha(premio);
+        setJaJogouRaspadinha(true);
+        toast.success(`Parabéns! Você ganhou: ${premio.label}`);
+        setShowRaspadinha(false);
+    };
+
     const handleLoginModal = async (e) => { 
         e.preventDefault(); 
         try { 
             await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
             setShowLoginPrompt(false); 
+            verificarReaberturaChat(); // 🔥 Verifica se deve reabrir
         } catch { 
             toast.error("Erro no login"); 
         } 
     };
     
+    // 🔥 CADASTRO COMPLETO DE CLIENTE COM ENDEREÇO
     const handleRegisterModal = async (e) => { 
         e.preventDefault(); 
         try { 
             const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
+            
+            // 1. Criar perfil na coleção USUARIOS
+            await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { 
+                email: emailAuthModal, 
+                nome: nomeAuthModal, 
+                isAdmin: false, 
+                isMasterAdmin: false, 
+                estabelecimentos: [], 
+                estabelecimentosGerenciados: [], 
+                criadoEm: Timestamp.now() 
+            });
+
+            // 2. Criar perfil na coleção CLIENTES com endereço completo
             await setDocFirestore(doc(db, 'clientes', cred.user.uid), { 
                 nome: nomeAuthModal, 
                 telefone: telefoneAuthModal, 
                 email: emailAuthModal, 
-                endereco: { rua: ruaAuthModal, numero: numeroAuthModal, bairro: bairroAuthModal, cidade: cidadeAuthModal }, 
+                endereco: { 
+                    rua: ruaAuthModal || '', 
+                    numero: numeroAuthModal || '', 
+                    bairro: bairroAuthModal || '', 
+                    cidade: cidadeAuthModal || '' 
+                }, 
                 criadoEm: Timestamp.now() 
             }); 
+            
+            toast.success("Conta criada com sucesso!");
             setShowLoginPrompt(false); 
-        } catch { 
-            toast.error("Erro ao criar conta."); 
+            verificarReaberturaChat(); // 🔥 Verifica se deve reabrir o chat
+        } catch (error) { 
+            console.error(error);
+            toast.error("Erro ao criar conta: " + error.message); 
         } 
     };
 
@@ -535,7 +580,6 @@ function Menu() {
 
                 {/* FILTROS E BUSCA */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
-                    {/* 🔥 CORREÇÃO: Input com text-base para evitar zoom */}
                     <input 
                         type="text" 
                         placeholder="🔍 Buscar..." 
@@ -559,7 +603,6 @@ function Menu() {
                             <h2 className="text-2xl font-bold mb-4">{cat}</h2>
                             <div className="grid gap-4 md:grid-cols-2">
                                 {items.slice(0, visible).map(item => (
-                                    /* 🔥 CORREÇÃO VISUAL: Cartão branco */
                                     <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 p-2">
                                         <CardapioItem item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />
                                     </div>
@@ -570,7 +613,6 @@ function Menu() {
                     );
                 })}
 
-                {/* 🔥 CORREÇÃO LAYOUT MOBILE: FLEX EM VEZ DE GRID NO MOBILE */}
                 <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
                     
                     {/* DADOS */}
@@ -582,15 +624,14 @@ function Menu() {
                         }
                         
                         <div className="space-y-4">
-                            {/* 🔥 CORREÇÃO: Inputs com text-base */}
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
                                 <div className="space-y-2">
-<div className="grid grid-cols-[1fr_90px] gap-3">
-    <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-    <input type="tel" className="w-full p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
-</div>
+                                    <div className="grid grid-cols-[1fr_90px] gap-3">
+                                        <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+                                        <input type="tel" className="w-full p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+                                    </div>
                                     <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
                                 </div>
                             )}
@@ -620,17 +661,17 @@ function Menu() {
                                     {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
                                     {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
                                     
-<div className="flex gap-2 mt-3 items-stretch">
-    <input 
-        placeholder="CUPOM" 
-        value={couponCodeInput} 
-        onChange={e => setCouponCodeInput(e.target.value)} 
-        className="flex-1 p-3 border rounded-lg uppercase text-gray-900 text-base min-w-0" // min-w-0 evita bugs no android
-    />
-    <button onClick={handleApplyCoupon} className="px-5 bg-green-600 text-white rounded-lg text-sm font-bold shadow-sm whitespace-nowrap active:scale-95 transition-transform">
-        Aplicar
-    </button>
-</div>
+                                    <div className="flex gap-2 mt-3 items-stretch">
+                                        <input 
+                                            placeholder="CUPOM" 
+                                            value={couponCodeInput} 
+                                            onChange={e => setCouponCodeInput(e.target.value)} 
+                                            className="flex-1 p-3 border rounded-lg uppercase text-gray-900 text-base min-w-0" 
+                                        />
+                                        <button onClick={handleApplyCoupon} className="px-5 bg-green-600 text-white rounded-lg text-sm font-bold shadow-sm whitespace-nowrap active:scale-95 transition-transform">
+                                            Aplicar
+                                        </button>
+                                    </div>
 
                                     <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
@@ -646,7 +687,7 @@ function Menu() {
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* IA: Renderiza se showAICenter for true OU se isWidgetOpen for true */}
+            {/* IA */}
             {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
@@ -656,7 +697,7 @@ function Menu() {
                     mode={showAICenter ? "center" : "widget"}
                     onClose={() => setShowAICenter(false)}
                     clienteNome={nomeCliente}
-                    onRequestLogin={handleAbrirLogin}
+                    onRequestLogin={handleLoginDoChat}
                     carrinho={carrinho}
                     onClick={prepararParaPagamento}
                 />
@@ -669,19 +710,31 @@ function Menu() {
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
+            
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
             {/* MODAL DE LOGIN */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
-<div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
+                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
                         <h2 className="text-2xl font-bold mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
+                            {/* 🔥 CAMPOS DE CADASTRO COM ENDEREÇO */}
                             {isRegisteringInModal && (
-                                <>
-                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
-                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
-                                </>
+                                <div className="space-y-3 animate-fade-in">
+                                    <input placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                    <input placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                    
+                                    <div className="grid grid-cols-[1fr_90px] gap-2">
+                                        <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                        <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base text-center" required />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <input placeholder="Bairro" value={bairroAuthModal} onChange={e => setBairroAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                        <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                    </div>
+                                </div>
                             )}
                             <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                             <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />

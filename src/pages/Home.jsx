@@ -8,6 +8,9 @@ import { useAuth } from '../context/AuthContext';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 
+// ✅ 1. IMPORTAÇÃO DO CHAT (Adicionado)
+import AIChatAssistant from '../components/AIChatAssistant';
+
 // --- Botão WhatsApp Flutuante ---
 function WhatsAppFloatingButton() {
   const [isHovered, setIsHovered] = useState(false);
@@ -58,7 +61,7 @@ function WhatsAppFloatingButton() {
   );
 }
 
-// --- AuthButtonElegant (Header/Navegação) - CORRIGIDO ---
+// --- AuthButtonElegant (Header/Navegação) ---
 function AuthButtonElegant({ onLoginClick }) {
   const { currentUser, loading, isAdmin, isMasterAdmin, logout } = useAuth();
   const navigate = useNavigate();
@@ -76,9 +79,7 @@ function AuthButtonElegant({ onLoginClick }) {
       if (isMasterAdmin) {
         navigate('/master-dashboard');
       } else {
-        // CORREÇÃO AQUI:
-        // Tanto Admin quanto Equipe (Aline) vão para /dashboard.
-        // O Dashboard cuidará de mostrar os botões corretos conforme a permissão.
+        // Correção mantida: ambos vão para dashboard
         navigate('/dashboard'); 
       }
       toast.info(`Bem-vindo de volta, ${userEmailPrefix}.`);
@@ -126,12 +127,12 @@ function AuthButtonElegant({ onLoginClick }) {
   );
 }
 
-// --- Hero Section - MELHORADA ---
+// --- Hero Section - Mantida ---
 function HeroSectionModern({ onExploreClick }) {
   return (
     <section className="relative w-full overflow-hidden bg-gradient-to-br from-white to-yellow-50 pt-24 md:pt-32">
       <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between py-12 md:py-20 px-4">
-        {/* Lado Esquerdo: Conteúdo de Texto */}
+        {/* Lado Esquerdo */}
         <div className="w-full lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0 z-10">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-black mb-4 leading-tight">
             Deu Fome? <br className="hidden md:inline"/> 
@@ -168,19 +169,16 @@ function HeroSectionModern({ onExploreClick }) {
           </div>
         </div>
 
-        {/* Lado Direito: Área Visual com Imagem de Pizza e Fundo Amarelo Vibrante */}
+        {/* Lado Direito */}
         <div className="relative w-full lg:w-1/2 flex justify-center items-center lg:h-[500px]">
-          {/* Fundo Vibrante com gradiente */}
           <div className="absolute inset-y-0 right-0 w-full lg:w-[120%] bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-bl-[100px] lg:rounded-bl-[150px] transform lg:translate-x-1/4"></div>
           
-          {/* Sua Imagem da Pizza - Com animação flutuante */}
           <img
             src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/pizza.png?alt=media&token=aac1a9a6-5381-41df-b728-c394fba7b762" 
             alt="Pizza Deliciosa"
             className="relative z-10 w-full max-w-md md:max-w-lg lg:max-w-none lg:w-auto h-auto rounded-xl shadow-2xl transform translate-y-8 lg:translate-y-0 rotate-3 animate-float"
           />
           
-          {/* Elementos decorativos */}
           <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-yellow-300 rounded-full opacity-50 animate-pulse"></div>
           <div className="absolute -top-4 -right-4 w-16 h-16 bg-yellow-400 rounded-full opacity-30 animate-bounce"></div>
         </div>
@@ -189,8 +187,9 @@ function HeroSectionModern({ onExploreClick }) {
   );
 }
 
-// --- Componente Modal de Login/Cadastro - MELHORADO ---
-function LoginModal({ isOpen, onClose }) {
+// --- Componente Modal de Login/Cadastro - CORRIGIDO ---
+// ✅ 2. Adicionei onSuccess para avisar a Home que logou
+function LoginModal({ isOpen, onClose, onSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
@@ -201,12 +200,17 @@ function LoginModal({ isOpen, onClose }) {
   const authFirebase = getAuth();
   const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
 
+  // ✅ Lógica para fechar e chamar sucesso
   useEffect(() => {
     if (!authLoading && currentUser && isOpen) {
-      onClose();
-      toast.success(`Bem-vindo de volta! ${isMasterAdmin ? 'Master Admin' : isAdmin ? 'Admin' : ''}`);
+      if (onSuccess) {
+          onSuccess(); // Avisa a Home para reabrir o chat
+      } else {
+          onClose(); // Só fecha se não veio do chat
+          toast.success(`Bem-vindo de volta! ${isMasterAdmin ? 'Master Admin' : isAdmin ? 'Admin' : ''}`);
+      }
     }
-  }, [currentUser, isAdmin, isMasterAdmin, authLoading, isOpen, onClose]);
+  }, [currentUser, isAdmin, isMasterAdmin, authLoading, isOpen, onClose, onSuccess]);
 
   const handleAuthAction = async (e) => {
     e.preventDefault();
@@ -229,7 +233,7 @@ function LoginModal({ isOpen, onClose }) {
           criadoEm: Timestamp.now()
         });
         
-        // 2. ✅ SALVAR DADOS DE CLIENTE (COLEÇÃO 'clientes')
+        // 2. SALVAR DADOS DE CLIENTE - Mantendo estrutura simples
         await setDoc(doc(db, 'clientes', user.uid), {
             userId: user.uid,
             nome: nome,
@@ -240,13 +244,13 @@ function LoginModal({ isOpen, onClose }) {
         });
         
         toast.success('🎉 Cadastro realizado com sucesso! Faça login para continuar.');
-        setIsRegistering(false);
-        setEmail('');
-        setPassword('');
-        setNome('');
+        // Não resetamos os campos aqui porque o useEffect vai capturar o login automático
+        if (onSuccess) onSuccess();
 
       } else {
         await signInWithEmailAndPassword(authFirebase, email, password);
+        // O useEffect cuida do resto
+        if (onSuccess) onSuccess();
       }
     } catch (error) {
       let errorMessage = 'Erro na operação. Verifique suas informações.';
@@ -269,7 +273,8 @@ function LoginModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+    // ✅ 3. CORREÇÃO Z-INDEX: z-[100000] (era z-50)
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100000] p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 animate-scale-in">
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-sans text-3xl font-bold text-black">
@@ -283,6 +288,7 @@ function LoginModal({ isOpen, onClose }) {
           </button>
         </div>
         
+        {/* Mantive o TEU formulário simples: Nome, Email, Senha */}
         <form onSubmit={handleAuthAction} className="space-y-6">
           {isRegistering && (
             <div>
@@ -373,7 +379,7 @@ function LoginModal({ isOpen, onClose }) {
   );
 }
 
-// --- Seção Vantagens - COMPLETAMENTE REPROJETADA ---
+// --- Seção Vantagens - Mantida ---
 function BenefitsSection() {
   return (
     <section className="bg-gradient-to-br from-gray-50 to-white py-20 md:py-28 px-4">
@@ -562,20 +568,40 @@ function Home() {
   const [estabelecimentos, setEstabelecimentos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // 🔥 ESTADOS DO CHAT
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [deveReabrirChat, setDeveReabrirChat] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState('');
 
   const navigate = useNavigate();
+  const { currentUser } = useAuth(); // Para passar nome para o chat
   const estabelecimentosRef = useRef(null);
 
   const openLoginModal = () => setIsLoginModalOpen(true);
   const closeLoginModal = () => setIsLoginModalOpen(false);
 
+  // 🔥 4. FUNÇÕES PARA LIGAR CHAT E LOGIN
+  const handleLoginDoChat = () => {
+     setIsChatOpen(false);
+     setDeveReabrirChat(true);
+     setIsLoginModalOpen(true);
+  };
+
+  const handleLoginSucesso = () => {
+     setIsLoginModalOpen(false);
+     if (deveReabrirChat) {
+         setIsChatOpen(true);
+         setDeveReabrirChat(false);
+     }
+  };
+
   const scrollToEstabelecimentos = () => {
     estabelecimentosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Filtro de estabelecimentos
   const filteredEstabelecimentos = estabelecimentos.filter(estabelecimento =>
     estabelecimento.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     estabelecimento.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -641,7 +667,6 @@ function Home() {
 
   return (
     <>
-      {/* Header Fixo e Transparente - MELHORADO */}
       <header className="fixed top-0 left-0 right-0 z-50 p-4 md:p-6 flex justify-between items-center bg-white bg-opacity-95 backdrop-blur-md shadow-sm border-b border-gray-100">
         <div 
           className="font-extrabold text-2xl md:text-3xl text-black cursor-pointer hover:text-gray-800 transition-colors duration-300 flex items-center"
@@ -653,13 +678,10 @@ function Home() {
         <AuthButtonElegant onLoginClick={openLoginModal} />
       </header>
 
-      {/* Hero Section */}
       <HeroSectionModern onExploreClick={scrollToEstabelecimentos} />
 
-      {/* Seção de Benefícios */}
       <BenefitsSection />
 
-      {/* Seção de Estabelecimentos Parceiros - MELHORADA */}
       <div ref={estabelecimentosRef} className="container mx-auto px-4 py-16 bg-white">
         <div className="text-center mb-12">
           <h2 className="text-4xl md:text-5xl font-extrabold text-black mb-4">
@@ -671,7 +693,6 @@ function Home() {
           <div className="w-24 h-1 bg-yellow-500 mx-auto rounded-full"></div>
         </div>
 
-        {/* Barra de Pesquisa */}
         <div className="max-w-md mx-auto mb-12">
           <div className="relative">
             <input
@@ -779,7 +800,6 @@ function Home() {
         )}
       </div>
 
-      {/* Rodapé Moderno - MELHORADO */}
       <footer className="bg-gradient-to-b from-black to-gray-900 text-gray-400 py-12 px-4">
         <div className="container mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
@@ -787,7 +807,7 @@ function Home() {
               <div className="font-extrabold text-2xl text-white mb-4">
                 DEU FOME<span className="text-yellow-500">.</span>
               </div>
-<p className="text-sm sm:text-base">
+              <p className="text-sm sm:text-base">
                 Sua experiência de delivery, elevada. Conectamos você aos melhores estabelecimentos da cidade.
               </p>
             </div>
@@ -831,12 +851,17 @@ function Home() {
         </div>
       </footer>
 
-      {/* Botão WhatsApp Flutuante */}
       <WhatsAppFloatingButton />
 
-      {/* Renderiza o Modal de Login/Cadastro */}
-      <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
+  
 
+  
+      {/* ✅ 7. RENDERIZA MODAL COM SUCESSO CONFIGURADO */}
+      <LoginModal 
+         isOpen={isLoginModalOpen} 
+         onClose={closeLoginModal} 
+         onSuccess={handleLoginSucesso}
+      />
 
     </>
   );

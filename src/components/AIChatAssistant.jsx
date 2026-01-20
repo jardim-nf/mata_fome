@@ -166,7 +166,14 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
   const handleSend = async (textStr) => {
     const textToSend = textStr || message;
     if (!textToSend.trim() || aiThinking) return;
-    if (!clienteNome && onRequestLogin) return onRequestLogin();
+    
+    // Se não estiver logado, fecha o chat e abre o login
+    if (!clienteNome && onRequestLogin) {
+        handleClose(); 
+        onRequestLogin();
+        return;
+    }
+    
     setMessage('');
     
     // 🔥 Envia cardápio formatado verticalmente para o contexto da IA
@@ -200,7 +207,20 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                <div className="bg-white p-4 rounded-2xl rounded-bl-none shadow-sm border border-gray-200 text-gray-800 text-base leading-relaxed">
                  {clienteNome ? 
                    <>Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 😃<br/>Sou o Jucleildo. O que você gostaria de pedir?</> : 
-                   <>Olá! Sou o Jucleildo. <button onClick={onRequestLogin} className="text-red-600 font-bold underline">Entre aqui</button> para pedir.</>}
+                   <>
+                     Olá! Sou o Jucleildo. 
+                     <button 
+                        onClick={() => { 
+                            handleClose(); 
+                            if(onRequestLogin) onRequestLogin(); 
+                        }} 
+                        className="text-red-600 font-bold underline cursor-pointer ml-1"
+                     >
+                        Entre aqui
+                     </button> 
+                     {' '}para pedir.
+                   </>
+                 }
                </div>
              </div>
            </div>
@@ -273,7 +293,18 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
           )}
 
           <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2 items-center">
-             <button type="button" onClick={() => !clienteNome ? onRequestLogin() : toggleMic()} className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+             <button 
+                type="button" 
+                onClick={() => {
+                    if(!clienteNome && onRequestLogin) {
+                        handleClose();
+                        onRequestLogin();
+                    } else {
+                        toggleMic();
+                    }
+                }} 
+                className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+             >
                <IoMic size={22} />
              </button>
              
@@ -282,7 +313,13 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                value={isListening ? 'Ouvindo...' : message} 
                onChange={e => setMessage(e.target.value)} 
                placeholder={clienteNome ? "Digite aqui..." : "Faça login"} 
-               disabled={isListening || !clienteNome}
+               disabled={isListening}
+               onFocus={() => {
+                   if (!clienteNome && onRequestLogin) {
+                       handleClose();
+                       onRequestLogin();
+                   }
+               }}
                className="flex-1 bg-gray-50 text-gray-900 rounded-full px-5 py-3 text-base focus:bg-white focus:ring-2 focus:ring-green-200 outline-none border border-gray-200 transition-all placeholder-gray-400" 
              />
              
