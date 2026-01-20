@@ -1,200 +1,253 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { toast } from 'react-toastify';
-import { IoSave, IoLockClosed, IoEye, IoEyeOff, IoTicket, IoToggle } from 'react-icons/io5';
+// src/components/AIChatAssistant.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { IoSend, IoClose, IoChatbubbleEllipses } from 'react-icons/io5';
+import { useAI } from '../context/AIContext'; // 🔥 Importando teu Contexto de IA
 
-const AdminSettings = () => {
-  const { estabelecimentoIdPrincipal } = useAuth();
-  
-  // Estados da Senha Master
-  const [senhaMaster, setSenhaMaster] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+export default function AIChatAssistant({ 
+    estabelecimento, 
+    produtos, 
+    carrinho, 
+    clienteNome, 
+    
+    // Props vindas do Menu.jsx
+    taxaEntrega,
+    enderecoAtual,
+    isRetirada,
+    onSetDeliveryMode,
+    onUpdateAddress,
+    
+    onAddDirect, 
+    onCheckout, 
+    onClose, 
+    onRequestLogin, 
+    mode = 'widget',
+    onClick // fallback para checkout
+}) {
+    const { sendMessage } = useAI(); // 🔥 Usando a função do teu backend
+    const [messages, setMessages] = useState([]);
+    const [input, setInput] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
+    
+    // Estados do Fluxo de Entrega (Interceptação)
+    const [conversationStep, setConversationStep] = useState('IDLE'); // IDLE, ASKING_TYPE, ASKING_ADDRESS
+    const scrollRef = useRef(null);
 
-  // 🔥 Estados da Raspadinha
-  const [raspadinhaAtiva, setRaspadinhaAtiva] = useState(false);
-  const [raspadinhaChance, setRaspadinhaChance] = useState(20); // Padrão 20% de chance
-  const [raspadinhaValor, setRaspadinhaValor] = useState(10);   // Padrão 10% de desconto
-
-  const [loading, setLoading] = useState(false);
-
-  // Carregar dados
-  useEffect(() => {
-    const fetchSettings = async () => {
-      if (!estabelecimentoIdPrincipal) return;
-      try {
-        const docRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          
-          // Carrega Senha
-          if (data.senhaMaster) setSenhaMaster(data.senhaMaster);
-
-          // 🔥 Carrega Raspadinha
-          if (data.raspadinhaConfig) {
-            setRaspadinhaAtiva(data.raspadinhaConfig.ativa ?? false);
-            setRaspadinhaChance(data.raspadinhaConfig.chance ?? 20);
-            setRaspadinhaValor(data.raspadinhaConfig.valor ?? 10);
-          }
+    // Mensagem inicial
+    useEffect(() => {
+        if (messages.length === 0) {
+            setMessages([{ 
+                sender: 'bot', 
+                text: clienteNome 
+                    ? `Olá ${clienteNome}! Sou o assistente do ${estabelecimento.nome}. O que vai querer? 🍕` 
+                    : `Olá! Sou o assistente do ${estabelecimento.nome}. Posso anotar seu pedido?`
+            }]);
         }
-      } catch (error) {
-        console.error("Erro ao carregar configurações:", error);
-      }
+    }, [clienteNome, estabelecimento.nome]);
+
+    // Auto-scroll
+    useEffect(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, [messages, isTyping]);
+
+    const handleSend = async () => {
+        if (!input.trim()) return;
+
+        const userMsg = input;
+        setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
+        setInput('');
+        
+        // --- 1. VERIFICA SE ESTAMOS NO FLUXO DE ENTREGA (FRONTEND) ---
+        if (conversationStep !== 'IDLE') {
+            processarFluxoEntrega(userMsg);
+            return;
+        }
+
+        // --- 2. SE NÃO, MANDA PRO BACKEND (IA) ---
+        setIsTyping(true);
+        try {
+            // Contexto para a IA saber o que tem no carrinho e menu
+            const context = {
+                cardapio: produtos.map(p => `${p.nome} (R$ ${p.preco})`).join(', '),
+                carrinho: carrinho.map(i => `${i.qtd}x ${i.nome}`).join(', '),
+                cliente: clienteNome
+            };
+
+            const response = await sendMessage(userMsg, context);
+            const replyText = response.reply || "Desculpe, não entendi.";
+
+            // --- 3. INTERCEPTA COMANDOS DO BACKEND ---
+            
+            // CASO A: IA mandou finalizar (||PAY||)
+            if (replyText.includes('||PAY||')) {
+                // Remove a tag para não mostrar ao usuário
+                const cleanText = replyText.replace('||PAY||', '').trim();
+                
+                if (cleanText) {
+                    setMessages(prev => [...prev, { sender: 'bot', text: cleanText }]);
+                }
+
+                // 🔥 AQUI ESTÁ O TRUQUE: Não fecha direto. Pergunta Entrega/Retirada.
+                iniciarFluxoEntrega(); 
+            } 
+            // CASO B: IA mandou adicionar item (Ex: Coca-Cola -- Opcao: ... -- Qtd: 1)
+            // Adapte essa verificação conforme seu backend retorna (ex: ||ADD|| ou texto formatado)
+            else if (replyText.includes('-- Qtd:') || replyText.includes('||ADD||')) {
+                const cleanText = replyText.replace('||ADD||', '').trim();
+                setMessages(prev => [...prev, { sender: 'bot', text: cleanText }]);
+                
+                // Tenta adicionar ao carrinho
+                const resultado = onAddDirect(cleanText); 
+                if (resultado === 'NOT_FOUND') {
+                    setMessages(prev => [...prev, { sender: 'bot', text: "Tentei adicionar, mas não achei o item exato. Pode verificar o nome?" }]);
+                }
+            }
+            // CASO C: Conversa normal
+            else {
+                setMessages(prev => [...prev, { sender: 'bot', text: replyText }]);
+            }
+
+        } catch (error) {
+            console.error(error);
+            setMessages(prev => [...prev, { sender: 'bot', text: "Tive um erro de conexão. Tente novamente." }]);
+        } finally {
+            setIsTyping(false);
+        }
     };
 
-    fetchSettings();
-  }, [estabelecimentoIdPrincipal]);
-
-  // Salvar dados
-  const handleSave = async () => {
-    if (!estabelecimentoIdPrincipal) return;
-    if (!senhaMaster.trim()) {
-      toast.warning("A senha não pode ser vazia.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const docRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal);
-      
-      await updateDoc(docRef, {
-        senhaMaster: senhaMaster,
-        // 🔥 Salva Config da Raspadinha
-        raspadinhaConfig: {
-            ativa: raspadinhaAtiva,
-            chance: Number(raspadinhaChance),
-            valor: Number(raspadinhaValor)
+    // --- LÓGICA DO FLUXO DE ENTREGA (LOCAL) ---
+    
+    const iniciarFluxoEntrega = () => {
+        if (!clienteNome) {
+            setMessages(prev => [...prev, { sender: 'bot', text: "Para fechar o pedido, preciso que faça login. Clique em 'Entrar' lá em cima!" }]);
+            onRequestLogin();
+            return;
         }
-      });
-      
-      toast.success("Configurações atualizadas com sucesso!");
-    } catch (error) {
-      console.error("Erro ao salvar:", error);
-      toast.error("Erro ao atualizar configurações.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Configurações Gerais</h1>
+        // Se já sabemos que é retirada ou entrega E temos endereço, finaliza direto
+        /* Comentado para forçar a confirmação, mas você pode descomentar se quiser agilidade
+           if (isRetirada || (enderecoAtual?.bairro && enderecoAtual?.rua)) {
+               confirmarEFechar();
+               return;
+           }
+        */
 
-      {/* --- SEÇÃO 1: SENHA MASTER --- */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
-        <div className="flex items-center gap-3 mb-4 border-b pb-4">
-            <div className="bg-red-100 p-2 rounded-lg">
-                <IoLockClosed className="text-red-600 text-xl" />
-            </div>
-            <div>
-                <h2 className="text-lg font-bold text-gray-800">Senha Master</h2>
-                <p className="text-sm text-gray-500">Para autorizar exclusão de pedidos na cozinha.</p>
-            </div>
-        </div>
+        setConversationStep('ASKING_TYPE');
+        // Adiciona mensagem da IA perguntando
+        setTimeout(() => {
+            setMessages(prev => [...prev, { sender: 'bot', text: "Certo! Antes de finalizar: É para **Entrega** 🛵 ou **Retirada** 🛍️?" }]);
+        }, 500);
+    };
 
-        <div className="max-w-md">
-            <label className="block text-sm font-bold text-gray-700 mb-2">Definir Senha</label>
-            <div className="relative">
-                <input 
-                    type={showPassword ? "text" : "password"}
-                    value={senhaMaster}
-                    onChange={(e) => setSenhaMaster(e.target.value)}
-                    placeholder="Ex: 1234"
-                    className="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono text-lg"
-                />
-                <button 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                    {showPassword ? <IoEyeOff size={20}/> : <IoEye size={20}/>}
-                </button>
-            </div>
-        </div>
-      </div>
+    const processarFluxoEntrega = (texto) => {
+        const lower = texto.toLowerCase();
+        
+        // ETAPA 1: TIPO DE ENTREGA
+        if (conversationStep === 'ASKING_TYPE') {
+            if (lower.includes('entrega') || lower.includes('casa') || lower.includes('lev')) {
+                onSetDeliveryMode('entrega'); // Atualiza Menu.jsx
+                
+                if (enderecoAtual?.bairro && enderecoAtual?.rua) {
+                    // Já tem endereço
+                    setMessages(prev => [...prev, { sender: 'bot', text: `Endereço: ${enderecoAtual.rua}, ${enderecoAtual.numero} - ${enderecoAtual.bairro}. Confere? (Sim/Não)` }]);
+                    setConversationStep('CONFIRM_ADDRESS');
+                } else {
+                    setMessages(prev => [...prev, { sender: 'bot', text: "Ok, entrega! Qual é o seu **Bairro** e **Rua**?" }]);
+                    setConversationStep('ASKING_ADDRESS');
+                }
+            } 
+            else if (lower.includes('retira') || lower.includes('busca') || lower.includes('aqui')) {
+                onSetDeliveryMode('retirada'); // Atualiza Menu.jsx
+                setMessages(prev => [...prev, { sender: 'bot', text: "Perfeito, retirada no balcão. Abrindo pagamento..." }]);
+                setTimeout(abrirPagamento, 1500);
+                setConversationStep('IDLE');
+            } else {
+                setMessages(prev => [...prev, { sender: 'bot', text: "Não entendi. Digite 'Entrega' ou 'Retirada'." }]);
+            }
+            return;
+        }
 
-      {/* --- SEÇÃO 2: RASPADINHA (NOVO) --- */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
-        <div className="flex items-center gap-3 mb-4 border-b pb-4">
-            <div className="bg-purple-100 p-2 rounded-lg">
-                <IoTicket className="text-purple-600 text-xl" />
-            </div>
-            <div>
-                <h2 className="text-lg font-bold text-gray-800">Raspadinha Premiada</h2>
-                <p className="text-sm text-gray-500">Configure o prêmio que aparece para o cliente no Cardápio.</p>
-            </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+        // ETAPA 2: PEGAR ENDEREÇO (Se não tiver)
+        if (conversationStep === 'ASKING_ADDRESS') {
+            // Aqui fazemos uma atualização "bruta" para o cálculo da taxa funcionar
+            // O ideal seria pedir campo a campo, mas vamos simplificar para o chat
+            onUpdateAddress({ 
+                bairro: texto, // Assume que o usuário digitou algo como "Centro, Rua X"
+                rua: texto 
+            });
             
-            {/* Toggle Ativar */}
-            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200 col-span-1 md:col-span-2">
-                <div>
-                    <span className="block font-bold text-gray-800">Ativar Raspadinha</span>
-                    <span className="text-xs text-gray-500">Exibir o jogo no cardápio digital</span>
+            setMessages(prev => [...prev, { sender: 'bot', text: "Anotei. Calculando taxa... Pode confirmar o pedido agora?" }]);
+            setConversationStep('CONFIRM_FINAL');
+            return;
+        }
+
+        // ETAPA 3: CONFIRMAÇÃO FINAL
+        if (conversationStep === 'CONFIRM_ADDRESS' || conversationStep === 'CONFIRM_FINAL') {
+            if (lower.includes('sim') || lower.includes('pode') || lower.includes('ok') || lower.includes('confirm')) {
+                setMessages(prev => [...prev, { sender: 'bot', text: `Fechado! Taxa de entrega: R$ ${taxaEntrega.toFixed(2)}. Abrindo pagamento...` }]);
+                setTimeout(abrirPagamento, 1500);
+                setConversationStep('IDLE');
+            } else {
+                setMessages(prev => [...prev, { sender: 'bot', text: "Ok, o que deseja alterar? (Digite 'cancelar' para voltar ao cardápio)" }]);
+                setConversationStep('IDLE'); // Volta ao modo IA normal para correções
+            }
+        }
+    };
+
+    const abrirPagamento = () => {
+        onCheckout(); // Abre o modal do Menu.jsx
+        // Opcional: fechar o chat no mobile
+        // onClose(); 
+    };
+
+    return (
+        <div className={`fixed z-[99999] transition-all duration-300 flex flex-col bg-white shadow-2xl border border-gray-200
+            ${mode === 'center' 
+                ? 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md h-[500px] rounded-2xl' 
+                : 'bottom-24 right-6 w-80 h-96 rounded-2xl'
+            }`}>
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-600 to-green-500 p-4 rounded-t-2xl flex justify-between items-center text-white">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">🤖</div>
+                    <div>
+                        <h3 className="font-bold text-sm">Assistente {estabelecimento.nome}</h3>
+                        <p className="text-xs opacity-90">{isTyping ? 'Digitando...' : 'Online'}</p>
+                    </div>
                 </div>
-                <button 
-                    onClick={() => setRaspadinhaAtiva(!raspadinhaAtiva)}
-                    className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${raspadinhaAtiva ? 'bg-green-500' : 'bg-gray-300'}`}
-                >
-                    <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm ${raspadinhaAtiva ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                </button>
+                <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full"><IoClose size={20} /></button>
             </div>
 
-            {/* Inputs de Valor */}
-            <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Chance de Ganhar (%)</label>
-                <div className="relative">
-                    <input 
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={raspadinhaChance}
-                        onChange={(e) => setRaspadinhaChance(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                {messages.map((msg, idx) => (
+                    <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${
+                            msg.sender === 'user' ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border border-gray-100'
+                        }`}>
+                            {msg.text}
+                        </div>
+                    </div>
+                ))}
+                {isTyping && <div className="flex justify-start"><div className="bg-white p-3 rounded-2xl rounded-bl-none border"><IoChatbubbleEllipses className="text-gray-400 animate-pulse" /></div></div>}
+            </div>
+
+            {/* Input */}
+            <div className="p-3 bg-white border-t rounded-b-2xl">
+                <div className="flex items-center gap-2 bg-gray-100 p-1 pr-2 rounded-full border focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100 transition-all">
+                    <input
+                        className="flex-1 bg-transparent px-4 py-2 outline-none text-sm text-gray-700"
+                        placeholder={conversationStep !== 'IDLE' ? "Responda aqui..." : "Digite seu pedido..."}
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                        autoFocus={mode === 'center'}
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">%</span>
+                    <button onClick={handleSend} disabled={!input.trim()} className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:opacity-50 transition-all shadow-sm active:scale-95">
+                        <IoSend size={16} />
+                    </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Ex: 30% dos clientes ganharão.</p>
             </div>
-
-            <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Valor do Desconto (%)</label>
-                <div className="relative">
-                    <input 
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={raspadinhaValor}
-                        onChange={(e) => setRaspadinhaValor(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">%</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Desconto aplicado no carrinho.</p>
-            </div>
-
         </div>
-      </div>
-
-      {/* Botão Salvar Geral */}
-      <button 
-        onClick={handleSave}
-        disabled={loading}
-        className="flex items-center justify-center gap-2 w-full max-w-md mx-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95 disabled:opacity-70"
-      >
-        {loading ? "Salvando..." : (
-            <>
-                <IoSave size={20} /> Salvar Configurações
-            </>
-        )}
-      </button>
-
-    </div>
-  );
-};
-
-export default AdminSettings;
+    );
+}

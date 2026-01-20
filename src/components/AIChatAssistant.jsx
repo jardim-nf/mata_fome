@@ -41,15 +41,10 @@ const formatarCardapio = (lista) => {
   return Object.entries(agrupado).map(([cat, itens]) => {
     const itensTexto = itens.map(p => {
       const precoBase = p.precoFinal || p.preco;
-      
-      // Se tiver variações, cria uma lista vertical limpa
       if (p.variacoes?.length > 0) {
           const vars = p.variacoes.map(v => `- ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`).join('\n');
-          // Adiciona quebra de linha extra antes das variações
           return `**${p.nome.toUpperCase()}**\n${vars}`; 
       }
-      
-      // Produto simples
       return `**${p.nome.toUpperCase()}**\n- Preço: R$ ${Number(precoBase).toFixed(2)}`;
     }).join('\n\n'); 
     
@@ -89,7 +84,7 @@ const MiniCart = ({ itens, onClose, onCheckout }) => (
   </div>
 );
 
-const ChatHeader = ({ onClose, statusText, estabelecimentoNome }) => (
+const ChatHeader = ({ onClose, statusText }) => (
   <div className="px-5 py-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
     <div className="flex items-center gap-3">
       <div className="w-11 h-11 bg-gradient-to-tr from-red-600 to-orange-500 text-white rounded-full flex items-center justify-center shadow-md ring-2 ring-white">
@@ -110,18 +105,38 @@ const ChatHeader = ({ onClose, statusText, estabelecimentoNome }) => (
 // 3. COMPONENTE PRINCIPAL
 // ============================================================================
 
-const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDirect, onCheckout, clienteNome, onRequestLogin, mode = 'center' }) => {
+const AIChatAssistant = ({ 
+    estabelecimento, 
+    produtos, 
+    carrinho, 
+    onClose, 
+    onAddDirect, 
+    onCheckout, 
+    clienteNome, 
+    onRequestLogin, 
+    mode = 'center',
+    // 🔥 NOVAS PROPS PARA LÓGICA DE ENTREGA
+    taxaEntrega,
+    enderecoAtual,
+    isRetirada,
+    onSetDeliveryMode,
+    onUpdateAddress
+}) => {
   const [message, setMessage] = useState('');
   const [isOpen, setIsOpen] = useState(true);
   const [showMiniCart, setShowMiniCart] = useState(false);
   const [isListening, setIsListening] = useState(false);
   
+  // 🔥 ESTADOS PARA FLUXO DE ENTREGA LOCAL
+  const [conversationStep, setConversationStep] = useState('IDLE'); // IDLE, ASKING_TYPE, ASKING_ADDRESS...
+  const [localMessages, setLocalMessages] = useState([]); // Mensagens que não vão pro backend (histórico local)
+
   const processedIdsRef = useRef(new Set());
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const { conversation, aiThinking, sendMessage, closeWidget } = useAI();
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conversation, aiThinking]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conversation, aiThinking, localMessages]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -147,26 +162,117 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     isListening ? recognitionRef.current.stop() : recognitionRef.current.start();
   };
 
+  // 🔥 MONITORAMENTO DE RESPOSTAS DA IA (INTERCEPTA ||PAY||)
   useEffect(() => {
     if (!conversation.length) return;
     const lastMsg = conversation[conversation.length - 1];
+    
     if (lastMsg.type === 'ai' && !processedIdsRef.current.has(lastMsg.id)) {
         processedIdsRef.current.add(lastMsg.id);
-        let match; const regexAdd = /\|\|ADD:(.*?)\|\|/gi;
+        
+        let match; 
+        const regexAdd = /\|\|ADD:(.*?)\|\|/gi;
         while ((match = regexAdd.exec(lastMsg.text)) !== null) if (onAddDirect) onAddDirect(match[1].trim());
-        if (lastMsg.text.includes('||PAY||')) { if (onCheckout) onCheckout(); handleClose(); }
+        
+        // 🛑 AQUI ESTÁ A MÁGICA: Se a IA mandar pagar, a gente PAUSA e inicia o fluxo de entrega
+        if (lastMsg.text.includes('||PAY||')) { 
+            iniciarFluxoEntrega();
+        }
     }
-  }, [conversation, onAddDirect, onCheckout]);
+  }, [conversation, onAddDirect]);
 
   const handleClose = () => {
     setIsOpen(false);
     setTimeout(() => mode === 'widget' ? closeWidget() : onClose?.(), 300);
   };
 
+  // --- LÓGICA DO FLUXO DE ENTREGA (LOCAL) ---
+  const addLocalBotMessage = (text) => {
+      // 🔥 CORREÇÃO: Adicionando Math.random() para garantir ID único e evitar o aviso de duplicate key
+      setLocalMessages(prev => [...prev, { id: Date.now() + Math.random(), type: 'ai', text }]);
+  };
+
+  const iniciarFluxoEntrega = () => {
+      if (!clienteNome) {
+          addLocalBotMessage("Para finalizar, preciso que faça login. Clique em 'Entre aqui' na mensagem inicial.");
+          if(onRequestLogin) onRequestLogin();
+          return;
+      }
+      setConversationStep('ASKING_TYPE');
+      setTimeout(() => {
+          addLocalBotMessage("Certo! Antes de finalizar: É para **Entrega** 🛵 ou **Retirada** 🛍️?");
+      }, 600);
+  };
+
+  const processarFluxoEntrega = (texto) => {
+      // Adiciona a resposta do usuário visualmente
+      // 🔥 CORREÇÃO: ID Único aqui também
+      setLocalMessages(prev => [...prev, { id: Date.now() + Math.random(), type: 'user', text: texto }]);
+      setMessage('');
+
+      const lower = texto.toLowerCase();
+
+      // ETAPA 1: TIPO DE PEDIDO
+      if (conversationStep === 'ASKING_TYPE') {
+          if (lower.includes('entrega') || lower.includes('casa') || lower.includes('lev')) {
+              onSetDeliveryMode('entrega');
+              
+              if (enderecoAtual?.bairro && enderecoAtual?.rua) {
+                  addLocalBotMessage(`Endereço: ${enderecoAtual.rua}, ${enderecoAtual.bairro}. Confere? (Sim/Não)`);
+                  setConversationStep('CONFIRM_ADDRESS');
+              } else {
+                  addLocalBotMessage("Ok, entrega! Qual é o seu **Bairro** e **Rua**?");
+                  setConversationStep('ASKING_ADDRESS');
+              }
+          } 
+          else if (lower.includes('retira') || lower.includes('busca') || lower.includes('aqui')) {
+              onSetDeliveryMode('retirada');
+              addLocalBotMessage("Perfeito, retirada no balcão. Abrindo pagamento...");
+              setTimeout(() => {
+                  onCheckout(); 
+                  handleClose();
+              }, 1500);
+              setConversationStep('IDLE');
+          } else {
+              addLocalBotMessage("Não entendi. Digite 'Entrega' ou 'Retirada'.");
+          }
+          return;
+      }
+
+      // ETAPA 2: PEGAR ENDEREÇO
+      if (conversationStep === 'ASKING_ADDRESS') {
+          onUpdateAddress({ bairro: texto, rua: texto }); // Atualiza Menu para calcular taxa
+          addLocalBotMessage("Anotei. Calculando taxa... Pode confirmar o pedido agora?");
+          setConversationStep('CONFIRM_FINAL');
+          return;
+      }
+
+      // ETAPA 3: CONFIRMAÇÃO FINAL
+      if (conversationStep === 'CONFIRM_ADDRESS' || conversationStep === 'CONFIRM_FINAL') {
+          if (lower.includes('sim') || lower.includes('pode') || lower.includes('ok') || lower.includes('fech')) {
+              addLocalBotMessage(`Fechado! Taxa de entrega: R$ ${taxaEntrega?.toFixed(2) || '0.00'}. Abrindo pagamento...`);
+              setTimeout(() => {
+                  onCheckout(); 
+                  handleClose();
+              }, 1500);
+              setConversationStep('IDLE');
+          } else {
+              addLocalBotMessage("Ok, o que deseja alterar? (Digite 'cancelar' para voltar ao cardápio)");
+              setConversationStep('IDLE');
+          }
+      }
+  };
+
   const handleSend = async (textStr) => {
     const textToSend = textStr || message;
     if (!textToSend.trim() || aiThinking) return;
     
+    // 🔥 SE ESTIVERMOS NO MEIO DO FLUXO DE ENTREGA, NÃO MANDA PRO BACKEND
+    if (conversationStep !== 'IDLE') {
+        processarFluxoEntrega(textToSend);
+        return;
+    }
+
     // Se não estiver logado, fecha o chat e abre o login
     if (!clienteNome && onRequestLogin) {
         handleClose(); 
@@ -176,7 +282,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     
     setMessage('');
     
-    // 🔥 Envia cardápio formatado verticalmente para o contexto da IA
+    // Envia para o Backend (IA)
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
       produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO OFICIAL:\n" + formatarCardapio(produtos),
@@ -186,17 +292,19 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     await sendMessage(textToSend, context);
   };
 
+  // Combina mensagens globais (IA) com locais (Fluxo Entrega)
+  const todasMensagens = [...conversation, ...localMessages].sort((a, b) => a.id - b.id);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       
-      {/* CARD PRINCIPAL (Estilo iOS) */}
       <div className="w-full max-w-lg h-[85vh] bg-white rounded-[2rem] shadow-2xl flex flex-col relative overflow-hidden ring-1 ring-white/20">
         
         {showMiniCart && <MiniCart itens={carrinho} onClose={() => setShowMiniCart(false)} onCheckout={() => { onCheckout?.(); handleClose(); }} />}
         
-        <ChatHeader onClose={handleClose} statusText={isListening ? 'Ouvindo...' : (aiThinking ? 'Digitando...' : 'Online')} estabelecimentoNome={estabelecimento?.nome} />
+        <ChatHeader onClose={handleClose} statusText={isListening ? 'Ouvindo...' : (aiThinking ? 'Digitando...' : 'Online')} />
 
         {/* ÁREA DE MENSAGENS */}
         <div className="flex-1 overflow-y-auto p-4 bg-slate-50 custom-scrollbar space-y-6">
@@ -225,7 +333,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
              </div>
            </div>
 
-           {conversation.map(msg => (
+           {todasMensagens.map(msg => (
              <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
                 <div className={`flex items-end gap-2 max-w-[90%] ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
                   
@@ -241,16 +349,9 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                   }`}>
                     <ReactMarkdown 
                         components={{ 
-                            // Título do Produto: Vira um bloco destacado
                             strong: ({node, ...props}) => <span className="block font-bold mt-2 mb-1 text-lg border-b border-white/20 pb-1" {...props} />,
-                            
-                            // Lista Principal: Remove margens padrão e adiciona espaçamento
                             ul: ({node, ...props}) => <ul className="w-full mt-1 space-y-1" {...props} />,
-                            
-                            // Item da Lista: Cria a linha visual (estilo recibo/tabela)
                             li: ({node, ...props}) => <li className="flex justify-between items-center py-1 border-b border-dashed border-gray-300 last:border-0" {...props} />,
-                            
-                            // Parágrafos simples
                             p: ({node, ...props}) => <p className="mb-0" {...props} />
                         }}
                     >
@@ -279,7 +380,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
         {/* INPUT */}
         <div className="bg-white border-t border-gray-100 p-4 pb-safe">
-          {!aiThinking && !isListening && clienteNome && (
+          {!aiThinking && !isListening && clienteNome && conversationStep === 'IDLE' && (
             <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide pb-1">
                <button onClick={() => setShowMiniCart(true)} className="shrink-0 px-4 py-2 bg-green-50 text-green-700 border border-green-200 text-sm font-bold rounded-full flex items-center gap-1 shadow-sm hover:bg-green-100 transition">
                  <IoCartOutline/> Carrinho ({carrinho.length})
@@ -312,7 +413,10 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                type="text" 
                value={isListening ? 'Ouvindo...' : message} 
                onChange={e => setMessage(e.target.value)} 
-               placeholder={clienteNome ? "Digite aqui..." : "Faça login"} 
+               placeholder={
+                   !clienteNome ? "Faça login" : 
+                   conversationStep !== 'IDLE' ? "Responda aqui..." : "Digite aqui..."
+               } 
                disabled={isListening}
                onFocus={() => {
                    if (!clienteNome && onRequestLogin) {
@@ -320,7 +424,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                        onRequestLogin();
                    }
                }}
-               className="flex-1 bg-gray-50 text-gray-900 rounded-full px-5 py-3 text-base focus:bg-white focus:ring-2 focus:ring-green-200 outline-none border border-gray-200 transition-all placeholder-gray-400" 
+               className="flex-1 bg-gray-5 text-gray-900 rounded-full px-5 py-3 text-base focus:bg-white focus:ring-2 focus:ring-green-200 outline-none border border-gray-200 transition-all placeholder-gray-400" 
              />
              
              <button type="submit" disabled={!message.trim() || aiThinking} className="w-12 h-12 shrink-0 bg-green-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-green-100 hover:bg-green-700 active:scale-95 disabled:opacity-50 disabled:shadow-none transition-all">

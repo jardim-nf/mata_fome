@@ -722,19 +722,39 @@ function Menu() {
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* IA - 🔥 CONFIGURADO PARA ABRIR PAGAMENTO DIRETO */}
+{/* IA - 🔥 AGORA COM O FLUXO DE ENTREGA RESTAURADO */}
             {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
                     produtos={allProdutos} 
-                    onAddDirect={handleAdicionarPorIA} 
-                    onCheckout={prepararParaPagamento} // 🔥 MUDANÇA: Abre modal de pagamento
-                    mode={showAICenter ? "center" : "widget"}
-                    onClose={() => setShowAICenter(false)}
-                    clienteNome={nomeCliente}
-                    onRequestLogin={handleLoginDoChat}
                     carrinho={carrinho}
-                    onClick={prepararParaPagamento}
+                    clienteNome={nomeCliente}
+                    
+                    // --- DADOS PARA O CHAT CALCULAR A TAXA ---
+                    taxaEntrega={taxaEntregaCalculada}
+                    enderecoAtual={{ rua, numero, bairro, cidade }}
+                    isRetirada={isRetirada}
+
+                    // --- AÇÕES DO CHAT ---
+                    onAddDirect={handleAdicionarPorIA} 
+                    
+                    // Quando a IA mandar pagar, abre o modal de pagamento direto
+                    onCheckout={prepararParaPagamento}
+                    
+                    onClose={() => setShowAICenter(false)}
+                    onRequestLogin={handleLoginDoChat}
+                    
+                    // 🔥 IA muda para Entrega/Retirada
+                    onSetDeliveryMode={(modo) => setIsRetirada(modo === 'retirada')}
+                    
+                    // 🔥 IA preenche o endereço para calcular a taxa
+                    onUpdateAddress={(dados) => {
+                        if (dados.rua) setRua(dados.rua);
+                        if (dados.numero) setNumero(dados.numero);
+                        if (dados.bairro) setBairro(dados.bairro); // O useEffect recalcula a taxa ao mudar isso
+                        if (dados.cidade) setCidade(dados.cidade);
+                        if (dados.referencia) setComplemento(dados.referencia);
+                    }}
                 />
             )}
 
