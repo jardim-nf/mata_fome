@@ -15,11 +15,13 @@ import PaymentModal from '../components/PaymentModal';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 import RaspadinhaModal from '../components/RaspadinhaModal';
 
+// 🔥 IMPORTS DA INTELIGÊNCIA ARTIFICIAL
 import { useAI } from '../context/AIContext';
 import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
 
-import { IoLocationSharp, IoTime, IoLogOutOutline, IoPerson } from 'react-icons/io5';
+// Ícones
+import { IoLocationSharp, IoTime, IoCall, IoLogOutOutline } from 'react-icons/io5';
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
@@ -27,9 +29,9 @@ function Menu() {
 
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen } = useAI();
-    
     const [showAICenter, setShowAICenter] = useState(true);
 
+    // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
     const [produtosFiltrados, setProdutosFiltrados] = useState([]);
     const [carrinho, setCarrinho] = useState([]);
@@ -52,7 +54,6 @@ function Menu() {
 
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
-    
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
 
@@ -102,15 +103,12 @@ function Menu() {
         }
     });
 
+    // --- 1. FUNÇÕES AUXILIARES (Definidas antes do uso) ---
+
     const scrollToResumo = useCallback(() => {
         const elementoResumo = document.getElementById('resumo-carrinho');
         if (elementoResumo) elementoResumo.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, []);
-
-    const handleAbrirLogin = () => {
-        setIsRegisteringInModal(false); 
-        setShowLoginPrompt(true);
-    };
 
     const formatarHorarios = useCallback((horarios) => {
         if (!horarios || typeof horarios !== 'object') return "Horário não informado";
@@ -154,6 +152,9 @@ function Menu() {
         }, {});
     };
 
+    // --- 2. CÁLCULOS FINANCEIROS (USEMEMO) ---
+    // 🔥 IMPORTANTE: Definidos aqui para estarem disponíveis para as funções abaixo
+
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
 
     const taxaAplicada = useMemo(() => {
@@ -171,8 +172,11 @@ function Menu() {
         return Math.max(0, total);
     }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
 
+    // --- 3. LÓGICA DE PRODUTOS E IA ---
+
     const carregarProdutosRapido = async (estabId) => {
         try {
+            console.log("🔄 Iniciando carregamento profundo...");
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const categoriasSnapshot = await getDocs(query(cardapioRef, where('ativo', '==', true)));
             
@@ -197,7 +201,10 @@ function Menu() {
                 item.precoFinal !== undefined || 
                 (item.variacoes && item.variacoes.length > 0)
             );
+
+            console.log("✅ Produtos carregados:", produtosValidos.length);
             return produtosValidos;
+
         } catch (error) {
             console.error("❌ Erro ao carregar:", error);
             return [];
@@ -233,7 +240,10 @@ function Menu() {
             return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
         });
 
-        if (!produtoEncontrado) return 'NOT_FOUND';
+        if (!produtoEncontrado) {
+            console.error("❌ Produto não encontrado:", nomeProduto);
+            return 'NOT_FOUND';
+        }
 
         let variacaoSelecionada = null;
         if (nomeOpcao) {
@@ -267,19 +277,17 @@ function Menu() {
         return 'MODAL';
     }, [allProdutos]);
 
+    // --- 4. AÇÕES DO USUÁRIO (CARRINHO, AUTH, ETC) ---
+
     const handleAbrirModalProduto = (item) => {
-        if (!currentUser) { 
-            toast.info('Faça login para continuar.'); 
-            handleAbrirLogin(); 
-            return; 
-        }
+        if (!currentUser) { toast.info('Faça login.'); setShowLoginPrompt(true); return; }
         if (item.variacoes && item.variacoes.length > 0) { setItemParaVariacoes(item); }
         else if (item.adicionais && item.adicionais.length > 0) { setItemParaAdicionais(item); }
         else { handleAdicionarRapido(item); }
     };
 
     const handleAdicionarRapido = (item) => {
-        if (!currentUser) { handleAbrirLogin(); return; }
+        if (!currentUser) { setShowLoginPrompt(true); return; }
         const preco = item.precoFinal !== undefined ? item.precoFinal : item.preco;
         setCarrinho(prev => [...prev, { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
         toast.success(`${item.nome} adicionado!`);
@@ -310,7 +318,7 @@ function Menu() {
     };
 
     const handleApplyCoupon = async () => {
-        if (!currentUser) { handleAbrirLogin(); return; }
+        if (!currentUser) { setShowLoginPrompt(true); return; }
         if (!couponCodeInput.trim()) return;
         setCouponLoading(true);
         try {
@@ -333,7 +341,7 @@ function Menu() {
     };
 
     const prepararParaPagamento = () => {
-        if (!currentUser) return handleAbrirLogin();
+        if (!currentUser) return setShowLoginPrompt(true);
         if (carrinho.length === 0) return toast.warn('Carrinho vazio.');
         
         const itensFormatados = carrinho.map(item => ({
@@ -371,32 +379,11 @@ function Menu() {
 
     const handlePagamentoFalha = (error) => toast.error(`Falha: ${error.message}`);
 
-    const handleLoginModal = async (e) => { 
-        e.preventDefault(); 
-        try { 
-            await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
-            setShowLoginPrompt(false); 
-        } catch { 
-            toast.error("Erro no login"); 
-        } 
-    };
+    const handleLoginModal = async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); setShowLoginPrompt(false); } catch { toast.error("Erro no login"); } };
     
-    const handleRegisterModal = async (e) => { 
-        e.preventDefault(); 
-        try { 
-            const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
-            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { 
-                nome: nomeAuthModal, 
-                telefone: telefoneAuthModal, 
-                email: emailAuthModal, 
-                endereco: { rua: ruaAuthModal, numero: numeroAuthModal, bairro: bairroAuthModal, cidade: cidadeAuthModal }, 
-                criadoEm: Timestamp.now() 
-            }); 
-            setShowLoginPrompt(false); 
-        } catch { 
-            toast.error("Erro ao criar conta."); 
-        } 
-    };
+    const handleRegisterModal = async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal, numero: numeroAuthModal, bairro: bairroAuthModal, cidade: cidadeAuthModal }, criadoEm: Timestamp.now() }); setShowLoginPrompt(false); } catch { toast.error("Erro ao criar conta."); } };
+
+    // --- 5. EFFECTS DE INICIALIZAÇÃO ---
 
     useEffect(() => {
         if (!estabelecimentoSlug) return;
@@ -410,7 +397,7 @@ function Menu() {
                 const data = snap.docs[0].data();
                 const id = snap.docs[0].id;
                 
-                const prods = await carregarProdutosRapido(id);
+                const prods = await carregarProdutosRapido(id); // Busca profunda
                 
                 setEstabelecimentoInfo({ ...data, id });
                 setActualEstabelecimentoId(id);
@@ -437,6 +424,7 @@ function Menu() {
         }
     }, [currentUser, currentClientData, authLoading]);
 
+    // Cálculo da Taxa
     useEffect(() => {
         const calcularTaxa = async () => {
             if (!actualEstabelecimentoId || !bairro || isRetirada) { setTaxaEntregaCalculada(0); return; }
@@ -455,6 +443,7 @@ function Menu() {
         return () => clearTimeout(timer);
     }, [bairro, actualEstabelecimentoId, isRetirada]);
 
+    // Filtros de Categoria
     useEffect(() => {
         let p = [...allProdutos];
         if (selectedCategory !== 'Todos') p = p.filter(prod => prod.categoria === selectedCategory);
@@ -487,22 +476,8 @@ function Menu() {
                 
                 {/* INFO */}
                 {estabelecimentoInfo && (
-                    <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative">
-                        <div className="absolute top-4 right-4 z-10">
-                             {currentUser ? (
-                                <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
-                                    <IoLogOutOutline size={18} />
-                                    <span>Sair</span>
-                                </button>
-                             ) : (
-                                <button type="button" onClick={handleAbrirLogin} className="flex items-center gap-2 text-sm font-bold text-white px-4 py-2 rounded-full shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
-                                    <IoPerson size={16} />
-                                    <span>Entrar</span>
-                                </button>
-                             )}
-                        </div>
-
-                        <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />
+                    <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg">
+                        <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} />
                         <div className="flex-1">
                             <h1 className="text-3xl font-bold mb-2">{estabelecimentoInfo.nome}</h1>
                             <div className="text-sm text-gray-600">
@@ -515,13 +490,7 @@ function Menu() {
 
                 {/* FILTROS */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
-                    <input 
-                        type="text" 
-                        placeholder="🔍 Buscar..." 
-                        value={searchTerm} 
-                        onChange={e => setSearchTerm(e.target.value)} 
-                        className="w-full p-3 mb-4 border rounded-lg text-gray-900 text-base" 
-                    />
+                    <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 border rounded-lg text-gray-900" />
                     <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
                             <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full font-bold whitespace-nowrap transition-all ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}>{cat}</button>
@@ -537,38 +506,25 @@ function Menu() {
                         <div key={cat} id={`categoria-${cat}`} className="mb-8">
                             <h2 className="text-2xl font-bold mb-4">{cat}</h2>
                             <div className="grid gap-4 md:grid-cols-2">
-                                {items.slice(0, visible).map(item => (
-                                    <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 p-2">
-                                        <CardapioItem item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />
-                                    </div>
-                                ))}
+                                {items.slice(0, visible).map(item => <CardapioItem key={item.id} item={item} onAddItem={handleAbrirModalProduto} onQuickAdd={handleAdicionarRapido} coresEstabelecimento={coresEstabelecimento} />)}
                             </div>
                             {items.length > 4 && <button onClick={() => visible >= items.length ? handleShowLess(cat) : handleShowMore(cat)} className="w-full mt-4 py-2 bg-gray-100 rounded-lg text-gray-500 font-bold">{visible >= items.length ? 'Ver menos' : 'Ver mais'}</button>}
                         </div>
                     );
                 })}
 
-                {/* 🔥 FLEX-COL PARA GARANTIR 100% DE LARGURA NO CELULAR */}
-                <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
-                    
-                    {/* DADOS */}
-                    <div className="bg-white p-6 rounded-xl border shadow-lg text-left w-full">
+                {/* DADOS E RESUMO */}
+                <div className="grid md:grid-cols-2 gap-8 mt-12">
+                    <div className="bg-white p-6 rounded-xl border shadow-lg text-left">
                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                        {currentUser ? 
-                            <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : 
-                            <button type="button" onClick={handleAbrirLogin} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Fazer Login</button>
-                        }
-                        
+                        {currentUser ? <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : <button onClick={() => setShowLoginPrompt(true)} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Entrar</button>}
                         <div className="space-y-4">
-                            <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
-                            <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
+                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
+                            <input className="w-full p-3 rounded border text-gray-900" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
                                 <div className="space-y-2">
-                                    <div className="flex gap-2">
-                                        <input className="flex-1 p-3 rounded border text-gray-900 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-                                        <input className="w-24 p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
-                                    </div>
-                                    <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+                                    <div className="flex gap-2"><input className="flex-1 p-3 rounded border text-gray-900" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} /><input className="w-24 p-3 rounded border text-center text-gray-900" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} /></div>
+                                    <input className="w-full p-3 rounded border text-gray-900" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
                                 </div>
                             )}
                             <div className="flex gap-2">
@@ -578,8 +534,7 @@ function Menu() {
                         </div>
                     </div>
 
-                    {/* RESUMO */}
-                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900 w-full">
+                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900">
                         <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
                         {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
                             <>
@@ -596,12 +551,7 @@ function Menu() {
                                     {!isRetirada && <div className="flex justify-between"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
                                     {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
                                     {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
-                                    
-                                    <div className="flex gap-2 mt-2">
-                                        <input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-gray-900 text-base" />
-                                        <button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button>
-                                    </div>
-
+                                    <div className="flex gap-2 mt-2"><input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-sm" /><button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button></div>
                                     <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
                                 <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600">✅ Finalizar Pedido</button>
@@ -611,11 +561,13 @@ function Menu() {
                 </div>
             </div>
 
+            {/* 🔥 CARRINHO FLUTUANTE CONDICIONAL */}
             {!isWidgetOpen && (
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
+            {/* 🔥 IA */}
+            {estabelecimentoInfo && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
                     produtos={allProdutos} 
@@ -624,7 +576,7 @@ function Menu() {
                     mode={showAICenter ? "center" : "widget"}
                     onClose={() => setShowAICenter(false)}
                     clienteNome={nomeCliente}
-                    onRequestLogin={handleAbrirLogin}
+                    onRequestLogin={() => setShowLoginPrompt(true)}
                     carrinho={carrinho}
                     onClick={prepararParaPagamento}
                 />
@@ -632,37 +584,30 @@ function Menu() {
 
             <AIWidgetButton />
 
-            {/* 🔥 Z-INDEX AUMENTADO PARA 10000 PARA FICAR ACIMA DA IA */}
-            {itemParaVariacoes && <div className="relative z-[10000]"><VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} /></div>}
-            {itemParaAdicionais && <div className="relative z-[10000]"><AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} /></div>}
-            
-            {/* 🔥 MODAL DE PAGAMENTO COM Z-INDEX 10000 */}
-            {showPaymentModal && pedidoParaPagamento && (
-                <div className="relative z-[10000]">
-                    <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />
-                </div>
-            )}
-
-            {/* 🔥 MODAL DE SUCESSO E LOGIN COM Z-INDEX 10000 */}
-            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
+            {/* MODAIS */}
+            {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
+            {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
+            {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
+            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
+            {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
             
             {showLoginPrompt && (
-                <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
-                    <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up">
-                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
+                <div className="fixed inset-0 z-[4000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left">
+                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl">&times;</button>
                         <h2 className="text-2xl font-bold mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (
                                 <>
-                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
-                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                    <input placeholder="Nome" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border" />
+                                    <input placeholder="Telefone" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border" />
                                 </>
                             )}
-                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
-                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
-                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition-colors">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                            <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border" />
+                            <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border" />
+                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
                         </form>
-                        <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block font-medium">
+                        <button onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block">
                             {isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}
                         </button>
                     </div>
