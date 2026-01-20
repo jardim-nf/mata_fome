@@ -587,10 +587,10 @@ function Menu() {
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
                                 <div className="space-y-2">
-                                    <div className="flex gap-2">
-                                        <input className="flex-1 p-3 rounded border text-gray-900 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
-                                        <input className="w-24 p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
-                                    </div>
+<div className="grid grid-cols-[1fr_90px] gap-3">
+    <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
+    <input type="tel" className="w-full p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
+</div>
                                     <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
                                 </div>
                             )}
@@ -620,10 +620,17 @@ function Menu() {
                                     {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
                                     {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
                                     
-                                    <div className="flex gap-2 mt-2">
-                                        <input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-2 border rounded uppercase text-gray-900 text-base" />
-                                        <button onClick={handleApplyCoupon} className="px-3 bg-green-600 text-white rounded text-sm font-bold">Aplicar</button>
-                                    </div>
+<div className="flex gap-2 mt-3 items-stretch">
+    <input 
+        placeholder="CUPOM" 
+        value={couponCodeInput} 
+        onChange={e => setCouponCodeInput(e.target.value)} 
+        className="flex-1 p-3 border rounded-lg uppercase text-gray-900 text-base min-w-0" // min-w-0 evita bugs no android
+    />
+    <button onClick={handleApplyCoupon} className="px-5 bg-green-600 text-white rounded-lg text-sm font-bold shadow-sm whitespace-nowrap active:scale-95 transition-transform">
+        Aplicar
+    </button>
+</div>
 
                                     <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
