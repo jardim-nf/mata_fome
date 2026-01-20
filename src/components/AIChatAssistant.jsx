@@ -5,25 +5,27 @@ import ReactMarkdown from 'react-markdown';
 import { useAI } from '../context/AIContext';
 
 // ============================================================================
-// 1. FORMATAÇÃO E REGRAS
+// 1. FORMATAÇÃO E REGRAS VISUAIS
 // ============================================================================
 
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
-  🚨 VOCÊ É O JUCLEILDO, GARÇOM DO ${nomeLoja}.
+  🚨 INSTRUÇÃO DE DESIGN:
+  Você é o garçom do ${nomeLoja}.
   
-  ⚠️ REGRA VISUAL (CRUCIAL):
-  - NUNCA use pontinhos (......) para alinhar preços.
-  - Para produtos com variações, coloque o NOME DO PRODUTO em uma linha e as opções abaixo.
-  - Use o formato exato abaixo:
+  ⚠️ REGRA DE OURO PARA LISTAS:
+  - NUNCA use pontinhos (......) para alinhar preços. Isso quebra no celular.
+  - Se um produto tiver variações, coloque cada uma em uma NOVA LINHA.
+  - Use marcadores simples (como hifens ou bolinhas).
 
-  **NOME DO PRODUTO**
-  - Opção A: R$ 20,00
-  - Opção B: R$ 30,00
+  EXEMPLO PERFEITO:
+  "Temos Coca-Cola:
+  - Lata: R$ 5,00
+  - 2 Litros: R$ 10,00"
 
   ⚡ COMANDO OCULTO: ||ADD: Nome -- Opcao: Variação -- Obs: N/A -- Qtd: 1||
 `;
 
-// 🔥 FORMATAÇÃO LIMPA (Sem pontinhos que quebram no celular)
+// 🔥 FORMATAÇÃO VERTICAL (MOBILE-FRIENDLY)
 const formatarCardapio = (lista) => {
   if (!lista?.length) return "Cardápio vazio.";
   
@@ -40,21 +42,25 @@ const formatarCardapio = (lista) => {
     const itensTexto = itens.map(p => {
       const precoBase = p.precoFinal || p.preco;
       
+      // Se tiver variações, cria uma lista vertical limpa
       if (p.variacoes?.length > 0) {
           const vars = p.variacoes.map(v => `- ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`).join('\n');
+          // Adiciona quebra de linha extra antes das variações
           return `**${p.nome.toUpperCase()}**\n${vars}`; 
       }
-      return `**${p.nome.toUpperCase()}**\n- Preço Único: R$ ${Number(precoBase).toFixed(2)}`;
+      
+      // Produto simples
+      return `**${p.nome.toUpperCase()}**\n- Preço: R$ ${Number(precoBase).toFixed(2)}`;
     }).join('\n\n'); 
     
     return `### ${emojis[cat] || '🍽️'} ${cat.toUpperCase()}\n${itensTexto}`;
-  }).join('\n\n'); 
+  }).join('\n\n---\n\n'); 
 };
 
 const cleanText = (text) => text?.replace(/\|\|ADD:.*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
 
 // ============================================================================
-// 2. COMPONENTES VISUAIS
+// 2. SUB-COMPONENTES
 // ============================================================================
 
 const MiniCart = ({ itens, onClose, onCheckout }) => (
@@ -163,9 +169,10 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     if (!clienteNome && onRequestLogin) return onRequestLogin();
     setMessage('');
     
+    // 🔥 Envia cardápio formatado verticalmente para o contexto da IA
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
-      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n" + formatarCardapio(produtos),
+      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO OFICIAL:\n" + formatarCardapio(produtos),
       clienteNome: clienteNome || 'Visitante',
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
     };
@@ -202,12 +209,11 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
              <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
                 <div className={`flex items-end gap-2 max-w-[90%] ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
                   
-                  {/* Avatar */}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 border shadow-sm ${msg.type === 'user' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-white text-red-500 border-gray-200'}`}>
                       {msg.type === 'user' ? <IoPerson/> : <IoRestaurant/>}
                   </div>
 
-                  {/* BALÃO DE TEXTO ESTILIZADO */}
+                  {/* BALÃO DE TEXTO */}
                   <div className={`px-4 py-3 rounded-2xl shadow-sm text-base leading-relaxed border ${
                       msg.type === 'user' 
                       ? 'bg-green-600 text-white rounded-br-none border-green-600' 
@@ -215,16 +221,16 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                   }`}>
                     <ReactMarkdown 
                         components={{ 
-                            // Título do produto (Negrito vira um bloco destacado)
-                            strong: ({node, ...props}) => <span className="block font-bold text-gray-900 mt-2 mb-1 text-lg border-b border-gray-100 pb-1" {...props} />,
+                            // Título do Produto: Vira um bloco destacado
+                            strong: ({node, ...props}) => <span className="block font-bold mt-2 mb-1 text-lg border-b border-white/20 pb-1" {...props} />,
                             
-                            // Lista (Variações vira linhas separadas bonitas)
-                            ul: ({node, ...props}) => <ul className="w-full" {...props} />,
+                            // Lista Principal: Remove margens padrão e adiciona espaçamento
+                            ul: ({node, ...props}) => <ul className="w-full mt-1 space-y-1" {...props} />,
                             
-                            // Item da lista (Cada variação é uma linha com fundo zebrado suave)
-                            li: ({node, ...props}) => <li className="flex justify-between items-center py-1.5 px-2 hover:bg-gray-50 rounded text-sm text-gray-700 border-b border-dashed border-gray-100 last:border-0" {...props} />,
+                            // Item da Lista: Cria a linha visual (estilo recibo/tabela)
+                            li: ({node, ...props}) => <li className="flex justify-between items-center py-1 border-b border-dashed border-gray-300 last:border-0" {...props} />,
                             
-                            // Texto normal
+                            // Parágrafos simples
                             p: ({node, ...props}) => <p className="mb-0" {...props} />
                         }}
                     >
