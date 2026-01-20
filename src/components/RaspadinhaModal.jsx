@@ -1,51 +1,69 @@
 // src/components/RaspadinhaModal.jsx
 import React, { useRef, useEffect, useState } from 'react';
 import { IoClose } from 'react-icons/io5';
-import confetti from 'canvas-confetti'; // Opcional: Instale com 'npm install canvas-confetti' para efeito de festa
+import confetti from 'canvas-confetti';
 
-const RaspadinhaModal = ({ onGanhar, onClose }) => {
+const RaspadinhaModal = ({ onGanhar, onClose, config }) => {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [premioSorteado, setPremioSorteado] = useState(null);
   const [raspadinhaCompletada, setRaspadinhaCompletada] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
 
-  // Lista de Prêmios Possíveis
-  const premios = [
-    { type: 'desconto', valor: 10, label: '10% DE DESCONTO', icon: '🏷️' },
-    { type: 'frete', valor: 0, label: 'FRETE GRÁTIS', icon: '🛵' },
-    { type: 'brinde', label: 'BEBIDA GRÁTIS', icon: '🥤', produto: { nome: 'Coca-Cola Lata', preco: 0 } }
-  ];
-
   useEffect(() => {
-    // 1. Sortear prêmio ao montar
-    const random = Math.floor(Math.random() * premios.length);
-    setPremioSorteado(premios[random]);
+    // 1. Lógica de Sorteio Baseada na Configuração do Admin
+    const sortearPremio = () => {
+        // Se não tiver config, usa padrão
+        const chance = config?.chance ?? 20; 
+        const valor = config?.valor ?? 10;
+
+        const random = Math.random() * 100; // Gera número entre 0 e 100
+
+        if (random <= chance) {
+            // GANHOU!
+            return { 
+                type: 'desconto', 
+                valor: valor, 
+                label: `${valor}% DE DESCONTO`, 
+                icon: '🎉',
+                ganhou: true
+            };
+        } else {
+            // PERDEU (Prêmio de consolação)
+            return { 
+                type: 'nada', 
+                valor: 0, 
+                label: 'NÃO FOI DESSA VEZ 😢', 
+                icon: '🍀',
+                ganhou: false
+            };
+        }
+    };
+
+    const premio = sortearPremio();
+    setPremioSorteado(premio);
     
-    // 2. Configurar Canvas
+    // 2. Configurar Canvas (Tinta Prateada)
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const container = containerRef.current;
     
-    // Ajustar tamanho do canvas ao container
     canvas.width = container.offsetWidth;
     canvas.height = container.offsetHeight;
 
-    // Pintar o canvas de cinza/prata (a "tinta" da raspadinha)
-    ctx.fillStyle = '#C0C0C0'; // Cor prata
+    ctx.fillStyle = '#C0C0C0'; // Prata
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Adicionar texto "RASPE AQUI"
+    // Texto "RASPE AQUI"
     ctx.font = 'bold 20px Arial';
     ctx.fillStyle = '#666';
     ctx.textAlign = 'center';
     ctx.fillText('RASPE AQUI!', canvas.width / 2, canvas.height / 2);
     
-    // Configurar pincel para "apagar"
     ctx.globalCompositeOperation = 'destination-out';
-  }, []);
+  }, [config]);
 
-  const startDrawing = (e) => setIsDrawing(true);
+  const startDrawing = () => setIsDrawing(true);
   const stopDrawing = () => {
     setIsDrawing(false);
     checkProgress();
@@ -57,7 +75,6 @@ const RaspadinhaModal = ({ onGanhar, onClose }) => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
     
-    // Suporte para Mouse e Touch
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
@@ -65,7 +82,7 @@ const RaspadinhaModal = ({ onGanhar, onClose }) => {
     const y = clientY - rect.top;
 
     ctx.beginPath();
-    ctx.arc(x, y, 20, 0, Math.PI * 2); // Tamanho do "pincel"
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
     ctx.fill();
   };
 
@@ -74,7 +91,6 @@ const RaspadinhaModal = ({ onGanhar, onClose }) => {
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    // Verifica quantos pixels transparentes existem
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const pixels = imageData.data;
     let transparentPixels = 0;
@@ -85,24 +101,28 @@ const RaspadinhaModal = ({ onGanhar, onClose }) => {
 
     const percent = (transparentPixels / (pixels.length / 4)) * 100;
 
-    // Se raspou mais de 50%, revela tudo
-    if (percent > 40) {
+    if (percent > 40) { // Se raspou 40%
       setRaspadinhaCompletada(true);
-      canvas.style.opacity = '0'; // Esconde o canvas suavemente
-      canvas.style.pointerEvents = 'none'; // Desativa cliques
+      canvas.style.opacity = '0'; 
+      canvas.style.pointerEvents = 'none';
       
-      // Efeito de confete (opcional)
-      if (typeof confetti === 'function') confetti();
-
-      // Notifica o pai que ganhou após 1 segundinho
-      setTimeout(() => {
-        onGanhar(premioSorteado);
-      }, 1500);
+      // Se ganhou, solta confete!
+      if (premioSorteado?.ganhou) {
+          if (typeof confetti === 'function') confetti();
+          setTimeout(() => {
+            onGanhar(premioSorteado); // Aplica o desconto
+          }, 1500);
+      } else {
+          // Se perdeu, fecha depois de um tempo
+          setTimeout(() => {
+             onClose();
+          }, 2000);
+      }
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4">
+    <div className="fixed inset-0 z-[6000] flex items-center justify-center bg-black bg-opacity-70 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-bounce-in relative">
         <button 
             onClick={onClose}
@@ -112,24 +132,24 @@ const RaspadinhaModal = ({ onGanhar, onClose }) => {
         </button>
 
         <div className="bg-[#FF6B35] p-4 text-center">
-            <h2 className="text-white font-bold text-xl">PARABÉNS! 🎉</h2>
-            <p className="text-white text-sm opacity-90">Você gastou mais de R$ 100!</p>
+            <h2 className="text-white font-bold text-xl">RASPADINHA PREMIADA 🎟️</h2>
+            <p className="text-white text-sm opacity-90">Tente a sorte e ganhe desconto!</p>
         </div>
 
         <div className="p-6 flex flex-col items-center">
-            <p className="text-gray-600 mb-4 font-medium">Raspe e descubra seu prêmio:</p>
-            
             <div 
                 ref={containerRef} 
-                className="relative w-64 h-32 rounded-lg overflow-hidden shadow-inner bg-yellow-100 select-none cursor-pointer"
+                className="relative w-64 h-32 rounded-lg overflow-hidden shadow-inner bg-yellow-50 select-none cursor-pointer border-2 border-dashed border-yellow-300"
             >
-                {/* O Prêmio (Fica embaixo do Canvas) */}
+                {/* O Prêmio (Fica embaixo) */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-2 z-0">
                     <span className="text-4xl mb-1">{premioSorteado?.icon}</span>
-                    <span className="font-bold text-lg text-gray-800">{premioSorteado?.label}</span>
+                    <span className={`font-bold text-lg ${premioSorteado?.ganhou ? 'text-green-600' : 'text-gray-500'}`}>
+                        {premioSorteado?.label}
+                    </span>
                 </div>
 
-                {/* A "Tinta" (Canvas fica por cima) */}
+                {/* A Tinta (Fica por cima) */}
                 <canvas
                     ref={canvasRef}
                     className="absolute inset-0 z-10 transition-opacity duration-700"
@@ -143,7 +163,7 @@ const RaspadinhaModal = ({ onGanhar, onClose }) => {
             </div>
             
             <p className="text-xs text-gray-400 mt-4 text-center">
-                Raspe com o mouse ou dedo para revelar.
+                Raspe com o dedo ou mouse para revelar.
             </p>
         </div>
       </div>

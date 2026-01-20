@@ -28,9 +28,7 @@ function Menu() {
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen } = useAI();
     
-    // IA começa aberta no centro (true)
     const [showAICenter, setShowAICenter] = useState(true);
-    // Estado para lembrar se o chat deve reabrir após login
     const [deveReabrirChat, setDeveReabrirChat] = useState(false);
 
     // --- ESTADOS ---
@@ -45,8 +43,7 @@ function Menu() {
     const [numero, setNumero] = useState('');
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
-    const [complemento, setComplemento] = useState('');
-
+    
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
 
@@ -64,7 +61,6 @@ function Menu() {
     const [emailAuthModal, setEmailAuthModal] = useState('');
     const [passwordAuthModal, setPasswordAuthModal] = useState('');
     
-    // Campos de Cadastro Completo
     const [nomeAuthModal, setNomeAuthModal] = useState('');
     const [telefoneAuthModal, setTelefoneAuthModal] = useState('');
     const [ruaAuthModal, setRuaAuthModal] = useState('');
@@ -81,7 +77,6 @@ function Menu() {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
     
-    // Estados da Raspadinha
     const [showRaspadinha, setShowRaspadinha] = useState(false);
     const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
     const [premioRaspadinha, setPremioRaspadinha] = useState(null);
@@ -116,19 +111,39 @@ function Menu() {
         if (elementoResumo) elementoResumo.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, []);
 
+    // 🔥 NOVA FUNÇÃO: Rola até a categoria sem filtrar
+    const handleCategoryClick = (cat) => {
+        setSelectedCategory(cat); // Apenas para destacar o botão
+        
+        if (cat === 'Todos') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            const element = document.getElementById(`categoria-${cat}`);
+            if (element) {
+                // Ajuste de offset para o header fixo não cobrir o título
+                const headerOffset = 180; 
+                const elementPosition = element.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: "smooth"
+                });
+            }
+        }
+    };
+
     const handleAbrirLogin = () => {
         setIsRegisteringInModal(false); 
         setShowLoginPrompt(true);
     };
 
-    // Login pedido pelo chat
     const handleLoginDoChat = () => {
-        setShowAICenter(false); // Fecha o chat visualmente
-        setDeveReabrirChat(true); // Marca para reabrir
-        handleAbrirLogin(); // Abre o modal
+        setShowAICenter(false); 
+        setDeveReabrirChat(true); 
+        handleAbrirLogin(); 
     };
 
-    // Verificar reabertura
     const verificarReaberturaChat = () => {
         if (deveReabrirChat) {
             setShowAICenter(true);
@@ -197,39 +212,61 @@ function Menu() {
         return Math.max(0, total);
     }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
 
-    // --- PRODUTOS E IA ---
+    // --- PRODUTOS E IA (MODO HÍBRIDO E ROBUSTO) ---
 
     const carregarProdutosRapido = async (estabId) => {
         try {
+            console.log("🔍 Buscando cardápio (Modo Híbrido) para ID:", estabId);
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
-            const categoriasSnapshot = await getDocs(query(cardapioRef, where('ativo', '==', true)));
+            const snapshot = await getDocs(cardapioRef);
             
-            const promessas = categoriasSnapshot.docs.map(async (catDoc) => {
-                const categoriaData = catDoc.data();
-                const itensRef = collection(db, 'estabelecimentos', estabId, 'cardapio', catDoc.id, 'itens');
-                const itensSnapshot = await getDocs(query(itensRef, where('ativo', '==', true)));
+            if (snapshot.empty) return [];
 
-                return itensSnapshot.docs.map(itemDoc => ({
-                    ...itemDoc.data(),
-                    id: itemDoc.id,
-                    categoria: categoriaData.nome || 'Geral',
-                    categoriaId: catDoc.id
+            const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            
+            // Verifica se é estrutura PLANA (itens na raiz)
+            const temProdutosDiretos = docs.some(d => d.categoriaNome !== undefined || d.preco !== undefined || (d.variacoes && d.variacoes.length > 0));
+
+            if (temProdutosDiretos) {
+                console.log("🚀 Modo PLANO");
+                return docs.filter(item => item.ativo !== false).map(item => ({
+                    ...item,
+                    categoria: item.categoriaNome || item.categoria || 'Geral'
+                }));
+            } 
+            
+            console.log("📂 Modo HIERÁRQUICO");
+            const categoriasAtivas = docs.filter(cat => cat.ativo !== false);
+
+            const promessas = categoriasAtivas.map(async (cat) => {
+                const itensRef = collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'itens');
+                const produtosRef = collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'produtos');
+                
+                const [itensSnap, produtosSnap] = await Promise.all([
+                    getDocs(query(itensRef, where('ativo', '==', true))),
+                    getDocs(query(produtosRef, where('ativo', '==', true)))
+                ]);
+
+                return [...itensSnap.docs, ...produtosSnap.docs].map(d => ({
+                    ...d.data(),
+                    id: d.id,
+                    categoria: cat.nome || 'Geral',
+                    categoriaId: cat.id
                 }));
             });
 
             const resultados = await Promise.all(promessas);
-            const todosProdutos = resultados.flat();
+            const produtosFinais = resultados.flat();
 
-            const produtosValidos = todosProdutos.filter(item => 
-                item.preco !== undefined || 
-                item.precoFinal !== undefined || 
-                (item.variacoes && item.variacoes.length > 0)
-            );
+            if (produtosFinais.length === 0 && docs.length > 0) {
+                console.warn("⚠️ Fallback para raiz.");
+                return docs.map(item => ({ ...item, categoria: item.categoria || item.nome || 'Geral' }));
+            }
 
-            return produtosValidos;
+            return produtosFinais;
 
         } catch (error) {
-            console.error("❌ Erro ao carregar:", error);
+            console.error("❌ Erro:", error);
             return [];
         }
     };
@@ -261,9 +298,7 @@ function Menu() {
             return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
         });
 
-        if (!produtoEncontrado) {
-            return 'NOT_FOUND';
-        }
+        if (!produtoEncontrado) return 'NOT_FOUND';
 
         let variacaoSelecionada = null;
         if (nomeOpcao) {
@@ -415,19 +450,17 @@ function Menu() {
         try { 
             await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
             setShowLoginPrompt(false); 
-            verificarReaberturaChat(); // 🔥 Verifica se deve reabrir
+            verificarReaberturaChat(); 
         } catch { 
             toast.error("Erro no login"); 
         } 
     };
     
-    // 🔥 CADASTRO COMPLETO DE CLIENTE COM ENDEREÇO
     const handleRegisterModal = async (e) => { 
         e.preventDefault(); 
         try { 
             const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
             
-            // 1. Criar perfil na coleção USUARIOS
             await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { 
                 email: emailAuthModal, 
                 nome: nomeAuthModal, 
@@ -438,7 +471,6 @@ function Menu() {
                 criadoEm: Timestamp.now() 
             });
 
-            // 2. Criar perfil na coleção CLIENTES com endereço completo
             await setDocFirestore(doc(db, 'clientes', cred.user.uid), { 
                 nome: nomeAuthModal, 
                 telefone: telefoneAuthModal, 
@@ -454,7 +486,7 @@ function Menu() {
             
             toast.success("Conta criada com sucesso!");
             setShowLoginPrompt(false); 
-            verificarReaberturaChat(); // 🔥 Verifica se deve reabrir o chat
+            verificarReaberturaChat(); 
         } catch (error) { 
             console.error(error);
             toast.error("Erro ao criar conta: " + error.message); 
@@ -520,12 +552,14 @@ function Menu() {
         return () => clearTimeout(timer);
     }, [bairro, actualEstabelecimentoId, isRetirada]);
 
+    // 🔥 CORREÇÃO: Não filtrar por categoria aqui!
     useEffect(() => {
         let p = [...allProdutos];
-        if (selectedCategory !== 'Todos') p = p.filter(prod => prod.categoria === selectedCategory);
+        // REMOVIDO: if (selectedCategory !== 'Todos') ...
+        // Filtramos apenas por texto de busca agora
         if (searchTerm) p = p.filter(prod => prod.nome.toLowerCase().includes(searchTerm.toLowerCase()));
         setProdutosFiltrados(p);
-    }, [allProdutos, selectedCategory, searchTerm]);
+    }, [allProdutos, searchTerm]); // Removido selectedCategory da dependência
 
     const menuAgrupado = useMemo(() => {
         return produtosFiltrados.reduce((acc, p) => {
@@ -589,7 +623,8 @@ function Menu() {
                     />
                     <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
-                            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full font-bold whitespace-nowrap transition-all ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}>{cat}</button>
+                            // 🔥 CORREÇÃO: Usa handleCategoryClick em vez de setSelectedCategory
+                            <button key={cat} onClick={() => handleCategoryClick(cat)} className={`px-4 py-2 rounded-full font-bold whitespace-nowrap transition-all ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}>{cat}</button>
                         ))}
                     </div>
                 </div>
@@ -687,13 +722,13 @@ function Menu() {
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-            {/* IA */}
+            {/* IA - 🔥 CONFIGURADO PARA ABRIR PAGAMENTO DIRETO */}
             {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
                     produtos={allProdutos} 
                     onAddDirect={handleAdicionarPorIA} 
-                    onCheckout={scrollToResumo} 
+                    onCheckout={prepararParaPagamento} // 🔥 MUDANÇA: Abre modal de pagamento
                     mode={showAICenter ? "center" : "widget"}
                     onClose={() => setShowAICenter(false)}
                     clienteNome={nomeCliente}
@@ -711,8 +746,13 @@ function Menu() {
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             
-            {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
-            
+{showRaspadinha && (
+    <RaspadinhaModal 
+        onGanhar={handleGanharRaspadinha} 
+        onClose={() => setShowRaspadinha(false)} 
+        config={estabelecimentoInfo?.raspadinhaConfig} // 🔥 Passando a config do banco!
+    />
+)}            
             {/* MODAL DE LOGIN */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
@@ -720,12 +760,10 @@ function Menu() {
                         <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
                         <h2 className="text-2xl font-bold mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
-                            {/* 🔥 CAMPOS DE CADASTRO COM ENDEREÇO */}
                             {isRegisteringInModal && (
-                                <div className="space-y-3 animate-fade-in">
+                                <>
                                     <input placeholder="Nome Completo" value={nomeAuthModal} onChange={e => setNomeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                     <input placeholder="Telefone (WhatsApp)" value={telefoneAuthModal} onChange={e => setTelefoneAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
-                                    
                                     <div className="grid grid-cols-[1fr_90px] gap-2">
                                         <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                         <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base text-center" required />
@@ -734,7 +772,7 @@ function Menu() {
                                         <input placeholder="Bairro" value={bairroAuthModal} onChange={e => setBairroAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                         <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                     </div>
-                                </div>
+                                </>
                             )}
                             <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                             <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
