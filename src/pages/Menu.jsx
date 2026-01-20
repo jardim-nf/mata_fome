@@ -15,12 +15,10 @@ import PaymentModal from '../components/PaymentModal';
 import CarrinhoFlutuante from '../components/CarrinhoFlutuante';
 import RaspadinhaModal from '../components/RaspadinhaModal';
 
-// 🔥 IMPORTS DA INTELIGÊNCIA ARTIFICIAL
 import { useAI } from '../context/AIContext';
 import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
 
-// Ícones
 import { IoLocationSharp, IoTime, IoLogOutOutline, IoPerson } from 'react-icons/io5';
 
 function Menu() {
@@ -30,11 +28,8 @@ function Menu() {
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen } = useAI();
     
-    // 🔥 MUDANÇA CRÍTICA AQUI:
-    // Mudei para 'true'. Agora a IA abre SOZINHA no meio da tela ao carregar.
     const [showAICenter, setShowAICenter] = useState(true);
 
-    // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
     const [produtosFiltrados, setProdutosFiltrados] = useState([]);
     const [carrinho, setCarrinho] = useState([]);
@@ -58,7 +53,6 @@ function Menu() {
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
     
-    // --- ESTADOS DO LOGIN ---
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
 
@@ -97,7 +91,7 @@ function Menu() {
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#ffffff',
         destaque: '#059669',
-        background: '#f3f4f6', 
+        background: '#f9fafb',
         texto: {
             principal: '#111827',
             secundario: '#4B5563',
@@ -107,8 +101,6 @@ function Menu() {
             sucesso: '#10B981'
         }
     });
-
-    // --- 1. FUNÇÕES AUXILIARES ---
 
     const scrollToResumo = useCallback(() => {
         const elementoResumo = document.getElementById('resumo-carrinho');
@@ -162,8 +154,6 @@ function Menu() {
         }, {});
     };
 
-    // --- 2. CÁLCULOS FINANCEIROS ---
-
     const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
 
     const taxaAplicada = useMemo(() => {
@@ -181,11 +171,8 @@ function Menu() {
         return Math.max(0, total);
     }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
 
-    // --- 3. LÓGICA DE PRODUTOS E IA ---
-
     const carregarProdutosRapido = async (estabId) => {
         try {
-            console.log("🔄 Iniciando carregamento profundo...");
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const categoriasSnapshot = await getDocs(query(cardapioRef, where('ativo', '==', true)));
             
@@ -210,10 +197,7 @@ function Menu() {
                 item.precoFinal !== undefined || 
                 (item.variacoes && item.variacoes.length > 0)
             );
-
-            console.log("✅ Produtos carregados:", produtosValidos.length);
             return produtosValidos;
-
         } catch (error) {
             console.error("❌ Erro ao carregar:", error);
             return [];
@@ -249,10 +233,7 @@ function Menu() {
             return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
         });
 
-        if (!produtoEncontrado) {
-            console.error("❌ Produto não encontrado:", nomeProduto);
-            return 'NOT_FOUND';
-        }
+        if (!produtoEncontrado) return 'NOT_FOUND';
 
         let variacaoSelecionada = null;
         if (nomeOpcao) {
@@ -285,8 +266,6 @@ function Menu() {
         handleAbrirModalProduto(produtoEncontrado);
         return 'MODAL';
     }, [allProdutos]);
-
-    // --- 4. AÇÕES DO USUÁRIO ---
 
     const handleAbrirModalProduto = (item) => {
         if (!currentUser) { 
@@ -419,8 +398,6 @@ function Menu() {
         } 
     };
 
-    // --- 5. EFFECTS ---
-
     useEffect(() => {
         if (!estabelecimentoSlug) return;
         const load = async () => {
@@ -508,7 +485,7 @@ function Menu() {
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
             <div className="max-w-7xl mx-auto px-4 w-full">
                 
-                {/* INFO E CABEÇALHO */}
+                {/* INFO */}
                 {estabelecimentoInfo && (
                     <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative">
                         <div className="absolute top-4 right-4 z-10">
@@ -536,7 +513,7 @@ function Menu() {
                     </div>
                 )}
 
-                {/* FILTROS E BUSCA */}
+                {/* FILTROS */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
                     <input 
                         type="text" 
@@ -552,7 +529,7 @@ function Menu() {
                     </div>
                 </div>
 
-                {/* LISTAGEM DE PRODUTOS */}
+                {/* LISTAGEM */}
                 {categoriasOrdenadas.map(cat => {
                     const items = menuAgrupado[cat];
                     const visible = visibleItemsCount[cat] || 4;
@@ -571,9 +548,11 @@ function Menu() {
                     );
                 })}
 
-                {/* DADOS E RESUMO */}
-                <div className="grid md:grid-cols-2 gap-8 mt-12">
-                    <div className="bg-white p-6 rounded-xl border shadow-lg text-left">
+                {/* 🔥 FLEX-COL PARA GARANTIR 100% DE LARGURA NO CELULAR */}
+                <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
+                    
+                    {/* DADOS */}
+                    <div className="bg-white p-6 rounded-xl border shadow-lg text-left w-full">
                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
                         {currentUser ? 
                             <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : 
@@ -599,7 +578,8 @@ function Menu() {
                         </div>
                     </div>
 
-                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900">
+                    {/* RESUMO */}
+                    <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900 w-full">
                         <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
                         {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
                             <>
@@ -652,14 +632,22 @@ function Menu() {
 
             <AIWidgetButton />
 
-            {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
-            {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
-            {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
-            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
-            {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} />}
+            {/* 🔥 Z-INDEX AUMENTADO PARA 10000 PARA FICAR ACIMA DA IA */}
+            {itemParaVariacoes && <div className="relative z-[10000]"><VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} /></div>}
+            {itemParaAdicionais && <div className="relative z-[10000]"><AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} /></div>}
+            
+            {/* 🔥 MODAL DE PAGAMENTO COM Z-INDEX 10000 */}
+            {showPaymentModal && pedidoParaPagamento && (
+                <div className="relative z-[10000]">
+                    <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />
+                </div>
+            )}
+
+            {/* 🔥 MODAL DE SUCESSO E LOGIN COM Z-INDEX 10000 */}
+            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             
             {showLoginPrompt && (
-                <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
+                <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up">
                         <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
                         <h2 className="text-2xl font-bold mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>

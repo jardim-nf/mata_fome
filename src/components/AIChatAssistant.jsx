@@ -5,27 +5,24 @@ import ReactMarkdown from 'react-markdown';
 import { useAI } from '../context/AIContext';
 
 // ============================================================================
-// 1. FORMATAÇÃO E REGRAS VISUAIS
+// 1. CONFIGURAÇÕES & REGRAS
 // ============================================================================
 
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
-  🚨 INSTRUÇÃO DE DESIGN:
-  Você é o garçom do ${nomeLoja}.
+  🚨 VOCÊ É O JUCLEILDO, GARÇOM DO ${nomeLoja}.
   
-  ⚠️ REGRA DE OURO PARA LISTAS:
-  - NUNCA use pontinhos (......) para alinhar preços. Isso quebra no celular.
-  - Se um produto tiver variações, coloque cada uma em uma NOVA LINHA.
-  - Use marcadores simples (como hifens ou bolinhas).
+  ⚠️ REGRA VISUAL (CRUCIAL):
+  - NUNCA use pontinhos (......) para alinhar preços.
+  - Para produtos com variações, coloque o NOME DO PRODUTO em uma linha e as opções abaixo.
+  - Use o formato exato abaixo:
 
-  EXEMPLO PERFEITO:
-  "Temos Coca-Cola:
-  - Lata: R$ 5,00
-  - 2 Litros: R$ 10,00"
+  **NOME DO PRODUTO**
+  - Opção A: R$ 20,00
+  - Opção B: R$ 30,00
 
   ⚡ COMANDO OCULTO: ||ADD: Nome -- Opcao: Variação -- Obs: N/A -- Qtd: 1||
 `;
 
-// 🔥 FORMATAÇÃO VERTICAL (MOBILE-FRIENDLY)
 const formatarCardapio = (lista) => {
   if (!lista?.length) return "Cardápio vazio.";
   
@@ -42,25 +39,21 @@ const formatarCardapio = (lista) => {
     const itensTexto = itens.map(p => {
       const precoBase = p.precoFinal || p.preco;
       
-      // Se tiver variações, cria uma lista vertical limpa
       if (p.variacoes?.length > 0) {
           const vars = p.variacoes.map(v => `- ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`).join('\n');
-          // Adiciona quebra de linha extra antes das variações
           return `**${p.nome.toUpperCase()}**\n${vars}`; 
       }
-      
-      // Produto simples
-      return `**${p.nome.toUpperCase()}**\n- Preço: R$ ${Number(precoBase).toFixed(2)}`;
+      return `**${p.nome.toUpperCase()}**\n- Preço Único: R$ ${Number(precoBase).toFixed(2)}`;
     }).join('\n\n'); 
     
     return `### ${emojis[cat] || '🍽️'} ${cat.toUpperCase()}\n${itensTexto}`;
-  }).join('\n\n---\n\n'); 
+  }).join('\n\n'); 
 };
 
 const cleanText = (text) => text?.replace(/\|\|ADD:.*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
 
 // ============================================================================
-// 2. SUB-COMPONENTES
+// 2. COMPONENTES VISUAIS
 // ============================================================================
 
 const MiniCart = ({ itens, onClose, onCheckout }) => (
@@ -83,14 +76,14 @@ const MiniCart = ({ itens, onClose, onCheckout }) => (
         </div>
       ))}
     </div>
-    <div className="p-5 bg-white border-t border-gray-100">
+    <div className="p-5 bg-white border-t border-gray-100 pb-safe">
        <button onClick={onCheckout} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 hover:bg-green-700 transition-colors">Concluir Pedido</button>
     </div>
   </div>
 );
 
 const ChatHeader = ({ onClose, statusText, estabelecimentoNome }) => (
-  <div className="px-5 py-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+  <div className="px-5 py-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm pt-safe">
     <div className="flex items-center gap-3">
       <div className="w-11 h-11 bg-gradient-to-tr from-red-600 to-orange-500 text-white rounded-full flex items-center justify-center shadow-md ring-2 ring-white">
         <IoRestaurant className="text-2xl" />
@@ -169,10 +162,9 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     if (!clienteNome && onRequestLogin) return onRequestLogin();
     setMessage('');
     
-    // 🔥 Envia cardápio formatado verticalmente para o contexto da IA
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
-      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO OFICIAL:\n" + formatarCardapio(produtos),
+      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n" + formatarCardapio(produtos),
       clienteNome: clienteNome || 'Visitante',
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
     };
@@ -182,7 +174,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       
       {/* CARD PRINCIPAL (Estilo iOS) */}
       <div className="w-full max-w-lg h-[85vh] bg-white rounded-[2rem] shadow-2xl flex flex-col relative overflow-hidden ring-1 ring-white/20">
@@ -221,16 +213,9 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
                   }`}>
                     <ReactMarkdown 
                         components={{ 
-                            // Título do Produto: Vira um bloco destacado
                             strong: ({node, ...props}) => <span className="block font-bold mt-2 mb-1 text-lg border-b border-white/20 pb-1" {...props} />,
-                            
-                            // Lista Principal: Remove margens padrão e adiciona espaçamento
                             ul: ({node, ...props}) => <ul className="w-full mt-1 space-y-1" {...props} />,
-                            
-                            // Item da Lista: Cria a linha visual (estilo recibo/tabela)
                             li: ({node, ...props}) => <li className="flex justify-between items-center py-1 border-b border-dashed border-gray-300 last:border-0" {...props} />,
-                            
-                            // Parágrafos simples
                             p: ({node, ...props}) => <p className="mb-0" {...props} />
                         }}
                     >
@@ -302,6 +287,9 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
         .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Safe Area for iPhone X+ */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
       `}</style>
     </div>
   );
