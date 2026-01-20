@@ -1,43 +1,52 @@
 // src/components/AIChatAssistant.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { IoClose, IoSend, IoTime, IoRestaurant, IoCartOutline, IoMic } from 'react-icons/io5';
+import { IoClose, IoSend, IoTime, IoRestaurant, IoCartOutline, IoMic, IoPerson } from 'react-icons/io5';
 import ReactMarkdown from 'react-markdown'; 
 import { useAI } from '../context/AIContext';
 
 // ============================================================================
-// 1. CONFIGURAÇÕES & CÉREBRO
+// 1. FORMATAÇÃO E REGRAS
 // ============================================================================
 
-// 🔥 ESTILO GAVETA (Usado apenas se NÃO for o card central)
-const ESTILO_WIDGET_MOBILE = "fixed inset-x-0 bottom-0 w-full h-[85vh] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.4)] flex flex-col border-t border-gray-200";
-const ESTILO_WIDGET_DESKTOP = "sm:fixed sm:bottom-6 sm:right-6 sm:w-96 sm:h-[650px] sm:rounded-2xl sm:shadow-[0_0_50px_rgba(0,0,0,0.25)] sm:flex sm:flex-col sm:border sm:border-gray-200";
-
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
-  🚨 INSTRUÇÃO: VOCÊ É O JUCLEILDO, GARÇOM DO ${nomeLoja}.
-  1. OBJETIVO: Vender com simpatia e brevidade.
-  2. PREÇOS: Se houver variação (P, M, G), LISTE O PREÇO DE CADA UMA.
+  🚨 VOCÊ É O JUCLEILDO, GARÇOM DO ${nomeLoja}.
   
-  ⚡ COMANDO OBRIGATÓRIO DE VENDA:
-  Ao identificar o pedido, finalize com:
-  ||ADD: Nome -- Opcao: Variação -- Obs: Detalhe -- Qtd: 1||
+  ⚠️ REGRA VISUAL (CRUCIAL):
+  - NUNCA use pontinhos (......) para alinhar preços.
+  - Para produtos com variações, coloque o NOME DO PRODUTO em uma linha e as opções abaixo.
+  - Use o formato exato abaixo:
+
+  **NOME DO PRODUTO**
+  - Opção A: R$ 20,00
+  - Opção B: R$ 30,00
+
+  ⚡ COMANDO OCULTO: ||ADD: Nome -- Opcao: Variação -- Obs: N/A -- Qtd: 1||
 `;
 
+// 🔥 FORMATAÇÃO LIMPA (Sem pontinhos que quebram no celular)
 const formatarCardapio = (lista) => {
   if (!lista?.length) return "Cardápio vazio.";
+  
   const agrupado = lista.reduce((acc, p) => {
-    const cat = p.categoria || 'Geral'; if (!acc[cat]) acc[cat] = []; acc[cat].push(p); return acc;
+    const cat = p.categoria || 'Geral'; 
+    if (!acc[cat]) acc[cat] = []; 
+    acc[cat].push(p); 
+    return acc;
   }, {});
   
-  const emojis = { 'Pizzas': '🍕', 'Bebidas': '🥤', 'Sobremesas': '🍦', 'Lanches': '🍔', 'Porções': '🍟' };
+  const emojis = { 'Pizzas': '🍕', 'Pizzas Doces': '🍫', 'Bebidas': '🥤', 'Sobremesas': '🍦', 'Lanches': '🍔', 'Porções': '🍟' };
   
   return Object.entries(agrupado).map(([cat, itens]) => {
     const itensTexto = itens.map(p => {
+      const precoBase = p.precoFinal || p.preco;
+      
       if (p.variacoes?.length > 0) {
-          const vars = p.variacoes.map(v => `${v.nome} (R$${Number(v.preco).toFixed(2)})`).join(', ');
-          return `- **${p.nome}**: [Opções: ${vars}]`;
+          const vars = p.variacoes.map(v => `- ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`).join('\n');
+          return `**${p.nome.toUpperCase()}**\n${vars}`; 
       }
-      return `- **${p.nome}** (R$ ${Number(p.precoFinal || p.preco).toFixed(2)})`;
-    }).join('\n');
+      return `**${p.nome.toUpperCase()}**\n- Preço Único: R$ ${Number(precoBase).toFixed(2)}`;
+    }).join('\n\n'); 
+    
     return `### ${emojis[cat] || '🍽️'} ${cat.toUpperCase()}\n${itensTexto}`;
   }).join('\n\n'); 
 };
@@ -45,51 +54,49 @@ const formatarCardapio = (lista) => {
 const cleanText = (text) => text?.replace(/\|\|ADD:.*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
 
 // ============================================================================
-// 2. SUB-COMPONENTES
+// 2. COMPONENTES VISUAIS
 // ============================================================================
 
 const MiniCart = ({ itens, onClose, onCheckout }) => (
-  <div className="absolute inset-0 z-[2147483647] bg-gray-50 flex flex-col animate-fade-in rounded-t-3xl sm:rounded-2xl overflow-hidden">
-    <div className="p-5 bg-white border-b border-gray-200 flex justify-between items-center shadow-sm">
-      <span className="font-bold text-gray-800 flex items-center gap-2 text-xl"><IoCartOutline/> Seu Pedido</span>
-      <button onClick={onClose} className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-gray-600 active:scale-95"><IoClose size={28}/></button>
+  <div className="absolute inset-0 z-50 bg-gray-50 flex flex-col animate-fade-in rounded-[2rem] overflow-hidden">
+    <div className="p-5 bg-white border-b border-gray-100 flex justify-between items-center shadow-sm">
+      <span className="font-bold text-gray-800 flex items-center gap-2 text-xl">🛍️ Sacola</span>
+      <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-full hover:bg-gray-200 transition"><IoClose size={24}/></button>
     </div>
-    <div className="flex-1 overflow-y-auto p-5 space-y-4">
-      {itens.length === 0 ? <p className="text-gray-500 text-center mt-10 text-lg">Carrinho vazio.</p> : itens.map(item => (
-        <div key={item.cartItemId} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <div className="flex flex-col">
-            <span className="font-bold text-gray-900 text-lg">{item.nome}</span>
-            {item.variacaoSelecionada && <span className="text-sm text-gray-600 font-medium">{item.variacaoSelecionada.nome}</span>}
-            <span className="text-sm text-gray-500">Qtd: {item.qtd}</span>
+    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+      {itens.length === 0 ? 
+        <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-50"><IoCartOutline size={64} /><p className="mt-2">Vazia</p></div> 
+      : itens.map(item => (
+        <div key={item.cartItemId} className="flex justify-between items-start bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+          <div>
+            <span className="font-bold text-gray-900 block">{item.nome}</span>
+            {item.variacaoSelecionada && <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-mono">{item.variacaoSelecionada.nome}</span>}
+            <span className="text-xs text-gray-400 block mt-1">Qtd: {item.qtd}</span>
           </div>
-          <span className="font-bold text-green-600 text-lg">R$ {(item.precoFinal * item.qtd).toFixed(2)}</span>
+          <span className="font-bold text-green-600">R$ {(item.precoFinal * item.qtd).toFixed(2)}</span>
         </div>
       ))}
     </div>
-    <div className="p-5 bg-white border-t border-gray-200 safe-area-bottom">
-       <button onClick={onCheckout} className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2">
-         <span>✅ Fechar Pedido</span>
-       </button>
+    <div className="p-5 bg-white border-t border-gray-100">
+       <button onClick={onCheckout} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 hover:bg-green-700 transition-colors">Concluir Pedido</button>
     </div>
   </div>
 );
 
-const ChatHeader = ({ onClose, statusText }) => (
-  <div className="px-6 py-5 flex items-center justify-between bg-white border-b border-gray-200 shadow-sm shrink-0 rounded-t-3xl sm:rounded-t-2xl">
-    <div className="flex items-center gap-4">
-      <div className="w-14 h-14 bg-red-600 text-white rounded-full flex items-center justify-center border-4 border-red-100 shadow-md">
-        <IoRestaurant className="text-3xl"/>
+const ChatHeader = ({ onClose, statusText, estabelecimentoNome }) => (
+  <div className="px-5 py-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
+    <div className="flex items-center gap-3">
+      <div className="w-11 h-11 bg-gradient-to-tr from-red-600 to-orange-500 text-white rounded-full flex items-center justify-center shadow-md ring-2 ring-white">
+        <IoRestaurant className="text-2xl" />
       </div>
-      <div className="text-left">
-        <p className="font-bold text-gray-900 text-xl leading-none">Jucleildo</p> 
-        <p className="text-sm text-green-600 font-bold mt-1 uppercase tracking-wide flex items-center gap-1">
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> {statusText}
-        </p>
+      <div>
+        <span className="font-bold text-gray-900 text-lg block leading-tight">Jucleildo</span>
+        <span className="text-xs text-gray-500 flex items-center gap-1 font-medium">
+           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> {statusText}
+        </span>
       </div>
     </div>
-    <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition active:scale-90 shadow-sm border border-gray-200">
-      <IoClose size={24}/>
-    </button>
+    <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition"><IoClose size={22}/></button>
   </div>
 );
 
@@ -97,7 +104,7 @@ const ChatHeader = ({ onClose, statusText }) => (
 // 3. COMPONENTE PRINCIPAL
 // ============================================================================
 
-const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDirect, onCheckout, clienteNome, onRequestLogin, mode = 'widget' }) => {
+const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDirect, onCheckout, clienteNome, onRequestLogin, mode = 'center' }) => {
   const [message, setMessage] = useState('');
   const [isOpen, setIsOpen] = useState(true);
   const [showMiniCart, setShowMiniCart] = useState(false);
@@ -107,8 +114,6 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const { conversation, aiThinking, sendMessage, closeWidget } = useAI();
-
-  const isCenter = mode === 'center';
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conversation, aiThinking]);
 
@@ -125,7 +130,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
       rec.onresult = (e) => {
         const transcript = e.results[0][0].transcript;
         setMessage(transcript);
-        setTimeout(() => handleSend(transcript), 600);
+        setTimeout(() => handleSend(transcript), 800);
       };
       recognitionRef.current = rec;
     }
@@ -160,7 +165,7 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
     
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
-      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO:\n" + formatarCardapio(produtos),
+      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n" + formatarCardapio(produtos),
       clienteNome: clienteNome || 'Visitante',
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
     };
@@ -169,87 +174,129 @@ const AIChatAssistant = ({ estabelecimento, produtos, carrinho, onClose, onAddDi
 
   if (!isOpen) return null;
 
-  // 🔥 LÓGICA DE LAYOUT:
-  // Se mode == 'center', ele força um CARD no meio da tela (com overlay preto), mesmo no mobile.
-  // Se mode == 'widget', ele usa o estilo de gaveta/botão flutuante.
-  const layoutClasses = isCenter 
-    ? 'fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm' 
-    : `z-[2147483647] bg-white transition-all duration-300 ${ESTILO_WIDGET_MOBILE} ${ESTILO_WIDGET_DESKTOP}`;
-
-  // Se for center, o container interno é um card arredondado e limitado.
-  // Se for widget, ele preenche a altura definida (gaveta).
-  const containerInner = isCenter 
-    ? 'w-full max-w-md h-[80vh] flex flex-col bg-white relative overflow-hidden rounded-2xl shadow-2xl' 
-    : 'w-full h-full flex flex-col bg-white relative overflow-hidden';
-
   return (
-    <div className={layoutClasses}>
-      <div className={containerInner}>
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      
+      {/* CARD PRINCIPAL (Estilo iOS) */}
+      <div className="w-full max-w-lg h-[85vh] bg-white rounded-[2rem] shadow-2xl flex flex-col relative overflow-hidden ring-1 ring-white/20">
         
         {showMiniCart && <MiniCart itens={carrinho} onClose={() => setShowMiniCart(false)} onCheckout={() => { onCheckout?.(); handleClose(); }} />}
         
-        <ChatHeader onClose={handleClose} statusText={isListening ? 'Ouvindo...' : (aiThinking ? 'Digitando...' : 'Online')} />
+        <ChatHeader onClose={handleClose} statusText={isListening ? 'Ouvindo...' : (aiThinking ? 'Digitando...' : 'Online')} estabelecimentoNome={estabelecimento?.nome} />
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-gray-50 scrollbar-thin">
-           <div className="flex justify-start">
-             <div className="bg-white p-5 rounded-3xl rounded-tl-none shadow-sm border border-gray-200 max-w-[90%] text-gray-900 text-lg leading-relaxed">
-               {clienteNome ? 
-                 <>Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 👋 Sou o Jucleildo. Posso anotar seu pedido?</> : 
-                 <>Olá! Sou o Jucleildo. <button onClick={onRequestLogin} className="text-red-600 font-bold underline">Entre aqui</button> para pedir.</>}
+        {/* ÁREA DE MENSAGENS */}
+        <div className="flex-1 overflow-y-auto p-4 bg-slate-50 custom-scrollbar space-y-6">
+           
+           <div className="flex justify-start animate-slide-up">
+             <div className="flex items-end gap-2 max-w-[90%]">
+               <div className="w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-lg shrink-0">🤖</div>
+               <div className="bg-white p-4 rounded-2xl rounded-bl-none shadow-sm border border-gray-200 text-gray-800 text-base leading-relaxed">
+                 {clienteNome ? 
+                   <>Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 😃<br/>Sou o Jucleildo. O que você gostaria de pedir?</> : 
+                   <>Olá! Sou o Jucleildo. <button onClick={onRequestLogin} className="text-red-600 font-bold underline">Entre aqui</button> para pedir.</>}
+               </div>
              </div>
            </div>
 
            {conversation.map(msg => (
-             <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`px-5 py-4 rounded-3xl shadow-md max-w-[90%] text-lg leading-relaxed ${
-                    msg.type === 'user' 
-                    ? 'bg-red-600 text-white rounded-tr-none' 
-                    : 'bg-white text-gray-900 border border-gray-200 rounded-tl-none'
-                }`}>
-                  <ReactMarkdown components={{ strong: ({node, ...props}) => <span className="font-bold" {...props} /> }}>
-                     {cleanText(msg.text)}
-                  </ReactMarkdown>
+             <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
+                <div className={`flex items-end gap-2 max-w-[90%] ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
+                  
+                  {/* Avatar */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 border shadow-sm ${msg.type === 'user' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-white text-red-500 border-gray-200'}`}>
+                      {msg.type === 'user' ? <IoPerson/> : <IoRestaurant/>}
+                  </div>
+
+                  {/* BALÃO DE TEXTO ESTILIZADO */}
+                  <div className={`px-4 py-3 rounded-2xl shadow-sm text-base leading-relaxed border ${
+                      msg.type === 'user' 
+                      ? 'bg-green-600 text-white rounded-br-none border-green-600' 
+                      : 'bg-white text-gray-800 rounded-bl-none border-gray-200'
+                  }`}>
+                    <ReactMarkdown 
+                        components={{ 
+                            // Título do produto (Negrito vira um bloco destacado)
+                            strong: ({node, ...props}) => <span className="block font-bold text-gray-900 mt-2 mb-1 text-lg border-b border-gray-100 pb-1" {...props} />,
+                            
+                            // Lista (Variações vira linhas separadas bonitas)
+                            ul: ({node, ...props}) => <ul className="w-full" {...props} />,
+                            
+                            // Item da lista (Cada variação é uma linha com fundo zebrado suave)
+                            li: ({node, ...props}) => <li className="flex justify-between items-center py-1.5 px-2 hover:bg-gray-50 rounded text-sm text-gray-700 border-b border-dashed border-gray-100 last:border-0" {...props} />,
+                            
+                            // Texto normal
+                            p: ({node, ...props}) => <p className="mb-0" {...props} />
+                        }}
+                    >
+                       {cleanText(msg.text)}
+                    </ReactMarkdown>
+                  </div>
+
                 </div>
              </div>
            ))}
-           {aiThinking && <div className="flex ml-4 space-x-2 py-2"><div className="w-3 h-3 bg-gray-400 rounded-full animate-bounce"/> <div className="w-3 h-3 bg-gray-400 rounded-full animate-bounce delay-75"/> <div className="w-3 h-3 bg-gray-400 rounded-full animate-bounce delay-150"/></div>}
+           
+           {aiThinking && (
+               <div className="flex justify-start">
+                   <div className="flex items-end gap-2">
+                     <div className="w-8 h-8 rounded-full bg-transparent shrink-0"/>
+                     <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-none shadow-sm border border-gray-200 flex space-x-1 items-center h-10">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"/> 
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-75"/> 
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-150"/>
+                     </div>
+                   </div>
+               </div>
+           )}
            <div ref={messagesEndRef} />
         </div>
 
-        <div className="bg-white border-t border-gray-200 shrink-0 pb-safe shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+        {/* INPUT */}
+        <div className="bg-white border-t border-gray-100 p-4 pb-safe">
           {!aiThinking && !isListening && clienteNome && (
-            <div className="pt-4 pb-3 px-5 flex gap-3 overflow-x-auto scrollbar-hide w-full">
-               <button onClick={() => setShowMiniCart(true)} className="shrink-0 px-5 py-3 bg-green-50 text-green-700 border border-green-200 text-base font-bold rounded-full flex items-center gap-2 whitespace-nowrap shadow-sm hover:bg-green-100 transition">
-                 <IoCartOutline size={20}/> Pedido ({carrinho.length})
+            <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide pb-1">
+               <button onClick={() => setShowMiniCart(true)} className="shrink-0 px-4 py-2 bg-green-50 text-green-700 border border-green-200 text-sm font-bold rounded-full flex items-center gap-1 shadow-sm hover:bg-green-100 transition">
+                 <IoCartOutline/> Carrinho ({carrinho.length})
                </button>
-               {['📜 Ver Cardápio', '🍔 Sugestão', '🔥 Promoções'].map(s => (
-                  <button key={s} onClick={() => handleSend(s)} className="shrink-0 px-5 py-3 bg-gray-50 text-gray-700 border border-gray-200 text-base font-medium rounded-full shadow-sm whitespace-nowrap hover:bg-gray-100 transition">
+               {['📜 Ver Cardápio', '🔥 Promo'].map(s => (
+                  <button key={s} onClick={() => handleSend(s)} className="shrink-0 px-4 py-2 bg-white text-gray-600 border border-gray-200 text-sm font-medium rounded-full shadow-sm hover:bg-gray-50 transition">
                     {s}
                   </button>
                ))}
             </div>
           )}
 
-          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="p-4 flex gap-3 items-center">
-             <button type="button" onClick={() => !clienteNome ? onRequestLogin() : toggleMic()} className={`w-14 h-14 shrink-0 rounded-full flex items-center justify-center transition-all border ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-               <IoMic size={24} />
+          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2 items-center">
+             <button type="button" onClick={() => !clienteNome ? onRequestLogin() : toggleMic()} className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+               <IoMic size={22} />
              </button>
              
              <input 
                type="text" 
                value={isListening ? 'Ouvindo...' : message} 
                onChange={e => setMessage(e.target.value)} 
-               placeholder={clienteNome ? "Digite aqui..." : "Faça login para pedir"} 
+               placeholder={clienteNome ? "Digite aqui..." : "Faça login"} 
                disabled={isListening || !clienteNome}
-               className="flex-1 bg-gray-100 text-gray-900 rounded-full px-6 py-4 text-lg focus:bg-white focus:ring-2 focus:ring-red-100 outline-none transition-all placeholder-gray-400 border border-transparent shadow-inner" 
+               className="flex-1 bg-gray-50 text-gray-900 rounded-full px-5 py-3 text-base focus:bg-white focus:ring-2 focus:ring-green-200 outline-none border border-gray-200 transition-all placeholder-gray-400" 
              />
              
-             <button type="submit" disabled={!message.trim() || aiThinking} className="w-14 h-14 shrink-0 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 active:scale-95 disabled:opacity-50 transition-all">
-               {aiThinking ? <IoTime className="animate-spin" size={24} /> : <IoSend size={24}/>}
+             <button type="submit" disabled={!message.trim() || aiThinking} className="w-12 h-12 shrink-0 bg-green-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-green-100 hover:bg-green-700 active:scale-95 disabled:opacity-50 disabled:shadow-none transition-all">
+               {aiThinking ? <IoTime className="animate-spin" size={22} /> : <IoSend size={20} className="ml-1"/>}
              </button>
           </form>
         </div>
       </div>
+      
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
     </div>
   );
 };
