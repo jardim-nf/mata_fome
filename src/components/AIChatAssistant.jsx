@@ -9,23 +9,64 @@ import { useAI } from '../context/AIContext';
 // ============================================================================
 
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
-  🚨 INSTRUÇÃO DE DESIGN:
-  Você é o garçom do ${nomeLoja}.
-  
-  ⚠️ REGRA DE OURO PARA LISTAS:
-  - NUNCA use pontinhos (......) para alinhar preços. Isso quebra no celular.
-  - Se um produto tiver variações, coloque cada uma em uma NOVA LINHA.
-  - Use marcadores simples (como hifens ou bolinhas).
+  🎭 SUA PERSONA:
+  Você é o Jucleildo, o garçom digital do ${nomeLoja}. 
+  Você é EXTREMAMENTE simpático, engraçado, usa emojis e adora fazer piadas sobre comida.
+  Fale como um amigo próximo ("meu consagrado", "chefia", "mestre").
 
-  EXEMPLO PERFEITO:
-  "Temos Coca-Cola:
-  - Lata: R$ 5,00
-  - 2 Litros: R$ 10,00"
+  ⚠️ REGRAS DE OURO DO ATENDIMENTO:
 
-  ⚡ COMANDO OCULTO: ||ADD: Nome -- Opcao: Variação -- Obs: N/A -- Qtd: 1||
+  1. 🛑 PERGUNTE O TAMANHO/VARIAÇÃO:
+     Se o cliente pedir algo que tem tamanho (como Pizza, Açaí, Porção), PERGUNTE O TAMANHO antes de adicionar.
+     Ex: "A Portuguesa é top! 🍕 Vai querer Média, Grande ou Gigante pra matar a fome?"
+     NÃO gere o comando de adicionar se não souber o tamanho/variação.
+
+  2. 🛑 PERGUNTE SOBRE DETALHES (O "SEM CEBOLA"):
+     Sempre pergunte se tem alguma observação.
+     Ex: "Alguma 'frescura' tipo tirar a cebola ou manda completão? 😂"
+
+  3. 📣 FINALIZAR:
+     Sempre avise: "Se acabou, digite 'Pagar' que eu fecho a conta!"
+
+  4. 💸 GATILHO DE PAGAMENTO:
+     Se disserem "pagar", "fechar", "conta": Responda algo divertido e adicione: ||PAY||
+
+  ⚡ COMANDO TÉCNICO DE ADIÇÃO:
+  Só gere quando souber o ITEM + TAMANHO (se houver) + OBS.
+  ||ADD: Nome do Produto -- Opcao: Tamanho/Variação (ou N/A) -- Obs: Detalhes (ou N/A) -- Qtd: 1||
 `;
 
-// 🔥 FORMATAÇÃO VERTICAL (MOBILE-FRIENDLY)
+// 🔥 FUNÇÃO PARA PARSEAR O COMANDO DA IA
+const parseAddCommand = (commandString) => {
+  const parts = commandString.split('--').map(p => p.trim());
+  
+  let item = { nome: '', variacao: null, observacao: '', qtd: 1 };
+
+  // 1. Nome
+  item.nome = parts[0];
+
+  // 2. Processar o resto
+  parts.slice(1).forEach(part => {
+    const lowerPart = part.toLowerCase();
+    
+    if (lowerPart.startsWith('opcao:')) {
+      const val = part.substring(6).trim(); 
+      if (val !== 'N/A' && val !== 'n/a') item.variacao = val;
+      
+    } else if (lowerPart.startsWith('obs:')) {
+      const val = part.substring(4).trim(); 
+      if (val !== 'N/A' && val !== 'n/a') item.observacao = val;
+      
+    } else if (lowerPart.startsWith('qtd:')) {
+      const val = parseInt(part.substring(4).trim()); 
+      if (!isNaN(val)) item.qtd = val;
+    }
+  });
+
+  return item;
+};
+
+// 🔥 FORMATAÇÃO VERTICAL
 const formatarCardapio = (lista) => {
   if (!lista?.length) return "Cardápio vazio.";
   
@@ -52,7 +93,7 @@ const formatarCardapio = (lista) => {
   }).join('\n\n---\n\n'); 
 };
 
-const cleanText = (text) => text?.replace(/\|\|ADD:.*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
+const cleanText = (text) => text?.replace(/\|\|ADD:[\s\S]*?\|\|/gi, '').replace(/\|\|PAY\|\|/gi, '').trim() || "";
 
 // ============================================================================
 // 2. SUB-COMPONENTES
@@ -71,7 +112,16 @@ const MiniCart = ({ itens, onClose, onCheckout }) => (
         <div key={item.cartItemId} className="flex justify-between items-start bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
           <div>
             <span className="font-bold text-gray-900 block">{item.nome}</span>
-            {item.variacaoSelecionada && <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-mono">{item.variacaoSelecionada.nome}</span>}
+            {item.variacaoSelecionada && (
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-mono mr-2">
+                    {typeof item.variacaoSelecionada === 'string' ? item.variacaoSelecionada : item.variacaoSelecionada.nome}
+                </span>
+            )}
+            {item.observacao && (
+                <div className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                    ✏️ Obs: "{item.observacao}"
+                </div>
+            )}
             <span className="text-xs text-gray-400 block mt-1">Qtd: {item.qtd}</span>
           </div>
           <span className="font-bold text-green-600">R$ {(item.precoFinal * item.qtd).toFixed(2)}</span>
@@ -115,7 +165,6 @@ const AIChatAssistant = ({
     clienteNome, 
     onRequestLogin, 
     mode = 'center',
-    // 🔥 NOVAS PROPS PARA LÓGICA DE ENTREGA
     taxaEntrega,
     enderecoAtual,
     isRetirada,
@@ -127,9 +176,9 @@ const AIChatAssistant = ({
   const [showMiniCart, setShowMiniCart] = useState(false);
   const [isListening, setIsListening] = useState(false);
   
-  // 🔥 ESTADOS PARA FLUXO DE ENTREGA LOCAL
-  const [conversationStep, setConversationStep] = useState('IDLE'); // IDLE, ASKING_TYPE, ASKING_ADDRESS...
-  const [localMessages, setLocalMessages] = useState([]); // Mensagens que não vão pro backend (histórico local)
+  // ESTADOS PARA FLUXO DE ENTREGA LOCAL
+  const [conversationStep, setConversationStep] = useState('IDLE'); 
+  const [localMessages, setLocalMessages] = useState([]); 
 
   const processedIdsRef = useRef(new Set());
   const messagesEndRef = useRef(null);
@@ -162,7 +211,7 @@ const AIChatAssistant = ({
     isListening ? recognitionRef.current.stop() : recognitionRef.current.start();
   };
 
-  // 🔥 MONITORAMENTO DE RESPOSTAS DA IA (INTERCEPTA ||PAY||)
+  // 🔥 MONITORAMENTO DE RESPOSTAS DA IA (INTERCEPTA ADD E PAY)
   useEffect(() => {
     if (!conversation.length) return;
     const lastMsg = conversation[conversation.length - 1];
@@ -170,11 +219,19 @@ const AIChatAssistant = ({
     if (lastMsg.type === 'ai' && !processedIdsRef.current.has(lastMsg.id)) {
         processedIdsRef.current.add(lastMsg.id);
         
+        // 1. Procura por comandos de adicionar produto (REGEX MELHORADO)
         let match; 
-        const regexAdd = /\|\|ADD:(.*?)\|\|/gi;
-        while ((match = regexAdd.exec(lastMsg.text)) !== null) if (onAddDirect) onAddDirect(match[1].trim());
+        const regexAdd = /\|\|ADD:([\s\S]*?)\|\|/gi;
         
-        // 🛑 AQUI ESTÁ A MÁGICA: Se a IA mandar pagar, a gente PAUSA e inicia o fluxo de entrega
+        while ((match = regexAdd.exec(lastMsg.text)) !== null) {
+            if (onAddDirect) {
+                const rawCommand = match[1].trim();
+                const itemObj = parseAddCommand(rawCommand);
+                onAddDirect(itemObj); 
+            }
+        }
+        
+        // 2. Procura comando de pagamento
         if (lastMsg.text.includes('||PAY||')) { 
             iniciarFluxoEntrega();
         }
@@ -186,28 +243,32 @@ const AIChatAssistant = ({
     setTimeout(() => mode === 'widget' ? closeWidget() : onClose?.(), 300);
   };
 
-  // --- LÓGICA DO FLUXO DE ENTREGA (LOCAL) ---
-  const addLocalBotMessage = (text) => {
-      // 🔥 CORREÇÃO: Adicionando Math.random() para garantir ID único e evitar o aviso de duplicate key
-      setLocalMessages(prev => [...prev, { id: Date.now() + Math.random(), type: 'ai', text }]);
+  // --- LÓGICA DO FLUXO DE ENTREGA (LOCAL COM DELAY) ---
+  
+  // 🔥 FIX: Função para garantir ordem correta das mensagens
+  const replyWithDelay = (text, delay = 600) => {
+      setTimeout(() => {
+          setLocalMessages(prev => [
+              ...prev, 
+              { id: Date.now() + Math.random(), type: 'ai', text }
+          ]);
+      }, delay);
   };
 
   const iniciarFluxoEntrega = () => {
       if (!clienteNome) {
-          addLocalBotMessage("Para finalizar, preciso que faça login. Clique em 'Entre aqui' na mensagem inicial.");
+          replyWithDelay("Para finalizar, preciso que faça login. Clique em 'Entre aqui' na mensagem inicial.");
           if(onRequestLogin) onRequestLogin();
           return;
       }
       setConversationStep('ASKING_TYPE');
-      setTimeout(() => {
-          addLocalBotMessage("Certo! Antes de finalizar: É para **Entrega** 🛵 ou **Retirada** 🛍️?");
-      }, 600);
+      // Delay ajuda a mensagem não aparecer antes da do usuário
+      replyWithDelay("Certo! Antes de finalizar: É para **Entrega** 🛵 ou **Retirada** 🛍️?", 800);
   };
 
   const processarFluxoEntrega = (texto) => {
-      // Adiciona a resposta do usuário visualmente
-      // 🔥 CORREÇÃO: ID Único aqui também
-      setLocalMessages(prev => [...prev, { id: Date.now() + Math.random(), type: 'user', text: texto }]);
+      // Adiciona mensagem do usuário IMEDIATAMENTE
+      setLocalMessages(prev => [...prev, { id: Date.now(), type: 'user', text: texto }]);
       setMessage('');
 
       const lower = texto.toLowerCase();
@@ -218,31 +279,31 @@ const AIChatAssistant = ({
               onSetDeliveryMode('entrega');
               
               if (enderecoAtual?.bairro && enderecoAtual?.rua) {
-                  addLocalBotMessage(`Endereço: ${enderecoAtual.rua}, ${enderecoAtual.bairro}. Confere? (Sim/Não)`);
+                  replyWithDelay(`Endereço: ${enderecoAtual.rua}, ${enderecoAtual.bairro}. Confere? (Sim/Não)`);
                   setConversationStep('CONFIRM_ADDRESS');
               } else {
-                  addLocalBotMessage("Ok, entrega! Qual é o seu **Bairro** e **Rua**?");
+                  replyWithDelay("Ok, entrega! Qual é o seu **Bairro** e **Rua**?");
                   setConversationStep('ASKING_ADDRESS');
               }
           } 
           else if (lower.includes('retira') || lower.includes('busca') || lower.includes('aqui')) {
               onSetDeliveryMode('retirada');
-              addLocalBotMessage("Perfeito, retirada no balcão. Abrindo pagamento...");
+              replyWithDelay("Perfeito, retirada no balcão. Abrindo pagamento...");
               setTimeout(() => {
                   onCheckout(); 
                   handleClose();
-              }, 1500);
+              }, 2000);
               setConversationStep('IDLE');
           } else {
-              addLocalBotMessage("Não entendi. Digite 'Entrega' ou 'Retirada'.");
+              replyWithDelay("Não entendi. Digite 'Entrega' ou 'Retirada'.");
           }
           return;
       }
 
       // ETAPA 2: PEGAR ENDEREÇO
       if (conversationStep === 'ASKING_ADDRESS') {
-          onUpdateAddress({ bairro: texto, rua: texto }); // Atualiza Menu para calcular taxa
-          addLocalBotMessage("Anotei. Calculando taxa... Pode confirmar o pedido agora?");
+          onUpdateAddress({ bairro: texto, rua: texto }); 
+          replyWithDelay("Anotei. Calculando taxa... Pode confirmar o pedido agora?");
           setConversationStep('CONFIRM_FINAL');
           return;
       }
@@ -250,14 +311,14 @@ const AIChatAssistant = ({
       // ETAPA 3: CONFIRMAÇÃO FINAL
       if (conversationStep === 'CONFIRM_ADDRESS' || conversationStep === 'CONFIRM_FINAL') {
           if (lower.includes('sim') || lower.includes('pode') || lower.includes('ok') || lower.includes('fech')) {
-              addLocalBotMessage(`Fechado! Taxa de entrega: R$ ${taxaEntrega?.toFixed(2) || '0.00'}. Abrindo pagamento...`);
+              replyWithDelay(`Fechado! Taxa de entrega: R$ ${taxaEntrega?.toFixed(2) || '0.00'}. Abrindo pagamento...`);
               setTimeout(() => {
                   onCheckout(); 
                   handleClose();
-              }, 1500);
+              }, 2500);
               setConversationStep('IDLE');
           } else {
-              addLocalBotMessage("Ok, o que deseja alterar? (Digite 'cancelar' para voltar ao cardápio)");
+              replyWithDelay("Ok, o que deseja alterar? (Digite 'cancelar' para voltar ao cardápio)");
               setConversationStep('IDLE');
           }
       }
@@ -267,13 +328,12 @@ const AIChatAssistant = ({
     const textToSend = textStr || message;
     if (!textToSend.trim() || aiThinking) return;
     
-    // 🔥 SE ESTIVERMOS NO MEIO DO FLUXO DE ENTREGA, NÃO MANDA PRO BACKEND
+    // FLUXO DE ENTREGA (BYPASS BACKEND)
     if (conversationStep !== 'IDLE') {
         processarFluxoEntrega(textToSend);
         return;
     }
 
-    // Se não estiver logado, fecha o chat e abre o login
     if (!clienteNome && onRequestLogin) {
         handleClose(); 
         onRequestLogin();
@@ -292,7 +352,6 @@ const AIChatAssistant = ({
     await sendMessage(textToSend, context);
   };
 
-  // Combina mensagens globais (IA) com locais (Fluxo Entrega)
   const todasMensagens = [...conversation, ...localMessages].sort((a, b) => a.id - b.id);
 
   if (!isOpen) return null;
@@ -318,13 +377,13 @@ const AIChatAssistant = ({
                    <>
                      Olá! Sou o Jucleildo. 
                      <button 
-                        onClick={() => { 
-                            handleClose(); 
-                            if(onRequestLogin) onRequestLogin(); 
-                        }} 
-                        className="text-red-600 font-bold underline cursor-pointer ml-1"
+                       onClick={() => { 
+                           handleClose(); 
+                           if(onRequestLogin) onRequestLogin(); 
+                       }} 
+                       className="text-red-600 font-bold underline cursor-pointer ml-1"
                      >
-                        Entre aqui
+                       Entre aqui
                      </button> 
                      {' '}para pedir.
                    </>
@@ -355,7 +414,7 @@ const AIChatAssistant = ({
                             p: ({node, ...props}) => <p className="mb-0" {...props} />
                         }}
                     >
-                       {cleanText(msg.text)}
+                        {cleanText(msg.text)}
                     </ReactMarkdown>
                   </div>
 
@@ -395,16 +454,16 @@ const AIChatAssistant = ({
 
           <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2 items-center">
              <button 
-                type="button" 
-                onClick={() => {
-                    if(!clienteNome && onRequestLogin) {
-                        handleClose();
-                        onRequestLogin();
-                    } else {
-                        toggleMic();
-                    }
-                }} 
-                className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+               type="button" 
+               onClick={() => {
+                   if(!clienteNome && onRequestLogin) {
+                       handleClose();
+                       onRequestLogin();
+                   } else {
+                       toggleMic();
+                   }
+               }} 
+               className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
              >
                <IoMic size={22} />
              </button>

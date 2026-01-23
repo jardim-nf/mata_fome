@@ -43,6 +43,7 @@ function Menu() {
     const [numero, setNumero] = useState('');
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
+    const [complemento, setComplemento] = useState(''); // Adicionado estado para complemento
     
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
@@ -111,16 +112,14 @@ function Menu() {
         if (elementoResumo) elementoResumo.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, []);
 
-    // 🔥 NOVA FUNÇÃO: Rola até a categoria sem filtrar
     const handleCategoryClick = (cat) => {
-        setSelectedCategory(cat); // Apenas para destacar o botão
+        setSelectedCategory(cat); 
         
         if (cat === 'Todos') {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
             const element = document.getElementById(`categoria-${cat}`);
             if (element) {
-                // Ajuste de offset para o header fixo não cobrir o título
                 const headerOffset = 180; 
                 const elementPosition = element.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
@@ -212,7 +211,7 @@ function Menu() {
         return Math.max(0, total);
     }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
 
-    // --- PRODUTOS E IA (MODO HÍBRIDO E ROBUSTO) ---
+    // --- PRODUTOS E IA ---
 
     const carregarProdutosRapido = async (estabId) => {
         try {
@@ -224,18 +223,15 @@ function Menu() {
 
             const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             
-            // Verifica se é estrutura PLANA (itens na raiz)
             const temProdutosDiretos = docs.some(d => d.categoriaNome !== undefined || d.preco !== undefined || (d.variacoes && d.variacoes.length > 0));
 
             if (temProdutosDiretos) {
-                console.log("🚀 Modo PLANO");
                 return docs.filter(item => item.ativo !== false).map(item => ({
                     ...item,
                     categoria: item.categoriaNome || item.categoria || 'Geral'
                 }));
             } 
             
-            console.log("📂 Modo HIERÁRQUICO");
             const categoriasAtivas = docs.filter(cat => cat.ativo !== false);
 
             const promessas = categoriasAtivas.map(async (cat) => {
@@ -259,7 +255,6 @@ function Menu() {
             const produtosFinais = resultados.flat();
 
             if (produtosFinais.length === 0 && docs.length > 0) {
-                console.warn("⚠️ Fallback para raiz.");
                 return docs.map(item => ({ ...item, categoria: item.categoria || item.nome || 'Geral' }));
             }
 
@@ -271,26 +266,42 @@ function Menu() {
         }
     };
 
-    const handleAdicionarPorIA = useCallback((comandoCompleto) => {
-        let nomeProduto = comandoCompleto;
+    // 🔥🔥 CORREÇÃO PRINCIPAL: PARSE INTELIGENTE (OBJETO vs STRING) 🔥🔥
+    const handleAdicionarPorIA = useCallback((dadosDoChat) => {
+        console.log("🤖 IA enviou:", dadosDoChat);
+
+        let nomeProduto = "";
         let nomeOpcao = null;
-        let observacaoIA = '';
+        let observacaoIA = "";
         let quantidadeIA = 1;
 
-        if (comandoCompleto.includes('-- Qtd:')) {
-            const partesQtd = comandoCompleto.split('-- Qtd:');
-            quantidadeIA = parseInt(partesQtd[1].trim()) || 1;
-            nomeProduto = partesQtd[0].trim();
+        // 1. EXTRAÇÃO DOS DADOS
+        if (typeof dadosDoChat === 'object' && dadosDoChat !== null) {
+            // Novo formato: Objeto vindo do AIChatAssistant atualizado
+            nomeProduto = dadosDoChat.nome || "";
+            nomeOpcao = dadosDoChat.variacao || null;
+            observacaoIA = dadosDoChat.observacao || "";
+            quantidadeIA = dadosDoChat.qtd || 1;
+        } else if (typeof dadosDoChat === 'string') {
+            // Fallback: Formato antigo (String) - Caso precise
+            nomeProduto = dadosDoChat;
+            if (nomeProduto.includes('-- Qtd:')) {
+                const partesQtd = nomeProduto.split('-- Qtd:');
+                quantidadeIA = parseInt(partesQtd[1].trim()) || 1;
+                nomeProduto = partesQtd[0].trim();
+            }
+            if (nomeProduto.includes('-- Opcao:')) {
+                const splitOpcao = nomeProduto.split('-- Opcao:');
+                nomeProduto = splitOpcao[0].trim();
+                const resto = splitOpcao[1];
+                nomeOpcao = resto.split('-- Obs:')[0].trim();
+                if (resto.includes('-- Obs:')) observacaoIA = resto.split('-- Obs:')[1].trim();
+            }
+        } else {
+            return; // Formato inválido
         }
 
-        if (nomeProduto.includes('-- Opcao:')) {
-            const splitOpcao = nomeProduto.split('-- Opcao:');
-            nomeProduto = splitOpcao[0].trim();
-            const resto = splitOpcao[1];
-            nomeOpcao = resto.split('-- Obs:')[0].trim();
-            if (resto.includes('-- Obs:')) observacaoIA = resto.split('-- Obs:')[1].trim();
-        }
-
+        // 2. BUSCA DO PRODUTO NO ARRAY
         const termoBusca = superNormalizar(nomeProduto);
         
         const produtoEncontrado = allProdutos.find(p => {
@@ -300,6 +311,7 @@ function Menu() {
 
         if (!produtoEncontrado) return 'NOT_FOUND';
 
+        // 3. RESOLUÇÃO DE VARIAÇÃO
         let variacaoSelecionada = null;
         if (nomeOpcao) {
             const termoOpcao = superNormalizar(nomeOpcao);
@@ -307,9 +319,11 @@ function Menu() {
                 superNormalizar(v.nome) === termoOpcao || superNormalizar(v.nome).includes(termoOpcao)
             );
         } else if (produtoEncontrado.variacoes?.length === 1) {
+            // Se só tem uma variação, pega ela automaticamente
             variacaoSelecionada = produtoEncontrado.variacoes[0];
         }
 
+        // 4. ADICIONAR AO CARRINHO (Direto ou Modal)
         if (variacaoSelecionada || (!produtoEncontrado.variacoes?.length && !produtoEncontrado.adicionais?.length)) {
             const precoFinal = variacaoSelecionada 
                 ? Number(variacaoSelecionada.preco || variacaoSelecionada.precoFinal)
@@ -319,7 +333,7 @@ function Menu() {
                 ...produtoEncontrado,
                 variacaoSelecionada,
                 precoFinal,
-                observacao: observacaoIA,
+                observacao: observacaoIA, // <--- OBSERVAÇÃO CORRETAMENTE INSERIDA
                 qtd: quantidadeIA,
                 cartItemId: uuidv4()
             }]);
@@ -327,6 +341,7 @@ function Menu() {
             return 'ADDED';
         }
 
+        // Se tem muitas variações e a IA não especificou, abre o modal
         setShowAICenter(false);
         handleAbrirModalProduto(produtoEncontrado);
         return 'MODAL';
@@ -410,7 +425,7 @@ function Menu() {
         }));
 
         const pedidoRaw = {
-            cliente: { nome: nomeCliente, telefone: telefoneCliente, endereco: isRetirada ? null : { rua, numero, bairro, cidade }, userId: currentUser.uid },
+            cliente: { nome: nomeCliente, telefone: telefoneCliente, endereco: isRetirada ? null : { rua, numero, bairro, cidade, complemento }, userId: currentUser.uid },
             estabelecimentoId: actualEstabelecimentoId,
             itens: itensFormatados,
             totalFinal: Number(finalOrderTotal),
@@ -552,14 +567,11 @@ function Menu() {
         return () => clearTimeout(timer);
     }, [bairro, actualEstabelecimentoId, isRetirada]);
 
-    // 🔥 CORREÇÃO: Não filtrar por categoria aqui!
     useEffect(() => {
         let p = [...allProdutos];
-        // REMOVIDO: if (selectedCategory !== 'Todos') ...
-        // Filtramos apenas por texto de busca agora
         if (searchTerm) p = p.filter(prod => prod.nome.toLowerCase().includes(searchTerm.toLowerCase()));
         setProdutosFiltrados(p);
-    }, [allProdutos, searchTerm]); // Removido selectedCategory da dependência
+    }, [allProdutos, searchTerm]);
 
     const menuAgrupado = useMemo(() => {
         return produtosFiltrados.reduce((acc, p) => {
@@ -623,7 +635,6 @@ function Menu() {
                     />
                     <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
-                            // 🔥 CORREÇÃO: Usa handleCategoryClick em vez de setSelectedCategory
                             <button key={cat} onClick={() => handleCategoryClick(cat)} className={`px-4 py-2 rounded-full font-bold whitespace-nowrap transition-all ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}>{cat}</button>
                         ))}
                     </div>
@@ -722,7 +733,7 @@ function Menu() {
                 <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
             )}
 
-{/* IA - 🔥 AGORA COM O FLUXO DE ENTREGA RESTAURADO */}
+            {/* IA */}
             {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
                 <AIChatAssistant 
                     estabelecimento={estabelecimentoInfo} 
@@ -730,28 +741,23 @@ function Menu() {
                     carrinho={carrinho}
                     clienteNome={nomeCliente}
                     
-                    // --- DADOS PARA O CHAT CALCULAR A TAXA ---
                     taxaEntrega={taxaEntregaCalculada}
                     enderecoAtual={{ rua, numero, bairro, cidade }}
                     isRetirada={isRetirada}
 
-                    // --- AÇÕES DO CHAT ---
                     onAddDirect={handleAdicionarPorIA} 
                     
-                    // Quando a IA mandar pagar, abre o modal de pagamento direto
                     onCheckout={prepararParaPagamento}
                     
                     onClose={() => setShowAICenter(false)}
                     onRequestLogin={handleLoginDoChat}
                     
-                    // 🔥 IA muda para Entrega/Retirada
                     onSetDeliveryMode={(modo) => setIsRetirada(modo === 'retirada')}
                     
-                    // 🔥 IA preenche o endereço para calcular a taxa
                     onUpdateAddress={(dados) => {
                         if (dados.rua) setRua(dados.rua);
                         if (dados.numero) setNumero(dados.numero);
-                        if (dados.bairro) setBairro(dados.bairro); // O useEffect recalcula a taxa ao mudar isso
+                        if (dados.bairro) setBairro(dados.bairro);
                         if (dados.cidade) setCidade(dados.cidade);
                         if (dados.referencia) setComplemento(dados.referencia);
                     }}
@@ -766,13 +772,14 @@ function Menu() {
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             
-{showRaspadinha && (
-    <RaspadinhaModal 
-        onGanhar={handleGanharRaspadinha} 
-        onClose={() => setShowRaspadinha(false)} 
-        config={estabelecimentoInfo?.raspadinhaConfig} // 🔥 Passando a config do banco!
-    />
-)}            
+            {showRaspadinha && (
+                <RaspadinhaModal 
+                    onGanhar={handleGanharRaspadinha} 
+                    onClose={() => setShowRaspadinha(false)} 
+                    config={estabelecimentoInfo?.raspadinhaConfig} 
+                />
+            )}            
+            
             {/* MODAL DE LOGIN */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">

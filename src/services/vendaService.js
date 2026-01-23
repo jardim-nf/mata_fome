@@ -1,51 +1,61 @@
 // src/services/vendaService.js
 import { 
   collection, 
-  addDoc, 
-  updateDoc, 
+  query, 
+  where, 
+  orderBy, 
+  getDocs, 
   doc, 
-  serverTimestamp,
-  query,
-  where,
-  orderBy,
-  getDocs 
+  getDoc 
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase'; // Importamos 'functions' aqui
 
 export const vendaService = {
-  // Salvar venda no Firebase
+  // 🔒 Salvar venda via Cloud Function (SEGURO)
   async salvarVenda(vendaData) {
     try {
-      const vendaComData = {
-        ...vendaData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
+      console.log('🔒 Iniciando processamento seguro do pedido...');
 
-      const docRef = await addDoc(collection(db, 'vendas'), vendaComData);
-      console.log('Venda salva com ID:', docRef.id);
+      // Chama a função que criamos no backend 'functions/index.js'
+      const criarPedidoFunction = httpsCallable(functions, 'criarPedidoSeguro');
+      
+      // Envia os dados e aguarda a resposta do servidor
+      // O servidor vai validar preços, estoque e calcular o total real
+      const result = await criarPedidoFunction(vendaData);
+      
+      console.log('✅ Venda processada pelo servidor:', result.data);
       
       return {
         success: true,
-        vendaId: docRef.id
+        vendaId: result.data.vendaId,
+        total: result.data.totalValidado
       };
+
     } catch (error) {
-      console.error('Erro ao salvar venda:', error);
+      console.error('❌ Erro ao salvar venda via servidor:', error);
+      
+      // Mensagens amigáveis para erros comuns
+      let msg = 'Erro ao processar o pedido. Tente novamente.';
+      if (error.code === 'not-found') msg = 'Algum produto do seu pedido não está mais disponível.';
+      if (error.code === 'unauthenticated') msg = 'Você precisa estar logado para fazer o pedido.';
+
       return {
         success: false,
-        error: error.message
+        error: msg,
+        details: error.message
       };
     }
   },
 
-  // Buscar vendas por estabelecimento
+  // Buscar vendas por estabelecimento (Mantido Leitura direta para performance)
   async buscarVendasPorEstabelecimento(estabelecimentoId, limite = 50) {
     try {
       const q = query(
         collection(db, 'vendas'),
         where('estabelecimentoId', '==', estabelecimentoId),
-        orderBy('createdAt', 'desc'),
-        limite(limite)
+        orderBy('createdAt', 'desc')
+        // limite(limite) // Remova o comentário se quiser limitar a qtd
       );
       
       const querySnapshot = await getDocs(q);

@@ -565,6 +565,7 @@ function BenefitsSection() {
 
 // --- Componente Principal da Página Home - MELHORADO ---
 function Home() {
+  
   const [estabelecimentos, setEstabelecimentos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
