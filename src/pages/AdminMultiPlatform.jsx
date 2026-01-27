@@ -442,7 +442,7 @@ function AdminMultiPlatform() {
             { id: 'whatsapp', name: 'WhatsApp Business', icon: <IoChatbubble className="text-green-500" />, color: 'green', description: 'Pedidos via WhatsApp', setupRequired: true, docsUrl: 'https://developers.facebook.com/docs/whatsapp/business-management-api/' },
             { id: 'rappi', name: 'Rappi', icon: <IoPhonePortrait className="text-blue-500" />, color: 'blue', description: 'Integração com Rappi Partner', setupRequired: true, docsUrl: 'https://developer.rappi.com' },
             { id: 'uberEats', name: 'Uber Eats', icon: <IoGlobe className="text-green-600" />, color: 'green', description: 'Integração com Uber Eats', setupRequired: true, docsUrl: 'https://developer.uber.com/docs/eats' },
-            { id: 'website', name: 'Site Próprio', icon: <IoStorefront className="text-purple-500" />, color: 'purple', description: 'Sistema DeuFome', setupRequired: false, docsUrl: null },
+            { id: 'website', name: 'Site Próprio', icon: <IoStorefront className="text-purple-500" />, color: 'purple', description: 'Sistema NaMão', setupRequired: false, docsUrl: null },
         ];
 
         return fixedList.map(p => {

@@ -256,7 +256,7 @@ const AdminDashboard = () => {
 
         <div className="text-center pt-8 border-t border-gray-200">
           <p className="text-gray-400 text-sm">
-            DeuFome System • Versão 2.8
+            NaMão System • Versão 1.0
           </p>
         </div>
       </div>

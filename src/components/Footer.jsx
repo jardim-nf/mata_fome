@@ -4,7 +4,7 @@ function Footer() {
     // e text-[var(--bege-claro)] para o texto (que é um creme claro),
     // ou simplesmente text-white para um contraste mais forte.
     <footer className="py-6 text-center text-[var(--vermelho] text-sm sm:text-base">
-      <p>&copy; 2025 DeuFome. Todos os direitos reservados.</p>
+      <p>&copy; 2025 NaMão. Todos os direitos reservados.</p>
     </footer>
   );
 }

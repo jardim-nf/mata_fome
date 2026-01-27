@@ -6,7 +6,7 @@ function Planos() {
     <div className="min-h-screen bg-[var(--bege-claro)] p-8">
       <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-8 md:p-12">
         <h1 className="text-4xl font-extrabold text-center text-[var(--vermelho-principal)] mb-10">
-          Planos e Funcionalidades do DeuFome.
+          Planos e Funcionalidades do NaMão.
         </h1>
 
         <section className="mb-12">
@@ -14,7 +14,7 @@ function Planos() {
             Como Funciona?
           </h2>
           <p className="text-lg text-gray-700 leading-relaxed mb-6">
-            O DeuFome é a plataforma perfeita para restaurantes, lanchonetes e bares que desejam digitalizar seus pedidos e otimizar a gestão. Com nossa solução, você oferece uma experiência de pedido online intuitiva para seus clientes e centraliza todas as informações em um painel de controle fácil de usar.
+            O NaMão é a plataforma perfeita para restaurantes, lanchonetes e bares que desejam digitalizar seus pedidos e otimizar a gestão. Com nossa solução, você oferece uma experiência de pedido online intuitiva para seus clientes e centraliza todas as informações em um painel de controle fácil de usar.
           </p>
           <ul className="list-disc list-inside text-lg text-gray-700 space-y-3">
             <li><strong>Cardápio Online Personalizável:</strong> Crie seu cardápio digital com fotos, descrições e preços, atualizando a qualquer momento.</li>

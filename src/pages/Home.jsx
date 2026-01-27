@@ -1,4 +1,6 @@
 // src/pages/Home.jsx
+import LogoNaMao from '../assets/logonamao.png';
+import LogoNaMao2 from '../assets/logonamao2.png';
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -17,7 +19,7 @@ function WhatsAppFloatingButton() {
 
   const handleWhatsAppClick = () => {
     const phoneNumber = "55229998102575";
-    const message = "Olá! Gostaria de mais informações sobre o Deu Fome.";
+    const message = "Olá! Gostaria de mais informações sobre o NaMão.";
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -53,7 +55,7 @@ function WhatsAppFloatingButton() {
           
           {/* Badge de Notificação */}
           <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-bold">!</span>
+            <span className="text-white text-xs font-bold">!!!</span>
           </div>
         </button>
       </div>
@@ -136,7 +138,7 @@ function HeroSectionModern({ onExploreClick }) {
         <div className="w-full lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0 z-10">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-black mb-4 leading-tight">
             Deu Fome? <br className="hidden md:inline"/> 
-            <span className="text-yellow-500"> Peça Agora!</span>
+            <span className="text-yellow-500"> Ta NaMão!</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-700 mb-8 max-w-lg mx-auto lg:mx-0">
             Sua plataforma própria de delivery, com os melhores estabelecimentos da cidade, 
@@ -643,7 +645,12 @@ function Home() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white text-black">
         <div className="text-3xl font-bold mb-4 animate-pulse">
-          Deu Fome <span className="text-yellow-500">.</span>
+<img 
+  src={LogoNaMao} 
+  alt="Logo NaMão Delivery" 
+  className="h-12 w-auto object-contain" 
+/>
+          NaMão <span className="text-yellow-500">.</span>
         </div>
         <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="mt-4 text-gray-600">Carregando estabelecimentos...</p>
@@ -673,8 +680,12 @@ function Home() {
           className="font-extrabold text-2xl md:text-3xl text-black cursor-pointer hover:text-gray-800 transition-colors duration-300 flex items-center"
           onClick={() => navigate('/')}
         >
-          <span className="text-yellow-500 mr-1">🍕</span>
-          DEU FOME<span className="text-yellow-500">.</span>
+{/* MUDE PARA ISSO (CORRETO) */}
+<img
+  src={LogoNaMao2} 
+  alt="Logo NaMão Delivery"
+  className="h-12 w-auto object-contain" 
+/>
         </div>
         <AuthButtonElegant onLoginClick={openLoginModal} />
       </header>
@@ -806,7 +817,7 @@ function Home() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="font-extrabold text-2xl text-white mb-4">
-                DEU FOME<span className="text-yellow-500">.</span>
+                NaMão<span className="text-yellow-500">.</span>
               </div>
               <p className="text-sm sm:text-base">
                 Sua experiência de delivery, elevada. Conectamos você aos melhores estabelecimentos da cidade.
@@ -834,16 +845,16 @@ function Home() {
             <div>
               <h4 className="text-white font-semibold mb-4">Contato</h4>
               <ul className="space-y-2 text-sm">
-                <li>📧 contato@deufome.com</li>
-                <li>📱 (11) 99999-9999</li>
-                <li>📍 São Paulo, SP</li>
+                <li>📧 contato@namao.com</li>
+                <li>📱 (22) 999810 - 2575</li>
+                <li>📍 Brasil </li>
               </ul>
             </div>
           </div>
           
           <div className="border-t border-gray-800 pt-8 text-center">
             <p className="font-medium text-sm">
-              &copy; {new Date().getFullYear()} Deu Fome. Todos os direitos reservados.
+              &copy; {new Date().getFullYear()} NaMão. Todos os direitos reservados.
             </p>
             <p className="font-normal text-xs mt-2">
               Feito com ❤️ para transformar o delivery
