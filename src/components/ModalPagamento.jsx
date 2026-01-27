@@ -25,40 +25,63 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [carregando, setCarregando] = useState(false);
     const [valorPersonalizado, setValorPersonalizado] = useState('');
 
-    // --- LÓGICA DE AGRUPAMENTO ---
+    // --- LÓGICA DE AGRUPAMENTO CORRIGIDA ---
     const agruparItensPorPessoa = useMemo(() => {
-        if (!mesa || !mesa.itens) return {};
+        // Tenta pegar de 'itens' (seu JSON atual) ou 'pedidos' (backups)
+        const listaItens = mesa?.itens || mesa?.pedidos || [];
+        
+        if (listaItens.length === 0) return {};
         
         const agrupados = {};
-        mesa.itens.forEach(item => {
-            let pessoa = 'Cliente 1';
-            if (item.destinatario && item.destinatario !== 'Mesa') {
-                pessoa = item.destinatario;
-            } else if (mesa.nomesOcupantes && mesa.nomesOcupantes.length > 0) {
-                pessoa = mesa.nomesOcupantes[0] || 'Cliente 1';
+        listaItens.forEach(item => {
+            // CORREÇÃO AQUI: Verifica 'cliente' (do seu JSON), depois 'destinatario'
+            let pessoa = item.cliente || item.destinatario || 'Mesa';
+            
+            // Tratamento para nomes vazios ou genéricos
+            if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes && mesa.nomesOcupantes.length > 0) {
+                // Se o item for da 'Mesa', tenta atribuir ao primeiro ocupante ou mantém 'Mesa'
+                // Aqui mantemos a lógica original de separar se tiver nome específico
+                if(!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0]; 
             }
             
+            // Fallback final
+            if (!pessoa) pessoa = 'Cliente 1';
+
             if (!agrupados[pessoa]) {
                 agrupados[pessoa] = { itens: [], total: 0 };
             }
             
+            // Garante leitura correta da quantidade (seu JSON usa 'quantidade', mas o código antigo usava 'qtd')
+            const qtd = item.quantidade || item.qtd || 1;
+
             agrupados[pessoa].itens.push(item);
-            agrupados[pessoa].total += (item.preco * item.quantidade);
+            agrupados[pessoa].total += (item.preco * qtd);
         });
 
         return agrupados;
     }, [mesa]);
 
+    // Função auxiliar para calcular total geral
+    const getTotalGeral = () => {
+        const listaItens = mesa?.itens || mesa?.pedidos || [];
+        return listaItens.reduce((acc, item) => {
+            const qtd = item.quantidade || item.qtd || 1;
+            return acc + (item.preco * qtd);
+        }, 0);
+    };
+
     // --- INICIALIZAÇÃO ---
     useEffect(() => {
-        const totalMesa = mesa?.total || 0;
+        // Usa a função de cálculo para garantir precisão
+        const totalMesa = getTotalGeral(); 
+        const listaItens = mesa?.itens || mesa?.pedidos || [];
 
         if (tipoPagamento === 'unico') {
             setPagamentos({
                 'Pagamento Único': {
                     valor: totalMesa,
                     formaPagamento: 'dinheiro',
-                    itens: mesa?.itens || [] 
+                    itens: listaItens
                 }
             });
         } else if (tipoPagamento === 'individual') {
@@ -69,7 +92,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 pagamentosIniciais['Cliente 1'] = {
                     valor: totalMesa,
                     formaPagamento: 'dinheiro',
-                    itens: mesa?.itens || []
+                    itens: listaItens
                 };
             } else {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
@@ -85,7 +108,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     }, [tipoPagamento, agruparItensPorPessoa, mesa]);
 
     const calcularTotalPagamentos = () => Object.values(pagamentos).reduce((acc, curr) => acc + curr.valor, 0);
-    const calcularTotalMesa = () => mesa?.total || 0;
+    const calcularTotalMesa = () => getTotalGeral();
 
     // --- MANIPULAÇÃO DE DADOS ---
     const editarFormaPagamento = (pessoaId, novaForma) => {
@@ -122,7 +145,8 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     // --- IMPRESSÃO TÉRMICA DE ALTO CONTRASTE ---
     const handleImprimirConferencia = () => {
         const totalMesa = calcularTotalMesa();
-        const dadosParaImpressao = agruparItensPorPessoa; 
+        // Usa os pagamentos se estiver na etapa de divisão, senão usa o agrupamento automático
+        const dadosParaImpressao = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
         
         const conteudo = `
             <html>
@@ -134,14 +158,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         body { margin: 0; padding: 0; }
                     }
                     body { 
-                        font-family: 'Courier New', monospace; /* Fonte padrão de impressora */
+                        font-family: 'Courier New', monospace; 
                         font-size: 12px; 
-                        width: 300px; /* Largura padrão bobina */
+                        width: 300px; 
                         margin: 0; 
                         padding: 10px 5px; 
-                        color: #000000 !important; /* PRETO PURO */
+                        color: #000000 !important; 
                         background-color: #ffffff !important;
-                        font-weight: bold !important; /* FORÇA NEGRITO EM TUDO */
+                        font-weight: bold !important; 
                     }
                     .header { text-align: center; margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 5px; }
                     .header h2 { font-size: 16px; margin: 0; text-transform: uppercase; font-weight: 900; }
@@ -174,7 +198,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         padding-top: 5px;
                     }
                     
-                    /* Força o navegador a imprimir cores exatas (preto) */
                     * {
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
@@ -189,28 +212,39 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 </div>
                 
                 ${Object.keys(dadosParaImpressao).length > 0 ? 
-                    Object.entries(dadosParaImpressao).map(([pessoa, dados]) => `
-                    <div class="pagante-block">
-                        <div class="pagante-header">
-                            <span>${pessoa.toUpperCase()}</span>
-                            <span>R$ ${dados.total.toFixed(2)}</span>
-                        </div>
+                    Object.entries(dadosParaImpressao).map(([pessoa, dados]) => {
+                        // Se estiver vindo do state 'pagamentos', pode ter .valor, se for do agrupamento tem .total
+                        const totalPessoa = dados.valor !== undefined ? dados.valor : dados.total;
                         
-                        ${dados.itens.map(item => `
-                            <div class="item-row">
-                                <span>${item.quantidade}x ${item.nome.substring(0, 20)}</span>
-                                <span>${(item.preco * item.quantidade).toFixed(2)}</span>
+                        return `
+                        <div class="pagante-block">
+                            <div class="pagante-header">
+                                <span>${pessoa.toUpperCase()}</span>
+                                <span>R$ ${totalPessoa.toFixed(2)}</span>
                             </div>
-                        `).join('')}
-                    </div>
-                `).join('') 
+                            
+                            ${dados.itens && dados.itens.length > 0 ? dados.itens.map(item => {
+                                const qtd = item.quantidade || item.qtd || 1;
+                                return `
+                                <div class="item-row">
+                                    <span>${qtd}x ${item.nome.substring(0, 20)}</span>
+                                    <span>${(item.preco * qtd).toFixed(2)}</span>
+                                </div>
+                                `;
+                            }).join('') : '<div class="item-row"><span>Valor Personalizado/Manual</span></div>'}
+                        </div>
+                        `;
+                    }).join('') 
                 : 
-                mesa?.itens?.map(item => `
+                (mesa?.itens || mesa?.pedidos || []).map(item => {
+                    const qtd = item.quantidade || item.qtd || 1;
+                    return `
                     <div class="item-row">
-                        <span>${item.quantidade}x ${item.nome}</span>
-                        <span>${(item.preco * item.quantidade).toFixed(2)}</span>
+                        <span>${qtd}x ${item.nome}</span>
+                        <span>${(item.preco * qtd).toFixed(2)}</span>
                     </div>
-                `).join('')
+                    `;
+                }).join('')
                 }
 
                 <div class="divider"></div>
@@ -255,7 +289,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 mesaId: mesa.id,
                 mesaNumero: mesa.numero,
                 estabelecimentoId: estabelecimentoId,
-                itens: mesa.itens,
+                itens: mesa.itens || mesa.pedidos || [],
                 pagamentos: pagamentos,
                 total: totalMesa,
                 tipoPagamento: tipoPagamento,
@@ -273,6 +307,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     clientes: [],
                     nomesOcupantes: ["Mesa"],
                     itens: [],
+                    pedidos: [], // Limpa pedidos também
                     total: 0,
                     pagamentos: {},
                     updatedAt: serverTimestamp()
