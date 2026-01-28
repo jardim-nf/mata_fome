@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IoClose, IoAdd, IoRemove, IoCart, IoPerson } from 'react-icons/io5';
+import { IoClose, IoAdd, IoRemove, IoCart, IoPerson, IoRadioButtonOn, IoRadioButtonOff } from 'react-icons/io5';
 
 const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
     const [produtoSelecionado, setProdutoSelecionado] = useState(null);
@@ -7,13 +7,14 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
     const [observacoes, setObservacoes] = useState('');
     const [categoriaAtiva, setCategoriaAtiva] = useState('');
     
+    // --- ESTADO NOVO: VARIAÇÃO SELECIONADA ---
+    const [variacaoSelecionada, setVariacaoSelecionada] = useState(null);
+
     // 1. LISTA DE PESSOAS DA MESA
-    // Pega os nomes da mesa. Se não tiver, usa "Mesa" como padrão.
     const listaPessoas = mesa.nomesOcupantes && mesa.nomesOcupantes.length > 0 
         ? mesa.nomesOcupantes 
         : (mesa.clientes || ['Mesa']);
         
-    // 2. ESTADO PARA QUEM É O PEDIDO (Default: primeiro nome da lista)
     const [clienteSelecionado, setClienteSelecionado] = useState(listaPessoas[0]);
 
     // Agrupar produtos por categoria
@@ -28,12 +29,28 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
 
     const categorias = Object.keys(produtosPorCategoria);
 
-    // Seleciona a primeira categoria automaticamente ao abrir
     useEffect(() => {
         if (categorias.length > 0 && !categoriaAtiva) {
             setCategoriaAtiva(categorias[0]);
         }
     }, [categorias, categoriaAtiva]);
+
+    // RESETAR VARIAÇÃO AO TROCAR DE PRODUTO
+    useEffect(() => {
+        setVariacaoSelecionada(null);
+        setQuantidade(1);
+        setObservacoes('');
+    }, [produtoSelecionado]);
+
+    // HELPER: PEGAR PREÇO ATUAL (Variação ou Base)
+    const getPrecoAtual = () => {
+        if (!produtoSelecionado) return 0;
+        // Se tiver variação selecionada, usa o preço dela. Se não, usa o do produto.
+        if (variacaoSelecionada) {
+            return Number(variacaoSelecionada.preco);
+        }
+        return Number(produtoSelecionado.preco);
+    };
 
     const handleAdicionar = () => {
         if (!produtoSelecionado) {
@@ -41,25 +58,42 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
             return;
         }
 
-        // 4. ENVIA O NOME DO CLIENTE JUNTO (5º argumento)
-        // Certifique-se que a função pai (DetalhesMesa) espera receber esse argumento extra!
+        // VERIFICA SE PRECISA DE VARIAÇÃO E NÃO SELECIONOU
+        const temVariacoes = produtoSelecionado.variacoes && produtoSelecionado.variacoes.length > 0;
+        if (temVariacoes && !variacaoSelecionada) {
+            alert('Por favor, selecione uma opção (ex: Blend, Comum...)');
+            return;
+        }
+
+        // MONTA O PRODUTO CONFIGURADO PARA ENVIAR
+        const itemParaEnviar = {
+            ...produtoSelecionado,
+            // Se tiver variação, sobrescrevemos o preço e salvamos a escolha
+            preco: getPrecoAtual(),
+            precoFinal: getPrecoAtual(),
+            variacaoSelecionada: variacaoSelecionada || null,
+            observacao: observacoes // Salva a obs aqui também
+        };
+
         onAdicionarItem(
-            produtoSelecionado, 
+            itemParaEnviar, 
             observacoes, 
-            [], // Adicionais (vazio por enquanto)
+            [], // Adicionais
             quantidade, 
-            clienteSelecionado // <--- AQUI VAI O NOME (JOAO, MARIA...)
+            clienteSelecionado 
         );
         
         // Reset form
         setProdutoSelecionado(null);
         setQuantidade(1);
         setObservacoes('');
-        // Mantém o cliente selecionado para facilitar pedidos em sequência
+        setVariacaoSelecionada(null);
     };
 
     const aumentarQuantidade = () => setQuantidade(prev => prev + 1);
     const diminuirQuantidade = () => setQuantidade(prev => prev > 1 ? prev - 1 : 1);
+
+    const temVariacoes = produtoSelecionado?.variacoes && produtoSelecionado.variacoes.length > 0;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
@@ -80,7 +114,7 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
                 <div className="flex flex-col lg:flex-row flex-1 gap-6 overflow-hidden">
                     {/* COLUNA ESQUERDA: LISTA DE PRODUTOS */}
                     <div className="flex-1 border border-gray-200 rounded-xl overflow-hidden flex flex-col bg-gray-50">
-                        {/* CATEGORIAS (Scroll horizontal) */}
+                        {/* CATEGORIAS */}
                         {categorias.length > 1 && (
                             <div className="flex overflow-x-auto border-b bg-white p-2 gap-2 scrollbar-hide">
                                 {categorias.map(categoria => (
@@ -134,19 +168,52 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
                     </div>
 
                     {/* COLUNA DIREITA: DETALHES DO SELEÇÃO */}
-                    <div className="w-full lg:w-96 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto">
+                    <div className="w-full lg:w-96 bg-white border border-gray-200 rounded-xl p-5 shadow-sm overflow-y-auto flex flex-col">
                         {produtoSelecionado ? (
-                            <div className="space-y-6">
+                            <div className="space-y-6 flex-1 flex flex-col">
                                 {/* INFO PRODUTO */}
                                 <div className="border-b border-gray-100 pb-4">
                                     <h3 className="font-black text-xl text-gray-800">{produtoSelecionado.nome}</h3>
                                     <p className="text-sm text-gray-500 mt-1">{produtoSelecionado.descricao}</p>
                                     <div className="text-2xl font-black text-blue-600 mt-2">
-                                        R$ {produtoSelecionado.preco?.toFixed(2)}
+                                        R$ {getPrecoAtual().toFixed(2)}
                                     </div>
                                 </div>
 
-                                {/* 3. SELETOR DE CLIENTE (NOVA PARTE) */}
+                                {/* --- AQUI ESTÁ A CORREÇÃO: SELETOR DE VARIAÇÕES --- */}
+                                {temVariacoes && (
+                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                        <label className="block text-sm font-bold text-blue-800 mb-2 uppercase tracking-wide">
+                                            Escolha uma opção:
+                                        </label>
+                                        <div className="flex flex-col gap-2">
+                                            {produtoSelecionado.variacoes.map((variacao, idx) => {
+                                                const isSelected = variacaoSelecionada?.nome === variacao.nome;
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => setVariacaoSelecionada(variacao)}
+                                                        className={`flex items-center justify-between p-3 rounded-lg border text-sm transition-all ${
+                                                            isSelected 
+                                                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                                                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            {isSelected ? <IoRadioButtonOn className="text-lg"/> : <IoRadioButtonOff className="text-lg text-gray-400"/>}
+                                                            <span className="font-bold">{variacao.nome}</span>
+                                                        </div>
+                                                        <span className={isSelected ? 'text-white/90' : 'text-gray-500'}>
+                                                            R$ {Number(variacao.preco).toFixed(2)}
+                                                        </span>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* SELETOR DE CLIENTE */}
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                                         <IoPerson className="text-blue-500" /> Quem pediu?
@@ -168,47 +235,53 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
                                     </div>
                                 </div>
 
-                                {/* QUANTIDADE */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Quantidade</label>
-                                    <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-xl border border-gray-200 w-fit">
-                                        <button onClick={diminuirQuantidade} className="w-10 h-10 rounded-lg bg-white shadow text-gray-600 hover:text-red-500 font-bold text-xl flex items-center justify-center transition-colors">
-                                            <IoRemove />
-                                        </button>
-                                        <span className="text-xl font-bold w-8 text-center text-gray-800">{quantidade}</span>
-                                        <button onClick={aumentarQuantidade} className="w-10 h-10 rounded-lg bg-blue-600 shadow text-white font-bold text-xl flex items-center justify-center hover:bg-blue-700 transition-colors">
-                                            <IoAdd />
-                                        </button>
+                                {/* QUANTIDADE E OBSERVAÇÕES */}
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Quantidade</label>
+                                        <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-xl border border-gray-200 w-fit">
+                                            <button onClick={diminuirQuantidade} className="w-10 h-10 rounded-lg bg-white shadow text-gray-600 hover:text-red-500 font-bold text-xl flex items-center justify-center transition-colors">
+                                                <IoRemove />
+                                            </button>
+                                            <span className="text-xl font-bold w-8 text-center text-gray-800">{quantidade}</span>
+                                            <button onClick={aumentarQuantidade} className="w-10 h-10 rounded-lg bg-blue-600 shadow text-white font-bold text-xl flex items-center justify-center hover:bg-blue-700 transition-colors">
+                                                <IoAdd />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Observações</label>
+                                        <textarea
+                                            value={observacoes}
+                                            onChange={(e) => setObservacoes(e.target.value)}
+                                            placeholder="Ex: Sem cebola, ponto da carne..."
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none bg-gray-50 text-sm"
+                                            rows="2"
+                                        />
                                     </div>
                                 </div>
 
-                                {/* OBSERVAÇÕES */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Observações</label>
-                                    <textarea
-                                        value={observacoes}
-                                        onChange={(e) => setObservacoes(e.target.value)}
-                                        placeholder="Ex: Sem cebola, ponto da carne..."
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none bg-gray-50 text-sm"
-                                        rows="3"
-                                    />
-                                </div>
-
                                 {/* TOTAL E BOTÃO */}
-                                <div className="pt-4 mt-auto">
+                                <div className="pt-4 mt-auto border-t border-gray-100">
                                     <div className="flex justify-between items-center mb-4 text-lg font-bold text-gray-800">
                                         <span>Total do Item:</span>
                                         <span className="text-green-600 text-xl">
-                                            R$ {(produtoSelecionado.preco * quantidade).toFixed(2)}
+                                            R$ {(getPrecoAtual() * quantidade).toFixed(2)}
                                         </span>
                                     </div>
 
                                     <button
                                         onClick={handleAdicionar}
-                                        className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95"
+                                        disabled={temVariacoes && !variacaoSelecionada}
+                                        className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${
+                                            temVariacoes && !variacaoSelecionada
+                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                : 'bg-green-500 hover:bg-green-600 text-white hover:shadow-xl'
+                                        }`}
                                     >
                                         <IoCart className="w-6 h-6" />
-                                        Confirmar para {clienteSelecionado}
+                                        {temVariacoes && !variacaoSelecionada ? 'Escolha uma opção' : `Confirmar para ${clienteSelecionado}`}
                                     </button>
                                 </div>
                             </div>

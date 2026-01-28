@@ -518,16 +518,25 @@ const TelaPedidos = () => {
 
             {/* LISTA DE PRODUTOS */}
             <main className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
-                {produtosFiltrados.map((prod, idx) => (
-                    <CardapioItem 
-                        key={`${prod.id}-${idx}`} produto={prod} 
-                        abrirModalOpcoes={(p) => { 
-                            if ((p.opcoes||[]).length > 0) setProdutoEmSelecao(p); 
-                            else confirmarAdicaoAoCarrinho({ ...p, precoFinal: parseFloat(p.preco), quantidade: 1 });
-                        }} 
-                        cores={coresEstabelecimento} 
-                    />
-                ))}
+{produtosFiltrados.map((prod, idx) => (
+    <CardapioItem 
+        key={`${prod.id}-${idx}`} 
+        produto={prod} 
+        abrirModalOpcoes={(p) => { 
+            // CORREÇÃO AQUI: Verifica todos os possíveis nomes de variação
+            const temOpcoes = (p.opcoes && p.opcoes.length > 0) || 
+                              (p.variacoes && p.variacoes.length > 0) || 
+                              (p.tamanhos && p.tamanhos.length > 0);
+
+            if (temOpcoes) {
+                setProdutoEmSelecao(p); 
+            } else {
+                confirmarAdicaoAoCarrinho({ ...p, precoFinal: parseFloat(p.preco), quantidade: 1 });
+            }
+        }} 
+        cores={coresEstabelecimento} 
+    />
+))}
             </main>
 
             {/* BARRA INFERIOR (RESUMO) */}

@@ -1,6 +1,6 @@
 // src/pages/Home.jsx
-import LogoNaMao from '../assets/logonamao.png';
-import LogoNaMao2 from '../assets/logonamao2.png';
+import LogoNaMao from '../assets/logonamao.svg';
+import LogoNaMao2 from '../assets/logonamao2.svg';
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
