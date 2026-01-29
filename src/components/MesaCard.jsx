@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { IoTime, IoPerson, IoCashOutline, IoPersonCircle } from 'react-icons/io5';
+import { IoTime, IoPerson, IoCashOutline, IoPersonCircle, IoTrash } from 'react-icons/io5';
 
 // Helper de formatação interna
 const formatarDinheiro = (val) => {
@@ -9,7 +9,8 @@ const formatarDinheiro = (val) => {
     }).format(val || 0);
 };
 
-const MesaCard = ({ mesa, onClick, onPagar }) => {
+// 🔥 ADICIONADO: prop 'onExcluir'
+const MesaCard = ({ mesa, onClick, onPagar, onExcluir }) => {
     
     // Cores do STATUS (Parte Superior)
     const cardStyle = useMemo(() => {
@@ -31,20 +32,16 @@ const MesaCard = ({ mesa, onClick, onPagar }) => {
         return `${diff}m`;
     }, [mesa.updatedAt, mesa.status]);
 
-    // 🔥 LÓGICA DE NOME: Prioriza a lista 'nomesOcupantes' da TelaPedidos
+    // LÓGICA DE NOME (Igual à anterior)
     const nomeCliente = useMemo(() => {
-        // 1. Tenta pegar da lista de ocupantes (criada na TelaPedidos)
         if (mesa.nomesOcupantes && Array.isArray(mesa.nomesOcupantes)) {
-            // Filtra "Mesa" que é o padrão do sistema
             const nomesReais = mesa.nomesOcupantes.filter(n => n !== 'Mesa');
             if (nomesReais.length > 0) {
-                // Retorna o primeiro nome + indicador se tiver mais gente
                 return nomesReais.length > 1 
                     ? `${nomesReais[0]} (+${nomesReais.length - 1})` 
                     : nomesReais[0];
             }
         }
-        // 2. Fallback para o campo 'nome' (criado no ModalAbrirMesa)
         return mesa.nome;
     }, [mesa.nomesOcupantes, mesa.nome]);
 
@@ -73,13 +70,11 @@ const MesaCard = ({ mesa, onClick, onPagar }) => {
                     </div>
                 ) : (
                     <div className="flex flex-col gap-1">
-                        {/* Pessoas */}
                         <div className="flex items-center gap-1.5 text-xs font-bold opacity-70">
                             <IoPerson size={14}/> 
                             <span>{mesa.pessoas || 1} pessoas</span>
                         </div>
                         
-                        {/* 🔥 Exibição do Nome CORRIGIDA */}
                         {nomeCliente && (
                             <div className="flex items-center gap-1.5 mt-1 bg-white/40 p-1 rounded-lg">
                                 <IoPersonCircle size={16} className="opacity-70"/>
@@ -88,13 +83,12 @@ const MesaCard = ({ mesa, onClick, onPagar }) => {
                                 </span>
                             </div>
                         )}
-                        {/* Espaço reservado para alinhar cards se não tiver nome */}
                         {!nomeCliente && <div className="h-6"></div>}
                     </div>
                 )}
             </div>
 
-            {/* --- RODAPÉ: VALOR E BOTÃO PAGAR --- */}
+            {/* --- RODAPÉ: PAGAR (Se Ocupada) OU EXCLUIR (Se Livre) --- */}
             {mesa.status !== 'livre' ? (
                 <div className="bg-white border-t border-gray-100">
                     
@@ -108,7 +102,7 @@ const MesaCard = ({ mesa, onClick, onPagar }) => {
                         </span>
                     </div>
 
-                    {/* Botão Pagar (Embaixo do valor) */}
+                    {/* Botão Pagar */}
                     <div 
                         onClick={(e) => {
                             e.stopPropagation();
@@ -125,8 +119,20 @@ const MesaCard = ({ mesa, onClick, onPagar }) => {
                     </div>
                 </div>
             ) : (
-                // Barra decorativa quando livre
-                <div onClick={onClick} className="h-3 bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors"></div>
+                // 🔥 BOTÃO DE EXCLUIR (Aparece apenas quando LIVRE)
+                <div className="bg-gray-50 border-t border-gray-100 flex justify-end">
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation(); // Impede de abrir a mesa ao clicar no lixo
+                            if (onExcluir) onExcluir();
+                        }}
+                        className="w-full py-2 flex items-center justify-center gap-1 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+                        title="Excluir Mesa"
+                    >
+                        <IoTrash size={14} />
+                        <span className="text-[10px] font-bold uppercase">Excluir</span>
+                    </button>
+                </div>
             )}
         </div>
     );
