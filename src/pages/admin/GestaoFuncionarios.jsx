@@ -8,7 +8,7 @@ import {
     excluirFuncionarioPermanentemente,
     verificarEmailExistente
 } from "../../services/firebaseFuncionarios";
-import { serverTimestamp } from "firebase/firestore"; // Importante para data de criação
+import { serverTimestamp } from "firebase/firestore";
 
 // Import dos ícones
 import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaUserPlus, FaExclamationTriangle } from 'react-icons/fa';
@@ -451,18 +451,24 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
             }
         }
 
-        onSave({ 
+        const payload = { 
             nome: nome.trim(), 
             email: email.trim(), 
             // 🚨 CONVERTE PARA MINÚSCULO PARA BATER COM O CHECK DE ROTAS (App.jsx)
             cargo: cargo.toLowerCase(), 
             telefone: telefone.trim() || null, 
             permissoes, 
-            senha: funcionario ? undefined : senha,
             status: funcionario?.status || 'ativo',
             isAdmin: false, 
             isMasterAdmin: false 
-        });
+        };
+
+        // 🔥 CORREÇÃO: Só adiciona a senha se for CRIAÇÃO (evita undefined na edição)
+        if (!funcionario) {
+            payload.senha = senha;
+        }
+
+        onSave(payload);
     };
 
     return (

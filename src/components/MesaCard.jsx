@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { IoTime, IoPerson, IoRestaurant, IoCashOutline } from 'react-icons/io5';
+import { IoTime, IoPerson, IoCashOutline, IoPersonCircle } from 'react-icons/io5';
 
 // Helper de formatação interna
 const formatarDinheiro = (val) => {
@@ -31,62 +31,102 @@ const MesaCard = ({ mesa, onClick, onPagar }) => {
         return `${diff}m`;
     }, [mesa.updatedAt, mesa.status]);
 
+    // 🔥 LÓGICA DE NOME: Prioriza a lista 'nomesOcupantes' da TelaPedidos
+    const nomeCliente = useMemo(() => {
+        // 1. Tenta pegar da lista de ocupantes (criada na TelaPedidos)
+        if (mesa.nomesOcupantes && Array.isArray(mesa.nomesOcupantes)) {
+            // Filtra "Mesa" que é o padrão do sistema
+            const nomesReais = mesa.nomesOcupantes.filter(n => n !== 'Mesa');
+            if (nomesReais.length > 0) {
+                // Retorna o primeiro nome + indicador se tiver mais gente
+                return nomesReais.length > 1 
+                    ? `${nomesReais[0]} (+${nomesReais.length - 1})` 
+                    : nomesReais[0];
+            }
+        }
+        // 2. Fallback para o campo 'nome' (criado no ModalAbrirMesa)
+        return mesa.nome;
+    }, [mesa.nomesOcupantes, mesa.nome]);
+
     return (
-        <div className={`relative rounded-xl border shadow-sm flex flex-col justify-between overflow-hidden transition-all hover:shadow-md min-h-[115px] ${cardStyle}`}>
+        <div className={`relative rounded-xl border shadow-sm flex flex-col justify-between overflow-hidden transition-all hover:shadow-md min-h-[140px] ${cardStyle}`}>
             
-            {/* --- ÁREA SUPERIOR (CLIQUE PARA ABRIR A MESA) --- */}
+            {/* --- ÁREA SUPERIOR (CLIQUE PARA ABRIR/DETALHES) --- */}
             <div 
                 onClick={onClick}
-                className="flex-1 p-3 cursor-pointer flex flex-col justify-between"
+                className="flex-1 p-3 cursor-pointer flex flex-col relative"
             >
-                <div className="flex justify-between items-start">
-                    <span className="text-2xl font-black leading-none tracking-tighter">{mesa.numero}</span>
+                {/* Cabeçalho: Número e Tempo */}
+                <div className="flex justify-between items-start mb-2">
+                    <span className="text-3xl font-black leading-none tracking-tighter opacity-90">{mesa.numero}</span>
                     
                     {mesa.status !== 'livre' && (
-                        <span className="text-[10px] font-bold bg-white/60 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <span className="text-[10px] font-bold bg-white/60 px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
                             <IoTime size={10}/> {tempoDecorrido}
                         </span>
                     )}
                 </div>
 
                 {mesa.status === 'livre' ? (
-                    <div className="flex flex-col items-center justify-center mt-1 opacity-40">
-                        <span className="text-xs font-bold uppercase">LIVRE</span>
+                    <div className="flex flex-col items-center justify-center mt-2 opacity-40">
+                        <span className="text-xs font-bold uppercase tracking-widest">LIVRE</span>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-1 text-xs font-bold opacity-80 mt-1">
-                        <IoPerson size={12}/> {mesa.pessoas || '?'}
+                    <div className="flex flex-col gap-1">
+                        {/* Pessoas */}
+                        <div className="flex items-center gap-1.5 text-xs font-bold opacity-70">
+                            <IoPerson size={14}/> 
+                            <span>{mesa.pessoas || 1} pessoas</span>
+                        </div>
+                        
+                        {/* 🔥 Exibição do Nome CORRIGIDA */}
+                        {nomeCliente && (
+                            <div className="flex items-center gap-1.5 mt-1 bg-white/40 p-1 rounded-lg">
+                                <IoPersonCircle size={16} className="opacity-70"/>
+                                <span className="text-xs font-bold truncate max-w-[110px] uppercase text-gray-800" title={nomeCliente}>
+                                    {nomeCliente}
+                                </span>
+                            </div>
+                        )}
+                        {/* Espaço reservado para alinhar cards se não tiver nome */}
+                        {!nomeCliente && <div className="h-6"></div>}
                     </div>
                 )}
             </div>
 
-            {/* --- ÁREA INFERIOR (BOTÃO DE PAGAR EXCLUSIVO) --- */}
+            {/* --- RODAPÉ: VALOR E BOTÃO PAGAR --- */}
             {mesa.status !== 'livre' ? (
-                <div 
-                    onClick={(e) => {
-                        e.stopPropagation(); // Impede que o clique abra a mesa
-                        onPagar();
-                    }}
-                    className={`h-[36px] flex items-center justify-between px-3 cursor-pointer transition-colors border-t border-black/5 ${
-                        mesa.status === 'pagamento' 
-                            ? 'bg-yellow-400 hover:bg-yellow-500 text-yellow-900' // Amarelo se pediu conta
-                            : 'bg-green-600 hover:bg-green-700 text-white' // Verde padrão
-                    }`}
-                    title="Clique aqui para fechar a conta"
-                >
-                    {/* Valor Formatado */}
-                    <span className="text-sm font-black tracking-tight">
-                        {formatarDinheiro(mesa.total)}
-                    </span>
+                <div className="bg-white border-t border-gray-100">
                     
-                    <div className="flex items-center gap-1 text-[10px] font-bold uppercase opacity-90">
-                        <span>Pagar</span>
+                    {/* Linha do Valor */}
+                    <div 
+                        onClick={onClick} 
+                        className="py-1 px-2 text-center border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                        <span className="text-base font-black text-gray-800 tracking-tight">
+                            {formatarDinheiro(mesa.total)}
+                        </span>
+                    </div>
+
+                    {/* Botão Pagar (Embaixo do valor) */}
+                    <div 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onPagar();
+                        }}
+                        className={`py-2 px-3 flex items-center justify-center gap-2 cursor-pointer transition-colors text-white font-bold text-xs uppercase tracking-wide
+                            ${mesa.status === 'pagamento' 
+                                ? 'bg-yellow-400 hover:bg-yellow-500 text-yellow-900' 
+                                : 'bg-green-600 hover:bg-green-700'
+                            }`}
+                    >
                         <IoCashOutline size={16} />
+                        <span>Pagar Conta</span>
                     </div>
                 </div>
             ) : (
-                // Barra decorativa cinza quando livre
-                <div onClick={onClick} className="h-[12px] bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors"></div>
+                // Barra decorativa quando livre
+                <div onClick={onClick} className="h-3 bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors"></div>
             )}
         </div>
     );

@@ -10,7 +10,7 @@ import AdicionarMesaModal from "../components/AdicionarMesaModal";
 import ModalPagamento from "../components/ModalPagamento";
 import { 
     IoArrowBack, IoAdd, 
-    IoGrid, IoPeople, IoWalletOutline, IoReceiptOutline,
+    IoGrid, IoPeople, IoWalletOutline, 
     IoRestaurant, IoSearch, IoClose, IoAlertCircle 
 } from "react-icons/io5";
 
@@ -37,33 +37,52 @@ const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
     </div>
 );
 
-// --- COMPONENTE LOADING ---
-const LoadingSpinner = () => (
-    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <div className="flex flex-col items-center">
-            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-            <p className="text-gray-400 font-bold text-xs tracking-widest uppercase">Carregando Salão...</p>
-        </div>
-    </div>
-);
-
-// --- MODAL ABRIR MESA ---
+// --- MODAL ABRIR MESA (COM CAMPO DE NOME) ---
 const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     const [quantidade, setQuantidade] = useState(2);
+    const [nome, setNome] = useState(''); // 🔥 Estado para o nome
+
+    // Resetar estados quando abrir
+    useEffect(() => {
+        if(isOpen) {
+            setQuantidade(2);
+            setNome('');
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
+    
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100">
-                <h3 className="text-xl font-black text-gray-900 text-center mb-4">Mesa {mesaNumero}</h3>
-                <p className="text-center text-gray-500 mb-4 text-sm">Quantas pessoas?</p>
-                <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3 mb-6 border border-gray-100">
-                    <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-12 h-12 rounded-lg bg-white shadow-sm border border-gray-200 text-2xl font-bold hover:bg-gray-50">-</button>
-                    <span className="text-4xl font-black text-gray-900">{quantidade}</span>
-                    <button onClick={() => setQuantidade(q => q + 1)} className="w-12 h-12 rounded-lg bg-blue-600 shadow text-white text-2xl font-bold hover:bg-blue-700">+</button>
+                <h3 className="text-xl font-black text-gray-900 text-center mb-1">Mesa {mesaNumero}</h3>
+                <p className="text-center text-gray-500 mb-4 text-xs">Informe os dados para abrir</p>
+                
+                {/* 🔥 Input de Nome */}
+                <div className="mb-4">
+                    <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">NOME DO CLIENTE (OPCIONAL)</label>
+                    <input 
+                        type="text"
+                        placeholder="Ex: João Silva"
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                        autoFocus
+                    />
                 </div>
+
+                <div className="mb-6">
+                    <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">QUANTAS PESSOAS?</label>
+                    <div className="flex items-center justify-between bg-gray-50 rounded-xl p-2 border border-gray-200">
+                        <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-10 h-10 rounded-lg bg-white shadow-sm border border-gray-200 text-xl font-bold hover:bg-gray-50 text-gray-600">-</button>
+                        <span className="text-2xl font-black text-gray-900">{quantidade}</span>
+                        <button onClick={() => setQuantidade(q => q + 1)} className="w-10 h-10 rounded-lg bg-blue-600 shadow text-white text-xl font-bold hover:bg-blue-700">+</button>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={onClose} className="py-3 bg-white border border-gray-200 rounded-lg font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
-                    <button onClick={() => onConfirm(quantidade)} className="py-3 bg-gray-900 text-white rounded-lg font-bold shadow-lg hover:bg-black">Abrir</button>
+                    <button onClick={onClose} className="py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
+                    <button onClick={() => onConfirm(quantidade, nome)} className="py-3 bg-gray-900 text-white rounded-xl font-bold shadow-lg hover:bg-black active:scale-95 transition-transform">Abrir Mesa</button>
                 </div>
             </div>
         </div>
@@ -142,10 +161,15 @@ export default function ControleSalao() {
         else { navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); }
     };
 
-    const handleConfirmarAbertura = async (qtd) => {
+    // 🔥 Função de abrir mesa agora recebe NOME também e salva no Firestore
+    const handleConfirmarAbertura = async (qtd, nomeCliente) => {
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
-                status: 'ocupada', pessoas: qtd, tipo: 'mesa', updatedAt: serverTimestamp()
+                status: 'ocupada', 
+                pessoas: qtd, 
+                nome: nomeCliente || '', // Salva o nome
+                tipo: 'mesa', 
+                updatedAt: serverTimestamp()
             });
             setIsModalAbrirMesaOpen(false);
             navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
@@ -159,7 +183,10 @@ export default function ControleSalao() {
             const matchStatus = filtro === 'todos' ? true :
                                 filtro === 'livres' ? m.status === 'livre' :
                                 filtro === 'ocupadas' ? m.status !== 'livre' : true;
-            const matchBusca = buscaMesa === '' ? true : String(m.numero).includes(buscaMesa);
+            // Busca pelo número OU pelo nome do cliente
+            const termoBusca = buscaMesa.toLowerCase();
+            const matchBusca = buscaMesa === '' ? true : 
+                               (String(m.numero).includes(buscaMesa) || (m.nome && m.nome.toLowerCase().includes(termoBusca)));
             return matchStatus && matchBusca;
         });
     }, [mesas, filtro, buscaMesa]);
@@ -181,7 +208,6 @@ export default function ControleSalao() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 pb-20">
-            {/* Largura total para caber 100 mesas */}
             <div className="w-full max-w-[2400px] mx-auto"> 
                 
                 <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
@@ -207,7 +233,7 @@ export default function ControleSalao() {
                             </div>
                         </div>
 
-                        {/* Stats Rápidos - APLIQUEI FORMATAR REAL AQUI */}
+                        {/* Stats Rápidos */}
                         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
                             <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
                             <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
@@ -216,7 +242,7 @@ export default function ControleSalao() {
                         
                         {/* Controles */}
                         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-                            {/* Busca */}
+                            {/* Busca (AGORA BUSCA NOME TAMBÉM) */}
                             <div className="relative w-full sm:w-32 md:w-48">
                                 <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
                                     <IoSearch className="text-gray-400" />
@@ -224,7 +250,7 @@ export default function ControleSalao() {
                                 <input
                                     type="text"
                                     className="block w-full pl-8 pr-8 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 placeholder-gray-400"
-                                    placeholder="Mesa nº..."
+                                    placeholder="Mesa ou Nome..."
                                     value={buscaMesa}
                                     onChange={(e) => setBuscaMesa(e.target.value)}
                                 />
@@ -253,10 +279,9 @@ export default function ControleSalao() {
                     </div>
                 </div>
 
-                {/* --- GRID DE 100 MESAS (High Density) --- */}
+                {/* --- GRID DE MESAS --- */}
                 <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh]">
                     {mesasFiltradas.length > 0 ? (
-                        // MANTIVE O GRID DE 3 A 12 COLUNAS PARA MONITORES ULTRA WIDE
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
                             {mesasFiltradas.map(mesa => (
                                 <MesaCard 
