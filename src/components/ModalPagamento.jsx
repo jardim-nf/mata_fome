@@ -533,7 +533,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
             <div className="relative w-full max-w-md bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-10 duration-300">
                 <div className="p-4 flex justify-between items-center border-b border-gray-100">
-                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">BrocouSystem</span>
+                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">NaMão</span>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
                         <IoClose size={24} />
                     </button>
