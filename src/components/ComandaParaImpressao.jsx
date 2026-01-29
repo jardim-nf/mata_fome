@@ -5,6 +5,12 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { IoPrint, IoWarning } from 'react-icons/io5';
 
+// Lista de palavras para identificar o que é bebida
+const TERMOS_BEBIDA = [
+    'bebida', 'refrigerante', 'suco', 'cerveja', 'agua', 'água', 
+    'drink', 'vinho', 'dose', 'long neck', 'lata', 'garrafa', 'h2oh', 'coca', 'guarana'
+];
+
 const ComandaParaImpressao = () => {
     const params = useParams();
     const id = params.id || params.pedidoId;
@@ -98,9 +104,24 @@ const ComandaParaImpressao = () => {
 
     const itensAgrupados = useMemo(() => {
         if (!pedido || !pedido.itens) return {};
-        if (!pedido.mesaNumero) return { 'Itens': pedido.itens };
 
-        return pedido.itens.reduce((acc, item) => {
+        // --- FILTRO DE BEBIDAS ---
+        // Filtra os itens removendo qualquer um que pareça ser bebida
+        const itensFiltrados = pedido.itens.filter(item => {
+            const nome = (item.nome || item.produto?.nome || '').toLowerCase();
+            const categoria = (item.categoria || item.produto?.categoria || '').toLowerCase();
+            const textoCompleto = `${nome} ${categoria}`;
+
+            // Se encontrar algum termo de bebida, retorna FALSE (remove da lista)
+            const ehBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
+            return !ehBebida;
+        });
+
+        // Se for delivery ou balcão (sem mesa), retorna lista direta filtrada
+        if (!pedido.mesaNumero) return { 'Itens': itensFiltrados };
+
+        // Se for mesa, agrupa por pessoa usando os itens filtrados
+        return itensFiltrados.reduce((acc, item) => {
             const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
             if (!acc[nomePessoa]) acc[nomePessoa] = [];
             acc[nomePessoa].push(item);
@@ -123,8 +144,11 @@ const ComandaParaImpressao = () => {
     const nomeClientePrincipal = pedido.clienteNome || pedido.cliente?.nome || 'Cliente';
     const telefoneCliente = pedido.telefone || pedido.cliente?.telefone || null;
 
+    // Verifica se sobrou algum item (se o pedido era só bebida, avisa)
+    const temItensParaImprimir = Object.keys(itensAgrupados).length > 0 && 
+                                 Object.values(itensAgrupados).some(lista => lista.length > 0);
+
     return (
-        // MUDANÇA 1: Ajustei max-w para 58mm e diminui a fonte base para text-xs
         <div className="bg-white min-h-screen p-0 text-black font-mono text-xs max-w-[58mm] mx-auto leading-tight">
             <button onClick={() => window.print()} className="print:hidden fixed top-2 right-2 bg-gray-200 p-2 rounded-full">
                 <IoPrint size={20} />
@@ -135,6 +159,7 @@ const ComandaParaImpressao = () => {
                 <h2 className="text-lg font-black uppercase">
                     {pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}
                 </h2>
+                <p className="text-[10px] uppercase font-bold">(SOMENTE COMIDA)</p>
                 <p className="text-[10px]">
                     {new Date().toLocaleString('pt-BR')}
                 </p>
@@ -162,9 +187,6 @@ const ComandaParaImpressao = () => {
                                 {enderecoFinal.complemento} {enderecoFinal.referencia}
                             </p>
                         )}
-                        {telefoneCliente && (
-                            <p className="mt-1 font-bold">Tel: {telefoneCliente}</p>
-                        )}
                     </div>
                 ) : (
                     !pedido.mesaNumero && (
@@ -183,41 +205,50 @@ const ComandaParaImpressao = () => {
 
             {/* LISTA DE ITENS */}
             <div className="space-y-3 mb-2">
-                {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
-                    <div key={nomePessoa} className="border-b border-black pb-1">
-                        {pedido.mesaNumero && (
-                            <div className="font-black bg-gray-200 px-1 text-[10px] uppercase mb-1">
-                                👤 {nomePessoa}
-                            </div>
-                        )}
-
-                        <div className="space-y-1">
-                            {itens.map((item, index) => (
-                                <div key={index} className="border-b border-dotted border-gray-300 pb-1 last:border-0">
-                                    {/* MUDANÇA 2: Layout Flex para garantir que o preço não corte */}
-                                    <div className="flex justify-between items-start text-xs font-bold">
-                                        <span className="mr-1 flex-1">
-                                            {item.quantidade}x {item.nome || item.produto?.nome}
-                                        </span>
-                                        <span className="whitespace-nowrap">
-                                            {(Number(item.precoFinal || item.preco) * item.quantidade).toFixed(2)}
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="pl-2 text-[10px] text-gray-600">
-                                        {item.variacaoSelecionada && <p>- {item.variacaoSelecionada.nome}</p>}
-                                        {item.adicionais?.map((ad, i) => <p key={i}>+ {ad.nome}</p>)}
-                                        {item.observacao && <p className="font-bold text-black mt-0.5 uppercase">OBS: {item.observacao}</p>}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                {!temItensParaImprimir ? (
+                    <div className="text-center py-4 font-bold">
+                        Apenas bebidas neste pedido.
                     </div>
-                ))}
+                ) : (
+                    Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
+                        <div key={nomePessoa} className="border-b border-black pb-1">
+                            {pedido.mesaNumero && (
+                                <div className="font-black bg-gray-200 px-1 text-[10px] uppercase mb-1">
+                                    👤 {nomePessoa}
+                                </div>
+                            )}
+
+                            <div className="space-y-1">
+                                {itens.map((item, index) => (
+                                    <div key={index} className="border-b border-dotted border-gray-300 pb-1 last:border-0">
+                                        <div className="flex justify-between items-start text-xs font-bold">
+                                            <span className="mr-1 flex-1">
+                                                {item.quantidade}x {item.nome || item.produto?.nome}
+                                            </span>
+                                            {/* Opcional: Se for para cozinha, talvez não queira mostrar preço. Se quiser esconder, remova este span */}
+                                            <span className="whitespace-nowrap">
+                                                {(Number(item.precoFinal || item.preco) * item.quantidade).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="pl-2 text-[10px] text-gray-600">
+                                            {item.variacaoSelecionada && <p>- {item.variacaoSelecionada.nome}</p>}
+                                            {item.adicionais?.map((ad, i) => <p key={i}>+ {ad.nome}</p>)}
+                                            {item.observacao && <p className="font-bold text-black mt-0.5 uppercase">OBS: {item.observacao}</p>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
 
             {/* TOTAIS */}
             <div className="border-t border-black pt-1">
+                {/* Nota sobre o total */}
+                <p className="text-[8px] text-center italic mb-1">*Total inclui itens de bebida não listados acima</p>
+
                 {Number(pedido.taxaEntrega) > 0 && (
                     <div className="flex justify-between text-[10px]">
                         <span>Entrega</span>
@@ -233,7 +264,7 @@ const ComandaParaImpressao = () => {
                 )}
 
                 <div className="flex justify-between text-base font-black mt-1">
-                    <span>TOTAL</span>
+                    <span>TOTAL GERAL</span>
                     <span>R$ {Number(pedido.total || pedido.totalFinal).toFixed(2)}</span>
                 </div>
                 
