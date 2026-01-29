@@ -40,9 +40,8 @@ const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
 // --- MODAL ABRIR MESA (COM CAMPO DE NOME) ---
 const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
     const [quantidade, setQuantidade] = useState(2);
-    const [nome, setNome] = useState(''); // 🔥 Estado para o nome
+    const [nome, setNome] = useState('');
 
-    // Resetar estados quando abrir
     useEffect(() => {
         if(isOpen) {
             setQuantidade(2);
@@ -58,7 +57,6 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
                 <h3 className="text-xl font-black text-gray-900 text-center mb-1">Mesa {mesaNumero}</h3>
                 <p className="text-center text-gray-500 mb-4 text-xs">Informe os dados para abrir</p>
                 
-                {/* 🔥 Input de Nome */}
                 <div className="mb-4">
                     <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">NOME DO CLIENTE (OPCIONAL)</label>
                     <input 
@@ -109,6 +107,7 @@ export default function ControleSalao() {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
 
+    // Mantive o setActions caso use o header global, mas o botão principal agora está no corpo da página
     useEffect(() => {
         setActions(
             <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
@@ -161,13 +160,12 @@ export default function ControleSalao() {
         else { navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); }
     };
 
-    // 🔥 Função de abrir mesa agora recebe NOME também e salva no Firestore
     const handleConfirmarAbertura = async (qtd, nomeCliente) => {
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
                 status: 'ocupada', 
                 pessoas: qtd, 
-                nome: nomeCliente || '', // Salva o nome
+                nome: nomeCliente || '', 
                 tipo: 'mesa', 
                 updatedAt: serverTimestamp()
             });
@@ -183,7 +181,6 @@ export default function ControleSalao() {
             const matchStatus = filtro === 'todos' ? true :
                                 filtro === 'livres' ? m.status === 'livre' :
                                 filtro === 'ocupadas' ? m.status !== 'livre' : true;
-            // Busca pelo número OU pelo nome do cliente
             const termoBusca = buscaMesa.toLowerCase();
             const matchBusca = buscaMesa === '' ? true : 
                                (String(m.numero).includes(buscaMesa) || (m.nome && m.nome.toLowerCase().includes(termoBusca)));
@@ -240,9 +237,18 @@ export default function ControleSalao() {
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
                         </div>
                         
-                        {/* Controles */}
+                        {/* Controles + Botão Adicionar */}
                         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-                            {/* Busca (AGORA BUSCA NOME TAMBÉM) */}
+                            
+                            {/* 🔥 BOTÃO DE ADICIONAR MESA AGORA AQUI */}
+                            <button 
+                                onClick={() => setIsModalOpen(true)}
+                                className="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm flex items-center gap-2 transition-all whitespace-nowrap active:scale-95"
+                            >
+                                <IoAdd size={18}/> <span className="hidden sm:inline">Nova Mesa</span>
+                            </button>
+
+                            {/* Busca */}
                             <div className="relative w-full sm:w-32 md:w-48">
                                 <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
                                     <IoSearch className="text-gray-400" />

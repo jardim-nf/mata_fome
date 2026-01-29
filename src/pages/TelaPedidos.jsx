@@ -336,25 +336,60 @@ const TelaPedidos = () => {
 
             if (novos.length > 0) {
                 const idPedido = `pedido_${mesaId}_${Date.now()}`;
-                const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedido);
-                batch.set(pedidoRef, {
-                    id: idPedido, mesaId, mesaNumero: mesa?.numero,
-                    itens: novos.map(i => ({ ...i, status: 'recebido' })),
-                    status: 'recebido', total: novos.reduce((a,i) => a + (i.preco * i.quantidade), 0),
-                    dataPedido: serverTimestamp(), source: 'salao'
+                
+                // --- 🔥 LÓGICA DE FILTRAGEM DE BEBIDAS ---
+                // Verifica categorias que NÃO DEVEM ir para a cozinha (Painel)
+                const isBebida = (cat) => {
+                    const c = (cat || '').toLowerCase();
+                    return c.includes('bebida') || c.includes('drink') || c.includes('suco') || 
+                           c.includes('refrigerante') || c.includes('água') || c.includes('agua') || 
+                           c.includes('cerveja') || c.includes('dose') || c.includes('vinho') || c.includes('bar');
+                };
+
+                // Filtra: Apenas o que NÃO é bebida vai para o pedido da cozinha
+                const itensParaCozinha = novos.filter(i => !isBebida(i.categoria));
+
+                // Se houver itens de cozinha, cria o pedido no painel
+                if (itensParaCozinha.length > 0) {
+                    const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedido);
+                    batch.set(pedidoRef, {
+                        id: idPedido, mesaId, mesaNumero: mesa?.numero,
+                        // Manda apenas os itens filtrados (Comida)
+                        itens: itensParaCozinha.map(i => ({ ...i, status: 'recebido' })),
+                        status: 'recebido', 
+                        total: itensParaCozinha.reduce((a,i) => a + (i.preco * i.quantidade), 0),
+                        dataPedido: serverTimestamp(), source: 'salao'
+                    });
+                }
+
+                // Na mesa, TODOS os itens (comida e bebida) ficam como 'enviado' para travar edição
+                const itensAtualizados = resumoPedido.map(i => {
+                    if (!i.status || i.status === 'pendente') {
+                        return { 
+                            ...i, 
+                            status: 'enviado', 
+                            // Vincula ao ID do pedido se houve pedido de cozinha, senão fica null (bebida pura)
+                            pedidoCozinhaId: itensParaCozinha.length > 0 ? idPedido : null 
+                        };
+                    }
+                    return i;
                 });
 
-                const itensAtualizados = resumoPedido.map(i => (!i.status || i.status === 'pendente') ? { ...i, status: 'enviado', pedidoCozinhaId: idPedido } : i);
                 batch.update(mesaRef, { itens: itensAtualizados, status: 'com_pedido', total, updatedAt: serverTimestamp() });
             } else {
                 batch.update(mesaRef, { itens: resumoPedido, total, updatedAt: serverTimestamp() });
             }
 
             await batch.commit();
-            toast.success("Pedido atualizado!");
+            toast.success("Pedido enviado!");
             setShowOrderSummary(false);
             navigate('/controle-salao');
-        } catch (e) { toast.error("Erro ao salvar"); } finally { setSalvando(false); }
+        } catch (e) { 
+            console.error(e);
+            toast.error("Erro ao salvar"); 
+        } finally { 
+            setSalvando(false); 
+        }
     };
 
     const confirmarExclusao = async () => {
@@ -633,9 +668,9 @@ const TelaPedidos = () => {
                                                                 </button>
                                                             ) : (
                                                                 <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
-                                                                    <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-red-500"><IoRemove/></button>
-                                                                    <span className="font-bold text-sm w-4 text-center">{item.quantidade}</span>
-                                                                    <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade + 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-green-600"><IoAdd/></button>
+                                                                        <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-red-500"><IoRemove/></button>
+                                                                        <span className="font-bold text-sm w-4 text-center">{item.quantidade}</span>
+                                                                        <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade + 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-green-600"><IoAdd/></button>
                                                                 </div>
                                                             )}
                                                         </div>
