@@ -434,7 +434,7 @@ const TelaPedidos = () => {
                     </button>
                 </div>
 
-                {/* LISTA DE PESSOAS (Com padding horizontal px-4 no container para não cortar) */}
+                {/* LISTA DE PESSOAS */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 px-1 hide-scrollbar w-full">
                     {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
                         <div key={idx} className="flex-shrink-0">
@@ -497,16 +497,42 @@ const TelaPedidos = () => {
                         )}
                     </div>
                     
-                    {/* Espaçador para garantir que o último item não cole na borda */}
                     <div className="w-2 flex-shrink-0"></div>
                 </div>
 
+                {/* --- CAMPO DE BUSCA (ADICIONADO) --- */}
+                <div className="relative w-full">
+                    <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
+                    <input 
+                        type="text" 
+                        placeholder="Buscar item no cardápio..." 
+                        value={termoBusca}
+                        onChange={(e) => setTermoBusca(e.target.value)}
+                        className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium"
+                        style={{ 
+                            // Utilizando a cor de destaque para o anel de foco via style inline para garantir dinamismo
+                            '--tw-ring-color': coresEstabelecimento.destaque,
+                            '--tw-ring-opacity': '0.5' 
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque}
+                        onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                    />
+                    {termoBusca && (
+                        <button 
+                            onClick={() => setTermoBusca('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"
+                        >
+                            <IoClose className="text-xs" />
+                        </button>
+                    )}
+                </div>
+
                 {/* Categorias */}
-                <div className="flex gap-2 overflow-x-auto hide-scrollbar px-1">
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar px-1 pb-1">
                     {categoriasOrdenadas.map(cat => (
                         <button 
                             key={cat} onClick={() => setCategoriaAtiva(cat)}
-                            className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200'}`}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent shadow-md' : 'bg-white text-gray-500 border-gray-200'}`}
                             style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria } : {}}
                         >
                             {cat}
@@ -518,25 +544,32 @@ const TelaPedidos = () => {
 
             {/* LISTA DE PRODUTOS */}
             <main className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
-{produtosFiltrados.map((prod, idx) => (
-    <CardapioItem 
-        key={`${prod.id}-${idx}`} 
-        produto={prod} 
-        abrirModalOpcoes={(p) => { 
-            // CORREÇÃO AQUI: Verifica todos os possíveis nomes de variação
-            const temOpcoes = (p.opcoes && p.opcoes.length > 0) || 
-                              (p.variacoes && p.variacoes.length > 0) || 
-                              (p.tamanhos && p.tamanhos.length > 0);
+                {produtosFiltrados.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                        <IoSearch className="text-4xl mb-2 opacity-20"/>
+                        <p className="text-sm font-medium">Nenhum produto encontrado</p>
+                    </div>
+                ) : (
+                    produtosFiltrados.map((prod, idx) => (
+                        <CardapioItem 
+                            key={`${prod.id}-${idx}`} 
+                            produto={prod} 
+                            abrirModalOpcoes={(p) => { 
+                                // CORREÇÃO: Verifica todos os possíveis nomes de variação
+                                const temOpcoes = (p.opcoes && p.opcoes.length > 0) || 
+                                                  (p.variacoes && p.variacoes.length > 0) || 
+                                                  (p.tamanhos && p.tamanhos.length > 0);
 
-            if (temOpcoes) {
-                setProdutoEmSelecao(p); 
-            } else {
-                confirmarAdicaoAoCarrinho({ ...p, precoFinal: parseFloat(p.preco), quantidade: 1 });
-            }
-        }} 
-        cores={coresEstabelecimento} 
-    />
-))}
+                                if (temOpcoes) {
+                                    setProdutoEmSelecao(p); 
+                                } else {
+                                    confirmarAdicaoAoCarrinho({ ...p, precoFinal: parseFloat(p.preco), quantidade: 1 });
+                                }
+                            }} 
+                            cores={coresEstabelecimento} 
+                        />
+                    ))
+                )}
             </main>
 
             {/* BARRA INFERIOR (RESUMO) */}
