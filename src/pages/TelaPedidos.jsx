@@ -60,6 +60,7 @@ const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
     const { estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate(); 
+    const { user } = useAuth();
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId; 
 
     // Estados de Dados
@@ -725,6 +726,7 @@ const TelaPedidos = () => {
                     onConfirm={confirmarAdicaoAoCarrinho} 
                     onClose={() => setProdutoEmSelecao(null)} 
                     coresEstabelecimento={coresEstabelecimento} 
+estabelecimentoId={estabelecimentoId}
                 />
             )}
 

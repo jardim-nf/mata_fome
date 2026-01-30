@@ -1,100 +1,89 @@
 import React, { useState, useEffect } from 'react';
 import { IoClose, IoAdd, IoRemove, IoCheckmarkCircle } from 'react-icons/io5';
+import { db } from '../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
-const AdicionaisModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
-    const cores = coresEstabelecimento || {
-        primaria: '#0b0b0b',
-        destaque: '#059669',
-        background: '#111827',
-        texto: { principal: '#ffffff', secundario: '#9ca3af' }
+const AdicionaisModal = ({ item, onConfirm, onClose, cores, estabelecimentoId }) => {
+    const [listaAdicionais, setListaAdicionais] = useState([]);
+    const [selecionados, setSelecionados] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const carregarAdicionais = async () => {
+            try {
+                // Aqui você busca os itens da categoria "Adicionais"
+                const querySnapshot = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', 'Adicionais', 'itens'));
+                const itens = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setListaAdicionais(itens);
+            } catch (error) {
+                console.error("Erro ao carregar adicionais:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        carregarAdicionais();
+    }, [estabelecimentoId]);
+
+    const toggleAdicional = (adc) => {
+        const existe = selecionados.find(s => s.id === adc.id);
+        if (existe) {
+            setSelecionados(selecionados.filter(s => s.id !== adc.id));
+        } else {
+            setSelecionados([...selecionados, adc]);
+        }
     };
 
-    const [adicionaisSelecionados, setAdicionaisSelecionados] = useState(
-        item.adicionais.reduce((acc, ad) => ({ ...acc, [ad.nome]: 0 }), {})
-    );
-    const [total, setTotal] = useState(0);
-    const [observacao, setObservacao] = useState('');
-
-useEffect(() => {
-    let somaAdicionais = 0;
-    item.adicionais.forEach(ad => {
-        const qtd = adicionaisSelecionados[ad.nome] || 0;
-        somaAdicionais += qtd * Number(ad.preco);
-    });
-
-    // CORREÇÃO: Não use item.precoFinal aqui!
-    const precoBaseReal = item.variacaoSelecionada 
-        ? Number(item.variacaoSelecionada.preco) 
-        : (Number(item.preco) || 0);
-
-    setTotal(precoBaseReal + somaAdicionais);
-}, [adicionaisSelecionados, item]);
-    const updateQtd = (nome, delta) => {
-        setAdicionaisSelecionados(prev => {
-            const novaQtd = Math.max(0, (prev[nome] || 0) + delta);
-            return { ...prev, [nome]: novaQtd };
+    const handleConfirmar = () => {
+        const precoAdicionais = selecionados.reduce((acc, curr) => acc + parseFloat(curr.preco || 0), 0);
+        const nomesAdicionais = selecionados.map(s => s.nome).join(', ');
+        
+        onConfirm({
+            ...item,
+            precoFinal: parseFloat(item.preco) + precoAdicionais,
+            observacao: item.observacao ? `${item.observacao} | Adicionais: ${nomesAdicionais}` : `Adicionais: ${nomesAdicionais}`,
+            adicionais: selecionados // Para guardar a referência
         });
     };
 
-    const handleConfirm = () => {
-        const adicionaisFinais = item.adicionais
-            .filter(ad => adicionaisSelecionados[ad.nome] > 0)
-            .map(ad => ({ ...ad, quantidade: adicionaisSelecionados[ad.nome] }));
-
-        onConfirm({ ...item, adicionais: adicionaisFinais, precoFinal: total, observacao: observacao });
-    };
-
-    const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
-
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: '#111827', color: 'white' }}>
-                
-                <div className="p-4 flex justify-between items-center shrink-0" style={{ backgroundColor: cores.primaria }}>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 animate-slide-up max-h-[80vh] flex flex-col">
+                <div className="flex justify-between items-center mb-4">
                     <div>
-                        <span className="text-xs font-bold opacity-80 uppercase tracking-wider text-white">Turbine seu pedido</span>
-                        <h2 className="text-xl font-extrabold text-white mt-1">{item.nome}</h2>
+                        <h3 className="text-xl font-black">Turbinar seu {item.nome}?</h3>
+                        <p className="text-xs text-gray-500">Escolha os complementos</p>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/20 text-white"><IoClose size={24} /></button>
+                    <button onClick={onClose} className="p-2 bg-gray-100 rounded-full"><IoClose/></button>
                 </div>
 
-                <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
-                    <h3 className="font-bold mb-3 text-sm uppercase tracking-wide text-gray-300">Adicionais:</h3>
-                    <div className="space-y-3">
-                        {item.adicionais.map((ad, index) => {
-                            const qtd = adicionaisSelecionados[ad.nome] || 0;
-                            const isSelected = qtd > 0;
+                <div className="flex-1 overflow-y-auto space-y-2">
+                    {loading ? <p className="text-center py-4">Carregando...</p> : 
+                        listaAdicionais.map(adc => {
+                            const isSel = selecionados.find(s => s.id === adc.id);
                             return (
-                                <div key={index} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${isSelected ? 'bg-gray-800 border-gray-600' : 'border-gray-800'}`}>
-                                    <div className="flex-1">
-                                        <p className="font-medium text-white">{ad.nome}</p>
-                                        <p className="text-sm font-bold" style={{ color: cores.destaque }}>+ {formatarMoeda(ad.preco)}</p>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-gray-900 rounded-lg p-1 border border-gray-700">
-                                        <button onClick={() => updateQtd(ad.nome, -1)} className={`w-8 h-8 flex items-center justify-center rounded-md ${qtd === 0 ? 'text-gray-600 cursor-not-allowed' : 'text-red-400 hover:bg-gray-800'}`} disabled={qtd === 0}><IoRemove /></button>
-                                        <span className="font-bold w-6 text-center text-white">{qtd}</span>
-                                        <button onClick={() => updateQtd(ad.nome, 1)} className="w-8 h-8 flex items-center justify-center rounded-md text-green-400 hover:bg-gray-800"><IoAdd /></button>
+                                <div 
+                                    key={adc.id} 
+                                    onClick={() => toggleAdicional(adc)}
+                                    className={`p-3 rounded-2xl border-2 transition-all flex justify-between items-center cursor-pointer ${isSel ? 'border-green-500 bg-green-50' : 'border-gray-100'}`}
+                                >
+                                    <span className="font-bold text-gray-700">{adc.nome}</span>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm font-black text-gray-900">+ R$ {parseFloat(adc.preco).toFixed(2)}</span>
+                                        {isSel ? <IoCheckmarkCircle className="text-2xl text-green-500"/> : <div className="w-6 h-6 rounded-full border-2 border-gray-200"/>}
                                     </div>
                                 </div>
-                            );
-                        })}
-                    </div>
-                    <div className="mt-6">
-                        <label className="block text-sm font-bold mb-2 text-gray-300">Observações:</label>
-                        <textarea className="w-full p-3 rounded-xl bg-gray-800 border border-gray-700 focus:outline-none text-white placeholder-gray-500 resize-none" rows="3" placeholder="Alguma preferência?" value={observacao} onChange={(e) => setObservacao(e.target.value)} />
-                    </div>
+                            )
+                        })
+                    }
                 </div>
 
-                <div className="p-4 border-t border-gray-800 bg-gray-900 shrink-0">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="text-gray-400">Total Final:</span>
-                        <span className="text-2xl font-black" style={{ color: cores.destaque }}>{formatarMoeda(total)}</span>
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700">Cancelar</button>
-                        <button onClick={handleConfirm} className="flex-1 py-3 rounded-xl font-bold text-white shadow-lg flex justify-center items-center gap-2 hover:brightness-110" style={{ backgroundColor: cores.destaque }}><IoCheckmarkCircle size={20}/> Confirmar</button>
-                    </div>
-                </div>
+                <button 
+                    onClick={handleConfirmar}
+                    className="w-full mt-4 py-4 rounded-2xl text-white font-bold shadow-lg"
+                    style={{ backgroundColor: cores.destaque }}
+                >
+                    Confirmar e Adicionar
+                </button>
             </div>
         </div>
     );
