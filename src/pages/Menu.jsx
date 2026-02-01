@@ -2,11 +2,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, runTransaction, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, doc, serverTimestamp, writeBatch, increment, getDoc } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
-import { usePayment } from '../context/PaymentContext';
 import { toast } from 'react-toastify';
 import AdicionaisModal from '../components/AdicionaisModal';
 import VariacoesModal from '../components/VariacoesModal';
@@ -43,7 +42,7 @@ function Menu() {
     const [numero, setNumero] = useState('');
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
-    const [complemento, setComplemento] = useState(''); // Adicionado estado para complemento
+    const [complemento, setComplemento] = useState('');
     
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
@@ -168,6 +167,10 @@ function Menu() {
     const formatarItemCarrinho = (item) => {
         let nome = item.nome;
         if (item.variacaoSelecionada?.nome) nome += ` - ${item.variacaoSelecionada.nome}`;
+        if (item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) {
+            const nomesAdicionais = item.adicionaisSelecionados.map(a => a.nome).join(', ');
+            nome += ` (+ ${nomesAdicionais})`;
+        }
         if (item.observacao) nome += ` (Obs: ${item.observacao})`;
         return nome;
     };
@@ -194,7 +197,15 @@ function Menu() {
 
     // --- CÁLCULOS ---
 
-    const subtotalCalculado = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoFinal * item.qtd), 0), [carrinho]);
+    // 🔥 CORREÇÃO: O subtotal deve usar o preçoFinal (que já inclui adicionais) 🔥
+    const subtotalCalculado = useMemo(() => {
+        return carrinho.reduce((acc, item) => {
+            // Se o preçoFinal já estiver calculado corretamente (base + adicionais), use-o.
+            // Caso contrário, recalcule aqui para garantir.
+            const precoBase = item.precoFinal || 0;
+            return acc + (precoBase * item.qtd);
+        }, 0);
+    }, [carrinho]);
 
     const taxaAplicada = useMemo(() => {
         if (isRetirada) return 0;
@@ -202,39 +213,27 @@ function Menu() {
         return taxaEntregaCalculada;
     }, [isRetirada, taxaEntregaCalculada, premioRaspadinha]);
 
-    const finalOrderTotal = useMemo(() => {
-        let total = subtotalCalculado + taxaAplicada - discountAmount;
-        if (premioRaspadinha?.type === 'desconto') {
-            const valorDesconto = subtotalCalculado * (premioRaspadinha.valor / 100);
-            total -= valorDesconto;
-        }
-        return Math.max(0, total);
-    }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
-
-    // --- PRODUTOS E IA ---
+// Trecho do Menu.jsx
+const finalOrderTotal = useMemo(() => {
+    let total = subtotalCalculado + taxaAplicada - discountAmount;
+    // ... logica de desconto ...
+    return Math.max(0, total);
+}, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
 
     const carregarProdutosRapido = async (estabId) => {
         try {
-            console.log("🔍 Buscando cardápio (Modo Híbrido) para ID:", estabId);
+            console.log("🔍 Buscando cardápio para ID:", estabId);
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const snapshot = await getDocs(cardapioRef);
             
             if (snapshot.empty) return [];
 
-            const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const categoriasDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             
-            const temProdutosDiretos = docs.some(d => d.categoriaNome !== undefined || d.preco !== undefined || (d.variacoes && d.variacoes.length > 0));
+            // Filtra categorias ativas
+            const categoriasAtivas = categoriasDocs.filter(cat => cat.ativo !== false);
 
-            if (temProdutosDiretos) {
-                return docs.filter(item => item.ativo !== false).map(item => ({
-                    ...item,
-                    categoria: item.categoriaNome || item.categoria || 'Geral'
-                }));
-            } 
-            
-            const categoriasAtivas = docs.filter(cat => cat.ativo !== false);
-
-            const promessas = categoriasAtivas.map(async (cat) => {
+            const promessasCategorias = categoriasAtivas.map(async (cat) => {
                 const itensRef = collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'itens');
                 const produtosRef = collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'produtos');
                 
@@ -243,111 +242,82 @@ function Menu() {
                     getDocs(query(produtosRef, where('ativo', '==', true)))
                 ]);
 
-                return [...itensSnap.docs, ...produtosSnap.docs].map(d => ({
-                    ...d.data(),
-                    id: d.id,
-                    categoria: cat.nome || 'Geral',
-                    categoriaId: cat.id
-                }));
+                // Função para processar documentos e buscar subcoleções (ADICIONAIS/VARIAÇÕES)
+                const processarDocs = async (docsSnapshot) => {
+                    return Promise.all(docsSnapshot.docs.map(async (docItem) => {
+                        const dados = docItem.data();
+                        const id = docItem.id;
+
+                        // 1. Busca Subcoleção de ADICIONAIS
+                        let listaAdicionais = [];
+                        try {
+                            const addRef = collection(docItem.ref, 'adicionais');
+                            const addSnap = await getDocs(addRef);
+                            listaAdicionais = addSnap.docs.map(a => ({ id: a.id, ...a.data() }));
+                        } catch (e) { /* Ignora se não existir */ }
+
+                        // 2. Busca Subcoleção de VARIAÇÕES
+                        let listaVariacoes = [];
+                        try {
+                            const varRef = collection(docItem.ref, 'variacoes');
+                            const varSnap = await getDocs(varRef);
+                            listaVariacoes = varSnap.docs.map(v => ({ id: v.id, ...v.data() }));
+                        } catch (e) { /* Ignora */ }
+
+                        // Prioriza o array do documento, se vazio usa a subcoleção
+                        const adicionaisFinais = (dados.adicionais && dados.adicionais.length > 0) 
+                            ? dados.adicionais 
+                            : listaAdicionais;
+
+                        const variacoesFinais = (dados.variacoes && dados.variacoes.length > 0)
+                            ? dados.variacoes
+                            : listaVariacoes;
+
+                        return {
+                            ...dados,
+                            id,
+                            categoria: cat.nome || 'Geral',
+                            categoriaId: cat.id,
+                            adicionais: adicionaisFinais, // Agora garantimos que isso está preenchido
+                            variacoes: variacoesFinais
+                        };
+                    }));
+                };
+
+                const itensProcessados = await processarDocs(itensSnap);
+                const produtosProcessados = await processarDocs(produtosSnap);
+
+                return [...itensProcessados, ...produtosProcessados];
             });
 
-            const resultados = await Promise.all(promessas);
-            const produtosFinais = resultados.flat();
-
-            if (produtosFinais.length === 0 && docs.length > 0) {
-                return docs.map(item => ({ ...item, categoria: item.categoria || item.nome || 'Geral' }));
-            }
-
-            return produtosFinais;
+            const resultados = await Promise.all(promessasCategorias);
+            return resultados.flat();
 
         } catch (error) {
-            console.error("❌ Erro:", error);
+            console.error("❌ Erro ao carregar produtos:", error);
             return [];
         }
     };
 
-    // 🔥🔥 CORREÇÃO PRINCIPAL: PARSE INTELIGENTE (OBJETO vs STRING) 🔥🔥
-    const handleAdicionarPorIA = useCallback((dadosDoChat) => {
-        console.log("🤖 IA enviou:", dadosDoChat);
+    // --- FUNÇÕES DE ADIÇÃO (DEFINIDAS ANTES DO USO) ---
 
-        let nomeProduto = "";
-        let nomeOpcao = null;
-        let observacaoIA = "";
-        let quantidadeIA = 1;
-
-        // 1. EXTRAÇÃO DOS DADOS
-        if (typeof dadosDoChat === 'object' && dadosDoChat !== null) {
-            // Novo formato: Objeto vindo do AIChatAssistant atualizado
-            nomeProduto = dadosDoChat.nome || "";
-            nomeOpcao = dadosDoChat.variacao || null;
-            observacaoIA = dadosDoChat.observacao || "";
-            quantidadeIA = dadosDoChat.qtd || 1;
-        } else if (typeof dadosDoChat === 'string') {
-            // Fallback: Formato antigo (String) - Caso precise
-            nomeProduto = dadosDoChat;
-            if (nomeProduto.includes('-- Qtd:')) {
-                const partesQtd = nomeProduto.split('-- Qtd:');
-                quantidadeIA = parseInt(partesQtd[1].trim()) || 1;
-                nomeProduto = partesQtd[0].trim();
-            }
-            if (nomeProduto.includes('-- Opcao:')) {
-                const splitOpcao = nomeProduto.split('-- Opcao:');
-                nomeProduto = splitOpcao[0].trim();
-                const resto = splitOpcao[1];
-                nomeOpcao = resto.split('-- Obs:')[0].trim();
-                if (resto.includes('-- Obs:')) observacaoIA = resto.split('-- Obs:')[1].trim();
-            }
-        } else {
-            return; // Formato inválido
-        }
-
-        // 2. BUSCA DO PRODUTO NO ARRAY
-        const termoBusca = superNormalizar(nomeProduto);
+    // Ações do Usuário
+    const handleAdicionarRapido = (item) => {
+        if (!currentUser) { handleAbrirLogin(); return; }
         
-        const produtoEncontrado = allProdutos.find(p => {
-            const nomeDb = superNormalizar(p.nome);
-            return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
-        });
+        // Garante que o preço é um número válido, mesmo se vier null/undefined
+        const precoBase = item.precoFinal !== undefined ? item.precoFinal : item.preco;
+        const preco = Number(precoBase) || 0;
 
-        if (!produtoEncontrado) return 'NOT_FOUND';
-
-        // 3. RESOLUÇÃO DE VARIAÇÃO
-        let variacaoSelecionada = null;
-        if (nomeOpcao) {
-            const termoOpcao = superNormalizar(nomeOpcao);
-            variacaoSelecionada = produtoEncontrado.variacoes?.find(v => 
-                superNormalizar(v.nome) === termoOpcao || superNormalizar(v.nome).includes(termoOpcao)
-            );
-        } else if (produtoEncontrado.variacoes?.length === 1) {
-            // Se só tem uma variação, pega ela automaticamente
-            variacaoSelecionada = produtoEncontrado.variacoes[0];
-        }
-
-        // 4. ADICIONAR AO CARRINHO (Direto ou Modal)
-        if (variacaoSelecionada || (!produtoEncontrado.variacoes?.length && !produtoEncontrado.adicionais?.length)) {
-            const precoFinal = variacaoSelecionada 
-                ? Number(variacaoSelecionada.preco || variacaoSelecionada.precoFinal)
-                : Number(produtoEncontrado.preco || produtoEncontrado.precoFinal || 0);
-
-            setCarrinho(prev => [...prev, {
-                ...produtoEncontrado,
-                variacaoSelecionada,
-                precoFinal,
-                observacao: observacaoIA, // <--- OBSERVAÇÃO CORRETAMENTE INSERIDA
-                qtd: quantidadeIA,
-                cartItemId: uuidv4()
-            }]);
-            toast.success(`${quantidadeIA}x ${produtoEncontrado.nome} adicionado!`);
-            return 'ADDED';
-        }
-
-        // Se tem muitas variações e a IA não especificou, abre o modal
-        setShowAICenter(false);
-        handleAbrirModalProduto(produtoEncontrado);
-        return 'MODAL';
-    }, [allProdutos]);
-
-    // --- AÇÕES DO USUÁRIO ---
+        setCarrinho(prev => [...prev, { 
+            ...item, 
+            qtd: 1, 
+            cartItemId: uuidv4(), 
+            precoFinal: preco,
+            observacao: '' 
+        }]);
+        toast.success(`${item.nome} adicionado!`);
+    };
 
     const handleAbrirModalProduto = (item) => {
         if (!currentUser) { 
@@ -355,27 +325,205 @@ function Menu() {
             handleAbrirLogin(); 
             return; 
         }
-        if (item.variacoes && item.variacoes.length > 0) { setItemParaVariacoes(item); }
-        else if (item.adicionais && item.adicionais.length > 0) { setItemParaAdicionais(item); }
-        else { handleAdicionarRapido(item); }
-    };
+        
+        // Limpa qualquer observação residual
+        const itemLimpo = { ...item, observacao: '' };
 
-    const handleAdicionarRapido = (item) => {
-        if (!currentUser) { handleAbrirLogin(); return; }
-        const preco = item.precoFinal !== undefined ? item.precoFinal : item.preco;
-        setCarrinho(prev => [...prev, { ...item, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
-        toast.success(`${item.nome} adicionado!`);
+        if (item.variacoes && item.variacoes.length > 0) { setItemParaVariacoes(itemLimpo); }
+        else if (item.adicionais && item.adicionais.length > 0) { setItemParaAdicionais(itemLimpo); }
+        else { handleAdicionarRapido(itemLimpo); }
     };
+// IA - Adição Inteligente com BUSCA TOTAL (Adicionais + Variações + Produtos)
+    const handleAdicionarPorIA = useCallback((dadosDoChat) => {
+        console.log("🤖 IA Processando:", dadosDoChat);
+        
+        // Debug: Vamos ver o que tem no banco carregado
+        // console.log("📦 Produtos Carregados:", allProdutos.map(p => p.nome));
 
+        // 1. Extração de Dados
+        let nomeProduto = "";
+        let nomeOpcao = null;
+        let listaAdicionaisNomes = []; 
+        let observacaoIA = "";
+        let quantidadeIA = 1;
+
+        if (typeof dadosDoChat === 'object' && dadosDoChat !== null) {
+            nomeProduto = dadosDoChat.nome || "";
+            nomeOpcao = dadosDoChat.variacao || null;
+            listaAdicionaisNomes = dadosDoChat.adicionaisNames || []; 
+            observacaoIA = dadosDoChat.observacao || "";
+            quantidadeIA = dadosDoChat.qtd || 1;
+        } else {
+            return;
+        }
+
+        const termoBusca = superNormalizar(nomeProduto);
+        
+        // --- ETAPA 1: Encontrar o Produto Principal ---
+        const produtoEncontrado = allProdutos.find(p => {
+            const nomeDb = superNormalizar(p.nome);
+            return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
+        });
+
+        if (!produtoEncontrado) {
+            console.warn("❌ Produto principal não encontrado:", nomeProduto);
+            return 'NOT_FOUND';
+        }
+
+        // --- ETAPA 2: Resolver Variação (Tamanho) ---
+        let variacaoSelecionada = null;
+        if (nomeOpcao) {
+            const termoOpcao = superNormalizar(nomeOpcao);
+            variacaoSelecionada = produtoEncontrado.variacoes?.find(v => 
+                superNormalizar(v.nome) === termoOpcao || superNormalizar(v.nome).includes(termoOpcao)
+            );
+        } else if (produtoEncontrado.variacoes?.length === 1) {
+            variacaoSelecionada = produtoEncontrado.variacoes[0];
+        }
+
+        if (produtoEncontrado.variacoes?.length > 1 && !variacaoSelecionada) {
+             setShowAICenter(false);
+             handleAbrirModalProduto(produtoEncontrado);
+             return 'MODAL';
+        }
+
+        // --- ETAPA 3: Resolver Adicionais (VARREDURA GLOBAL) ---
+        let adicionaisSelecionadosObj = [];
+        let somaAdicionais = 0;
+
+        if (listaAdicionaisNomes.length > 0) {
+            listaAdicionaisNomes.forEach(nomeAddIA => {
+                const termoAdd = superNormalizar(nomeAddIA); // ex: "ovo"
+                let itemEncontrado = null;
+
+                // BUSCA 1: Dentro dos 'adicionais' do produto principal
+                if (produtoEncontrado.adicionais) {
+                    itemEncontrado = produtoEncontrado.adicionais.find(a => 
+                        superNormalizar(a.nome).includes(termoAdd)
+                    );
+                }
+
+                // BUSCA 2: Como um produto solto no cardápio
+                if (!itemEncontrado) {
+                    itemEncontrado = allProdutos.find(p => {
+                        if (p.id === produtoEncontrado.id) return false;
+                        return superNormalizar(p.nome) === termoAdd || superNormalizar(p.nome).includes(termoAdd);
+                    });
+                }
+
+                // BUSCA 3: Dentro das 'variacoes' ou 'adicionais' de QUALQUER outro produto
+                // (Isso resolve se o Ovo estiver escondido dentro da categoria "Adicionais" como variação)
+                if (!itemEncontrado) {
+                    for (const prod of allProdutos) {
+                        // Procura em Adicionais do produto
+                        if (prod.adicionais) {
+                            const achouAdd = prod.adicionais.find(a => superNormalizar(a.nome).includes(termoAdd));
+                            if (achouAdd) { itemEncontrado = achouAdd; break; }
+                        }
+                        // Procura em Variações do produto
+                        if (prod.variacoes) {
+                            const achouVar = prod.variacoes.find(v => superNormalizar(v.nome).includes(termoAdd));
+                            if (achouVar) { itemEncontrado = achouVar; break; }
+                        }
+                    }
+                }
+
+                if (itemEncontrado) {
+                    // Normaliza preço
+                    let valorBruto = itemEncontrado.precoFinal !== undefined 
+                        ? itemEncontrado.precoFinal 
+                        : (itemEncontrado.preco || itemEncontrado.valor);
+
+                    if (typeof valorBruto === 'string') valorBruto = valorBruto.replace(',', '.');
+                    const precoNumerico = Number(valorBruto) || 0;
+
+                    console.log(`✅ Adicional encontrado: ${itemEncontrado.nome} (+ R$ ${precoNumerico})`);
+
+                    adicionaisSelecionadosObj.push({
+                        id: itemEncontrado.id || uuidv4(),
+                        nome: itemEncontrado.nome,
+                        quantidade: 1, 
+                        preco: precoNumerico 
+                    });
+                    
+                    somaAdicionais += precoNumerico;
+                } else {
+                    console.warn(`⚠️ Item "${nomeAddIA}" não encontrado no banco.`);
+                    observacaoIA += ` (Com extra de: ${nomeAddIA})`;
+                }
+            });
+        }
+
+        // --- ETAPA 4: Fechamento ---
+        const precoBase = variacaoSelecionada 
+            ? Number(variacaoSelecionada.preco || variacaoSelecionada.precoFinal || 0)
+            : Number(produtoEncontrado.preco || produtoEncontrado.precoFinal || 0);
+
+        const precoTotalUnitario = precoBase + somaAdicionais;
+
+        console.log(`💰 TOTAL: R$ ${precoTotalUnitario} (${precoBase} + ${somaAdicionais})`);
+
+        setCarrinho(prev => [...prev, {
+            ...produtoEncontrado,
+            variacaoSelecionada,
+            adicionaisSelecionados: adicionaisSelecionadosObj,
+            precoFinal: precoTotalUnitario, // Soma garantida aqui
+            observacao: observacaoIA, 
+            qtd: quantidadeIA,
+            cartItemId: uuidv4()
+        }]);
+
+        toast.success(`Adicionado!`);
+        return 'ADDED';
+
+    }, [allProdutos, currentUser]);
     const handleConfirmarVariacoes = (itemConfigurado) => {
-        const preco = Number(itemConfigurado.variacaoSelecionada?.preco || itemConfigurado.preco);
-        setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
-        setItemParaVariacoes(null);
+        const preco = Number(itemConfigurado.variacaoSelecionada?.preco || itemConfigurado.preco || 0);
+        
+        if (itemConfigurado.adicionais && itemConfigurado.adicionais.length > 0) {
+            setItemParaVariacoes(null);
+            // Passa para o próximo modal já com o preço da variação e observação limpa
+            setItemParaAdicionais({ ...itemConfigurado, precoFinal: preco });
+        } else {
+            setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
+            setItemParaVariacoes(null);
+        }
     };
 
+// 🔥 CORREÇÃO DA SOMA DOS ADICIONAIS 🔥
     const handleConfirmarAdicionais = (itemConfigurado) => {
-        const preco = Number(itemConfigurado.precoFinal || itemConfigurado.preco);
-        setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
+        // 1. Garante o preço base (do produto ou da variação selecionada)
+        let precoBase = Number(itemConfigurado.precoFinal || itemConfigurado.preco || 0);
+        
+        // 2. Calcula a soma dos adicionais blindando contra erros de formatação (vírgula ou string)
+        const totalAdicionais = (itemConfigurado.adicionaisSelecionados || []).reduce((acc, ad) => {
+            // Tenta pegar o preço em 'preco' ou 'valor'
+            let valorItem = ad.preco !== undefined ? ad.preco : ad.valor;
+            
+            // Se for string (ex: "10,00"), troca vírgula por ponto
+            if (typeof valorItem === 'string') {
+                valorItem = valorItem.replace(',', '.');
+            }
+
+            const precoNumerico = Number(valorItem) || 0;
+            const quantidade = Number(ad.quantidade) || 1;
+
+            return acc + (precoNumerico * quantidade);
+        }, 0);
+        
+        // 3. Soma final
+        const precoTotal = precoBase + totalAdicionais;
+
+        // Garante que a observação seja string limpa
+        const obsFinal = itemConfigurado.observacao || '';
+
+        setCarrinho(prev => [...prev, { 
+            ...itemConfigurado, 
+            qtd: 1, 
+            cartItemId: uuidv4(), 
+            precoFinal: precoTotal, // Preço corrigido
+            observacao: obsFinal
+        }]);
         setItemParaAdicionais(null);
     };
 
@@ -421,7 +569,11 @@ function Menu() {
         const itensFormatados = carrinho.map(item => ({
             nome: formatarItemCarrinho(item),
             quantidade: item.qtd,
-            preco: Number(item.precoFinal)
+            preco: Number(item.precoFinal),
+            adicionais: item.adicionaisSelecionados || [],
+            variacao: item.variacaoSelecionada || null,
+            produtoIdOriginal: item.id,
+            categoriaId: item.categoriaId
         }));
 
         const pedidoRaw = {
@@ -438,16 +590,68 @@ function Menu() {
         setShowPaymentModal(true);
     };
 
+    const baixarEstoque = async (itensVendidos) => {
+        if (!actualEstabelecimentoId || !itensVendidos.length) return;
+        const batch = writeBatch(db);
+        
+        const promessasDeLeitura = itensVendidos.map(async (item) => {
+            if (!item.categoriaId || !item.produtoIdOriginal) return null;
+            const itemRef = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.produtoIdOriginal);
+            const itemSnap = await getDoc(itemRef);
+            
+            if (!itemSnap.exists()) {
+                const prodRef = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'cardapio', item.categoriaId, 'produtos', item.produtoIdOriginal);
+                const prodSnap = await getDoc(prodRef);
+                return { item, itemRef: prodRef, itemSnap: prodSnap };
+            }
+            return { item, itemRef, itemSnap };
+        });
+
+        const resultados = await Promise.all(promessasDeLeitura);
+
+        resultados.forEach((res) => {
+            if (!res || !res.itemSnap.exists()) return;
+            const data = res.itemSnap.data();
+            const itemVendido = res.item;
+            const ref = res.itemRef;
+
+            if (itemVendido.variacao && data.variacoes && Array.isArray(data.variacoes)) {
+                const novasVariacoes = data.variacoes.map(v => {
+                    const ehEssa = (v.id && v.id === itemVendido.variacao.id) || 
+                                   (v.nome === itemVendido.variacao.nome);
+                    if (ehEssa) {
+                        const estoqueAtual = Number(v.estoque) || 0;
+                        return { ...v, estoque: estoqueAtual - itemVendido.quantidade };
+                    }
+                    return v;
+                });
+                const novoTotalEstoque = novasVariacoes.reduce((acc, v) => acc + (Number(v.estoque) || 0), 0);
+                batch.update(ref, { variacoes: novasVariacoes, estoque: novoTotalEstoque });
+            } else {
+                batch.update(ref, { estoque: increment(-itemVendido.quantidade) });
+            }
+        });
+
+        await batch.commit();
+    };
+
     const handlePagamentoSucesso = async (result) => {
         setProcessandoPagamento(true);
         try {
             const pedidoFinal = cleanData({ ...pedidoParaPagamento, status: 'recebido', transactionId: result.transactionId });
             const docRef = await addDoc(collection(db, 'pedidos'), pedidoFinal);
+            
+            try {
+                await baixarEstoque(pedidoParaPagamento.itens);
+            } catch (errEstoque) {
+                console.warn("Erro ao baixar estoque (possível falta de permissão, mas pedido foi salvo):", errEstoque);
+            }
+
             setConfirmedOrderDetails({ id: docRef.id });
             setShowOrderConfirmationModal(true);
             setCarrinho([]);
             setShowPaymentModal(false);
-        } catch (e) { console.error(e); } 
+        } catch (e) { console.error("Erro:", e); toast.error("Erro ao salvar pedido."); } 
         finally { setProcessandoPagamento(false); }
     };
 
@@ -466,50 +670,20 @@ function Menu() {
             await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
             setShowLoginPrompt(false); 
             verificarReaberturaChat(); 
-        } catch { 
-            toast.error("Erro no login"); 
-        } 
+        } catch { toast.error("Erro no login"); } 
     };
     
     const handleRegisterModal = async (e) => { 
         e.preventDefault(); 
         try { 
             const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
-            
-            await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { 
-                email: emailAuthModal, 
-                nome: nomeAuthModal, 
-                isAdmin: false, 
-                isMasterAdmin: false, 
-                estabelecimentos: [], 
-                estabelecimentosGerenciados: [], 
-                criadoEm: Timestamp.now() 
-            });
-
-            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { 
-                nome: nomeAuthModal, 
-                telefone: telefoneAuthModal, 
-                email: emailAuthModal, 
-                endereco: { 
-                    rua: ruaAuthModal || '', 
-                    numero: numeroAuthModal || '', 
-                    bairro: bairroAuthModal || '', 
-                    cidade: cidadeAuthModal || '' 
-                }, 
-                criadoEm: Timestamp.now() 
-            }); 
-            
-            toast.success("Conta criada com sucesso!");
-            setShowLoginPrompt(false); 
-            verificarReaberturaChat(); 
-        } catch (error) { 
-            console.error(error);
-            toast.error("Erro ao criar conta: " + error.message); 
-        } 
+            await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { email: emailAuthModal, nome: nomeAuthModal, isAdmin: false, isMasterAdmin: false, estabelecimentos: [], estabelecimentosGerenciados: [], criadoEm: Timestamp.now() });
+            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal || '', numero: numeroAuthModal || '', bairro: bairroAuthModal || '', cidade: cidadeAuthModal || '' }, criadoEm: Timestamp.now() }); 
+            toast.success("Conta criada!"); setShowLoginPrompt(false); verificarReaberturaChat(); 
+        } catch (error) { toast.error("Erro ao criar conta: " + error.message); } 
     };
 
     // --- EFFECTS ---
-
     useEffect(() => {
         if (!estabelecimentoSlug) return;
         const load = async () => {
@@ -518,20 +692,16 @@ function Menu() {
                 const q = query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug));
                 const snap = await getDocs(q);
                 if (snap.empty) { navigate('/'); return; }
-
                 const data = snap.docs[0].data();
                 const id = snap.docs[0].id;
-                
                 const prods = await carregarProdutosRapido(id);
-                
                 setEstabelecimentoInfo({ ...data, id });
                 setActualEstabelecimentoId(id);
                 setNomeEstabelecimento(data.nome);
                 if (data.cores) setCoresEstabelecimento(data.cores);
                 if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
                 setAllProdutos(prods);
-            } catch (err) { console.error(err); } 
-            finally { setLoading(false); }
+            } catch (err) { console.error(err); } finally { setLoading(false); }
         };
         load();
     }, [estabelecimentoSlug, navigate]);
@@ -595,24 +765,15 @@ function Menu() {
     return (
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
             <div className="max-w-7xl mx-auto px-4 w-full">
-                
-                {/* INFO E CABEÇALHO */}
                 {estabelecimentoInfo && (
                     <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative">
                         <div className="absolute top-4 right-4 z-10">
                              {currentUser ? (
-                                <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
-                                    <IoLogOutOutline size={18} />
-                                    <span>Sair</span>
-                                </button>
+                                <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors"><IoLogOutOutline size={18} /><span>Sair</span></button>
                              ) : (
-                                <button type="button" onClick={handleAbrirLogin} className="flex items-center gap-2 text-sm font-bold text-white px-4 py-2 rounded-full shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
-                                    <IoPerson size={16} />
-                                    <span>Entrar</span>
-                                </button>
+                                <button type="button" onClick={handleAbrirLogin} className="flex items-center gap-2 text-sm font-bold text-white px-4 py-2 rounded-full shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}><IoPerson size={16} /><span>Entrar</span></button>
                              )}
                         </div>
-
                         <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />
                         <div className="flex-1">
                             <h1 className="text-3xl font-bold mb-2">{estabelecimentoInfo.nome}</h1>
@@ -624,15 +785,8 @@ function Menu() {
                     </div>
                 )}
 
-                {/* FILTROS E BUSCA */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
-                    <input 
-                        type="text" 
-                        placeholder="🔍 Buscar..." 
-                        value={searchTerm} 
-                        onChange={e => setSearchTerm(e.target.value)} 
-                        className="w-full p-3 mb-4 border rounded-lg text-gray-900 text-base" 
-                    />
+                    <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 border rounded-lg text-gray-900 text-base" />
                     <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
                         {['Todos', ...categoriasOrdenadas].map(cat => (
                             <button key={cat} onClick={() => handleCategoryClick(cat)} className={`px-4 py-2 rounded-full font-bold whitespace-nowrap transition-all ${selectedCategory === cat ? 'text-white' : 'bg-gray-100 text-gray-600'}`} style={{ backgroundColor: selectedCategory === cat ? coresEstabelecimento.destaque : undefined }}>{cat}</button>
@@ -640,7 +794,6 @@ function Menu() {
                     </div>
                 </div>
 
-                {/* LISTAGEM DE PRODUTOS */}
                 {categoriasOrdenadas.map(cat => {
                     const items = menuAgrupado[cat];
                     const visible = visibleItemsCount[cat] || 4;
@@ -660,15 +813,9 @@ function Menu() {
                 })}
 
                 <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
-                    
-                    {/* DADOS */}
                     <div className="bg-white p-6 rounded-xl border shadow-lg text-left w-full">
                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                        {currentUser ? 
-                            <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : 
-                            <button type="button" onClick={handleAbrirLogin} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Fazer Login</button>
-                        }
-                        
+                        {currentUser ? <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : <button type="button" onClick={handleAbrirLogin} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Fazer Login</button>}
                         <div className="space-y-4">
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
@@ -688,7 +835,6 @@ function Menu() {
                         </div>
                     </div>
 
-                    {/* RESUMO */}
                     <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900 w-full">
                         <h3 className="text-xl font-bold mb-4">🛒 Resumo</h3>
                         {carrinho.length === 0 ? <p className="text-gray-500">Seu carrinho está vazio.</p> : (
@@ -708,17 +854,9 @@ function Menu() {
                                     {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
                                     
                                     <div className="flex gap-2 mt-3 items-stretch">
-                                        <input 
-                                            placeholder="CUPOM" 
-                                            value={couponCodeInput} 
-                                            onChange={e => setCouponCodeInput(e.target.value)} 
-                                            className="flex-1 p-3 border rounded-lg uppercase text-gray-900 text-base min-w-0" 
-                                        />
-                                        <button onClick={handleApplyCoupon} className="px-5 bg-green-600 text-white rounded-lg text-sm font-bold shadow-sm whitespace-nowrap active:scale-95 transition-transform">
-                                            Aplicar
-                                        </button>
+                                        <input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-3 border rounded-lg uppercase text-gray-900 text-base min-w-0" />
+                                        <button onClick={handleApplyCoupon} className="px-5 bg-green-600 text-white rounded-lg text-sm font-bold shadow-sm whitespace-nowrap active:scale-95 transition-transform">Aplicar</button>
                                     </div>
-
                                     <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
                                 <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600">✅ Finalizar Pedido</button>
@@ -728,59 +866,15 @@ function Menu() {
                 </div>
             </div>
 
-            {/* CARRINHO FLUTUANTE CONDICIONAL */}
-            {!isWidgetOpen && (
-                <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />
-            )}
-
-            {/* IA */}
-            {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
-                <AIChatAssistant 
-                    estabelecimento={estabelecimentoInfo} 
-                    produtos={allProdutos} 
-                    carrinho={carrinho}
-                    clienteNome={nomeCliente}
-                    
-                    taxaEntrega={taxaEntregaCalculada}
-                    enderecoAtual={{ rua, numero, bairro, cidade }}
-                    isRetirada={isRetirada}
-
-                    onAddDirect={handleAdicionarPorIA} 
-                    
-                    onCheckout={prepararParaPagamento}
-                    
-                    onClose={() => setShowAICenter(false)}
-                    onRequestLogin={handleLoginDoChat}
-                    
-                    onSetDeliveryMode={(modo) => setIsRetirada(modo === 'retirada')}
-                    
-                    onUpdateAddress={(dados) => {
-                        if (dados.rua) setRua(dados.rua);
-                        if (dados.numero) setNumero(dados.numero);
-                        if (dados.bairro) setBairro(dados.bairro);
-                        if (dados.cidade) setCidade(dados.cidade);
-                        if (dados.referencia) setComplemento(dados.referencia);
-                    }}
-                />
-            )}
-
+            {!isWidgetOpen && <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />}
+            {estabelecimentoInfo && (showAICenter || isWidgetOpen) && <AIChatAssistant estabelecimento={estabelecimentoInfo} produtos={allProdutos} carrinho={carrinho} clienteNome={nomeCliente} taxaEntrega={taxaEntregaCalculada} enderecoAtual={{ rua, numero, bairro, cidade }} isRetirada={isRetirada} onAddDirect={handleAdicionarPorIA} onCheckout={prepararParaPagamento} onClose={() => setShowAICenter(false)} onRequestLogin={handleLoginDoChat} onSetDeliveryMode={(modo) => setIsRetirada(modo === 'retirada')} onUpdateAddress={(dados) => { if (dados.rua) setRua(dados.rua); if (dados.numero) setNumero(dados.numero); if (dados.bairro) setBairro(dados.bairro); if (dados.cidade) setCidade(dados.cidade); if (dados.referencia) setComplemento(dados.referencia); }} />}
             <AIWidgetButton />
 
-            {/* MODAIS */}
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
-            
-            {showRaspadinha && (
-                <RaspadinhaModal 
-                    onGanhar={handleGanharRaspadinha} 
-                    onClose={() => setShowRaspadinha(false)} 
-                    config={estabelecimentoInfo?.raspadinhaConfig} 
-                />
-            )}            
-            
-            {/* MODAL DE LOGIN */}
+            {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
@@ -805,9 +899,7 @@ function Menu() {
                             <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                             <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition-colors">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
                         </form>
-                        <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block font-medium">
-                            {isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}
-                        </button>
+                        <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block font-medium">{isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}</button>
                     </div>
                 </div>
             )}

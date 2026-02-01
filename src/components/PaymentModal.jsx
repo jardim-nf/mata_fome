@@ -1,25 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { IoClose, IoCash, IoCard, IoQrCode, IoCopy, IoCheckmarkCircle, IoTime } from 'react-icons/io5';
+import React, { useState, useEffect, useMemo } from 'react';
+import { IoClose, IoCash, IoCard, IoQrCode, IoCopy, IoCheckmarkCircle, IoTime, IoChevronDown, IoChevronUp } from 'react-icons/io5';
 import { toast } from 'react-toastify';
 
 // --- FUNÇÕES ÚTEIS PARA PIX ---
-
-// Remove acentos e caracteres especiais, mantendo apenas letras e números (para TxID)
 const sanitizeTxId = (text) => {
     if (!text) return '***';
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "");
 };
 
-// Remove caracteres especiais de nomes e cidades, mantendo espaços
 const sanitizeText = (text) => {
     if (!text) return '';
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").toUpperCase();
 };
 
-// Limpa a chave PIX (remove parenteses, espaços, traços, mas mantem @ e . para emails)
 const sanitizeKey = (key) => {
     if (!key) return '';
-    return key.trim().replace(/[^a-zA-Z0-9@.]/g, ""); // Remove ( ) - e espaços
+    return key.trim().replace(/[^a-zA-Z0-9@.]/g, "");
 };
 
 // --- GERADOR DE PAYLOAD PIX (EMVCo) ---
@@ -28,46 +24,26 @@ const generatePixPayload = ({ key, name, city, transactionId, amount }) => {
     const cleanName = sanitizeText(name || 'LOJA').substring(0, 25);
     const cleanCity = sanitizeText(city || 'BRASIL').substring(0, 15);
     const cleanTxId = sanitizeTxId(transactionId).substring(0, 25) || '***';
+    
     const cleanAmount = Number(amount).toFixed(2);
 
-    // Formata campos ID + Tam + Valor
     const format = (id, value) => {
         const str = String(value);
         const len = str.length.toString().padStart(2, '0');
         return `${id}${len}${str}`;
     };
 
-    // 1. Payload Format
     const payloadFormat = format('00', '01');
-
-    // 2. Merchant Account (GUI + Key)
     const merchantAccount = format('26', format('00', 'br.gov.bcb.pix') + format('01', cleanKey));
-
-    // 3. Merchant Category
     const merchantCat = format('52', '0000');
-
-    // 4. Currency (BRL)
     const currency = format('53', '986');
-
-    // 5. Amount
     const amountField = format('54', cleanAmount);
-
-    // 6. Country
     const country = format('58', 'BR');
-
-    // 7. Merchant Name
     const merchantName = format('59', cleanName);
-
-    // 8. Merchant City
     const merchantCity = format('60', cleanCity);
-
-    // 9. Additional Data (TxID)
     const additionalData = format('62', format('05', cleanTxId));
-
-    // String base para CRC
     const payloadBase = `${payloadFormat}${merchantAccount}${merchantCat}${currency}${amountField}${country}${merchantName}${merchantCity}${additionalData}6304`;
 
-    // 10. Cálculo CRC16-CCITT (0x1021)
     const polynomial = 0x1021;
     let crc = 0xFFFF;
 
@@ -90,6 +66,7 @@ const PaymentModal = ({
     onClose, 
     amount, 
     orderId, 
+    cartItems = [], // 🔥 Recebe os itens para mostrar resumo
     onSuccess, 
     coresEstabelecimento, 
     pixKey, 
@@ -99,20 +76,21 @@ const PaymentModal = ({
     const [pixCode, setPixCode] = useState('');
     const [trocoPara, setTrocoPara] = useState('');
     const [cartaoTipo, setCartaoTipo] = useState('credito');
+    const [showDetails, setShowDetails] = useState(false);
 
-    // Gera o código PIX assim que o método PIX é selecionado
+    // Gera o código PIX
     useEffect(() => {
         if (method === 'pix' && pixKey) {
             try {
-                // Removemos traços do ID do pedido para não quebrar o QR Code
                 const txIdSeguro = orderId ? orderId.replace(/-/g, '').slice(-20) : '***';
-                
+                const valorFinal = Number(amount);
+
                 const code = generatePixPayload({
                     key: pixKey,
                     name: establishmentName || 'LOJA',
                     city: 'BRASIL',
                     transactionId: txIdSeguro,
-                    amount: Number(amount)
+                    amount: valorFinal
                 });
                 setPixCode(code);
             } catch (e) {
@@ -129,12 +107,12 @@ const PaymentModal = ({
     };
 
     const handleConfirm = () => {
-        let paymentData = { method, amount };
+        let paymentData = { method, amount: Number(amount) };
         
         if (method === 'pix') {
             paymentData.details = { pixCode };
         } else if (method === 'cash') {
-            paymentData.details = { troco: trocoPara ? Number(trocoPara) - amount : 0 };
+            paymentData.details = { troco: trocoPara ? Number(trocoPara) - Number(amount) : 0 };
         } else if (method === 'card') {
             paymentData.details = { type: cartaoTipo };
         }
@@ -150,10 +128,10 @@ const PaymentModal = ({
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
             
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                 
                 {/* Header */}
-                <div className="p-6 text-center border-b border-gray-100 bg-gray-50">
+                <div className="p-6 text-center border-b border-gray-100 bg-gray-50 flex-shrink-0 relative">
                     <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
                         <IoClose size={24} />
                     </button>
@@ -164,10 +142,46 @@ const PaymentModal = ({
                             R$ {Number(amount).toFixed(2)}
                         </span>
                     </div>
+
+                    {/* Botão para ver detalhes do pedido */}
+                    {cartItems.length > 0 && (
+                        <button 
+                            onClick={() => setShowDetails(!showDetails)}
+                            className="mt-2 text-xs font-bold text-gray-500 flex items-center justify-center gap-1 mx-auto hover:text-gray-800 transition-colors"
+                        >
+                            {showDetails ? 'Ocultar Detalhes' : 'Ver Detalhes'} 
+                            {showDetails ? <IoChevronUp /> : <IoChevronDown />}
+                        </button>
+                    )}
                 </div>
 
-                {/* Body */}
-                <div className="p-6">
+                {/* Lista de Detalhes (Expansível) */}
+                {showDetails && cartItems.length > 0 && (
+                    <div className="bg-gray-50 px-6 pb-4 text-sm border-b border-gray-100 overflow-y-auto max-h-40 flex-shrink-0">
+                        <div className="space-y-2">
+                            {cartItems.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-start text-gray-700">
+                                    <div className="flex-1">
+                                        <span className="font-bold">{item.qtd}x {item.nome}</span>
+                                        {item.variacaoSelecionada && (
+                                            <span className="text-xs text-gray-500 block">Opção: {item.variacaoSelecionada.nome || item.variacaoSelecionada}</span>
+                                        )}
+                                        {/* 🔥 MOSTRA OS ADICIONAIS AQUI 🔥 */}
+                                        {item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0 && (
+                                            <div className="text-xs text-blue-600">
+                                                + {item.adicionaisSelecionados.map(a => `${a.nome} (R$ ${Number(a.preco || 0).toFixed(2)})`).join(', ')}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="font-bold whitespace-nowrap">R$ {Number(item.precoFinal * item.qtd).toFixed(2)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Body (Rolável) */}
+                <div className="p-6 overflow-y-auto flex-1">
                     {!method ? (
                         <div className="space-y-3">
                             <button 
@@ -295,8 +309,8 @@ const PaymentModal = ({
                                     </div>
                                     <p className="text-xs text-gray-400 ml-1">Deixe em branco se tiver o valor exato.</p>
                                     
-                                    {trocoPara && Number(trocoPara) < amount && (
-                                        <p className="text-xs text-red-500 font-bold mt-2 ml-1">O valor deve ser maior que o total.</p>
+                                    {trocoPara && Number(trocoPara) < Number(amount) && (
+                                        <p className="text-xs text-red-500 font-bold mt-2 ml-1">O valor deve ser maior que o total (R$ {Number(amount).toFixed(2)}).</p>
                                     )}
                                 </div>
                             )}
@@ -306,15 +320,18 @@ const PaymentModal = ({
 
                 {/* Footer de Ação */}
                 {method && (
-                    <div className="p-6 border-t border-gray-100 bg-gray-50 safe-area-bottom">
+                    <div className="p-6 border-t border-gray-100 bg-gray-50 safe-area-bottom flex-shrink-0">
                         <button 
                             onClick={handleConfirm}
-                            disabled={method === 'pix' && !pixKey}
+                            disabled={
+                                (method === 'pix' && !pixKey) ||
+                                (method === 'cash' && trocoPara && Number(trocoPara) < Number(amount))
+                            }
                             className="w-full py-4 rounded-xl font-bold text-white shadow-lg text-lg flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
                             style={{ backgroundColor: corDestaque }}
                         >
                             <IoCheckmarkCircle className="text-2xl" />
-                            {method === 'pix' ? 'Já fiz o pagamento' : 'Confirmar Pedido'}
+                            {method === 'pix' ? `Já paguei R$ ${Number(amount).toFixed(2)}` : 'Confirmar Pedido'}
                         </button>
                     </div>
                 )}

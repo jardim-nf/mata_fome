@@ -60,7 +60,10 @@ const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
     const { estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    
+    // 🔥 IMPORTANTE: Trazendo userData para pegar o 'nome' do banco
+    const { user, userData } = useAuth(); 
+    
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId;
 
     // Estados de Dados
@@ -144,7 +147,7 @@ const TelaPedidos = () => {
         carregarConfigECardapio();
     }, [estabelecimentoId]);
 
-    // --- REALTIME LISTENER DA MESA (CORREÇÃO DE TEMPO REAL) ---
+    // --- REALTIME LISTENER DA MESA ---
     useEffect(() => {
         if (!estabelecimentoId || !mesaId) return;
 
@@ -156,13 +159,10 @@ const TelaPedidos = () => {
                 const data = docSnap.data();
                 setMesa({ id: docSnap.id, ...data });
 
-                // Sincroniza Itens
                 if (data.itens) setResumoPedido(data.itens);
 
-                // Sincroniza Pessoas (Mantendo seleção segura)
                 if (data.nomesOcupantes?.length > 0) {
                     setOcupantes(data.nomesOcupantes);
-                    // Se o cliente selecionado não existir mais na lista atualizada, volta para 'Mesa' ou o primeiro
                     setClienteSelecionado(prev => {
                         return data.nomesOcupantes.includes(prev) ? prev : (data.nomesOcupantes[0] || 'Mesa');
                     });
@@ -204,29 +204,31 @@ const TelaPedidos = () => {
         );
     }, [cardapio, termoBusca, categoriaAtiva]);
 
-const confirmarAdicaoAoCarrinho = async (itemConfig) => {
+    // --- FUNÇÃO ADICIONAR (SALVA NOME DO GARÇOM) ---
+    const confirmarAdicaoAoCarrinho = async (itemConfig) => {
         const { nome, variacaoSelecionada, observacao, precoFinal } = itemConfig;
         const nomeFinal = variacaoSelecionada ? `${nome} - ${variacaoSelecionada.nome}` : nome;
 
-        // 1. Tenta achar um item PENDENTE idêntico para apenas somar a quantidade
+        // 🔥 AQUI ESTÁ A MÁGICA: Pega o nome do cadastro (userData.nome)
+        const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
+
         const novaLista = [...resumoPedido];
         const indexExistente = novaLista.findIndex(i => 
             i.produtoIdOriginal === itemConfig.id && 
             i.nome === nomeFinal &&
             i.observacao === (observacao || '') &&
             i.cliente === clienteSelecionado &&
-            (!i.status || i.status === 'pendente') // <--- SÓ SOMA SE AINDA NÃO FOI ENVIADO
+            (!i.status || i.status === 'pendente')
         );
 
         if (indexExistente >= 0) {
-            // Se achou um pendente igual, soma +1 nele
             novaLista[indexExistente].quantidade += 1;
+            // Atualiza quem mexeu por último
+            novaLista[indexExistente].adicionadoPor = nomeGarcom;
             toast.success(`+1 ${nomeFinal}`);
         } else {
-            // Se não achou (ou o que tem lá já foi enviado), CRIA UMA NOVA LINHA com ID ÚNICO
             const novoItem = {
                 ...itemConfig,
-                // GERA UM ID ÚNICO BASEADO NO TEMPO (CRUCIAL PARA O ERRO NÃO OCORRER)
                 id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
                 produtoIdOriginal: itemConfig.id, 
                 nome: nomeFinal, 
@@ -235,17 +237,17 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
                 quantidade: 1, 
                 cliente: clienteSelecionado,
                 adicionadoEm: new Date(), 
-                status: 'pendente'
+                status: 'pendente',
+                // Salva o nome real
+                adicionadoPor: nomeGarcom 
             };
             novaLista.push(novoItem);
             toast.success(`${nomeFinal} adicionado!`);
         }
 
-        // Atualiza na tela imediatamente
         setResumoPedido(novaLista);
         setProdutoEmSelecao(null);
 
-        // Salva no Banco
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
                 itens: novaLista,
@@ -268,7 +270,6 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
         }
 
         const novoNome = novoNomeTemp.trim();
-        // Evita duplicatas
         if (ocupantes.includes(novoNome)) {
             toast.warning("Esse nome já existe!");
             return;
@@ -276,7 +277,6 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
 
         const novosOcupantes = [...ocupantes, novoNome];
 
-        // Atualização Otimista
         setOcupantes(novosOcupantes);
         setClienteSelecionado(novoNome);
         setIsAddingPerson(false);
@@ -299,7 +299,7 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
     };
 
     const salvarEdicaoPessoa = async (index) => {
-        if (editandoNomeIndex === null) return; // Já fechou
+        if (editandoNomeIndex === null) return;
 
         if (!novoNomeTemp.trim()) {
             setEditandoNomeIndex(null);
@@ -309,7 +309,6 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
         const nomeAntigo = ocupantes[index];
         const novoNome = novoNomeTemp.trim();
 
-        // Se não mudou nada, só fecha
         if (nomeAntigo === novoNome) {
             setEditandoNomeIndex(null);
             return;
@@ -318,13 +317,11 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
         const novosOcupantes = [...ocupantes];
         novosOcupantes[index] = novoNome;
 
-        // Otimista UI
         setOcupantes(novosOcupantes);
         setEditandoNomeIndex(null);
 
         if (clienteSelecionado === nomeAntigo) setClienteSelecionado(novoNome);
 
-        // Atualiza itens vinculados
         const novosItens = resumoPedido.map(i => (i.cliente === nomeAntigo ? { ...i, cliente: novoNome } : i));
         setResumoPedido(novosItens);
 
@@ -340,18 +337,15 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
         }
     };
 
-const salvarAlteracoes = async () => {
+    // --- FUNÇÃO SALVAR E BAIXAR ESTOQUE ---
+    const salvarAlteracoes = async () => {
         setSalvando(true);
         try {
             const novos = resumoPedido.filter(i => !i.status || i.status === 'pendente');
-            
-            // Recalcula total financeiro da mesa
             const total = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
-            
             const batch = writeBatch(db);
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
 
-            // === 1. LÓGICA DE ESTOQUE INTELIGENTE (ATUALIZA VARIAÇÃO E TOTAL) ===
             const promessasDeLeitura = novos.map(async (item) => {
                 if (!item.categoriaId || !item.produtoIdOriginal) return null;
                 const itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.produtoIdOriginal);
@@ -363,47 +357,30 @@ const salvarAlteracoes = async () => {
 
             resultados.forEach((res) => {
                 if (!res || !res.itemSnap.exists()) return;
-                
                 const data = res.itemSnap.data();
                 const itemVendido = res.item;
                 const ref = res.itemRef;
 
-                // CASO A: Produto TEM Variações (Ex: Coca-Cola)
                 if (itemVendido.variacaoSelecionada && data.variacoes && Array.isArray(data.variacoes)) {
-                    
-                    // 1. Descobre qual variação foi vendida e desconta dela
                     const novasVariacoes = data.variacoes.map(v => {
                         const ehEssa = (v.id && v.id === itemVendido.variacaoSelecionada.id) || 
                                        (v.nome === itemVendido.variacaoSelecionada.nome);
-                        
                         if (ehEssa) {
                             const estoqueAtual = Number(v.estoque) || 0;
                             return { ...v, estoque: estoqueAtual - itemVendido.quantidade };
                         }
                         return v;
                     });
-
-                    // 2. SOMA TUDO AUTOMATICAMENTE (Aqui resolve o problema do "15")
-                    // O sistema soma: 10 (Lata) + 10 (600ml) + 9 (2L) = 29
                     const novoTotalEstoque = novasVariacoes.reduce((acc, v) => acc + (Number(v.estoque) || 0), 0);
-                    
-                    // 3. Manda salvar: A lista de variações E o número total da vitrine
-                    batch.update(ref, { 
-                        variacoes: novasVariacoes,
-                        estoque: novoTotalEstoque 
-                    });
-
+                    batch.update(ref, { variacoes: novasVariacoes, estoque: novoTotalEstoque });
                 } else {
-                    // CASO B: Produto Simples (Ex: Hambúrguer único)
                     batch.update(ref, { estoque: increment(-itemVendido.quantidade) });
                 }
             });
-            // =================================================================
 
             if (novos.length > 0) {
                 const idPedido = `pedido_${mesaId}_${Date.now()}`;
                 
-                // Filtra Bebidas (não vão para cozinha)
                 const isBebida = (cat) => {
                     const c = (cat || '').toLowerCase();
                     return c.includes('bebida') || c.includes('drink') || c.includes('suco') || 
@@ -413,7 +390,6 @@ const salvarAlteracoes = async () => {
 
                 const itensParaCozinha = novos.filter(i => !isBebida(i.categoria));
 
-                // Cria pedido na cozinha
                 if (itensParaCozinha.length > 0) {
                     const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedido);
                     batch.set(pedidoRef, {
@@ -425,7 +401,6 @@ const salvarAlteracoes = async () => {
                     });
                 }
 
-                // Atualiza status na mesa
                 const itensAtualizados = resumoPedido.map(i => {
                     if (!i.status || i.status === 'pendente') {
                         return { 
@@ -444,12 +419,9 @@ const salvarAlteracoes = async () => {
 
             await batch.commit();
             
-            // --- ATUALIZAÇÃO VISUAL IMEDIATA NA TELA (OPCIONAL) ---
-            // Isso faz o número mudar na sua frente sem precisar recarregar a página
             setCardapio(prev => prev.map(prod => {
                 const itemVendido = novos.find(i => i.produtoIdOriginal === prod.id);
                 if (itemVendido) {
-                     // Simples subtração visual para dar feedback instantâneo
                      return { ...prod, estoque: (Number(prod.estoque) || 0) - itemVendido.quantidade };
                 }
                 return prod;
@@ -478,24 +450,21 @@ const salvarAlteracoes = async () => {
             batch.update(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { itens: novaLista, total: novoTotal });
             await batch.commit();
 
-            // Não precisa setResumoPedido aqui pois o onSnapshot vai pegar
             setModalSenhaAberto(false);
             setItemParaExcluir(null);
             toast.success("Item removido.");
         } catch (e) { toast.error("Erro ao excluir"); }
     };
 
-const ajustarQuantidade = async (id, cliente, qtd) => {
-        // Se a quantidade for 0, filtra (remove). Se não, atualiza.
+    const ajustarQuantidade = async (id, cliente, qtd) => {
         const novaLista = resumoPedido.map(i => {
-            // Compara estritamente pelo ID único gerado
             if (i.id === id) {
                 return { ...i, quantidade: qtd };
             }
             return i;
         }).filter(i => i.quantidade > 0);
 
-        setResumoPedido(novaLista); // UI Imediata
+        setResumoPedido(novaLista);
 
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
@@ -505,7 +474,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
         } catch (e) { console.error(e); }
     };
 
-    // --- CÁLCULOS ---
     const itensAgrupados = useMemo(() => {
         return resumoPedido.reduce((acc, item) => {
             const k = item.cliente || 'Mesa';
@@ -519,7 +487,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div></div>;
 
     return (
-        // z-50 e bg-gray-50 garantem que cubra o dashboard que está por baixo
         <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden flex flex-col">
 
             {/* Header */}
@@ -544,12 +511,10 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                     </button>
                 </div>
 
-                {/* LISTA DE PESSOAS */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 px-1 hide-scrollbar w-full">
                     {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
                         <div key={idx} className="flex-shrink-0">
                             {editandoNomeIndex === idx ? (
-                                // INPUT DE EDIÇÃO
                                 <input
                                     autoFocus
                                     className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md"
@@ -560,7 +525,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                                     onKeyDown={e => e.key === 'Enter' && salvarEdicaoPessoa(idx)}
                                 />
                             ) : (
-                                // BOTÃO DE SELEÇÃO
                                 <button
                                     onClick={() => setClienteSelecionado(nome)}
                                     className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`}
@@ -568,8 +532,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                                 >
                                     <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />
                                     {nome}
-
-                                    {/* Ícone de Editar (Lápis) - Só aparece se selecionado */}
                                     {clienteSelecionado === nome && (
                                         <div
                                             onClick={(e) => { e.stopPropagation(); iniciarEdicaoPessoa(idx, nome); }}
@@ -584,7 +546,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                         </div>
                     ))}
 
-                    {/* INPUT DE NOVA PESSOA OU BOTÃO + */}
                     <div className="flex-shrink-0">
                         {isAddingPerson ? (
                             <input
@@ -606,11 +567,9 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                             </button>
                         )}
                     </div>
-
                     <div className="w-2 flex-shrink-0"></div>
                 </div>
 
-                {/* --- CAMPO DE BUSCA (ADICIONADO) --- */}
                 <div className="relative w-full">
                     <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
                     <input
@@ -620,7 +579,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                         onChange={(e) => setTermoBusca(e.target.value)}
                         className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium"
                         style={{
-                            // Utilizando a cor de destaque para o anel de foco via style inline para garantir dinamismo
                             '--tw-ring-color': coresEstabelecimento.destaque,
                             '--tw-ring-opacity': '0.5'
                         }}
@@ -637,7 +595,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                     )}
                 </div>
 
-                {/* Categorias */}
                 <div className="flex gap-2 overflow-x-auto hide-scrollbar px-1 pb-1">
                     {categoriasOrdenadas.map(cat => (
                         <button
@@ -652,7 +609,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                 </div>
             </header>
 
-            {/* LISTA DE PRODUTOS */}
             <main className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
                 {produtosFiltrados.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-gray-400">
@@ -665,7 +621,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                             key={`${prod.id}-${idx}`}
                             produto={prod}
                             abrirModalOpcoes={(p) => {
-                                // CORREÇÃO: Verifica todos os possíveis nomes de variação
                                 const temOpcoes = (p.opcoes && p.opcoes.length > 0) ||
                                     (p.variacoes && p.variacoes.length > 0) ||
                                     (p.tamanhos && p.tamanhos.length > 0);
@@ -682,7 +637,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                 )}
             </main>
 
-            {/* BARRA INFERIOR (RESUMO) */}
             {resumoPedido.length > 0 && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
                     <div className="flex justify-between items-center max-w-md mx-auto">
@@ -728,7 +682,6 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                                                     <div className="flex-1">
                                                         <div className="flex justify-between items-start">
                                                             <h4 className="font-bold text-gray-900">
-                                                                {/* ADICIONE ISSO: Se for maior que 1, mostra a quantidade em vermelho */}
                                                                 {item.quantidade > 1 && (
                                                                     <span className="text-red-500 mr-1">{item.quantidade}x</span>
                                                                 )}
@@ -737,6 +690,14 @@ const ajustarQuantidade = async (id, cliente, qtd) => {
                                                             <span className="font-bold text-gray-900 text-sm">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
                                                         </div>
                                                         {item.observacao && <p className="text-xs text-orange-600 mt-1">Obs: {item.observacao}</p>}
+                                                        
+                                                        {/* --- MOSTRAR NOME DO GARÇOM --- */}
+                                                        {item.adicionadoPor && (
+                                                            <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-400 font-medium">
+                                                                <IoPersonAdd className="text-gray-300" size={10} /> 
+                                                                <span>Add por: {item.adicionadoPor}</span>
+                                                            </div>
+                                                        )}
 
                                                         <div className="mt-3 flex items-center justify-between">
                                                             <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md border ${isEnviado ? 'bg-green-50 text-green-700 border-green-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>

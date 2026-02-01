@@ -4,8 +4,8 @@ import { IoClose, IoSend, IoTime, IoRestaurant, IoCartOutline, IoMic, IoPerson }
 import ReactMarkdown from 'react-markdown'; 
 import { useAI } from '../context/AIContext';
 
-// ============================================================================
-// 1. FORMATAÇÃO E REGRAS VISUAIS
+// ===========================================================================
+// 1. FORMATAÇÃO E REGRAS VISUAIS (ATUALIZADO COM LEITURA REAL DE EXTRAS)
 // ============================================================================
 
 const SYSTEM_INSTRUCTION = (nomeLoja) => `
@@ -18,29 +18,39 @@ const SYSTEM_INSTRUCTION = (nomeLoja) => `
 
   1. 🛑 PERGUNTE O TAMANHO/VARIAÇÃO:
      Se o cliente pedir algo que tem tamanho (como Pizza, Açaí, Porção), PERGUNTE O TAMANHO antes de adicionar.
-     Ex: "A Portuguesa é top! 🍕 Vai querer Média, Grande ou Gigante pra matar a fome?"
-     NÃO gere o comando de adicionar se não souber o tamanho/variação.
+     
+  2. 🚀 OFEREÇA PARA "TURBINAR" (UPSELL REALISTA):
+     Antes de fechar o item, olhe no CARDÁPIO se o produto escolhido tem uma linha escrito "(Extras: ...)".
+     - SE TIVER EXTRAS: Liste 2 ou 3 opções REAIS que estão na lista daquele produto.
+       Exemplo Correto: "Bora turbinar com Ovo, Bacon ou Borda de Catupiry?" (Só cite o que estiver escrito nos extras do item).
+       Exemplo Errado: Oferecer "Bacon" se o item só tem "Granola" de extra.
+     - SE NÃO TIVER EXTRAS: Não invente nada. Apenas confirme o pedido ou ofereça uma bebida.
 
-  2. 🛑 PERGUNTE SOBRE DETALHES (O "SEM CEBOLA"):
-     Sempre pergunte se tem alguma observação.
-     Ex: "Alguma 'frescura' tipo tirar a cebola ou manda completão? 😂"
+  3. 🛑 SOBRE OBSERVAÇÕES:
+     Pergunte se tem alguma observação (tirar cebola, ponto da carne) APÓS oferecer os adicionais.
 
-  3. 📣 FINALIZAR:
+  4. 📣 FINALIZAR:
      Sempre avise: "Se acabou, digite 'Pagar' que eu fecho a conta!"
 
-  4. 💸 GATILHO DE PAGAMENTO:
+  5. 💸 GATILHO DE PAGAMENTO:
      Se disserem "pagar", "fechar", "conta": Responda algo divertido e adicione: ||PAY||
 
-  ⚡ COMANDO TÉCNICO DE ADIÇÃO:
-  Só gere quando souber o ITEM + TAMANHO (se houver) + OBS.
-  ||ADD: Nome do Produto -- Opcao: Tamanho/Variação (ou N/A) -- Obs: Detalhes (ou N/A) -- Qtd: 1||
+  ⚡ COMANDO TÉCNICO DE ADIÇÃO (ESTRUTURA):
+  SÓ GERE ESTE COMANDO DEPOIS QUE O CLIENTE DECIDIR SOBRE OS ADICIONAIS.
+  ||ADD: Nome do Produto -- Opcao: Tamanho/Variação (ou N/A) -- Adds: Item1, Item2 (ou N/A) -- Obs: Detalhes (ou N/A) -- Qtd: 1||
 `;
 
-// 🔥 FUNÇÃO PARA PARSEAR O COMANDO DA IA
+// 🔥 FUNÇÃO PARA PARSEAR O COMANDO DA IA (ATUALIZADA)
 const parseAddCommand = (commandString) => {
   const parts = commandString.split('--').map(p => p.trim());
   
-  let item = { nome: '', variacao: null, observacao: '', qtd: 1 };
+  let item = { 
+      nome: '', 
+      variacao: null, 
+      adicionaisNames: [], // Nova lista para os nomes dos adicionais
+      observacao: '', 
+      qtd: 1 
+  };
 
   // 1. Nome
   item.nome = parts[0];
@@ -53,6 +63,13 @@ const parseAddCommand = (commandString) => {
       const val = part.substring(6).trim(); 
       if (val !== 'N/A' && val !== 'n/a') item.variacao = val;
       
+    } else if (lowerPart.startsWith('adds:')) {
+      // 🔥 Captura os adicionais separados por vírgula
+      const val = part.substring(5).trim();
+      if (val !== 'N/A' && val !== 'n/a' && val !== '') {
+          item.adicionaisNames = val.split(',').map(a => a.trim());
+      }
+
     } else if (lowerPart.startsWith('obs:')) {
       const val = part.substring(4).trim(); 
       if (val !== 'N/A' && val !== 'n/a') item.observacao = val;
@@ -66,7 +83,7 @@ const parseAddCommand = (commandString) => {
   return item;
 };
 
-// 🔥 FORMATAÇÃO VERTICAL
+// 🔥 FORMATAÇÃO VERTICAL (ATUALIZADA PARA MOSTRAR ADICIONAIS)
 const formatarCardapio = (lista) => {
   if (!lista?.length) return "Cardápio vazio.";
   
@@ -81,12 +98,25 @@ const formatarCardapio = (lista) => {
   
   return Object.entries(agrupado).map(([cat, itens]) => {
     const itensTexto = itens.map(p => {
+      let texto = `**${p.nome.toUpperCase()}**`;
+      
+      // Preço Base
       const precoBase = p.precoFinal || p.preco;
+      if (precoBase) texto += ` - R$ ${Number(precoBase).toFixed(2)}`;
+
+      // Variações
       if (p.variacoes?.length > 0) {
-          const vars = p.variacoes.map(v => `- ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`).join('\n');
-          return `**${p.nome.toUpperCase()}**\n${vars}`; 
+          const vars = p.variacoes.map(v => `  [Opção] ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`).join('\n');
+          texto += `\n${vars}`; 
       }
-      return `**${p.nome.toUpperCase()}**\n- Preço: R$ ${Number(precoBase).toFixed(2)}`;
+
+      // Adicionais (MOSTRAR PARA A IA SABER QUE EXISTE)
+      if (p.adicionais?.length > 0) {
+          const adds = p.adicionais.map(a => `  [Add] ${a.nome}: +R$ ${Number(a.preco || a.valor).toFixed(2)}`).join(', ');
+          texto += `\n  (Extras: ${adds})`;
+      }
+
+      return texto;
     }).join('\n\n'); 
     
     return `### ${emojis[cat] || '🍽️'} ${cat.toUpperCase()}\n${itensTexto}`;
@@ -117,6 +147,14 @@ const MiniCart = ({ itens, onClose, onCheckout }) => (
                     {typeof item.variacaoSelecionada === 'string' ? item.variacaoSelecionada : item.variacaoSelecionada.nome}
                 </span>
             )}
+            
+            {/* Exibe Adicionais separadamente */}
+            {item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0 && (
+                <div className="text-xs text-blue-600 font-medium mt-1">
+                    + {item.adicionaisSelecionados.map(a => a.nome).join(', ')}
+                </div>
+            )}
+
             {item.observacao && (
                 <div className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
                     ✏️ Obs: "{item.observacao}"
