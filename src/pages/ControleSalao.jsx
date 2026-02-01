@@ -37,8 +37,8 @@ const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
     </div>
 );
 
-// --- MODAL ABRIR MESA (COM CAMPO DE NOME) ---
-const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
+// --- MODAL ABRIR MESA ---
+const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) => {
     const [quantidade, setQuantidade] = useState(2);
     const [nome, setNome] = useState('');
 
@@ -79,8 +79,10 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={onClose} className="py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
-                    <button onClick={() => onConfirm(quantidade, nome)} className="py-3 bg-gray-900 text-white rounded-xl font-bold shadow-lg hover:bg-black active:scale-95 transition-transform">Abrir Mesa</button>
+                    <button onClick={onClose} disabled={isOpening} className="py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+                    <button onClick={() => onConfirm(quantidade, nome)} disabled={isOpening} className="py-3 bg-gray-900 text-white rounded-xl font-bold shadow-lg hover:bg-black active:scale-95 transition-transform flex items-center justify-center gap-2">
+                        {isOpening ? 'Abrindo...' : 'Abrir Mesa'}
+                    </button>
                 </div>
             </div>
         </div>
@@ -88,7 +90,11 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero }) => {
 };
 
 export default function ControleSalao() {
-    const { userData } = useAuth(); 
+    // --- CORREÇÃO AQUI: Tenta pegar 'user' ou 'currentUser' ---
+    const { userData, user, currentUser } = useAuth(); 
+    // Garante que temos um objeto de usuário válido
+    const usuarioLogado = user || currentUser;
+
     const { setActions, clearActions } = useHeader();
     const navigate = useNavigate();
     
@@ -102,12 +108,12 @@ export default function ControleSalao() {
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
+    const [isOpeningTable, setIsOpeningTable] = useState(false); 
 
     const estabelecimentoId = useMemo(() => {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
 
-    // Mantive o setActions caso use o header global, mas o botão principal agora está no corpo da página
     useEffect(() => {
         setActions(
             <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
@@ -155,23 +161,93 @@ export default function ControleSalao() {
         catch (error) { toast.error("Erro."); }
     };
 
-    const handleMesaClick = (mesa) => {
-        if (mesa.status === 'livre') { setMesaParaAbrir(mesa); setIsModalAbrirMesaOpen(true); } 
-        else { navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); }
+    // --- 1. LÓGICA DE BLOQUEIO AO CLICAR NA MESA (CORRIGIDA) ---
+    const handleMesaClick = async (mesa) => {
+        // Se já estiver ocupada, entra normal
+        if (mesa.status !== 'livre') { 
+            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); 
+            return;
+        }
+
+        // SEGURANÇA: Se o usuário não carregou, não deixa clicar
+        if (!usuarioLogado || !usuarioLogado.uid) {
+            toast.error("Erro de autenticação. Recarregue a página.");
+            return;
+        }
+
+        // Verifica visualmente se JÁ existe um bloqueio de OUTRA pessoa
+        if (mesa.bloqueadoPor && mesa.bloqueadoPor !== usuarioLogado.uid) {
+            const agora = new Date();
+            let tempoBloqueio = 0;
+            if (mesa.bloqueadoEm) {
+                tempoBloqueio = (agora.getTime() - mesa.bloqueadoEm.toDate().getTime()) / 1000 / 60;
+            }
+            
+            if (tempoBloqueio < 2) {
+                const nomeQuemBloqueou = mesa.bloqueadoPorNome || "Outro garçom";
+                toast.warning(`⚠️ Mesa sendo aberta por: ${nomeQuemBloqueou}`);
+                return;
+            }
+        }
+
+        // Tenta BLOQUEAR NO BANCO
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id), {
+                bloqueadoPor: usuarioLogado.uid, // Usa a variável corrigida
+                bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
+                bloqueadoEm: serverTimestamp()
+            });
+
+            // Se der sucesso, abre o modal
+            setMesaParaAbrir(mesa); 
+            setIsModalAbrirMesaOpen(true);
+
+        } catch (error) {
+            console.error("Erro ao bloquear mesa", error);
+            toast.error("Erro ao acessar mesa. Tente novamente.");
+        }
     };
 
+    // --- 2. CANCELAR ABERTURA (REMOVE O BLOQUEIO) ---
+    const handleCancelarAbertura = async () => {
+        setIsModalAbrirMesaOpen(false);
+        if (mesaParaAbrir) {
+            try {
+                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
+                    bloqueadoPor: null,
+                    bloqueadoPorNome: null,
+                    bloqueadoEm: null
+                });
+            } catch (error) {
+                console.error("Erro ao desbloquear mesa", error);
+            }
+            setMesaParaAbrir(null);
+        }
+    };
+
+    // --- 3. CONFIRMAR ABERTURA (LIMPA BLOQUEIO E ABRE) ---
     const handleConfirmarAbertura = async (qtd, nomeCliente) => {
+        if (!mesaParaAbrir) return;
+        setIsOpeningTable(true);
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
                 status: 'ocupada', 
                 pessoas: qtd, 
                 nome: nomeCliente || '', 
                 tipo: 'mesa', 
-                updatedAt: serverTimestamp()
+                updatedAt: serverTimestamp(),
+                // Limpa o bloqueio
+                bloqueadoPor: null,
+                bloqueadoPorNome: null,
+                bloqueadoEm: null
             });
             setIsModalAbrirMesaOpen(false);
             navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
-        } catch (error) { toast.error("Erro ao abrir"); }
+        } catch (error) { 
+            toast.error("Erro ao abrir"); 
+        } finally {
+            setIsOpeningTable(false);
+        }
     };
 
     const handlePagamentoConcluido = () => { setIsModalPagamentoOpen(false); setMesaParaPagamento(null); };
@@ -208,16 +284,22 @@ export default function ControleSalao() {
             <div className="w-full max-w-[2400px] mx-auto"> 
                 
                 <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
-                <ModalAbrirMesa isOpen={isModalAbrirMesaOpen} onClose={() => setIsModalAbrirMesaOpen(false)} onConfirm={handleConfirmarAbertura} mesaNumero={mesaParaAbrir?.numero} />
+                
+                <ModalAbrirMesa 
+                    isOpen={isModalAbrirMesaOpen} 
+                    onClose={handleCancelarAbertura} 
+                    onConfirm={handleConfirmarAbertura} 
+                    mesaNumero={mesaParaAbrir?.numero} 
+                    isOpening={isOpeningTable}
+                />
+
                 {isModalPagamentoOpen && mesaParaPagamento && estabelecimentoId && (
                     <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handlePagamentoConcluido} />
                 )}
 
-                {/* --- HEADER FIXO --- */}
                 <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2">
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                         
-                        {/* Título */}
                         <div className="flex flex-col gap-1">
                             <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-gray-600 font-bold text-xs flex items-center gap-1 w-fit">
                                 <IoArrowBack /> Voltar
@@ -230,17 +312,13 @@ export default function ControleSalao() {
                             </div>
                         </div>
 
-                        {/* Stats Rápidos */}
                         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
                             <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
                             <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
                         </div>
                         
-                        {/* Controles + Botão Adicionar */}
                         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-                            
-                            {/* 🔥 BOTÃO DE ADICIONAR MESA AGORA AQUI */}
                             <button 
                                 onClick={() => setIsModalOpen(true)}
                                 className="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm flex items-center gap-2 transition-all whitespace-nowrap active:scale-95"
@@ -248,7 +326,6 @@ export default function ControleSalao() {
                                 <IoAdd size={18}/> <span className="hidden sm:inline">Nova Mesa</span>
                             </button>
 
-                            {/* Busca */}
                             <div className="relative w-full sm:w-32 md:w-48">
                                 <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
                                     <IoSearch className="text-gray-400" />
@@ -267,7 +344,6 @@ export default function ControleSalao() {
                                 )}
                             </div>
 
-                            {/* Filtros */}
                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                 {['todos', 'livres', 'ocupadas'].map(t => (
                                     <button
@@ -285,7 +361,6 @@ export default function ControleSalao() {
                     </div>
                 </div>
 
-                {/* --- GRID DE MESAS --- */}
                 <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh]">
                     {mesasFiltradas.length > 0 ? (
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
