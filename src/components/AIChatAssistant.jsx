@@ -429,7 +429,7 @@ const handleSend = async (textStr) => {
                <div className="w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-lg shrink-0">🤖</div>
                <div className="bg-white p-4 rounded-2xl rounded-bl-none shadow-sm border border-gray-200 text-gray-800 text-base leading-relaxed">
                  {clienteNome ? 
-                   <>Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 😃<br/>Sou o Jucleildo. O que você gostaria de pedir?</> : 
+                   <>Olá, <strong>{clienteNome.split(' ')[0]}</strong>! 😃<br/>Sou o Jucleildo. O que você gostaria de pedir? Se não quiser minha ajuda :( , é só fechar e pedir manual ok?</> : 
                    <>
                      Olá! Sou o Jucleildo. 
                      <button 
