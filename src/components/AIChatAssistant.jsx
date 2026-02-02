@@ -8,7 +8,7 @@ import { useAI } from '../context/AIContext';
 // 1. FORMATAÇÃO E REGRAS VISUAIS (ATUALIZADO COM LEITURA REAL DE EXTRAS)
 // ============================================================================
 
-const SYSTEM_INSTRUCTION = (nomeLoja) => `
+const SYSTEM_INSTRUCTION = (nomeLoja, categoriasDisponiveis) => `
   🎭 SUA PERSONA:
   Você é o Jucleildo, o garçom digital do ${nomeLoja}. 
   Você é EXTREMAMENTE simpático, engraçado, usa emojis e adora fazer piadas sobre comida.
@@ -20,14 +20,10 @@ const SYSTEM_INSTRUCTION = (nomeLoja) => `
      Se o cliente pedir algo que tem tamanho (como Pizza, Açaí, Porção), PERGUNTE O TAMANHO antes de adicionar.
      
   2. 🚀 OFEREÇA PARA "TURBINAR" (UPSELL REALISTA):
-     Antes de fechar o item, olhe no CARDÁPIO se o produto escolhido tem uma linha escrito "(Extras: ...)".
-     - SE TIVER EXTRAS: Liste 2 ou 3 opções REAIS que estão na lista daquele produto.
-       Exemplo Correto: "Bora turbinar com Ovo, Bacon ou Borda de Catupiry?" (Só cite o que estiver escrito nos extras do item).
-       Exemplo Errado: Oferecer "Bacon" se o item só tem "Granola" de extra.
-     - SE NÃO TIVER EXTRAS: Não invente nada. Apenas confirme o pedido ou ofereça uma bebida.
+     Antes de fechar o item, verifique se tem extras. Se tiver, ofereça. Se não, apenas confirme.
 
   3. 🛑 SOBRE OBSERVAÇÕES:
-     Pergunte se tem alguma observação (tirar cebola, ponto da carne) APÓS oferecer os adicionais.
+     Pergunte se tem alguma observação APÓS oferecer os adicionais.
 
   4. 📣 FINALIZAR:
      Sempre avise: "Se acabou, digite 'Pagar' que eu fecho a conta!"
@@ -35,8 +31,16 @@ const SYSTEM_INSTRUCTION = (nomeLoja) => `
   5. 💸 GATILHO DE PAGAMENTO:
      Se disserem "pagar", "fechar", "conta": Responda algo divertido e adicione: ||PAY||
 
+  6. 📋 APRESENTAÇÃO DO CARDÁPIO (IMPORTANTE):
+     Se o cliente perguntar "o que tem?", "me vê o cardápio" ou algo genérico:
+     NÃO LISTE OS PRODUTOS AINDA. O texto ficaria muito grande.
+    Em seguida, liste as categorias abaixo EXATAMENTE neste formato (uma por linha com bullet *):
+     ${categoriasDisponiveis}
+     
+     Finalize com: "O que manda, meu consagrado?"
+     SÓ mostre os itens detalhados quando o cliente escolher uma categoria (ex: "Quero ver as Pizzas").
+
   ⚡ COMANDO TÉCNICO DE ADIÇÃO (ESTRUTURA):
-  SÓ GERE ESTE COMANDO DEPOIS QUE O CLIENTE DECIDIR SOBRE OS ADICIONAIS.
   ||ADD: Nome do Produto -- Opcao: Tamanho/Variação (ou N/A) -- Adds: Item1, Item2 (ou N/A) -- Obs: Detalhes (ou N/A) -- Qtd: 1||
 `;
 
@@ -82,8 +86,7 @@ const parseAddCommand = (commandString) => {
 
   return item;
 };
-
-// 🔥 FORMATAÇÃO VERTICAL (ATUALIZADA PARA MOSTRAR ADICIONAIS)
+// 🔥 FORMATAÇÃO VERTICAL E LIMPA (COM OPÇÕES ORGANIZADAS)
 const formatarCardapio = (lista) => {
   if (!lista?.length) return "Cardápio vazio.";
   
@@ -98,26 +101,31 @@ const formatarCardapio = (lista) => {
   
   return Object.entries(agrupado).map(([cat, itens]) => {
     const itensTexto = itens.map(p => {
+      // 1. Nome do Produto em Negrito
       let texto = `**${p.nome.toUpperCase()}**`;
       
-      // Preço Base
+      // 2. Preço Base (Se existir)
       const precoBase = p.precoFinal || p.preco;
       if (precoBase) texto += ` - R$ ${Number(precoBase).toFixed(2)}`;
 
-      // Variações
+      // 3. Variações (AQUI ESTÁ A MÁGICA ✨)
+      // Usamos '\n  - ' para criar uma lista visual com recuo
       if (p.variacoes?.length > 0) {
-          const vars = p.variacoes.map(v => `  [Opção] ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`).join('\n');
-          texto += `\n${vars}`; 
+          const vars = p.variacoes.map(v => 
+            `\n  - 🔸 ${v.nome}: R$ ${Number(v.preco).toFixed(2)}`
+          ).join(''); // O \n já está dentro do map
+          
+          texto += `${vars}`; 
       }
 
-      // Adicionais (MOSTRAR PARA A IA SABER QUE EXISTE)
+      // 4. Adicionais
       if (p.adicionais?.length > 0) {
-          const adds = p.adicionais.map(a => `  [Add] ${a.nome}: +R$ ${Number(a.preco || a.valor).toFixed(2)}`).join(', ');
+          const adds = p.adicionais.map(a => `${a.nome} (+R$${Number(a.preco || a.valor).toFixed(2)})`).join(', ');
           texto += `\n  (Extras: ${adds})`;
       }
 
       return texto;
-    }).join('\n\n'); 
+    }).join('\n\n'); // Pula duas linhas entre produtos diferentes
     
     return `### ${emojis[cat] || '🍽️'} ${cat.toUpperCase()}\n${itensTexto}`;
   }).join('\n\n---\n\n'); 
@@ -362,7 +370,7 @@ const AIChatAssistant = ({
       }
   };
 
-  const handleSend = async (textStr) => {
+const handleSend = async (textStr) => {
     const textToSend = textStr || message;
     if (!textToSend.trim() || aiThinking) return;
     
@@ -380,16 +388,26 @@ const AIChatAssistant = ({
     
     setMessage('');
     
+    // 🔥 NOVA LÓGICA: Extrair e formatar as categorias verticalmente
+    const listaCategorias = [...new Set(produtos.map(p => p.categoria || 'Geral'))]
+        .map(c => `* 🍽️ ${c}`) // Adiciona o bullet point (*) e emoji para forçar lista
+        .join('\n');            // Garante que cada um fique em uma linha
+
     // Envia para o Backend (IA)
     const context = {
       estabelecimentoNome: estabelecimento?.nome || 'Restaurante',
-      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome) + "\n\n📋 CARDÁPIO OFICIAL:\n" + formatarCardapio(produtos),
+      
+      // Passamos a 'listaCategorias' para a instrução saber como exibir o resumo
+      produtosPopulares: SYSTEM_INSTRUCTION(estabelecimento?.nome, listaCategorias) + 
+                         "\n\n📋 DETALHES TÉCNICOS (CONSULTA):\n" + 
+                         formatarCardapio(produtos), // O cardápio completo vai no fim, só para a IA consultar preços
+                         
       clienteNome: clienteNome || 'Visitante',
       history: conversation.slice(-6).map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }))
     };
+
     await sendMessage(textToSend, context);
   };
-
   const todasMensagens = [...conversation, ...localMessages].sort((a, b) => a.id - b.id);
 
   if (!isOpen) return null;

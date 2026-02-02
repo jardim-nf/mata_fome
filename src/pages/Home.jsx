@@ -1,70 +1,140 @@
 // src/pages/Home.jsx
-import LogoNaMao from '../assets/logonamao.svg';
-import LogoNaMao2 from '../assets/logonamao2.svg';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, Timestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
 
-// ✅ 1. IMPORTAÇÃO DO CHAT (Adicionado)
-import AIChatAssistant from '../components/AIChatAssistant';
+// ✅ Validação nativa
+const validateEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+};
 
-// --- Botão WhatsApp Flutuante ---
-function WhatsAppFloatingButton() {
+const validatePassword = (password) => {
+  return password.length >= 6;
+};
+
+const validateName = (name) => {
+  return name.trim().length >= 2;
+};
+
+// ✅ Hook para estabelecimentos com cache
+const useEstabelecimentos = () => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  useEffect(() => {
+    let isMounted = true;
+    const CACHE_KEY = 'estabelecimentos_cache_v1';
+    const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutos
+
+    const fetchEstabelecimentos = async () => {
+      try {
+        // Tentar carregar do cache primeiro
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { data: cachedData, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_EXPIRY) {
+            if (isMounted) {
+              setData(cachedData);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Fetch do Firestore
+        const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
+        const listaEstabelecimentos = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        if (isMounted) {
+          setData(listaEstabelecimentos);
+          setLoading(false);
+          
+          // Salvar no cache
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            data: listaEstabelecimentos,
+            timestamp: Date.now()
+          }));
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error("Erro ao carregar estabelecimentos:", err);
+          setError("Não foi possível carregar os estabelecimentos. Tente novamente mais tarde.");
+          setLoading(false);
+          
+          // Tentar usar cache expirado como fallback
+          const cached = localStorage.getItem(CACHE_KEY);
+          if (cached) {
+            const { data: cachedData } = JSON.parse(cached);
+            setData(cachedData);
+          }
+        }
+      }
+    };
+
+    fetchEstabelecimentos();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return { data, loading, error };
+};
+
+// ✅ WhatsApp Button (mesmo visual)
+const WhatsAppFloatingButton = () => {
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleWhatsAppClick = () => {
+  const handleWhatsAppClick = useCallback(() => {
     const phoneNumber = "55229998102575";
     const message = "Olá! Gostaria de mais informações sobre o NaMão.";
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
-  };
+  }, []);
 
   return (
-    <>
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-        {/* Alert "Clique Aqui" */}
-        {isHovered && (
-          <div className="mb-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-full shadow-2xl animate-bounce">
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-sm">CLIQUE AQUI!</span>
-              <div className="w-2 h-2 bg-white rounded-full animate-ping"></div>
-            </div>
-            <div className="absolute -bottom-1 right-6 w-3 h-3 bg-green-500 transform rotate-45"></div>
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+      {isHovered && (
+        <div className="mb-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-full shadow-2xl animate-bounce">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-sm">CLIQUE AQUI!</span>
+            <div className="w-2 h-2 bg-white rounded-full animate-ping"></div>
           </div>
-        )}
+          <div className="absolute -bottom-1 right-6 w-3 h-3 bg-green-500 transform rotate-45"></div>
+        </div>
+      )}
+      
+      <button
+        onClick={handleWhatsAppClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className="relative bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 hover:rotate-12 group"
+      >
+        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.87 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893-.001-3.189-1.262-6.187-3.55-8.444"/>
+        </svg>
         
-        {/* Botão Principal do WhatsApp */}
-        <button
-          onClick={handleWhatsAppClick}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          className="relative bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 hover:rotate-12 group"
-        >
-          {/* Ícone do WhatsApp */}
-          <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893-.001-3.189-1.262-6.187-3.55-8.444"/>
-          </svg>
-          
-          {/* Efeito de Pulsação */}
-          <div className="absolute inset-0 border-2 border-green-400 rounded-full animate-ping opacity-75"></div>
-          
-          {/* Badge de Notificação */}
-          <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-bold">!!!</span>
-          </div>
-        </button>
-      </div>
-    </>
+        <div className="absolute inset-0 border-2 border-green-400 rounded-full animate-ping opacity-75"></div>
+        
+        <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+          <span className="text-white text-xs font-bold">!!!</span>
+        </div>
+      </button>
+    </div>
   );
-}
+};
 
-// --- AuthButtonElegant (Header/Navegação) ---
-function AuthButtonElegant({ onLoginClick }) {
+// ✅ Auth Button (mesmo visual)
+const AuthButtonElegant = ({ onLoginClick }) => {
   const { currentUser, loading, isAdmin, isMasterAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -81,8 +151,7 @@ function AuthButtonElegant({ onLoginClick }) {
       if (isMasterAdmin) {
         navigate('/master-dashboard');
       } else {
-        // Correção mantida: ambos vão para dashboard
-        navigate('/dashboard'); 
+        navigate('/dashboard');
       }
       toast.info(`Bem-vindo de volta, ${userEmailPrefix}.`);
     };
@@ -102,15 +171,13 @@ function AuthButtonElegant({ onLoginClick }) {
       <div className="flex items-center space-x-3">
         <button
           onClick={handleProfileClick}
-          className="cursor-pointer px-4 py-2 rounded-full text-black bg-yellow-400 font-semibold text-sm transition-all duration-300 ease-in-out
-                      hover:bg-yellow-500 hover:shadow-md transform hover:scale-105"
+          className="cursor-pointer px-4 py-2 rounded-full text-black bg-yellow-400 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-500 hover:shadow-md transform hover:scale-105"
         >
           👋 Olá, {userEmailPrefix}!
         </button>
         <button
           onClick={handleLogout}
-          className="cursor-pointer px-4 py-2 rounded-full text-gray-700 border border-gray-400 font-semibold text-sm transition-all duration-300 ease-in-out
-                      hover:bg-gray-100 hover:text-black hover:border-gray-500 transform hover:scale-105"
+          className="cursor-pointer px-4 py-2 rounded-full text-gray-700 border border-gray-400 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-100 hover:text-black hover:border-gray-500 transform hover:scale-105"
         >
           Sair
         </button>
@@ -121,20 +188,18 @@ function AuthButtonElegant({ onLoginClick }) {
   return (
     <button
       onClick={onLoginClick}
-      className="px-5 py-2 rounded-full text-black bg-yellow-400 font-semibold text-sm transition-all duration-300 ease-in-out
-                hover:bg-yellow-500 hover:shadow-md transform hover:scale-105"
+      className="px-5 py-2 rounded-full text-black bg-yellow-400 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-500 hover:shadow-md transform hover:scale-105"
     >
       🔐 Login / Cadastre-se
     </button>
   );
-}
+};
 
-// --- Hero Section - Mantida ---
-function HeroSectionModern({ onExploreClick }) {
+// ✅ Hero Section (MESMO VISUAL original)
+const HeroSectionModern = ({ onExploreClick }) => {
   return (
     <section className="relative w-full overflow-hidden bg-gradient-to-br from-white to-yellow-50 pt-24 md:pt-32">
       <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between py-12 md:py-20 px-4">
-        {/* Lado Esquerdo */}
         <div className="w-full lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0 z-10">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-black mb-4 leading-tight">
             Deu Fome? <br className="hidden md:inline"/> 
@@ -147,14 +212,12 @@ function HeroSectionModern({ onExploreClick }) {
           <div className="flex justify-center lg:justify-start">
             <button
               onClick={onExploreClick}
-              className="bg-yellow-500 text-black font-bold py-3 px-8 rounded-full text-lg shadow-lg
-                        transition-all duration-300 transform hover:scale-105 hover:bg-yellow-600 hover:shadow-xl"
+              className="bg-yellow-500 text-black font-bold py-3 px-8 rounded-full text-lg shadow-lg transition-all duration-300 transform hover:scale-105 hover:bg-yellow-600 hover:shadow-xl"
             >
               🍕 Ver Estabelecimentos
             </button>
           </div>
           
-          {/* Stats */}
           <div className="flex flex-wrap gap-6 mt-8 justify-center lg:justify-start">
             <div className="text-center">
               <div className="text-2xl font-bold text-yellow-500">+500</div>
@@ -171,7 +234,6 @@ function HeroSectionModern({ onExploreClick }) {
           </div>
         </div>
 
-        {/* Lado Direito */}
         <div className="relative w-full lg:w-1/2 flex justify-center items-center lg:h-[500px]">
           <div className="absolute inset-y-0 right-0 w-full lg:w-[120%] bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-bl-[100px] lg:rounded-bl-[150px] transform lg:translate-x-1/4"></div>
           
@@ -187,11 +249,186 @@ function HeroSectionModern({ onExploreClick }) {
       </div>
     </section>
   );
-}
+};
 
-// --- Componente Modal de Login/Cadastro - CORRIGIDO ---
-// ✅ 2. Adicionei onSuccess para avisar a Home que logou
-function LoginModal({ isOpen, onClose, onSuccess }) {
+// ✅ Benefits Section (MESMO VISUAL original)
+const BenefitsSection = () => {
+  return (
+    <section className="bg-gradient-to-br from-gray-50 to-white py-20 md:py-28 px-4">
+      <div className="container mx-auto">
+        
+        <div className="text-center mb-16">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-black mb-6">
+            Transforme seu Negócio de Delivery
+          </h2>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            Ferramentas poderosas para você vender mais, organizar melhor e economizar
+          </p>
+          <div className="w-32 h-1 bg-gradient-to-r from-yellow-400 to-yellow-500 mx-auto mt-6 rounded-full"></div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12">
+          
+          <div className="group relative bg-white rounded-2xl p-8 shadow-xl border border-gray-100 transition-all duration-500 hover:scale-105 hover:shadow-2xl">
+            <div className="absolute -top-4 -right-4 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+              +47% em média
+            </div>
+            
+            <div className="mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-black mb-4">
+                Venda Mais e Aumente sua Receita
+              </h3>
+            </div>
+            
+            <p className="text-gray-700 text-lg leading-relaxed mb-6">
+              Crie cupons, programas de fidelidade, campanhas de email e push para fidelizar seus clientes.
+            </p>
+            
+            <ul className="space-y-3 mb-6">
+              {['Cupons personalizados', 'Programa de pontos', 'Email marketing', 'Notificações push', 'Relatórios de performance'].map((item, index) => (
+                <li key={index} className="flex items-center text-gray-600">
+                  <svg className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            
+            <button className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+              Começar a Vender Mais
+            </button>
+          </div>
+
+          <div className="group relative bg-white rounded-2xl p-8 shadow-xl border border-gray-100 transition-all duration-500 hover:scale-105 hover:shadow-2xl">
+            <div className="absolute -top-4 -right-4 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+              +60% eficiência
+            </div>
+            
+            <div className="mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-black mb-4">
+                Organize sua Operação de Delivery
+              </h3>
+            </div>
+            
+            <p className="text-gray-700 text-lg leading-relaxed mb-6">
+              Centralize seus pedidos em uma só plataforma e organize suas operações de forma eficiente.
+            </p>
+            
+            <ul className="space-y-3 mb-6">
+              {['Painel unificado', 'Gestão de pedidos', 'Controle de estoque', 'Relatórios em tempo real', 'App para entregadores'].map((item, index) => (
+                <li key={index} className="flex items-center text-gray-600">
+                  <svg className="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            
+            <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+              Otimizar Operação
+            </button>
+          </div>
+
+          <div className="group relative bg-white rounded-2xl p-8 shadow-xl border border-gray-100 transition-all duration-500 hover:scale-105 hover:shadow-2xl">
+            <div className="absolute -top-4 -right-4 bg-purple-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+              Até 80% economia
+            </div>
+            
+            <div className="mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-black mb-4">
+                Economize Dinheiro com Comissões
+              </h3>
+            </div>
+            
+            <p className="text-gray-700 text-lg leading-relaxed mb-6">
+              Com seu canal próprio você não paga mais comissões altas e não fica dependente de marketplaces.
+            </p>
+            
+            <ul className="space-y-3 mb-6">
+              {['Comissão zero', 'Canal próprio', 'Sem intermediários', 'Branding completo', 'Clientes diretos'].map((item, index) => (
+                <li key={index} className="flex items-center text-gray-600">
+                  <svg className="w-5 h-5 text-purple-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            
+            <button className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+              Economizar Agora
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-20 bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-2xl p-8 md:p-12 text-center text-white">
+          <h3 className="text-2xl md:text-3xl font-bold mb-4">
+            🚫 Chega de Comissões Abusivas!
+          </h3>
+          <p className="text-lg md:text-xl mb-6 opacity-90">
+            Compare e veja quanto você pode economizar
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
+            {[
+              { platform: "Ifood", commission: "25-35%", color: "bg-red-500" },
+              { platform: "Rappi", commission: "28-38%", color: "bg-blue-500" },
+              { platform: "Uber Eats", commission: "30-40%", color: "bg-green-500" },
+              { platform: "Deu Fome", commission: "0%", color: "bg-white text-yellow-500" }
+            ].map((platform, index) => (
+              <div key={index} className={`p-4 rounded-xl ${platform.color} shadow-lg transform hover:scale-105 transition-transform duration-300`}>
+                <div className="font-bold text-lg mb-2">{platform.platform}</div>
+                <div className="text-2xl font-extrabold">{platform.commission}</div>
+                <div className="text-sm opacity-90">comissão</div>
+              </div>
+            ))}
+          </div>
+          
+          <p className="mt-6 text-sm opacity-80">
+            *Valores médios de comissão no mercado - Dados 2024
+          </p>
+        </div>
+
+        <div className="text-center mt-16">
+          <h3 className="text-3xl md:text-4xl font-bold text-black mb-6">
+            Pronto para Transformar seu Delivery?
+          </h3>
+          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+            Junte-se a centenas de estabelecimentos que já aumentaram suas vendas e reduziram custos
+          </p>
+          <div className="flex w-full gap-4 justify-center">
+            <button className="bg-black hover:bg-gray-800 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+              🚀 Começar Agora - 7 Dias Grátis
+            </button>
+            <button className="border-2 border-black text-black hover:bg-black hover:text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105">
+              📞 Falar com Especialista
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ✅ Login Modal (MESMO VISUAL original)
+const LoginModal = ({ isOpen, onClose, onSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
@@ -202,13 +439,12 @@ function LoginModal({ isOpen, onClose, onSuccess }) {
   const authFirebase = getAuth();
   const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
 
-  // ✅ Lógica para fechar e chamar sucesso
   useEffect(() => {
     if (!authLoading && currentUser && isOpen) {
       if (onSuccess) {
-          onSuccess(); // Avisa a Home para reabrir o chat
+          onSuccess();
       } else {
-          onClose(); // Só fecha se não veio do chat
+          onClose();
           toast.success(`Bem-vindo de volta! ${isMasterAdmin ? 'Master Admin' : isAdmin ? 'Admin' : ''}`);
       }
     }
@@ -224,7 +460,6 @@ function LoginModal({ isOpen, onClose, onSuccess }) {
         const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
         const user = userCredential.user;
         
-        // 1. SALVAR DADOS DE USUÁRIO (COLEÇÃO 'usuarios')
         await setDoc(doc(db, 'usuarios', user.uid), {
           email: user.email,
           nome: nome,
@@ -235,7 +470,6 @@ function LoginModal({ isOpen, onClose, onSuccess }) {
           criadoEm: Timestamp.now()
         });
         
-        // 2. SALVAR DADOS DE CLIENTE - Mantendo estrutura simples
         await setDoc(doc(db, 'clientes', user.uid), {
             userId: user.uid,
             nome: nome,
@@ -246,12 +480,10 @@ function LoginModal({ isOpen, onClose, onSuccess }) {
         });
         
         toast.success('🎉 Cadastro realizado com sucesso! Faça login para continuar.');
-        // Não resetamos os campos aqui porque o useEffect vai capturar o login automático
         if (onSuccess) onSuccess();
 
       } else {
         await signInWithEmailAndPassword(authFirebase, email, password);
-        // O useEffect cuida do resto
         if (onSuccess) onSuccess();
       }
     } catch (error) {
@@ -275,7 +507,6 @@ function LoginModal({ isOpen, onClose, onSuccess }) {
   if (!isOpen) return null;
 
   return (
-    // ✅ 3. CORREÇÃO Z-INDEX: z-[100000] (era z-50)
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100000] p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md border border-gray-200 animate-scale-in">
         <div className="flex justify-between items-center mb-6">
@@ -290,7 +521,6 @@ function LoginModal({ isOpen, onClose, onSuccess }) {
           </button>
         </div>
         
-        {/* Mantive o TEU formulário simples: Nome, Email, Senha */}
         <form onSubmit={handleAuthAction} className="space-y-6">
           {isRegistering && (
             <div>
@@ -379,277 +609,69 @@ function LoginModal({ isOpen, onClose, onSuccess }) {
       </div>
     </div>
   );
-}
+};
 
-// --- Seção Vantagens - Mantida ---
-function BenefitsSection() {
-  return (
-    <section className="bg-gradient-to-br from-gray-50 to-white py-20 md:py-28 px-4">
-      <div className="container mx-auto">
-        
-        {/* Cabeçalho Impactante */}
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-extrabold text-black mb-6">
-            Transforme seu Negócio de Delivery
-          </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Ferramentas poderosas para você vender mais, organizar melhor e economizar
-          </p>
-          <div className="w-32 h-1 bg-gradient-to-r from-yellow-400 to-yellow-500 mx-auto mt-6 rounded-full"></div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12">
-          
-          {/* Card 1: Venda Mais - DESTAQUE */}
-          <div className="group relative bg-white rounded-2xl p-8 shadow-xl border border-gray-100 transition-all duration-500 hover:scale-105 hover:shadow-2xl">
-            {/* Elemento de Destaque */}
-            <div className="absolute -top-4 -right-4 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
-              +47% em média
-            </div>
-            
-            <div className="mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-black mb-4">
-                Venda Mais e Aumente sua Receita
-              </h3>
-            </div>
-            
-            <p className="text-gray-700 text-lg leading-relaxed mb-6">
-              Crie cupons, programas de fidelidade, campanhas de email e push para fidelizar seus clientes.
-            </p>
-            
-            {/* Lista de Benefícios */}
-            <ul className="space-y-3 mb-6">
-              {['Cupons personalizados', 'Programa de pontos', 'Email marketing', 'Notificações push', 'Relatórios de performance'].map((item, index) => (
-                <li key={index} className="flex items-center text-gray-600">
-                  <svg className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            
-            <button className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
-              Começar a Vender Mais
-            </button>
-          </div>
-
-          {/* Card 2: Organize Operação */}
-          <div className="group relative bg-white rounded-2xl p-8 shadow-xl border border-gray-100 transition-all duration-500 hover:scale-105 hover:shadow-2xl">
-            <div className="absolute -top-4 -right-4 bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
-              +60% eficiência
-            </div>
-            
-            <div className="mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-black mb-4">
-                Organize sua Operação de Delivery
-              </h3>
-            </div>
-            
-            <p className="text-gray-700 text-lg leading-relaxed mb-6">
-              Centralize seus pedidos em uma só plataforma e organize suas operações de forma eficiente.
-            </p>
-            
-            <ul className="space-y-3 mb-6">
-              {['Painel unificado', 'Gestão de pedidos', 'Controle de estoque', 'Relatórios em tempo real', 'App para entregadores'].map((item, index) => (
-                <li key={index} className="flex items-center text-gray-600">
-                  <svg className="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            
-            <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
-              Otimizar Operação
-            </button>
-          </div>
-
-          {/* Card 3: Economize Dinheiro */}
-          <div className="group relative bg-white rounded-2xl p-8 shadow-xl border border-gray-100 transition-all duration-500 hover:scale-105 hover:shadow-2xl">
-            <div className="absolute -top-4 -right-4 bg-purple-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
-              Até 80% economia
-            </div>
-            
-            <div className="mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-black mb-4">
-                Economize Dinheiro com Comissões
-              </h3>
-            </div>
-            
-            <p className="text-gray-700 text-lg leading-relaxed mb-6">
-              Com seu canal próprio você não paga mais comissões altas e não fica dependente de marketplaces.
-            </p>
-            
-            <ul className="space-y-3 mb-6">
-              {['Comissão zero', 'Canal próprio', 'Sem intermediários', 'Branding completo', 'Clientes diretos'].map((item, index) => (
-                <li key={index} className="flex items-center text-gray-600">
-                  <svg className="w-5 h-5 text-purple-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            
-            <button className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
-              Economizar Agora
-            </button>
-          </div>
-        </div>
-
-        {/* Comparativo de Comissões */}
-        <div className="mt-20 bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-2xl p-8 md:p-12 text-center text-white">
-          <h3 className="text-2xl md:text-3xl font-bold mb-4">
-            🚫 Chega de Comissões Abusivas!
-          </h3>
-          <p className="text-lg md:text-xl mb-6 opacity-90">
-            Compare e veja quanto você pode economizar
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            {[
-              { platform: "Ifood", commission: "25-35%", color: "bg-red-500" },
-              { platform: "Rappi", commission: "28-38%", color: "bg-blue-500" },
-              { platform: "Uber Eats", commission: "30-40%", color: "bg-green-500" },
-              { platform: "Deu Fome", commission: "0%", color: "bg-white text-yellow-500" }
-            ].map((platform, index) => (
-              <div key={index} className={`p-4 rounded-xl ${platform.color} shadow-lg transform hover:scale-105 transition-transform duration-300`}>
-                <div className="font-bold text-lg mb-2">{platform.platform}</div>
-                <div className="text-2xl font-extrabold">{platform.commission}</div>
-                <div className="text-sm opacity-90">comissão</div>
-              </div>
-            ))}
-          </div>
-          
-          <p className="mt-6 text-sm opacity-80">
-            *Valores médios de comissão no mercado - Dados 2024
-          </p>
-        </div>
-
-        {/* Call to Action Final */}
-        <div className="text-center mt-16">
-          <h3 className="text-3xl md:text-4xl font-bold text-black mb-6">
-            Pronto para Transformar seu Delivery?
-          </h3>
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Junte-se a centenas de estabelecimentos que já aumentaram suas vendas e reduziram custos
-          </p>
-          <div className="flex w-full gap-4 justify-center">
-            <button className="bg-black hover:bg-gray-800 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
-              🚀 Começar Agora - 7 Dias Grátis
-            </button>
-            <button className="border-2 border-black text-black hover:bg-black hover:text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105">
-              📞 Falar com Especialista
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// --- Componente Principal da Página Home - MELHORADO ---
+// ✅ Componente Principal Home
 function Home() {
-  
-  const [estabelecimentos, setEstabelecimentos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  // 🔥 ESTADOS DO CHAT
+  const { data: estabelecimentos, loading, error } = useEstabelecimentos();
+  const [searchTerm, setSearchTerm] = useState('');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [deveReabrirChat, setDeveReabrirChat] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
-
   const navigate = useNavigate();
-  const { currentUser } = useAuth(); // Para passar nome para o chat
+  const { currentUser } = useAuth();
   const estabelecimentosRef = useRef(null);
 
-  const openLoginModal = () => setIsLoginModalOpen(true);
-  const closeLoginModal = () => setIsLoginModalOpen(false);
+  const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
+  const closeLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
 
-  // 🔥 4. FUNÇÕES PARA LIGAR CHAT E LOGIN
-  const handleLoginDoChat = () => {
+  const handleLoginDoChat = useCallback(() => {
      setIsChatOpen(false);
      setDeveReabrirChat(true);
      setIsLoginModalOpen(true);
-  };
+  }, []);
 
-  const handleLoginSucesso = () => {
+  const handleLoginSucesso = useCallback(() => {
      setIsLoginModalOpen(false);
      if (deveReabrirChat) {
          setIsChatOpen(true);
          setDeveReabrirChat(false);
      }
-  };
+  }, [deveReabrirChat]);
 
-  const scrollToEstabelecimentos = () => {
+  const scrollToEstabelecimentos = useCallback(() => {
     estabelecimentosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const filteredEstabelecimentos = estabelecimentos.filter(estabelecimento =>
-    estabelecimento.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    estabelecimento.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchEstabelecimentos = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
-        const listaEstabelecimentos = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        if (isMounted) {
-          setEstabelecimentos(listaEstabelecimentos);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error("Erro ao carregar estabelecimentos:", err);
-          setError("Não foi possível carregar os estabelecimentos. Tente novamente mais tarde.");
-          toast.error("Erro ao carregar estabelecimentos.");
-        }
-      }
-    };
-
-    fetchEstabelecimentos();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  const handleSearch = useCallback((value) => {
+    setSearchTerm(value);
+  }, []);
+
+  const handleCardClick = useCallback((slug, nome) => {
+    navigate(`/cardapio/${slug}`);
+    toast.info(`Carregando cardápio de ${nome}...`);
+  }, [navigate]);
+
+  const filteredEstabelecimentos = useMemo(() => {
+    return estabelecimentos.filter(estabelecimento =>
+      estabelecimento.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      estabelecimento.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [estabelecimentos, searchTerm]);
+
+  const handleLoginSuccess = useCallback(() => {
+    setIsLoginModalOpen(false);
+    if (currentUser) {
+      const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
+      toast.success(`Bem-vindo, ${userEmailPrefix}!`);
+    }
+  }, [currentUser]);
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white text-black">
         <div className="text-3xl font-bold mb-4 animate-pulse">
-<img 
-  src={LogoNaMao} 
-  alt="Logo NaMão Delivery" 
-  className="h-12 w-auto object-contain" 
-/>
           NaMão <span className="text-yellow-500">.</span>
         </div>
         <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
@@ -680,18 +702,12 @@ function Home() {
           className="font-extrabold text-2xl md:text-3xl text-black cursor-pointer hover:text-gray-800 transition-colors duration-300 flex items-center"
           onClick={() => navigate('/')}
         >
-{/* MUDE PARA ISSO (CORRETO) */}
-<img
-  src={LogoNaMao2} 
-  alt="Logo NaMão Delivery"
-  className="h-12 w-auto object-contain" 
-/>
+          NaMão<span className="text-yellow-500">.</span>
         </div>
         <AuthButtonElegant onLoginClick={openLoginModal} />
       </header>
 
       <HeroSectionModern onExploreClick={scrollToEstabelecimentos} />
-
       <BenefitsSection />
 
       <div ref={estabelecimentosRef} className="container mx-auto px-4 py-16 bg-white">
@@ -711,7 +727,7 @@ function Home() {
               type="text"
               placeholder="🔍 Pesquisar estabelecimentos..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
               className="w-full px-6 py-4 bg-gray-50 border border-gray-300 rounded-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300"
             />
           </div>
@@ -733,14 +749,7 @@ function Home() {
               <div
                 key={estabelecimento.id}
                 className="group bg-white rounded-2xl shadow-lg overflow-hidden transform transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl cursor-pointer flex flex-col border border-gray-200 hover:border-yellow-500"
-                onClick={() => {
-                  if (estabelecimento.slug) {
-                    navigate(`/cardapio/${estabelecimento.slug}`);
-                    toast.info(`Carregando cardápio de ${estabelecimento.nome}...`);
-                  } else {
-                    toast.error(`Estabelecimento "${estabelecimento.nome}" não disponível.`);
-                  }
-                }}
+                onClick={() => handleCardClick(estabelecimento.slug, estabelecimento.nome)}
               >
                 {estabelecimento.imageUrl ? (
                   <div className="relative overflow-hidden">
@@ -748,6 +757,7 @@ function Home() {
                       src={estabelecimento.imageUrl}
                       alt={estabelecimento.nome || 'Estabelecimento'}
                       className="w-full h-56 object-cover object-center group-hover:scale-110 transition-transform duration-300"
+                      loading="lazy"
                     />
                     <div className="absolute top-4 right-4 bg-yellow-500 text-black px-3 py-1 rounded-full text-sm font-semibold">
                       ⭐ {estabelecimento.rating || '4.5'}
@@ -796,10 +806,7 @@ function Home() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (estabelecimento.slug) {
-                        navigate(`/cardapio/${estabelecimento.slug}`);
-                        toast.info(`Carregando cardápio de ${estabelecimento.nome}...`);
-                      }
+                      handleCardClick(estabelecimento.slug, estabelecimento.nome);
                     }}
                     className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-xl text-lg transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"
                   >
@@ -865,16 +872,11 @@ function Home() {
 
       <WhatsAppFloatingButton />
 
-  
-
-  
-      {/* ✅ 7. RENDERIZA MODAL COM SUCESSO CONFIGURADO */}
       <LoginModal 
          isOpen={isLoginModalOpen} 
          onClose={closeLoginModal} 
          onSuccess={handleLoginSucesso}
       />
-
     </>
   );
 }
