@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore'; // Removido collectionGroup
+import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { IoPrint, IoWarning } from 'react-icons/io5';
@@ -12,6 +12,9 @@ const TERMOS_BEBIDA = [
 ];
 
 const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
+    // Se receber o pedido via prop (impressão direta do painel), usa ele.
+    // Senão, busca do banco (janela separada).
+    
     const params = useParams();
     const idUrl = params.id || params.pedidoId;
     const [searchParams] = useSearchParams();
@@ -27,18 +30,13 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const pedido = pedidoProp || pedidoState;
 
     useEffect(() => {
-        // Se o pedido veio via PROPS (Impressão direta do painel), não busca nada.
-        if (pedidoProp) {
-            setLoading(false);
-            return;
-        }
+        if (pedidoProp) return; // Se já veio via prop, não busca nada
 
         if (!idUrl) {
             setLoading(false);
-            setErro("ID não fornecido na URL.");
+            setErro("ID não fornecido.");
             return;
         }
-        
         if (authLoading) return;
 
         const buscarPedido = async () => {
@@ -47,43 +45,34 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             try {
                 let docSnap;
                 let encontrou = false;
-                let dadosPedido = null;
 
-                // TENTATIVA 1: Busca na coleção global 'pedidos' (Delivery Comum)
-                // É o local mais provável para pedidos de delivery
-                const refGlobal = doc(db, 'pedidos', idUrl);
-                docSnap = await getDoc(refGlobal);
-                
-                if (docSnap.exists()) {
-                    dadosPedido = { id: docSnap.id, ...docSnap.data() };
-                    encontrou = true;
-                } 
-                
-                // TENTATIVA 2: Busca na subcoleção do estabelecimento (Mesas/Comanda)
-                // Só executa se não achou no global e se temos o ID do estabelecimento
-                if (!encontrou) {
-                    const lojaId = estabIdUrl || primeiroEstabelecimento;
-                    
-                    if (lojaId) {
-                        const refLoja = doc(db, 'estabelecimentos', lojaId, 'pedidos', idUrl);
-                        docSnap = await getDoc(refLoja);
-                        
-                        if (docSnap.exists()) {
-                            dadosPedido = { id: docSnap.id, ...docSnap.data() };
-                            encontrou = true;
-                        }
+                // 1. Busca na Loja Específica
+                const lojaId = estabIdUrl || primeiroEstabelecimento;
+                if (lojaId) {
+                    const refLoja = doc(db, 'estabelecimentos', lojaId, 'pedidos', idUrl);
+                    docSnap = await getDoc(refLoja);
+                    if (docSnap.exists()) {
+                        setPedidoState({ id: docSnap.id, ...docSnap.data() });
+                        encontrou = true;
                     }
                 }
 
-                if (encontrou && dadosPedido) {
-                    setPedidoState(dadosPedido);
-                } else {
-                    throw new Error("Pedido não encontrado em nenhuma coleção.");
+                // 2. Busca Global (Fallback)
+                if (!encontrou) {
+                    const q = query(collectionGroup(db, 'pedidos'), where('id', '==', idUrl));
+                    const querySnap = await getDocs(q);
+                    if (!querySnap.empty) {
+                        const dados = querySnap.docs[0].data();
+                        setPedidoState({ id: querySnap.docs[0].id, ...dados });
+                        encontrou = true;
+                    }
                 }
 
+                if (!encontrou) throw new Error("Pedido não encontrado.");
+
             } catch (error) {
-                console.error("Erro ao buscar pedido:", error);
-                setErro("Pedido não encontrado."); 
+                console.error("Erro:", error);
+                setErro(error.message);
             } finally {
                 setLoading(false);
             }
@@ -92,18 +81,25 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         buscarPedido();
     }, [idUrl, authLoading, primeiroEstabelecimento, estabIdUrl, pedidoProp]);
 
-    // Auto-Print (Apenas se for janela nova/URL)
+    // Auto-Print (Apenas se for janela nova)
     useEffect(() => {
         if (!pedidoProp && pedido && !loading && !erro) {
             const titulo = modoImpressao === 'cozinha' ? 'COZINHA' : 'CONFERÊNCIA';
             document.title = `${titulo} - ${pedido.mesaNumero || pedido.id.slice(0,4)}`;
             
-            const timer = setTimeout(() => { window.print(); }, 800);
-            return () => clearTimeout(timer);
+            // Comentado para evitar fechamento automático durante testes, descomente em produção
+            // const handleAfterPrint = () => { window.close(); };
+            // window.addEventListener("afterprint", handleAfterPrint);
+
+            const timer = setTimeout(() => { window.print(); }, 500);
+            
+            return () => {
+                clearTimeout(timer);
+                // window.removeEventListener("afterprint", handleAfterPrint);
+            };
         }
     }, [pedido, loading, erro, modoImpressao, pedidoProp]);
 
-    // Lógica de Agrupamento
     const itensAgrupados = useMemo(() => {
         if (!pedido || !pedido.itens) return {};
 
@@ -120,6 +116,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             });
         }
 
+        // Agrupamento por Cliente (Mesa) ou Geral
         return itensParaProcessar.reduce((acc, item) => {
             const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
             if (!acc[nomePessoa]) acc[nomePessoa] = [];
@@ -134,7 +131,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         <div className="flex flex-col items-center justify-center h-screen text-red-600 p-4 text-center">
             <IoWarning className="text-5xl mb-2"/>
             <h1 className="text-xl font-bold">{erro}</h1>
-            <p className="text-sm text-gray-500 mt-2">ID: {idUrl}</p>
         </div>
     );
 
@@ -146,11 +142,13 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const temItens = Object.keys(itensAgrupados).length > 0;
     const dataPedido = pedido.createdAt?.toDate ? pedido.createdAt.toDate() : new Date();
 
+    // Formatação de Moeda
     const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
 
     return (
         <div className="bg-white text-black font-mono text-xs leading-tight p-2" style={{ maxWidth: '80mm', margin: '0 auto' }}>
             
+            {/* Botão de impressão manual (escondido na impressão) */}
             <button onClick={() => window.print()} className="print:hidden fixed top-2 right-2 bg-gray-200 p-2 rounded-full z-50 hover:bg-gray-300">
                 <IoPrint size={20} />
             </button>
@@ -160,12 +158,15 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 <h1 className="text-xl font-black uppercase tracking-wide">
                     {pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}
                 </h1>
+                
                 <p className="text-[10px] mt-1 font-bold">
                     PEDIDO #{pedido.senha || pedido.id?.slice(-4).toUpperCase()}
                 </p>
                 <p className="text-[10px]">
                     {dataPedido.toLocaleString('pt-BR')}
                 </p>
+
+                {/* Tag de Modo (Cozinha/Bar) */}
                 {modoImpressao === 'cozinha' && (
                     <div className="mt-1 bg-black text-white font-black uppercase text-sm py-1">
                         ** COZINHA **
@@ -176,7 +177,10 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             {/* --- DADOS DO CLIENTE --- */}
             <div className="mb-3 border-b-2 border-dashed border-black pb-2">
                 <p className="font-black text-sm uppercase mb-1">{nomeClientePrincipal}</p>
-                {telefoneCliente && <p className="text-xs font-bold mb-1">Tel: {telefoneCliente}</p>}
+                
+                {telefoneCliente && (
+                    <p className="text-xs font-bold mb-1">Tel: {telefoneCliente}</p>
+                )}
 
                 {enderecoFinal ? (
                     <div className="border border-black p-1 mt-1 bg-gray-100">
@@ -194,7 +198,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 )}
             </div>
 
-            {/* --- ITENS --- */}
+            {/* --- ITENS DO PEDIDO --- */}
             <div className="mb-2">
                 {!temItens ? (
                     <div className="text-center py-4 font-bold border border-black p-2 bg-gray-100">
@@ -203,26 +207,37 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 ) : (
                     Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
                         <div key={nomePessoa} className="mb-2">
+                            {/* Nome de quem pediu (se for mesa) */}
                             {pedido.mesaNumero && nomePessoa !== 'Geral' && (
                                 <div className="font-black bg-black text-white px-1 text-[10px] uppercase mb-1">
                                     👤 {nomePessoa}
                                 </div>
                             )}
+
                             {itens.map((item, index) => (
                                 <div key={index} className="mb-3 border-b border-dotted border-gray-400 pb-2 last:border-0">
+                                    
+                                    {/* Linha Principal do Item */}
                                     <div className="flex justify-between items-start">
                                         <span className="font-black text-sm flex-1 pr-2">
                                             {item.quantidade}x {item.nome || item.produto?.nome}
                                         </span>
+                                        {/* Preço (Opcional na Cozinha) */}
                                         {modoImpressao !== 'cozinha' && (
                                             <span className="font-bold whitespace-nowrap">
                                                 {formatMoney((item.precoFinal || item.preco) * item.quantidade)}
                                             </span>
                                         )}
                                     </div>
+
+                                    {/* Variação (Sabor/Tamanho) */}
                                     {item.variacaoSelecionada && (
-                                        <div className="pl-3 text-xs font-bold mt-0.5">Opção: {item.variacaoSelecionada.nome}</div>
+                                        <div className="pl-3 text-xs font-bold mt-0.5">
+                                            Opção: {item.variacaoSelecionada.nome}
+                                        </div>
                                     )}
+
+                                    {/* ADICIONAIS (Bem destacados) */}
                                     {item.adicionais && item.adicionais.length > 0 && (
                                         <div className="pl-2 mt-1 space-y-0.5">
                                             {item.adicionais.map((adic, idx) => (
@@ -233,6 +248,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             ))}
                                         </div>
                                     )}
+
+                                    {/* OBSERVAÇÕES (Destaque máximo na cozinha) */}
                                     {item.observacao && (
                                         <div className={`mt-1 ml-2 text-xs uppercase font-bold p-0.5 ${modoImpressao === 'cozinha' ? 'bg-black text-white inline-block' : 'text-black'}`}>
                                             OBS: {item.observacao}
@@ -245,33 +262,48 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 )}
             </div>
 
-            {/* --- TOTAIS --- */}
+            {/* --- TOTAIS E PAGAMENTO (Esconde na Cozinha) --- */}
             {modoImpressao !== 'cozinha' && (
                 <div className="border-t-2 border-black pt-2 mt-2">
                     <div className="flex justify-between text-xs font-bold">
                         <span>Subtotal:</span>
                         <span>{formatMoney(pedido.totalItens || (pedido.totalFinal - (pedido.taxaEntrega || 0)))}</span>
                     </div>
+                    
                     {Number(pedido.taxaEntrega) > 0 && (
-                        <div className="flex justify-between text-xs"><span>Taxa de Entrega:</span><span>{formatMoney(pedido.taxaEntrega)}</span></div>
+                        <div className="flex justify-between text-xs">
+                            <span>Taxa de Entrega:</span>
+                            <span>{formatMoney(pedido.taxaEntrega)}</span>
+                        </div>
                     )}
+
                     {Number(pedido.desconto) > 0 && (
-                        <div className="flex justify-between text-xs"><span>Desconto:</span><span>- {formatMoney(pedido.desconto)}</span></div>
+                        <div className="flex justify-between text-xs">
+                            <span>Desconto:</span>
+                            <span>- {formatMoney(pedido.desconto)}</span>
+                        </div>
                     )}
+
                     <div className="flex justify-between text-lg font-black mt-1 border-t border-dotted border-black pt-1">
                         <span>TOTAL:</span>
                         <span>{formatMoney(pedido.totalFinal || pedido.total)}</span>
                     </div>
+
                     <div className="mt-3 border border-black p-1 text-center">
                         <p className="font-bold text-xs uppercase">FORMA DE PAGAMENTO:</p>
                         <p className="font-black text-sm uppercase">{pedido.metodoPagamento || pedido.formaPagamento || 'A Combinar'}</p>
-                        {pedido.trocoPara && <p className="text-xs font-bold mt-0.5">Troco para: {formatMoney(pedido.trocoPara)}</p>}
+                        {pedido.trocoPara && (
+                            <p className="text-xs font-bold mt-0.5">Troco para: {formatMoney(pedido.trocoPara)}</p>
+                        )}
                     </div>
                 </div>
             )}
 
-            <div className="text-center mt-6 text-[10px] font-bold">*** FIM DO PEDIDO ***</div>
+            <div className="text-center mt-6 text-[10px] font-bold">
+                *** FIM DO PEDIDO ***
+            </div>
 
+            {/* CSS Específico para Impressão */}
             <style>{`
                 @media print {
                     @page { margin: 0; size: auto; }
