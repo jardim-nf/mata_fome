@@ -24,7 +24,37 @@
   max-width: 400px;
   padding: 1rem;
 }
+@media print {
+  /* Esconde TUDO na tela */
+  body * {
+    visibility: hidden;
+    height: 0;
+    overflow: hidden;
+  }
 
+  /* Mostra APENAS a área de impressão específica */
+  #area-impressao, #area-impressao * {
+    visibility: visible;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Posiciona a comanda no topo da folha */
+  #area-impressao {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Remove cabeçalhos e rodapés automáticos do navegador se possível */
+  @page {
+    margin: 0;
+    size: auto;
+  }
+}
 /* 3) Tailwind directives */
 @tailwind base;
 @tailwind components;
