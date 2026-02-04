@@ -1,3 +1,4 @@
+// src/components/CardapioItem.jsx
 import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
@@ -82,7 +83,6 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
     return variacoesAtivas.length === 1;
   };
 
-  // Quando clica no botão, ele chama a função do Menu.js que faz a checagem de login
   const handleButtonClick = (e) => {
     e.stopPropagation(); 
     if (!isAvailable) return;
@@ -100,11 +100,9 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
                     precoFinal: Number(variacaoUnica.preco) 
                 };
             }
-            // AQUI CHAMA O MENU.JS (ONDE ESTÁ A CHECAGEM DE LOGIN)
             onQuickAdd(itemParaAdicionar);
         }
     } else {
-      // AQUI CHAMA O MENU.JS (ONDE ESTÁ A CHECAGEM DE LOGIN)
       if (onAddItem) onAddItem(safeItem);
     }
   };
@@ -177,13 +175,14 @@ function CardapioItem({ item, onAddItem, onQuickAdd, coresEstabelecimento }) {
         <div className="flex-1 flex flex-col justify-between min-w-0 py-1">
           <div>
             <div className="flex justify-between items-start">
-                <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1 line-clamp-2 transition-colors" style={{ ':hover': { color: cores.destaque } }}>
+                <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1 transition-colors" style={{ ':hover': { color: cores.destaque } }}>
                 {safeItem.nome}
                 </h3>
             </div>
             
+            {/* 🔥 CORREÇÃO: Removido line-clamp-2 para mostrar descrição total */}
             {safeItem.descricao && (
-              <p className="text-gray-500 text-sm leading-relaxed line-clamp-2 mb-2">
+              <p className="text-gray-500 text-sm leading-relaxed mb-2">
                 {safeItem.descricao}
               </p>
             )}

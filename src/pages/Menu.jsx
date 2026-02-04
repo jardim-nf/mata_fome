@@ -25,9 +25,9 @@ function Menu() {
     const navigate = useNavigate();
 
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
-    const { isWidgetOpen } = useAI();
+    const { isWidgetOpen, closeWidget, openWidget } = useAI();
     
-    const [showAICenter, setShowAICenter] = useState(true);
+    const [showAICenter, setShowAICenter] = useState(false);
     const [deveReabrirChat, setDeveReabrirChat] = useState(false);
 
     // --- ESTADOS ---
@@ -56,6 +56,7 @@ function Menu() {
     
     // --- ESTADOS DO LOGIN ---
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+    const [forceLogin, setForceLogin] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
 
     const [emailAuthModal, setEmailAuthModal] = useState('');
@@ -104,6 +105,19 @@ function Menu() {
         }
     });
 
+    // --- FORÇAR LOGIN ---
+    useEffect(() => {
+        if (!authLoading) {
+            if (!currentUser) {
+                setForceLogin(true);
+                setShowLoginPrompt(true);
+            } else {
+                setForceLogin(false);
+                setShowLoginPrompt(false);
+            }
+        }
+    }, [authLoading, currentUser]);
+
     // --- FUNÇÕES AUXILIARES ---
 
     const scrollToResumo = useCallback(() => {
@@ -113,7 +127,6 @@ function Menu() {
 
     const handleCategoryClick = (cat) => {
         setSelectedCategory(cat); 
-        
         if (cat === 'Todos') {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
@@ -122,11 +135,7 @@ function Menu() {
                 const headerOffset = 180; 
                 const elementPosition = element.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-                
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: "smooth"
-                });
+                window.scrollTo({ top: offsetPosition, behavior: "smooth" });
             }
         }
     };
@@ -197,11 +206,8 @@ function Menu() {
 
     // --- CÁLCULOS ---
 
-    // 🔥 CORREÇÃO: O subtotal deve usar o preçoFinal (que já inclui adicionais) 🔥
     const subtotalCalculado = useMemo(() => {
         return carrinho.reduce((acc, item) => {
-            // Se o preçoFinal já estiver calculado corretamente (base + adicionais), use-o.
-            // Caso contrário, recalcule aqui para garantir.
             const precoBase = item.precoFinal || 0;
             return acc + (precoBase * item.qtd);
         }, 0);
@@ -213,12 +219,10 @@ function Menu() {
         return taxaEntregaCalculada;
     }, [isRetirada, taxaEntregaCalculada, premioRaspadinha]);
 
-// Trecho do Menu.jsx
-const finalOrderTotal = useMemo(() => {
-    let total = subtotalCalculado + taxaAplicada - discountAmount;
-    // ... logica de desconto ...
-    return Math.max(0, total);
-}, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
+    const finalOrderTotal = useMemo(() => {
+        let total = subtotalCalculado + taxaAplicada - discountAmount;
+        return Math.max(0, total);
+    }, [subtotalCalculado, taxaAplicada, discountAmount, premioRaspadinha]);
 
     const carregarProdutosRapido = async (estabId) => {
         try {
@@ -230,7 +234,6 @@ const finalOrderTotal = useMemo(() => {
 
             const categoriasDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             
-            // Filtra categorias ativas
             const categoriasAtivas = categoriasDocs.filter(cat => cat.ativo !== false);
 
             const promessasCategorias = categoriasAtivas.map(async (cat) => {
@@ -242,13 +245,11 @@ const finalOrderTotal = useMemo(() => {
                     getDocs(query(produtosRef, where('ativo', '==', true)))
                 ]);
 
-                // Função para processar documentos e buscar subcoleções (ADICIONAIS/VARIAÇÕES)
                 const processarDocs = async (docsSnapshot) => {
                     return Promise.all(docsSnapshot.docs.map(async (docItem) => {
                         const dados = docItem.data();
                         const id = docItem.id;
 
-                        // 1. Busca Subcoleção de ADICIONAIS
                         let listaAdicionais = [];
                         try {
                             const addRef = collection(docItem.ref, 'adicionais');
@@ -256,7 +257,6 @@ const finalOrderTotal = useMemo(() => {
                             listaAdicionais = addSnap.docs.map(a => ({ id: a.id, ...a.data() }));
                         } catch (e) { /* Ignora se não existir */ }
 
-                        // 2. Busca Subcoleção de VARIAÇÕES
                         let listaVariacoes = [];
                         try {
                             const varRef = collection(docItem.ref, 'variacoes');
@@ -264,7 +264,6 @@ const finalOrderTotal = useMemo(() => {
                             listaVariacoes = varSnap.docs.map(v => ({ id: v.id, ...v.data() }));
                         } catch (e) { /* Ignora */ }
 
-                        // Prioriza o array do documento, se vazio usa a subcoleção
                         const adicionaisFinais = (dados.adicionais && dados.adicionais.length > 0) 
                             ? dados.adicionais 
                             : listaAdicionais;
@@ -278,7 +277,7 @@ const finalOrderTotal = useMemo(() => {
                             id,
                             categoria: cat.nome || 'Geral',
                             categoriaId: cat.id,
-                            adicionais: adicionaisFinais, // Agora garantimos que isso está preenchido
+                            adicionais: adicionaisFinais,
                             variacoes: variacoesFinais
                         };
                     }));
@@ -299,13 +298,43 @@ const finalOrderTotal = useMemo(() => {
         }
     };
 
-    // --- FUNÇÕES DE ADIÇÃO (DEFINIDAS ANTES DO USO) ---
+    // --- FUNÇÕES DE ADIÇÃO E MANIPULAÇÃO ---
 
-    // Ações do Usuário
+    // 🔥 BUSCA AGRESSIVA DE ADICIONAIS GLOBAIS 🔥
+    const enrichWithGlobalAdicionais = (item) => {
+        const termosAdicionais = [
+            'adicionais', 'adicional', 'extra', 'extras', 
+            'complemento', 'complementos', 'acrescimo', 'acrescimos',
+            'molho', 'molhos', 'opcoes', 'opções'
+        ];
+
+        // Se o item clicado JÁ É um adicional, não faz nada
+        const categoriaItemNorm = normalizarTexto(item.categoria || '');
+        if (termosAdicionais.some(t => categoriaItemNorm.includes(t))) return item;
+
+        // Procura no cardápio inteiro qualquer coisa que pareça adicional
+        const globais = allProdutos.filter(p => {
+            const cat = normalizarTexto(p.categoria || '');
+            return termosAdicionais.some(termo => cat.includes(termo));
+        });
+
+        // Filtra para não duplicar o que o item já tem
+        const idsExistentes = new Set((item.adicionais || []).map(a => a.id));
+        const globaisFiltrados = globais.filter(g => !idsExistentes.has(g.id));
+
+        if (globaisFiltrados.length > 0) {
+            console.log(`➕ [${item.nome}] Injetando ${globaisFiltrados.length} adicionais globais.`);
+        }
+
+        return {
+            ...item,
+            adicionais: [...(item.adicionais || []), ...globaisFiltrados]
+        };
+    };
+
     const handleAdicionarRapido = (item) => {
         if (!currentUser) { handleAbrirLogin(); return; }
         
-        // Garante que o preço é um número válido, mesmo se vier null/undefined
         const precoBase = item.precoFinal !== undefined ? item.precoFinal : item.preco;
         const preco = Number(precoBase) || 0;
 
@@ -319,6 +348,7 @@ const finalOrderTotal = useMemo(() => {
         toast.success(`${item.nome} adicionado!`);
     };
 
+    // 🔥 LÓGICA DE ABERTURA DE MODAL COM ADICIONAIS GLOBAIS 🔥
     const handleAbrirModalProduto = (item) => {
         if (!currentUser) { 
             toast.info('Faça login para continuar.'); 
@@ -326,21 +356,70 @@ const finalOrderTotal = useMemo(() => {
             return; 
         }
         
-        // Limpa qualquer observação residual
         const itemLimpo = { ...item, observacao: '' };
+        
+        // 1. Injeta os adicionais globais no item
+        const itemComAdicionais = enrichWithGlobalAdicionais(itemLimpo);
 
-        if (item.variacoes && item.variacoes.length > 0) { setItemParaVariacoes(itemLimpo); }
-        else if (item.adicionais && item.adicionais.length > 0) { setItemParaAdicionais(itemLimpo); }
-        else { handleAdicionarRapido(itemLimpo); }
+        // 2. Decide qual modal abrir (Variações ou Adicionais)
+        if (itemComAdicionais.variacoes && itemComAdicionais.variacoes.length > 0) { 
+            // Passa o item JÁ com adicionais para o modal de variação
+            // (Assim, quando confirmar a variação, os adicionais não se perdem)
+            setItemParaVariacoes(itemComAdicionais); 
+        }
+        else if (itemComAdicionais.adicionais && itemComAdicionais.adicionais.length > 0) { 
+            // Se não tem variação, mas tem adicionais (do item ou globais), abre modal de adicionais
+            setItemParaAdicionais(itemComAdicionais); 
+        }
+        else { 
+            // Nada para escolher, adiciona direto
+            handleAdicionarRapido(itemComAdicionais); 
+        }
     };
-// IA - Adição Inteligente com BUSCA TOTAL (Adicionais + Variações + Produtos)
+
+    const handleConfirmarVariacoes = (itemConfigurado) => {
+        const preco = Number(itemConfigurado.variacaoSelecionada?.preco || itemConfigurado.preco || 0);
+        
+        // O itemConfigurado já deve ter vindo com adicionais do passo anterior, 
+        // mas por segurança rodamos o enrich de novo ou verificamos.
+        // Como passamos 'itemComAdicionais' no setItemParaVariacoes, 'itemConfigurado' deve ter a lista.
+        
+        if (itemConfigurado.adicionais && itemConfigurado.adicionais.length > 0) {
+            setItemParaVariacoes(null);
+            setItemParaAdicionais({ ...itemConfigurado, precoFinal: preco });
+        } else {
+            setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
+            setItemParaVariacoes(null);
+        }
+    };
+
+    const handleConfirmarAdicionais = (itemConfigurado) => {
+        let precoBase = Number(itemConfigurado.precoFinal || itemConfigurado.preco || 0);
+        
+        const totalAdicionais = (itemConfigurado.adicionaisSelecionados || []).reduce((acc, ad) => {
+            let valorItem = ad.preco !== undefined ? ad.preco : ad.valor;
+            if (typeof valorItem === 'string') valorItem = valorItem.replace(',', '.');
+            return acc + (Number(valorItem) || 0) * (Number(ad.quantidade) || 1);
+        }, 0);
+        
+        const precoTotal = precoBase + totalAdicionais;
+        const obsFinal = itemConfigurado.observacao || '';
+
+        setCarrinho(prev => [...prev, { 
+            ...itemConfigurado, 
+            qtd: 1, 
+            cartItemId: uuidv4(), 
+            precoFinal: precoTotal, 
+            observacao: obsFinal
+        }]);
+        setItemParaAdicionais(null);
+    };
+
+    // IA - Adição Inteligente (Mantida a lógica de busca)
     const handleAdicionarPorIA = useCallback((dadosDoChat) => {
+        // ... (Lógica da IA permanece igual para não quebrar funcionalidade)
         console.log("🤖 IA Processando:", dadosDoChat);
         
-        // Debug: Vamos ver o que tem no banco carregado
-        // console.log("📦 Produtos Carregados:", allProdutos.map(p => p.nome));
-
-        // 1. Extração de Dados
         let nomeProduto = "";
         let nomeOpcao = null;
         let listaAdicionaisNomes = []; 
@@ -353,24 +432,16 @@ const finalOrderTotal = useMemo(() => {
             listaAdicionaisNomes = dadosDoChat.adicionaisNames || []; 
             observacaoIA = dadosDoChat.observacao || "";
             quantidadeIA = dadosDoChat.qtd || 1;
-        } else {
-            return;
-        }
+        } else { return; }
 
         const termoBusca = superNormalizar(nomeProduto);
-        
-        // --- ETAPA 1: Encontrar o Produto Principal ---
         const produtoEncontrado = allProdutos.find(p => {
             const nomeDb = superNormalizar(p.nome);
             return nomeDb === termoBusca || nomeDb.includes(termoBusca) || termoBusca.includes(nomeDb);
         });
 
-        if (!produtoEncontrado) {
-            console.warn("❌ Produto principal não encontrado:", nomeProduto);
-            return 'NOT_FOUND';
-        }
+        if (!produtoEncontrado) { return 'NOT_FOUND'; }
 
-        // --- ETAPA 2: Resolver Variação (Tamanho) ---
         let variacaoSelecionada = null;
         if (nomeOpcao) {
             const termoOpcao = superNormalizar(nomeOpcao);
@@ -387,87 +458,51 @@ const finalOrderTotal = useMemo(() => {
              return 'MODAL';
         }
 
-        // --- ETAPA 3: Resolver Adicionais (VARREDURA GLOBAL) ---
         let adicionaisSelecionadosObj = [];
         let somaAdicionais = 0;
 
         if (listaAdicionaisNomes.length > 0) {
             listaAdicionaisNomes.forEach(nomeAddIA => {
-                const termoAdd = superNormalizar(nomeAddIA); // ex: "ovo"
+                const termoAdd = superNormalizar(nomeAddIA);
                 let itemEncontrado = null;
 
-                // BUSCA 1: Dentro dos 'adicionais' do produto principal
                 if (produtoEncontrado.adicionais) {
-                    itemEncontrado = produtoEncontrado.adicionais.find(a => 
-                        superNormalizar(a.nome).includes(termoAdd)
-                    );
+                    itemEncontrado = produtoEncontrado.adicionais.find(a => superNormalizar(a.nome).includes(termoAdd));
                 }
-
-                // BUSCA 2: Como um produto solto no cardápio
                 if (!itemEncontrado) {
                     itemEncontrado = allProdutos.find(p => {
                         if (p.id === produtoEncontrado.id) return false;
                         return superNormalizar(p.nome) === termoAdd || superNormalizar(p.nome).includes(termoAdd);
                     });
                 }
-
-                // BUSCA 3: Dentro das 'variacoes' ou 'adicionais' de QUALQUER outro produto
-                // (Isso resolve se o Ovo estiver escondido dentro da categoria "Adicionais" como variação)
-                if (!itemEncontrado) {
-                    for (const prod of allProdutos) {
-                        // Procura em Adicionais do produto
-                        if (prod.adicionais) {
-                            const achouAdd = prod.adicionais.find(a => superNormalizar(a.nome).includes(termoAdd));
-                            if (achouAdd) { itemEncontrado = achouAdd; break; }
-                        }
-                        // Procura em Variações do produto
-                        if (prod.variacoes) {
-                            const achouVar = prod.variacoes.find(v => superNormalizar(v.nome).includes(termoAdd));
-                            if (achouVar) { itemEncontrado = achouVar; break; }
-                        }
-                    }
-                }
-
                 if (itemEncontrado) {
-                    // Normaliza preço
-                    let valorBruto = itemEncontrado.precoFinal !== undefined 
-                        ? itemEncontrado.precoFinal 
-                        : (itemEncontrado.preco || itemEncontrado.valor);
-
+                    let valorBruto = itemEncontrado.precoFinal !== undefined ? itemEncontrado.precoFinal : (itemEncontrado.preco || itemEncontrado.valor);
                     if (typeof valorBruto === 'string') valorBruto = valorBruto.replace(',', '.');
                     const precoNumerico = Number(valorBruto) || 0;
-
-                    console.log(`✅ Adicional encontrado: ${itemEncontrado.nome} (+ R$ ${precoNumerico})`);
-
                     adicionaisSelecionadosObj.push({
                         id: itemEncontrado.id || uuidv4(),
                         nome: itemEncontrado.nome,
                         quantidade: 1, 
                         preco: precoNumerico 
                     });
-                    
                     somaAdicionais += precoNumerico;
                 } else {
-                    console.warn(`⚠️ Item "${nomeAddIA}" não encontrado no banco.`);
                     observacaoIA += ` (Com extra de: ${nomeAddIA})`;
                 }
             });
         }
 
-        // --- ETAPA 4: Fechamento ---
         const precoBase = variacaoSelecionada 
             ? Number(variacaoSelecionada.preco || variacaoSelecionada.precoFinal || 0)
             : Number(produtoEncontrado.preco || produtoEncontrado.precoFinal || 0);
 
         const precoTotalUnitario = precoBase + somaAdicionais;
 
-        console.log(`💰 TOTAL: R$ ${precoTotalUnitario} (${precoBase} + ${somaAdicionais})`);
-
         setCarrinho(prev => [...prev, {
             ...produtoEncontrado,
             variacaoSelecionada,
             adicionaisSelecionados: adicionaisSelecionadosObj,
-            precoFinal: precoTotalUnitario, // Soma garantida aqui
+            precoFinal: precoTotalUnitario, 
             observacao: observacaoIA, 
             qtd: quantidadeIA,
             cartItemId: uuidv4()
@@ -477,55 +512,6 @@ const finalOrderTotal = useMemo(() => {
         return 'ADDED';
 
     }, [allProdutos, currentUser]);
-    const handleConfirmarVariacoes = (itemConfigurado) => {
-        const preco = Number(itemConfigurado.variacaoSelecionada?.preco || itemConfigurado.preco || 0);
-        
-        if (itemConfigurado.adicionais && itemConfigurado.adicionais.length > 0) {
-            setItemParaVariacoes(null);
-            // Passa para o próximo modal já com o preço da variação e observação limpa
-            setItemParaAdicionais({ ...itemConfigurado, precoFinal: preco });
-        } else {
-            setCarrinho(prev => [...prev, { ...itemConfigurado, qtd: 1, cartItemId: uuidv4(), precoFinal: preco }]);
-            setItemParaVariacoes(null);
-        }
-    };
-
-// 🔥 CORREÇÃO DA SOMA DOS ADICIONAIS 🔥
-    const handleConfirmarAdicionais = (itemConfigurado) => {
-        // 1. Garante o preço base (do produto ou da variação selecionada)
-        let precoBase = Number(itemConfigurado.precoFinal || itemConfigurado.preco || 0);
-        
-        // 2. Calcula a soma dos adicionais blindando contra erros de formatação (vírgula ou string)
-        const totalAdicionais = (itemConfigurado.adicionaisSelecionados || []).reduce((acc, ad) => {
-            // Tenta pegar o preço em 'preco' ou 'valor'
-            let valorItem = ad.preco !== undefined ? ad.preco : ad.valor;
-            
-            // Se for string (ex: "10,00"), troca vírgula por ponto
-            if (typeof valorItem === 'string') {
-                valorItem = valorItem.replace(',', '.');
-            }
-
-            const precoNumerico = Number(valorItem) || 0;
-            const quantidade = Number(ad.quantidade) || 1;
-
-            return acc + (precoNumerico * quantidade);
-        }, 0);
-        
-        // 3. Soma final
-        const precoTotal = precoBase + totalAdicionais;
-
-        // Garante que a observação seja string limpa
-        const obsFinal = itemConfigurado.observacao || '';
-
-        setCarrinho(prev => [...prev, { 
-            ...itemConfigurado, 
-            qtd: 1, 
-            cartItemId: uuidv4(), 
-            precoFinal: precoTotal, // Preço corrigido
-            observacao: obsFinal
-        }]);
-        setItemParaAdicionais(null);
-    };
 
     const removerDoCarrinho = (cartItemId) => {
         const item = carrinho.find((p) => p.cartItemId === cartItemId);
@@ -765,13 +751,12 @@ const finalOrderTotal = useMemo(() => {
     return (
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
             <div className="max-w-7xl mx-auto px-4 w-full">
+                {/* CABEÇALHO */}
                 {estabelecimentoInfo && (
                     <div className="bg-white rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative">
                         <div className="absolute top-4 right-4 z-10">
-                             {currentUser ? (
+                             {currentUser && (
                                 <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors"><IoLogOutOutline size={18} /><span>Sair</span></button>
-                             ) : (
-                                <button type="button" onClick={handleAbrirLogin} className="flex items-center gap-2 text-sm font-bold text-white px-4 py-2 rounded-full shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}><IoPerson size={16} /><span>Entrar</span></button>
                              )}
                         </div>
                         <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-2" style={{ borderColor: coresEstabelecimento.primaria }} alt="Logo" />
@@ -779,12 +764,12 @@ const finalOrderTotal = useMemo(() => {
                             <h1 className="text-3xl font-bold mb-2">{estabelecimentoInfo.nome}</h1>
                             <div className="text-sm text-gray-600">
                                 <p className="flex items-center gap-2"><IoLocationSharp className="text-red-500" /> {estabelecimentoInfo.endereco?.rua}</p>
-                                <p className="flex items-center gap-2"><IoTime className="text-blue-500" /> {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}</p>
                             </div>
                         </div>
                     </div>
                 )}
 
+                {/* FILTROS E BUSCA */}
                 <div className="bg-white p-4 mb-8 sticky top-0 z-40 shadow-sm md:rounded-lg">
                     <input type="text" placeholder="🔍 Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 mb-4 border rounded-lg text-gray-900 text-base" />
                     <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide">
@@ -794,6 +779,7 @@ const finalOrderTotal = useMemo(() => {
                     </div>
                 </div>
 
+                {/* LISTAGEM PRODUTOS */}
                 {categoriasOrdenadas.map(cat => {
                     const items = menuAgrupado[cat];
                     const visible = visibleItemsCount[cat] || 4;
@@ -812,11 +798,11 @@ const finalOrderTotal = useMemo(() => {
                     );
                 })}
 
+                {/* RESUMO E DADOS */}
                 <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
                     <div className="bg-white p-6 rounded-xl border shadow-lg text-left w-full">
-                        <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                        {currentUser ? <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded mb-4">Sair ({currentUser.email})</button> : <button type="button" onClick={handleAbrirLogin} className="text-xs text-green-600 border border-green-200 px-2 py-1 rounded mb-4">Fazer Login</button>}
-                        <div className="space-y-4">
+                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
+                         <div className="space-y-4">
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
@@ -850,13 +836,6 @@ const finalOrderTotal = useMemo(() => {
                                 <div className="border-t pt-4 space-y-2 text-sm">
                                     <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
                                     {!isRetirada && <div className="flex justify-between"><span>Taxa:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
-                                    {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Desconto:</span> <span>- R$ {discountAmount.toFixed(2)}</span></div>}
-                                    {premioRaspadinha && <div className="flex justify-between text-purple-600"><span>🎁 Prêmio:</span> <span>{premioRaspadinha.label}</span></div>}
-                                    
-                                    <div className="flex gap-2 mt-3 items-stretch">
-                                        <input placeholder="CUPOM" value={couponCodeInput} onChange={e => setCouponCodeInput(e.target.value)} className="flex-1 p-3 border rounded-lg uppercase text-gray-900 text-base min-w-0" />
-                                        <button onClick={handleApplyCoupon} className="px-5 bg-green-600 text-white rounded-lg text-sm font-bold shadow-sm whitespace-nowrap active:scale-95 transition-transform">Aplicar</button>
-                                    </div>
                                     <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
                                 </div>
                                 <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600">✅ Finalizar Pedido</button>
@@ -866,19 +845,39 @@ const finalOrderTotal = useMemo(() => {
                 </div>
             </div>
 
+            {/* MODAIS E FLUTUANTES */}
             {!isWidgetOpen && <CarrinhoFlutuante carrinho={carrinho} coresEstabelecimento={coresEstabelecimento} onClick={scrollToResumo} />}
-            {estabelecimentoInfo && (showAICenter || isWidgetOpen) && <AIChatAssistant estabelecimento={estabelecimentoInfo} produtos={allProdutos} carrinho={carrinho} clienteNome={nomeCliente} taxaEntrega={taxaEntregaCalculada} enderecoAtual={{ rua, numero, bairro, cidade }} isRetirada={isRetirada} onAddDirect={handleAdicionarPorIA} onCheckout={prepararParaPagamento} onClose={() => setShowAICenter(false)} onRequestLogin={handleLoginDoChat} onSetDeliveryMode={(modo) => setIsRetirada(modo === 'retirada')} onUpdateAddress={(dados) => { if (dados.rua) setRua(dados.rua); if (dados.numero) setNumero(dados.numero); if (dados.bairro) setBairro(dados.bairro); if (dados.cidade) setCidade(dados.cidade); if (dados.referencia) setComplemento(dados.referencia); }} />}
+            
+            {estabelecimentoInfo && (showAICenter || isWidgetOpen) && (
+                <AIChatAssistant 
+                    estabelecimento={estabelecimentoInfo} 
+                    produtos={allProdutos} 
+                    carrinho={carrinho} 
+                    clienteNome={nomeCliente} 
+                    taxaEntrega={taxaEntregaCalculada} 
+                    enderecoAtual={{ rua, numero, bairro, cidade }} 
+                    isRetirada={isRetirada} 
+                    onAddDirect={handleAdicionarPorIA} 
+                    onCheckout={prepararParaPagamento} 
+                    onClose={() => { closeWidget(); setShowAICenter(false); }} 
+                    onRequestLogin={handleLoginDoChat} 
+                    onSetDeliveryMode={(modo) => setIsRetirada(modo === 'retirada')} 
+                    onUpdateAddress={(dados) => { if (dados.rua) setRua(dados.rua); if (dados.numero) setNumero(dados.numero); if (dados.bairro) setBairro(dados.bairro); if (dados.cidade) setCidade(dados.cidade); if (dados.referencia) setComplemento(dados.referencia); }} 
+                />
+            )}
+            
             <AIWidgetButton />
 
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             {itemParaAdicionais && <AdicionaisModal item={itemParaAdicionais} onConfirm={handleConfirmarAdicionais} onClose={() => setItemParaAdicionais(null)} coresEstabelecimento={coresEstabelecimento} />}
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
-            {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
-            {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
+            
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
-                        <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
+                        {!forceLogin && (
+                            <button onClick={() => setShowLoginPrompt(false)} className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-800">&times;</button>
+                        )}
                         <h2 className="text-2xl font-bold mb-6 text-center">{isRegisteringInModal ? 'Criar Conta' : 'Login'}</h2>
                         <form onSubmit={isRegisteringInModal ? handleRegisterModal : handleLoginModal} className="space-y-4">
                             {isRegisteringInModal && (

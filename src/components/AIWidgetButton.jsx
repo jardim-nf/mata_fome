@@ -4,29 +4,29 @@ import { IoChatbubbleEllipses, IoClose } from 'react-icons/io5';
 import { useAI } from '../context/AIContext';
 
 const AIWidgetButton = () => {
-  // 🔥 CORREÇÃO: Usando os nomes corretos do AIContext atualizado
-  const { isOpen, setIsOpen, messages } = useAI();
+  // 🔥 CORREÇÃO: Usando os nomes exatos que estão no AIContext.jsx
+  const { isWidgetOpen, toggleWidget, conversation } = useAI();
 
-  // Verifica se 'messages' existe antes de ler o length
-  const hasUnreadMessages = messages && messages.length > 0;
+  // Verifica se tem mensagens na conversa
+  const hasUnreadMessages = conversation && conversation.length > 0;
 
   return (
     <button
-      onClick={() => setIsOpen(!isOpen)} // Usa setIsOpen para alternar
+      onClick={toggleWidget} // Usa a função correta do contexto
       className={`
         fixed bottom-6 right-6 z-[999] 
         w-16 h-16 rounded-full 
         flex items-center justify-center
         shadow-2xl transition-all duration-300
         hover:scale-110 active:scale-95
-        ${isOpen 
+        ${isWidgetOpen 
           ? 'bg-red-600 text-white' 
           : 'bg-white text-red-600 border-2 border-red-600'
         }
       `}
       aria-label="Assistente Virtual"
     >
-      {isOpen ? (
+      {isWidgetOpen ? (
         <IoClose className="text-2xl" />
       ) : (
         <div className="relative">
