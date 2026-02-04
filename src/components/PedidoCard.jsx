@@ -1,3 +1,4 @@
+// src/components/PedidoCard.jsx
 import React, { useState, useMemo, useCallback } from 'react';
 import { 
     IoPerson, IoTrash, IoArrowForward, IoCheckmarkCircle, IoPrint,
@@ -12,13 +13,14 @@ const PedidoCard = ({
     newOrderIds, 
     showMesaInfo = true,
     isAgrupado = false,
+    estabelecimentoInfo = null,
     motoboysDisponiveis = [], 
-    onAtribuirMotoboy,
-    onImprimir // 🔥 Recebe a função do Painel
+    onAtribuirMotoboy         
 }) => {
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
     const [selectedMotoboyId, setSelectedMotoboyId] = useState("");
-    const [isExpanded, setIsExpanded] = useState(false); 
+    const [isExpanded, setIsExpanded] = useState(false); // Estado para expandir itens
     
     const { estabelecimentoIdPrincipal } = useAuth();
 
@@ -57,7 +59,7 @@ const PedidoCard = ({
         return somaItens + taxaEntrega;
     }, [item]);
 
-    // --- HELPERS ---
+    // --- HELPERS DE DATA E TEMPO ---
     const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
 
     const formatarDataHora = (timestamp) => {
@@ -68,6 +70,7 @@ const PedidoCard = ({
         } catch { return ''; }
     };
 
+    // Calcula diferença em minutos entre dois timestamps
     const calcDiffMin = (start, end) => {
         if (!start || !end) return 0;
         const d1 = start.seconds ? new Date(start.seconds * 1000) : new Date(start);
@@ -84,12 +87,26 @@ const PedidoCard = ({
 
         const tempos = [];
 
-        if (criado && preparo) tempos.push({ label: 'Espera', val: calcDiffMin(criado, preparo), icon: <IoTime/>, color: 'text-red-500' });
-        if (preparo && entrega) tempos.push({ label: 'Preparo', val: calcDiffMin(preparo, entrega), icon: <IoRestaurant/>, color: 'text-orange-500' });
-        if (entrega && fim) tempos.push({ label: 'Entrega', val: calcDiffMin(entrega, fim), icon: <IoBicycle/>, color: 'text-blue-500' });
+        // Tempo de Espera (Criado -> Preparo)
+        if (criado && preparo) {
+            tempos.push({ label: 'Espera', val: calcDiffMin(criado, preparo), icon: <IoTime/>, color: 'text-red-500' });
+        }
+        
+        // Tempo de Preparo (Preparo -> Entrega/Pronto)
+        if (preparo && entrega) {
+            tempos.push({ label: 'Preparo', val: calcDiffMin(preparo, entrega), icon: <IoRestaurant/>, color: 'text-orange-500' });
+        }
 
+        // Tempo de Entrega (Entrega -> Finalizado)
+        if (entrega && fim) {
+            tempos.push({ label: 'Entrega', val: calcDiffMin(entrega, fim), icon: <IoBicycle/>, color: 'text-blue-500' });
+        }
+
+        // Tempo Total (Criado -> Agora ou Finalizado)
         const fimTotal = fim || new Date();
-        if (criado) tempos.push({ label: 'Total', val: calcDiffMin(criado, fimTotal), icon: <IoFlag/>, color: 'text-gray-600 font-bold' });
+        if (criado) {
+            tempos.push({ label: 'Total', val: calcDiffMin(criado, fimTotal), icon: <IoFlag/>, color: 'text-gray-600 font-bold' });
+        }
 
         return tempos;
     }, [item]);
@@ -99,7 +116,7 @@ const PedidoCard = ({
         return t[forma?.toLowerCase()] || forma?.toUpperCase() || 'OUTROS';
     };
 
-    // --- WHATSAPP ---
+    // --- WHATSAPP AUTOMÁTICO ---
     const enviarWhatsApp = (statusAlvo) => {
         const telefone = item.cliente?.telefone || item.telefone;
         if (!telefone) return; 
@@ -131,17 +148,39 @@ const PedidoCard = ({
         window.open(`https://wa.me/55${numeroFormatado}?text=${encodeURIComponent(msgFinal)}`, '_blank');
     };
 
-    // --- 🔥 IMPRESSÃO DIRETA (SEM NOVA ABA) 🔥 ---
+    // --- IMPRESSÃO OTIMIZADA ---
     const handlePrint = useCallback(() => {
         if (!item || !item.id) return;
-        
-        if (onImprimir) {
-            // Chama a função do Painel.jsx que usa window.print() na mesma tela
-            onImprimir(item);
+        setIsPrinting(true);
+
+        const width = 350;
+        const height = 600;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+
+        const isSalao = item.source === 'salao' || item.tipo === 'salao' || item.tipo === 'mesa';
+        const estabId = estabelecimentoInfo?.id || item.estabelecimentoId || estabelecimentoIdPrincipal;
+
+        let url = `/comanda/${item.id}`;
+        const params = new URLSearchParams();
+        if (isSalao) params.append('origem', 'salao');
+        if (estabId) params.append('estabId', estabId);
+        if (params.toString()) url += `?${params.toString()}`;
+
+        const printWindow = window.open(url, 'ImprimirComanda', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`);
+
+        if (printWindow) {
+            const timer = setInterval(() => {
+                if (printWindow.closed) {
+                    clearInterval(timer);
+                    setIsPrinting(false);
+                }
+            }, 500);
         } else {
-            alert("Erro: Função de impressão não conectada.");
+            alert("⚠️ Pop-up bloqueado! Permita pop-ups para imprimir.");
+            setIsPrinting(false);
         }
-    }, [item, onImprimir]);
+    }, [item, estabelecimentoInfo, estabelecimentoIdPrincipal]);
 
     // --- AÇÕES DE STATUS ---
     const handleAction = useCallback(async () => {
@@ -248,7 +287,7 @@ const PedidoCard = ({
                     </span>
                 </div>
 
-                {/* TEMPOS DE ETAPA */}
+                {/* 🔥 EXIBIÇÃO DE TEMPOS DE ETAPA */}
                 {temposEtapa.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
                         {temposEtapa.map((tempo, i) => (
@@ -334,13 +373,13 @@ const PedidoCard = ({
 
                 {/* BOTÕES DE AÇÃO */}
                 <div className="flex gap-2 mt-4 min-h-[40px] items-start">
-                    {/* 🔥 BOTÃO DE IMPRIMIR - CHAMA A FUNÇÃO DIRETA 🔥 */}
                     <button 
                         onClick={handlePrint} 
+                        disabled={isPrinting} 
                         className="w-10 h-10 shrink-0 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-blue-100 hover:text-blue-600 border border-gray-200 transition-colors" 
                         title="Imprimir Comanda"
                     >
-                        <IoPrint className="text-lg" />
+                        {isPrinting ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/> : <IoPrint className="text-lg" />}
                     </button>
                     
                     <button 
