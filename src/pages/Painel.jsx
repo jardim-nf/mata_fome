@@ -10,12 +10,13 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { IoTime, IoArrowBack, IoCalendarOutline, IoRestaurant, IoBicycle } from "react-icons/io5";
+import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoVolumeMedium, IoVolumeMute } from "react-icons/io5";
+import ComandaParaImpressao from '../components/ComandaParaImpressao'; // 🔥 IMPORTAÇÃO DA COMANDA
 
 // ==========================================
 // 📦 COMPONENTE DE GRUPO (MESA/COZINHA)
 // ==========================================
-const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
+const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo, onImprimir }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
         pedidos.forEach(pedido => {
@@ -80,6 +81,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                                 isAgrupado={true}
                                 motoboysDisponiveis={[]}
                                 onAtribuirMotoboy={null}
+                                onImprimir={onImprimir} // 🔥 PASSA A FUNÇÃO DE IMPRIMIR
                             />
                         ))}
                     </div>
@@ -95,7 +97,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
 function Painel() {
     const navigate = useNavigate(); 
     const audioRef = useRef(null);
-    const { logout, loading: authLoading, estabelecimentosGerenciados } = useAuth();
+    const { loading: authLoading, estabelecimentosGerenciados } = useAuth();
     
     // --- ESTADOS ---
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
@@ -109,6 +111,9 @@ function Painel() {
     const [abaAtiva, setAbaAtiva] = useState('delivery'); // 'delivery' ou 'cozinha'
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
+    
+    // 🔥 ESTADO PARA IMPRESSÃO DIRETA
+    const [pedidoParaImpressao, setPedidoParaImpressao] = useState(null);
     
     // Refs
     const isUpdatingRef = useRef(false);
@@ -178,6 +183,15 @@ function Painel() {
         return () => unsubscribe();
     }, [estabelecimentoAtivo]);
 
+    // 🔥 FUNÇÃO DE IMPRESSÃO DIRETA 🔥
+    const handleImprimirDireto = useCallback((pedido) => {
+        setPedidoParaImpressao(pedido);
+        // Pequeno delay para o React renderizar o componente oculto antes de chamar o print
+        setTimeout(() => {
+            window.print();
+        }, 100);
+    }, []);
+
     // 5. AÇÕES DE PEDIDO (ATRIBUIR)
     const handleAtribuirMotoboy = useCallback(async (pedidoId, motoboyId, motoboyNome, source) => {
         if (!pedidoId || !motoboyId) return toast.error("Dados inválidos");
@@ -237,7 +251,6 @@ function Painel() {
                 atualizadoEm: serverTimestamp()
             };
 
-            // Salva o momento exato da mudança de status
             if (newStatus === 'preparo') {
                 updatePayload.dataPreparo = serverTimestamp();
             } else if (newStatus === 'em_entrega') {
@@ -391,7 +404,9 @@ function Painel() {
                             <button onClick={() => setAbaAtiva('delivery')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoBicycle /> Delivery</button>
                             <button onClick={() => setAbaAtiva('cozinha')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all ${abaAtiva === 'cozinha' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoRestaurant /> Cozinha</button>
                         </div>
-                        <button onClick={() => { setNotificationsEnabled(!notificationsEnabled); setUserInteracted(true); toast.info(notificationsEnabled ? "Som desativado" : "Som ativado"); }} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors border ${notificationsEnabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>{notificationsEnabled ? '🔔 Som ON' : '🔕 Som OFF'}</button>
+                        <button onClick={() => { setNotificationsEnabled(!notificationsEnabled); setUserInteracted(true); toast.info(notificationsEnabled ? "Som desativado" : "Som ativado"); }} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors border flex items-center gap-2 ${notificationsEnabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                            {notificationsEnabled ? <><IoVolumeMedium /> Som ON</> : <><IoVolumeMute /> Som OFF</>}
+                        </button>
                     </div>
                 </div>
             </header>
@@ -425,7 +440,14 @@ function Painel() {
                                         <div className="h-full flex flex-col items-center justify-center text-gray-300"><div className="text-2xl mb-1">🍃</div><span className="text-sm">Vazio</span></div>
                                     ) : (
                                         abaAtiva === 'cozinha' ? (
-                                            <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} />
+                                            <GrupoPedidosMesa 
+                                                pedidos={listaPedidos} 
+                                                onUpdateStatus={handleUpdateStatusAndNotify} 
+                                                onExcluir={handleExcluirPedido} 
+                                                newOrderIds={newOrderIds} 
+                                                estabelecimentoInfo={estabelecimentoInfo} 
+                                                onImprimir={handleImprimirDireto} // 🔥 Passando onImprimir
+                                            />
                                         ) : (
                                             <div className="space-y-3">
                                                 {listaPedidos.map(pedido => (
@@ -438,6 +460,7 @@ function Painel() {
                                                         estabelecimentoInfo={estabelecimentoInfo} 
                                                         motoboysDisponiveis={motoboys} 
                                                         onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} 
+                                                        onImprimir={() => handleImprimirDireto(pedido)} // 🔥 Passando onImprimir
                                                     />
                                                 ))}
                                             </div>
@@ -449,6 +472,13 @@ function Painel() {
                     })}
                 </div>
             </main>
+
+            {/* 🔥 ÁREA INVISÍVEL PARA IMPRESSÃO 🔥 */}
+            <div className="hidden print:block print:absolute print:top-0 print:left-0 print:w-full">
+                {pedidoParaImpressao && (
+                    <ComandaParaImpressao pedido={pedidoParaImpressao} />
+                )}
+            </div>
         </div>
     );
 }
