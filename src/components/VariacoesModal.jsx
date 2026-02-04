@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IoClose, IoCheckmarkCircle, IoSquareOutline, IoCheckbox } from 'react-icons/io5';
+import { IoClose, IoCheckmarkCircle, IoSquareOutline, IoCheckbox, IoLockClosed } from 'react-icons/io5';
 
 const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     const cores = coresEstabelecimento || {
@@ -13,43 +13,22 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     const [observacao, setObservacao] = useState('');
     const [total, setTotal] = useState(0);
 
-    // --- CORREÇÃO AQUI: PROCESSAR O QUE ESTÁ DENTRO DO GRUPO ---
+    // --- CORREÇÃO: CARREGA ADICIONAIS DE FORMA SIMPLES E SEGURA ---
     useEffect(() => {
         if (item) {
-            let listaFinal = [];
-
-            // 1. Processar Adicionais
+            // Se tiver adicionais, carrega a lista limpa
             if (item.adicionais && Array.isArray(item.adicionais)) {
-                item.adicionais.forEach(adic => {
-                    // VERIFICAÇÃO CRUCIAL:
-                    // Se o item for um GRUPO (ex: Molhos) e tiver 'variacoes' dentro,
-                    // nós pegamos as variações (o que está dentro).
-                    if (adic.variacoes && adic.variacoes.length > 0) {
-                        const itensDeDentro = adic.variacoes.map(subItem => ({
-                            ...subItem,
-                            // Garante que tenha um ID único, usando o nome se precisar
-                            id: subItem.id || `${adic.id}-${subItem.nome}`, 
-                            nome: subItem.nome,
-                            preco: subItem.preco,
-                            // Flag pra saber que veio de um grupo (opcional)
-                            grupo: adic.nome 
-                        }));
-                        listaFinal = [...listaFinal, ...itensDeDentro];
-                    } 
-                    // Se não tiver variações, é um item solto (ex: Bacon Extra), adiciona ele mesmo
-                    else {
-                        listaFinal.push(adic);
-                    }
-                });
+                setAdicionaisDisponiveis(item.adicionais);
             }
 
-            setAdicionaisDisponiveis(listaFinal);
-
-            // 2. Se já tiver variação pré-selecionada (vinda do botão "Adicionar"), seta ela
+            // Seleção automática da variação principal se só tiver uma
             if (item.variacaoSelecionada) {
                 setSelectedOption(item.variacaoSelecionada);
             } else if (item.variacoes && item.variacoes.length === 1) {
                 setSelectedOption(item.variacoes[0]);
+            } else if (!item.variacoes || item.variacoes.length === 0) {
+                // Caso não tenha variação (só adicional), cria um dummy
+                setSelectedOption({ nome: 'Padrão', preco: item.preco });
             }
         }
     }, [item]);
@@ -57,7 +36,6 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     // --- CÁLCULO DO TOTAL ---
     useEffect(() => {
         let valorBase = 0;
-        
         if (selectedOption) {
             valorBase = Number(selectedOption.preco) || 0;
         } else {
@@ -74,13 +52,11 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     }, [selectedOption, item, adicionaisSelecionados]);
 
     const handleConfirm = () => {
-        if (item.variacoes && item.variacoes.length > 0 && !selectedOption) {
-            return; 
-        }
+        if (item.variacoes && item.variacoes.length > 0 && !selectedOption) return;
 
         onConfirm({
             ...item,
-            variacaoSelecionada: selectedOption || null,
+            variacaoSelecionada: selectedOption?.nome === 'Padrão' ? null : selectedOption,
             adicionaisSelecionados: adicionaisSelecionados,
             observacao,
             precoFinal: total
@@ -89,11 +65,9 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
 
     const toggleAdicional = (adic) => {
         setAdicionaisSelecionados(prev => {
-            // Compara por ID ou por Nome para garantir que encontre o item certo
             const exists = prev.find(a => (a.id && a.id === adic.id) || a.nome === adic.nome);
-            
             if (exists) {
-                return prev.filter(a => (a.id && a.id !== adic.id) && a.nome !== adic.nome);
+                return prev.filter(a => !((a.id && a.id === adic.id) || a.nome === adic.nome));
             } else {
                 return [...prev, { ...adic, quantidade: 1 }];
             }
@@ -103,6 +77,10 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     const formatarMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
     
     const mostrarSecaoAdicionais = adicionaisDisponiveis.length > 0;
+    const temVariacoesReais = item.variacoes && item.variacoes.length > 0;
+    
+    // 🔥 LÓGICA DE BLOQUEIO: Bloqueia se tem variações mas nenhuma selecionada
+    const bloquearAdicionais = temVariacoesReais && !selectedOption;
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in">
@@ -121,8 +99,8 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                 {/* Conteúdo com Scroll */}
                 <div className="p-5 overflow-y-auto custom-scrollbar flex-1 bg-gray-50">
                     
-                    {/* 1. Variações (Obrigatório) */}
-                    {item.variacoes && item.variacoes.length > 0 && (
+                    {/* 1. Variações */}
+                    {temVariacoesReais && (
                         <>
                             <h3 className="font-bold mb-3 text-sm uppercase text-gray-500 tracking-wide">
                                 1. Escolha uma opção <span className="text-red-500 text-[10px] bg-red-100 px-2 py-0.5 rounded-full ml-1">Obrigatório</span>
@@ -150,17 +128,25 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                         </>
                     )}
 
-                    {/* 2. Adicionais (Opcional) */}
+                    {/* 2. Adicionais */}
                     {mostrarSecaoAdicionais && (
-                        <div className={`${item.variacoes && item.variacoes.length > 0 ? 'border-t border-gray-200 pt-6' : ''}`}>
+                        <div className={`relative transition-all duration-300 ${temVariacoesReais ? 'border-t border-gray-200 pt-6' : ''} ${bloquearAdicionais ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
+                            
+                            {/* Aviso de bloqueio visual */}
+                            {bloquearAdicionais && (
+                                <div className="absolute inset-0 z-10 flex items-center justify-center">
+                                    <div className="bg-white/90 px-4 py-2 rounded-full shadow-sm border border-gray-200 text-xs font-bold text-gray-500 flex items-center gap-2">
+                                        <IoLockClosed /> Selecione a opção acima primeiro
+                                    </div>
+                                </div>
+                            )}
+
                             <h3 className="font-bold mb-3 text-sm uppercase text-gray-500 tracking-wide">
-                                {item.variacoes && item.variacoes.length > 0 ? "2." : "1."} Adicionais <span className="text-gray-400 font-normal text-xs normal-case ml-1">(Opcional)</span>
+                                {temVariacoesReais ? "2." : "1."} Adicionais <span className="text-gray-400 font-normal text-xs normal-case ml-1">(Opcional)</span>
                             </h3>
                             <div className="space-y-2">
                                 {adicionaisDisponiveis.map((adic, idx) => {
-                                    // Verificação segura de seleção
                                     const isSel = adicionaisSelecionados.some(a => (a.id && a.id === adic.id) || a.nome === adic.nome);
-                                    
                                     let precoAdic = adic.preco !== undefined ? adic.preco : adic.valor;
                                     if(typeof precoAdic === 'string') precoAdic = parseFloat(precoAdic.replace(',', '.'));
 
@@ -173,7 +159,6 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className={`font-medium ${isSel ? 'text-gray-900' : 'text-gray-500'}`}>{adic.nome}</span>
-                                                    {/* Mostra de qual grupo veio se existir */}
                                                     {adic.grupo && <span className="text-[10px] text-gray-400 font-light">{adic.grupo}</span>}
                                                 </div>
                                             </div>
@@ -206,8 +191,8 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                             Voltar
                         </button>
                         <button onClick={handleConfirm} 
-                                disabled={item.variacoes && item.variacoes.length > 0 && !selectedOption}
-                                className={`flex-1 py-3.5 rounded-xl font-bold text-white flex justify-center items-center gap-2 shadow-lg transition-all active:scale-95 ${item.variacoes && item.variacoes.length > 0 && !selectedOption ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
+                                disabled={temVariacoesReais && !selectedOption}
+                                className={`flex-1 py-3.5 rounded-xl font-bold text-white flex justify-center items-center gap-2 shadow-lg transition-all active:scale-95 ${temVariacoesReais && !selectedOption ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
                                 style={{ backgroundColor: cores.destaque }}>
                             <IoCheckmarkCircle size={20}/> 
                             <span>Adicionar</span>

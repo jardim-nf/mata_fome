@@ -1,89 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import { IoClose, IoAdd, IoRemove, IoCheckmarkCircle } from 'react-icons/io5';
-import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { IoClose, IoCheckmarkCircle, IoSquareOutline, IoCheckbox } from 'react-icons/io5';
 
-const AdicionaisModal = ({ item, onConfirm, onClose, cores, estabelecimentoId }) => {
+const AdicionaisModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
+    // Fallback de cores para evitar erro se vier undefined
+    const cores = coresEstabelecimento || {
+        primaria: '#0b0b0b', destaque: '#059669', background: '#ffffff',
+        texto: { principal: '#111827' }
+    };
+
     const [listaAdicionais, setListaAdicionais] = useState([]);
     const [selecionados, setSelecionados] = useState([]);
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const carregarAdicionais = async () => {
-            try {
-                // Aqui você busca os itens da categoria "Adicionais"
-                const querySnapshot = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', 'Adicionais', 'itens'));
-                const itens = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setListaAdicionais(itens);
-            } catch (error) {
-                console.error("Erro ao carregar adicionais:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        carregarAdicionais();
-    }, [estabelecimentoId]);
+        // Usa os adicionais que já foram injetados pelo Menu.jsx
+        if (item && item.adicionais) {
+            setListaAdicionais(item.adicionais);
+        }
+    }, [item]);
 
     const toggleAdicional = (adc) => {
         const existe = selecionados.find(s => s.id === adc.id);
         if (existe) {
             setSelecionados(selecionados.filter(s => s.id !== adc.id));
         } else {
-            setSelecionados([...selecionados, adc]);
+            // Garante quantidade 1 ao selecionar
+            setSelecionados([...selecionados, { ...adc, quantidade: 1 }]);
         }
     };
 
     const handleConfirmar = () => {
-        const precoAdicionais = selecionados.reduce((acc, curr) => acc + parseFloat(curr.preco || 0), 0);
-        const nomesAdicionais = selecionados.map(s => s.nome).join(', ');
-        
+        // Calcula o preço total dos adicionais
+        const precoAdicionais = selecionados.reduce((acc, curr) => {
+            const valor = curr.preco !== undefined ? curr.preco : curr.valor;
+            // Trata string "10,00" virando número 10.00
+            const valorNumerico = typeof valor === 'string' 
+                ? parseFloat(valor.replace(',', '.')) 
+                : parseFloat(valor || 0);
+            return acc + valorNumerico;
+        }, 0);
+
+        // Preço base do item
+        const precoBase = parseFloat(item.precoFinal || item.preco || 0);
+
         onConfirm({
             ...item,
-            precoFinal: parseFloat(item.preco) + precoAdicionais,
-            observacao: item.observacao ? `${item.observacao} | Adicionais: ${nomesAdicionais}` : `Adicionais: ${nomesAdicionais}`,
-            adicionais: selecionados // Para guardar a referência
+            precoFinal: precoBase + precoAdicionais,
+            adicionaisSelecionados: selecionados, // Passa a lista estruturada
+            // A observação é montada no componente pai ou aqui se preferir textual
+            observacao: item.observacao || ''
         });
     };
 
+    const formatarMoeda = (val) => {
+        const valor = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
+    };
+
     return (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-lg rounded-t-3xl p-5 animate-slide-up max-h-[80vh] flex flex-col">
-                <div className="flex justify-between items-center mb-4">
-                    <div>
-                        <h3 className="text-xl font-black">Turbinar seu {item.nome}?</h3>
-                        <p className="text-xs text-gray-500">Escolha os complementos</p>
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                
+                {/* Header */}
+                <div className="p-4 flex justify-between items-center" style={{ backgroundColor: cores.destaque }}>
+                    <div className="text-white">
+                        <h3 className="text-lg font-extrabold leading-tight">Turbinar {item.nome}?</h3>
+                        <p className="text-xs opacity-90">Escolha os complementos</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-gray-100 rounded-full"><IoClose/></button>
+                    <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors">
+                        <IoClose size={20}/>
+                    </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2">
-                    {loading ? <p className="text-center py-4">Carregando...</p> : 
-                        listaAdicionais.map(adc => {
+                {/* Lista */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
+                    {listaAdicionais.length === 0 ? (
+                        <p className="text-center text-gray-500 py-4">Nenhum adicional disponível para este item.</p>
+                    ) : (
+                        listaAdicionais.map((adc, idx) => {
                             const isSel = selecionados.find(s => s.id === adc.id);
+                            // Normaliza preço para exibição
+                            let precoExibicao = adc.preco !== undefined ? adc.preco : adc.valor;
+                            
                             return (
                                 <div 
-                                    key={adc.id} 
+                                    key={adc.id || idx} 
                                     onClick={() => toggleAdicional(adc)}
-                                    className={`p-3 rounded-2xl border-2 transition-all flex justify-between items-center cursor-pointer ${isSel ? 'border-green-500 bg-green-50' : 'border-gray-100'}`}
+                                    className={`p-3 rounded-xl border transition-all flex justify-between items-center cursor-pointer ${isSel ? 'bg-white border-green-500 shadow-sm' : 'bg-white border-gray-200 hover:border-gray-300'}`}
                                 >
-                                    <span className="font-bold text-gray-700">{adc.nome}</span>
                                     <div className="flex items-center gap-3">
-                                        <span className="text-sm font-black text-gray-900">+ R$ {parseFloat(adc.preco).toFixed(2)}</span>
-                                        {isSel ? <IoCheckmarkCircle className="text-2xl text-green-500"/> : <div className="w-6 h-6 rounded-full border-2 border-gray-200"/>}
+                                        <div style={{ color: isSel ? cores.destaque : '#d1d5db' }}>
+                                            {isSel ? <IoCheckbox size={24} /> : <IoSquareOutline size={24} />}
+                                        </div>
+                                        <span className={`font-bold ${isSel ? 'text-gray-800' : 'text-gray-500'}`}>{adc.nome}</span>
                                     </div>
+                                    <span className="text-sm font-bold text-gray-700">+ {formatarMoeda(precoExibicao)}</span>
                                 </div>
-                            )
+                            );
                         })
-                    }
+                    )}
                 </div>
 
-                <button 
-                    onClick={handleConfirmar}
-                    className="w-full mt-4 py-4 rounded-2xl text-white font-bold shadow-lg"
-                    style={{ backgroundColor: cores.destaque }}
-                >
-                    Confirmar e Adicionar
-                </button>
+                {/* Footer */}
+                <div className="p-4 border-t border-gray-100 bg-white">
+                    <button 
+                        onClick={handleConfirmar}
+                        className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
+                        style={{ backgroundColor: cores.destaque }}
+                    >
+                        <IoCheckmarkCircle size={20} />
+                        Confirmar e Adicionar
+                    </button>
+                </div>
             </div>
         </div>
     );
