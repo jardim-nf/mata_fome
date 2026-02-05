@@ -1,73 +1,37 @@
-/* 1) importar fonte Poppins */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
-
-/* 2) variáveis CSS (opcional, mas ajuda no @apply) */
-:root {
-  --color-primary: #FFD400;
-  --color-secondary: #000000;
-  --color-accent: #FFFFFF;
-}
-.Toastify__toast-container.confirm-modal-position {
-  width: auto;
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.toast-confirm-modal {
-  background-color: #1f2937 !important; /* bg-gray-800 */
-  color: white !important;
-  border-radius: 12px !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
-  width: 90%;
-  max-width: 400px;
-  padding: 1rem;
-}
-@media print {
-  /* Esconde TUDO na tela */
-  body * {
-    visibility: hidden;
-    height: 0;
-    overflow: hidden;
-  }
-
-  /* Mostra APENAS a área de impressão específica */
-  #area-impressao, #area-impressao * {
-    visibility: visible;
-    height: auto;
-    overflow: visible;
-  }
-
-  /* Posiciona a comanda no topo da folha */
-  #area-impressao {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
-
-  /* Remove cabeçalhos e rodapés automáticos do navegador se possível */
-  @page {
-    margin: 0;
-    size: auto;
-  }
-}
-/* 3) Tailwind directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 4) custom base styles */
+/* REMOVIDO O BLOCO @media print ANTIGO 
+   Porque agora usamos janela pop-up dedicada.
+*/
+
+/* Fonte Poppins (Opcional, mas recomendado se você usa) */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
 @layer base {
   body {
-    @apply font-sans bg-accent text-secondary;
     font-family: 'Poppins', sans-serif;
-    line-height: 1.6;
   }
-  h1, h2, h3, h4 {
-    @apply font-heading font-semibold;
+}
+
+/* CSS Específico para garantir impressão limpa na janela pop-up */
+@media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Esconde botões que tenham a classe .print:hidden */
+  .print\:hidden {
+    display: none !important;
   }
 }

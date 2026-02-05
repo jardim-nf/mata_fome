@@ -1,3 +1,4 @@
+// src/pages/Menu.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -55,6 +56,7 @@ function Menu() {
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [forceLogin, setForceLogin] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
+    const [loginLoading, setLoginLoading] = useState(false);
 
     const [emailAuthModal, setEmailAuthModal] = useState('');
     const [passwordAuthModal, setPasswordAuthModal] = useState('');
@@ -154,6 +156,50 @@ function Menu() {
     };
 
     const handleAbrirLogin = () => { setIsRegisteringInModal(false); setShowLoginPrompt(true); };
+    
+    // 🔥 LÓGICA DE LOGIN REAL 🔥
+    const handleLoginModal = async (e) => { 
+        e.preventDefault(); 
+        setLoginLoading(true); 
+        try { 
+            await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
+            toast.success("Login realizado com sucesso!");
+            setShowLoginPrompt(false); 
+            verificarReaberturaChat(); 
+        } catch (error) { 
+            console.error("Erro login:", error);
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                toast.error("E-mail ou senha incorretos.");
+            } else if (error.code === 'auth/too-many-requests') {
+                toast.error("Muitas tentativas. Tente novamente mais tarde.");
+            } else {
+                toast.error("Erro ao entrar: " + error.message);
+            }
+        } finally {
+            setLoginLoading(false); 
+        }
+    };
+    
+    // 🔥 LÓGICA DE CADASTRO REAL 🔥
+    const handleRegisterModal = async (e) => { 
+        e.preventDefault(); 
+        setLoginLoading(true);
+        try { 
+            const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
+            await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { email: emailAuthModal, nome: nomeAuthModal, isAdmin: false, isMasterAdmin: false, estabelecimentos: [], estabelecimentosGerenciados: [], criadoEm: Timestamp.now() });
+            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal || '', numero: numeroAuthModal || '', bairro: bairroAuthModal || '', cidade: cidadeAuthModal || '' }, criadoEm: Timestamp.now() }); 
+            toast.success("Conta criada!"); setShowLoginPrompt(false); verificarReaberturaChat(); 
+        } catch (error) { 
+            if (error.code === 'auth/email-already-in-use') {
+                toast.error("Este e-mail já está cadastrado.");
+            } else {
+                toast.error("Erro ao criar conta: " + error.message); 
+            }
+        } finally {
+            setLoginLoading(false);
+        }
+    };
+
     const handleLoginDoChat = () => { setShowAICenter(false); setDeveReabrirChat(true); handleAbrirLogin(); };
     const verificarReaberturaChat = () => { if (deveReabrirChat) { setShowAICenter(true); setDeveReabrirChat(false); } };
 
@@ -227,7 +273,6 @@ function Menu() {
 
     const carregarProdutosRapido = async (estabId) => {
         try {
-            console.log("🔍 Buscando cardápio para ID:", estabId);
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const snapshot = await getDocs(cardapioRef);
             
@@ -350,8 +395,11 @@ function Menu() {
         const temVariacao = itemComAdicionais.variacoes && itemComAdicionais.variacoes.length > 0;
         const temAdicional = itemComAdicionais.adicionais && itemComAdicionais.adicionais.length > 0;
 
-        if (temVariacao || temAdicional) { setItemParaVariacoes(itemComAdicionais); } 
-        else { handleAdicionarRapido(itemComAdicionais); }
+        if (temVariacao || temAdicional) { 
+            setItemParaVariacoes(itemComAdicionais); 
+        } else { 
+            handleAdicionarRapido(itemComAdicionais); 
+        }
     };
 
     const handleAbrirModalProduto = (item) => {
@@ -363,8 +411,11 @@ function Menu() {
         const temVariacao = itemComAdicionais.variacoes && itemComAdicionais.variacoes.length > 0;
         const temAdicional = itemComAdicionais.adicionais && itemComAdicionais.adicionais.length > 0;
 
-        if (temVariacao || temAdicional) { setItemParaVariacoes(itemComAdicionais); } 
-        else { handleAdicionarRapido(itemComAdicionais); }
+        if (temVariacao || temAdicional) { 
+            setItemParaVariacoes(itemComAdicionais); 
+        } else { 
+            handleAdicionarRapido(itemComAdicionais); 
+        }
     };
 
     const handleConfirmarVariacoes = (itemConfigurado) => {
@@ -399,12 +450,10 @@ function Menu() {
     const handleLogout = async () => { try { await logout(); setCarrinho([]); window.location.reload(); } catch (e) { console.error(e); } };
     const handleApplyCoupon = async () => { /* ... */ };
 
-    // 🔥 PREPARAR PAGAMENTO COM VALIDAÇÃO FORTE 🔥
     const prepararParaPagamento = () => {
         if (!currentUser) return handleAbrirLogin();
         if (carrinho.length === 0) return toast.warn('Carrinho vazio.');
         
-        // Validação de Dados
         if (!nomeCliente.trim()) {
             toast.error("Por favor, preencha seu NOME.");
             document.getElementById('input-nome')?.focus();
@@ -449,19 +498,12 @@ function Menu() {
 
     const baixarEstoque = async (itensVendidos) => { /* ... */ };
     
-    // Função chamada ao finalizar o pagamento no Modal
     const handlePagamentoSucesso = async (result) => {
         setProcessandoPagamento(true);
         try {
             const pedidoFinal = cleanData({ ...pedidoParaPagamento, status: 'recebido', transactionId: result.transactionId });
             const docRef = await addDoc(collection(db, 'pedidos'), pedidoFinal);
-            
-            try {
-                await baixarEstoque(pedidoParaPagamento.itens);
-            } catch (errEstoque) {
-                console.warn("Erro estoque:", errEstoque);
-            }
-
+            try { await baixarEstoque(pedidoParaPagamento.itens); } catch (errEstoque) { console.warn("Erro estoque:", errEstoque); }
             setConfirmedOrderDetails({ id: docRef.id });
             setShowOrderConfirmationModal(true);
             setCarrinho([]);
@@ -472,8 +514,6 @@ function Menu() {
 
     const handlePagamentoFalha = (error) => toast.error(`Falha: ${error.message}`);
     const handleGanharRaspadinha = (premio) => { /* ... */ };
-    const handleLoginModal = async (e) => { /* ... */ };
-    const handleRegisterModal = async (e) => { /* ... */ };
 
     // --- EFFECTS ---
     useEffect(() => {
@@ -708,6 +748,8 @@ function Menu() {
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
+            
+            {/* 🔥 MODAL DE LOGIN 🔥 */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-md relative text-left shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
@@ -732,7 +774,9 @@ function Menu() {
                             )}
                             <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                             <input type="password" placeholder="Senha" value={passwordAuthModal} onChange={e => setPasswordAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
-                            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition-colors">{isRegisteringInModal ? 'Cadastrar' : 'Entrar'}</button>
+                            <button type="submit" disabled={loginLoading} className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 transition-colors flex justify-center items-center gap-2">
+                                {loginLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (isRegisteringInModal ? 'Cadastrar' : 'Entrar')}
+                            </button>
                         </form>
                         <button type="button" onClick={() => setIsRegisteringInModal(!isRegisteringInModal)} className="w-full mt-4 text-green-600 text-sm hover:underline text-center block font-medium">{isRegisteringInModal ? 'Já tenho conta? Entrar' : 'Não tem conta? Criar agora'}</button>
                     </div>
