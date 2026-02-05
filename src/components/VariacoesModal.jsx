@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { IoClose, IoCheckmarkCircle, IoSquareOutline, IoCheckbox, IoLockClosed } from 'react-icons/io5';
+// 🔥 1. IMPORTS DO FIREBASE (Necessários para o Salão)
+import { db } from '../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
-const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
+const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabelecimentoId }) => {
     const cores = coresEstabelecimento || {
         primaria: '#0b0b0b', destaque: '#059669', background: '#111827',
         texto: { principal: '#ffffff', secundario: '#9ca3af' }
@@ -12,30 +15,84 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     const [adicionaisSelecionados, setAdicionaisSelecionados] = useState([]);
     const [observacao, setObservacao] = useState('');
     const [total, setTotal] = useState(0);
+    const [loadingAdicionais, setLoadingAdicionais] = useState(false);
 
-    // --- CORREÇÃO: CARREGA ADICIONAIS DE FORMA SIMPLES E SEGURA ---
+    // --- FUNÇÃO AUXILIAR: PROCESSA OS GRUPOS (Lógica que você gosta) ---
+    const processarAdicionais = (listaCrua) => {
+        let listaFinal = [];
+        if (listaCrua && Array.isArray(listaCrua)) {
+            listaCrua.forEach(adic => {
+                // Se for um GRUPO com variações dentro
+                if (adic.variacoes && adic.variacoes.length > 0) {
+                    const itensDeDentro = adic.variacoes.map(subItem => ({
+                        ...subItem,
+                        id: subItem.id || `${adic.id}-${subItem.nome}`, 
+                        nome: subItem.nome,
+                        preco: subItem.preco,
+                        grupo: adic.nome 
+                    }));
+                    listaFinal = [...listaFinal, ...itensDeDentro];
+                } 
+                // Se for item solto
+                else {
+                    listaFinal.push(adic);
+                }
+            });
+        }
+        return listaFinal;
+    };
+
+    // --- EFFECT PRINCIPAL: CARREGA E PROCESSA DADOS ---
     useEffect(() => {
-        if (item) {
-            // Se tiver adicionais, carrega a lista limpa
-            if (item.adicionais && Array.isArray(item.adicionais)) {
-                setAdicionaisDisponiveis(item.adicionais);
+        if (!item) return;
+
+        const carregarDados = async () => {
+            let dadosParaProcessar = [];
+
+            // CENÁRIO 1: O item já tem os adicionais (Delivery ou Cache)
+            if (item.adicionais && Array.isArray(item.adicionais) && item.adicionais.length > 0) {
+                dadosParaProcessar = item.adicionais;
+                setAdicionaisDisponiveis(processarAdicionais(dadosParaProcessar));
+            } 
+            // CENÁRIO 2: Controle de Salão (Busca no Firebase)
+            else if (estabelecimentoId && item.categoriaId && item.id) {
+                setLoadingAdicionais(true);
+                try {
+                    const adicsRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.id, 'adicionais');
+                    const snapshot = await getDocs(adicsRef);
+                    
+                    if (!snapshot.empty) {
+                        // Pega os dados do banco
+                        const listaDoBanco = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                        // 🔥 Aplica a sua lógica de processamento nos dados do banco
+                        setAdicionaisDisponiveis(processarAdicionais(listaDoBanco));
+                    } else {
+                        setAdicionaisDisponiveis([]);
+                    }
+                } catch (error) {
+                    console.error("Erro ao buscar adicionais:", error);
+                } finally {
+                    setLoadingAdicionais(false);
+                }
             }
 
-            // Seleção automática da variação principal se só tiver uma
+            // Seleção automática da variação (Padrão/Única)
             if (item.variacaoSelecionada) {
                 setSelectedOption(item.variacaoSelecionada);
             } else if (item.variacoes && item.variacoes.length === 1) {
                 setSelectedOption(item.variacoes[0]);
             } else if (!item.variacoes || item.variacoes.length === 0) {
-                // Caso não tenha variação (só adicional), cria um dummy
                 setSelectedOption({ nome: 'Padrão', preco: item.preco });
             }
-        }
-    }, [item]);
+        };
+
+        carregarDados();
+    }, [item, estabelecimentoId]);
 
     // --- CÁLCULO DO TOTAL ---
     useEffect(() => {
         let valorBase = 0;
+        
         if (selectedOption) {
             valorBase = Number(selectedOption.preco) || 0;
         } else {
@@ -52,11 +109,13 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     }, [selectedOption, item, adicionaisSelecionados]);
 
     const handleConfirm = () => {
-        if (item.variacoes && item.variacoes.length > 0 && !selectedOption) return;
+        if (item.variacoes && item.variacoes.length > 0 && !selectedOption) {
+            return; 
+        }
 
         onConfirm({
             ...item,
-            variacaoSelecionada: selectedOption?.nome === 'Padrão' ? null : selectedOption,
+            variacaoSelecionada: selectedOption || null,
             adicionaisSelecionados: adicionaisSelecionados,
             observacao,
             precoFinal: total
@@ -65,7 +124,9 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
 
     const toggleAdicional = (adic) => {
         setAdicionaisSelecionados(prev => {
+            // Compara por ID ou por Nome para garantir que encontre o item certo
             const exists = prev.find(a => (a.id && a.id === adic.id) || a.nome === adic.nome);
+            
             if (exists) {
                 return prev.filter(a => !((a.id && a.id === adic.id) || a.nome === adic.nome));
             } else {
@@ -77,9 +138,9 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     const formatarMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
     
     const mostrarSecaoAdicionais = adicionaisDisponiveis.length > 0;
-    const temVariacoesReais = item.variacoes && item.variacoes.length > 0;
     
-    // 🔥 LÓGICA DE BLOQUEIO: Bloqueia se tem variações mas nenhuma selecionada
+    // Verifica bloqueio se tem variação mas não selecionou
+    const temVariacoesReais = item.variacoes && item.variacoes.length > 0;
     const bloquearAdicionais = temVariacoesReais && !selectedOption;
 
     return (
@@ -99,7 +160,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                 {/* Conteúdo com Scroll */}
                 <div className="p-5 overflow-y-auto custom-scrollbar flex-1 bg-gray-50">
                     
-                    {/* 1. Variações */}
+                    {/* 1. Variações (Obrigatório) */}
                     {temVariacoesReais && (
                         <>
                             <h3 className="font-bold mb-3 text-sm uppercase text-gray-500 tracking-wide">
@@ -128,8 +189,13 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                         </>
                     )}
 
-                    {/* 2. Adicionais */}
-                    {mostrarSecaoAdicionais && (
+                    {/* 2. Adicionais (Opcional) */}
+                    {loadingAdicionais ? (
+                        <div className="py-8 flex flex-col justify-center items-center text-gray-400 gap-2">
+                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400"></div>
+                             <span className="text-xs">Buscando opções...</span>
+                        </div>
+                    ) : mostrarSecaoAdicionais && (
                         <div className={`relative transition-all duration-300 ${temVariacoesReais ? 'border-t border-gray-200 pt-6' : ''} ${bloquearAdicionais ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
                             
                             {/* Aviso de bloqueio visual */}
@@ -146,7 +212,9 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                             </h3>
                             <div className="space-y-2">
                                 {adicionaisDisponiveis.map((adic, idx) => {
+                                    // Verificação segura de seleção
                                     const isSel = adicionaisSelecionados.some(a => (a.id && a.id === adic.id) || a.nome === adic.nome);
+                                    
                                     let precoAdic = adic.preco !== undefined ? adic.preco : adic.valor;
                                     if(typeof precoAdic === 'string') precoAdic = parseFloat(precoAdic.replace(',', '.'));
 
@@ -159,6 +227,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className={`font-medium ${isSel ? 'text-gray-900' : 'text-gray-500'}`}>{adic.nome}</span>
+                                                    {/* Mostra de qual grupo veio se existir */}
                                                     {adic.grupo && <span className="text-[10px] text-gray-400 font-light">{adic.grupo}</span>}
                                                 </div>
                                             </div>

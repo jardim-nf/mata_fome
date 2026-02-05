@@ -1,279 +1,273 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { toast } from 'react-toastify';
+import { useAuth } from '../context/AuthContext';
+import { IoPrint } from 'react-icons/io5';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-// Importa os dois modelos de impressão
-import ComandaParaImpressao from '../components/ComandaParaImpressao';
-import ComandaSalaoImpressao from '../components/ComandaSalaoImpressao';
+// --- LAYOUT SALÃO (Mesa) ---
+const LayoutSalao = ({ pedido, estabelecimento }) => {
+    // Agrupa itens por pessoa
+    const itensPorPessoa = useMemo(() => {
+        if (!pedido.itens) return {};
+        return pedido.itens.reduce((acc, item) => {
+            const nome = item.clienteNome || item.cliente || 'Mesa';
+            if (!acc[nome]) acc[nome] = [];
+            acc[nome].push(item);
+            return acc;
+        }, {});
+    }, [pedido.itens]);
 
-export default function PaginaImpressao() {
-    const { pedidoId } = useParams();
+    const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
+
+    return (
+        <div className="font-mono text-xs text-black w-full max-w-[80mm] mx-auto p-2 bg-white">
+            
+            {/* Cabeçalho Limpo */}
+            <div className="text-center border-b border-black pb-2 mb-2">
+                <h1 className="font-bold text-sm uppercase">{estabelecimento?.nome || 'RESTAURANTE'}</h1>
+                
+                {/* MESA EM DESTAQUE (SEM FUNDO PRETO) */}
+                <div className="text-xl font-black mt-1 border-2 border-black inline-block px-3 rounded">
+                    MESA {pedido.mesaNumero || pedido.mesa}
+                </div>
+                
+                <p className="text-[10px] mt-1">
+                    {pedido.createdAt?.toDate 
+                        ? format(pedido.createdAt.toDate(), "dd/MM/yyyy HH:mm", { locale: ptBR }) 
+                        : new Date().toLocaleString()}
+                </p>
+                <p className="text-[10px]">Senha: {pedido.senha || pedido.id?.slice(0,4)}</p>
+            </div>
+
+            {/* Lista Agrupada */}
+            <div>
+                {Object.entries(itensPorPessoa).map(([nomeCliente, itens]) => (
+                    <div key={nomeCliente} className="mb-2">
+                        {/* 🔥 NOME SEM TARJA (Apenas Negrito) 🔥 */}
+                        {nomeCliente !== 'Mesa' && (
+                            <div className="font-black text-sm border-b border-dotted border-black mb-1 mt-2 pb-1 uppercase">
+                                👤 {nomeCliente}
+                            </div>
+                        )}
+
+                        {itens.map((item, idx) => (
+                            <div key={idx} className="mb-2 border-b border-gray-200 pb-1">
+                                <div className="flex justify-between items-start font-bold text-sm">
+                                    <span>{item.quantidade}x {item.nome}</span>
+                                    <span>{formatMoney((item.precoFinal || item.preco) * item.quantidade)}</span>
+                                </div>
+
+                                {/* Detalhes */}
+                                <div className="pl-2 text-[11px] font-normal">
+                                    {item.variacaoSelecionada && (
+                                        <div className="italic">- {item.variacaoSelecionada.nome}</div>
+                                    )}
+
+                                    {/* Adicionais Selecionados */}
+                                    {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
+                                        <div key={i}>+ {adc.nome}</div>
+                                    ))}
+
+                                    {item.observacao && (
+                                        <div className="font-bold mt-0.5 uppercase">** {item.observacao}</div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ))}
+            </div>
+
+            {/* Totais */}
+            <div className="border-t border-black pt-2 mt-2 text-right">
+                <div className="flex justify-between text-lg font-bold">
+                    <span>TOTAL:</span>
+                    <span>{formatMoney(pedido.total || pedido.totalFinal)}</span>
+                </div>
+            </div>
+            
+            <div className="text-center text-[10px] mt-4 font-bold">*** NÃO É DOCUMENTO FISCAL ***</div>
+        </div>
+    );
+};
+
+// --- LAYOUT DELIVERY ---
+const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao }) => {
+    const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
+    
+    return (
+        <div className="font-mono text-xs text-black w-full max-w-[80mm] mx-auto p-2 bg-white">
+            <div className="text-center border-b border-black pb-2 mb-2">
+                <h1 className="font-bold text-sm uppercase">{estabelecimento?.nome || 'DELIVERY'}</h1>
+                <p className="font-bold mt-1">PEDIDO #{pedido.numeroPedido || pedido.id?.slice(0,5)}</p>
+                <p className="text-[10px]">{new Date().toLocaleString()}</p>
+                
+                {/* 🔥 TARJA DE COZINHA REMOVIDA (Agora é borda) 🔥 */}
+                {modoImpressao === 'cozinha' && (
+                    <div className="mt-1 border-2 border-black font-black uppercase text-sm py-1">
+                        ** COZINHA **
+                    </div>
+                )}
+            </div>
+
+            {/* Cliente */}
+            <div className="mb-3 border-b border-black pb-2">
+                <div className="font-bold text-sm uppercase">{pedido.cliente?.nome || "Cliente"}</div>
+                {pedido.cliente?.telefone && <div>Tel: {pedido.cliente.telefone}</div>}
+                
+                {pedido.endereco || pedido.cliente?.endereco ? (
+                    <div className="mt-1 border border-black p-1 rounded font-bold bg-white">
+                        {(pedido.endereco || pedido.cliente.endereco).rua}, {(pedido.endereco || pedido.cliente.endereco).numero}
+                        <div>{(pedido.endereco || pedido.cliente.endereco).bairro}</div>
+                        {(pedido.endereco || pedido.cliente.endereco).complemento && <div>Obs: {(pedido.endereco || pedido.cliente.endereco).complemento}</div>}
+                    </div>
+                ) : (
+                    <div className="mt-1 font-bold border border-black px-1 inline-block">RETIRADA</div>
+                )}
+            </div>
+
+            {/* Itens */}
+            <div className="mb-2">
+                {pedido.itens?.map((item, idx) => (
+                    <div key={idx} className="mb-2 border-b border-dashed border-gray-300 pb-1">
+                        <div className="flex justify-between items-start font-bold">
+                            <span>{item.quantidade}x {item.nome}</span>
+                            <span>{formatMoney((item.preco || 0) * item.quantidade)}</span>
+                        </div>
+                        <div className="pl-2 text-[10px] font-normal">
+                            {(item.variacao || item.variacaoSelecionada) && (
+                                <div className="italic">- {item.variacao?.nome || item.variacaoSelecionada?.nome}</div>
+                            )}
+                            
+                            {/* Adicionais Selecionados */}
+                            {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
+                                <div key={i}>+ {adc.nome}</div>
+                            ))}
+
+                            {item.observacao && <div className="font-bold uppercase">** {item.observacao}</div>}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Totais */}
+            <div className="border-t border-black pt-2 space-y-1 text-right">
+                <div className="flex justify-between"><span>Subtotal:</span><span>{formatMoney(pedido.totalItens || pedido.subtotal)}</span></div>
+                {Number(pedido.taxaEntrega) > 0 && <div className="flex justify-between"><span>Taxa:</span><span>{formatMoney(pedido.taxaEntrega)}</span></div>}
+                {Number(pedido.desconto) > 0 && <div className="flex justify-between"><span>Desconto:</span><span>- {formatMoney(pedido.desconto)}</span></div>}
+                <div className="flex justify-between text-lg font-bold border-t border-dotted border-black pt-1 mt-1"><span>TOTAL:</span><span>{formatMoney(pedido.totalFinal || pedido.total)}</span></div>
+            </div>
+
+            {/* Pagamento */}
+            <div className="mt-2 border border-black p-1 text-center font-bold">
+                {pedido.metodoPagamento || "A Combinar"}
+                {pedido.trocoPara && <div>Troco para: {formatMoney(pedido.trocoPara)}</div>}
+            </div>
+        </div>
+    );
+};
+
+// --- PÁGINA PRINCIPAL ---
+const PaginaImpressao = () => {
+    const params = useParams();
+    const idUrl = params.id || params.pedidoId;
+    const [searchParams] = useSearchParams();
+    const { primeiroEstabelecimento, loading: authLoading } = useAuth();
+    
+    // Pega parâmetros da URL
+    const origem = searchParams.get('origem'); // 'salao' ou 'delivery'
+    const modoImpressao = searchParams.get('modo'); // 'cozinha' ou undefined
+    const estabIdUrl = searchParams.get('estabId');
+
     const [pedido, setPedido] = useState(null);
     const [estabelecimento, setEstabelecimento] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [hasPrinted, setHasPrinted] = useState(false);
-    const [printAttempted, setPrintAttempted] = useState(false);
-    
-    // Referência para o componente
-    const componentRef = useRef();
+    const [erro, setErro] = useState('');
 
-    // 1. Busca os dados do Pedido e do Estabelecimento
     useEffect(() => {
-        const buscarDados = async () => {
-            if (!pedidoId) {
-                setError("ID do pedido não fornecido.");
-                setLoading(false);
-                return;
-            }
-            try {
-                // Busca Pedido
-                const pedidoRef = doc(db, 'pedidos', pedidoId);
-                let pedidoSnap = await getDoc(pedidoRef);
-                
-                if (!pedidoSnap.exists()) {
-                    throw new Error("Pedido não encontrado no banco de dados.");
-                }
-                
-                const dadosPedido = { id: pedidoSnap.id, ...pedidoSnap.data() };
-                setPedido(dadosPedido);
+        if (!idUrl || authLoading) return;
 
-                // Busca Estabelecimento
-                if (dadosPedido.estabelecimentoId) {
-                    const estabelecimentoRef = doc(db, 'estabelecimentos', dadosPedido.estabelecimentoId);
-                    const estabelecimentoSnap = await getDoc(estabelecimentoRef);
-                    
-                    if (estabelecimentoSnap.exists()) {
-                        setEstabelecimento({ id: estabelecimentoSnap.id, ...estabelecimentoSnap.data() });
+        const carregarDados = async () => {
+            setLoading(true);
+            try {
+                // 1. Busca o Pedido
+                let pedidoData = null;
+                let docSnap = await getDoc(doc(db, 'pedidos', idUrl));
+                
+                if (docSnap.exists()) {
+                    pedidoData = { id: docSnap.id, ...docSnap.data() };
+                } else {
+                    const q = query(collectionGroup(db, 'pedidos'), where('id', '==', idUrl));
+                    const qs = await getDocs(q);
+                    if (!qs.empty) {
+                        pedidoData = { id: qs.docs[0].id, ...qs.docs[0].data() };
+                    } else {
+                        // Tenta buscar Mesa Ativa
+                        const estabId = estabIdUrl || primeiroEstabelecimento;
+                        if (estabId) {
+                             const mesaSnap = await getDoc(doc(db, 'estabelecimentos', estabId, 'mesas', idUrl));
+                             if (mesaSnap.exists()) {
+                                 pedidoData = { id: mesaSnap.id, ...mesaSnap.data(), isMesa: true };
+                             }
+                        }
                     }
                 }
 
+                if (!pedidoData) throw new Error("Pedido não encontrado.");
+                setPedido(pedidoData);
+
+                // 2. Busca Estabelecimento
+                const idEstab = pedidoData.estabelecimentoId || estabIdUrl || primeiroEstabelecimento;
+                if (idEstab) {
+                    const estabSnap = await getDoc(doc(db, 'estabelecimentos', idEstab));
+                    if (estabSnap.exists()) setEstabelecimento(estabSnap.data());
+                }
+
+                // Auto-Print
+                setTimeout(() => window.print(), 800);
+
             } catch (err) {
-                console.error("Erro ao buscar dados para impressão:", err);
-                setError(err.message);
-                toast.error(err.message);
+                console.error(err);
+                setErro(err.message);
             } finally {
                 setLoading(false);
             }
         };
-        buscarDados();
-    }, [pedidoId]);
 
-    // 2. Fechar janela de forma segura
-    const closeWindowSafely = () => {
-        console.log('Tentando fechar janela de impressão...');
-        
-        // Tentativa 1: Fechar normalmente
-        if (window.opener && !window.opener.closed) {
-            window.close();
-        } 
-        // Tentativa 2: Fechar com fallback
-        else {
-            try {
-                window.close();
-            } catch (e) {
-                console.log('Não foi possível fechar a janela automaticamente');
-                // Mostrar botão para fechar manualmente
-                const closeBtn = document.getElementById('close-manual-btn');
-                if (closeBtn) {
-                    closeBtn.style.display = 'block';
-                }
-            }
-        }
-    };
+        carregarDados();
+    }, [idUrl, authLoading, estabIdUrl, primeiroEstabelecimento]);
 
-    // 3. Imprimir e gerenciar o fechamento
-    useEffect(() => {
-        if (!loading && pedido && !printAttempted) {
-            setPrintAttempted(true);
-            
-            console.log('Iniciando processo de impressão...');
-            
-            const printTimer = setTimeout(() => {
-                try {
-                    window.print();
-                    setHasPrinted(true);
-                    console.log('Impressão iniciada com sucesso');
-                } catch (error) {
-                    console.error('Erro ao iniciar impressão:', error);
-                    // Mesmo com erro, marca como impresso para prosseguir
-                    setHasPrinted(true);
-                }
-            }, 1500);
-
-            return () => clearTimeout(printTimer);
-        }
-    }, [loading, pedido, printAttempted]);
-
-    // 4. Configurar o evento de após impressão
-    useEffect(() => {
-        const handleAfterPrint = () => {
-            console.log('Evento afterprint disparado - fechando janela');
-            
-            // Delay para garantir que a impressão foi processada
-            setTimeout(() => {
-                closeWindowSafely();
-            }, 1000);
-        };
-
-        // Fallback: se afterprint não disparar em 10 segundos, fechar mesmo assim
-        const safetyTimer = setTimeout(() => {
-            if (!window.closed) {
-                console.log('Fallback: fechando janela após timeout');
-                closeWindowSafely();
-            }
-        }, 10000);
-
-        window.onafterprint = handleAfterPrint;
-
-        return () => {
-            window.onafterprint = null;
-            clearTimeout(safetyTimer);
-        };
-    }, []);
-
-    // 5. Se houve erro ou não encontrou pedido, fechar após um tempo
-    useEffect(() => {
-        if (error) {
-            const errorTimer = setTimeout(() => {
-                closeWindowSafely();
-            }, 5000);
-            
-            return () => clearTimeout(errorTimer);
-        }
-    }, [error]);
-
-    if (loading) {
-        return (
-            <div style={{ 
-                fontFamily: 'monospace', 
-                padding: '20px', 
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100vh',
-                backgroundColor: 'white'
-            }}>
-                <div style={{ fontSize: '24px', marginBottom: '20px' }}>🖨️</div>
-                <div style={{ fontSize: '16px', marginBottom: '10px' }}>Preparando comanda...</div>
-                <div style={{ fontSize: '12px', color: '#666' }}>A impressão iniciará automaticamente</div>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div style={{ 
-                fontFamily: 'monospace', 
-                padding: '20px', 
-                textAlign: 'center', 
-                color: 'red',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100vh',
-                backgroundColor: 'white'
-            }}>
-                <div style={{ fontSize: '24px', marginBottom: '20px' }}>❌</div>
-                <div style={{ fontSize: '16px', marginBottom: '20px' }}>Erro: {error}</div>
-                <button 
-                    id="close-manual-btn"
-                    onClick={closeWindowSafely}
-                    style={{
-                        padding: '10px 20px',
-                        backgroundColor: '#f56565',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '5px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                    }}
-                >
-                    Fechar Janela
-                </button>
-            </div>
-        );
-    }
+    if (loading) return <div className="flex h-screen items-center justify-center font-bold text-xl">Carregando impressão...</div>;
+    if (erro) return <div className="flex h-screen items-center justify-center font-bold text-red-600">{erro}</div>;
+    if (!pedido) return null;
 
     return (
-        <div style={{ backgroundColor: 'white', minHeight: '100vh' }}>
-            {/* Componente de impressão */}
-            {pedido.tipo === 'salao' || pedido.source === 'salao' ? (
-                <ComandaSalaoImpressao 
-                    ref={componentRef} 
-                    pedido={pedido} 
-                    estabelecimento={estabelecimento} 
-                />
-            ) : (
-                <ComandaParaImpressao 
-                    ref={componentRef} 
-                    pedido={pedido} 
-                    estabelecimento={estabelecimento} 
-                />
-            )}
-            
-            {/* Overlay de informação (não imprime) */}
-            <div style={{
-                position: 'fixed',
-                top: '10px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: '#f7fafc',
-                padding: '10px 20px',
-                borderRadius: '5px',
-                border: '1px solid #e2e8f0',
-                fontSize: '14px',
-                zIndex: 1000,
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }} className="no-print">
-                {hasPrinted ? '✅ Impressão concluída - Fechando...' : '🖨️ Imprimindo...'}
-            </div>
-
-            {/* Botão de fechamento manual (só aparece se necessário) */}
-            <button 
-                id="close-manual-btn"
-                onClick={closeWindowSafely}
-                style={{
-                    position: 'fixed',
-                    bottom: '20px',
-                    right: '20px',
-                    padding: '8px 16px',
-                    backgroundColor: '#f56565',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    display: 'none',
-                    zIndex: 1000
-                }}
-                className="no-print"
-            >
-                Fechar
-            </button>
-
+        <div className="bg-white min-h-screen">
             <style>{`
                 @media print {
-                    .no-print {
-                        display: none !important;
-                    }
-                    body {
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        background: white !important;
-                    }
-                }
-                @media screen {
-                    body {
-                        background: white;
-                    }
+                    @page { margin: 0; size: auto; }
+                    body { margin: 0; padding: 0; background: white; }
+                    .no-print { display: none !important; }
+                    /* Garante texto preto puro */
+                    * { color: black !important; }
                 }
             `}</style>
+
+            <button onClick={() => window.print()} className="no-print fixed top-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50">
+                <IoPrint size={24} />
+            </button>
+
+            {/* SELETOR DE LAYOUT */}
+            {(origem === 'salao' || pedido.mesaNumero || pedido.isMesa) ? (
+                <LayoutSalao pedido={pedido} estabelecimento={estabelecimento} />
+            ) : (
+                <LayoutDelivery pedido={pedido} estabelecimento={estabelecimento} modoImpressao={modoImpressao} />
+            )}
         </div>
     );
-}
+};
+
+export default PaginaImpressao;

@@ -50,7 +50,7 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
           padding: 2px 0; 
           margin-top: 8px; 
           margin-bottom: 4px;
-          border-bottom: 1px solid #000;
+          border-bottom: 1px solid ;
           text-transform: uppercase;
         }
         .obs { font-size: 10px; font-style: italic; margin-left: 10px; }

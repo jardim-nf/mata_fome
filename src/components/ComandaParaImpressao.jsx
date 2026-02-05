@@ -135,7 +135,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 {!temItens ? <div className="text-center py-4 border border-black p-2">Sem itens.</div> : 
                     Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
                         <div key={nomePessoa} className="mb-2">
-                            {pedido.mesaNumero && nomePessoa !== 'Geral' && <div className="font-black bg-black text-white px-1 text-[10px] uppercase mb-1 print-color-adjust">👤 {nomePessoa}</div>}
+                            {pedido.mesaNumero && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[20px] uppercase mb-1 print-color-adjust">👤 {nomePessoa}</div>}
                             {itens.map((item, index) => (
                                 <div key={index} className="mb-3 border-b border-dotted border-gray-400 pb-2 last:border-0">
                                     <div className="flex justify-between items-start">
