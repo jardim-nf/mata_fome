@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy,runTransaction } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext"; 
 import { useHeader } from '../context/HeaderContext';
@@ -161,9 +161,9 @@ export default function ControleSalao() {
         catch (error) { toast.error("Erro."); }
     };
 
-    // --- 1. LÓGICA DE BLOQUEIO AO CLICAR NA MESA (CORRIGIDA) ---
+// --- 1. LÓGICA DE BLOQUEIO SEGURA (COM TRANSACTION) ---
     const handleMesaClick = async (mesa) => {
-        // Se já estiver ocupada, entra normal
+        // Se já estiver ocupada visualmente, entra normal
         if (mesa.status !== 'livre') { 
             navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); 
             return;
@@ -175,36 +175,59 @@ export default function ControleSalao() {
             return;
         }
 
-        // Verifica visualmente se JÁ existe um bloqueio de OUTRA pessoa
-        if (mesa.bloqueadoPor && mesa.bloqueadoPor !== usuarioLogado.uid) {
-            const agora = new Date();
-            let tempoBloqueio = 0;
-            if (mesa.bloqueadoEm) {
-                tempoBloqueio = (agora.getTime() - mesa.bloqueadoEm.toDate().getTime()) / 1000 / 60;
-            }
-            
-            if (tempoBloqueio < 2) {
-                const nomeQuemBloqueou = mesa.bloqueadoPorNome || "Outro garçom";
-                toast.warning(`⚠️ Mesa sendo aberta por: ${nomeQuemBloqueou}`);
-                return;
-            }
-        }
+        const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
 
-        // Tenta BLOQUEAR NO BANCO
         try {
-            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id), {
-                bloqueadoPor: usuarioLogado.uid, // Usa a variável corrigida
-                bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
-                bloqueadoEm: serverTimestamp()
+            await runTransaction(db, async (transaction) => {
+                // 1. Lê o documento mais recente do servidor
+                const mesaDoc = await transaction.get(mesaRef);
+                
+                if (!mesaDoc.exists()) {
+                    throw "Mesa não existe mais!";
+                }
+
+                const data = mesaDoc.data();
+
+                // 2. Verifica se a mesa JÁ foi ocupada por alguém milissegundos antes
+                if (data.status !== 'livre') {
+                    throw "Esta mesa acabou de ser ocupada!";
+                }
+
+                // 3. Verifica Bloqueio (Race Condition Check)
+                if (data.bloqueadoPor && data.bloqueadoPor !== usuarioLogado.uid) {
+                    const agora = new Date();
+                    let tempoBloqueio = 0;
+                    
+                    // Verifica se o bloqueio é recente (ex: menos de 2 minutos)
+                    if (data.bloqueadoEm) {
+                        // Se for Timestamp do Firestore, converte. Se for data, usa direto.
+                        const dataBloqueio = data.bloqueadoEm.toDate ? data.bloqueadoEm.toDate() : new Date(data.bloqueadoEm);
+                        tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60; // em minutos
+                    }
+
+                    // Se bloqueado há menos de 2 minutos, impede o acesso
+                    if (tempoBloqueio < 2) {
+                        throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
+                    }
+                }
+
+                // 4. Se passou por tudo, APLICA O BLOQUEIO NA TRANSAÇÃO
+                transaction.update(mesaRef, {
+                    bloqueadoPor: usuarioLogado.uid,
+                    bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
+                    bloqueadoEm: serverTimestamp()
+                });
             });
 
-            // Se der sucesso, abre o modal
+            // Se a transação não der erro, abrimos o modal
             setMesaParaAbrir(mesa); 
             setIsModalAbrirMesaOpen(true);
 
         } catch (error) {
-            console.error("Erro ao bloquear mesa", error);
-            toast.error("Erro ao acessar mesa. Tente novamente.");
+            console.error("Conflito ao abrir mesa:", error);
+            // Se o erro for uma string que nós jogamos (throw), exibe ela. Senão, erro genérico.
+            const msg = typeof error === 'string' ? error : "Erro: Mesa sendo acessada por outro usuário.";
+            toast.warning(msg);
         }
     };
 
