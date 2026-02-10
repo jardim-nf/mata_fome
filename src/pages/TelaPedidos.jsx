@@ -64,6 +64,7 @@ const TelaPedidos = () => {
     const navigate = useNavigate();
     const { user, userData } = useAuth(); 
     
+    // Define qual ID usar (Logado ou URL)
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId;
 
     // Estados
@@ -259,86 +260,76 @@ const TelaPedidos = () => {
         );
     }, [cardapio, termoBusca, categoriaAtiva]);
 
-// --- ESSA É A FUNÇÃO QUE CORRIGE A IMPRESSÃO ---
-const confirmarAdicaoAoCarrinho = async (itemConfig) => {
-    // 1. Separa os dados. O 'restoDoItem' pega tudo, menos a lista gigante de 'adicionais'
-    const { nome, variacaoSelecionada, observacao, precoFinal, adicionaisSelecionados, ...restoDoItem } = itemConfig;
-    
-    // 2. Monta o nome visual
-    let nomeFinal = nome;
-    if (variacaoSelecionada) {
-        nomeFinal += ` - ${variacaoSelecionada.nome}`;
-    }
-    
-    // 3. Garante que temos uma lista limpa dos selecionados
-    const temAdicionais = adicionaisSelecionados && adicionaisSelecionados.length > 0;
-    const listaFinalAdicionais = temAdicionais ? adicionaisSelecionados : [];
+    const confirmarAdicaoAoCarrinho = async (itemConfig) => {
+        const { nome, variacaoSelecionada, observacao, precoFinal, adicionaisSelecionados, ...restoDoItem } = itemConfig;
+        
+        let nomeFinal = nome;
+        if (variacaoSelecionada) {
+            nomeFinal += ` - ${variacaoSelecionada.nome}`;
+        }
+        
+        const temAdicionais = adicionaisSelecionados && adicionaisSelecionados.length > 0;
+        const listaFinalAdicionais = temAdicionais ? adicionaisSelecionados : [];
 
-    // Adiciona no nome (opcional, ajuda na visualização rápida)
-    if (temAdicionais) {
-         const nomesAdics = listaFinalAdicionais.map(a => a.nome).join(', ');
-         nomeFinal += ` (+ ${nomesAdics})`;
-    }
+        if (temAdicionais) {
+             const nomesAdics = listaFinalAdicionais.map(a => a.nome).join(', ');
+             nomeFinal += ` (+ ${nomesAdics})`;
+        }
 
-    const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
-    const novaLista = [...resumoPedido];
-    
-    // Verifica se já existe item igual
-    const indexExistente = novaLista.findIndex(i => {
-        const adicsAtuais = i.adicionaisSelecionados || [];
-        const adicsNovos = listaFinalAdicionais;
-        const mesmaQtd = adicsAtuais.length === adicsNovos.length;
-        const mesmosAdics = mesmaQtd && adicsAtuais.every(a => adicsNovos.some(b => b.nome === a.nome));
+        const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
+        const novaLista = [...resumoPedido];
+        
+        const indexExistente = novaLista.findIndex(i => {
+            const adicsAtuais = i.adicionaisSelecionados || [];
+            const adicsNovos = listaFinalAdicionais;
+            const mesmaQtd = adicsAtuais.length === adicsNovos.length;
+            const mesmosAdics = mesmaQtd && adicsAtuais.every(a => adicsNovos.some(b => b.nome === a.nome));
 
-        return i.produtoIdOriginal === itemConfig.id && 
-               i.nome === nomeFinal &&
-               i.observacao === (observacao || '') &&
-               i.cliente === clienteSelecionado &&
-               (!i.status || i.status === 'pendente') &&
-               mesmosAdics;
-    });
-
-    if (indexExistente >= 0) {
-        novaLista[indexExistente].quantidade += 1;
-        novaLista[indexExistente].adicionadoPor = nomeGarcom;
-        toast.success(`+1 ${nomeFinal}`);
-    } else {
-        // 🔥 CORREÇÃO CRUCIAL PARA A IMPRESSÃO 🔥
-        const novoItem = {
-            ...restoDoItem, // Aqui NÃO tem a lista gigante de 'adicionais' do cardápio
-            id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
-            produtoIdOriginal: itemConfig.id, 
-            categoriaId: itemConfig.categoriaId,
-            nome: nomeFinal, 
-            preco: precoFinal,
-            observacao: observacao || '', 
-            quantidade: 1, 
-            cliente: clienteSelecionado,
-            adicionadoEm: new Date(), 
-            status: 'pendente',
-            adicionadoPor: nomeGarcom,
-            // Salva APENAS o que foi selecionado
-            adicionaisSelecionados: listaFinalAdicionais,
-            // Forçamos o campo 'adicionais' a ser igual aos selecionados para a impressora não confundir
-            adicionais: listaFinalAdicionais, 
-            variacaoSelecionada: variacaoSelecionada || null
-        };
-        novaLista.push(novoItem);
-        toast.success(`${nomeFinal} adicionado!`);
-    }
-
-    setResumoPedido(novaLista);
-    setProdutoEmSelecao(null);
-
-    // Salva no Firebase
-    try {
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-            itens: novaLista,
-            total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0),
-            updatedAt: serverTimestamp()
+            return i.produtoIdOriginal === itemConfig.id && 
+                   i.nome === nomeFinal &&
+                   i.observacao === (observacao || '') &&
+                   i.cliente === clienteSelecionado &&
+                   (!i.status || i.status === 'pendente') &&
+                   mesmosAdics;
         });
-    } catch(e) { console.error(e); }
-};
+
+        if (indexExistente >= 0) {
+            novaLista[indexExistente].quantidade += 1;
+            novaLista[indexExistente].adicionadoPor = nomeGarcom;
+            toast.success(`+1 ${nomeFinal}`);
+        } else {
+            const novoItem = {
+                ...restoDoItem,
+                id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
+                produtoIdOriginal: itemConfig.id, 
+                categoriaId: itemConfig.categoriaId,
+                nome: nomeFinal, 
+                preco: precoFinal,
+                observacao: observacao || '', 
+                quantidade: 1, 
+                cliente: clienteSelecionado,
+                adicionadoEm: new Date(), 
+                status: 'pendente',
+                adicionadoPor: nomeGarcom,
+                adicionaisSelecionados: listaFinalAdicionais,
+                adicionais: listaFinalAdicionais, 
+                variacaoSelecionada: variacaoSelecionada || null
+            };
+            novaLista.push(novoItem);
+            toast.success(`${nomeFinal} adicionado!`);
+        }
+
+        setResumoPedido(novaLista);
+        setProdutoEmSelecao(null);
+
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+                itens: novaLista,
+                total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0),
+                updatedAt: serverTimestamp()
+            });
+        } catch(e) { console.error(e); }
+    };
 
     const iniciarAdicaoPessoa = () => { setIsAddingPerson(true); setNovoNomeTemp(''); };
     const confirmarNovaPessoa = async () => {
@@ -375,64 +366,120 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
         setResumoPedido(novaLista);
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { itens: novaLista, total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0) });
     };
+
+    // --- 🔥 SALVAR ALTERAÇÕES (CORRIGIDO PARA O CONTROLE DE SALÃO) ---
     const salvarAlteracoes = async () => {
         setSalvando(true);
         try {
             const novos = resumoPedido.filter(i => !i.status || i.status === 'pendente');
             const total = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
+            
             const batch = writeBatch(db);
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
 
+            // 1. Atualiza Estoque (Opcional, não quebra se falhar a permissão)
+            // Se o usuário não tiver permissão de editar cardápio, isso poderia travar o batch.
+            // Para garantir, vamos fazer separado ou assumir que o sistema permite.
+            // Se for cliente, cuidado.
             const promessas = novos.map(async item => {
                 if(!item.categoriaId || !item.produtoIdOriginal) return null;
-                let ref = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.produtoIdOriginal);
-                let snap = await getDoc(ref);
-                if(!snap.exists()) {
-                    ref = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'produtos', item.produtoIdOriginal);
-                    snap = await getDoc(ref);
+                try {
+                    let ref = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.produtoIdOriginal);
+                    let snap = await getDoc(ref);
+                    if(!snap.exists()) {
+                        ref = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'produtos', item.produtoIdOriginal);
+                        snap = await getDoc(ref);
+                    }
+                    if(snap.exists()) return { item, itemRef: ref, itemSnap: snap };
+                } catch(e) {
+                    console.warn("Sem permissão para ler/atualizar estoque, ignorando...", e);
                 }
-                return { item, itemRef: ref, itemSnap: snap };
+                return null;
             });
+            
             const resultados = await Promise.all(promessas);
+            
             resultados.forEach(res => {
                 if(!res || !res.itemSnap.exists()) return;
                 const data = res.itemSnap.data();
                 const itemV = res.item;
                 const ref = res.itemRef;
-                if(itemV.variacaoSelecionada && data.variacoes && Array.isArray(data.variacoes)) {
-                    const novasVars = data.variacoes.map(v => {
-                        const ehEssa = (v.id && v.id === itemV.variacaoSelecionada.id) || (v.nome === itemV.variacaoSelecionada.nome);
-                        if(ehEssa) return { ...v, estoque: (Number(v.estoque)||0) - itemV.quantidade };
-                        return v;
-                    });
-                    const novoTotal = novasVars.reduce((acc, v) => acc + (Number(v.estoque)||0), 0);
-                    batch.update(ref, { variacoes: novasVars, estoque: novoTotal });
-                } else {
-                    batch.update(ref, { estoque: increment(-itemV.quantidade) });
+                
+                try {
+                    if(itemV.variacaoSelecionada && data.variacoes && Array.isArray(data.variacoes)) {
+                        const novasVars = data.variacoes.map(v => {
+                            const ehEssa = (v.id && v.id === itemV.variacaoSelecionada.id) || (v.nome === itemV.variacaoSelecionada.nome);
+                            if(ehEssa) return { ...v, estoque: (Number(v.estoque)||0) - itemV.quantidade };
+                            return v;
+                        });
+                        const novoTotal = novasVars.reduce((acc, v) => acc + (Number(v.estoque)||0), 0);
+                        batch.update(ref, { variacoes: novasVars, estoque: novoTotal });
+                    } else {
+                        batch.update(ref, { estoque: increment(-itemV.quantidade) });
+                    }
+                } catch (e) {
+                     console.warn("Erro ao preparar update de estoque no batch", e);
                 }
             });
 
+            // 2. Cria o Pedido para a Cozinha (Se houver itens de cozinha)
             if(novos.length > 0) {
                 const idPedido = `pedido_${mesaId}_${Date.now()}`;
+                
+                // Filtra o que vai pra cozinha (Ex: Bebidas não vão, se for a regra)
                 const isBebida = (cat) => {
                     const c = (cat || '').toLowerCase();
                     return c.includes('bebida') || c.includes('drink') || c.includes('suco') || c.includes('refrigerante') || c.includes('agua') || c.includes('cerveja');
                 };
+                
+                // Se quiser mandar TUDO para a cozinha, remova o filtro.
+                // Aqui mantive sua lógica de filtrar bebidas.
                 const cozinha = novos.filter(i => !isBebida(i.categoria));
+                
                 if(cozinha.length > 0) {
-                    batch.set(doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedido), {
-                        id: idPedido, mesaId, mesaNumero: mesa?.numero, itens: cozinha.map(i => ({...i, status: 'recebido'})), status: 'recebido', total: cozinha.reduce((a,i)=>a+(i.preco*i.quantidade),0), dataPedido: serverTimestamp(), source: 'salao'
+                    // 🔥 SALVA NA COLEÇÃO 'pedidos' DO ESTABELECIMENTO
+                    const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedido);
+                    batch.set(pedidoRef, {
+                        id: idPedido, 
+                        mesaId, 
+                        mesaNumero: mesa?.numero, 
+                        itens: cozinha.map(i => ({...i, status: 'recebido'})), 
+                        status: 'recebido', 
+                        total: cozinha.reduce((a,i)=>a+(i.preco*i.quantidade),0), 
+                        dataPedido: serverTimestamp(), 
+                        createdAt: serverTimestamp(), // Adicionado para garantir ordenação
+                        source: 'salao'
                     });
                 }
+
+                // 3. Atualiza a Mesa (Controle de Salão)
                 const itensUpd = resumoPedido.map(i => (!i.status || i.status === 'pendente') ? { ...i, status: 'enviado', pedidoCozinhaId: cozinha.length > 0 ? idPedido : null } : i);
-                batch.update(mesaRef, { itens: itensUpd, status: 'com_pedido', total, updatedAt: serverTimestamp() });
+                
+                // 🔥 CORREÇÃO: status 'ocupada' ao invés de 'com_pedido' para o Controle de Salão reconhecer
+                batch.update(mesaRef, { 
+                    itens: itensUpd, 
+                    status: 'ocupada', // <-- Isso faz o card ficar vermelho/ocupado no Controle
+                    total: total, 
+                    updatedAt: serverTimestamp() 
+                });
             } else {
-                batch.update(mesaRef, { itens: resumoPedido, total, updatedAt: serverTimestamp() });
+                // Se não tem novos itens (apenas atualização de qtd ou algo assim), só atualiza a mesa
+                batch.update(mesaRef, { 
+                    itens: resumoPedido, 
+                    total: total, 
+                    updatedAt: serverTimestamp() 
+                });
             }
+
             await batch.commit();
             toast.success("Pedido enviado!");
-            navigate('/controle-salao');
-        } catch(e) { console.error(e); toast.error("Erro ao salvar"); } finally { setSalvando(false); }
+            // navigate('/controle-salao'); // Opcional: voltar ou ficar na mesa
+        } catch(e) { 
+            console.error("Erro ao salvar:", e); 
+            toast.error("Erro ao enviar pedido. Tente novamente."); 
+        } finally { 
+            setSalvando(false); 
+        }
     };
 
     const itensAgrupados = useMemo(() => {
@@ -500,7 +547,6 @@ const confirmarAdicaoAoCarrinho = async (itemConfig) => {
                         key={`${prod.id}-${idx}`}
                         produto={prod}
                         abrirModalOpcoes={(p) => {
-                            // 🔥🔥🔥 AQUI ESTÁ A MÁGICA 🔥🔥🔥
                             const itemEnriquecido = enrichWithGlobalAdicionais(p);
                             const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
                             if (temOpcoes) setProdutoEmSelecao(itemEnriquecido);

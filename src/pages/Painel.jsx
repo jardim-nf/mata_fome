@@ -91,16 +91,25 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-    // 🔥 FUNÇÃO INTELIGENTE: Decide se é "salao" ou "global" (delivery) baseado nos dados do pedido
+// 🔥 FUNÇÃO INTELIGENTE: Decide se é "salao" ou "global" (delivery)
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
         
         const clienteLimpo = limparDadosCliente(pedidoData.cliente);
         let endereco = pedidoData.endereco || {};
-        if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) { endereco = { ...endereco, ...clienteLimpo.endereco }; }
+        if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) { 
+            endereco = { ...endereco, ...clienteLimpo.endereco }; 
+        }
         
-        // Se tiver mesaNumero > 0, é Salão. Se não, é Delivery/Retirada (Global)
-        const source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
+        // --- CORREÇÃO AQUI ---
+        // 1. Verifica se já veio com 'source' definido (ex: 'salao' vindo da TelaPedidos)
+        // 2. Se não tiver, tenta adivinhar pelo número da mesa
+        let source = pedidoData.source;
+        if (!source) {
+             source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
+        }
+
+        // Define o tipo visual
         const tipo = pedidoData.tipo || (source === 'salao' ? 'salao' : 'delivery');
 
         return {
@@ -108,7 +117,7 @@ function Painel() {
             id: pedidoData.id, 
             cliente: clienteLimpo, 
             endereco: endereco, 
-            source: source, // <-- Aqui está a correção
+            source: source, // Usa a fonte definida corretamente
             tipo: tipo,
             status: pedidoData.status || 'recebido', 
             itens: pedidoData.itens || [],
@@ -195,9 +204,11 @@ function Painel() {
 
         let isFirstRun = true;
         
-        // 🔥 Agora escutamos APENAS a coleção de pedidos do estabelecimento (que contém tudo)
-        const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), orderBy('createdAt', 'asc')); // Usei createdAt que é comum a todos
-        
+// 🔥 Agora escutamos APENAS a coleção de pedidos do estabelecimento
+const qPedidos = query(
+    collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), 
+    orderBy('createdAt', 'asc') // Garante ordem de chegada
+);
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) {
                 snapshot.docChanges().forEach(checkAutoPrint);
