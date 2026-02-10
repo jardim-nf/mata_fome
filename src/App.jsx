@@ -61,12 +61,9 @@ import FinanceiroMaster from './pages/admin/FinanceiroMaster';
 
 function App() {
   return (
-    // 🔥 CORREÇÃO CRUCIAL: Router no topo de tudo!
-    // Assim, AIProvider e AuthProvider podem usar 'useNavigate' sem quebrar o site.
     <Router>
       <AuthProvider>
         <HeaderProvider>
-          {/* AIProvider e PaymentProvider agora estão DENTRO do Router */}
           <AIProvider>
             <PaymentProvider>
               <NotificationProvider>
@@ -78,8 +75,14 @@ function App() {
                     <Route path="/home" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/login-admin" element={<Login />} />
+                    
+                    {/* 👇 ESSA É A ROTA NOVA PARA O IFRAME AUTOMÁTICO 👇 */}
+                    <Route path="/imprimir-comanda/:pedidoId" element={<ComandaParaImpressao />} />
+                    
+                    {/* Rotas legadas de impressão manual */}
                     <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
                     <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
+                    
                     <Route path="/cardapio" element={<ListaEstabelecimentos />} />
                     <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
                     

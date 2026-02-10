@@ -2,43 +2,72 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePayment } from '../context/PaymentContext';
-import useCarrinho from '../hooks/useCarrinho'; // <--- 1. Importamos o carrinho real
+import useCarrinho from '../hooks/useCarrinho';
 import PaymentSelector from '../components/PaymentSelector';
-import RaspadinhaModal from '../components/RaspadinhaModal'; // <--- 2. Importamos a raspadinha
+import RaspadinhaModal from '../components/RaspadinhaModal';
 import { toast } from 'react-toastify';
+
+// 🔥 IMPORTS DO FIREBASE
+import { useAuth } from '../context/AuthContext';
+import { db } from '../firebase';
+import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore'; // Importei doc e getDoc
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { processPayment } = usePayment();
+  const { processPayment, selectedPayment } = usePayment();
+  const { currentUser, currentClientData } = useAuth();
+  const { carrinho, subtotal, adicionarAoCarrinho, limparCarrinho } = useCarrinho();
   
-  // --- AQUI MUDOU: Usamos dados reais do carrinho ---
-  const { carrinho, subtotal, adicionarAoCarrinho } = useCarrinho();
-  
-  // Estados para controlar a Raspadinha
   const [showRaspadinha, setShowRaspadinha] = useState(false);
   const [premioAplicado, setPremioAplicado] = useState(null);
   const [jaJogou, setJaJogou] = useState(false);
-
-  // Estados de valores (Taxa e Desconto)
   const [taxaEntrega, setTaxaEntrega] = useState(8.00); 
   const [descontoValor, setDescontoValor] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // --- O GATILHO: Verifica se deve mostrar a raspadinha ---
+  // 🔥 Estado para armazenar o valor mínimo vindo do banco
+  const [valorGatilhoRaspadinha, setValorGatilhoRaspadinha] = useState(9999); // Começa alto para não abrir sem querer
+
+  // 1. useEffect para buscar a configuração da loja
   useEffect(() => {
-    // Se passou de R$ 100 e ainda não jogou...
-    if (subtotal >= 100 && !jaJogou && !premioAplicado) {
-        // Espera 1 segundinho e mostra a tela!
+    const fetchConfigRaspadinha = async () => {
+        const estabId = carrinho[0]?.estabelecimentoId;
+        if (!estabId) return;
+
+        try {
+            const docRef = doc(db, 'estabelecimentos', estabId);
+            const docSnap = await getDoc(docRef);
+            
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                // Pega o valor ou define 100 como padrão se não tiver configurado
+                const valorMinimo = data.valorMinimoRaspadinha ? parseFloat(data.valorMinimoRaspadinha) : 100;
+                setValorGatilhoRaspadinha(valorMinimo);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar config da raspadinha:", error);
+        }
+    };
+
+    if (carrinho.length > 0) {
+        fetchConfigRaspadinha();
+    }
+  }, [carrinho]);
+
+  // 2. useEffect do Gatilho (Agora usa a variável dinâmica)
+  useEffect(() => {
+    // 🔥 Agora compara com 'valorGatilhoRaspadinha' em vez de 100 fixo
+    if (subtotal >= valorGatilhoRaspadinha && !jaJogou && !premioAplicado) {
         setTimeout(() => {
             setShowRaspadinha(true);
         }, 1000);
     }
-  }, [subtotal, jaJogou, premioAplicado]);
+  }, [subtotal, jaJogou, premioAplicado, valorGatilhoRaspadinha]);
 
-  // --- LÓGICA DO PRÊMIO: O que fazer quando ganhar ---
   const handleGanharPremio = (premio) => {
-    setShowRaspadinha(false); // Fecha o modal
-    setJaJogou(true);         // Marca que já jogou
-    setPremioAplicado(premio); // Salva qual foi o prêmio
+    setShowRaspadinha(false);
+    setJaJogou(true);
+    setPremioAplicado(premio);
 
     if (premio.type === 'desconto') {
         const valorDoDesconto = subtotal * (premio.valor / 100);
@@ -50,7 +79,6 @@ const CheckoutPage = () => {
         toast.success('🎉 Ganhou Frete Grátis!');
     } 
     else if (premio.type === 'brinde') {
-        // Adiciona o brinde no carrinho com preço R$ 0,00
         adicionarAoCarrinho(
             { ...premio.produto, id: 'brinde-raspadinha', preco: 0, nome: `${premio.produto.nome} (Brinde)` },
             1,
@@ -61,20 +89,70 @@ const CheckoutPage = () => {
     }
   };
 
-  // Cálculo final do total
   const totalFinal = subtotal + taxaEntrega - descontoValor;
 
-  const handlePaymentSuccess = () => {
-    toast.success('🎉 Pagamento realizado com sucesso!');
-    setTimeout(() => {
-      navigate('/historico-pedidos');
-    }, 2000);
+  const handlePaymentSuccess = async () => {
+    if (isSaving) return;
+    
+    const estabelecimentoId = carrinho[0]?.estabelecimentoId;
+
+    if (!estabelecimentoId) {
+        toast.error("Erro crítico: Estabelecimento não identificado.");
+        return;
+    }
+
+    if (!currentUser) {
+        toast.error("Você precisa estar logado.");
+        navigate('/login');
+        return;
+    }
+
+    setIsSaving(true);
+
+    try {
+        const pedido = {
+            clienteId: currentUser.uid,
+            clienteNome: currentClientData?.nome || currentUser.displayName || 'Cliente App',
+            clienteTelefone: currentClientData?.telefone || '',
+            
+            endereco: currentClientData?.endereco || { 
+                rua: 'Endereço não cadastrado', 
+                numero: 'S/N', 
+                bairro: 'Verificar com cliente' 
+            },
+            
+            itens: carrinho,
+            total: totalFinal,
+            
+            formaPagamento: selectedPayment || 'Não selecionado',
+            metodoPagamento: selectedPayment, 
+            
+            tipoEntrega: 'delivery',
+            status: 'recebido',
+            createdAt: Timestamp.now(),
+            dataPedido: Timestamp.now(),
+            
+            descontoAplicado: descontoValor,
+            premioRaspadinha: premioAplicado ? premioAplicado.type : null,
+            estabelecimentoId: estabelecimentoId
+        };
+
+        await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'), pedido);
+
+        toast.success('🎉 Pedido enviado para a loja!');
+        limparCarrinho();
+        setTimeout(() => { navigate('/historico-pedidos'); }, 2000);
+
+    } catch (error) {
+        console.error("Erro ao salvar pedido:", error);
+        toast.error("Erro ao processar pedido. Tente novamente.");
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 relative">
-      
-      {/* --- AQUI ENTRA A RASPADINHA (Fica por cima de tudo) --- */}
       {showRaspadinha && (
         <RaspadinhaModal 
             onGanhar={handleGanharPremio} 
@@ -84,11 +162,8 @@ const CheckoutPage = () => {
 
       <div className="max-w-4xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Header */}
           <div className="bg-[#FF6B35] text-white p-6">
             <h1 className="text-2xl font-bold">Finalizar Pedido</h1>
-            
-            {/* Aviso visual se tiver prêmio aplicado */}
             {premioAplicado && (
                 <div className="mt-2 bg-white/20 inline-block px-3 py-1 rounded text-sm font-bold animate-pulse">
                     🎁 Prêmio Ativo: {premioAplicado.label}
@@ -97,9 +172,16 @@ const CheckoutPage = () => {
           </div>
 
           <div className="p-6">
-            {/* Resumo do Pedido (Agora com dados reais) */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold mb-4">Resumo do Pedido</h2>
+              
+              {currentClientData?.endereco && (
+                  <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm">
+                      <p className="font-bold text-gray-700">📍 Entregar em:</p>
+                      <p>{currentClientData.endereco.rua}, {currentClientData.endereco.numero} - {currentClientData.endereco.bairro}</p>
+                  </div>
+              )}
+
               <div className="space-y-3">
                 {carrinho.map((item, index) => (
                   <div key={item._cartId || index} className="flex justify-between items-center py-2 border-b">
@@ -119,7 +201,6 @@ const CheckoutPage = () => {
                   <span>R$ {subtotal.toFixed(2)}</span>
                 </div>
 
-                {/* Linha do Desconto (só aparece se tiver) */}
                 {descontoValor > 0 && (
                     <div className="flex justify-between py-2 border-b text-green-600 font-bold">
                         <span>Desconto Raspadinha</span>
@@ -143,10 +224,8 @@ const CheckoutPage = () => {
               </div>
             </div>
 
-            {/* Seletor de Pagamento */}
             <PaymentSelector
               amount={totalFinal}
-              // Passamos metadata para saber no futuro que esse pedido teve prêmio
               metadata={{ 
                   premioRaspadinha: premioAplicado ? premioAplicado.type : null 
               }}

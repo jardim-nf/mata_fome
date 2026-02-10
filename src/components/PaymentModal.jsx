@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IoClose, IoCash, IoCard, IoQrCode, IoCopy, IoCheckmarkCircle, IoTime, IoChevronDown, IoChevronUp } from 'react-icons/io5';
 import { toast } from 'react-toastify';
 
@@ -66,7 +66,7 @@ const PaymentModal = ({
     onClose, 
     amount, 
     orderId, 
-    cartItems = [], // 🔥 Recebe os itens para mostrar resumo
+    cartItems = [], 
     onSuccess, 
     coresEstabelecimento, 
     pixKey, 
@@ -112,7 +112,11 @@ const PaymentModal = ({
         if (method === 'pix') {
             paymentData.details = { pixCode };
         } else if (method === 'cash') {
-            paymentData.details = { troco: trocoPara ? Number(trocoPara) - Number(amount) : 0 };
+            paymentData.details = { 
+                // 🔥 CORREÇÃO AQUI: Mandamos o valor original para o backend calcular/salvar
+                trocoPara: trocoPara ? Number(trocoPara) : 0,
+                troco: trocoPara ? Number(trocoPara) - Number(amount) : 0 
+            };
         } else if (method === 'card') {
             paymentData.details = { type: cartaoTipo };
         }
@@ -143,7 +147,6 @@ const PaymentModal = ({
                         </span>
                     </div>
 
-                    {/* Botão para ver detalhes do pedido */}
                     {cartItems.length > 0 && (
                         <button 
                             onClick={() => setShowDetails(!showDetails)}
@@ -154,31 +157,6 @@ const PaymentModal = ({
                         </button>
                     )}
                 </div>
-
-                {/* Lista de Detalhes (Expansível) */}
-                {showDetails && cartItems.length > 0 && (
-                    <div className="bg-gray-50 px-6 pb-4 text-sm border-b border-gray-100 overflow-y-auto max-h-40 flex-shrink-0">
-                        <div className="space-y-2">
-                            {cartItems.map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-start text-gray-700">
-                                    <div className="flex-1">
-                                        <span className="font-bold">{item.qtd}x {item.nome}</span>
-                                        {item.variacaoSelecionada && (
-                                            <span className="text-xs text-gray-500 block">Opção: {item.variacaoSelecionada.nome || item.variacaoSelecionada}</span>
-                                        )}
-                                        {/* 🔥 MOSTRA OS ADICIONAIS AQUI 🔥 */}
-                                        {item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0 && (
-                                            <div className="text-xs text-blue-600">
-                                                + {item.adicionaisSelecionados.map(a => `${a.nome} (R$ ${Number(a.preco || 0).toFixed(2)})`).join(', ')}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <span className="font-bold whitespace-nowrap">R$ {Number(item.precoFinal * item.qtd).toFixed(2)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 {/* Body (Rolável) */}
                 <div className="p-6 overflow-y-auto flex-1">
@@ -229,7 +207,6 @@ const PaymentModal = ({
                                 ← Voltar
                             </button>
 
-                            {/* --- ÁREA DO PIX --- */}
                             {method === 'pix' && (
                                 <div className="text-center space-y-4">
                                     {pixKey ? (
@@ -241,49 +218,32 @@ const PaymentModal = ({
                                                     className="w-48 h-48 mix-blend-multiply"
                                                 />
                                             </div>
-                                            
                                             <div className="bg-gray-50 p-3 rounded-xl flex items-center justify-between gap-2 border border-gray-200">
                                                 <p className="text-xs text-gray-500 truncate max-w-[200px] font-mono select-all">
                                                     {pixCode || "Gerando..."}
                                                 </p>
-                                                <button 
-                                                    onClick={handleCopyPix} 
-                                                    className="text-white bg-green-600 font-bold text-xs flex items-center gap-1 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors shadow-sm"
-                                                >
+                                                <button onClick={handleCopyPix} className="text-white bg-green-600 font-bold text-xs flex items-center gap-1 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors shadow-sm">
                                                     <IoCopy /> Copiar
                                                 </button>
-                                            </div>
-                                            
-                                            <div className="flex items-center justify-center gap-2 text-sm text-gray-500 bg-blue-50 p-2 rounded-lg">
-                                                <IoTime className="text-blue-500" /> 
-                                                <span>Aguardando confirmação...</span>
                                             </div>
                                         </>
                                     ) : (
                                         <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex flex-col items-center">
                                             <IoClose className="text-3xl mb-2" />
                                             <strong>Chave PIX não configurada.</strong>
-                                            <span>Avise o estabelecimento.</span>
                                         </div>
                                     )}
                                 </div>
                             )}
 
-                            {/* --- ÁREA DO CARTÃO --- */}
                             {method === 'card' && (
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-3">Qual tipo de cartão?</label>
                                     <div className="flex gap-3">
-                                        <button 
-                                            onClick={() => setCartaoTipo('credito')}
-                                            className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${cartaoTipo === 'credito' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                                        >
+                                        <button onClick={() => setCartaoTipo('credito')} className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${cartaoTipo === 'credito' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
                                             <IoCard size={24} /> Crédito
                                         </button>
-                                        <button 
-                                            onClick={() => setCartaoTipo('debito')}
-                                            className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${cartaoTipo === 'debito' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                                        >
+                                        <button onClick={() => setCartaoTipo('debito')} className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${cartaoTipo === 'debito' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
                                             <IoCard size={24} /> Débito
                                         </button>
                                     </div>
@@ -293,7 +253,6 @@ const PaymentModal = ({
                                 </div>
                             )}
 
-                            {/* --- ÁREA DO DINHEIRO --- */}
                             {method === 'cash' && (
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Vai precisar de troco?</label>
@@ -307,27 +266,20 @@ const PaymentModal = ({
                                             onChange={e => setTrocoPara(e.target.value)}
                                         />
                                     </div>
-                                    <p className="text-xs text-gray-400 ml-1">Deixe em branco se tiver o valor exato.</p>
-                                    
-                                    {trocoPara && Number(trocoPara) < Number(amount) && (
-                                        <p className="text-xs text-red-500 font-bold mt-2 ml-1">O valor deve ser maior que o total (R$ {Number(amount).toFixed(2)}).</p>
-                                    )}
+                                    {trocoPara && Number(trocoPara) < Number(amount) && <p className="text-xs text-red-500 font-bold mt-2 ml-1">O valor deve ser maior que o total.</p>}
                                 </div>
                             )}
                         </div>
                     )}
                 </div>
 
-                {/* Footer de Ação */}
+                {/* Footer */}
                 {method && (
                     <div className="p-6 border-t border-gray-100 bg-gray-50 safe-area-bottom flex-shrink-0">
                         <button 
                             onClick={handleConfirm}
-                            disabled={
-                                (method === 'pix' && !pixKey) ||
-                                (method === 'cash' && trocoPara && Number(trocoPara) < Number(amount))
-                            }
-                            className="w-full py-4 rounded-xl font-bold text-white shadow-lg text-lg flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
+                            disabled={(method === 'pix' && !pixKey) || (method === 'cash' && trocoPara && Number(trocoPara) < Number(amount))}
+                            className="w-full py-4 rounded-xl font-bold text-white shadow-lg text-lg flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
                             style={{ backgroundColor: corDestaque }}
                         >
                             <IoCheckmarkCircle className="text-2xl" />

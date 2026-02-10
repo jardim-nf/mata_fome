@@ -498,18 +498,51 @@ function Menu() {
 
     const baixarEstoque = async (itensVendidos) => { /* ... */ };
     
+    // 🔥 LÓGICA CORRIGIDA: SALVA NO BANCO CORRETO COM PAGAMENTO CERTO
     const handlePagamentoSucesso = async (result) => {
         setProcessandoPagamento(true);
         try {
-            const pedidoFinal = cleanData({ ...pedidoParaPagamento, status: 'recebido', transactionId: result.transactionId });
-            const docRef = await addDoc(collection(db, 'pedidos'), pedidoFinal);
+            // --- 1. Mapeamento do Pagamento ---
+            let formaPagamento = 'A Combinar';
+            let trocoPara = '';
+
+            if (result.method === 'pix') {
+                formaPagamento = 'pix';
+            } else if (result.method === 'card') {
+                // result.details.type vem como 'credito' ou 'debito'
+                formaPagamento = result.details.type || 'cartao';
+            } else if (result.method === 'cash') {
+                formaPagamento = 'dinheiro';
+                trocoPara = result.details.trocoPara || ''; 
+            }
+
+            const pedidoFinal = cleanData({ 
+                ...pedidoParaPagamento, 
+                status: 'recebido', 
+                formaPagamento, 
+                metodoPagamento: formaPagamento, // Redundancia
+                trocoPara,
+                tipoEntrega: isRetirada ? 'retirada' : 'delivery'
+            });
+
+            // --- 2. Salvar no Caminho Certo (Estabelecimento) ---
+            if (!actualEstabelecimentoId) throw new Error("ID do estabelecimento não encontrado");
+            
+            // 🔥 CORREÇÃO: Salva na coleção aninhada
+            const docRef = await addDoc(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos'), pedidoFinal);
+            
             try { await baixarEstoque(pedidoParaPagamento.itens); } catch (errEstoque) { console.warn("Erro estoque:", errEstoque); }
+            
             setConfirmedOrderDetails({ id: docRef.id });
             setShowOrderConfirmationModal(true);
             setCarrinho([]);
             setShowPaymentModal(false);
-        } catch (e) { console.error("Erro:", e); toast.error("Erro ao salvar pedido."); } 
-        finally { setProcessandoPagamento(false); }
+        } catch (e) { 
+            console.error("Erro:", e); 
+            toast.error("Erro ao salvar pedido."); 
+        } finally { 
+            setProcessandoPagamento(false); 
+        }
     };
 
     const handlePagamentoFalha = (error) => toast.error(`Falha: ${error.message}`);
@@ -745,7 +778,7 @@ function Menu() {
 
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
             
-            {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} customer={pedidoParaPagamento.cliente} onSuccess={handlePagamentoSucesso} onError={handlePagamentoFalha} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
+            {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} onSuccess={handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
             
