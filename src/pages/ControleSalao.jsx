@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, orderBy,runTransaction } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, doc, getDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, runTransaction } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext"; 
 import { useHeader } from '../context/HeaderContext';
@@ -8,10 +8,12 @@ import { toast } from 'react-toastify';
 import MesaCard from "../components/MesaCard";
 import AdicionarMesaModal from "../components/AdicionarMesaModal";
 import ModalPagamento from "../components/ModalPagamento";
+import GeradorTickets from "../components/GeradorTickets"; // Certifique-se que o arquivo existe
 import { 
     IoArrowBack, IoAdd, 
     IoGrid, IoPeople, IoWalletOutline, 
-    IoRestaurant, IoSearch, IoClose, IoAlertCircle 
+    IoRestaurant, IoSearch, IoClose, IoAlertCircle,
+    IoTicket 
 } from "react-icons/io5";
 
 // --- HELPER DE FORMATAÇÃO ---
@@ -90,9 +92,7 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) =
 };
 
 export default function ControleSalao() {
-    // --- CORREÇÃO AQUI: Tenta pegar 'user' ou 'currentUser' ---
     const { userData, user, currentUser } = useAuth(); 
-    // Garante que temos um objeto de usuário válido
     const usuarioLogado = user || currentUser;
 
     const { setActions, clearActions } = useHeader();
@@ -109,16 +109,53 @@ export default function ControleSalao() {
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
     const [isOpeningTable, setIsOpeningTable] = useState(false); 
+    
+    // --- ESTADOS PARA TICKETS ---
+    const [isModalTicketsOpen, setIsModalTicketsOpen] = useState(false);
+    const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
 
     const estabelecimentoId = useMemo(() => {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
 
+    // --- BUSCA O NOME REAL DO ESTABELECIMENTO ---
+    useEffect(() => {
+        const fetchNomeEstabelecimento = async () => {
+            if (estabelecimentoId) {
+                try {
+                    const docRef = doc(db, "estabelecimentos", estabelecimentoId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        // Tenta pegar o nome, se não tiver usa o do userData, se não tiver usa genérico
+                        const nomeReal = docSnap.data().nome || userData?.nomeEstabelecimento || "Mata Fome";
+                        setNomeEstabelecimento(nomeReal);
+                    }
+                } catch (error) {
+                    console.error("Erro ao buscar nome:", error);
+                    setNomeEstabelecimento(userData?.nomeEstabelecimento || "Mata Fome");
+                }
+            }
+        };
+        fetchNomeEstabelecimento();
+    }, [estabelecimentoId, userData]);
+
+    // --- BOTÕES DO HEADER ---
     useEffect(() => {
         setActions(
-            <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                <IoAdd className="text-lg"/> <span className="hidden sm:inline">Criar Mesa</span>
-            </button>
+            <div className="flex gap-2">
+                <button 
+                    onClick={() => setIsModalTicketsOpen(true)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
+                >
+                    <IoTicket className="text-lg"/> <span className="hidden sm:inline">Tickets</span>
+                </button>
+                <button 
+                    onClick={() => setIsModalOpen(true)} 
+                    className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
+                >
+                    <IoAdd className="text-lg"/> <span className="hidden sm:inline">Criar Mesa</span>
+                </button>
+            </div>
         );
         return () => clearActions();
     }, [setActions, clearActions]);
@@ -161,15 +198,12 @@ export default function ControleSalao() {
         catch (error) { toast.error("Erro."); }
     };
 
-// --- 1. LÓGICA DE BLOQUEIO SEGURA (COM TRANSACTION) ---
     const handleMesaClick = async (mesa) => {
-        // Se já estiver ocupada visualmente, entra normal
         if (mesa.status !== 'livre') { 
             navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); 
             return;
         }
 
-        // SEGURANÇA: Se o usuário não carregou, não deixa clicar
         if (!usuarioLogado || !usuarioLogado.uid) {
             toast.error("Erro de autenticação. Recarregue a página.");
             return;
@@ -179,7 +213,6 @@ export default function ControleSalao() {
 
         try {
             await runTransaction(db, async (transaction) => {
-                // 1. Lê o documento mais recente do servidor
                 const mesaDoc = await transaction.get(mesaRef);
                 
                 if (!mesaDoc.exists()) {
@@ -188,30 +221,24 @@ export default function ControleSalao() {
 
                 const data = mesaDoc.data();
 
-                // 2. Verifica se a mesa JÁ foi ocupada por alguém milissegundos antes
                 if (data.status !== 'livre') {
                     throw "Esta mesa acabou de ser ocupada!";
                 }
 
-                // 3. Verifica Bloqueio (Race Condition Check)
                 if (data.bloqueadoPor && data.bloqueadoPor !== usuarioLogado.uid) {
                     const agora = new Date();
                     let tempoBloqueio = 0;
                     
-                    // Verifica se o bloqueio é recente (ex: menos de 2 minutos)
                     if (data.bloqueadoEm) {
-                        // Se for Timestamp do Firestore, converte. Se for data, usa direto.
                         const dataBloqueio = data.bloqueadoEm.toDate ? data.bloqueadoEm.toDate() : new Date(data.bloqueadoEm);
-                        tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60; // em minutos
+                        tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60; 
                     }
 
-                    // Se bloqueado há menos de 2 minutos, impede o acesso
                     if (tempoBloqueio < 2) {
                         throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
                     }
                 }
 
-                // 4. Se passou por tudo, APLICA O BLOQUEIO NA TRANSAÇÃO
                 transaction.update(mesaRef, {
                     bloqueadoPor: usuarioLogado.uid,
                     bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
@@ -219,19 +246,16 @@ export default function ControleSalao() {
                 });
             });
 
-            // Se a transação não der erro, abrimos o modal
             setMesaParaAbrir(mesa); 
             setIsModalAbrirMesaOpen(true);
 
         } catch (error) {
             console.error("Conflito ao abrir mesa:", error);
-            // Se o erro for uma string que nós jogamos (throw), exibe ela. Senão, erro genérico.
             const msg = typeof error === 'string' ? error : "Erro: Mesa sendo acessada por outro usuário.";
             toast.warning(msg);
         }
     };
 
-    // --- 2. CANCELAR ABERTURA (REMOVE O BLOQUEIO) ---
     const handleCancelarAbertura = async () => {
         setIsModalAbrirMesaOpen(false);
         if (mesaParaAbrir) {
@@ -248,7 +272,6 @@ export default function ControleSalao() {
         }
     };
 
-    // --- 3. CONFIRMAR ABERTURA (LIMPA BLOQUEIO E ABRE) ---
     const handleConfirmarAbertura = async (qtd, nomeCliente) => {
         if (!mesaParaAbrir) return;
         setIsOpeningTable(true);
@@ -259,7 +282,6 @@ export default function ControleSalao() {
                 nome: nomeCliente || '', 
                 tipo: 'mesa', 
                 updatedAt: serverTimestamp(),
-                // Limpa o bloqueio
                 bloqueadoPor: null,
                 bloqueadoPorNome: null,
                 bloqueadoEm: null
@@ -320,6 +342,14 @@ export default function ControleSalao() {
                     <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handlePagamentoConcluido} />
                 )}
 
+                {/* MODAL DE TICKETS (INTEGRADO COM NOME REAL) */}
+                {isModalTicketsOpen && (
+                    <GeradorTickets 
+                        onClose={() => setIsModalTicketsOpen(false)} 
+                        estabelecimentoNome={nomeEstabelecimento}
+                    />
+                )}
+
                 <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2">
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                         
@@ -342,6 +372,15 @@ export default function ControleSalao() {
                         </div>
                         
                         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
+                            
+                            {/* --- BOTÃO TICKETS (NOVO) --- */}
+                            <button 
+                                onClick={() => setIsModalTicketsOpen(true)}
+                                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm flex items-center gap-2 transition-all whitespace-nowrap active:scale-95"
+                            >
+                                <IoTicket size={18} /> <span className="hidden sm:inline">Tickets</span>
+                            </button>
+
                             <button 
                                 onClick={() => setIsModalOpen(true)}
                                 className="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm flex items-center gap-2 transition-all whitespace-nowrap active:scale-95"
