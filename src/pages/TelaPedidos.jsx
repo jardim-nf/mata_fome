@@ -471,9 +471,14 @@ const TelaPedidos = () => {
                 });
             }
 
-            await batch.commit();
+await batch.commit();
             toast.success("Pedido enviado!");
-            // navigate('/controle-salao'); // Opcional: voltar ou ficar na mesa
+            
+            // --- ADICIONE ESTAS DUAS LINHAS AQUI ---
+            setShowOrderSummary(false); // 1. Fecha o modal do resumo/carrinho
+            navigate('/controle-salao'); // 2. Volta para a tela das mesas
+            // ---------------------------------------
+
         } catch(e) { 
             console.error("Erro ao salvar:", e); 
             toast.error("Erro ao enviar pedido. Tente novamente."); 
