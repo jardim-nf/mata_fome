@@ -1,11 +1,17 @@
-// src/components/DashBoardSummary.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, orderBy, doc, onSnapshot, getDoc, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { 
-  IoStatsChart, IoCart, IoRestaurant, IoCash, IoBicycle, 
-  IoEye, IoEyeOff, IoCalendarOutline 
+  IoStatsChart, 
+  IoCart, 
+  IoRestaurant, 
+  IoCash, 
+  IoBicycle, 
+  IoEye, 
+  IoEyeOff, 
+  IoCalendarOutline,
+  IoTicket // <--- Importação garantida
 } from 'react-icons/io5';
 
 // --- COMPONENTE DO CARD (VISUAL) ---
@@ -30,7 +36,8 @@ const StatCard = ({ title, value, subtext, icon: Icon, colorClass, loading }) =>
   </div>
 );
 
-const DashBoardSummary = () => {
+// Recebendo a prop 'onVerRelatorio' para corrigir o erro
+const DashBoardSummary = ({ onVerRelatorio }) => {
   const { primeiroEstabelecimento } = useAuth(); 
   const [loading, setLoading] = useState(true);
   const [nomeEstabelecimento, setNomeEstabelecimento] = useState('');
@@ -50,7 +57,6 @@ const DashBoardSummary = () => {
     });
 
     // --- QUERY 1: DELIVERY (App/Site) ---
-    // Geralmente salvos na coleção raiz 'pedidos'
     const qDelivery = query(
         collection(db, 'pedidos'),
         where('estabelecimentoId', '==', primeiroEstabelecimento),
@@ -64,10 +70,9 @@ const DashBoardSummary = () => {
     });
 
     // --- QUERY 2: SALÃO/MESA (POS) ---
-    // 🔥 CORREÇÃO: Agora busca em 'vendas' e ordena por 'criadoEm'
     const qSalao = query(
         collection(db, 'estabelecimentos', primeiroEstabelecimento, 'vendas'),
-        orderBy('criadoEm', 'desc'), // Corrigido de dataPedido para criadoEm
+        orderBy('criadoEm', 'desc'),
         limit(100)
     );
 
@@ -83,10 +88,10 @@ const DashBoardSummary = () => {
     return () => { unsubDelivery(); unsubSalao(); };
   }, [primeiroEstabelecimento]);
 
-  // --- 2. CÁLCULOS OTIMIZADOS (USEMEMO) ---
+  // --- 2. CÁLCULOS OTIMIZADOS ---
   const stats = useMemo(() => {
     const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0); // Zera hora para comparar apenas a data
+    hoje.setHours(0, 0, 0, 0); 
 
     let totalFat = 0, fatSalao = 0, fatDelivery = 0;
     let countSalao = 0, countDelivery = 0;
@@ -94,7 +99,6 @@ const DashBoardSummary = () => {
     
     const motoboyMap = {};
 
-    // Helper: Converte Timestamp Firestore para Date JS
     const getDate = (timestamp) => {
         if (!timestamp) return null;
         if (timestamp.toDate) return timestamp.toDate();
@@ -102,7 +106,6 @@ const DashBoardSummary = () => {
         return new Date(timestamp); 
     };
 
-    // Helper: Limpa valor monetário
     const parseCurrency = (val) => {
         if (!val) return 0;
         if (typeof val === 'number') return val;
@@ -115,24 +118,19 @@ const DashBoardSummary = () => {
         lista.forEach(pedido => {
             if (pedido.status === 'cancelado') return;
 
-            // 1. VERIFICAÇÃO DE DATA (Corrigido para aceitar 'criadoEm')
             const dataObj = pedido.createdAt || pedido.criadoEm || pedido.dataPedido || pedido.updatedAt;
             const dataPedido = getDate(dataObj);
             
-            // Se não tiver data ou a data for anterior a hoje (00:00), ignora
             if (!dataPedido || dataPedido < hoje) return;
 
-            // 2. CÁLCULO DO VALOR
             let valorCru = pedido.totalFinal ?? pedido.total ?? pedido.valorTotal ?? 0;
             let valor = parseCurrency(valorCru);
 
-            // Contagem de Tempo
             if (pedido.tempoPreparo) {
                 somaTempos += Number(pedido.tempoPreparo);
                 countTempos++;
             }
 
-            // Separação por Origem e Soma
             if (origem === 'salao' || pedido.tipo === 'salao') {
                 fatSalao += valor;
                 countSalao++;
@@ -140,7 +138,6 @@ const DashBoardSummary = () => {
                 fatDelivery += valor;
                 countDelivery++;
 
-                // Entregadores
                 if (pedido.motoboyId || pedido.motoboyNome) {
                     const idMoto = pedido.motoboyId || pedido.motoboyNome;
                     const nomeMoto = pedido.motoboyNome || 'Desconhecido';
@@ -180,11 +177,10 @@ const DashBoardSummary = () => {
 
   const formatarMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
-  // --- RENDERIZAÇÃO ---
   return (
     <div className="space-y-6 mb-8">
       
-      {/* CABEÇALHO DO RESUMO */}
+      {/* CABEÇALHO */}
       <div className="flex w-full justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm gap-4">
         <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
@@ -278,6 +274,20 @@ const DashBoardSummary = () => {
                     </div>
                 ))}
             </div>
+        </div>
+      )}
+
+      {/* BOTÃO DE RELATÓRIO DE TICKETS (CORRIGIDO)
+          Só aparece se a função 'onVerRelatorio' for passada pelo componente pai
+      */}
+      {onVerRelatorio && (
+        <div className="flex justify-end mb-4 px-2">
+            <button 
+                onClick={onVerRelatorio}
+                className="flex items-center gap-2 bg-white text-purple-700 border border-purple-200 px-4 py-2 rounded-xl font-bold text-sm hover:bg-purple-50 shadow-sm transition-all"
+            >
+                <IoTicket size={18} /> Ver Relatório de Tickets Impressos
+            </button>
         </div>
       )}
     </div>

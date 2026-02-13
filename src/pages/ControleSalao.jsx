@@ -8,12 +8,13 @@ import { toast } from 'react-toastify';
 import MesaCard from "../components/MesaCard";
 import AdicionarMesaModal from "../components/AdicionarMesaModal";
 import ModalPagamento from "../components/ModalPagamento";
-import GeradorTickets from "../components/GeradorTickets"; // Certifique-se que o arquivo existe
+import GeradorTickets from "../components/GeradorTickets"; 
+import RelatorioTicketsModal from "../components/RelatorioTicketsModal"; 
 import { 
     IoArrowBack, IoAdd, 
     IoGrid, IoPeople, IoWalletOutline, 
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTicket 
+    IoTicket, IoDocumentText 
 } from "react-icons/io5";
 
 // --- HELPER DE FORMATAÇÃO ---
@@ -110,8 +111,9 @@ export default function ControleSalao() {
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
     const [isOpeningTable, setIsOpeningTable] = useState(false); 
     
-    // --- ESTADOS PARA TICKETS ---
+    // --- ESTADOS PARA TICKETS E RELATÓRIO ---
     const [isModalTicketsOpen, setIsModalTicketsOpen] = useState(false);
+    const [isRelatorioOpen, setIsRelatorioOpen] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
 
     const estabelecimentoId = useMemo(() => {
@@ -126,7 +128,6 @@ export default function ControleSalao() {
                     const docRef = doc(db, "estabelecimentos", estabelecimentoId);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
-                        // Tenta pegar o nome, se não tiver usa o do userData, se não tiver usa genérico
                         const nomeReal = docSnap.data().nome || userData?.nomeEstabelecimento || "Mata Fome";
                         setNomeEstabelecimento(nomeReal);
                     }
@@ -139,16 +140,28 @@ export default function ControleSalao() {
         fetchNomeEstabelecimento();
     }, [estabelecimentoId, userData]);
 
-    // --- BOTÕES DO HEADER ---
+    // --- BOTÕES DO HEADER (AQUI ESTÃO OS BOTÕES) ---
     useEffect(() => {
         setActions(
             <div className="flex gap-2">
+                {/* BOTÃO RELATÓRIO */}
+                <button 
+                    onClick={() => setIsRelatorioOpen(true)}
+                    className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
+                    title="Ver histórico de tickets"
+                >
+                    <IoDocumentText className="text-lg"/> <span className="hidden sm:inline">Relatório</span>
+                </button>
+
+                {/* BOTÃO TICKETS */}
                 <button 
                     onClick={() => setIsModalTicketsOpen(true)}
                     className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
                 >
                     <IoTicket className="text-lg"/> <span className="hidden sm:inline">Tickets</span>
                 </button>
+
+                {/* BOTÃO NOVA MESA */}
                 <button 
                     onClick={() => setIsModalOpen(true)} 
                     className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
@@ -342,11 +355,20 @@ export default function ControleSalao() {
                     <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handlePagamentoConcluido} />
                 )}
 
-                {/* MODAL DE TICKETS (INTEGRADO COM NOME REAL) */}
+                {/* MODAL DE TICKETS (IMPRESSÃO) */}
                 {isModalTicketsOpen && (
                     <GeradorTickets 
                         onClose={() => setIsModalTicketsOpen(false)} 
                         estabelecimentoNome={nomeEstabelecimento}
+                        estabelecimentoId={estabelecimentoId} 
+                    />
+                )}
+
+                {/* MODAL DE RELATÓRIO (VISUALIZAÇÃO) */}
+                {isRelatorioOpen && (
+                    <RelatorioTicketsModal 
+                        onClose={() => setIsRelatorioOpen(false)}
+                        estabelecimentoId={estabelecimentoId}
                     />
                 )}
 
@@ -373,20 +395,30 @@ export default function ControleSalao() {
                         
                         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
                             
-                            {/* --- BOTÃO TICKETS (NOVO) --- */}
-                            <button 
-                                onClick={() => setIsModalTicketsOpen(true)}
-                                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm flex items-center gap-2 transition-all whitespace-nowrap active:scale-95"
-                            >
-                                <IoTicket size={18} /> <span className="hidden sm:inline">Tickets</span>
-                            </button>
+                            {/* --- BOTÕES NO LOCAL TAMBÉM (BACKUP) --- */}
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <button 
+                                    onClick={() => setIsRelatorioOpen(true)}
+                                    className="flex-1 sm:flex-initial bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-bold px-3 py-2 rounded-lg shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all text-xs"
+                                    title="Relatório"
+                                >
+                                    <IoDocumentText className="text-lg"/>
+                                </button>
 
-                            <button 
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm flex items-center gap-2 transition-all whitespace-nowrap active:scale-95"
-                            >
-                                <IoAdd size={18}/> <span className="hidden sm:inline">Nova Mesa</span>
-                            </button>
+                                <button 
+                                    onClick={() => setIsModalTicketsOpen(true)}
+                                    className="flex-1 sm:flex-initial bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95"
+                                >
+                                    <IoTicket size={18} /> <span className="hidden sm:inline">Tickets</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => setIsModalOpen(true)}
+                                    className="flex-1 sm:flex-initial bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95"
+                                >
+                                    <IoAdd size={18}/> <span className="hidden sm:inline">Mesa</span>
+                                </button>
+                            </div>
 
                             <div className="relative w-full sm:w-32 md:w-48">
                                 <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
@@ -395,7 +427,7 @@ export default function ControleSalao() {
                                 <input
                                     type="text"
                                     className="block w-full pl-8 pr-8 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 placeholder-gray-400"
-                                    placeholder="Mesa ou Nome..."
+                                    placeholder="Buscar..."
                                     value={buscaMesa}
                                     onChange={(e) => setBuscaMesa(e.target.value)}
                                 />
@@ -406,12 +438,12 @@ export default function ControleSalao() {
                                 )}
                             </div>
 
-                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto">
                                 {['todos', 'livres', 'ocupadas'].map(t => (
                                     <button
                                         key={t}
                                         onClick={() => setFiltro(t)}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-bold capitalize transition-all ${
+                                        className={`px-3 py-1.5 rounded-md text-xs font-bold capitalize transition-all whitespace-nowrap ${
                                             filtro === t ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                     >
