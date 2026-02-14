@@ -28,9 +28,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [selecionados, setSelecionados] = useState({});
     const [carregando, setCarregando] = useState(false);
 
-    // --- CÁLCULOS PRINCIPAIS ---
+    // --- CÁLCULOS FINANCEIROS ---
 
-    // 1. Total de Consumo (Soma produtos)
+    // 1. Total Consumido (Soma de todos os produtos na mesa)
     const calcularTotalConsumo = () => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         return listaItens.reduce((acc, item) => {
@@ -39,27 +39,25 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }, 0);
     };
 
-    // 2. Total Já Pago (Busca do histórico)
+    // 2. Total Já Pago (Soma do histórico de pagamentos parciais)
     const calcularJaPago = () => {
         const historico = mesa?.pagamentosParciais || [];
-        return historico.reduce((acc, pgto) => acc + (pgto.valor || 0), 0);
+        return historico.reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
     };
 
-    // 3. Restante a Pagar
+    // 3. Restante a Pagar (Consumo - Pago)
     const calcularRestanteMesa = () => {
         const consumo = calcularTotalConsumo();
         const jaPago = calcularJaPago();
-        // Garante que não fique negativo por erro de arredondamento
         return Math.max(0, consumo - jaPago);
     };
 
-    // --- AGRUPAMENTO ---
+    // --- AGRUPAMENTO DE ITENS (Para visualização) ---
     const agruparItensPorPessoa = useMemo(() => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         if (listaItens.length === 0) return {};
         
         const agrupados = {};
-        
         listaItens.forEach(item => {
             let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
             if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes?.length > 0) {
@@ -78,7 +76,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         return agrupados;
     }, [mesa]);
 
-    // --- INICIALIZAÇÃO INTELIGENTE ---
+    // --- INICIALIZAÇÃO ---
     useEffect(() => {
         const restanteMesa = calcularRestanteMesa();
         const listaItens = mesa?.itens || mesa?.pedidos || [];
@@ -108,9 +106,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 selecionadosIniciais[key] = false;
             } else {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
-                    // CORREÇÃO AQUI: 
-                    // Se o consumo da pessoa (ex: 100) for maior que o que falta na mesa (ex: 70),
-                    // o sistema força o valor a ser 70. Ninguém paga mais do que a dívida da mesa.
+                    // TRAVA DE SEGURANÇA: Ninguém paga mais do que a dívida total da mesa
                     const valorSugerido = Math.min(dados.total, restanteMesa);
 
                     pagamentosIniciais[pessoa] = {
@@ -124,7 +120,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             setPagamentos(pagamentosIniciais);
             setSelecionados(selecionadosIniciais);
         }
-    }, [tipoPagamento, agruparItensPorPessoa, mesa]); // Dependências mantidas para recalcular se a mesa mudar
+    }, [tipoPagamento, agruparItensPorPessoa, mesa]);
 
     // --- AÇÕES UI ---
     const toggleSelecao = (pessoa) => {
@@ -167,61 +163,97 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         setSelecionados(novosS);
     };
 
-    // --- IMPRESSÃO ---
+    // --- IMPRESSÃO DE CONFERÊNCIA (O PONTO CHAVE) ---
     const handleImprimirConferencia = () => {
         const totalConsumo = calcularTotalConsumo();
         const jaPago = calcularJaPago();
         const restante = calcularRestanteMesa();
-        const dadosBase = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
         
+        // Se estiver na etapa de seleção, imprime só os selecionados. Senão, imprime tudo.
+        const dadosBase = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
         const dadosParaImpressao = etapa > 1 ? 
             Object.fromEntries(Object.entries(dadosBase).filter(([k]) => selecionados[k])) : 
             dadosBase;
 
+        // Se nenhum selecionado na etapa de pagamento, imprime o geral para conferência
+        const dadosFinais = Object.keys(dadosParaImpressao).length > 0 ? dadosParaImpressao : agruparItensPorPessoa;
+
         const conteudo = `
             <html>
             <head>
-                <title>Comanda - Mesa ${mesa?.numero}</title>
+                <title>Conferência - Mesa ${mesa?.numero}</title>
                 <style>
-                    body { font-family: 'Courier New', monospace; font-size: 12px; width: 300px; margin: 0; padding: 10px 5px; color: #000; background: #fff; font-weight: bold; }
-                    .header { text-align: center; margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 5px; }
-                    .pagante-block { margin-bottom: 10px; }
-                    .pagante-header { display: flex; justify-content: space-between; font-weight: 900; font-size: 13px; border-bottom: 1px solid #000; }
-                    .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 12px; }
-                    .total-geral { font-size: 14px; text-align: right; margin-top: 5px; }
-                    .saldo-restante { font-size: 18px; font-weight: 900; text-align: right; margin-top: 5px; border-top: 2px solid #000; padding-top: 5px; }
+                    @media print { @page { margin: 0; size: 80mm auto; } body { margin: 0; } }
+                    body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0; padding: 5px; color: #000; background: #fff; font-weight: bold; }
+                    .header { text-align: center; margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 5px; }
+                    .header h2 { font-size: 14px; margin: 0; text-transform: uppercase; }
+                    .pagante-block { margin-bottom: 8px; }
+                    .pagante-header { display: flex; justify-content: space-between; font-weight: 900; border-bottom: 1px solid #000; margin-bottom: 2px; text-transform: uppercase; }
+                    .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 11px; margin-bottom: 1px; }
+                    
+                    /* BOX DE TOTAIS */
+                    .resumo-box { border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px; }
+                    .linha-resumo { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px; }
+                    .linha-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
                 </style>
             </head>
             <body>
                 <div class="header">
                     <h2>PRÉ-CONFERÊNCIA</h2>
-                    <p>MESA ${mesa?.numero}</p>
+                    <p style="font-size: 14px; margin: 5px 0;">MESA ${mesa?.numero}</p>
+                    <p style="font-size: 10px;">${new Date().toLocaleString('pt-BR')}</p>
                 </div>
-                ${Object.entries(dadosParaImpressao).map(([pessoa, dados]) => `
+
+                ${Object.entries(dadosFinais).map(([pessoa, dados]) => `
                     <div class="pagante-block">
-                        <div class="pagante-header"><span>${pessoa.toUpperCase()}</span><span>R$ ${dados.valor.toFixed(2)}</span></div>
-                        ${dados.itens?.map(item => `<div class="item-row"><span>${item.quantidade || 1}x ${item.nome.substring(0,15)}</span><span>${(item.preco * (item.quantidade||1)).toFixed(2)}</span></div>`).join('') || ''}
+                        <div class="pagante-header">
+                            <span>${pessoa.substring(0, 15)}</span>
+                            <span>R$ ${(dados.valor !== undefined ? dados.valor : dados.total).toFixed(2)}</span>
+                        </div>
+                        ${dados.itens?.filter(i => i.preco > 0).map(item => `
+                            <div class="item-row">
+                                <span>${item.quantidade || 1}x ${item.nome.substring(0,20)}</span>
+                                <span>${((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</span>
+                            </div>
+                        `).join('') || '<div class="item-row"><i>Valor Manual</i></div>'}
                     </div>
                 `).join('')}
-                <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
-                    <div class="total-geral">CONSUMO TOTAL: R$ ${totalConsumo.toFixed(2)}</div>
-                    ${jaPago > 0 ? `<div class="total-geral">JÁ PAGO: -R$ ${jaPago.toFixed(2)}</div>` : ''}
-                    <div class="saldo-restante">A PAGAR: R$ ${restante.toFixed(2)}</div>
+
+                <div class="resumo-box">
+                    <div class="linha-resumo">
+                        <span>TOTAL CONSUMO:</span>
+                        <span>R$ ${totalConsumo.toFixed(2)}</span>
+                    </div>
+                    
+                    ${jaPago > 0 ? `
+                    <div class="linha-resumo">
+                        <span>(-) JÁ PAGO:</span>
+                        <span>R$ ${jaPago.toFixed(2)}</span>
+                    </div>
+                    ` : ''}
+
+                    <div class="linha-total">
+                        <span>A PAGAR:</span>
+                        <span>R$ ${restante.toFixed(2)}</span>
+                    </div>
                 </div>
+                
+                <br/>
+                <div style="text-align:center; font-size:10px;">*** NÃO É DOCUMENTO FISCAL ***</div>
             </body>
             </html>
         `;
+        
         const win = window.open('', '', 'height=600,width=400');
         win.document.write(conteudo);
         win.document.close();
-        setTimeout(() => { win.print(); win.close(); }, 500);
+        setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
 
     // --- FINALIZAR ---
     const handleFinalizar = async (modo) => {
         setCarregando(true);
         try {
-            // Recalcula totais para validação final
             const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
                 return selecionados[pessoa] ? acc + dados.valor : acc;
             }, 0);
@@ -301,7 +333,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }
     };
 
-    // --- UI HELPERS ---
+    // --- UI RENDERIZADORES ---
     const renderHistoricoPagamentos = () => {
         const jaPago = calcularJaPago();
         if (jaPago <= 0) return null;
@@ -334,6 +366,11 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">
                         Total Consumo: R$ {calcularTotalConsumo().toFixed(2)}
                     </p>
+                    
+                    {/* BOTÃO DE IMPRIMIR COMANDA */}
+                    <button onClick={handleImprimirConferencia} className="mt-4 w-full py-2 bg-white/20 text-white hover:bg-white/30 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
+                        <IoPrint className="text-lg" /> Imprimir Conferência
+                    </button>
                 </div>
             </div>
 
@@ -414,6 +451,8 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                             </button>
                                         ))}
                                     </div>
+                                    
+                                    {/* LISTA DE ITENS - FILTRADA PARA POSITIVOS */}
                                     {dados.itens && dados.itens.filter(i => i.preco > 0).length > 0 && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
                                             <p className="text-[10px] text-gray-400 font-bold mb-1">CONSUMO:</p>

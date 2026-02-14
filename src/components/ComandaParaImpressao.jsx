@@ -85,12 +85,41 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             document.title = `PEDIDO ${pedido.senha || pedido.id.slice(0,4)}`;
             const timer = setTimeout(() => { 
                 window.focus();
-                window.print();
+                window.print(); 
             }, 1000); 
             return () => clearTimeout(timer);
         }
     }, [pedido, loading, erro, pedidoProp]);
 
+    // --- 3. CÁLCULOS FINANCEIROS (BLINDAGEM) ---
+    const totais = useMemo(() => {
+        if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
+
+        const itens = pedido.itens || [];
+        
+        // A) Total Consumo (Soma apenas itens positivos)
+        const consumo = itens.reduce((acc, item) => {
+            return item.preco > 0 ? acc + (item.preco * (item.quantidade || 1)) : acc;
+        }, 0);
+
+        // B) Taxas e Descontos
+        const taxa = Number(pedido.taxaEntrega) || 0;
+        const desconto = Number(pedido.desconto) || 0;
+        
+        // C) Total Geral da Conta (Antes de abater pagamentos)
+        const totalGeral = consumo + taxa - desconto;
+
+        // D) Já Pago (Histórico de parciais)
+        const pagamentos = pedido.pagamentosParciais || [];
+        const jaPago = pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+
+        // E) Restante Final
+        const restante = Math.max(0, totalGeral - jaPago);
+
+        return { consumo, taxa, desconto, totalGeral, jaPago, restante };
+    }, [pedido]);
+
+    // --- 4. AGRUPAMENTO DE ITENS ---
     const itensAgrupados = useMemo(() => {
         if (!pedido || !pedido.itens) return {};
         let itensParaProcessar = pedido.itens;
@@ -105,6 +134,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }
 
         return itensParaProcessar.reduce((acc, item) => {
+            // TRAVA: Ignora itens com preço negativo (pagamentos antigos)
+            if (item.preco <= 0) return acc;
+
             const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
             if (!acc[nomePessoa]) acc[nomePessoa] = [];
             acc[nomePessoa].push(item);
@@ -114,39 +146,17 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
     const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
 
-    // 🔥 NOVA FUNÇÃO DE FORMATAÇÃO DE PAGAMENTO (BLINDADA)
     const formatarPagamento = (p) => {
-        // Pega qualquer campo que possa ter o pagamento
         const metodo = p.formaPagamento || p.metodoPagamento || p.paymentMethod || '';
         const metodoString = String(metodo).toLowerCase().trim();
         
-        // Mapeia os códigos do PaymentContext e Formulario
         switch(metodoString) {
-            case 'dinheiro': 
-            case 'cash':
-            case '4': // ID do dinheiro
-                return 'DINHEIRO';
-            
-            case 'pix': 
-            case '1': // ID do pix
-                return 'PIX';
-            
-            case 'cartao': 
-            case 'card':
-                return 'CARTÃO NA ENTREGA';
-
-            case 'credit_card':
-            case 'credito':
-            case '2': // ID credito
-                return 'CRÉDITO NA ENTREGA';
-
-            case 'debit_card':
-            case 'debito':
-            case '3': // ID debito
-                return 'DÉBITO NA ENTREGA';
-            
+            case 'dinheiro': case 'cash': case '4': return 'DINHEIRO';
+            case 'pix': case '1': return 'PIX';
+            case 'cartao': case 'card': return 'CARTÃO NA ENTREGA';
+            case 'credit_card': case 'credito': case '2': return 'CRÉDITO NA ENTREGA';
+            case 'debit_card': case 'debito': case '3': return 'DÉBITO NA ENTREGA';
             case 'online': return 'PAGO ONLINE';
-            
             default: return metodo.toUpperCase() || 'A COMBINAR';
         }
     };
@@ -161,13 +171,15 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const temItens = Object.keys(itensAgrupados).length > 0;
     const dataPedido = pedido.createdAt?.toDate ? pedido.createdAt.toDate() : (pedido.dataPedido?.toDate ? pedido.dataPedido.toDate() : new Date());
 
-    // 🔥 LÓGICA DO TROCO CORRIGIDA
+    // Troco (Calculado sobre o restante ou total geral)
     const metodoPagamento = (pedido.formaPagamento || pedido.metodoPagamento || '').toLowerCase();
-    const isDinheiro = metodoPagamento === 'dinheiro' || metodoPagamento === 'cash' || metodoPagamento === '4';
+    const isDinheiro = metodoPagamento.includes('dinheiro') || metodoPagamento === 'cash' || metodoPagamento === '4';
     const valorTroco = pedido.trocoPara ? parseFloat(pedido.trocoPara) : 0;
-    const totalPedido = pedido.totalFinal || pedido.total || 0;
-    const precisaTroco = (isDinheiro && valorTroco > totalPedido);
-    const trocoDevolver = precisaTroco ? (valorTroco - totalPedido) : 0;
+    
+    // Se tiver pagamento parcial, o troco deve ser sobre o restante
+    const valorBaseParaTroco = totais.restante > 0 ? totais.restante : totais.totalGeral;
+    const precisaTroco = (isDinheiro && valorTroco > valorBaseParaTroco);
+    const trocoDevolver = precisaTroco ? (valorTroco - valorBaseParaTroco) : 0;
 
     return (
         <div className="bg-white text-black font-mono text-xs leading-tight p-2 w-full h-auto" style={{ maxWidth: '80mm', margin: '0 auto' }}>
@@ -232,20 +244,40 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
             {modoImpressao !== 'cozinha' && (
                 <div className="border-t-2 border-black pt-2 mt-2">
-                    <div className="flex justify-between text-xs font-bold"><span>Subtotal:</span><span>{formatMoney(pedido.totalItens || (pedido.totalFinal - (pedido.taxaEntrega || 0)))}</span></div>
-                    {Number(pedido.taxaEntrega) > 0 && <div className="flex justify-between text-xs"><span>Taxa de Entrega:</span><span>{formatMoney(pedido.taxaEntrega)}</span></div>}
-                    {Number(pedido.desconto) > 0 && <div className="flex justify-between text-xs"><span>Desconto:</span><span>- {formatMoney(pedido.desconto)}</span></div>}
+                    {/* SUBTOTAL REAL (Soma dos produtos) */}
+                    <div className="flex justify-between text-xs font-bold"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
                     
-                    <div className="flex justify-between text-lg font-black mt-1 border-t border-dotted border-black pt-1">
-                        <span>TOTAL:</span>
-                        <span>{formatMoney(totalPedido)}</span>
-                    </div>
+                    {totais.taxa > 0 && <div className="flex justify-between text-xs"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
+                    {totais.desconto > 0 && <div className="flex justify-between text-xs"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
+                    
+                    {/* SE TIVER PAGO PARCIALMENTE, MOSTRA O EXTRATO COMPLETO */}
+                    {totais.jaPago > 0 ? (
+                        <>
+                            <div className="flex justify-between text-sm font-bold mt-1 border-t border-dotted border-gray-400 pt-1">
+                                <span>TOTAL CONTA:</span>
+                                <span>{formatMoney(totais.totalGeral)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm font-bold text-gray-700">
+                                <span>(-) JÁ PAGO:</span>
+                                <span>{formatMoney(totais.jaPago)}</span>
+                            </div>
+                            <div className="flex justify-between text-xl font-black mt-2 border-t-2 border-black pt-1">
+                                <span>A PAGAR:</span>
+                                <span>{formatMoney(totais.restante)}</span>
+                            </div>
+                        </>
+                    ) : (
+                        /* SE NÃO TIVER PAGO NADA, MOSTRA O PADRÃO */
+                        <div className="flex justify-between text-lg font-black mt-1 border-t border-dotted border-black pt-1">
+                            <span>TOTAL:</span>
+                            <span>{formatMoney(totais.totalGeral)}</span>
+                        </div>
+                    )}
 
                     <div className="mt-3 border-2 border-black p-1 text-center">
                         <p className="font-bold text-xs uppercase">PAGAMENTO:</p>
                         <p className="font-black text-sm uppercase">{formatarPagamento(pedido)}</p>
                         
-                        {/* Exibe troco SE for dinheiro E tiver valor de troco definido */}
                         {precisaTroco && (
                             <div className="mt-1 border-t border-black pt-1">
                                 <p className="text-xs font-bold">Troco para: {formatMoney(valorTroco)}</p>
