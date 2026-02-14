@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../firebase'; 
 import { 
     IoClose,
@@ -15,7 +15,9 @@ import {
     IoPeople,
     IoWallet,
     IoPrint,
-    IoCalculator 
+    IoCheckbox,
+    IoSquareOutline,
+    IoTime
 } from 'react-icons/io5';
 import { toast } from 'react-toastify';
 
@@ -23,38 +25,13 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [etapa, setEtapa] = useState(1);
     const [tipoPagamento, setTipoPagamento] = useState(null);
     const [pagamentos, setPagamentos] = useState({});
+    const [selecionados, setSelecionados] = useState({});
     const [carregando, setCarregando] = useState(false);
 
-    // --- LÓGICA DE AGRUPAMENTO ---
-    const agruparItensPorPessoa = useMemo(() => {
-        const listaItens = mesa?.itens || mesa?.pedidos || [];
-        
-        if (listaItens.length === 0) return {};
-        
-        const agrupados = {};
-        listaItens.forEach(item => {
-            let pessoa = item.cliente || item.destinatario || 'Mesa';
-            
-            if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes && mesa.nomesOcupantes.length > 0) {
-                if(!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0]; 
-            }
-            
-            if (!pessoa) pessoa = 'Cliente 1';
+    // --- CÁLCULOS PRINCIPAIS ---
 
-            if (!agrupados[pessoa]) {
-                agrupados[pessoa] = { itens: [], total: 0 };
-            }
-            
-            const qtd = item.quantidade || item.qtd || 1;
-
-            agrupados[pessoa].itens.push(item);
-            agrupados[pessoa].total += (item.preco * qtd);
-        });
-
-        return agrupados;
-    }, [mesa]);
-
-    const getTotalGeral = () => {
+    // 1. Total de Consumo (Soma produtos)
+    const calcularTotalConsumo = () => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         return listaItens.reduce((acc, item) => {
             const qtd = item.quantidade || item.qtd || 1;
@@ -62,46 +39,98 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }, 0);
     };
 
-    // --- INICIALIZAÇÃO ---
+    // 2. Total Já Pago (Busca do histórico)
+    const calcularJaPago = () => {
+        const historico = mesa?.pagamentosParciais || [];
+        return historico.reduce((acc, pgto) => acc + (pgto.valor || 0), 0);
+    };
+
+    // 3. Restante a Pagar
+    const calcularRestanteMesa = () => {
+        const consumo = calcularTotalConsumo();
+        const jaPago = calcularJaPago();
+        // Garante que não fique negativo por erro de arredondamento
+        return Math.max(0, consumo - jaPago);
+    };
+
+    // --- AGRUPAMENTO ---
+    const agruparItensPorPessoa = useMemo(() => {
+        const listaItens = mesa?.itens || mesa?.pedidos || [];
+        if (listaItens.length === 0) return {};
+        
+        const agrupados = {};
+        
+        listaItens.forEach(item => {
+            let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
+            if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes?.length > 0) {
+                if(!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0]; 
+            }
+            if (!pessoa) pessoa = 'Cliente 1';
+
+            if (!agrupados[pessoa]) {
+                agrupados[pessoa] = { itens: [], total: 0 };
+            }
+            
+            const qtd = item.quantidade || item.qtd || 1;
+            agrupados[pessoa].itens.push(item);
+            agrupados[pessoa].total += (item.preco * qtd);
+        });
+        return agrupados;
+    }, [mesa]);
+
+    // --- INICIALIZAÇÃO INTELIGENTE ---
     useEffect(() => {
-        const totalMesa = getTotalGeral(); 
+        const restanteMesa = calcularRestanteMesa();
         const listaItens = mesa?.itens || mesa?.pedidos || [];
 
         if (tipoPagamento === 'unico') {
+            const key = 'Pagamento Único';
             setPagamentos({
-                'Pagamento Único': {
-                    valor: totalMesa,
+                [key]: {
+                    valor: restanteMesa,
                     formaPagamento: 'dinheiro',
                     itens: listaItens
                 }
             });
+            setSelecionados({ [key]: true });
         } else if (tipoPagamento === 'individual') {
             const pagamentosIniciais = {};
+            const selecionadosIniciais = {};
             const grupos = agruparItensPorPessoa;
 
             if (Object.keys(grupos).length === 0) {
-                pagamentosIniciais['Cliente 1'] = {
-                    valor: totalMesa,
+                const key = 'Mesa / Restante';
+                pagamentosIniciais[key] = {
+                    valor: restanteMesa,
                     formaPagamento: 'dinheiro',
                     itens: listaItens
                 };
+                selecionadosIniciais[key] = false;
             } else {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
+                    // CORREÇÃO AQUI: 
+                    // Se o consumo da pessoa (ex: 100) for maior que o que falta na mesa (ex: 70),
+                    // o sistema força o valor a ser 70. Ninguém paga mais do que a dívida da mesa.
+                    const valorSugerido = Math.min(dados.total, restanteMesa);
+
                     pagamentosIniciais[pessoa] = {
-                        valor: dados.total,
+                        valor: valorSugerido, 
                         formaPagamento: 'dinheiro',
                         itens: dados.itens 
                     };
+                    selecionadosIniciais[pessoa] = false;
                 });
             }
             setPagamentos(pagamentosIniciais);
+            setSelecionados(selecionadosIniciais);
         }
-    }, [tipoPagamento, agruparItensPorPessoa, mesa]);
+    }, [tipoPagamento, agruparItensPorPessoa, mesa]); // Dependências mantidas para recalcular se a mesa mudar
 
-    const calcularTotalPagamentos = () => Object.values(pagamentos).reduce((acc, curr) => acc + curr.valor, 0);
-    const calcularTotalMesa = () => getTotalGeral();
+    // --- AÇÕES UI ---
+    const toggleSelecao = (pessoa) => {
+        setSelecionados(prev => ({ ...prev, [pessoa]: !prev[pessoa] }));
+    };
 
-    // --- MANIPULAÇÃO DE DADOS ---
     const editarFormaPagamento = (pessoaId, novaForma) => {
         setPagamentos(prev => ({
             ...prev,
@@ -109,168 +138,117 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }));
     };
 
-    // --- LÓGICA INTELIGENTE DE CÁLCULO (CORRIGIDA) ---
     const editarValorPagamento = (pessoaId, novoValor) => {
         let valorFormatado = novoValor;
-        if (typeof novoValor === 'string') {
-            valorFormatado = novoValor.replace(',', '.');
-        }
+        if (typeof novoValor === 'string') valorFormatado = novoValor.replace(',', '.');
         const valorNovoFloat = parseFloat(valorFormatado) || 0;
-
-        setPagamentos(prev => {
-            const novosPagamentos = { ...prev };
-            const chaves = Object.keys(prev);
-            
-            // Encontra alguém para descontar a diferença (que não seja a pessoa sendo editada)
-            // Geralmente pega o primeiro da lista ('Cliente 1' ou 'Mesa')
-            const payerParaDescontar = chaves.find(key => key !== pessoaId);
-
-            if (payerParaDescontar) {
-                const totalMesa = calcularTotalMesa();
-                
-                // Soma de todos os outros MENOS quem vai sofrer o desconto e MENOS quem está sendo editado
-                const somaOutros = chaves
-                    .filter(key => key !== payerParaDescontar && key !== pessoaId)
-                    .reduce((acc, key) => acc + (prev[key].valor || 0), 0);
-
-                // O valor do 'payerParaDescontar' será o que sobrar da conta
-                let novoValorDescontado = totalMesa - (somaOutros + valorNovoFloat);
-                
-                // Evita valores negativos
-                if (novoValorDescontado < 0) novoValorDescontado = 0;
-
-                novosPagamentos[payerParaDescontar] = {
-                    ...novosPagamentos[payerParaDescontar],
-                    valor: novoValorDescontado
-                };
-            }
-
-            // Atualiza o valor da pessoa que está sendo editada
-            novosPagamentos[pessoaId] = {
-                ...novosPagamentos[pessoaId],
-                valor: valorNovoFloat
-            };
-
-            return novosPagamentos;
-        });
-    };
-
-    // Função manual caso precise forçar o restante
-    const assumirRestante = (pessoaId) => {
-        const totalMesa = calcularTotalMesa();
-        const totalOutros = Object.entries(pagamentos)
-            .filter(([id]) => id !== pessoaId)
-            .reduce((acc, [, dados]) => acc + dados.valor, 0);
-        
-        const faltaPagar = Math.max(0, totalMesa - totalOutros);
 
         setPagamentos(prev => ({
             ...prev,
-            [pessoaId]: { ...prev[pessoaId], valor: faltaPagar }
+            [pessoaId]: { ...prev[pessoaId], valor: valorNovoFloat }
         }));
-        
-        toast.info(`Valor ajustado para R$ ${faltaPagar.toFixed(2)}`);
+        setSelecionados(prev => ({ ...prev, [pessoaId]: true }));
     };
 
     const adicionarPessoa = () => {
         const novaPessoa = `Pagante Extra ${Object.keys(pagamentos).length + 1}`;
         setPagamentos(prev => ({
             ...prev,
-            [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] }
+            [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] } 
         }));
+        setSelecionados(prev => ({ ...prev, [novaPessoa]: true }));
     };
 
     const removerPessoa = (pessoaId) => {
         if (Object.keys(pagamentos).length <= 1) return;
-        setPagamentos(prev => {
-            const novos = { ...prev };
-            delete novos[pessoaId];
-            return novos;
-        });
+        const novosP = { ...pagamentos }; delete novosP[pessoaId];
+        const novosS = { ...selecionados }; delete novosS[pessoaId];
+        setPagamentos(novosP);
+        setSelecionados(novosS);
     };
 
     // --- IMPRESSÃO ---
     const handleImprimirConferencia = () => {
-        const totalMesa = calcularTotalMesa();
-        const dadosParaImpressao = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
+        const totalConsumo = calcularTotalConsumo();
+        const jaPago = calcularJaPago();
+        const restante = calcularRestanteMesa();
+        const dadosBase = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
         
+        const dadosParaImpressao = etapa > 1 ? 
+            Object.fromEntries(Object.entries(dadosBase).filter(([k]) => selecionados[k])) : 
+            dadosBase;
+
         const conteudo = `
             <html>
             <head>
                 <title>Comanda - Mesa ${mesa?.numero}</title>
                 <style>
-                    @media print { @page { margin: 0; size: auto; } body { margin: 0; padding: 0; } }
                     body { font-family: 'Courier New', monospace; font-size: 12px; width: 300px; margin: 0; padding: 10px 5px; color: #000; background: #fff; font-weight: bold; }
                     .header { text-align: center; margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 5px; }
-                    .header h2 { font-size: 16px; margin: 0; text-transform: uppercase; font-weight: 900; }
-                    .divider { border-top: 2px dashed #000; margin: 10px 0; display: block; }
                     .pagante-block { margin-bottom: 10px; }
-                    .pagante-header { display: flex; justify-content: space-between; font-weight: 900; font-size: 13px; margin-bottom: 3px; border-bottom: 1px solid #000; }
+                    .pagante-header { display: flex; justify-content: space-between; font-weight: 900; font-size: 13px; border-bottom: 1px solid #000; }
                     .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 12px; }
-                    .total-geral { font-size: 18px; font-weight: 900; text-align: right; margin-top: 15px; border-top: 2px solid #000; padding-top: 5px; }
+                    .total-geral { font-size: 14px; text-align: right; margin-top: 5px; }
+                    .saldo-restante { font-size: 18px; font-weight: 900; text-align: right; margin-top: 5px; border-top: 2px solid #000; padding-top: 5px; }
                 </style>
             </head>
             <body>
                 <div class="header">
                     <h2>PRÉ-CONFERÊNCIA</h2>
-                    <p style="margin:5px 0; font-size:14px">MESA ${mesa?.numero}</p>
-                    <p style="font-size:10px">${new Date().toLocaleString('pt-BR')}</p>
+                    <p>MESA ${mesa?.numero}</p>
                 </div>
-                ${Object.keys(dadosParaImpressao).length > 0 ? 
-                    Object.entries(dadosParaImpressao).map(([pessoa, dados]) => {
-                        const totalPessoa = dados.valor !== undefined ? dados.valor : dados.total;
-                        return `
-                        <div class="pagante-block">
-                            <div class="pagante-header">
-                                <span>${pessoa.toUpperCase()}</span>
-                                <span>R$ ${totalPessoa.toFixed(2)}</span>
-                            </div>
-                            ${dados.itens && dados.itens.length > 0 ? dados.itens.map(item => {
-                                const qtd = item.quantidade || item.qtd || 1;
-                                return `<div class="item-row"><span>${qtd}x ${item.nome.substring(0, 20)}</span><span>${(item.preco * qtd).toFixed(2)}</span></div>`;
-                            }).join('') : '<div class="item-row"><span>Valor Personalizado/Manual</span></div>'}
-                        </div>`;
-                    }).join('') 
-                : (mesa?.itens || mesa?.pedidos || []).map(item => {
-                    const qtd = item.quantidade || item.qtd || 1;
-                    return `<div class="item-row"><span>${qtd}x ${item.nome}</span><span>${(item.preco * qtd).toFixed(2)}</span></div>`;
-                }).join('')}
-                <div class="divider"></div>
-                <div class="total-geral">TOTAL: R$ ${totalMesa.toFixed(2)}</div>
-                <br/><div style="text-align:center; font-size:10px; font-weight:900;">*** NÃO É DOCUMENTO FISCAL ***<br/>AGUARDAMOS SEU PAGAMENTO</div><br/>
+                ${Object.entries(dadosParaImpressao).map(([pessoa, dados]) => `
+                    <div class="pagante-block">
+                        <div class="pagante-header"><span>${pessoa.toUpperCase()}</span><span>R$ ${dados.valor.toFixed(2)}</span></div>
+                        ${dados.itens?.map(item => `<div class="item-row"><span>${item.quantidade || 1}x ${item.nome.substring(0,15)}</span><span>${(item.preco * (item.quantidade||1)).toFixed(2)}</span></div>`).join('') || ''}
+                    </div>
+                `).join('')}
+                <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
+                    <div class="total-geral">CONSUMO TOTAL: R$ ${totalConsumo.toFixed(2)}</div>
+                    ${jaPago > 0 ? `<div class="total-geral">JÁ PAGO: -R$ ${jaPago.toFixed(2)}</div>` : ''}
+                    <div class="saldo-restante">A PAGAR: R$ ${restante.toFixed(2)}</div>
+                </div>
             </body>
             </html>
         `;
         const win = window.open('', '', 'height=600,width=400');
         win.document.write(conteudo);
         win.document.close();
-        win.focus();
         setTimeout(() => { win.print(); win.close(); }, 500);
     };
 
     // --- FINALIZAR ---
-    const finalizarPagamento = async () => {
+    const handleFinalizar = async (modo) => {
         setCarregando(true);
         try {
-            const totalPago = calcularTotalPagamentos();
-            const totalMesa = calcularTotalMesa();
-            
-            if (Math.abs(totalPago - totalMesa) > 0.10) {
-                if(!window.confirm(`Diferença de valores detectada. Fechar mesmo assim?`)) {
-                    setCarregando(false);
-                    return;
-                }
-            }
+            // Recalcula totais para validação final
+            const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
+                return selecionados[pessoa] ? acc + dados.valor : acc;
+            }, 0);
 
+            const totalConsumo = calcularTotalConsumo();
+            const jaPagoAntigo = calcularJaPago();
+            const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
+            const restanteFinal = totalConsumo - totalJaPagoNovo;
+            
+            // Verifica se quitou (tolerância de centavos)
+            const mesaQuitada = restanteFinal <= 0.10;
+
+            const pagamentosValidos = Object.fromEntries(
+                Object.entries(pagamentos).filter(([k]) => selecionados[k] && pagamentos[k].valor > 0)
+            );
+
+            // 1. Registrar Venda
             const dadosVenda = {
                 mesaId: mesa.id,
                 mesaNumero: mesa.numero,
                 estabelecimentoId: estabelecimentoId,
-                itens: mesa.itens || mesa.pedidos || [],
-                pagamentos: pagamentos,
-                total: totalMesa,
+                itens: Object.values(pagamentosValidos).flatMap(p => p.itens || []),
+                pagamentos: pagamentosValidos,
+                total: totalPagoAgora,
+                valorOriginal: totalConsumo,
                 tipoPagamento: tipoPagamento,
-                status: 'pago',
+                status: mesaQuitada ? 'pago' : 'pago_parcial',
                 criadoEm: serverTimestamp(),
                 criadoPor: auth.currentUser?.uid,
                 funcionario: auth.currentUser?.displayName || 'Garçom'
@@ -278,21 +256,41 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
 
+            // 2. Atualizar Mesa
             if (mesa.id) {
-                await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
-                    status: 'livre',
-                    clientes: [],
-                    nomesOcupantes: ["Mesa"],
-                    itens: [],
-                    pedidos: [],
-                    total: 0,
-                    pagamentos: {},
-                    updatedAt: serverTimestamp()
-                });
+                if (modo === 'total' || mesaQuitada) {
+                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
+                        status: 'livre',
+                        clientes: [],
+                        nomesOcupantes: ["Mesa"],
+                        itens: [],
+                        pedidos: [],
+                        total: 0,
+                        pagamentos: {},
+                        pagamentosParciais: [],
+                        updatedAt: serverTimestamp()
+                    });
+                    toast.success("Conta quitada! Mesa liberada.");
+                } else {
+                    const novoPagamentoInfo = {
+                        id: docRef.id,
+                        valor: totalPagoAgora,
+                        data: new Date().toISOString(),
+                        responsavel: auth.currentUser?.displayName || 'Garçom',
+                        tipo: tipoPagamento
+                    };
+
+                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
+                        status: 'ocupada',
+                        total: restanteFinal, 
+                        pagamentosParciais: arrayUnion(novoPagamentoInfo),
+                        updatedAt: serverTimestamp()
+                    });
+                    toast.success(`Recebido R$ ${totalPagoAgora.toFixed(2)}. Restam R$ ${restanteFinal.toFixed(2)}`);
+                }
             }
 
-            toast.success("Pagamento realizado!");
-            if (onSucesso) onSucesso({ vendaId: docRef.id });
+            if (onSucesso) onSucesso({ vendaId: docRef.id, parcial: !mesaQuitada });
             onClose();
 
         } catch (error) {
@@ -303,35 +301,54 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }
     };
 
-    // --- RENDERIZADORES ---
+    // --- UI HELPERS ---
+    const renderHistoricoPagamentos = () => {
+        const jaPago = calcularJaPago();
+        if (jaPago <= 0) return null;
+
+        return (
+            <div className="bg-gray-100 p-4 rounded-2xl mb-4 border border-gray-200">
+                <div className="flex items-center gap-2 text-gray-500 mb-2">
+                    <IoTime /> <span className="text-xs font-bold uppercase">Histórico de Pagamentos</span>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Já abatido da conta:</span>
+                    <span className="text-lg font-bold text-green-600">- R$ {jaPago.toFixed(2)}</span>
+                </div>
+                <div className="mt-1 text-xs text-gray-400 text-right">
+                    (Este valor já está descontado do total a pagar)
+                </div>
+            </div>
+        );
+    };
+
     const renderizarEtapa1 = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="bg-[#3b82f6] rounded-3xl p-6 shadow-xl shadow-blue-200 text-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-black opacity-10 rounded-full -ml-10 -mb-10 blur-xl"></div>
-                <div className="relative z-10">
-                    <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3 border border-white/30">
+                 <div className="relative z-10">
+                    <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3">
                         <IoWallet className="text-3xl text-white" />
                     </div>
-                    <h2 className="text-xl font-bold text-blue-100 mb-1">Total a Pagar</h2>
-                    <span className="text-5xl font-black text-white tracking-tight">R$ {calcularTotalMesa().toFixed(2)}</span>
-                    <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">Mesa {mesa?.numero}</p>
-                    <button onClick={handleImprimirConferencia} className="mt-6 w-full py-3 bg-white text-blue-600 rounded-xl font-black text-sm uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-blue-50 transition-all shadow-lg active:scale-95">
-                        <IoPrint className="text-lg" /> Imprimir Comanda
-                    </button>
+                    <h2 className="text-xl font-bold text-blue-100 mb-1">Restante a Pagar</h2>
+                    <span className="text-5xl font-black text-white">R$ {calcularRestanteMesa().toFixed(2)}</span>
+                    <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">
+                        Total Consumo: R$ {calcularTotalConsumo().toFixed(2)}
+                    </p>
                 </div>
             </div>
-            <p className="text-center text-sm text-gray-500 font-medium">Selecione como deseja dividir o pagamento:</p>
+
+            {renderHistoricoPagamentos()}
+
             <div className="space-y-3">
-                <button onClick={() => { setTipoPagamento('unico'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50/30 hover:shadow-md transition-all group flex items-center gap-4 text-left">
-                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors"><IoPerson size={24} /></div>
-                    <div className="flex-1"><h4 className="font-bold text-gray-900">Pagamento Único</h4><p className="text-xs text-gray-500">Uma pessoa paga o total</p></div>
-                    <IoChevronForward className="text-gray-300 group-hover:text-blue-600" />
+                <button onClick={() => { setTipoPagamento('unico'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50/30 flex items-center gap-4 text-left transition-all">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600"><IoPerson size={24} /></div>
+                    <div className="flex-1"><h4 className="font-bold text-gray-900">Quitar Restante</h4><p className="text-xs text-gray-500">Pagar todo o valor pendente</p></div>
+                    <IoChevronForward className="text-gray-300" />
                 </button>
-                <button onClick={() => { setTipoPagamento('individual'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:bg-green-50/30 hover:shadow-md transition-all group flex items-center gap-4 text-left">
-                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors"><IoPeople size={24} /></div>
-                    <div className="flex-1"><h4 className="font-bold text-gray-900">Pagamento Individual</h4><p className="text-xs text-gray-500">Dividir por consumo ou valor</p></div>
-                    <IoChevronForward className="text-gray-300 group-hover:text-green-600" />
+                <button onClick={() => { setTipoPagamento('individual'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:bg-green-50/30 flex items-center gap-4 text-left transition-all">
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600"><IoPeople size={24} /></div>
+                    <div className="flex-1"><h4 className="font-bold text-gray-900">Pagamento Parcial / Dividir</h4><p className="text-xs text-gray-500">Abater valor ou dividir entre pessoas</p></div>
+                    <IoChevronForward className="text-gray-300" />
                 </button>
             </div>
         </div>
@@ -339,104 +356,174 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
     const renderizarEtapa2 = () => {
         const formasPagamento = [
-            { id: 'dinheiro', icon: <IoCash />, label: 'Dinheiro', color: 'bg-green-100 text-green-600' },
-            { id: 'credito', icon: <IoCard />, label: 'Crédito', color: 'bg-blue-100 text-blue-600' },
-            { id: 'debito', icon: <IoCard />, label: 'Débito', color: 'bg-purple-100 text-purple-600' },
-            { id: 'pix', icon: <IoPhonePortrait />, label: 'PIX', color: 'bg-teal-100 text-teal-600' }
+            { id: 'dinheiro', icon: <IoCash />, label: 'Dinheiro' },
+            { id: 'credito', icon: <IoCard />, label: 'Crédito' },
+            { id: 'debito', icon: <IoCard />, label: 'Débito' },
+            { id: 'pix', icon: <IoPhonePortrait />, label: 'PIX' }
         ];
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-300">
                 <div className="flex items-center gap-2 mb-4">
                     <button onClick={() => setEtapa(1)} className="p-2 hover:bg-gray-100 rounded-lg"><IoChevronBack className="text-xl" /></button>
-                    <h3 className="text-lg font-black text-gray-900">{tipoPagamento === 'unico' ? 'Configurar Pagamento' : 'Dividir Conta'}</h3>
+                    <h3 className="text-lg font-black text-gray-900">Quem vai pagar agora?</h3>
                 </div>
-                <div className="space-y-4">
+                
+                {tipoPagamento === 'individual' && (
+                     <div className="bg-blue-50 text-blue-800 p-3 rounded-xl text-xs font-bold mb-4 flex gap-2 items-center border border-blue-100">
+                         <IoCheckmark className="text-lg" />
+                         Selecione quem vai pagar neste momento.
+                     </div>
+                )}
+
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                     {Object.entries(pagamentos).map(([pessoa, dados]) => (
-                        <div key={pessoa} className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${tipoPagamento === 'unico' ? 'bg-blue-500' : 'bg-purple-500'}`}>{tipoPagamento === 'unico' ? <IoPerson /> : pessoa.charAt(0)}</div>
-                                    <div><h4 className="font-bold text-gray-900 text-sm">{pessoa}</h4><div className="text-2xl font-black text-gray-800">R$ {dados.valor.toFixed(2)}</div></div>
+                        <div key={pessoa} className={`bg-white rounded-2xl p-4 border transition-all ${selecionados[pessoa] ? 'border-blue-500 ring-1 ring-blue-200 shadow-md' : 'border-gray-200 opacity-70 grayscale-[0.5]'}`}>
+                            <div className="flex justify-between items-center mb-3">
+                                <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => toggleSelecao(pessoa)}>
+                                    <div className={`text-2xl transition-transform active:scale-90 ${selecionados[pessoa] ? 'text-blue-600' : 'text-gray-300'}`}>
+                                        {selecionados[pessoa] ? <IoCheckbox /> : <IoSquareOutline />}
+                                    </div>
+                                    <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center font-bold text-gray-600">{pessoa.charAt(0)}</div>
+                                    <div><h4 className="font-bold text-gray-900 text-sm">{pessoa}</h4></div>
                                 </div>
                                 {tipoPagamento === 'individual' && Object.keys(pagamentos).length > 1 && (
                                     <button onClick={() => removerPessoa(pessoa)} className="text-red-400 hover:text-red-600 p-2"><IoRemove /></button>
                                 )}
                             </div>
-                            <div className="grid grid-cols-4 gap-2 mb-4">
-                                {formasPagamento.map(forma => (
-                                    <button key={forma.id} onClick={() => editarFormaPagamento(pessoa, forma.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${dados.formaPagamento === forma.id ? `ring-2 ring-offset-1 ring-blue-500 ${forma.color}` : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
-                                        <div className="text-xl mb-1">{forma.icon}</div><span className="text-[9px] font-bold uppercase">{forma.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                            {tipoPagamento === 'individual' && (
-                                <div className="flex gap-2 items-center">
-                                    <div className="relative flex-1">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span>
-                                        <input 
-                                            type="number" 
-                                            placeholder="Valor..." 
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            // IMPORTANTE: onChange para refletir imediatamente ou onBlur para calcular ao sair.
-                                            // Vamos usar onBlur para evitar recálculos loucos enquanto digita, mas a lógica está corrigida.
-                                            onBlur={(e) => { if(e.target.value) { editarValorPagamento(pessoa, e.target.value); e.target.value = ''; } }}
-                                        />
+                            
+                            {selecionados[pessoa] && (
+                                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="relative flex-1">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">R$</span>
+                                            <input 
+                                                type="number" 
+                                                className="w-full bg-blue-50/50 border border-blue-200 rounded-lg pl-8 pr-3 py-3 text-lg font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                placeholder="0.00"
+                                                value={dados.valor}
+                                                onChange={(e) => editarValorPagamento(pessoa, e.target.value)}
+                                                onClick={(e) => e.target.select()} 
+                                            />
+                                        </div>
                                     </div>
-                                    <button onClick={() => assumirRestante(pessoa)} className="px-3 py-2 bg-blue-100 hover:bg-blue-200 rounded-lg text-xs font-bold uppercase text-blue-600 flex items-center gap-1 transition-colors" title="Pagar o restante da conta">
-                                        <IoCalculator /> Restante
-                                    </button>
+                                    <div className="grid grid-cols-4 gap-2 mb-2">
+                                        {formasPagamento.map(forma => (
+                                            <button key={forma.id} onClick={() => editarFormaPagamento(pessoa, forma.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${dados.formaPagamento === forma.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-105' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
+                                                <div className="text-xl mb-1">{forma.icon}</div><span className="text-[8px] font-bold uppercase">{forma.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {dados.itens && dados.itens.filter(i => i.preco > 0).length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                            <p className="text-[10px] text-gray-400 font-bold mb-1">CONSUMO:</p>
+                                            <div className="text-xs text-gray-500 space-y-1 max-h-20 overflow-y-auto">
+                                                {dados.itens.filter(i => i.preco > 0).map((item, idx) => (
+                                                    <div key={idx} className="flex justify-between">
+                                                        <span>{item.quantidade || 1}x {item.nome}</span>
+                                                        <span>{((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
                     ))}
                 </div>
+                
                 {tipoPagamento === 'individual' && (
-                    <button onClick={adicionarPessoa} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all">
-                        <IoAdd /> Adicionar Pagante
+                    <button onClick={adicionarPessoa} className="mt-4 w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all">
+                        <IoAdd /> Adicionar Pagante Manual
                     </button>
                 )}
-                <button onClick={() => setEtapa(3)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2">
-                    Revisar e Finalizar <IoChevronForward />
+                
+                <button onClick={() => setEtapa(3)} className="mt-4 w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">
+                    Conferir e Finalizar <IoChevronForward />
                 </button>
             </div>
         );
     };
 
     const renderizarEtapa3 = () => {
-        const totalMesa = calcularTotalMesa();
-        const totalPagamentos = calcularTotalPagamentos();
-        const diferenca = totalPagamentos - totalMesa;
-        const batendo = Math.abs(diferenca) < 0.10;
+        const totalConsumo = calcularTotalConsumo();
+        const jaPago = calcularJaPago();
+        const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
+            return selecionados[pessoa] ? acc + dados.valor : acc;
+        }, 0);
+        
+        const totalPagoGeral = jaPago + totalPagoAgora;
+        const restanteFinal = totalConsumo - totalPagoGeral;
+        
+        const vaiQuitar = restanteFinal <= 0.10;
+        const troco = restanteFinal < -0.10 ? Math.abs(restanteFinal) : 0;
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-300">
                 <div className="text-center relative">
                     <button onClick={() => setEtapa(2)} className="absolute top-0 left-0 p-2 bg-gray-100 rounded-xl hover:bg-gray-200"><IoChevronBack /></button>
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><IoCheckmark className="text-3xl text-green-600" /></div>
-                    <h3 className="text-xl font-black text-gray-900">Confirmar</h3>
-                    <p className="text-sm text-gray-500">Revise antes de encerrar a mesa</p>
+                    <h3 className="text-xl font-black text-gray-900">Confirmação</h3>
                 </div>
-                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-xl">
-                    <div className="flex justify-between items-center mb-2"><span className="text-gray-500 font-medium">Total Mesa</span><span className="font-bold text-gray-900">R$ {totalMesa.toFixed(2)}</span></div>
-                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100"><span className="text-gray-500 font-medium">Total Recebido</span><span className={`font-bold ${batendo ? 'text-green-600' : 'text-red-500'}`}>R$ {totalPagamentos.toFixed(2)}</span></div>
-                    {!batendo && (
-                        <div className={`p-3 rounded-xl text-center text-sm font-bold mb-4 ${diferenca > 0 ? 'bg-orange-100 text-orange-600' : 'bg-red-100 text-red-600'}`}>
-                            {diferenca > 0 ? `Troco: R$ ${diferenca.toFixed(2)}` : `Faltam: R$ ${Math.abs(diferenca).toFixed(2)}`}
+                
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl">
+                    <div className="flex justify-between items-center mb-1 text-gray-400 font-medium text-xs">
+                        <span>Total Consumo</span>
+                        <span>R$ {totalConsumo.toFixed(2)}</span>
+                    </div>
+                    {jaPago > 0 && (
+                        <div className="flex justify-between items-center mb-3 text-green-600 font-bold text-xs border-b border-gray-100 pb-2">
+                            <span>Já Pago (Anterior)</span>
+                            <span>- R$ {jaPago.toFixed(2)}</span>
                         </div>
                     )}
+                    
+                    <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100">
+                        <span className="text-lg font-bold text-gray-900">Pagando Agora</span>
+                        <span className="text-3xl font-black text-blue-600">R$ {totalPagoAgora.toFixed(2)}</span>
+                    </div>
+
+                    <div className={`p-4 rounded-2xl text-center mb-6 ${!vaiQuitar ? 'bg-orange-50 text-orange-700' : (troco > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600')}`}>
+                        <p className="text-xs font-bold uppercase tracking-wider mb-1">Situação da Mesa Após Pagamento</p>
+                        <p className="text-xl font-black">
+                            {!vaiQuitar && `Faltarão R$ ${restanteFinal.toFixed(2)}`}
+                            {vaiQuitar && troco === 0 && `Conta Quitada (Mesa Fecha)`}
+                            {vaiQuitar && troco > 0 && `Conta Quitada (Troco: R$ ${troco.toFixed(2)})`}
+                        </p>
+                    </div>
+
                     <div className="space-y-2">
-                        {Object.entries(pagamentos).map(([pessoa, dados]) => (
-                            <div key={pessoa} className="flex justify-between text-sm">
-                                <span className="text-gray-600">{pessoa} <span className="text-xs text-gray-400">({dados.formaPagamento})</span></span>
-                                <span className="font-bold text-gray-800">R$ {dados.valor.toFixed(2)}</span>
+                        <p className="text-xs font-bold text-gray-400 uppercase">Resumo da Transação:</p>
+                        {Object.entries(pagamentos).filter(([k]) => selecionados[k]).map(([pessoa, dados]) => (
+                            <div key={pessoa} className="flex justify-between text-sm border-b border-gray-50 pb-2">
+                                <span className="text-gray-600 font-medium">{pessoa} <span className="text-xs text-gray-400">({dados.formaPagamento})</span></span>
+                                <span className="font-bold text-gray-900">R$ {dados.valor.toFixed(2)}</span>
                             </div>
                         ))}
                     </div>
                 </div>
-                <button onClick={finalizarPagamento} disabled={carregando} className={`w-full py-4 rounded-2xl font-bold shadow-lg text-white transition-all flex items-center justify-center gap-2 ${batendo ? 'bg-green-600 hover:bg-green-700 shadow-green-200' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'}`}>
-                    {carregando ? 'Processando...' : (batendo ? 'Encerrar Mesa' : 'Encerrar com Diferença')}
-                </button>
+
+                <div className="flex flex-col gap-3">
+                    {!vaiQuitar && (
+                        <button 
+                            onClick={() => handleFinalizar('parcial')}
+                            disabled={carregando}
+                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                            {carregando ? 'Processando...' : `Receber R$ ${totalPagoAgora.toFixed(2)} e Manter Aberta`}
+                        </button>
+                    )}
+
+                    {vaiQuitar && (
+                        <button 
+                            onClick={() => handleFinalizar('total')} 
+                            disabled={carregando} 
+                            className="w-full py-4 bg-green-600 hover:bg-green-700 rounded-2xl font-bold shadow-lg shadow-green-200 text-white active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                            {carregando ? 'Processando...' : (troco > 0 ? 'Encerrar com Troco' : 'Encerrar Mesa (Tudo Pago)')}
+                        </button>
+                    )}
+                </div>
             </div>
         );
     };
@@ -446,7 +533,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
             <div className="relative w-full max-w-md bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-10 duration-300">
                 <div className="p-4 flex justify-between items-center border-b border-gray-100">
-                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">NaMão</span>
+                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">Pagamento</span>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"><IoClose size={24} /></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 bg-[#f8faff]">
