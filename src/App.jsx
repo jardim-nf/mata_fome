@@ -58,7 +58,7 @@ import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
 import FinanceiroMaster from './pages/admin/FinanceiroMaster';
-
+import NotificationManager from './components/NotificationManager'; // <--- IMPORTAR
 function App() {
   return (
     <Router>

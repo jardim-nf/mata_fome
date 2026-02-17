@@ -1,140 +1,205 @@
 // src/pages/admin/AuditLogs.jsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, query, orderBy, where, getDocs, limit, startAfter } from 'firebase/firestore';
+import { collection, query, orderBy, where, getDocs, limit, startAfter, endBefore, limitToLast } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { 
+  FaStore, 
+  FaSignOutAlt, 
+  FaSearch, 
+  FaFilter, 
+  FaHistory, 
+  FaChevronDown, 
+  FaChevronUp, 
+  FaUserShield, 
+  FaCube, 
+  FaEdit, 
+  FaTrash, 
+  FaPlus,
+  FaArrowRight,
+  FaArrowLeft,
+  FaExclamationTriangle,
+  FaCode,
+  FaFileCsv,
+  FaCalendarAlt,
+  FaExternalLinkAlt
+} from 'react-icons/fa';
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 20;
 
-// Componente Header Atualizado
-function DashboardHeader({ currentUser, logout, navigate }) {
-  const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
-  
-  const handleLogout = async () => {
-    try {
-      await logout();
-      toast.success('Você foi desconectado com sucesso!');
-      navigate('/');
-    } catch (error) {
-      toast.error('Ocorreu um erro ao tentar desconectar.');
-    }
-  };
-
+// --- Header Minimalista ---
+const DashboardHeader = ({ navigate, logout, currentUser }) => {
+  const userEmailPrefix = currentUser?.email ? currentUser.email.split('@')[0] : 'Admin';
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 p-6 flex justify-between items-center bg-white shadow-lg border-b border-gray-200 backdrop-blur-sm bg-white/95">
-      <div className="font-extrabold text-2xl text-gray-900 cursor-pointer hover:text-yellow-500 transition-colors duration-300 flex items-center gap-2" onClick={() => navigate('/')}>
-        <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm">DF</span>
-        </div>
-        DEU FOME <span className="text-yellow-500">.</span>
-      </div>
-      <div className="flex items-center space-x-4">
-        <div className="hidden sm:flex items-center space-x-3 bg-gray-100 rounded-full px-4 py-2">
-          <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-sm">{userEmailPrefix.charAt(0).toUpperCase()}</span>
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 h-16 transition-all duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+           <div className="flex items-center gap-1">
+              <div className="bg-yellow-400 text-black font-bold p-1 rounded-sm transform -skew-x-12">
+                  <FaStore />
+              </div>
+              <span className="text-gray-900 font-extrabold text-xl tracking-tight">
+                  Na<span className="text-yellow-500">Mão</span>
+              </span>
           </div>
-          <span className="text-gray-700 text-sm font-medium">Olá, {userEmailPrefix}!</span>
         </div>
-        <Link to="/master-dashboard" className="px-4 py-2 rounded-full bg-yellow-500 text-white font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-lg transform hover:-translate-y-0.5 flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-          </svg>
-          Dashboard
-        </Link>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 rounded-full text-gray-700 border border-gray-300 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-50 hover:border-gray-400 transform hover:-translate-y-0.5 flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-          </svg>
-          Sair
-        </button>
+        <div className="flex items-center gap-6">
+            <div className="hidden md:flex flex-col items-end">
+              <span className="text-sm font-semibold text-gray-800">{userEmailPrefix}</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Master Admin</span>
+            </div>
+            <button 
+                onClick={logout} 
+                className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
+                title="Sair"
+            >
+              <FaSignOutAlt />
+            </button>
+          </div>
       </div>
     </header>
   );
-}
+};
 
-// Componente de Card de Log Individual
-function LogCard({ log }) {
-  const [showDetails, setShowDetails] = useState(false);
-
-  const getActionTypeColor = (actionType) => {
-    if (actionType.includes('CRIADO') || actionType.includes('ATIVADO')) return 'text-green-600 bg-green-50 border-green-200';
-    if (actionType.includes('ATUALIZADO') || actionType.includes('EDITADO')) return 'text-blue-600 bg-blue-50 border-blue-200';
-    if (actionType.includes('DELETADO') || actionType.includes('DESATIVADO') || actionType.includes('CANCELADO')) return 'text-red-600 bg-red-50 border-red-200';
-    if (actionType.includes('LOGIN')) return 'text-purple-600 bg-purple-50 border-purple-200';
-    return 'text-gray-600 bg-gray-50 border-gray-200';
-  };
-
-  return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-all duration-300">
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getActionTypeColor(log.actionType)}`}>
-              {log.actionType?.replace(/_/g, ' ')}
-            </span>
-            <span className="text-sm text-gray-500 font-medium">
-              {log.timestamp && format(log.timestamp.toDate(), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR })}
-            </span>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-semibold text-gray-700 mb-1">Ator</p>
-            <div className="flex w-full gap-4">
-
-                <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">
-                    {log.actor?.email?.charAt(0).toUpperCase()}
-                  </span>
+// --- Visualizador de Detalhes JSON ---
+const DetailViewer = ({ data }) => {
+    if (!data) return <span className="text-gray-400 text-xs italic">Nenhum detalhe técnico registrado.</span>;
+    let parsedData = data;
+    if (typeof data === 'string') {
+        try { parsedData = JSON.parse(data); } catch (e) { }
+    }
+    if (typeof parsedData === 'object' && Object.keys(parsedData).length === 0) {
+        return <span className="text-gray-400 text-xs italic">Detalhes vazios.</span>;
+    }
+    return (
+        <div className="bg-gray-900 rounded-lg p-4 text-xs font-mono text-green-400 overflow-x-auto border border-gray-800 shadow-inner">
+            {Object.entries(parsedData).map(([key, value]) => (
+                <div key={key} className="mb-1 last:mb-0">
+                    <span className="text-blue-300">{key}:</span>{' '}
+                    <span className="text-gray-300 break-all whitespace-pre-wrap">
+                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                    </span>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-900 font-medium">{log.actor?.email}</p>
-                  <p className="text-xs text-gray-500">{log.actor?.role}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div>
-              <p className="text-sm font-semibold text-gray-700 mb-1">Alvo</p>
-              <p className="text-sm text-gray-900">
-                <span className="font-medium">{log.target?.type}</span>
-                <span className="text-gray-500 ml-2 font-mono text-xs">
-                  ID: {log.target?.id?.substring(0, 8)}...
-                </span>
-              </p>
-            </div>
-          </div>
+            ))}
         </div>
-        
-        <button
-          onClick={() => setShowDetails(!showDetails)}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all duration-300 flex items-center gap-2 self-start"
-        >
-          <svg className={`w-4 h-4 transition-transform duration-300 ${showDetails ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/>
-          </svg>
-          {showDetails ? 'Ocultar' : 'Detalhes'}
-        </button>
-      </div>
+    );
+};
 
-      {showDetails && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-          <p className="text-sm font-semibold text-gray-700 mb-2">Detalhes da Ação:</p>
-          <pre className="text-xs text-gray-600 bg-white p-3 rounded-lg border border-gray-200 overflow-x-auto">
-            {JSON.stringify(log.details, null, 2)}
-          </pre>
+// --- Linha de Log Inteligente ---
+const LogItem = ({ log }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    // Gera o link correto baseado no tipo do alvo
+    const getTargetLink = () => {
+        if (!log.target?.id) return null;
+        switch(log.target.type) {
+            case 'estabelecimento': return `/master/estabelecimentos/${log.target.id}/editar`;
+            case 'usuario': return `/master/usuarios/${log.target.id}/editar`;
+            case 'pedido': return `/master/pedidos/${log.target.id}`;
+            default: return null;
+        }
+    };
+
+    const targetLink = getTargetLink();
+
+    const getIconAndColor = (type) => {
+        const t = (type || '').toUpperCase();
+        if (t.includes('CRIADO') || t.includes('ADICIONADO') || t.includes('ATIVADO') || t.includes('IMPORTADO')) 
+            return { icon: <FaPlus />, color: 'bg-green-100 text-green-700', border: 'border-green-200' };
+        if (t.includes('ATUALIZADO') || t.includes('EDITADO')) 
+            return { icon: <FaEdit />, color: 'bg-blue-100 text-blue-700', border: 'border-blue-200' };
+        if (t.includes('DELETADO') || t.includes('REMOVIDO') || t.includes('DESATIVADO')) 
+            return { icon: <FaTrash />, color: 'bg-red-100 text-red-700', border: 'border-red-200' };
+        return { icon: <FaHistory />, color: 'bg-gray-100 text-gray-700', border: 'border-gray-200' };
+    };
+
+    const style = getIconAndColor(log.actionType);
+
+    return (
+        <div className={`border-b border-gray-100 last:border-0 transition-colors ${expanded ? 'bg-gray-50' : 'bg-white'}`}>
+            <div className="flex items-center justify-between p-5 hover:bg-gray-50/80 transition-all group">
+                
+                {/* Clique Principal para Expandir */}
+                <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${style.color} border ${style.border} shrink-0 shadow-sm`}>
+                        {style.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate" title={log.actionType}>
+                            {log.actionType?.replace(/_/g, ' ')}
+                        </p>
+                        <p className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                            <FaUserShield className="text-gray-400" /> 
+                            <span className="truncate">{log.actor?.email || 'Sistema / Desconhecido'}</span>
+                        </p>
+                    </div>
+                </div>
+
+                {/* Metadata e Link Rápido */}
+                <div className="flex items-center gap-4 ml-4">
+                    <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-200/50 px-2 py-0.5 rounded">
+                                {log.target?.type || 'Geral'}
+                            </span>
+                            {/* Link Direto para o Objeto (se existir) */}
+                            {targetLink && (
+                                <Link 
+                                    to={targetLink}
+                                    className="text-gray-400 hover:text-blue-600 transition-colors p-1"
+                                    title={`Ir para ${log.target.type}`}
+                                >
+                                    <FaExternalLinkAlt size={10} />
+                                </Link>
+                            )}
+                        </div>
+                        <span className="text-xs text-gray-400 font-medium">
+                            {log.timestamp ? format(log.timestamp.toDate(), "dd/MM HH:mm", { locale: ptBR }) : '--/--'}
+                        </span>
+                    </div>
+                    
+                    <button onClick={() => setExpanded(!expanded)} className="text-gray-300 hover:text-gray-500 p-2">
+                        {expanded ? <FaChevronUp /> : <FaChevronDown />}
+                    </button>
+                </div>
+            </div>
+
+            {/* Detalhes Expandidos */}
+            {expanded && (
+                <div className="p-5 pl-[4.5rem] border-t border-gray-200/50 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                        <div className="space-y-1">
+                            <p className="text-[10px] uppercase font-bold text-gray-400">ID do Alvo</p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-xs font-mono bg-white p-2 border border-gray-200 rounded select-all text-gray-600 flex-1">
+                                    {log.target?.id || 'N/A'}
+                                </p>
+                            </div>
+                        </div>
+                        {log.target?.name && (
+                            <div className="space-y-1">
+                                <p className="text-[10px] uppercase font-bold text-gray-400">Nome do Alvo</p>
+                                <p className="text-sm font-bold text-gray-800">{log.target.name}</p>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 mb-1">
+                            <FaCode className="text-gray-400 text-xs" />
+                            <p className="text-[10px] uppercase font-bold text-gray-400">Payload Técnico</p>
+                        </div>
+                        <DetailViewer data={log.details} />
+                    </div>
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
-}
+    );
+};
 
 function AuditLogs() {
   const navigate = useNavigate();
@@ -143,350 +208,310 @@ function AuditLogs() {
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [error, setError] = useState('');
+  const [indexLink, setIndexLink] = useState(null);
 
-  const [filterActionType, setFilterActionType] = useState('todos');
-  const [filterActorEmail, setFilterActorEmail] = useState('');
-  const [filterTargetType, setFilterTargetType] = useState('todos');
-  const [filterTargetId, setFilterTargetId] = useState('');
-  const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate] = useState('');
-  
-  const [allActionTypes, setAllActionTypes] = useState([]);
-  const [allActorEmails, setAllActorEmails] = useState([]);
+  // Filtros
+  const [filterType, setFilterType] = useState('todos');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
 
-  const [lastVisibleDoc, setLastVisibleDoc] = useState(null);
-  const [pageHistory, setPageHistory] = useState([null]);
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [hasMorePages, setHasMorePages] = useState(true);
+  // Paginação
+  const [lastVisible, setLastVisible] = useState(null);
+  const [firstVisible, setFirstVisible] = useState(null);
+  const [page, setPage] = useState(1);
 
-  // Controle de acesso
+  // 1. Verificar Permissão
   useEffect(() => {
-    if (!authLoading && !isMasterAdmin) {
-      toast.error('Acesso negado.');
-      navigate('/master-dashboard');
+    if (!authLoading) {
+      if (!currentUser || !isMasterAdmin) {
+        navigate('/master-dashboard');
+      }
     }
-  }, [isMasterAdmin, authLoading, navigate]);
+  }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
-  const fetchLogs = useCallback(async (pageIndex = 0, direction = 'next') => {
+  // 2. Buscar Logs (Server-Side)
+  const fetchLogs = useCallback(async (direction = 'initial') => {
     if (!isMasterAdmin) return;
     setLoadingLogs(true);
     setError('');
-    
+    setIndexLink(null);
+
     try {
-        let q = query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'));
-        
-        // Aplicando filtros
-        if (filterActionType !== 'todos') q = query(q, where('actionType', '==', filterActionType));
-        if (filterActorEmail) q = query(q, where('actor.email', '==', filterActorEmail));
-        if (filterTargetType !== 'todos') q = query(q, where('target.type', '==', filterTargetType));
-        if (filterTargetId) q = query(q, where('target.id', '==', filterTargetId));
-        if (filterStartDate) q = query(q, where('timestamp', '>=', startOfDay(parseISO(filterStartDate))));
-        if (filterEndDate) q = query(q, where('timestamp', '<=', endOfDay(parseISO(filterEndDate))));
+        let q = collection(db, 'auditLogs');
+        let constraints = [orderBy('timestamp', 'desc')];
 
-        // Paginação
-        const startAfterDoc = pageHistory[pageIndex];
-        if (startAfterDoc) {
-            q = query(q, startAfter(startAfterDoc));
+        // --- FILTROS SERVER-SIDE ---
+        // Se usar Data, o Firebase exige que seja a primeira ordenação ou índice composto
+        if (dateStart) constraints.push(where('timestamp', '>=', startOfDay(parseISO(dateStart))));
+        if (dateEnd) constraints.push(where('timestamp', '<=', endOfDay(parseISO(dateEnd))));
+
+        if (filterType !== 'todos') {
+            constraints.push(where('actionType', '==', filterType));
         }
-        q = query(q, limit(ITEMS_PER_PAGE));
 
-        const documentSnapshots = await getDocs(q);
-        const fetchedLogs = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLogs(fetchedLogs);
-
-        const lastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-        setLastVisibleDoc(lastVisible);
-        
+        // --- PAGINAÇÃO ---
         if (direction === 'next' && lastVisible) {
-            const newPageHistory = pageHistory.slice(0, pageIndex + 1);
-            if (!newPageHistory.includes(lastVisible)) {
-                setPageHistory([...newPageHistory, lastVisible]);
-            }
+            constraints.push(startAfter(lastVisible));
+        } else if (direction === 'prev' && firstVisible) {
+            // Estratégia simples de voltar: reset para evitar complexidade de cursor reverso
+            if (page <= 2) direction = 'initial'; 
         }
-        setCurrentPageIndex(pageIndex);
-        setHasMorePages(documentSnapshots.docs.length === ITEMS_PER_PAGE);
+
+        if (direction === 'initial') {
+             constraints.push(limit(ITEMS_PER_PAGE));
+        } else {
+             constraints.push(limit(ITEMS_PER_PAGE));
+        }
+
+        // Monta Query
+        // Nota: O Firestore ordena automaticamente os where() filters
+        const finalQuery = query(q, ...constraints);
+        const snapshot = await getDocs(finalQuery);
+
+        if (!snapshot.empty) {
+            setFirstVisible(snapshot.docs[0]);
+            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+            setLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        } else {
+            if (direction === 'initial') setLogs([]);
+        }
 
     } catch (err) {
-        setError('Erro ao carregar logs. Verifique os índices do Firestore.');
-        toast.error('Erro ao carregar logs.');
+        console.error("Erro Query:", err);
+        if (err.code === 'failed-precondition' && err.message.includes('index')) {
+            const match = err.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+            if (match) {
+                setIndexLink(match[0]);
+                setError("Índice necessário. O Firebase exige criar um índice para combinar Data + Tipo.");
+            }
+        } else {
+            setError("Erro ao carregar logs. Verifique sua conexão.");
+        }
     } finally {
         setLoadingLogs(false);
     }
-  }, [isMasterAdmin, filterActionType, filterActorEmail, filterTargetType, filterTargetId, filterStartDate, filterEndDate, pageHistory]);
+  }, [isMasterAdmin, filterType, dateStart, dateEnd, lastVisible, page]);
 
+  // Trigger de Busca
   useEffect(() => {
-    if (isMasterAdmin) {
-        fetchLogs(0, 'next');
-    }
-  }, [isMasterAdmin, filterActionType, filterActorEmail, filterTargetType, filterTargetId, filterStartDate, filterEndDate]);
+    setPage(1);
+    setLastVisible(null);
+    setFirstVisible(null);
+    fetchLogs('initial');
+  }, [filterType, dateStart, dateEnd, isMasterAdmin]); // Removemos fetchLogs para evitar loop
 
-  const handleNextPage = () => {
-    if (hasMorePages) fetchLogs(currentPageIndex + 1, 'next');
+  const handleNext = () => { setPage(p => p + 1); fetchLogs('next'); };
+  const handlePrev = () => { if (page > 1) { setPage(p => p - 1); if (page === 2) fetchLogs('initial'); } };
+
+  // --- EXPORTAR CSV ---
+  const handleExportCSV = () => {
+    if (logs.length === 0) return toast.warn("Sem dados para exportar.");
+    
+    const headers = ["ID", "Data", "Hora", "Ação", "Ator", "Alvo Tipo", "Alvo ID", "Alvo Nome"];
+    const rows = logs.map(log => {
+        const date = log.timestamp ? log.timestamp.toDate() : new Date();
+        return [
+            log.id,
+            format(date, "dd/MM/yyyy"),
+            format(date, "HH:mm:ss"),
+            log.actionType,
+            log.actor?.email || "Sistema",
+            log.target?.type || "N/A",
+            log.target?.id || "N/A",
+            `"${log.target?.name || ''}"` // Aspas para nomes com vírgula
+        ];
+    });
+
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `auditoria_export_${format(new Date(), "yyyyMMdd_HHmm")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Relatório CSV gerado!");
   };
 
-  const handlePreviousPage = () => {
-    if (currentPageIndex > 0) fetchLogs(currentPageIndex - 1, 'prev');
-  };
+  // Filtragem Client-Side (Busca Texto)
+  const displayedLogs = logs.filter(log => {
+      const term = searchTerm.toLowerCase();
+      return !term || 
+             (log.actor?.email && log.actor.email.toLowerCase().includes(term)) ||
+             (log.target?.id && log.target.id.toLowerCase().includes(term)) ||
+             (log.target?.name && log.target.name.toLowerCase().includes(term));
+  });
 
-  const clearFilters = () => {
-    setFilterActionType('todos');
-    setFilterActorEmail('');
-    setFilterTargetType('todos');
-    setFilterTargetId('');
-    setFilterStartDate('');
-    setFilterEndDate('');
-  };
-
-  if (authLoading || loadingLogs) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-yellow-500 mb-4"></div>
-        <p className="text-xl text-gray-600 font-medium">Carregando logs...</p>
-        <p className="text-sm text-gray-500 mt-2">Isso pode levar alguns instantes</p>
-      </div>
-    );
-  }
+  if (authLoading) return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen pt-24 pb-8 px-4">
-      <DashboardHeader currentUser={currentUser} logout={logout} navigate={navigate} />
-      
-      <div className="max-w-7xl mx-auto">
-        {/* Cabeçalho da Página */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
-          <div className="flex-1">
-            <h1 className="text-4xl font-bold text-gray-900 text-center lg:text-left">
-              📊 Logs de Auditoria
-            </h1>
-            <p className="text-lg text-gray-600 mt-2 text-center lg:text-left">
-              Monitoramento completo de todas as ações do sistema
-            </p>
-            <div className="w-32 h-1 bg-gradient-to-r from-yellow-500 to-orange-500 mx-auto lg:mx-0 mt-4 rounded-full"></div>
-          </div>
-          <Link
-            to="/master-dashboard"
-            className="bg-white text-gray-700 font-semibold px-6 py-3 rounded-xl border border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all duration-300 flex items-center gap-3 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
-            Voltar ao Dashboard
-          </Link>
+    <div className="bg-gray-50 min-h-screen pt-20 pb-12 px-4 sm:px-6 font-sans text-gray-900">
+      <DashboardHeader navigate={navigate} logout={logout} currentUser={currentUser} />
+
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Header da Página */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+                <button onClick={() => navigate('/master-dashboard')} className="text-gray-400 hover:text-gray-600 flex items-center gap-2 mb-2 text-sm font-medium transition-colors">
+                    <FaArrowLeft /> Voltar ao Dashboard
+                </button>
+                <h1 className="text-3xl font-bold tracking-tight text-gray-900">Auditoria & Segurança</h1>
+                <p className="text-gray-500 text-sm mt-1">Rastreamento detalhado de todas as operações do sistema.</p>
+            </div>
+            
+            <button 
+                onClick={handleExportCSV}
+                className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl hover:bg-green-700 transition-all shadow-lg font-bold text-sm"
+            >
+                <FaFileCsv size={16} /> Exportar Relatório
+            </button>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-6 mb-8 rounded-xl shadow-sm" role="alert">
-            <div className="flex items-center">
-              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <div>
-                <p className="font-bold">Erro ao carregar dados</p>
-                <p className="text-sm mt-1">{error}</p>
-              </div>
+        {/* --- AVISO CRÍTICO DE ÍNDICE --- */}
+        {indexLink && (
+            <div className="mb-6 p-5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-4 shadow-sm animate-pulse">
+                <div className="bg-red-100 p-2 rounded-full text-red-600">
+                    <FaExclamationTriangle className="text-xl" />
+                </div>
+                <div className="flex-1">
+                    <h3 className="font-bold text-red-800 text-lg">Configuração Necessária (Índice Firestore)</h3>
+                    <p className="text-sm text-red-700 mt-1 mb-3">
+                        Para combinar o filtro de <strong>Data</strong> com <strong>Tipo de Ação</strong>, o Firebase exige um índice composto.
+                    </p>
+                    <a 
+                        href={indexLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors shadow-lg"
+                    >
+                        🛠️ Criar Índice Agora
+                    </a>
+                </div>
             </div>
-          </div>
         )}
 
-        {/* Estatísticas Rápidas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total de Logs</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{logs.length}</p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Tipos de Ação</p>
-                <p className="text-3xl font-bold text-purple-600 mt-2">
-                  {new Set(logs.map(log => log.actionType)).size}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                </svg>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Usuários Ativos</p>
-                <p className="text-3xl font-bold text-green-600 mt-2">
-                  {new Set(logs.map(log => log.actor?.email)).size}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Seção de Filtros */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-200">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-              <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-              </svg>
-              Filtrar Logs
-            </h2>
-            <button
-              onClick={clearFilters}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all duration-300 flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-              Limpar Filtros
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Período</label>
-                <div className="grid grid-cols-1 gap-3">
-                  <input 
-                    type="date" 
-                    value={filterStartDate} 
-                    onChange={e => setFilterStartDate(e.target.value)}
-                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
-                  />
-                  <input 
-                    type="date" 
-                    value={filterEndDate} 
-                    onChange={e => setFilterEndDate(e.target.value)}
-                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
-                  />
+        {/* Barra de Filtros */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* Data Inicio */}
+                <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Data Inicial</label>
+                    <div className="relative">
+                        <FaCalendarAlt className="absolute left-4 top-3.5 text-gray-300" />
+                        <input 
+                            type="date" 
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                            value={dateStart}
+                            onChange={(e) => setDateStart(e.target.value)}
+                        />
+                    </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de Ação</label>
-                <select 
-                  value={filterActionType} 
-                  onChange={e => setFilterActionType(e.target.value)}
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
-                >
-                  <option value="todos">Todos os Tipos</option>
-                  {allActionTypes.map(type => (
-                    <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email do Ator</label>
-                <input 
-                  value={filterActorEmail} 
-                  onChange={e => setFilterActorEmail(e.target.value)}
-                  placeholder="Filtrar por email..."
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
-                />
-              </div>
-            </div>
+                {/* Data Fim */}
+                <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Data Final</label>
+                    <div className="relative">
+                        <FaCalendarAlt className="absolute left-4 top-3.5 text-gray-300" />
+                        <input 
+                            type="date" 
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                            value={dateEnd}
+                            onChange={(e) => setDateEnd(e.target.value)}
+                        />
+                    </div>
+                </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de Alvo</label>
-                <select 
-                  value={filterTargetType} 
-                  onChange={e => setFilterTargetType(e.target.value)}
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
-                >
-                  <option value="todos">Todos os Tipos</option>
-                  <option value="estabelecimento">Estabelecimento</option>
-                  <option value="usuario">Usuário</option>
-                  <option value="pedido">Pedido</option>
-                  <option value="produto">Produto</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">ID do Alvo</label>
-                <input 
-                  value={filterTargetId} 
-                  onChange={e => setFilterTargetId(e.target.value)}
-                  placeholder="ID específico do alvo..."
-                  className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-500 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
-                />
-              </div>
+                {/* Tipo de Ação */}
+                <div className="relative">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Tipo de Ação</label>
+                    <div className="relative">
+                        <FaFilter className="absolute left-4 top-3.5 text-gray-300" />
+                        <select 
+                            className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm appearance-none cursor-pointer"
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value)}
+                        >
+                            <option value="todos">Todos</option>
+                            <option value="ESTABELECIMENTO_ATUALIZADO">Estabelecimento Atualizado</option>
+                            <option value="ESTABELECIMENTO_CRIADO">Estabelecimento Criado</option>
+                            <option value="USUARIO_CRIADO">Usuário Criado</option>
+                            <option value="CARDAPIO_IMPORTADO">Cardápio Importado</option>
+                            {/* Adicione outros conforme necessário */}
+                        </select>
+                        <FaChevronDown className="absolute right-4 top-4 text-gray-300 text-xs pointer-events-none" />
+                    </div>
+                </div>
+
+                {/* Busca Texto (Client-Side) */}
+                <div className="relative">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Busca Rápida (Tela)</label>
+                    <div className="relative">
+                        <FaSearch className="absolute left-4 top-3.5 text-gray-300" />
+                        <input 
+                            type="text" 
+                            placeholder="Email, ID..." 
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
             </div>
-          </div>
         </div>
 
         {/* Lista de Logs */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
-          <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-3">
-            <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            Registros de Auditoria ({logs.length})
-          </h2>
-          
-          {logs.length === 0 ? (
-            <div className="text-center py-12">
-              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Nenhum log encontrado</h3>
-              <p className="text-gray-600 mb-6">Tente ajustar os filtros de busca para ver mais resultados.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {logs.map((log) => (
-                <LogCard key={log.id} log={log} />
-              ))}
-            </div>
-          )}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {loadingLogs ? (
+                <div className="p-16 text-center text-gray-400">
+                    <div className="w-10 h-10 border-4 border-gray-100 border-t-yellow-400 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="font-medium text-sm">Buscando registros...</p>
+                </div>
+            ) : displayedLogs.length === 0 ? (
+                <div className="p-16 text-center">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300 text-2xl">
+                        <FaCube />
+                    </div>
+                    <h3 className="text-gray-900 font-bold mb-1">Nenhum registro encontrado</h3>
+                    <p className="text-gray-500 text-sm">Não há logs com esses critérios.</p>
+                </div>
+            ) : (
+                <div>
+                    {displayedLogs.map(log => (
+                        <LogItem key={log.id} log={log} />
+                    ))}
+                </div>
+            )}
+
+            {/* Paginação */}
+            {displayedLogs.length > 0 && (
+                <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <button 
+                        onClick={handlePrev} 
+                        disabled={page === 1 || loadingLogs}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <FaArrowLeft /> Anterior
+                    </button>
+                    
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        Página {page}
+                    </span>
+                    
+                    <button 
+                        onClick={handleNext} 
+                        disabled={displayedLogs.length < ITEMS_PER_PAGE || loadingLogs}
+                        className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg text-sm font-bold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+                    >
+                        Próxima <FaArrowRight />
+                    </button>
+                </div>
+            )}
         </div>
 
-        {/* CONTROLES DE PAGINAÇÃO */}
-        <div className="flex justify-center items-center mt-12 space-x-4">
-          <button
-            onClick={handlePreviousPage}
-            disabled={currentPageIndex === 0}
-            className="px-6 py-3 bg-white text-gray-700 rounded-xl border border-gray-300 font-semibold hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:transform-none"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
-            </svg>
-            Anterior
-          </button>
-          
-          <div className="bg-white px-6 py-3 rounded-xl border border-gray-300 shadow-sm">
-            <span className="text-gray-700 font-semibold">Página {currentPageIndex + 1}</span>
-          </div>
-          
-          <button
-            onClick={handleNextPage}
-            disabled={!hasMorePages}
-            className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl font-semibold hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:transform-none"
-          >
-            Próxima
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-            </svg>
-          </button>
-        </div>
       </div>
     </div>
   );

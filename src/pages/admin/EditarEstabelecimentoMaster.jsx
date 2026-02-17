@@ -1,34 +1,65 @@
-// src/pages/admin/EditarEstabelecimentoMaster.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { uploadFile, deleteFileByUrl } from '../../utils/firebaseStorageService';
+import { uploadFile } from '../../utils/firebaseStorageService';
 import { auditLogger } from '../../utils/auditLogger';
+import { 
+  FaStore, 
+  FaArrowLeft, 
+  FaSave, 
+  FaCamera, 
+  FaCheck, 
+  FaTimes, 
+  FaBuilding, 
+  FaMapMarkerAlt, 
+  FaPhone, 
+  FaCreditCard 
+} from 'react-icons/fa';
 
-// Componente FormInput (reutilizável para campos de texto)
-function FormInput({ label, name, value, onChange, type = 'text', helpText = '', ...props }) {
+// --- Header Minimalista (Reutilizado para consistência) ---
+const DashboardHeader = ({ navigate }) => (
+  <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 h-16 transition-all duration-300">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
+      <div className="flex items-center gap-1 cursor-pointer" onClick={() => navigate('/')}>
+          <div className="bg-yellow-400 text-black font-bold p-1 rounded-sm transform -skew-x-12">
+              <FaStore />
+          </div>
+          <span className="text-gray-900 font-extrabold text-xl tracking-tight">
+              Na<span className="text-yellow-500">Mão</span>
+          </span>
+      </div>
+    </div>
+  </header>
+);
+
+// --- Componente de Input Moderno ---
+function FormInput({ label, name, value, onChange, type = 'text', helpText = '', icon: Icon, ...props }) {
     return (
-        <div>
-            <label htmlFor={name} className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
-            <input
-                id={name}
-                name={name}
-                value={value || ''}
-                onChange={onChange}
-                type={type}
-                {...props}
-                className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
-            />
-            {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
+        <div className="group">
+            <label htmlFor={name} className="block text-xs font-bold text-gray-500 uppercase mb-1.5 flex items-center gap-2">
+                {Icon && <Icon className="text-gray-400" />} {label}
+            </label>
+            <div className="relative">
+                <input
+                    id={name}
+                    name={name}
+                    value={value || ''}
+                    onChange={onChange}
+                    type={type}
+                    {...props}
+                    className="w-full bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-xl focus:ring-2 focus:ring-black focus:border-transparent block p-3 transition-all placeholder-gray-400"
+                />
+            </div>
+            {helpText && <p className="mt-1 text-xs text-gray-400">{helpText}</p>}
         </div>
     );
 }
 
 function EditarEstabelecimentoMaster() {
-    const { id } = useParams(); // ID do estabelecimento da URL
+    const { id } = useParams();
     const navigate = useNavigate();
     const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
 
@@ -38,15 +69,15 @@ function EditarEstabelecimentoMaster() {
         informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
         chavePix: '',
         slug: '',
-        imageUrl: '', // Campo para a URL do logo
+        imageUrl: '',
         rating: 0,
         adminUID: '',
         ativo: true,
         currentPlanId: '',
         nextBillingDate: null,
     });
-    const [logoImage, setLogoImage] = useState(null); // Estado para o novo arquivo de logo
-    const [logoPreview, setLogoPreview] = useState(''); // Estado para pré-visualização do logo
+    const [logoImage, setLogoImage] = useState(null);
+    const [logoPreview, setLogoPreview] = useState('');
     const [loading, setLoading] = useState(true);
     const [formLoading, setFormLoading] = useState(false);
     const [error, setError] = useState('');
@@ -57,11 +88,11 @@ function EditarEstabelecimentoMaster() {
 
     const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-    // Efeito para controle de acesso e carregamento inicial do estabelecimento
+    // --- CARREGAMENTO INICIAL ---
     useEffect(() => {
         if (authLoading) return;
         if (!isMasterAdmin) {
-            toast.error('Acesso negado. Apenas Master Admin pode editar estabelecimentos.');
+            toast.error('Acesso negado.');
             navigate('/painel');
             return;
         }
@@ -76,12 +107,9 @@ function EditarEstabelecimentoMaster() {
                     setFormData(prev => ({
                         ...prev,
                         ...data,
-                        // Garante que sub-objetos existam para evitar erros ao acessar
                         endereco: data.endereco || { rua: '', numero: '', bairro: '', cidade: '' },
                         informacoes_contato: data.informacoes_contato || { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
-                        // Converte Timestamp para Date se necessário (para nextBillingDate)
                         nextBillingDate: data.nextBillingDate?.toDate ? data.nextBillingDate.toDate() : null,
-                        // Garante que campos string nunca sejam null
                         adminUID: data.adminUID || '',
                         currentPlanId: data.currentPlanId || '',
                         slug: data.slug || '',
@@ -89,15 +117,14 @@ function EditarEstabelecimentoMaster() {
                         imageUrl: data.imageUrl || '',
                         nome: data.nome || '',
                     }));
-                    setLogoPreview(data.imageUrl || ''); // Define a pré-visualização com a URL existente
-                    // Se o slug já existe, consideramos que ele não foi editado manualmente
+                    setLogoPreview(data.imageUrl || '');
                     setSlugManuallyEdited(!!data.slug);
                 } else {
                     setError("Estabelecimento não encontrado.");
                 }
             } catch (err) {
-                console.error("Erro ao buscar estabelecimento:", err);
-                setError("Erro ao carregar dados do estabelecimento.");
+                console.error("Erro ao buscar:", err);
+                setError("Erro ao carregar dados.");
             } finally {
                 setLoading(false);
             }
@@ -106,53 +133,45 @@ function EditarEstabelecimentoMaster() {
         fetchEstablishment();
     }, [id, isMasterAdmin, authLoading, navigate]);
 
-    // Efeito para carregar admins disponíveis
+    // --- CARREGAR ADMINS ---
     useEffect(() => {
         if (!isMasterAdmin || !currentUser) return;
-
         const fetchAdmins = async () => {
             try {
                 const q = query(collection(db, 'usuarios'), where('isAdmin', '==', true), orderBy('nome', 'asc'));
                 const querySnapshot = await getDocs(q);
-                const admins = querySnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome, email: doc.data().email }));
-                setAvailableAdmins(admins);
-            } catch (err) {
-                console.error("Erro ao carregar administradores disponíveis:", err);
-                setError("Erro ao carregar lista de administradores.");
-            } finally {
-                setLoadingAdmins(false);
-            }
+                setAvailableAdmins(querySnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome, email: doc.data().email })));
+            } catch (err) { console.error(err); } finally { setLoadingAdmins(false); }
         };
         fetchAdmins();
     }, [isMasterAdmin, currentUser]);
 
-    // Efeito para carregar planos disponíveis
+    // --- CARREGAR PLANOS ---
     useEffect(() => {
         if (!isMasterAdmin || !currentUser) return;
-
         const fetchPlans = async () => {
             try {
-                const q = query(collection(db, 'plans'), where('ativo', '==', true), orderBy('preco', 'asc'));
-                const querySnapshot = await getDocs(q);
-                const plans = querySnapshot.docs.map(doc => ({ 
-                    id: doc.id, 
-                    name: doc.data().nome || doc.data().name || 'Sem nome',
-                    preco: doc.data().preco
-                }));
+                let q = query(collection(db, 'planos'), orderBy('preco', 'asc'));
+                let querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    q = query(collection(db, 'plans'), orderBy('preco', 'asc'));
+                    querySnapshot = await getDocs(q);
+                }
+                
+                const plans = querySnapshot.docs.map(doc => {
+                    const d = doc.data();
+                    return { id: doc.id, name: d.nome || d.name || 'Sem Nome', preco: d.preco || 0 };
+                });
                 setAvailablePlans(plans);
-            } catch (err) {
-                console.error("Erro ao carregar planos disponíveis:", err);
-                setError("Erro ao carregar lista de planos.");
-            } finally {
-                setLoadingPlans(false);
-            }
+            } catch (err) { console.error(err); } finally { setLoadingPlans(false); }
         };
         fetchPlans();
     }, [isMasterAdmin, currentUser]);
 
+    // --- HANDLERS ---
     const handleInputChange = (e) => {
         const { name, value, type, checked, files } = e.target;
-
         if (name === 'slug') setSlugManuallyEdited(true);
 
         if (type === 'file') {
@@ -167,16 +186,10 @@ function EditarEstabelecimentoMaster() {
             const [parent, child] = name.split('.');
             setFormData(prev => ({
                 ...prev,
-                [parent]: { 
-                    ...prev[parent], 
-                    [child]: type === 'checkbox' ? checked : (value || '') 
-                }
+                [parent]: { ...prev[parent], [child]: type === 'checkbox' ? checked : (value || '') }
             }));
         } else {
-            setFormData(prev => ({ 
-                ...prev, 
-                [name]: type === 'checkbox' ? checked : (value || '') 
-            }));
+            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : (value || '') }));
         }
     };
 
@@ -185,9 +198,9 @@ function EditarEstabelecimentoMaster() {
         setFormLoading(true);
         setError('');
 
-        const { nome, endereco, informacoes_contato, slug, adminUID, currentPlanId } = formData;
-        if (!nome.trim() || !endereco.rua.trim() || !informacoes_contato.telefone_whatsapp.trim() || !slug.trim() || !adminUID.trim() || !currentPlanId.trim()) {
-            toast.warn("Por favor, preencha todos os campos obrigatórios (Nome, Endereço, Telefone, Slug, Admin, Plano).");
+        const { nome, slug } = formData;
+        if (!nome.trim() || !slug.trim()) {
+            toast.warn("Nome e Slug são obrigatórios.");
             setFormLoading(false);
             return;
         }
@@ -195,292 +208,219 @@ function EditarEstabelecimentoMaster() {
         let finalLogoUrl = formData.imageUrl;
 
         try {
-            // Se um novo arquivo de logo foi selecionado
             if (logoImage) {
                 const logoName = `establishment_logos/${formData.slug || id}_${Date.now()}_${logoImage.name}`;
                 finalLogoUrl = await uploadFile(logoImage, logoName);
-                toast.success('Novo logo enviado com sucesso!');
-
-                if (formData.imageUrl && formData.imageUrl !== finalLogoUrl) {
-                    // await deleteFileByUrl(formData.imageUrl);
-                }
-            } else if (formData.imageUrl && !logoPreview && !logoImage) {
-                finalLogoUrl = '';
             }
 
-            // Verificar se o slug já existe para outro estabelecimento
+            // Validação de Slug Único
             const currentDoc = await getDoc(doc(db, 'estabelecimentos', id));
             const currentData = currentDoc.data();
             
             if (formData.slug !== currentData.slug) {
                 const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
                 const slugSnapshot = await getDocs(slugQuery);
-                if (!slugSnapshot.empty) {
-                    const existingSlugDoc = slugSnapshot.docs[0];
-                    if (existingSlugDoc.id !== id) {
-                        setError('Este slug (URL) já está em uso por outro estabelecimento. Por favor, escolha outro.');
-                        setFormLoading(false);
-                        return;
-                    }
+                if (!slugSnapshot.empty && slugSnapshot.docs[0].id !== id) {
+                    setError('Este slug já está em uso.');
+                    setFormLoading(false);
+                    return;
                 }
             }
 
-            // Preparar dados para atualização
             const dataToUpdate = {
-                nome: formData.nome,
-                endereco: formData.endereco,
-                informacoes_contato: formData.informacoes_contato,
-                chavePix: formData.chavePix,
-                slug: formData.slug,
+                ...formData,
                 imageUrl: finalLogoUrl,
                 rating: Number(formData.rating) || 0,
-                adminUID: formData.adminUID,
-                ativo: formData.ativo,
-                currentPlanId: formData.currentPlanId,
-                nextBillingDate: formData.nextBillingDate,
                 updatedAt: new Date(),
             };
 
             const docRef = doc(db, 'estabelecimentos', id);
             await updateDoc(docRef, dataToUpdate);
 
-            // Atualizar o vínculo do administrador (se o adminUID mudou)
+            // Atualização de vínculo de Admin (Lógica mantida do original)
             if (currentData.adminUID !== formData.adminUID) {
-                // Remover o estabelecimento do admin antigo
-                if (currentData.adminUID) {
+                 // ... (Lógica de atualizar array do usuário admin antigo e novo - mantida igual)
+                 if (currentData.adminUID) {
                     const oldAdminRef = doc(db, 'usuarios', currentData.adminUID);
-                    const oldAdminSnap = await getDoc(oldAdminRef);
-                    if (oldAdminSnap.exists()) {
-                        const oldAdminData = oldAdminSnap.data();
-                        const updatedEstabs = (oldAdminData.estabelecimentosGerenciados || []).filter(estabId => estabId !== id);
-                        await updateDoc(oldAdminRef, { estabelecimentosGerenciados: updatedEstabs });
+                    const oldSnap = await getDoc(oldAdminRef);
+                    if (oldSnap.exists()) {
+                        const oldData = oldSnap.data();
+                        const updated = (oldData.estabelecimentosGerenciados || []).filter(eid => eid !== id);
+                        await updateDoc(oldAdminRef, { estabelecimentosGerenciados: updated });
                     }
                 }
-                // Adicionar o estabelecimento ao novo admin
                 if (formData.adminUID) {
                     const newAdminRef = doc(db, 'usuarios', formData.adminUID);
-                    const newAdminSnap = await getDoc(newAdminRef);
-                    if (newAdminSnap.exists()) {
-                        const newAdminData = newAdminSnap.data();
-                        const currentManagedEstabs = newAdminData.estabelecimentosGerenciados || [];
-                        if (!currentManagedEstabs.includes(id)) {
-                            await updateDoc(newAdminRef, {
-                                estabelecimentosGerenciados: [...currentManagedEstabs, id]
-                            });
+                    const newSnap = await getDoc(newAdminRef);
+                    if (newSnap.exists()) {
+                        const newData = newSnap.data();
+                        const current = newData.estabelecimentosGerenciados || [];
+                        if (!current.includes(id)) {
+                            await updateDoc(newAdminRef, { estabelecimentosGerenciados: [...current, id] });
                         }
                     }
                 }
-                toast.info('Vínculo de administrador atualizado.');
             }
 
-            auditLogger(
-                'ESTABELECIMENTO_ATUALIZADO',
-                { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' },
-                { type: 'estabelecimento', id: id, name: formData.nome },
-                dataToUpdate
-            );
-
-            toast.success("Estabelecimento atualizado com sucesso!");
+            auditLogger('ESTABELECIMENTO_ATUALIZADO', { uid: currentUser.uid, email: currentUser.email }, { id: id, name: formData.nome });
+            toast.success("Atualizado com sucesso!");
             navigate('/master/estabelecimentos');
         } catch (err) {
-            console.error("Erro ao atualizar estabelecimento:", err);
-            setError("Erro ao atualizar estabelecimento: " + err.message);
-            toast.error("Erro ao atualizar estabelecimento.");
+            console.error(err);
+            setError("Erro ao salvar.");
+            toast.error("Erro ao salvar.");
         } finally {
             setFormLoading(false);
         }
     };
 
-    if (loading || authLoading || loadingAdmins || loadingPlans) return <div className="text-center p-8">Carregando...</div>;
+    if (loading || authLoading) return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div></div>;
     if (error && !formData.nome) return <div className="text-center p-8 text-red-600">{error}</div>;
 
     return (
-        <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
-            <div className="max-w-4xl mx-auto">
-                <form onSubmit={handleSubmit} className="space-y-8">
-                    {/* Cabeçalho com Ações */}
-                    <div className="flex w-full justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="bg-gray-50 min-h-screen pt-20 pb-12 font-sans text-gray-900">
+            <DashboardHeader navigate={navigate} />
+            
+            <div className="max-w-4xl mx-auto px-4 sm:px-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    
+                    {/* Header da Página */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                         <div>
-                            <Link
-                                to="/master/estabelecimentos"
-                                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 flex items-center gap-1 mb-4"
+                            <button type="button" onClick={() => navigate('/master/estabelecimentos')} className="text-gray-400 hover:text-gray-600 flex items-center gap-2 mb-2 text-sm font-medium transition-colors">
+                                <FaArrowLeft /> Cancelar e Voltar
+                            </button>
+                            <h1 className="text-3xl font-bold tracking-tight">Editar Estabelecimento</h1>
+                            <p className="text-gray-500 text-sm mt-1">Atualize as informações da loja.</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button 
+                                type="submit" 
+                                disabled={formLoading} 
+                                className="flex items-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-all shadow-lg disabled:opacity-50"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                                Voltar para Estabelecimentos
-                            </Link>
-                            <h1 className="text-3xl font-bold text-slate-800">Editar Estabelecimento</h1>
+                                {formLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FaSave />}
+                                {formLoading ? 'Salvando...' : 'Salvar Alterações'}
+                            </button>
                         </div>
-                        <button type="submit" disabled={formLoading} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white text-base font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
-                            {formLoading ? 'Salvando...' : 'Salvar Alterações'}
-                        </button>
                     </div>
 
-                    {error && (
-                        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
-                            <p className="font-bold">Erro de Atualização:</p>
-                            <p>{error}</p>
-                        </div>
-                    )}
+                    {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex items-center gap-2"><FaTimes /> {error}</div>}
 
-                    {/* Dados Principais */}
-                    <div className="bg-white p-6 rounded-xl shadow-md">
-                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Informações Gerais</h2>
-                        <div className="space-y-4">
-                            <FormInput label="Nome do Estabelecimento" name="nome" value={formData.nome} onChange={handleInputChange} required />
-                            <FormInput label="Slug (URL amigável)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Será a parte final da URL do cardápio (ex: /cardapio/seunome). Gerado automaticamente, mas pode ser editado."/>
-                            <FormInput label="Chave PIX (Para Receber Pagamentos)" name="chavePix" value={formData.chavePix} onChange={handleInputChange} helpText="Chave PIX para pagamentos diretos."/>
-
-                            {/* Campo de Upload de Imagem para o Logo */}
-                            <div className="flex flex-col gap-2">
-                                <label htmlFor="logoUpload" className="block text-sm font-medium text-slate-700">
-                                    Logo do Estabelecimento (Opcional):
-                                </label>
-                                <input
-                                    type="file"
-                                    id="logoUpload"
-                                    name="logoUpload"
-                                    accept="image/*"
-                                    onChange={handleInputChange}
-                                    className="w-full border-slate-300 rounded-lg p-1"
-                                />
-                                {(logoPreview || formData.imageUrl) && (
-                                    <div className="mt-2 flex items-center gap-4">
-                                        <p className="text-sm text-slate-600">Pré-visualização:</p>
-                                        <img
-                                            src={logoPreview || formData.imageUrl}
-                                            alt="Pré-visualização do Logo"
-                                            className="w-24 h-24 object-cover rounded-lg shadow"
-                                        />
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        {/* COLUNA ESQUERDA - INFOS PRINCIPAIS */}
+                        <div className="lg:col-span-2 space-y-6">
+                            
+                            {/* Card Identificação */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><FaBuilding className="text-yellow-500"/> Identificação</h3>
+                                <div className="space-y-4">
+                                    <FormInput label="Nome da Loja" name="nome" value={formData.nome} onChange={handleInputChange} required placeholder="Ex: Pizzaria do João" />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <FormInput label="Slug (URL)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="Endereço do cardápio." placeholder="pizzaria-do-joao" />
+                                        <FormInput label="Chave PIX" name="chavePix" value={formData.chavePix} onChange={handleInputChange} placeholder="CPF, Email ou Aleatória" />
                                     </div>
-                                )}
-                                <input
-                                    name="imageUrl"
-                                    value={formData.imageUrl}
-                                    readOnly
-                                    hidden
-                                />
+                                    <FormInput label="Avaliação Inicial (0-5)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" />
+                                </div>
                             </div>
 
-                            <FormInput label="Avaliação (1-5)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" helpText="Avaliação média do estabelecimento."/>
-
-                            {/* Seleção do Administrador - CORRIGIDO */}
-                            <div>
-                                <label htmlFor="adminUID" className="block text-sm font-medium text-slate-600 mb-1">Admin Responsável *</label>
-                                <select
-                                    id="adminUID"
-                                    name="adminUID"
-                                    value={formData.adminUID || ''}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
-                                >
-                                    <option value="">Selecione um administrador...</option>
-                                    {loadingAdmins ? (
-                                        <option value="" disabled>Carregando administradores...</option>
-                                    ) : availableAdmins.length === 0 ? (
-                                        <option value="" disabled>Nenhum admin disponível (crie um admin primeiro)</option>
-                                    ) : (
-                                        availableAdmins.map(admin => (
-                                            <option key={admin.id} value={admin.id}>
-                                                {admin.nome} ({admin.email})
-                                            </option>
-                                        ))
-                                    )}
-                                </select>
-                                <p className="mt-1 text-xs text-slate-500">Vincule este estabelecimento a um administrador já existente. Apenas usuários com a permissão 'Admin Estabelecimento' aparecem aqui.</p>
-                                <Link to="/master/usuarios/criar" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2 block">
-                                    Criar novo administrador
-                                </Link>
+                            {/* Card Endereço */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><FaMapMarkerAlt className="text-yellow-500"/> Localização</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                    <div className="sm:col-span-3">
+                                        <FormInput label="Rua / Logradouro" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} />
+                                    </div>
+                                    <div className="sm:col-span-1">
+                                        <FormInput label="Número" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <FormInput label="Bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <FormInput label="Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} />
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* Seleção do Plano - CORRIGIDO */}
-                            <div>
-                                <label htmlFor="currentPlanId" className="block text-sm font-medium text-slate-600 mb-1">Plano de Assinatura *</label>
-                                <select
-                                    id="currentPlanId"
-                                    name="currentPlanId"
-                                    value={formData.currentPlanId || ''}
-                                    onChange={handleInputChange}
-                                    required
-                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
-                                >
-                                    <option value="">Selecione um plano...</option>
-                                    {loadingPlans ? (
-                                        <option value="" disabled>Carregando planos...</option>
-                                    ) : availablePlans.length === 0 ? (
-                                        <option value="" disabled>Nenhum plano ativo disponível (crie um plano primeiro)</option>
-                                    ) : (
-                                        availablePlans.map(plan => (
-                                            <option key={plan.id} value={plan.id}>
-                                                {plan.name} - R$ {plan.preco}
-                                            </option>
-                                        ))
-                                    )}
-                                </select>
-                                <p className="mt-1 text-xs text-slate-500">Selecione o plano de assinatura que este estabelecimento utilizará.</p>
-                                <Link to="/master/plans" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 mt-2 block">
-                                    Gerenciar planos
-                                </Link>
-                            </div>
-
-                            {/* Próxima Data de Cobrança */}
-                            <div>
-                                <label htmlFor="nextBillingDate" className="block text-sm font-medium text-slate-600 mb-1">Próxima Data de Cobrança:</label>
-                                <input
-                                    type="date"
-                                    id="nextBillingDate"
-                                    name="nextBillingDate"
-                                    value={formData.nextBillingDate ? formData.nextBillingDate.toISOString().split('T')[0] : ''}
-                                    onChange={handleInputChange}
-                                    className="mt-1 block w-full rounded-lg border-slate-300 shadow-sm p-2.5 focus:border-indigo-500 focus:ring-indigo-500"
-                                />
-                                <p className="mt-1 text-xs text-slate-500">Define a data da próxima cobrança de assinatura. Deixe vazio para não definir.</p>
+                            {/* Card Contato */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><FaPhone className="text-yellow-500"/> Contato</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <FormInput label="WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} />
+                                    <FormInput label="Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} />
+                                </div>
+                                <div className="mt-4">
+                                    <FormInput label="Horário Funcionamento" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} />
+                                </div>
                             </div>
 
                         </div>
-                    </div>
 
-                    {/* Informações de Contato */}
-                    <div className="bg-white p-6 rounded-xl shadow-md">
-                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Informações de Contato</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <FormInput label="Telefone/WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} type="tel" placeholder="(XX) XXXXX-XXXX"/>
-                            <FormInput label="Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} placeholder="@usuario_do_estabelecimento"/>
-                        </div>
-                        <div className="mt-4">
-                            <FormInput label="Horário de Funcionamento" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter - Dom: 18h às 23h"/>
-                        </div>
-                    </div>
-
-                    {/* Endereço */}
-                    <div className="bg-white p-6 rounded-xl shadow-md">
-                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Endereço Principal</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <FormInput label="Rua" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} />
-                            <FormInput label="Número" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} />
-                            <FormInput label="Bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} />
-                            <FormInput label="Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} />
-                        </div>
-                    </div>
-
-                    {/* Status Ativo/Inativo */}
-                    <div className="bg-white p-6 rounded-xl shadow-md">
-                        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">Status</h2>
-                        <label className="flex items-center cursor-pointer">
-                            <div className="relative">
-                                <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
-                                <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
-                                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${formData.ativo ? 'transform translate-x-full' : ''}`}></div>
+                        {/* COLUNA DIREITA - CONFIGURAÇÕES */}
+                        <div className="space-y-6">
+                            
+                            {/* Card Logo */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+                                <h3 className="text-sm font-bold uppercase text-gray-400 mb-4">Logo da Loja</h3>
+                                <div className="relative inline-block group">
+                                    <div className="w-32 h-32 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden mx-auto">
+                                        {logoPreview || formData.imageUrl ? (
+                                            <img src={logoPreview || formData.imageUrl} alt="Logo" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <FaCamera className="text-3xl text-gray-300" />
+                                        )}
+                                    </div>
+                                    <label htmlFor="logoUpload" className="absolute bottom-2 right-2 bg-black text-white p-2 rounded-full cursor-pointer hover:bg-gray-800 transition-colors shadow-lg">
+                                        <FaCamera className="text-xs" />
+                                    </label>
+                                    <input type="file" id="logoUpload" name="logoUpload" accept="image/*" onChange={handleInputChange} className="hidden" />
+                                </div>
+                                <p className="text-xs text-gray-400 mt-2">Recomendado: 500x500px</p>
                             </div>
-                            <div className="ml-3 text-base font-semibold text-slate-700">{formData.ativo ? 'Ativo' : 'Inativo'}</div>
-                        </label>
-                        <p className="mt-2 text-xs text-slate-500">Estabelecimentos inativos não aparecerão para os clientes e não receberão pedidos.</p>
-                    </div>
 
-                    <div className="flex justify-end pt-4">
-                        <button type="submit" disabled={formLoading} className="px-8 py-3 bg-indigo-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300">
-                            {formLoading ? 'Atualizando...' : 'Salvar Alterações'}
-                        </button>
+                            {/* Card Status */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-sm font-bold uppercase text-gray-400 mb-4">Status da Loja</h3>
+                                <label className="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                                    <span className="font-semibold text-gray-700">{formData.ativo ? 'Loja Ativa' : 'Loja Inativa'}</span>
+                                    <div className="relative">
+                                        <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
+                                        <div className={`block w-12 h-7 rounded-full transition-colors ${formData.ativo ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                                        <div className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${formData.ativo ? 'transform translate-x-5' : ''}`}></div>
+                                    </div>
+                                </label>
+                            </div>
+
+                            {/* Card Administrativo */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><FaCreditCard className="text-yellow-500"/> Administrativo</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Admin Responsável</label>
+                                        <select name="adminUID" value={formData.adminUID} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl p-3 focus:ring-2 focus:ring-black">
+                                            <option value="">Selecione...</option>
+                                            {availableAdmins.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Plano Atual</label>
+                                        <select name="currentPlanId" value={formData.currentPlanId} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl p-3 focus:ring-2 focus:ring-black">
+                                            <option value="">Selecione...</option>
+                                            {availablePlans.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.preco}</option>)}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Próxima Cobrança</label>
+                                        <input type="date" name="nextBillingDate" value={formData.nextBillingDate ? formData.nextBillingDate.toISOString().split('T')[0] : ''} onChange={handleInputChange} className="w-full bg-gray-50 border border-gray-200 text-sm rounded-xl p-3 focus:ring-2 focus:ring-black" />
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
                 </form>
             </div>

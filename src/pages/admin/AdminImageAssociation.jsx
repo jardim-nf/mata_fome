@@ -8,14 +8,50 @@ import {
   FaUpload, 
   FaStore, 
   FaSpinner, 
+  FaSearch, 
+  FaArrowLeft, 
+  FaSignOutAlt,
   FaImage,
-  FaSearch,
-  FaArrowLeft
+  FaCamera
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-// Componente de Card de Produto
+// --- Header Minimalista (Reutilizado) ---
+const DashboardHeader = ({ navigate, logout, currentUser }) => {
+  const userEmailPrefix = currentUser?.email ? currentUser.email.split('@')[0] : 'Admin';
+  return (
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 h-16 transition-all duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+           <div className="flex items-center gap-1">
+              <div className="bg-yellow-400 text-black font-bold p-1 rounded-sm transform -skew-x-12">
+                  <FaStore />
+              </div>
+              <span className="text-gray-900 font-extrabold text-xl tracking-tight">
+                  Na<span className="text-yellow-500">Mão</span>
+              </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-6">
+            <div className="hidden md:flex flex-col items-end">
+              <span className="text-sm font-semibold text-gray-800">{userEmailPrefix}</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Master Admin</span>
+            </div>
+            <button 
+                onClick={logout} 
+                className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
+                title="Sair"
+            >
+              <FaSignOutAlt />
+            </button>
+          </div>
+      </div>
+    </header>
+  );
+};
+
+// --- Componente de Card de Produto ---
 const ProductCard = ({ item, onImageUpload, uploadingItemId }) => {
   const [isUploading, setIsUploading] = useState(false);
 
@@ -24,7 +60,7 @@ const ProductCard = ({ item, onImageUpload, uploadingItemId }) => {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("A imagem é muito grande. O limite é 5MB.");
+      toast.error("Limite de 5MB excedido.");
       return;
     }
 
@@ -40,89 +76,94 @@ const ProductCard = ({ item, onImageUpload, uploadingItemId }) => {
   const isUploadingThisItem = isUploading || uploadingItemId === item.id;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      {/* Imagem do Produto */}
-      <div className="mb-3">
-        <img 
-          src={item.imageUrl || '/images/placeholder-food.jpg'} 
-          alt={item.nome} 
-          className="w-full h-32 object-cover rounded border border-gray-200"
-          onError={(e) => {
-            e.target.src = '/images/placeholder-food.jpg';
-          }}
+    <div className="group bg-white rounded-2xl border border-gray-100 p-4 hover:shadow-lg transition-all duration-300 flex flex-col h-full">
+      {/* Área da Imagem */}
+      <div className="relative aspect-square mb-4 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 group-hover:border-yellow-200 transition-colors">
+        {item.imageUrl ? (
+            <img 
+              src={item.imageUrl} 
+              alt={item.nome} 
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={(e) => { e.target.src = 'https://placehold.co/400x400?text=Sem+Imagem'; }}
+            />
+        ) : (
+            <div className="flex flex-col items-center justify-center h-full text-gray-300">
+                <FaImage className="text-3xl mb-2" />
+                <span className="text-xs">Sem foto</span>
+            </div>
+        )}
+        
+        {/* Overlay de Upload */}
+        <label 
+            htmlFor={`file-${item.id}`}
+            className={`absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${isUploadingThisItem ? 'opacity-100 bg-black/80' : ''}`}
+        >
+            {isUploadingThisItem ? (
+                <>
+                    <FaSpinner className="animate-spin text-2xl mb-2" />
+                    <span className="text-xs font-bold">Enviando...</span>
+                </>
+            ) : (
+                <>
+                    <FaCamera className="text-2xl mb-2" />
+                    <span className="text-xs font-bold">Alterar Foto</span>
+                </>
+            )}
+        </label>
+        <input 
+            type="file" 
+            id={`file-${item.id}`}
+            className="hidden"
+            accept="image/*"
+            onChange={handleFileChange}
+            disabled={isUploadingThisItem}
         />
       </div>
 
-      {/* Informações do Produto */}
-      <div className="mb-3">
-        <h3 className="font-semibold text-gray-900 text-sm mb-1">
+      {/* Infos */}
+      <div className="mt-auto">
+        <h3 className="font-bold text-gray-900 text-sm mb-1 leading-tight line-clamp-2" title={item.nome}>
           {item.nome}
         </h3>
-        <div className="flex justify-between items-center">
-          <span className="text-green-600 font-bold">
-            R$ {item.preco?.toFixed(2) || '0,00'}
-          </span>
-        </div>
+        <p className="text-xs text-gray-500 font-medium">
+           R$ {item.preco?.toFixed(2).replace('.', ',') || '0,00'}
+        </p>
       </div>
-
-      {/* Botão de Upload */}
-      <label 
-        htmlFor={`file-${item.id}`}
-        className={`flex items-center justify-center space-x-2 w-full px-3 py-2 rounded text-sm font-medium cursor-pointer ${
-          isUploadingThisItem
-            ? 'bg-gray-400 text-white cursor-not-allowed'
-            : 'bg-yellow-500 text-white hover:bg-yellow-600'
-        }`}
-      >
-        {isUploadingThisItem ? (
-          <>
-            <FaSpinner className="animate-spin" />
-            <span>Enviando...</span>
-          </>
-        ) : (
-          <>
-            <FaUpload size={14} />
-            <span>Trocar Imagem</span>
-          </>
-        )}
-      </label>
-      <input 
-        type="file" 
-        id={`file-${item.id}`}
-        className="hidden"
-        accept="image/png, image/jpeg, image/jpg, image/webp"
-        onChange={handleFileChange}
-        disabled={isUploadingThisItem}
-      />
     </div>
   );
 };
 
-// Função para formatar endereço
+// Função helper
 const formatarEndereco = (endereco) => {
   if (!endereco) return 'Endereço não disponível';
-  
   if (typeof endereco === 'string') return endereco;
-  
-  // Se for objeto
   const partes = [];
   if (endereco.rua) partes.push(endereco.rua);
   if (endereco.numero) partes.push(endereco.numero);
   if (endereco.bairro) partes.push(endereco.bairro);
-  if (endereco.cidade) partes.push(endereco.cidade);
-  
   return partes.join(', ') || 'Endereço não disponível';
 };
 
 function AdminImageAssociation() {
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, isMasterAdmin, loading: authLoading } = useAuth();
+  
   const [estabelecimentos, setEstabelecimentos] = useState([]);
   const [selectedEstabelecimentoId, setSelectedEstabelecimentoId] = useState('');
   const [cardapio, setCardapio] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // --- CARREGAMENTO INICIAL ---
+  useEffect(() => {
+    if (!authLoading) {
+        if (!currentUser || !isMasterAdmin) {
+            navigate('/master-dashboard');
+            return;
+        }
+    }
+  }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
   useEffect(() => {
     const fetchEstabelecimentos = async () => {
@@ -131,13 +172,13 @@ function AdminImageAssociation() {
         const querySnapshot = await getDocs(q);
         setEstabelecimentos(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
-        console.error("Erro ao carregar estabelecimentos:", error);
         toast.error('Erro ao carregar estabelecimentos.');
       }
     };
-    fetchEstabelecimentos();
-  }, []);
+    if (isMasterAdmin) fetchEstabelecimentos();
+  }, [isMasterAdmin]);
 
+  // --- CARREGAR CARDÁPIO ---
   useEffect(() => {
     if (!selectedEstabelecimentoId) {
       setCardapio([]);
@@ -166,8 +207,8 @@ function AdminImageAssociation() {
         }
         setCardapio(fullMenu);
       } catch (error) {
-        toast.error("Erro ao carregar o cardápio.");
         console.error(error);
+        toast.error("Erro ao carregar cardápio.");
       }
       setLoading(false);
     };
@@ -175,197 +216,155 @@ function AdminImageAssociation() {
     fetchCardapio();
   }, [selectedEstabelecimentoId]);
 
+  // --- HANDLER UPLOAD ---
   const handleImageUpload = async (itemId, categoriaId, file) => {
     if (!file) return;
-    
     setUploadingItemId(itemId);
     try {
       const newImageUrl = await uploadImageAndUpdateProduct(selectedEstabelecimentoId, categoriaId, itemId, file);
-      
-      setCardapio(prevCardapio => 
-        prevCardapio.map(cat => ({
+      setCardapio(prev => prev.map(cat => ({
           ...cat,
-          itens: cat.itens.map(item => 
-            item.id === itemId ? { ...item, imageUrl: newImageUrl } : item
-          )
-        }))
-      );
-      toast.success("Imagem enviada com sucesso!");
+          itens: cat.itens.map(item => item.id === itemId ? { ...item, imageUrl: newImageUrl } : item)
+      })));
+      toast.success("Imagem atualizada!");
     } catch (error) {
-      toast.error("Falha ao enviar a imagem.");
-      console.error("Erro no upload:", error);
+      toast.error("Erro no envio.");
     } finally {
       setUploadingItemId(null);
     }
   };
 
-  // Filtrar produtos
+  // --- FILTRO ---
   const filteredCardapio = cardapio.map(categoria => ({
     ...categoria,
     itens: categoria.itens.filter(item => 
       item.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.descricao?.toLowerCase().includes(searchTerm.toLowerCase())
+      (item.descricao && item.descricao.toLowerCase().includes(searchTerm.toLowerCase()))
     )
   })).filter(categoria => categoria.itens.length > 0);
 
   const selectedEstabelecimento = estabelecimentos.find(e => e.id === selectedEstabelecimentoId);
 
+  if (authLoading) return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div></div>;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo e Voltar */}
-            <div className="flex items-center space-x-6">
-              <button
-                onClick={() => navigate('/master-dashboard')}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
-              >
-                <FaArrowLeft size={16} />
-                <span className="font-medium">VOLTAR</span>
-              </button>
-              
-              <div className="flex items-center space-x-2">
-                <h1 className="text-2xl font-bold text-gray-900">DEU FOME</h1>
-                <span className="text-yellow-500 text-2xl font-bold">.</span>
-              </div>
-            </div>
+    <div className="bg-gray-50 min-h-screen pt-20 pb-12 px-4 sm:px-6 font-sans text-gray-900">
+      <DashboardHeader navigate={navigate} logout={logout} currentUser={currentUser} />
 
-            {/* Título da Página */}
-            <div className="text-right">
-              <h2 className="text-lg font-semibold text-gray-700">DEU FOME - Associar Imagens</h2>
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Header da Página */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+                <button onClick={() => navigate('/master-dashboard')} className="text-gray-400 hover:text-gray-600 flex items-center gap-2 mb-2 text-sm font-medium transition-colors">
+                    <FaArrowLeft /> Voltar ao Dashboard
+                </button>
+                <h1 className="text-3xl font-bold tracking-tight">Galeria de Produtos</h1>
+                <p className="text-gray-500 text-sm mt-1">Gerencie as fotos dos itens do cardápio.</p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Conteúdo Principal */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Cabeçalho do Conteúdo */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Gerenciar Imagens dos Produtos
-          </h1>
-          <p className="text-gray-600">
-            Faça upload e associe imagens aos produtos do cardápio
-          </p>
         </div>
 
-        {/* Filtros */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Estabelecimento */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-              <FaStore className="mr-2 text-yellow-600" size={16} />
-              Estabelecimento
-            </h3>
-            <select
-              value={selectedEstabelecimentoId}
-              onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 bg-white"
-            >
-              <option value="">Selecione um estabelecimento</option>
-              {estabelecimentos.map(est => (
-                <option key={est.id} value={est.id}>{est.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Buscar Produtos */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-              <FaSearch className="mr-2 text-yellow-600" size={16} />
-              Buscar Produtos
-            </h3>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Buscar produtos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-3 pr-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-                disabled={!selectedEstabelecimentoId}
-              />
+        {/* Barra de Ferramentas (Filtros) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-8 flex flex-col md:flex-row gap-4">
+            
+            {/* Select Estabelecimento */}
+            <div className="relative min-w-[280px]">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Loja</label>
+                <div className="relative">
+                    <FaStore className="absolute left-4 top-3.5 text-gray-300" />
+                    <select
+                        value={selectedEstabelecimentoId}
+                        onChange={(e) => setSelectedEstabelecimentoId(e.target.value)}
+                        className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:bg-white text-sm appearance-none cursor-pointer font-medium"
+                    >
+                        <option value="">Selecione uma loja...</option>
+                        {estabelecimentos.map(est => (
+                            <option key={est.id} value={est.id}>{est.nome}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
-          </div>
+
+            {/* Input Busca */}
+            <div className="flex-1 relative">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Buscar Produto</label>
+                <div className="relative">
+                    <FaSearch className="absolute left-4 top-3.5 text-gray-300" />
+                    <input 
+                        type="text" 
+                        placeholder="Nome do produto..." 
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:bg-white transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        disabled={!selectedEstabelecimentoId}
+                    />
+                </div>
+            </div>
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <FaSpinner className="text-yellow-500 text-2xl animate-spin mb-3" />
-            <p className="text-gray-600">Carregando cardápio...</p>
-          </div>
-        )}
-
-        {/* Estabelecimento Info */}
-        {selectedEstabelecimento && !loading && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-gray-900 text-lg">
-                  {selectedEstabelecimento.nome}
-                </h2>
-                <p className="text-gray-600 text-sm mt-1">
-                  {formatarEndereco(selectedEstabelecimento.endereco)}
-                </p>
-              </div>
-              <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                {cardapio.length} categorias • {cardapio.reduce((total, cat) => total + cat.itens.length, 0)} produtos
-              </span>
+            <div className="flex flex-col items-center justify-center py-20">
+                <div className="w-12 h-12 border-4 border-gray-200 border-t-yellow-400 rounded-full animate-spin mb-4"></div>
+                <p className="text-gray-500 font-medium">Carregando cardápio...</p>
             </div>
-          </div>
         )}
 
-        {/* Lista de Produtos */}
-        {!loading && selectedEstabelecimentoId && (
-          <div className="space-y-8">
-            {filteredCardapio.length === 0 ? (
-              <div className="text-center py-8 bg-white border border-gray-200 rounded-lg">
-                <FaImage className="text-gray-300 text-2xl mx-auto mb-3" />
-                <p className="text-gray-500">
-                  {searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto disponível'}
-                </p>
-              </div>
-            ) : (
-              filteredCardapio.map(categoria => (
-                <div key={categoria.id} className="bg-white border border-gray-200 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-gray-900">
-                      {categoria.nome}
-                    </h2>
-                    <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded">
-                      {categoria.itens.length} {categoria.itens.length === 1 ? 'item' : 'itens'}
-                    </span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {categoria.itens.map(item => (
-                      <ProductCard
-                        key={item.id}
-                        item={item}
-                        onImageUpload={handleImageUpload}
-                        uploadingItemId={uploadingItemId}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Estado Inicial */}
+        {/* Estado Vazio (Sem Seleção) */}
         {!selectedEstabelecimentoId && !loading && (
-          <div className="text-center py-12 bg-white border border-gray-200 rounded-lg">
-            <FaStore className="text-gray-300 text-2xl mx-auto mb-3" />
-            <p className="text-gray-500">Selecione um estabelecimento para começar</p>
-            <p className="text-gray-400 text-sm mt-2">
-              Escolha um estabelecimento na lista acima para visualizar e gerenciar as imagens dos produtos
-            </p>
-          </div>
+            <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300 text-2xl">
+                    <FaCamera />
+                </div>
+                <h3 className="text-lg font-bold text-gray-700">Nenhuma loja selecionada</h3>
+                <p className="text-gray-400 text-sm mt-1">Escolha um estabelecimento acima para começar.</p>
+            </div>
         )}
+
+        {/* Conteúdo Principal */}
+        {!loading && selectedEstabelecimentoId && (
+            <div>
+                {/* Resumo da Loja */}
+                <div className="mb-8 px-2">
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedEstabelecimento.nome}</h2>
+                    <p className="text-gray-500 text-sm">{formatarEndereco(selectedEstabelecimento.endereco)}</p>
+                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-yellow-50 text-yellow-700 rounded-lg text-xs font-bold">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                        {cardapio.reduce((acc, cat) => acc + cat.itens.length, 0)} produtos cadastrados
+                    </div>
+                </div>
+
+                {/* Grid de Categorias e Produtos */}
+                <div className="space-y-10">
+                    {filteredCardapio.length === 0 ? (
+                        <div className="text-center py-16">
+                            <p className="text-gray-400 font-medium">Nenhum produto encontrado com este filtro.</p>
+                        </div>
+                    ) : (
+                        filteredCardapio.map(categoria => (
+                            <div key={categoria.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4 px-2 border-l-4 border-yellow-400 pl-3">
+                                    {categoria.nome}
+                                    <span className="ml-2 text-xs font-normal text-gray-400">({categoria.itens.length})</span>
+                                </h3>
+                                
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {categoria.itens.map(item => (
+                                        <ProductCard
+                                            key={item.id}
+                                            item={item}
+                                            onImageUpload={handleImageUpload}
+                                            uploadingItemId={uploadingItemId}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        )}
+
       </div>
     </div>
   );
