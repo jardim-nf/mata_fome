@@ -6,65 +6,98 @@ import {
   orderBy, 
   getDocs, 
   doc, 
-  getDoc 
+  getDoc,
+  addDoc,
+  serverTimestamp 
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../firebase'; // Importamos 'functions' aqui
+import { db } from '../firebase'; 
 
 export const vendaService = {
-  // 🔒 Salvar venda via Cloud Function (SEGURO)
+  // 🔓 Salvar venda DIRETO no Firestore
   async salvarVenda(vendaData) {
     try {
-      console.log('🔒 Iniciando processamento seguro do pedido...');
+      console.log('💾 Salvando venda no banco de dados...', vendaData);
 
-      // Chama a função que criamos no backend 'functions/index.js'
-      const criarPedidoFunction = httpsCallable(functions, 'criarPedidoSeguro');
+      // 1. Sanitização de Dados (CRÍTICO PARA O FIRESTORE)
+      // O Firestore quebra se receber "undefined". Aqui garantimos que campos opcionais virem "null".
+      const dadosLimpos = {
+        ...vendaData,
+        usuarioId: vendaData.usuarioId || null,
+        clienteCpf: vendaData.clienteCpf || null,
+        status: vendaData.status || 'finalizada',
+        createdAt: serverTimestamp(), 
+        origem: 'pdv_web'
+      };
+
+      // Remove chaves que porventura ainda estejam undefined
+      const payloadFinal = JSON.parse(JSON.stringify(dadosLimpos));
       
-      // Envia os dados e aguarda a resposta do servidor
-      // O servidor vai validar preços, estoque e calcular o total real
-      const result = await criarPedidoFunction(vendaData);
-      
-      console.log('✅ Venda processada pelo servidor:', result.data);
+      // Restaura o serverTimestamp (que o JSON.stringify pode ter estragado)
+      payloadFinal.createdAt = serverTimestamp();
+
+      // 2. Salva no Banco
+      const vendasRef = collection(db, 'vendas');
+      const docRef = await addDoc(vendasRef, payloadFinal);
+
+      console.log('✅ Venda salva com sucesso! ID:', docRef.id);
       
       return {
         success: true,
-        vendaId: result.data.vendaId,
-        total: result.data.totalValidado
+        vendaId: docRef.id,
+        total: vendaData.total
       };
 
     } catch (error) {
-      console.error('❌ Erro ao salvar venda via servidor:', error);
+      // Log detalhado para sabermos se é permissão ou dados inválidos
+      console.error('❌ Erro ao salvar venda:', error);
       
-      // Mensagens amigáveis para erros comuns
-      let msg = 'Erro ao processar o pedido. Tente novamente.';
-      if (error.code === 'not-found') msg = 'Algum produto do seu pedido não está mais disponível.';
-      if (error.code === 'unauthenticated') msg = 'Você precisa estar logado para fazer o pedido.';
+      let mensagem = 'Erro ao salvar no banco de dados.';
+      
+      if (error.code === 'permission-denied') {
+        mensagem = 'Sem permissão para salvar. Verifique as Regras do Firestore.';
+      } else if (error.message.includes('undefined')) {
+        mensagem = 'Erro de dados: Um campo indefinido foi enviado ao banco.';
+      }
 
       return {
         success: false,
-        error: msg,
+        error: mensagem,
         details: error.message
       };
     }
   },
 
-  // Buscar vendas por estabelecimento (Mantido Leitura direta para performance)
+  // 🆕 Função Placeholder para NFC-e
+  async emitirNfce(vendaId, cpfCliente) {
+    console.log(`🧾 Solicitando NFC-e para venda ${vendaId}`);
+    await new Promise(r => setTimeout(r, 1000));
+    return {
+        success: false,
+        error: 'API Fiscal ainda não configurada no sistema.'
+    };
+  },
+
+  // Buscar vendas por estabelecimento
   async buscarVendasPorEstabelecimento(estabelecimentoId, limite = 50) {
     try {
+      if (!estabelecimentoId) return [];
+      
       const q = query(
         collection(db, 'vendas'),
         where('estabelecimentoId', '==', estabelecimentoId),
         orderBy('createdAt', 'desc')
-        // limite(limite) // Remova o comentário se quiser limitar a qtd
       );
       
       const querySnapshot = await getDocs(q);
       const vendas = [];
       
       querySnapshot.forEach((doc) => {
+        const data = doc.data();
         vendas.push({
           id: doc.id,
-          ...doc.data()
+          ...data,
+          // Converte timestamp do Firestore para Date do JS
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
         });
       });
       
@@ -82,9 +115,11 @@ export const vendaService = {
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
+        const data = docSnap.data();
         return {
           id: docSnap.id,
-          ...docSnap.data()
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null
         };
       } else {
         return null;

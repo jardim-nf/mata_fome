@@ -58,7 +58,9 @@ import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
 import FinanceiroMaster from './pages/admin/FinanceiroMaster';
-import NotificationManager from './components/NotificationManager'; // <--- IMPORTAR
+
+// ❌ REMOVIDO: import NotificationManager ... (não é necessário pois está no Context)
+
 function App() {
   return (
     <Router>
@@ -76,7 +78,7 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/login-admin" element={<Login />} />
                     
-                    {/* 👇 ESSA É A ROTA NOVA PARA O IFRAME AUTOMÁTICO 👇 */}
+                    {/* 👇 ROTA PARA O IFRAME AUTOMÁTICO 👇 */}
                     <Route path="/imprimir-comanda/:pedidoId" element={<ComandaParaImpressao />} />
                     
                     {/* Rotas legadas de impressão manual */}

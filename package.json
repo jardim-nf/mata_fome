@@ -9,7 +9,7 @@
   "dependencies": {
     "@google/genai": "^1.37.0",
     "aos": "^2.3.4",
-    "axios": "^1.13.2",
+    "axios": "^1.13.5",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.0",
     "chartjs-plugin-datalabels": "^2.2.0",
