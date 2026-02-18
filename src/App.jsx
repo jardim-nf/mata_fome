@@ -58,8 +58,7 @@ import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
 import FinanceiroMaster from './pages/admin/FinanceiroMaster';
-
-// ❌ REMOVIDO: import NotificationManager ... (não é necessário pois está no Context)
+import ConfigFiscalScreen from './pages/admin/ConfigFiscalScreen';
 
 function App() {
   return (
@@ -334,7 +333,7 @@ function App() {
                       <Route path="/master/usuarios/criar" element={<PrivateRoute allowedRoles={['masterAdmin']}><CriarUsuarioMaster /></PrivateRoute>} />
                       <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminImageAssociation /></PrivateRoute>} />
                       <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={['masterAdmin']}><AuditLogs /></PrivateRoute>} />
-                      
+                      <Route path="/admin/config-fiscal" element={<ConfigFiscalScreen />} />
                       {/* Fallback */}
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
