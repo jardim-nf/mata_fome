@@ -13,13 +13,13 @@ import {
 import { db } from '../firebase'; 
 
 export const vendaService = {
-  // 🔓 Salvar venda DIRETO no Firestore
+  
+  // 1. Salvar venda DIRETO no Firestore
   async salvarVenda(vendaData) {
     try {
       console.log('💾 Salvando venda no banco de dados...', vendaData);
 
-      // 1. Sanitização de Dados (CRÍTICO PARA O FIRESTORE)
-      // O Firestore quebra se receber "undefined". Aqui garantimos que campos opcionais virem "null".
+      // Sanitização de Dados (Evita erro de 'undefined' no Firestore)
       const dadosLimpos = {
         ...vendaData,
         usuarioId: vendaData.usuarioId || null,
@@ -31,11 +31,9 @@ export const vendaService = {
 
       // Remove chaves que porventura ainda estejam undefined
       const payloadFinal = JSON.parse(JSON.stringify(dadosLimpos));
-      
-      // Restaura o serverTimestamp (que o JSON.stringify pode ter estragado)
+      // Restaura o serverTimestamp (o JSON.stringify remove funções/objetos especiais)
       payloadFinal.createdAt = serverTimestamp();
 
-      // 2. Salva no Banco
       const vendasRef = collection(db, 'vendas');
       const docRef = await addDoc(vendasRef, payloadFinal);
 
@@ -48,14 +46,12 @@ export const vendaService = {
       };
 
     } catch (error) {
-      // Log detalhado para sabermos se é permissão ou dados inválidos
       console.error('❌ Erro ao salvar venda:', error);
-      
       let mensagem = 'Erro ao salvar no banco de dados.';
       
       if (error.code === 'permission-denied') {
         mensagem = 'Sem permissão para salvar. Verifique as Regras do Firestore.';
-      } else if (error.message.includes('undefined')) {
+      } else if (error.message && error.message.includes('undefined')) {
         mensagem = 'Erro de dados: Um campo indefinido foi enviado ao banco.';
       }
 
@@ -67,7 +63,7 @@ export const vendaService = {
     }
   },
 
-  // 🆕 Função Placeholder para NFC-e
+  // 2. Placeholder para NFC-e
   async emitirNfce(vendaId, cpfCliente) {
     console.log(`🧾 Solicitando NFC-e para venda ${vendaId}`);
     await new Promise(r => setTimeout(r, 1000));
@@ -77,7 +73,7 @@ export const vendaService = {
     };
   },
 
-  // Buscar vendas por estabelecimento
+  // 3. Buscar vendas por estabelecimento (Geral)
   async buscarVendasPorEstabelecimento(estabelecimentoId, limite = 50) {
     try {
       if (!estabelecimentoId) return [];
@@ -96,7 +92,6 @@ export const vendaService = {
         vendas.push({
           id: doc.id,
           ...data,
-          // Converte timestamp do Firestore para Date do JS
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
         });
       });
@@ -108,7 +103,7 @@ export const vendaService = {
     }
   },
 
-  // Buscar venda por ID
+  // 4. Buscar venda por ID
   async buscarVendaPorId(vendaId) {
     try {
       const docRef = doc(db, 'vendas', vendaId);
@@ -128,5 +123,35 @@ export const vendaService = {
       console.error('Erro ao buscar venda:', error);
       return null;
     }
+  },
+
+  // 5. 🆕 Buscar vendas de um período específico (para o histórico de turnos)
+  async buscarVendasPorIntervalo(usuarioId, estabelecimentoId, dataInicio, dataFim) {
+    try {
+      const fim = dataFim || new Date(); // Se não tem fim, usa agora
+      
+      const q = query(
+        collection(db, 'vendas'),
+        where('estabelecimentoId', '==', estabelecimentoId),
+        where('usuarioId', '==', usuarioId),
+        where('createdAt', '>=', dataInicio),
+        where('createdAt', '<=', fim),
+        orderBy('createdAt', 'desc')
+      );
+
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+        };
+      });
+    } catch (error) {
+      console.error("Erro ao buscar vendas do turno:", error);
+      return [];
+    }
   }
-};
+
+}; // <-- O objeto vendaService fecha aqui!
