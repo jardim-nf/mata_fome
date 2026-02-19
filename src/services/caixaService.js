@@ -67,5 +67,31 @@ export const caixaService = {
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => { const d = doc.data(); return { id: doc.id, ...d, dataAbertura: d.dataAbertura?.toDate ? d.dataAbertura.toDate() : null, dataFechamento: d.dataFechamento?.toDate ? d.dataFechamento.toDate() : null }; });
     } catch (e) { console.error(e); return []; }
-  }
+  },
+  async abrirCaixa(dados) {
+      try { 
+          const q = query(
+              collection(db, 'caixas'), 
+              where('usuarioId', '==', dados.usuarioId), 
+              where('estabelecimentoId', '==', dados.estabelecimentoId), 
+              where('status', '==', 'aberto'), 
+              limit(1)
+          );
+          const snapshot = await getDocs(q);
+          
+          if (!snapshot.empty) {
+              return { success: false, error: 'Já existe um turno aberto. Feche-o antes de abrir um novo.' };
+          }
+
+          // Se não tem caixa aberto, prossegue com a criação
+          const ref = await addDoc(collection(db, 'caixas'), { 
+              ...dados, 
+              dataAbertura: serverTimestamp(), 
+              status: 'aberto' 
+          }); 
+          return { success: true, id: ref.id }; 
+      } catch (e) { 
+          return { success: false, error: e.message }; 
+      }
+  },
 };
