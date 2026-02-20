@@ -81,11 +81,28 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     // --- 2. DISPARA A IMPRESSÃO ---
     useEffect(() => {
         if (!pedidoProp && pedido && !loading && !erro) {
+<<<<<<< HEAD
             document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
+=======
+            document.title = `PEDIDO ${pedido.senha || pedido.id.slice(0,4)}`;
+            
+>>>>>>> 16ded56fbc13f1013de7c527caeffb5d68fb3ca4
             const timer = setTimeout(() => { 
                 window.focus();
+                
+                // 🔥 A CORREÇÃO: O navegador avisa-nos quando a impressão termina, 
+                // e só depois disso é que fechamos a janela em segurança.
+                window.onafterprint = () => {
+                    window.close();
+                };
+
                 window.print(); 
+<<<<<<< HEAD
             }, 1200); // 1.2s para garantir o desenho do HTML
+=======
+            }, 1200); // Tempo ligeiramente maior para garantir que o React desenha tudo
+            
+>>>>>>> 16ded56fbc13f1013de7c527caeffb5d68fb3ca4
             return () => clearTimeout(timer);
         }
     }, [pedido, loading, erro, pedidoProp]);

@@ -66,7 +66,6 @@ function Painel() {
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
     
-    const [urlImpressao, setUrlImpressao] = useState(null);
     const [printQueue, setPrintQueue] = useState([]); 
     const [isPrinting, setIsPrinting] = useState(false);
 
@@ -101,7 +100,6 @@ function Painel() {
             endereco = { ...endereco, ...clienteLimpo.endereco }; 
         }
         
-        // --- CORREÇÃO AQUI ---
         // 1. Verifica se já veio com 'source' definido (ex: 'salao' vindo da TelaPedidos)
         // 2. Se não tiver, tenta adivinhar pelo número da mesa
         let source = pedidoData.source;
@@ -136,7 +134,6 @@ function Painel() {
     const handleAtribuirMotoboy = useCallback(async (pedidoId, motoboyId, motoboyNome, source) => {
         if (!pedidoId || !motoboyId) return toast.error("Dados inválidos");
         try {
-            // Agora tudo fica dentro de 'estabelecimentos'
             const path = `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`;
             await updateDoc(doc(db, path), { motoboyId, motoboyNome, status: 'em_entrega', atualizadoEm: serverTimestamp(), dataEntrega: serverTimestamp() });
             toast.success(`🚀 ${motoboyNome} atribuído!`);
@@ -204,7 +201,10 @@ function Painel() {
 
         let isFirstRun = true;
         
+<<<<<<< HEAD
         // 🔥 Agora escutamos APENAS a coleção de pedidos do estabelecimento
+=======
+>>>>>>> 16ded56fbc13f1013de7c527caeffb5d68fb3ca4
         const qPedidos = query(
             collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), 
             orderBy('createdAt', 'asc') // Garante ordem de chegada
@@ -251,13 +251,43 @@ function Painel() {
         prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
 
+    // 🔥 NOVO SISTEMA DE IMPRESSÃO VIA POP-UP CORRIGIDO
     useEffect(() => {
         if (!isPrinting && printQueue.length > 0 && estabelecimentoAtivo) {
             setIsPrinting(true);
-            setUrlImpressao(`/imprimir-comanda/${printQueue[0]}?estabId=${estabelecimentoAtivo}`);
+            const pedidoId = printQueue[0];
+            // 🔥 ATUALIZADO AQUI PARA A ROTA "/comanda/" 
+            const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}`;
+
+            // Abre o Pop-up visual
+            const width = 350;
+            const height = 600;
+            const left = (window.screen.width - width) / 2;
+            const top = (window.screen.height - height) / 2;
+            
+            const printWindow = window.open(url, `AutoPrint_${pedidoId}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
+            
+            // Monitora quando a aba fechar (pelo window.close que colocamos no componente de impressão)
+            if (printWindow) {
+                const timer = setInterval(() => {
+                    if (printWindow.closed) {
+                        clearInterval(timer);
+                        setPrintQueue(prev => prev.slice(1)); // Passa para o próximo da fila
+                        setIsPrinting(false);
+                    }
+                }, 500);
+            } else {
+                toast.warning("⚠️ Pop-up bloqueado! Permita os pop-ups no navegador para imprimir sozinho.");
+                // Força a fila a andar mesmo se estiver bloqueado, para não travar o sistema
+                setTimeout(() => {
+                    setPrintQueue(prev => prev.slice(1)); 
+                    setIsPrinting(false);
+                }, 2000);
+            }
         }
     }, [printQueue, isPrinting, estabelecimentoAtivo]);
 
+<<<<<<< HEAD
     // 🔥 O TEMPO AQUI FOI ALTERADO PARA 30 SEGUNDOS (30000ms)
 const handleIframeLoad = () => {
     const iframe = document.querySelector("iframe[title='iframe-impressao-auto']");
@@ -272,6 +302,8 @@ const handleIframeLoad = () => {
 
     iframe.contentWindow.addEventListener('afterprint', handleAfterPrint);
 };
+=======
+>>>>>>> 16ded56fbc13f1013de7c527caeffb5d68fb3ca4
     const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'finalizado'], [abaAtiva]);
     const STATUS_UI = { recebido: { title: '📥 Novos', color: 'border-l-red-500', bg: 'bg-red-500' }, preparo: { title: '🔥 Preparo', color: 'border-l-orange-500', bg: 'bg-orange-500' }, em_entrega: { title: '🛵 Entrega', color: 'border-l-blue-500', bg: 'bg-blue-500' }, pronto_para_servir: { title: '✅ Pronto (Mesa)', color: 'border-l-green-500', bg: 'bg-green-500' }, finalizado: { title: '🏁 Concluído', color: 'border-l-gray-500', bg: 'bg-gray-500' } };
 
@@ -300,9 +332,7 @@ const handleIframeLoad = () => {
                 <div className="flex flex-col md:flex-row gap-4 min-w-full md:min-w-0 h-full">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
-                        // 🔥 FILTRO INTELIGENTE DE ABA:
-                        // Se estiver na aba 'cozinha', mostra source='salao'
-                        // Se estiver na aba 'delivery', mostra source='global'
+                        // 🔥 FILTRO INTELIGENTE DE ABA
                         let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
                         
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
@@ -319,6 +349,7 @@ const handleIframeLoad = () => {
                     })}
                 </div>
             </main>
+<<<<<<< HEAD
             {urlImpressao && (
           <iframe 
                     src={urlImpressao}
@@ -341,3 +372,9 @@ const handleIframeLoad = () => {
 }
 
 export default withEstablishmentAuth(Painel);
+=======
+        </div>
+    );
+}
+export default withEstablishmentAuth(Painel);
+>>>>>>> 16ded56fbc13f1013de7c527caeffb5d68fb3ca4
