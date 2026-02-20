@@ -83,16 +83,19 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     useEffect(() => {
         if (!pedidoProp && pedido && !loading && !erro) {
             document.title = `PEDIDO ${pedido.senha || pedido.id.slice(0,4)}`;
+            
             const timer = setTimeout(() => { 
                 window.focus();
-                window.print(); 
                 
-                // 🔥 FECHA A JANELA SOZINHA APÓS A IMPRESSÃO
-                setTimeout(() => {
+                // 🔥 A CORREÇÃO: O navegador avisa-nos quando a impressão termina, 
+                // e só depois disso é que fechamos a janela em segurança.
+                window.onafterprint = () => {
                     window.close();
-                }, 500);
+                };
 
-            }, 1000); 
+                window.print(); 
+            }, 1200); // Tempo ligeiramente maior para garantir que o React desenha tudo
+            
             return () => clearTimeout(timer);
         }
     }, [pedido, loading, erro, pedidoProp]);
