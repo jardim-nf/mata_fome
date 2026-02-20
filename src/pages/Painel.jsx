@@ -319,13 +319,13 @@ const qPedidos = query(
                     onLoad={handleIframeLoad}
                     style={{ 
                         position: 'fixed',
-                        bottom: 0,
-                        right: 0,
-                        width: '1px',
-                        height: '1px',
-                        opacity: 0,
-                        pointerEvents: 'none',
-                        zIndex: -100,
+                        top: 0,
+                        left: 0,
+                        width: '350px', // Tamanho real para não amassar o layout
+                        height: '600px', // Tamanho real para não amassar o layout
+                        opacity: 0, // Totalmente invisível
+                        pointerEvents: 'none', // Não atrapalha o clique do mouse
+                        zIndex: -9999, // Fica atrás do sistema inteiro
                         border: 'none'
                     }}
                     title="iframe-impressao-auto"
