@@ -247,12 +247,13 @@ function Painel() {
         prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
 
-    // 🔥 NOVO SISTEMA DE IMPRESSÃO VIA POP-UP
+    // 🔥 NOVO SISTEMA DE IMPRESSÃO VIA POP-UP CORRIGIDO
     useEffect(() => {
         if (!isPrinting && printQueue.length > 0 && estabelecimentoAtivo) {
             setIsPrinting(true);
             const pedidoId = printQueue[0];
-            const url = `/imprimir-comanda/${pedidoId}?estabId=${estabelecimentoAtivo}`;
+            // 🔥 ATUALIZADO AQUI PARA A ROTA "/comanda/" 
+            const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}`;
 
             // Abre o Pop-up visual
             const width = 350;
@@ -327,7 +328,6 @@ function Painel() {
                     })}
                 </div>
             </main>
-            {/* IFRAME REMOVIDO! A impressão automática agora usa o window.open do useEffect lá em cima */}
         </div>
     );
 }
