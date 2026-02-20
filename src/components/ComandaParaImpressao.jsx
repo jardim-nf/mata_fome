@@ -86,6 +86,12 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             const timer = setTimeout(() => { 
                 window.focus();
                 window.print(); 
+                
+                // 🔥 FECHA A JANELA SOZINHA APÓS A IMPRESSÃO
+                setTimeout(() => {
+                    window.close();
+                }, 500);
+
             }, 1000); 
             return () => clearTimeout(timer);
         }
