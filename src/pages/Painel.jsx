@@ -313,17 +313,20 @@ const qPedidos = query(
                     })}
                 </div>
             </main>
-            {urlImpressao && (
+{urlImpressao && (
                 <iframe 
                     src={urlImpressao}
                     onLoad={handleIframeLoad}
                     style={{ 
-                        position: 'fixed', 
-                        left: '-9999px', 
-                        top: 0, 
-                        width: '500px', 
-                        height: '500px', 
-                        border: 'none', 
+                        position: 'fixed',
+                        bottom: 0,
+                        right: 0,
+                        width: '1px',
+                        height: '1px',
+                        opacity: 0,
+                        pointerEvents: 'none',
+                        zIndex: -100,
+                        border: 'none'
                     }}
                     title="iframe-impressao-auto"
                 />
