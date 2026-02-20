@@ -152,6 +152,7 @@ function Painel() {
         } catch (error) { toast.error("Erro ao cancelar."); }
     }, [estabelecimentoAtivo]);
 
+    
     const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
         if (isUpdatingRef.current || bloqueioAtualizacao.has(pedidoId)) return;
         try {

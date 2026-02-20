@@ -311,4 +311,5 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     );
 };
 
+
 export default ComandaParaImpressao;
