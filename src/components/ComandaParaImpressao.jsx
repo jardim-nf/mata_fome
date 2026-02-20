@@ -34,7 +34,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         const buscarPedido = async () => {
             setLoading(true);
             setErro('');
-            console.log(`🖨️ [Comanda] Buscando pedido ${idUrl}...`);
 
             try {
                 let encontrou = false, dados = null;
@@ -82,60 +81,53 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     // --- 2. DISPARA A IMPRESSÃO ---
     useEffect(() => {
         if (!pedidoProp && pedido && !loading && !erro) {
-            document.title = `PEDIDO ${pedido.senha || pedido.id.slice(0,4)}`;
+            document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
             const timer = setTimeout(() => { 
                 window.focus();
                 window.print(); 
-            }, 1000); 
+            }, 1200); // 1.2s para garantir o desenho do HTML
             return () => clearTimeout(timer);
         }
     }, [pedido, loading, erro, pedidoProp]);
 
-    // --- 3. CÁLCULOS FINANCEIROS (BLINDAGEM) ---
+    // --- 3. CÁLCULOS FINANCEIROS (COM BLINDAGEM DE ARRAYS) ---
     const totais = useMemo(() => {
         if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
 
-        const itens = pedido.itens || [];
+        const itens = Array.isArray(pedido.itens) ? pedido.itens : [];
         
-        // A) Total Consumo (Soma apenas itens positivos)
         const consumo = itens.reduce((acc, item) => {
             return item.preco > 0 ? acc + (item.preco * (item.quantidade || 1)) : acc;
         }, 0);
 
-        // B) Taxas e Descontos
         const taxa = Number(pedido.taxaEntrega) || 0;
         const desconto = Number(pedido.desconto) || 0;
-        
-        // C) Total Geral da Conta (Antes de abater pagamentos)
         const totalGeral = consumo + taxa - desconto;
 
-        // D) Já Pago (Histórico de parciais)
-        const pagamentos = pedido.pagamentosParciais || [];
+        const pagamentos = Array.isArray(pedido.pagamentosParciais) ? pedido.pagamentosParciais : [];
         const jaPago = pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
 
-        // E) Restante Final
         const restante = Math.max(0, totalGeral - jaPago);
 
         return { consumo, taxa, desconto, totalGeral, jaPago, restante };
     }, [pedido]);
 
-    // --- 4. AGRUPAMENTO DE ITENS ---
+    // --- 4. AGRUPAMENTO DE ITENS (COM BLINDAGEM DE ARRAYS) ---
     const itensAgrupados = useMemo(() => {
-        if (!pedido || !pedido.itens) return {};
-        let itensParaProcessar = pedido.itens;
+        if (!pedido || !Array.isArray(pedido.itens)) return {};
+        let itensParaProcessar = [...pedido.itens];
         
         if (modoImpressao === 'cozinha') {
             itensParaProcessar = itensParaProcessar.filter(item => {
-                const nome = (item.nome || item.produto?.nome || '').toLowerCase();
-                const categoria = (item.categoria || item.produto?.categoria || '').toLowerCase();
+                const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
+                const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
                 const textoCompleto = `${nome} ${categoria}`;
                 return !TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
             });
         }
 
         return itensParaProcessar.reduce((acc, item) => {
-            // TRAVA: Ignora itens com preço negativo (pagamentos antigos)
-            if (item.preco <= 0) return acc;
+            if (item.preco <= 0) return acc; // Ignora itens de abatimento/pagamento
 
             const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
             if (!acc[nomePessoa]) acc[nomePessoa] = [];
@@ -161,155 +153,186 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }
     };
 
-    if (loading) return <div className="flex items-center justify-center h-screen font-bold text-xl p-4 text-center">Carregando...</div>;
-    if (erro && !pedidoProp) return <div className="flex items-center justify-center h-screen font-bold text-red-600 p-4 text-center">ERRO: {erro}</div>;
+    if (loading) return <div className="flex items-center justify-center h-screen font-bold text-xl p-4 text-center bg-white">Carregando comanda...</div>;
+    if (erro && !pedidoProp) return <div className="flex items-center justify-center h-screen font-bold text-red-600 p-4 text-center bg-white">ERRO: {erro}</div>;
     if (!pedido) return null;
 
     const enderecoFinal = pedido.endereco || pedido.cliente?.endereco || null;
     const nomeClientePrincipal = pedido.clienteNome || pedido.cliente?.nome || 'Cliente';
     const telefoneCliente = pedido.telefone || pedido.cliente?.telefone || null;
     const temItens = Object.keys(itensAgrupados).length > 0;
-    const dataPedido = pedido.createdAt?.toDate ? pedido.createdAt.toDate() : (pedido.dataPedido?.toDate ? pedido.dataPedido.toDate() : new Date());
+    
+    // Fallback robusto para a data
+    let stringData = new Date().toLocaleString('pt-BR');
+    if (pedido.createdAt?.toDate) stringData = pedido.createdAt.toDate().toLocaleString('pt-BR');
+    else if (pedido.dataPedido?.toDate) stringData = pedido.dataPedido.toDate().toLocaleString('pt-BR');
 
-    // Troco (Calculado sobre o restante ou total geral)
-    const metodoPagamento = (pedido.formaPagamento || pedido.metodoPagamento || '').toLowerCase();
+    const metodoPagamento = String(pedido.formaPagamento || pedido.metodoPagamento || '').toLowerCase();
     const isDinheiro = metodoPagamento.includes('dinheiro') || metodoPagamento === 'cash' || metodoPagamento === '4';
     const valorTroco = pedido.trocoPara ? parseFloat(pedido.trocoPara) : 0;
-    
-    // Se tiver pagamento parcial, o troco deve ser sobre o restante
     const valorBaseParaTroco = totais.restante > 0 ? totais.restante : totais.totalGeral;
     const precisaTroco = (isDinheiro && valorTroco > valorBaseParaTroco);
     const trocoDevolver = precisaTroco ? (valorTroco - valorBaseParaTroco) : 0;
 
     return (
-        <div className="bg-white text-black font-mono text-xs leading-tight p-2 w-full h-auto" style={{ maxWidth: '80mm', margin: '0 auto' }}>
-            <button onClick={() => window.print()} className="print:hidden fixed top-2 right-2 bg-gray-200 p-2 rounded-full shadow-md z-50 hover:bg-gray-300">
-                <IoPrint size={20}/>
-            </button>
-
-            <div className="text-center border-b-2 border-black pb-2 mb-2">
-                <h1 className="text-xl font-black uppercase">{pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}</h1>
-                <p className="text-[10px] mt-1 font-bold">PEDIDO #{pedido.senha || pedido.id?.slice(-4).toUpperCase()}</p>
-                <p className="text-[10px]">{dataPedido.toLocaleString('pt-BR')}</p>
-                
-                {modoImpressao === 'cozinha' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}
-            </div>
-
-            <div className="mb-3 border-b-2 border-dashed border-black pb-2">
-                <p className="font-black text-sm uppercase mb-1">{nomeClientePrincipal}</p>
-                {telefoneCliente && <p className="text-xs font-bold mb-1">Tel: {telefoneCliente}</p>}
-                
-                {enderecoFinal ? (
-                    <div className="border-2 border-black p-1 mt-1">
-                        <p className="font-bold text-xs uppercase underline">ENTREGA:</p>
-                        <p className="font-bold text-xs">{enderecoFinal.rua}, {enderecoFinal.numero}</p>
-                        <p className="text-xs">{enderecoFinal.bairro}</p>
-                        {enderecoFinal.complemento && <p className="text-xs italic">({enderecoFinal.complemento})</p>}
-                    </div>
-                ) : (!pedido.mesaNumero && (
-                    <div className="mt-1 border-2 border-black p-1 text-center font-black text-xs uppercase">
-                        RETIRADA NO BALCÃO
-                    </div>
-                ))}
-            </div>
-
-            <div className="mb-2">
-                {!temItens ? <div className="text-center py-4 border border-black p-2">Sem itens para este setor.</div> : 
-                    Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
-                        <div key={nomePessoa} className="mb-2">
-                            {pedido.mesaNumero && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
-                            {itens.map((item, index) => (
-                                <div key={index} className="mb-2 border-b border-dotted border-gray-400 pb-1 last:border-0">
-                                    <div className="flex justify-between items-start">
-                                        <span className="font-black text-sm flex-1 pr-2 uppercase">{item.quantidade}x {item.nome || item.produto?.nome}</span>
-                                        {modoImpressao !== 'cozinha' && <span className="font-bold whitespace-nowrap">{formatMoney((item.precoFinal || item.preco) * item.quantidade)}</span>}
-                                    </div>
-                                    {item.variacaoSelecionada && <div className="pl-3 text-xs font-bold mt-0.5">Opção: {item.variacaoSelecionada.nome}</div>}
-                                    {item.adicionais?.length > 0 && (
-                                        <div className="pl-2 mt-0.5">
-                                            {item.adicionais.map((adic, idx) => (
-                                                <div key={idx} className="flex items-center text-[10px] font-bold text-gray-700">
-                                                    <span className="mr-1">+</span><span>{adic.quantidade || 1}x {adic.nome}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block">OBS: {item.observacao}</div>}
-                                </div>
-                            ))}
-                        </div>
-                    ))
-                }
-            </div>
-
-            {modoImpressao !== 'cozinha' && (
-                <div className="border-t-2 border-black pt-2 mt-2">
-                    {/* SUBTOTAL REAL (Soma dos produtos) */}
-                    <div className="flex justify-between text-xs font-bold"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
-                    
-                    {totais.taxa > 0 && <div className="flex justify-between text-xs"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
-                    {totais.desconto > 0 && <div className="flex justify-between text-xs"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
-                    
-                    {/* SE TIVER PAGO PARCIALMENTE, MOSTRA O EXTRATO COMPLETO */}
-                    {totais.jaPago > 0 ? (
-                        <>
-                            <div className="flex justify-between text-sm font-bold mt-1 border-t border-dotted border-gray-400 pt-1">
-                                <span>TOTAL CONTA:</span>
-                                <span>{formatMoney(totais.totalGeral)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm font-bold text-gray-700">
-                                <span>(-) JÁ PAGO:</span>
-                                <span>{formatMoney(totais.jaPago)}</span>
-                            </div>
-                            <div className="flex justify-between text-xl font-black mt-2 border-t-2 border-black pt-1">
-                                <span>A PAGAR:</span>
-                                <span>{formatMoney(totais.restante)}</span>
-                            </div>
-                        </>
-                    ) : (
-                        /* SE NÃO TIVER PAGO NADA, MOSTRA O PADRÃO */
-                        <div className="flex justify-between text-lg font-black mt-1 border-t border-dotted border-black pt-1">
-                            <span>TOTAL:</span>
-                            <span>{formatMoney(totais.totalGeral)}</span>
-                        </div>
-                    )}
-
-                    <div className="mt-3 border-2 border-black p-1 text-center">
-                        <p className="font-bold text-xs uppercase">PAGAMENTO:</p>
-                        <p className="font-black text-sm uppercase">{formatarPagamento(pedido)}</p>
-                        
-                        {precisaTroco && (
-                            <div className="mt-1 border-t border-black pt-1">
-                                <p className="text-xs font-bold">Troco para: {formatMoney(valorTroco)}</p>
-                                <p className="text-sm font-black italic">DEVOLVER: {formatMoney(trocoDevolver)}</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-            
-            <div className="text-center mt-6 text-[10px] font-bold border-t border-black pt-2">
-                *** FIM DO PEDIDO ***
-                <br/>
-                {new Date().toLocaleTimeString()}
-            </div>
-            
+        <>
+            {/* O CSS NUCLEAR QUE RESOLVE O PROBLEMA DA PÁGINA BRANCA */}
             <style>{`
                 @media print {
-                    @page { margin: 0; size: auto; }
-                    body { margin: 0; padding: 0; background-color: white !important; }
-                    .print\\:hidden { display: none !important; }
-                    * { 
-                        color: #000 !important; 
-                        background-color: transparent !important;
-                        -webkit-print-color-adjust: exact !important; 
-                        print-color-adjust: exact !important;
+                    @page { margin: 0; }
+                    
+                    /* Anula qualquer Tailwind global no root/body */
+                    html, body, #root {
+                        height: auto !important;
+                        min-height: auto !important;
+                        overflow: visible !important;
+                        position: static !important;
+                        background: white !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
+
+                    /* Esconde toda a interface que possa bugar o layout */
+                    body * { visibility: hidden; }
+
+                    /* Salva e exibe apenas a div da impressora */
+                    #area-impressao, #area-impressao * {
+                        visibility: visible !important;
+                        color: black !important;
+                    }
+                    
+                    #area-impressao {
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 80mm !important;
+                        margin: 0 !important;
+                        padding: 2mm !important;
+                    }
+
+                    .no-print { display: none !important; }
                 }
             `}</style>
-        </div>
+
+            <button onClick={() => window.print()} className="no-print fixed top-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50">
+                <IoPrint size={24} />
+            </button>
+
+            {/* A DIV BLINDADA QUE SERÁ IMPRESSA */}
+            <div id="area-impressao" className="bg-white text-black font-mono text-xs leading-tight w-full mx-auto" style={{ maxWidth: '80mm' }}>
+                
+                <div className="text-center border-b-2 border-black pb-2 mb-2">
+                    <h1 className="text-xl font-black uppercase">{pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}</h1>
+                    {/* A SENHA ROBUSTA: */}
+                    <p className="text-[12px] mt-1 font-bold">PEDIDO #{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
+                    <p className="text-[10px]">{stringData}</p>
+                    
+                    {modoImpressao === 'cozinha' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}
+                </div>
+
+                <div className="mb-3 border-b-2 border-dashed border-black pb-2">
+                    <p className="font-black text-sm uppercase mb-1">{nomeClientePrincipal}</p>
+                    {telefoneCliente && <p className="text-xs font-bold mb-1">Tel: {telefoneCliente}</p>}
+                    
+                    {enderecoFinal ? (
+                        <div className="border-2 border-black p-1 mt-1">
+                            <p className="font-bold text-xs uppercase underline">ENTREGA:</p>
+                            <p className="font-bold text-xs">{enderecoFinal.rua}, {enderecoFinal.numero}</p>
+                            <p className="text-xs">{enderecoFinal.bairro}</p>
+                            {enderecoFinal.complemento && <p className="text-xs italic">({enderecoFinal.complemento})</p>}
+                        </div>
+                    ) : (!pedido.mesaNumero && (
+                        <div className="mt-1 border-2 border-black p-1 text-center font-black text-xs uppercase">
+                            RETIRADA NO BALCÃO
+                        </div>
+                    ))}
+                </div>
+
+                <div className="mb-2">
+                    {!temItens ? <div className="text-center py-4 border border-black p-2">Sem itens para este setor.</div> : 
+                        Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
+                            <div key={nomePessoa} className="mb-2">
+                                {pedido.mesaNumero && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
+                                {itens.map((item, index) => {
+                                    // Garantia contra dados legados de adicionais
+                                    const adicionais = Array.isArray(item.adicionais) ? item.adicionais : [];
+                                    
+                                    return (
+                                        <div key={index} className="mb-2 border-b border-dotted border-gray-400 pb-1 last:border-0">
+                                            <div className="flex justify-between items-start">
+                                                <span className="font-black text-sm flex-1 pr-2 uppercase">{item.quantidade || 1}x {item.nome || item.produto?.nome}</span>
+                                                {modoImpressao !== 'cozinha' && <span className="font-bold whitespace-nowrap">{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}
+                                            </div>
+                                            {item.variacaoSelecionada && <div className="pl-3 text-xs font-bold mt-0.5">Opção: {item.variacaoSelecionada.nome}</div>}
+                                            {adicionais.length > 0 && (
+                                                <div className="pl-2 mt-0.5">
+                                                    {adicionais.map((adic, idx) => (
+                                                        <div key={idx} className="flex items-center text-[10px] font-bold text-gray-700">
+                                                            <span className="mr-1">+</span><span>{adic.quantidade || 1}x {adic.nome}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block">OBS: {item.observacao}</div>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))
+                    }
+                </div>
+
+                {modoImpressao !== 'cozinha' && (
+                    <div className="border-t-2 border-black pt-2 mt-2">
+                        <div className="flex justify-between text-xs font-bold"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
+                        
+                        {totais.taxa > 0 && <div className="flex justify-between text-xs"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
+                        {totais.desconto > 0 && <div className="flex justify-between text-xs"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
+                        
+                        {totais.jaPago > 0 ? (
+                            <>
+                                <div className="flex justify-between text-sm font-bold mt-1 border-t border-dotted border-gray-400 pt-1">
+                                    <span>TOTAL CONTA:</span>
+                                    <span>{formatMoney(totais.totalGeral)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm font-bold text-gray-700">
+                                    <span>(-) JÁ PAGO:</span>
+                                    <span>{formatMoney(totais.jaPago)}</span>
+                                </div>
+                                <div className="flex justify-between text-xl font-black mt-2 border-t-2 border-black pt-1">
+                                    <span>A PAGAR:</span>
+                                    <span>{formatMoney(totais.restante)}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex justify-between text-lg font-black mt-1 border-t border-dotted border-black pt-1">
+                                <span>TOTAL:</span>
+                                <span>{formatMoney(totais.totalGeral)}</span>
+                            </div>
+                        )}
+
+                        <div className="mt-3 border-2 border-black p-1 text-center">
+                            <p className="font-bold text-xs uppercase">PAGAMENTO:</p>
+                            <p className="font-black text-sm uppercase">{formatarPagamento(pedido)}</p>
+                            
+                            {precisaTroco && (
+                                <div className="mt-1 border-t border-black pt-1">
+                                    <p className="text-xs font-bold">Troco para: {formatMoney(valorTroco)}</p>
+                                    <p className="text-sm font-black italic">DEVOLVER: {formatMoney(trocoDevolver)}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+                
+                <div className="text-center mt-6 text-[10px] font-bold border-t border-black pt-2">
+                    *** FIM DO PEDIDO ***
+                    <br/>
+                    {new Date().toLocaleTimeString()}
+                </div>
+            </div>
+        </>
     );
 };
-
 
 export default ComandaParaImpressao;

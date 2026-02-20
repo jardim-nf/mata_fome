@@ -91,7 +91,7 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-// 🔥 FUNÇÃO INTELIGENTE: Decide se é "salao" ou "global" (delivery)
+    // 🔥 FUNÇÃO INTELIGENTE: Decide se é "salao" ou "global" (delivery)
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
         
@@ -152,7 +152,6 @@ function Painel() {
         } catch (error) { toast.error("Erro ao cancelar."); }
     }, [estabelecimentoAtivo]);
 
-    
     const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
         if (isUpdatingRef.current || bloqueioAtualizacao.has(pedidoId)) return;
         try {
@@ -205,11 +204,11 @@ function Painel() {
 
         let isFirstRun = true;
         
-// 🔥 Agora escutamos APENAS a coleção de pedidos do estabelecimento
-const qPedidos = query(
-    collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), 
-    orderBy('createdAt', 'asc') // Garante ordem de chegada
-);
+        // 🔥 Agora escutamos APENAS a coleção de pedidos do estabelecimento
+        const qPedidos = query(
+            collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), 
+            orderBy('createdAt', 'asc') // Garante ordem de chegada
+        );
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) {
                 snapshot.docChanges().forEach(checkAutoPrint);
@@ -259,14 +258,20 @@ const qPedidos = query(
         }
     }, [printQueue, isPrinting, estabelecimentoAtivo]);
 
-    const handleIframeLoad = () => {
-        setTimeout(() => {
-            setUrlImpressao(null);
-            setPrintQueue(prev => prev.slice(1)); 
-            setIsPrinting(false); 
-        }, 15000); 
+    // 🔥 O TEMPO AQUI FOI ALTERADO PARA 30 SEGUNDOS (30000ms)
+const handleIframeLoad = () => {
+    const iframe = document.querySelector("iframe[title='iframe-impressao-auto']");
+    if (!iframe) return;
+
+    const handleAfterPrint = () => {
+        setUrlImpressao(null);
+        setPrintQueue(prev => prev.slice(1));
+        setIsPrinting(false);
+        iframe.contentWindow.removeEventListener('afterprint', handleAfterPrint);
     };
 
+    iframe.contentWindow.addEventListener('afterprint', handleAfterPrint);
+};
     const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'finalizado'], [abaAtiva]);
     const STATUS_UI = { recebido: { title: '📥 Novos', color: 'border-l-red-500', bg: 'bg-red-500' }, preparo: { title: '🔥 Preparo', color: 'border-l-orange-500', bg: 'bg-orange-500' }, em_entrega: { title: '🛵 Entrega', color: 'border-l-blue-500', bg: 'bg-blue-500' }, pronto_para_servir: { title: '✅ Pronto (Mesa)', color: 'border-l-green-500', bg: 'bg-green-500' }, finalizado: { title: '🏁 Concluído', color: 'border-l-gray-500', bg: 'bg-gray-500' } };
 
@@ -315,16 +320,18 @@ const qPedidos = query(
                 </div>
             </main>
             {urlImpressao && (
-                <iframe 
+          <iframe 
                     src={urlImpressao}
                     onLoad={handleIframeLoad}
                     style={{ 
-                        position: 'fixed', 
+                        position: 'absolute',
+                        /* Em vez de usar visibility ou opacity, nós apenas jogamos o iframe para fora da tela */
+                        top: 0,
                         left: '-9999px', 
-                        top: 0, 
-                        width: '500px', 
-                        height: '500px', 
-                        border: 'none', 
+                        width: '80mm',   /* Mantém a largura exata da bobina */
+                        height: '100vh', 
+                        border: 'none',
+                        zIndex: -1       /* Coloca atrás de tudo caso algo dê errado */
                     }}
                     title="iframe-impressao-auto"
                 />
@@ -332,4 +339,5 @@ const qPedidos = query(
         </div>
     );
 }
+
 export default withEstablishmentAuth(Painel);
