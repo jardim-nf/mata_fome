@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { db, auth } from '../firebase'; 
+import { httpsCallable } from 'firebase/functions'; // 🆕 Importação para chamar a Cloud Function
+import { db, auth, functions } from '../firebase'; // 🆕 Certifique-se de importar 'functions' do seu firebase.js
 import { 
     IoClose,
     IoChevronBack,
@@ -17,7 +18,8 @@ import {
     IoPrint,
     IoCheckbox,
     IoSquareOutline,
-    IoTime
+    IoTime,
+    IoReceiptOutline // 🆕 Ícone para a nota
 } from 'react-icons/io5';
 import { toast } from 'react-toastify';
 
@@ -27,6 +29,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [pagamentos, setPagamentos] = useState({});
     const [selecionados, setSelecionados] = useState({});
     const [carregando, setCarregando] = useState(false);
+
+    // 🆕 Estados para NFC-e
+    const [emitirNota, setEmitirNota] = useState(false);
+    const [cpfNota, setCpfNota] = useState('');
 
     // --- CÁLCULOS FINANCEIROS ---
 
@@ -106,9 +112,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 selecionadosIniciais[key] = false;
             } else {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
-                    // TRAVA DE SEGURANÇA: Ninguém paga mais do que a dívida total da mesa
                     const valorSugerido = Math.min(dados.total, restanteMesa);
-
                     pagamentosIniciais[pessoa] = {
                         valor: valorSugerido, 
                         formaPagamento: 'dinheiro',
@@ -163,19 +167,16 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         setSelecionados(novosS);
     };
 
-    // --- IMPRESSÃO DE CONFERÊNCIA (O PONTO CHAVE) ---
     const handleImprimirConferencia = () => {
         const totalConsumo = calcularTotalConsumo();
         const jaPago = calcularJaPago();
         const restante = calcularRestanteMesa();
         
-        // Se estiver na etapa de seleção, imprime só os selecionados. Senão, imprime tudo.
         const dadosBase = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
         const dadosParaImpressao = etapa > 1 ? 
             Object.fromEntries(Object.entries(dadosBase).filter(([k]) => selecionados[k])) : 
             dadosBase;
 
-        // Se nenhum selecionado na etapa de pagamento, imprime o geral para conferência
         const dadosFinais = Object.keys(dadosParaImpressao).length > 0 ? dadosParaImpressao : agruparItensPorPessoa;
 
         const conteudo = `
@@ -190,8 +191,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     .pagante-block { margin-bottom: 8px; }
                     .pagante-header { display: flex; justify-content: space-between; font-weight: 900; border-bottom: 1px solid #000; margin-bottom: 2px; text-transform: uppercase; }
                     .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 11px; margin-bottom: 1px; }
-                    
-                    /* BOX DE TOTAIS */
                     .resumo-box { border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px; }
                     .linha-resumo { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px; }
                     .linha-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
@@ -220,24 +219,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 `).join('')}
 
                 <div class="resumo-box">
-                    <div class="linha-resumo">
-                        <span>TOTAL CONSUMO:</span>
-                        <span>R$ ${totalConsumo.toFixed(2)}</span>
-                    </div>
-                    
-                    ${jaPago > 0 ? `
-                    <div class="linha-resumo">
-                        <span>(-) JÁ PAGO:</span>
-                        <span>R$ ${jaPago.toFixed(2)}</span>
-                    </div>
-                    ` : ''}
-
-                    <div class="linha-total">
-                        <span>A PAGAR:</span>
-                        <span>R$ ${restante.toFixed(2)}</span>
-                    </div>
+                    <div class="linha-resumo"><span>TOTAL CONSUMO:</span><span>R$ ${totalConsumo.toFixed(2)}</span></div>
+                    ${jaPago > 0 ? `<div class="linha-resumo"><span>(-) JÁ PAGO:</span><span>R$ ${jaPago.toFixed(2)}</span></div>` : ''}
+                    <div class="linha-total"><span>A PAGAR:</span><span>R$ ${restante.toFixed(2)}</span></div>
                 </div>
-                
                 <br/>
                 <div style="text-align:center; font-size:10px;">*** NÃO É DOCUMENTO FISCAL ***</div>
             </body>
@@ -250,7 +235,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
 
-    // --- FINALIZAR ---
+    // --- FINALIZAR E EMITIR NOTA ---
     const handleFinalizar = async (modo) => {
         setCarregando(true);
         try {
@@ -263,14 +248,13 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
             const restanteFinal = totalConsumo - totalJaPagoNovo;
             
-            // Verifica se quitou (tolerância de centavos)
             const mesaQuitada = restanteFinal <= 0.10;
 
             const pagamentosValidos = Object.fromEntries(
                 Object.entries(pagamentos).filter(([k]) => selecionados[k] && pagamentos[k].valor > 0)
             );
 
-            // 1. Registrar Venda
+            // 1. Registrar Venda no Firestore
             const dadosVenda = {
                 mesaId: mesa.id,
                 mesaNumero: mesa.numero,
@@ -288,7 +272,23 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
 
-            // 2. Atualizar Mesa
+            // 🆕 2. Disparar Emissão de NFC-e se solicitado
+            if (emitirNota) {
+                toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
+                try {
+                    const emitirNfce = httpsCallable(functions, 'emitirNfcePlugNotas');
+                    await emitirNfce({ 
+                        vendaId: docRef.id, 
+                        cpf: cpfNota 
+                    });
+                    toast.success("Nota enviada para a Sefaz!");
+                } catch (error) {
+                    console.error("Erro ao solicitar NFC-e:", error);
+                    toast.error("Venda salva, mas ocorreu um erro ao enviar a nota: " + error.message);
+                }
+            }
+
+            // 3. Atualizar Mesa
             if (mesa.id) {
                 if (modo === 'total' || mesaQuitada) {
                     await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
@@ -367,7 +367,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         Total Consumo: R$ {calcularTotalConsumo().toFixed(2)}
                     </p>
                     
-                    {/* BOTÃO DE IMPRIMIR COMANDA */}
                     <button onClick={handleImprimirConferencia} className="mt-4 w-full py-2 bg-white/20 text-white hover:bg-white/30 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
                         <IoPrint className="text-lg" /> Imprimir Conferência
                     </button>
@@ -452,7 +451,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                         ))}
                                     </div>
                                     
-                                    {/* LISTA DE ITENS - FILTRADA PARA POSITIVOS */}
                                     {dados.itens && dados.itens.filter(i => i.preco > 0).length > 0 && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
                                             <p className="text-[10px] text-gray-400 font-bold mb-1">CONSUMO:</p>
@@ -531,14 +529,33 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         </p>
                     </div>
 
-                    <div className="space-y-2">
-                        <p className="text-xs font-bold text-gray-400 uppercase">Resumo da Transação:</p>
-                        {Object.entries(pagamentos).filter(([k]) => selecionados[k]).map(([pessoa, dados]) => (
-                            <div key={pessoa} className="flex justify-between text-sm border-b border-gray-50 pb-2">
-                                <span className="text-gray-600 font-medium">{pessoa} <span className="text-xs text-gray-400">({dados.formaPagamento})</span></span>
-                                <span className="font-bold text-gray-900">R$ {dados.valor.toFixed(2)}</span>
+                    {/* 🆕 TOGGLE PARA EMITIR NFC-E */}
+                    <div className="mt-4 p-4 border-2 border-dashed border-gray-200 rounded-2xl">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={emitirNota}
+                                onChange={(e) => setEmitirNota(e.target.checked)}
+                                className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <div className="flex items-center gap-2 text-gray-700 font-bold">
+                                <IoReceiptOutline className="text-emerald-600 text-lg" />
+                                Emitir Nota Fiscal (NFC-e)
                             </div>
-                        ))}
+                        </label>
+                        
+                        {emitirNota && (
+                            <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="CPF na Nota (Opcional)"
+                                    value={cpfNota}
+                                    onChange={(e) => setCpfNota(e.target.value.replace(/\D/g, ''))} // Apenas números
+                                    className="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    maxLength={11}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
 

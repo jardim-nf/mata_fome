@@ -10,11 +10,14 @@ import AdicionarMesaModal from "../components/AdicionarMesaModal";
 import ModalPagamento from "../components/ModalPagamento";
 import GeradorTickets from "../components/GeradorTickets"; 
 import RelatorioTicketsModal from "../components/RelatorioTicketsModal"; 
+// 👇 IMPORTAÇÃO DO NOVO MODAL DE HISTÓRICO DE MESAS 👇
+import HistoricoMesasModal from "../components/HistoricoMesasModal"; 
+
 import { 
     IoArrowBack, IoAdd, 
     IoGrid, IoPeople, IoWalletOutline, 
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTicket, IoDocumentText 
+    IoTicket, IoDocumentText, IoTimeOutline 
 } from "react-icons/io5";
 
 // --- HELPER DE FORMATAÇÃO ---
@@ -114,6 +117,7 @@ export default function ControleSalao() {
     // --- ESTADOS PARA TICKETS E RELATÓRIO ---
     const [isModalTicketsOpen, setIsModalTicketsOpen] = useState(false);
     const [isRelatorioOpen, setIsRelatorioOpen] = useState(false);
+    const [isHistoricoMesasOpen, setIsHistoricoMesasOpen] = useState(false); // NOVO ESTADO AQUI
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
 
     const estabelecimentoId = useMemo(() => {
@@ -140,11 +144,32 @@ export default function ControleSalao() {
         fetchNomeEstabelecimento();
     }, [estabelecimentoId, userData]);
 
-    // --- BOTÕES DO HEADER (AQUI ESTÃO OS BOTÕES) ---
+    // 👇 EVENTO PARA ABRIR O HISTÓRICO DE MESAS COM F4 👇
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'F4') {
+                e.preventDefault();
+                setIsHistoricoMesasOpen(true);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    // --- BOTÕES DO HEADER ---
     useEffect(() => {
         setActions(
             <div className="flex gap-2">
-                {/* BOTÃO RELATÓRIO */}
+                {/* BOTÃO HISTÓRICO DE MESAS (NOVO) */}
+                <button 
+                    onClick={() => setIsHistoricoMesasOpen(true)}
+                    className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
+                    title="Histórico de Mesas (F4)"
+                >
+                    <IoTimeOutline className="text-lg"/> <span className="hidden sm:inline">Histórico (F4)</span>
+                </button>
+
+                {/* BOTÃO RELATÓRIO CAIXA */}
                 <button 
                     onClick={() => setIsRelatorioOpen(true)}
                     className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
@@ -364,10 +389,19 @@ export default function ControleSalao() {
                     />
                 )}
 
-                {/* MODAL DE RELATÓRIO (VISUALIZAÇÃO) */}
+                {/* MODAL DE RELATÓRIO CAIXA */}
                 {isRelatorioOpen && (
                     <RelatorioTicketsModal 
                         onClose={() => setIsRelatorioOpen(false)}
+                        estabelecimentoId={estabelecimentoId}
+                    />
+                )}
+
+                {/* 👇 RENDERIZA O NOVO MODAL DE HISTÓRICO DAS MESAS 👇 */}
+                {isHistoricoMesasOpen && (
+                    <HistoricoMesasModal 
+                        isOpen={isHistoricoMesasOpen} 
+                        onClose={() => setIsHistoricoMesasOpen(false)} 
                         estabelecimentoId={estabelecimentoId}
                     />
                 )}
@@ -397,10 +431,19 @@ export default function ControleSalao() {
                             
                             {/* --- BOTÕES NO LOCAL TAMBÉM (BACKUP) --- */}
                             <div className="flex gap-2 w-full sm:w-auto">
+                                {/* Botão Histórico Mesas (F4) */}
+                                <button 
+                                    onClick={() => setIsHistoricoMesasOpen(true)}
+                                    className="flex-1 sm:flex-initial bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-bold px-3 py-2 rounded-lg shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all text-xs"
+                                    title="Histórico de Mesas (F4)"
+                                >
+                                    <IoTimeOutline className="text-lg"/>
+                                </button>
+
                                 <button 
                                     onClick={() => setIsRelatorioOpen(true)}
                                     className="flex-1 sm:flex-initial bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-bold px-3 py-2 rounded-lg shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all text-xs"
-                                    title="Relatório"
+                                    title="Relatório Caixa"
                                 >
                                     <IoDocumentText className="text-lg"/>
                                 </button>

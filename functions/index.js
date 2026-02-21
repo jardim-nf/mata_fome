@@ -1,5 +1,5 @@
 // functions/index.js
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params"; 
 import OpenAI from "openai";
@@ -14,7 +14,7 @@ const db = getFirestore();
 
 // Segredos
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
-// const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY"); // 🔒 Comentado até você ter a chave
+const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY"); // 🔓 Liberado
 
 // ==================================================================
 // 1. SEU AGENTE DE IA (MANTIDO)
@@ -135,56 +135,172 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
 });
 
 // ==================================================================
-// 3. 🆕 EMITIR NFC-e (MODO SIMULAÇÃO / PLACEHOLDER)
+// 3. EMITIR NFC-E VIA PLUGNOTAS (INTEGRAÇÃO REAL)
 // ==================================================================
-export const emitirNfcePlugNotas = onCall({ cors: true }, async (request) => {
-    // 1. Validação básica
+export const emitirNfcePlugNotas = onCall({ 
+    cors: true,
+    secrets: [plugNotasApiKey] 
+}, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     
     const { vendaId, cpf } = request.data;
     if (!vendaId) throw new HttpsError('invalid-argument', 'ID da venda obrigatório.');
 
     try {
-        logger.info(`🧾 Iniciando emissão (SIMULAÇÃO) para Venda: ${vendaId} | CPF: ${cpf || 'N/A'}`);
+        logger.info(`🧾 Iniciando emissão no PlugNotas para Venda: ${vendaId} | CPF: ${cpf || 'N/A'}`);
 
-        // 2. Busca a venda para garantir que existe
+        // 1. Busca a venda
         const vendaRef = db.collection('vendas').doc(vendaId);
         const vendaSnap = await vendaRef.get();
-
         if (!vendaSnap.exists) throw new HttpsError('not-found', 'Venda não encontrada.');
+        const venda = vendaSnap.data();
 
-        // 3. Simula tempo de processamento da Sefaz (1.5 segundos)
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // 2. Busca os dados do Estabelecimento (Configuração Fiscal)
+        const estabelecimentoRef = db.collection('estabelecimentos').doc(venda.estabelecimentoId);
+        const estabelecimentoSnap = await estabelecimentoRef.get();
+        const estabelecimento = estabelecimentoSnap.data();
+        
+        if (!estabelecimento?.fiscal?.cnpj) {
+            throw new HttpsError('failed-precondition', 'Estabelecimento sem configuração fiscal.');
+        }
 
-        // 4. Cria dados fiscais fictícios para teste visual
-        // Link de um PDF de exemplo público para você ver funcionando na tela
-        const fakePdfUrl = "https://www.nfe.fazenda.gov.br/portal/exibirArquivo.aspx?conteudo=URCYvjVMIzI="; 
-        const fakeXmlUrl = "https://exemplo.com/fake.xml";
+        const configFiscal = estabelecimento.fiscal;
+
+        // 3. Montar os itens para o padrão PlugNotas
+        const itensNfce = venda.itens.map(item => ({
+            codigo: item.id || "001",
+            descricao: item.nome,
+            ncm: item.ncm || "21069090", // NCM Genérico para alimentação (ajuste conforme necessário)
+            cfop: "5102", // Venda de mercadoria adquirida/recebida de terceiros
+            valorUnitario: item.precoFinal,
+            quantidade: item.quantidade,
+            tributos: {
+                // Configuração básica para Simples Nacional (CSOSN 102)
+                icms: { origem: "0", csosn: "102" },
+                pis: { cst: "99" },
+                cofins: { cst: "99" }
+            }
+        }));
+
+        // 4. Montar o Payload Principal
+        const payload = [{
+            idIntegracao: vendaId, // Seu ID interno para rastrear
+            presencial: true,
+            consumidorFinal: true,
+            naturezaOperacao: "Venda de Mercadoria",
+            ambiente: configFiscal.ambiente === "1" ? "PRODUCAO" : "HOMOLOGACAO",
+            destinatario: cpf ? { cpf: cpf.replace(/\D/g, '') } : undefined, // Envia CPF apenas se existir
+            itens: itensNfce,
+            pagamentos: [{
+                // Mapeia o tipo de pagamento da sua venda (01=Dinheiro, 03=Crédito, 04=Débito, 17=PIX)
+                tPag: venda.metodoPagamento === "PIX" ? "17" : "01", 
+                vPag: venda.total
+            }]
+        }];
+
+        // 5. Disparar para a API do PlugNotas
+        const response = await fetch("https://api.plugnotas.com.br/nfce", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-api-key": plugNotasApiKey.value()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            logger.error("❌ Erro retornado pelo PlugNotas:", result);
+            throw new HttpsError('internal', `Falha no PlugNotas: ${result.message || 'Erro desconhecido'}`);
+        }
+
+        // A API retorna o ID do processamento
+        const idPlugNotas = result.documents[0].id;
 
         const fiscalData = {
-            status: 'AUTORIZADA', // Status de sucesso da Sefaz
-            protocolo: '1234567890001',
-            idPlugNotas: 'simulacao_id_' + Date.now(),
-            dataEmissao: FieldValue.serverTimestamp(),
-            pdf: fakePdfUrl,
-            xml: fakeXmlUrl,
-            ambiente: 'HOMOLOGACAO_SIMULADA'
+            status: 'PROCESSANDO', 
+            idPlugNotas: idPlugNotas,
+            idIntegracao: result.documents[0].idIntegracao,
+            dataEnvio: FieldValue.serverTimestamp(),
+            ambiente: configFiscal.ambiente === "1" ? "PRODUCAO" : "HOMOLOGACAO"
         };
 
-        // 5. Atualiza a venda no banco
+        // 6. Atualiza a venda no banco com o status de processamento
         await vendaRef.update({ fiscal: fiscalData });
 
-        logger.info(`✅ Emissão Simulada com Sucesso: ${vendaId}`);
+        logger.info(`✅ Venda enviada ao PlugNotas. ID PlugNotas: ${idPlugNotas}`);
 
         return {
             sucesso: true,
-            mensagem: 'Nota emitida com sucesso (Simulação).',
-            pdfUrl: fakePdfUrl,
-            xmlUrl: fakeXmlUrl
+            mensagem: 'Nota enviada para processamento com sucesso.',
+            idPlugNotas: idPlugNotas
         };
 
     } catch (error) {
-        logger.error("❌ Erro na Emissão (Simulação):", error);
-        throw new HttpsError('internal', 'Erro ao processar emissão simulada.');
+        logger.error("❌ Erro na Emissão NFC-e:", error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', 'Erro interno ao processar NFC-e.');
+    }
+});
+
+// ==================================================================
+// 4. WEBHOOK PLUGNOTAS (RETORNO ASSÍNCRONO DA SEFAZ)
+// ==================================================================
+export const webhookPlugNotas = onRequest(async (req, res) => {
+    // O PlugNotas envia um POST com os dados do processamento
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+
+    const data = req.body;
+    logger.info(`🔔 Webhook Recebido do PlugNotas:`, data);
+
+    try {
+        // idIntegracao é o ID da nossa venda que enviamos na emissão
+        const { id, idIntegracao, status, pdf, xml, mensagem } = data;
+
+        if (!idIntegracao) {
+            logger.warn("Webhook ignorado: Sem idIntegracao (ID da Venda).");
+            res.status(200).send('OK');
+            return;
+        }
+
+        const vendaRef = db.collection('vendas').doc(idIntegracao);
+        const vendaSnap = await vendaRef.get();
+
+        if (!vendaSnap.exists) {
+            logger.warn(`Venda não encontrada para o ID Integração: ${idIntegracao}`);
+            res.status(200).send('OK');
+            return;
+        }
+
+        // Prepara a atualização no banco
+        const updateData = {
+            'fiscal.status': status,
+            'fiscal.dataAtualizacao': FieldValue.serverTimestamp()
+        };
+
+        // Se a Sefaz autorizou, salva os links
+        if (status === 'CONCLUIDO') {
+            if (pdf) updateData['fiscal.pdf'] = pdf;
+            if (xml) updateData['fiscal.xml'] = xml;
+        } 
+        // Se deu erro, salva o motivo
+        else if (status === 'REJEITADO' || status === 'DENEGADO') {
+            updateData['fiscal.motivoRejeicao'] = mensagem || 'Rejeitada pela Sefaz';
+        }
+
+        // Aplica a atualização no Firestore
+        await vendaRef.update(updateData);
+        logger.info(`✅ Venda ${idIntegracao} atualizada com status: ${status}`);
+
+        // Responde 200 rápido para o PlugNotas saber que a notificação foi recebida
+        res.status(200).json({ message: "Notificação processada com sucesso" });
+
+    } catch (error) {
+        logger.error("❌ Erro ao processar Webhook do PlugNotas:", error);
+        res.status(500).send('Erro Interno');
     }
 });
