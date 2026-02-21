@@ -700,24 +700,60 @@ const PdvScreen = () => {
 
     const inputBuscaRef = useRef(null);
 
-    // --- LÓGICA DE CARREGAMENTO ---
+// --- LÓGICA DE CARREGAMENTO ---
     useEffect(() => {
         if (!userData || !currentUser) return;
+        
         const carregarLojas = async () => {
             let listaIds = [];
-            if (userData.estabelecimentosGerenciados && Array.isArray(userData.estabelecimentosGerenciados)) listaIds = userData.estabelecimentosGerenciados;
-            else if (currentUser.uid) listaIds = [currentUser.uid];
+            
+            if (userData.estabelecimentoId) {
+                listaIds = [userData.estabelecimentoId];
+            } else if (userData.estabelecimentosGerenciados && Array.isArray(userData.estabelecimentosGerenciados)) {
+                listaIds = userData.estabelecimentosGerenciados;
+            } else if (currentUser.uid) {
+                listaIds = [currentUser.uid];
+            }
+
             if (listaIds.length === 0) return;
+
             const promessas = listaIds.map(async (id) => {
-                try { const docRef = doc(db, 'estabelecimentos', id); const docSnap = await getDoc(docRef); return { id, nome: docSnap.exists() ? (docSnap.data().nome || 'Loja Sem Nome') : 'Loja Desconhecida' }; } catch (e) { return { id, nome: 'Erro' }; }
+                try { 
+                    const docRef = doc(db, 'estabelecimentos', id); 
+                    const docSnap = await getDoc(docRef); 
+                    
+                    // 👇 AQUI ESTÁ A MAGIA: Só retorna a loja se ela REALMENTE existir no Firebase
+                    if (docSnap.exists()) {
+                        return { 
+                            id, 
+                            nome: docSnap.data().nome || 'Loja Sem Nome' 
+                        };
+                    }
+                    // Se não existir, retorna nulo para ignorar a loja "fantasma"
+                    return null; 
+                } catch (e) { 
+                    return null; 
+                }
             });
-            const lojasCarregadas = await Promise.all(promessas);
+
+            // Remove todos os "null" (lojas apagadas) da lista
+            let lojasCarregadas = (await Promise.all(promessas)).filter(loja => loja !== null);
+            
+            // 👇 TRAVA DE SEGURANÇA: Se a pessoa tem estabelecimentoId fixo, força apenas a 1ª loja
+            if (userData.estabelecimentoId && lojasCarregadas.length > 0) {
+                lojasCarregadas = [lojasCarregadas[0]];
+            }
+
             setEstabelecimentos(lojasCarregadas);
-            if (!estabelecimentoAtivo && lojasCarregadas.length > 0) { setEstabelecimentoAtivo(lojasCarregadas[0].id); setNomeLoja(lojasCarregadas[0].nome); }
+            
+            if (!estabelecimentoAtivo && lojasCarregadas.length > 0) { 
+                setEstabelecimentoAtivo(lojasCarregadas[0].id); 
+                setNomeLoja(lojasCarregadas[0].nome); 
+            }
         };
+        
         carregarLojas();
     }, [userData, currentUser]);
-
     const trocarLoja = (id) => { const loja = estabelecimentos.find(e => e.id === id); if (loja) { setEstabelecimentoAtivo(id); setNomeLoja(loja.nome); setCaixaAberto(null); setVendasBase([]); setProdutos([]); setVendasSuspensas([]); } };
 
     const vendasTurnoAtual = useMemo(() => {
