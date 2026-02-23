@@ -101,7 +101,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }
     }, [pedido, loading, erro, pedidoProp]);
 
-    // --- 3. CÁLCULOS FINANCEIROS (COM BLINDAGEM DE ARRAYS) ---
+    // --- 3. CÁLCULOS FINANCEIROS (COM BLINDAGEM DE ARRAYS E IDENTIFICAÇÃO DE DESCONTO OCULTO) ---
     const totais = useMemo(() => {
         if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
 
@@ -112,15 +112,24 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }, 0);
 
         const taxa = Number(pedido.taxaEntrega) || 0;
-        const desconto = Number(pedido.desconto) || 0;
-        const totalGeral = consumo + taxa - desconto;
+        let desconto = Number(pedido.desconto) || 0;
+        
+        // 🔥 A MÁGICA ACONTECE AQUI:
+        // Se o banco salvou um "totalFinal" com desconto, mas não salvou o campo "desconto",
+        // calculamos a diferença para não exibir o total errado na via impressa.
+        const totalNoBanco = Number(pedido.totalFinal) || 0;
+        if (desconto === 0 && totalNoBanco > 0 && totalNoBanco < (consumo + taxa)) {
+            desconto = (consumo + taxa) - totalNoBanco;
+        }
+
+        const totalGeral = consumo + taxa - Math.abs(desconto);
 
         const pagamentos = Array.isArray(pedido.pagamentosParciais) ? pedido.pagamentosParciais : [];
         const jaPago = pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
 
         const restante = Math.max(0, totalGeral - jaPago);
 
-        return { consumo, taxa, desconto, totalGeral, jaPago, restante };
+        return { consumo, taxa, desconto: Math.abs(desconto), totalGeral, jaPago, restante };
     }, [pedido]);
 
     // --- 4. AGRUPAMENTO DE ITENS (COM BLINDAGEM DE ARRAYS) ---
@@ -147,8 +156,12 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }, {});
     }, [pedido, modoImpressao]);
 
-    const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
-
+const formatMoney = (val) => {
+    return Number(val || 0).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
+};
     const formatarPagamento = (p) => {
         const metodo = p.formaPagamento || p.metodoPagamento || p.paymentMethod || '';
         const metodoString = String(metodo).toLowerCase().trim();
@@ -298,7 +311,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                         <div className="flex justify-between text-xs font-bold"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
                         
                         {totais.taxa > 0 && <div className="flex justify-between text-xs"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
-                        {totais.desconto > 0 && <div className="flex justify-between text-xs"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
+                        
+                        {/* DESTAQUE PARA O DESCONTO */}
+                        {totais.desconto > 0 && <div className="flex justify-between text-sm font-black uppercase border-y border-dashed border-black py-1 my-1"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
                         
                         {totais.jaPago > 0 ? (
                             <>

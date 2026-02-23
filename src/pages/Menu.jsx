@@ -24,7 +24,7 @@ function Menu() {
 
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen, closeWidget, openWidget } = useAI();
-    
+
     const [showAICenter, setShowAICenter] = useState(false);
     const [deveReabrirChat, setDeveReabrirChat] = useState(false);
 
@@ -41,7 +41,7 @@ function Menu() {
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
     const [complemento, setComplemento] = useState('');
-    
+
     const [taxaEntregaCalculada, setTaxaEntregaCalculada] = useState(0);
     const [isRetirada, setIsRetirada] = useState(false);
 
@@ -51,7 +51,7 @@ function Menu() {
 
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
-    
+
     // --- ESTADOS DO LOGIN ---
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [forceLogin, setForceLogin] = useState(false);
@@ -60,14 +60,14 @@ function Menu() {
 
     const [emailAuthModal, setEmailAuthModal] = useState('');
     const [passwordAuthModal, setPasswordAuthModal] = useState('');
-    
+
     const [nomeAuthModal, setNomeAuthModal] = useState('');
     const [telefoneAuthModal, setTelefoneAuthModal] = useState('');
     const [ruaAuthModal, setRuaAuthModal] = useState('');
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
-    
+
     const auth = getAuth();
 
     const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -76,7 +76,7 @@ function Menu() {
     const [couponLoading, setCouponLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
-    
+
     const [showRaspadinha, setShowRaspadinha] = useState(false);
     const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
     const [premioRaspadinha, setPremioRaspadinha] = useState(null);
@@ -92,7 +92,7 @@ function Menu() {
     const [processandoPagamento, setProcessandoPagamento] = useState(false);
 
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
-        primaria: '#EA1D2C', 
+        primaria: '#EA1D2C',
         destaque: '#059669',
         background: '#f9fafb',
         texto: {
@@ -141,13 +141,13 @@ function Menu() {
     }, []);
 
     const handleCategoryClick = (cat) => {
-        setSelectedCategory(cat); 
+        setSelectedCategory(cat);
         if (cat === 'Todos') {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
             const element = document.getElementById(`categoria-${cat}`);
             if (element) {
-                const headerOffset = 180; 
+                const headerOffset = 180;
                 const elementPosition = element.getBoundingClientRect().top;
                 const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
                 window.scrollTo({ top: offsetPosition, behavior: "smooth" });
@@ -156,17 +156,17 @@ function Menu() {
     };
 
     const handleAbrirLogin = () => { setIsRegisteringInModal(false); setShowLoginPrompt(true); };
-    
+
     // 🔥 LÓGICA DE LOGIN REAL 🔥
-    const handleLoginModal = async (e) => { 
-        e.preventDefault(); 
-        setLoginLoading(true); 
-        try { 
-            await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
+    const handleLoginModal = async (e) => {
+        e.preventDefault();
+        setLoginLoading(true);
+        try {
+            await signInWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
             toast.success("Login realizado com sucesso!");
-            setShowLoginPrompt(false); 
-            verificarReaberturaChat(); 
-        } catch (error) { 
+            setShowLoginPrompt(false);
+            verificarReaberturaChat();
+        } catch (error) {
             console.error("Erro login:", error);
             if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
                 toast.error("E-mail ou senha incorretos.");
@@ -176,24 +176,24 @@ function Menu() {
                 toast.error("Erro ao entrar: " + error.message);
             }
         } finally {
-            setLoginLoading(false); 
+            setLoginLoading(false);
         }
     };
-    
+
     // 🔥 LÓGICA DE CADASTRO REAL 🔥
-    const handleRegisterModal = async (e) => { 
-        e.preventDefault(); 
+    const handleRegisterModal = async (e) => {
+        e.preventDefault();
         setLoginLoading(true);
-        try { 
-            const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal); 
+        try {
+            const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
             await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { email: emailAuthModal, nome: nomeAuthModal, isAdmin: false, isMasterAdmin: false, estabelecimentos: [], estabelecimentosGerenciados: [], criadoEm: Timestamp.now() });
-            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal || '', numero: numeroAuthModal || '', bairro: bairroAuthModal || '', cidade: cidadeAuthModal || '' }, criadoEm: Timestamp.now() }); 
-            toast.success("Conta criada!"); setShowLoginPrompt(false); verificarReaberturaChat(); 
-        } catch (error) { 
+            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal || '', numero: numeroAuthModal || '', bairro: bairroAuthModal || '', cidade: cidadeAuthModal || '' }, criadoEm: Timestamp.now() });
+            toast.success("Conta criada!"); setShowLoginPrompt(false); verificarReaberturaChat();
+        } catch (error) {
             if (error.code === 'auth/email-already-in-use') {
                 toast.error("Este e-mail já está cadastrado.");
             } else {
-                toast.error("Erro ao criar conta: " + error.message); 
+                toast.error("Erro ao criar conta: " + error.message);
             }
         } finally {
             setLoginLoading(false);
@@ -275,7 +275,7 @@ function Menu() {
         try {
             const cardapioRef = collection(db, 'estabelecimentos', estabId, 'cardapio');
             const snapshot = await getDocs(cardapioRef);
-            
+
             if (snapshot.empty) return [];
 
             const categoriasDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -284,7 +284,7 @@ function Menu() {
             const promessasCategorias = categoriasAtivas.map(async (cat) => {
                 const itensRef = collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'itens');
                 const produtosRef = collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'produtos');
-                
+
                 const [itensSnap, produtosSnap] = await Promise.all([
                     getDocs(query(itensRef, where('ativo', '==', true))),
                     getDocs(query(produtosRef, where('ativo', '==', true)))
@@ -370,16 +370,16 @@ function Menu() {
 
     const handleAdicionarRapido = (item) => {
         if (!currentUser) { handleAbrirLogin(); return; }
-        
+
         const precoBase = item.precoFinal !== undefined ? item.precoFinal : item.preco;
         const preco = Number(precoBase) || 0;
 
-        setCarrinho(prev => [...prev, { 
-            ...item, 
-            qtd: 1, 
-            cartItemId: uuidv4(), 
+        setCarrinho(prev => [...prev, {
+            ...item,
+            qtd: 1,
+            cartItemId: uuidv4(),
             precoFinal: preco,
-            observacao: '' 
+            observacao: ''
         }]);
         toast.success(`✅ ${item.nome} adicionado!`);
 
@@ -395,36 +395,36 @@ function Menu() {
         const temVariacao = itemComAdicionais.variacoes && itemComAdicionais.variacoes.length > 0;
         const temAdicional = itemComAdicionais.adicionais && itemComAdicionais.adicionais.length > 0;
 
-        if (temVariacao || temAdicional) { 
-            setItemParaVariacoes(itemComAdicionais); 
-        } else { 
-            handleAdicionarRapido(itemComAdicionais); 
+        if (temVariacao || temAdicional) {
+            setItemParaVariacoes(itemComAdicionais);
+        } else {
+            handleAdicionarRapido(itemComAdicionais);
         }
     };
 
     const handleAbrirModalProduto = (item) => {
         if (!currentUser) { toast.info('Faça login para continuar.'); handleAbrirLogin(); return; }
-        
+
         const itemLimpo = { ...item, observacao: '' };
         const itemComAdicionais = enrichWithGlobalAdicionais(itemLimpo);
 
         const temVariacao = itemComAdicionais.variacoes && itemComAdicionais.variacoes.length > 0;
         const temAdicional = itemComAdicionais.adicionais && itemComAdicionais.adicionais.length > 0;
 
-        if (temVariacao || temAdicional) { 
-            setItemParaVariacoes(itemComAdicionais); 
-        } else { 
-            handleAdicionarRapido(itemComAdicionais); 
+        if (temVariacao || temAdicional) {
+            setItemParaVariacoes(itemComAdicionais);
+        } else {
+            handleAdicionarRapido(itemComAdicionais);
         }
     };
 
     const handleConfirmarVariacoes = (itemConfigurado) => {
         const preco = Number(itemConfigurado.precoFinal || 0);
-        setCarrinho(prev => [...prev, { 
-            ...itemConfigurado, 
-            qtd: 1, 
-            cartItemId: uuidv4(), 
-            precoFinal: preco 
+        setCarrinho(prev => [...prev, {
+            ...itemConfigurado,
+            qtd: 1,
+            cartItemId: uuidv4(),
+            precoFinal: preco
         }]);
         setItemParaVariacoes(null);
         toast.success(`✅ ${itemConfigurado.nome} adicionado!`);
@@ -448,12 +448,63 @@ function Menu() {
 
     const handleAdicionarPorIA = useCallback((dadosDoChat) => { return 'ADDED'; }, [allProdutos, currentUser]);
     const handleLogout = async () => { try { await logout(); setCarrinho([]); window.location.reload(); } catch (e) { console.error(e); } };
-    const handleApplyCoupon = async () => { /* ... */ };
+    const handleApplyCoupon = async () => {
+        if (!couponCodeInput) return;
+        setCouponLoading(true);
+        try {
+            const cuponsRef = collection(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons');
+            const q = query(cuponsRef, where('codigo', '==', couponCodeInput.trim().toUpperCase()), where('ativo', '==', true));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                toast.error("Cupom inválido ou expirado.");
+                setCouponLoading(false);
+                return;
+            }
+
+            const cupomData = querySnapshot.docs[0].data();
+            const agora = new Date();
+
+            // Validar datas
+            if (cupomData.validadeFim.toDate() < agora) {
+                toast.error("Este cupom já expirou.");
+                setCouponLoading(false);
+                return;
+            }
+
+            // Validar valor mínimo
+            if (cupomData.minimoPedido && subtotalCalculado < cupomData.minimoPedido) {
+                toast.warn(`O valor mínimo para este cupom é ${formatarMoeda(cupomData.minimoPedido)}`);
+                setCouponLoading(false);
+                return;
+            }
+
+            // Calcular desconto
+            let valorDesc = 0;
+            if (cupomData.tipoDesconto === 'percentual') {
+                valorDesc = (subtotalCalculado * cupomData.valorDesconto) / 100;
+            } else if (cupomData.tipoDesconto === 'valorFixo') {
+                valorDesc = cupomData.valorDesconto;
+            } else if (cupomData.tipoDesconto === 'freteGratis') {
+                valorDesc = taxaAplicada;
+            }
+
+            setAppliedCoupon(cupomData);
+            setDiscountAmount(valorDesc);
+            toast.success("Cupom aplicado com sucesso!");
+
+        } catch (error) {
+            console.error("Erro cupom:", error);
+            toast.error("Erro ao validar cupom.");
+        } finally {
+            setCouponLoading(false);
+        }
+    };
 
     const prepararParaPagamento = () => {
         if (!currentUser) return handleAbrirLogin();
         if (carrinho.length === 0) return toast.warn('Carrinho vazio.');
-        
+
         if (!nomeCliente.trim()) {
             toast.error("Por favor, preencha seu NOME.");
             document.getElementById('input-nome')?.focus();
@@ -497,7 +548,7 @@ function Menu() {
     };
 
     const baixarEstoque = async (itensVendidos) => { /* ... */ };
-    
+
     // 🔥 LÓGICA CORRIGIDA: SALVA NO BANCO CORRETO COM PAGAMENTO CERTO
     const handlePagamentoSucesso = async (result) => {
         setProcessandoPagamento(true);
@@ -513,35 +564,35 @@ function Menu() {
                 formaPagamento = result.details.type || 'cartao';
             } else if (result.method === 'cash') {
                 formaPagamento = 'dinheiro';
-                trocoPara = result.details.trocoPara || ''; 
+                trocoPara = result.details.trocoPara || '';
             }
 
-            const pedidoFinal = cleanData({ 
-                ...pedidoParaPagamento, 
-                status: 'recebido', 
-                formaPagamento, 
-                metodoPagamento: formaPagamento, // Redundancia
-                trocoPara,
+            const pedidoFinal = cleanData({
+                ...pedidoParaPagamento,
+                status: 'recebido',
+                formaPagamento,
+                desconto: discountAmount, // 👈 ADICIONE ESTA LINHA
+                totalFinal: finalOrderTotal, // Garante que o total com desconto seja salvo
                 tipoEntrega: isRetirada ? 'retirada' : 'delivery'
             });
 
             // --- 2. Salvar no Caminho Certo (Estabelecimento) ---
             if (!actualEstabelecimentoId) throw new Error("ID do estabelecimento não encontrado");
-            
+
             // 🔥 CORREÇÃO: Salva na coleção aninhada
             const docRef = await addDoc(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos'), pedidoFinal);
-            
+
             try { await baixarEstoque(pedidoParaPagamento.itens); } catch (errEstoque) { console.warn("Erro estoque:", errEstoque); }
-            
+
             setConfirmedOrderDetails({ id: docRef.id });
             setShowOrderConfirmationModal(true);
             setCarrinho([]);
             setShowPaymentModal(false);
-        } catch (e) { 
-            console.error("Erro:", e); 
-            toast.error("Erro ao salvar pedido."); 
-        } finally { 
-            setProcessandoPagamento(false); 
+        } catch (e) {
+            console.error("Erro:", e);
+            toast.error("Erro ao salvar pedido.");
+        } finally {
+            setProcessandoPagamento(false);
         }
     };
 
@@ -563,16 +614,16 @@ function Menu() {
                 setEstabelecimentoInfo({ ...data, id });
                 setActualEstabelecimentoId(id);
                 setNomeEstabelecimento(data.nome);
-                
+
                 if (data.cores) {
                     let coresVindas = data.cores;
                     if (coresVindas.primaria && coresVindas.primaria.toLowerCase() === '#ffffff') {
-                        coresVindas.primaria = '#EA1D2C'; 
+                        coresVindas.primaria = '#EA1D2C';
                         coresVindas.texto = { ...coresVindas.texto, principal: '#111827' };
                     }
                     setCoresEstabelecimento(coresVindas);
                 }
-                
+
                 if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
                 setAllProdutos(prods);
             } catch (err) { console.error(err); } finally { setLoading(false); }
@@ -643,9 +694,9 @@ function Menu() {
                 {estabelecimentoInfo && (
                     <div className="rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative" style={{ backgroundColor: coresEstabelecimento.primaria }}>
                         <div className="absolute top-4 right-4 z-10">
-                             {currentUser && (
+                            {currentUser && (
                                 <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-white px-3 py-1 rounded-full border border-red-100 hover:bg-gray-100 transition-colors"><IoLogOutOutline size={18} /><span>Sair</span></button>
-                             )}
+                            )}
                         </div>
                         <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-4 border-white bg-white" alt="Logo" />
                         <div className="flex-1 text-white">
@@ -678,11 +729,11 @@ function Menu() {
                             <div className="grid gap-4 md:grid-cols-2">
                                 {items.slice(0, visible).map(item => (
                                     <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 p-2">
-                                        <CardapioItem 
-                                            item={item} 
-                                            onAddItem={() => handleAbrirModalProduto(item)} 
-                                            onPurchase={() => handleComprarAgora(item)} 
-                                            coresEstabelecimento={coresEstabelecimento} 
+                                        <CardapioItem
+                                            item={item}
+                                            onAddItem={() => handleAbrirModalProduto(item)}
+                                            onPurchase={() => handleComprarAgora(item)}
+                                            coresEstabelecimento={coresEstabelecimento}
                                         />
                                     </div>
                                 ))}
@@ -695,8 +746,8 @@ function Menu() {
                 {/* RESUMO E DADOS */}
                 <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
                     <div className="bg-white p-6 rounded-xl border shadow-lg text-left w-full">
-                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
-                         <div className="space-y-4">
+                        <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
+                        <div className="space-y-4">
                             <input id="input-nome" className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Nome *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} />
                             <input id="input-telefone" className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Telefone *" value={telefoneCliente} onChange={e => setTelefoneCliente(e.target.value)} />
                             {!isRetirada && (
@@ -717,7 +768,7 @@ function Menu() {
 
                     <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900 w-full transition-all duration-300">
                         <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                            <IoCart className="text-green-600"/> Resumo do Pedido
+                            <IoCart className="text-green-600" /> Resumo do Pedido
                         </h3>
                         {carrinho.length === 0 ? <p className="text-gray-500 py-4 text-center">Seu carrinho está vazio.</p> : (
                             <>
@@ -749,6 +800,55 @@ function Menu() {
                                 </button>
                             </>
                         )}
+                        {/* --- ÁREA DE CUPOM DE DESCONTO --- */}
+                        <div className="mt-6 mb-4 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Cupom de Desconto</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Possui um código?"
+                                    value={couponCodeInput}
+                                    onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                                    className="flex-1 p-2 border rounded-lg text-sm"
+                                    disabled={appliedCoupon}
+                                />
+                                <button
+                                    onClick={handleApplyCoupon}
+                                    disabled={couponLoading || !couponCodeInput || appliedCoupon}
+                                    className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold disabled:opacity-50"
+                                >
+                                    {couponLoading ? '...' : appliedCoupon ? 'Aplicado' : 'Aplicar'}
+                                </button>
+                            </div>
+                            {appliedCoupon && (
+                                <div className="flex justify-between items-center mt-2">
+                                    <span className="text-xs text-green-600 font-bold">✅ Cupom {appliedCoupon.codigo} ativo</span>
+                                    <button
+                                        onClick={() => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); }}
+                                        className="text-xs text-red-500 underline"
+                                    >
+                                        Remover
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* --- EXIBIÇÃO DO DESCONTO NO TOTAL --- */}
+                        <div className="border-t pt-4 space-y-2 text-sm">
+                            <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
+
+                            {/* ADICIONE ESTA LINHA ABAIXO */}
+                            {discountAmount > 0 && (
+                                <div className="flex justify-between text-green-600 font-bold">
+                                    <span>Desconto:</span>
+                                    <span>- R$ {discountAmount.toFixed(2)}</span>
+                                </div>
+                            )}
+
+                            {!isRetirada && <div className="flex justify-between"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
+                            {/* ... resto do código do total ... */}
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -756,13 +856,13 @@ function Menu() {
             {/* BARRA FIXA */}
             {carrinho.length > 0 && !isWidgetOpen && (
                 <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] z-[49] flex items-center justify-between animate-slide-up"
-                     style={{ backgroundColor: '#ffffff' }}>
+                    style={{ backgroundColor: '#ffffff' }}>
                     <div className="flex flex-col">
                         <span className="text-xs text-gray-500 font-bold uppercase">Total a Pagar</span>
                         <span className="text-2xl font-black text-gray-900">{formatarMoeda(finalOrderTotal)}</span>
                         <span className="text-xs text-green-600 font-medium">{carrinho.length} itens</span>
                     </div>
-                    <button 
+                    <button
                         onClick={scrollToResumo}
                         className="px-6 py-3 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg active:scale-95 transition-transform"
                         style={{ backgroundColor: coresEstabelecimento.primaria }}
@@ -777,11 +877,11 @@ function Menu() {
             <AIWidgetButton bottomOffset={carrinho.length > 0 ? '100px' : '24px'} />
 
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
-            
+
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} onSuccess={handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
-            
+
             {/* 🔥 MODAL DE LOGIN 🔥 */}
             {showLoginPrompt && (
                 <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 text-gray-900">
@@ -815,7 +915,7 @@ function Menu() {
                     </div>
                 </div>
             )}
-            
+
             <style>{`
                 @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
                 .animate-slide-up { animation: slide-up 0.3s ease-out; }
