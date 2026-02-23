@@ -1247,14 +1247,23 @@ const PdvScreen = () => {
                                     </select>
                                 ) : (<h1 className="text-xl font-bold text-gray-800 mt-1 tracking-tight truncate">{nomeLoja}</h1>)}
                             </div>
+<div className="flex items-center gap-3 w-full md:w-auto">
+    {/* 👇 BOTÃO VOLTAR ADICIONADO AQUI 👇 */}
+    <button 
+        onClick={() => navigate('/dashboard')} 
+        className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all border border-gray-200 shrink-0 flex items-center gap-2 font-bold text-sm shadow-sm" 
+        title="Voltar ao Dashboard"
+    >
+        <span className="text-lg">🔙</span> <span className="hidden sm:inline">Voltar</span>
+    </button>
 
-                            <div className="flex items-center gap-3 w-full md:w-auto">
-                                <button onClick={() => navigate('/admin/config-fiscal')} className="p-3 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-emerald-600 rounded-xl transition-all border border-gray-100 shrink-0" title="Configurações Fiscais">⚙️</button>
-                                <div className="relative group w-full md:w-96">
-                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 group-focus-within:text-emerald-600 transition-colors">🔍</span>
-                                    <input ref={inputBuscaRef} type="text" placeholder="Buscar Produto (F1) ou Bipe o código..." className="w-full pl-10 pr-4 py-3 bg-gray-100 border border-transparent rounded-xl text-sm font-medium text-gray-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all placeholder-gray-400 shadow-inner focus:shadow-none" value={busca} onChange={e => setBusca(e.target.value)} />
-                                </div>
-                            </div>
+    <button onClick={() => navigate('/admin/config-fiscal')} className="p-3 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-emerald-600 rounded-xl transition-all border border-gray-100 shrink-0" title="Configurações Fiscais">⚙️</button>
+    
+    <div className="relative group w-full md:w-96">
+        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 group-focus-within:text-emerald-600 transition-colors">🔍</span>
+        <input ref={inputBuscaRef} type="text" placeholder="Buscar Produto (F1) ou Bipe o código..." className="w-full pl-10 pr-4 py-3 bg-gray-100 border border-transparent rounded-xl text-sm font-medium text-gray-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all placeholder-gray-400 shadow-inner focus:shadow-none" value={busca} onChange={e => setBusca(e.target.value)} />
+    </div>
+</div>
                         </div>
 
                         <div className="px-6 py-4 flex gap-3 overflow-x-auto scrollbar-hide shrink-0 border-b border-gray-200 bg-white">
