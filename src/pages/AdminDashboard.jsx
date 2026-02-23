@@ -140,7 +140,14 @@ const AdminDashboard = () => {
               />
             </Link>
           )}
-
+<Link to="/admin/cupons" className="h-full">
+  <ActionButton
+    title="Cupons de Desconto"
+    subtitle="Crie e gerencie códigos promocionais para seus clientes"
+    icon="🎫"
+    colorClass="hover:border-yellow-500 hover:bg-yellow-50"
+  />
+</Link>
           {/* BOTÃO 4: Cardápio Digital */}
           {temPermissao('visualizar-cardapio') && (
             <Link to="/admin/gerenciar-cardapio" className="h-full">
