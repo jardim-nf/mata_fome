@@ -148,6 +148,25 @@ const AdminDashboard = () => {
     colorClass="hover:border-yellow-500 hover:bg-yellow-50"
   />
 </Link>
+
+    <Link to="/admin/entregadores" className="h-full">
+                <ActionButton
+                  title="Entregadores"
+                  subtitle="Gerencie motoboys, rotas e comissões"
+                  icon={<FaMotorcycle className="text-orange-600" />}
+                  colorClass="hover:border-orange-600 hover:bg-orange-50"
+                />
+              </Link>
+
+     <Link to="/admin/taxas-de-entrega" className="h-full">
+                <ActionButton
+                  title="Taxas de Entrega"
+                  subtitle="Configure valores de frete por bairro e ações em lote"
+                  icon="🛵"
+                  colorClass="hover:border-amber-500 hover:bg-amber-50"
+                />
+              </Link>
+
           {/* BOTÃO 4: Cardápio Digital */}
           {temPermissao('visualizar-cardapio') && (
             <Link to="/admin/gerenciar-cardapio" className="h-full">
@@ -204,15 +223,7 @@ const AdminDashboard = () => {
                 />
               </Link>
               
-              <Link to="/admin/taxas-de-entrega" className="h-full">
-                <ActionButton
-                  title="Taxas de Entrega"
-                  subtitle="Configure valores de frete por bairro e ações em lote"
-                  icon="🛵"
-                  colorClass="hover:border-amber-500 hover:bg-amber-50"
-                />
-              </Link>
-
+         
               <Link to="/admin/analytics" className="h-full">
                 <ActionButton
                   title="Produtividade"
@@ -240,14 +251,7 @@ const AdminDashboard = () => {
                 />
               </Link>
 
-              <Link to="/admin/entregadores" className="h-full">
-                <ActionButton
-                  title="Entregadores"
-                  subtitle="Gerencie motoboys, rotas e comissões"
-                  icon={<FaMotorcycle className="text-orange-600" />}
-                  colorClass="hover:border-orange-600 hover:bg-orange-50"
-                />
-              </Link>
+          
               
               <Link to="/admin/reports" className="h-full">
                 <ActionButton
