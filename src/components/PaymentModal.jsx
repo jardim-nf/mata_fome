@@ -15,9 +15,11 @@ const sanitizeText = (text) => {
 
 const sanitizeKey = (key) => {
     if (!key) return '';
-    return key.trim().replace(/[^a-zA-Z0-9@.]/g, "");
+    
+    // 🔥 CORREÇÃO: Adicionado o \- e o \+ para permitir traços e o sinal de mais (+)
+    let cleanKey = key.trim().replace(/[^a-zA-Z0-9@.\-+]/g, "");
+    return cleanKey;
 };
-
 // --- GERADOR DE PAYLOAD PIX (EMVCo) ---
 const generatePixPayload = ({ key, name, city, transactionId, amount }) => {
     const cleanKey = sanitizeKey(key);

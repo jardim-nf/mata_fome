@@ -567,15 +567,19 @@ function Menu() {
                 trocoPara = result.details.trocoPara || '';
             }
 
-            const pedidoFinal = cleanData({
+const pedidoFinal = cleanData({
                 ...pedidoParaPagamento,
                 status: 'recebido',
                 formaPagamento,
-                desconto: discountAmount, // 👈 ADICIONE ESTA LINHA
-                totalFinal: finalOrderTotal, // Garante que o total com desconto seja salvo
+                metodoPagamento: formaPagamento, // Mantém a compatibilidade
+                
+                // 👇 AQUI ESTÃO OS DADOS DO TROCO E DESCONTO 👇
+                trocoPara: Number(trocoPara) || 0,
+                desconto: discountAmount, 
+                totalFinal: finalOrderTotal, 
+                
                 tipoEntrega: isRetirada ? 'retirada' : 'delivery'
             });
-
             // --- 2. Salvar no Caminho Certo (Estabelecimento) ---
             if (!actualEstabelecimentoId) throw new Error("ID do estabelecimento não encontrado");
 
