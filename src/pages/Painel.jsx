@@ -189,15 +189,15 @@ function Painel() {
             return date >= startOfToday;
         };
 
-        const checkAutoPrint = (change) => {
+const checkAutoPrint = (change) => {
             const data = change.doc.data();
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
-                // 👇 VERIFICA SE ESTE PEDIDO JÁ PASSOU PELA IMPRESSORA 👇
+                // 👇 AGORA SIM, ELE VERIFICA A MEMÓRIA ANTES DE IMPRIMIR 👇
                 if (!pedidosJaImpressos.current.has(pedidoId)) {
-                    pedidosJaImpressos.current.add(pedidoId); // Marca como já enviado para impressão
+                    pedidosJaImpressos.current.add(pedidoId); // Marca como impresso
                     setPrintQueue(prev => prev.includes(pedidoId) ? prev : [...prev, pedidoId]);
                 }
             }
