@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
@@ -37,7 +37,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
             {pedidosAgrupados.map((grupo, index) => (
                 <div key={`grupo-${grupo.mesaNumero}-${index}`} className="border border-amber-200 rounded-xl bg-amber-50/30 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                     <div className="bg-white px-4 py-3 border-b border-amber-100 flex justify-between items-center">
-                        <div className="flex items-center gap-3"><span className="font-bold text-gray-900 text-lg flex items-center gap-2"><IoRestaurant className="text-amber-500" /> Mesa {grupo.mesaNumero}</span>{grupo.loteHorario && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full flex items-center gap-1 font-mono"><IoTime className="w-3 h-3"/> {grupo.loteHorario}</span>}</div>
+                        <div className="flex items-center gap-3"><span className="font-bold text-gray-900 text-lg flex items-center gap-2"><IoRestaurant className="text-amber-500" /> Mesa {grupo.mesaNumero}</span>{grupo.loteHorario && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full flex items-center gap-1 font-mono"><IoTime className="w-3 h-3" /> {grupo.loteHorario}</span>}</div>
                         <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">{grupo.totalItens} itens</span>
                     </div>
                     <div className="p-3 space-y-3 bg-gray-50/50">
@@ -52,25 +52,26 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
 };
 
 function Painel() {
-    const navigate = useNavigate(); 
+    const navigate = useNavigate();
     const audioRef = useRef(null);
     const { loading: authLoading, estabelecimentosGerenciados } = useAuth();
-    
+
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
     const [loading, setLoading] = useState(true);
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [userInteracted, setUserInteracted] = useState(false);
     const [newOrderIds, setNewOrderIds] = useState(new Set());
-    const [abaAtiva, setAbaAtiva] = useState('delivery'); 
+    const [abaAtiva, setAbaAtiva] = useState('delivery');
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
-    
-    const [printQueue, setPrintQueue] = useState([]); 
+
+    const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
+    const pedidosJaImpressos = useRef(new Set());
 
     const dataHojeFormatada = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
     const estabelecimentoAtivo = useMemo(() => estabelecimentosGerenciados?.[0] || null, [estabelecimentosGerenciados]);
@@ -79,7 +80,7 @@ function Painel() {
         setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
         setMotoboys([]);
         setNewOrderIds(new Set());
-        setPrintQueue([]); 
+        setPrintQueue([]);
         setEstabelecimentoInfo(null);
         setLoading(true);
     }, [estabelecimentoAtivo]);
@@ -93,33 +94,33 @@ function Painel() {
     // 🔥 FUNÇÃO INTELIGENTE: Decide se é "salao" ou "global" (delivery)
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
-        
+
         const clienteLimpo = limparDadosCliente(pedidoData.cliente);
         let endereco = pedidoData.endereco || {};
-        if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) { 
-            endereco = { ...endereco, ...clienteLimpo.endereco }; 
+        if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
+            endereco = { ...endereco, ...clienteLimpo.endereco };
         }
-        
+
         // 1. Verifica se já veio com 'source' definido (ex: 'salao' vindo da TelaPedidos)
         // 2. Se não tiver, tenta adivinhar pelo número da mesa
         let source = pedidoData.source;
         if (!source) {
-             source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
+            source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
         }
 
         // Define o tipo visual
         const tipo = pedidoData.tipo || (source === 'salao' ? 'salao' : 'delivery');
 
         return {
-            ...pedidoData, 
-            id: pedidoData.id, 
-            cliente: clienteLimpo, 
-            endereco: endereco, 
+            ...pedidoData,
+            id: pedidoData.id,
+            cliente: clienteLimpo,
+            endereco: endereco,
             source: source, // Usa a fonte definida corretamente
             tipo: tipo,
-            status: pedidoData.status || 'recebido', 
+            status: pedidoData.status || 'recebido',
             itens: pedidoData.itens || [],
-            mesaNumero: pedidoData.mesaNumero || 0, 
+            mesaNumero: pedidoData.mesaNumero || 0,
             loteHorario: pedidoData.loteHorario || ''
         };
     }, [limparDadosCliente]);
@@ -154,22 +155,22 @@ function Painel() {
         try {
             isUpdatingRef.current = true;
             setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
-            
+
             const allPedidos = Object.values(pedidos).flat();
             const pedidoAlvo = allPedidos.find(p => p.id === pedidoId);
             if (!pedidoAlvo) throw new Error("Pedido não localizado");
-            
+
             const path = `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`;
             const updatePayload = { status: newStatus, atualizadoEm: serverTimestamp() };
-            
+
             if (newStatus === 'preparo') updatePayload.dataPreparo = serverTimestamp();
             else if (newStatus === 'em_entrega') updatePayload.dataEntrega = serverTimestamp();
             else if (newStatus === 'pronto_para_servir') updatePayload.dataPronto = serverTimestamp();
             else if (newStatus === 'finalizado') updatePayload.dataFinalizado = serverTimestamp();
-            
+
             await updateDoc(doc(db, path), updatePayload);
             toast.success(`Status atualizado!`);
-        } catch (error) { toast.error("Erro ao mover pedido."); } 
+        } catch (error) { toast.error("Erro ao mover pedido."); }
         finally { setTimeout(() => { isUpdatingRef.current = false; setBloqueioAtualizacao(prev => { const novo = new Set(prev); novo.delete(pedidoId); return novo; }); }, 500); }
     }, [pedidos, estabelecimentoAtivo, bloqueioAtualizacao]);
 
@@ -178,21 +179,27 @@ function Painel() {
     // ==========================================
     useEffect(() => {
         if (authLoading || !estabelecimentoAtivo) return;
-        
-        const startOfToday = new Date(); 
-        startOfToday.setHours(0,0,0,0);
-        
-        const isToday = (timestamp) => { 
-            if (!timestamp) return true; 
-            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp); 
-            return date >= startOfToday; 
+
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const isToday = (timestamp) => {
+            if (!timestamp) return true;
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
+            return date >= startOfToday;
         };
 
         const checkAutoPrint = (change) => {
             const data = change.doc.data();
             const status = data.status || 'recebido';
+            const pedidoId = change.doc.id;
+
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
-                setPrintQueue(prev => prev.includes(change.doc.id) ? prev : [...prev, change.doc.id]);
+                // 👇 VERIFICA SE ESTE PEDIDO JÁ PASSOU PELA IMPRESSORA 👇
+                if (!pedidosJaImpressos.current.has(pedidoId)) {
+                    pedidosJaImpressos.current.add(pedidoId); // Marca como já enviado para impressão
+                    setPrintQueue(prev => prev.includes(pedidoId) ? prev : [...prev, pedidoId]);
+                }
             }
         };
 
@@ -200,36 +207,37 @@ function Painel() {
         getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo)).then(snap => { if (snap.exists()) setEstabelecimentoInfo(snap.data()); });
 
         let isFirstRun = true;
-        
+
         // 🔥 Agora escutamos APENAS a coleção de pedidos do estabelecimento
         const qPedidos = query(
-            collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), 
+            collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
             orderBy('createdAt', 'asc') // Garante ordem de chegada
         );
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) {
                 snapshot.docChanges().forEach(checkAutoPrint);
             }
-            
+
             const listaTodos = snapshot.docs
                 .map(d => processarDadosPedido({ id: d.id, ...d.data() }))
                 .filter(p => p && isToday(p.dataPedido || p.createdAt));
-            
+
             // Corrige status pendente visualmente
             listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento'].includes(p.status)) p.status = 'recebido'; });
-            
-            setPedidos(prev => ({ ...prev, 
+
+            setPedidos(prev => ({
+                ...prev,
                 recebido: listaTodos.filter(p => p.status === 'recebido'),
                 preparo: listaTodos.filter(p => p.status === 'preparo'),
                 em_entrega: listaTodos.filter(p => p.status === 'em_entrega'), // Delivery
                 pronto_para_servir: listaTodos.filter(p => p.status === 'pronto_para_servir'), // Salão
                 finalizado: listaTodos.filter(p => p.status === 'finalizado')
             }));
-            
+
             setLoading(false);
             isFirstRun = false;
         }));
-        
+
         return () => unsubscribers.forEach(u => u());
     }, [estabelecimentoAtivo, authLoading, processarDadosPedido]);
 
@@ -261,9 +269,9 @@ function Painel() {
             const height = 600;
             const left = (window.screen.width - width) / 2;
             const top = (window.screen.height - height) / 2;
-            
+
             const printWindow = window.open(url, `AutoPrint_${pedidoId}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
-            
+
             // Monitora quando a aba fechar (pelo window.close que colocamos no componente de impressão)
             if (printWindow) {
                 const timer = setInterval(() => {
@@ -277,7 +285,7 @@ function Painel() {
                 toast.warning("⚠️ Pop-up bloqueado! Permita os pop-ups no navegador para imprimir sozinho.");
                 // Força a fila a andar mesmo se estiver bloqueado, para não travar o sistema
                 setTimeout(() => {
-                    setPrintQueue(prev => prev.slice(1)); 
+                    setPrintQueue(prev => prev.slice(1));
                     setIsPrinting(false);
                 }, 2000);
             }
@@ -314,15 +322,15 @@ function Painel() {
                         const config = STATUS_UI[statusKey];
                         // 🔥 FILTRO INTELIGENTE DE ABA
                         let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
-                        
+
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
                         return (
                             <div key={statusKey} className={`flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px] md:h-[calc(100vh-140px)] border-t-4 ${config.color.replace('border-l-', 'border-t-')}`}>
                                 <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl"><h3 className="font-bold text-gray-700 uppercase text-sm">{config.title}</h3><span className={`${config.bg} text-white text-xs font-bold px-2 py-1 rounded-full`}>{listaPedidos.length}</span></div>
                                 <div className="flex-1 p-2 overflow-y-auto custom-scrollbar bg-gray-50/30">
-                                    {listaPedidos.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-gray-300"><div className="text-2xl mb-1">🍃</div><span className="text-sm">Vazio</span></div> : 
-                                    (abaAtiva === 'cozinha' ? <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} /> : 
-                                    <div className="space-y-3">{listaPedidos.map(pedido => <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} motoboysDisponiveis={motoboys} onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} />)}</div>)}
+                                    {listaPedidos.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-gray-300"><div className="text-2xl mb-1">🍃</div><span className="text-sm">Vazio</span></div> :
+                                        (abaAtiva === 'cozinha' ? <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} /> :
+                                            <div className="space-y-3">{listaPedidos.map(pedido => <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} motoboysDisponiveis={motoboys} onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} />)}</div>)}
                                 </div>
                             </div>
                         );
