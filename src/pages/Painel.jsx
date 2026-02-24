@@ -195,14 +195,24 @@ const checkAutoPrint = (change) => {
             const pedidoId = change.doc.id;
 
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
-                // 👇 AGORA SIM, ELE VERIFICA A MEMÓRIA ANTES DE IMPRIMIR 👇
-                if (!pedidosJaImpressos.current.has(pedidoId)) {
-                    pedidosJaImpressos.current.add(pedidoId); // Marca como impresso
+                
+                // 🔥 TRAVA NUCLEAR: Verifica o histórico do navegador inteiro (todas as abas)
+                const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
+
+                if (!pedidosJaImpressos.current.has(pedidoId) && !impressosLocal.includes(pedidoId)) {
+                    // 1. Marca na memória desta aba
+                    pedidosJaImpressos.current.add(pedidoId); 
+                    
+                    // 2. Marca na memória do navegador (para bloquear outras abas)
+                    impressosLocal.push(pedidoId);
+                    if (impressosLocal.length > 50) impressosLocal.shift(); // Guarda só os últimos 50
+                    localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
+
+                    // 3. Adiciona à fila
                     setPrintQueue(prev => prev.includes(pedidoId) ? prev : [...prev, pedidoId]);
                 }
             }
         };
-
         const unsubscribers = [];
         getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo)).then(snap => { if (snap.exists()) setEstabelecimentoInfo(snap.data()); });
 
@@ -256,12 +266,11 @@ const checkAutoPrint = (change) => {
         prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted]);
 
-    // 🔥 NOVO SISTEMA DE IMPRESSÃO VIA POP-UP CORRIGIDO
+// 🔥 NOVO SISTEMA DE IMPRESSÃO VIA POP-UP BLINDADO
     useEffect(() => {
         if (!isPrinting && printQueue.length > 0 && estabelecimentoAtivo) {
             setIsPrinting(true);
             const pedidoId = printQueue[0];
-            // 🔥 ATUALIZADO AQUI PARA A ROTA "/comanda/" 
             const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}`;
 
             // Abre o Pop-up visual
@@ -272,20 +281,20 @@ const checkAutoPrint = (change) => {
 
             const printWindow = window.open(url, `AutoPrint_${pedidoId}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
 
-            // Monitora quando a aba fechar (pelo window.close que colocamos no componente de impressão)
+            // Monitora quando a aba fechar
             if (printWindow) {
                 const timer = setInterval(() => {
                     if (printWindow.closed) {
                         clearInterval(timer);
-                        setPrintQueue(prev => prev.slice(1)); // Passa para o próximo da fila
+                        // Remove especificamente ESTE pedido da fila, evitando bugs do slice()
+                        setPrintQueue(prev => prev.filter(id => id !== pedidoId)); 
                         setIsPrinting(false);
                     }
                 }, 500);
             } else {
                 toast.warning("⚠️ Pop-up bloqueado! Permita os pop-ups no navegador para imprimir sozinho.");
-                // Força a fila a andar mesmo se estiver bloqueado, para não travar o sistema
                 setTimeout(() => {
-                    setPrintQueue(prev => prev.slice(1));
+                    setPrintQueue(prev => prev.filter(id => id !== pedidoId));
                     setIsPrinting(false);
                 }, 2000);
             }
