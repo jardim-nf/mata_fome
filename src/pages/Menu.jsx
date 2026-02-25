@@ -49,6 +49,9 @@ function Menu() {
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
+    // 🔥 NOVO ESTADO: Bairros Disponíveis do Estabelecimento
+    const [bairrosDisponiveis, setBairrosDisponiveis] = useState([]);
+
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
 
@@ -157,7 +160,6 @@ function Menu() {
 
     const handleAbrirLogin = () => { setIsRegisteringInModal(false); setShowLoginPrompt(true); };
 
-    // 🔥 LÓGICA DE LOGIN REAL 🔥
     const handleLoginModal = async (e) => {
         e.preventDefault();
         setLoginLoading(true);
@@ -180,14 +182,24 @@ function Menu() {
         }
     };
 
-    // 🔥 LÓGICA DE CADASTRO REAL 🔥
     const handleRegisterModal = async (e) => {
         e.preventDefault();
         setLoginLoading(true);
         try {
             const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
             await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { email: emailAuthModal, nome: nomeAuthModal, isAdmin: false, isMasterAdmin: false, estabelecimentos: [], estabelecimentosGerenciados: [], criadoEm: Timestamp.now() });
-            await setDocFirestore(doc(db, 'clientes', cred.user.uid), { nome: nomeAuthModal, telefone: telefoneAuthModal, email: emailAuthModal, endereco: { rua: ruaAuthModal || '', numero: numeroAuthModal || '', bairro: bairroAuthModal || '', cidade: cidadeAuthModal || '' }, criadoEm: Timestamp.now() });
+            await setDocFirestore(doc(db, 'clientes', cred.user.uid), {
+                nome: nomeAuthModal,
+                telefone: telefoneAuthModal,
+                email: emailAuthModal,
+                endereco: {
+                    rua: ruaAuthModal || '',
+                    numero: numeroAuthModal || '',
+                    bairro: bairroAuthModal || '', // Salva o bairro selecionado da lista
+                    cidade: cidadeAuthModal || ''
+                },
+                criadoEm: Timestamp.now()
+            });
             toast.success("Conta criada!"); setShowLoginPrompt(false); verificarReaberturaChat();
         } catch (error) {
             if (error.code === 'auth/email-already-in-use') {
@@ -515,8 +527,15 @@ function Menu() {
             document.getElementById('input-telefone')?.focus();
             return;
         }
+
+        // 🔥 NOVA VALIDAÇÃO DE BAIRRO
+        if (!isRetirada && !bairro) {
+            toast.error("Por favor, SELECIONE O BAIRRO para entrega.");
+            return;
+        }
+
         if (!isRetirada) {
-            if (!rua.trim() || !numero.trim() || !bairro.trim()) {
+            if (!rua.trim() || !numero.trim()) {
                 toast.error("Preencha o ENDEREÇO completo para entrega.");
                 document.getElementById('input-rua')?.focus();
                 return;
@@ -549,41 +568,34 @@ function Menu() {
 
     const baixarEstoque = async (itensVendidos) => { /* ... */ };
 
-    // 🔥 LÓGICA CORRIGIDA: SALVA NO BANCO CORRETO COM PAGAMENTO CERTO
     const handlePagamentoSucesso = async (result) => {
         setProcessandoPagamento(true);
         try {
-            // --- 1. Mapeamento do Pagamento ---
             let formaPagamento = 'A Combinar';
             let trocoPara = '';
 
             if (result.method === 'pix') {
                 formaPagamento = 'pix';
             } else if (result.method === 'card') {
-                // result.details.type vem como 'credito' ou 'debito'
                 formaPagamento = result.details.type || 'cartao';
             } else if (result.method === 'cash') {
                 formaPagamento = 'dinheiro';
                 trocoPara = result.details.trocoPara || '';
             }
 
-const pedidoFinal = cleanData({
+            const pedidoFinal = cleanData({
                 ...pedidoParaPagamento,
                 status: 'recebido',
                 formaPagamento,
-                metodoPagamento: formaPagamento, // Mantém a compatibilidade
-                
-                // 👇 AQUI ESTÃO OS DADOS DO TROCO E DESCONTO 👇
+                metodoPagamento: formaPagamento,
                 trocoPara: Number(trocoPara) || 0,
-                desconto: discountAmount, 
-                totalFinal: finalOrderTotal, 
-                
+                desconto: discountAmount,
+                totalFinal: finalOrderTotal,
                 tipoEntrega: isRetirada ? 'retirada' : 'delivery'
             });
-            // --- 2. Salvar no Caminho Certo (Estabelecimento) ---
+
             if (!actualEstabelecimentoId) throw new Error("ID do estabelecimento não encontrado");
 
-            // 🔥 CORREÇÃO: Salva na coleção aninhada
             const docRef = await addDoc(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos'), pedidoFinal);
 
             try { await baixarEstoque(pedidoParaPagamento.itens); } catch (errEstoque) { console.warn("Erro estoque:", errEstoque); }
@@ -630,6 +642,17 @@ const pedidoFinal = cleanData({
 
                 if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
                 setAllProdutos(prods);
+
+                // 🔥 BUSCAR BAIRROS PARA O SELECT
+                const taxasSnap = await getDocs(collection(db, 'estabelecimentos', id, 'taxasDeEntrega'));
+                const bairrosList = [];
+                taxasSnap.forEach(doc => {
+                    bairrosList.push(doc.data().nomeBairro);
+                });
+                // Remove duplicados e ordena alfabeticamente
+                const bairrosUnicos = [...new Set(bairrosList)].sort();
+                setBairrosDisponiveis(bairrosUnicos);
+
             } catch (err) { console.error(err); } finally { setLoading(false); }
         };
         load();
@@ -760,7 +783,19 @@ const pedidoFinal = cleanData({
                                         <input id="input-rua" className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Rua *" value={rua} onChange={e => setRua(e.target.value)} />
                                         <input className="w-full p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
                                     </div>
-                                    <input className="w-full p-3 rounded border text-gray-900 text-base" placeholder="Bairro *" value={bairro} onChange={e => setBairro(e.target.value)} />
+
+                                    {/* 🔥 O INPUT DE BAIRRO FOI TROCADO POR UM SELECT 🔥 */}
+                                    <select
+                                        className="w-full p-3 rounded border text-gray-900 text-base bg-white"
+                                        value={bairro}
+                                        onChange={e => setBairro(e.target.value)}
+                                    >
+                                        <option value="">Selecione o Bairro *</option>
+                                        {bairrosDisponiveis.map(b => (
+                                            <option key={b} value={b}>{b}</option>
+                                        ))}
+                                    </select>
+
                                 </div>
                             )}
                             <div className="flex gap-2">
@@ -769,7 +804,38 @@ const pedidoFinal = cleanData({
                             </div>
                         </div>
                     </div>
-
+            {/* --- ÁREA DE CUPOM DE DESCONTO --- */}
+                                <div className="mt-6 mb-4 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Cupom de Desconto</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Possui um código?"
+                                            value={couponCodeInput}
+                                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                                            className="flex-1 p-2 border rounded-lg text-sm"
+                                            disabled={appliedCoupon}
+                                        />
+                                        <button
+                                            onClick={handleApplyCoupon}
+                                            disabled={couponLoading || !couponCodeInput || appliedCoupon}
+                                            className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold disabled:opacity-50"
+                                        >
+                                            {couponLoading ? '...' : appliedCoupon ? 'Aplicado' : 'Aplicar'}
+                                        </button>
+                                    </div>
+                                    {appliedCoupon && (
+                                        <div className="flex justify-between items-center mt-2">
+                                            <span className="text-xs text-green-600 font-bold">✅ Cupom {appliedCoupon.codigo} ativo</span>
+                                            <button
+                                                onClick={() => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); }}
+                                                className="text-xs text-red-500 underline"
+                                            >
+                                                Remover
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                     <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900 w-full transition-all duration-300">
                         <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                             <IoCart className="text-green-600" /> Resumo do Pedido
@@ -795,64 +861,50 @@ const pedidoFinal = cleanData({
                                     ))}
                                 </div>
                                 <div className="border-t pt-4 space-y-2 text-sm">
-                                    <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
-                                    {!isRetirada && <div className="flex justify-between"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
-                                    <div className="flex justify-between text-xl font-bold pt-4 border-t" style={{ color: coresEstabelecimento.destaque }}><span>Total:</span> <span>R$ {finalOrderTotal.toFixed(2)}</span></div>
+                                    <div className="flex justify-between">
+                                        <span>Subtotal:</span> 
+                                        <span>R$ {subtotalCalculado.toFixed(2)}</span>
+                                    </div>
+                                    
+                                    {/* 🔥 ADICIONADO: Linha da Taxa de Entrega 🔥 */}
+                                    {!isRetirada && (
+                                        <div className="flex justify-between text-gray-700">
+                                            <span>Taxa de Entrega:</span>
+                                            <span>
+                                                {bairro && bairrosDisponiveis.includes(bairro) 
+                                                    ? (taxaAplicada > 0 ? `R$ ${taxaAplicada.toFixed(2)}` : 'Grátis') 
+                                                    : 'A calcular'}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {discountAmount > 0 && (
+                                        <div className="flex justify-between text-green-600 font-bold">
+                                            <span>Desconto:</span>
+                                            <span>- R$ {discountAmount.toFixed(2)}</span>
+                                        </div>
+                                    )}
                                 </div>
-                                <button onClick={prepararParaPagamento} className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600 hover:bg-green-700 animate-pulse-subtle">
-                                    ✅ Finalizar Pedido
-                                </button>
-                            </>
-                        )}
-                        {/* --- ÁREA DE CUPOM DE DESCONTO --- */}
-                        <div className="mt-6 mb-4 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Cupom de Desconto</label>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Possui um código?"
-                                    value={couponCodeInput}
-                                    onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
-                                    className="flex-1 p-2 border rounded-lg text-sm"
-                                    disabled={appliedCoupon}
-                                />
-                                <button
-                                    onClick={handleApplyCoupon}
-                                    disabled={couponLoading || !couponCodeInput || appliedCoupon}
-                                    className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold disabled:opacity-50"
-                                >
-                                    {couponLoading ? '...' : appliedCoupon ? 'Aplicado' : 'Aplicar'}
-                                </button>
-                            </div>
-                            {appliedCoupon && (
-                                <div className="flex justify-between items-center mt-2">
-                                    <span className="text-xs text-green-600 font-bold">✅ Cupom {appliedCoupon.codigo} ativo</span>
-                                    <button
-                                        onClick={() => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); }}
-                                        className="text-xs text-red-500 underline"
+
+                                {/* 🔥 CORRIGIDO: Bloqueio real do botão se não tiver bairro válido 🔥 */}
+                                {!isRetirada && (!bairro || !bairrosDisponiveis.includes(bairro)) ? (
+                                    <button 
+                                        disabled
+                                        className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-gray-500 bg-gray-200 cursor-not-allowed border-2 border-gray-300"
                                     >
-                                        Remover
+                                        ⚠️ Selecione o Bairro acima
                                     </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* --- EXIBIÇÃO DO DESCONTO NO TOTAL --- */}
-                        <div className="border-t pt-4 space-y-2 text-sm">
-                            <div className="flex justify-between"><span>Subtotal:</span> <span>R$ {subtotalCalculado.toFixed(2)}</span></div>
-
-                            {/* ADICIONE ESTA LINHA ABAIXO */}
-                            {discountAmount > 0 && (
-                                <div className="flex justify-between text-green-600 font-bold">
-                                    <span>Desconto:</span>
-                                    <span>- R$ {discountAmount.toFixed(2)}</span>
-                                </div>
-                            )}
-
-                            {!isRetirada && <div className="flex justify-between"><span>Taxa de Entrega:</span> <span>R$ {taxaAplicada.toFixed(2)}</span></div>}
-                            {/* ... resto do código do total ... */}
-                        </div>
-
+                                ) : (
+                                    <button 
+                                        onClick={prepararParaPagamento} 
+                                        className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white shadow-lg active:scale-95 transition-all bg-green-600 hover:bg-green-700 animate-pulse-subtle"
+                                    >
+                                        ✅ Finalizar Pedido
+                                    </button>
+                                )}
+                    
+                            </> /* ✅ CORREÇÃO 2: Faltava fechar o fragmento aqui! */
+                        )}
                     </div>
                 </div>
             </div>
@@ -903,8 +955,20 @@ const pedidoFinal = cleanData({
                                         <input placeholder="Rua" value={ruaAuthModal} onChange={e => setRuaAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                         <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base text-center" required />
                                     </div>
+
+                                    {/* 🔥 SELECT DE BAIRRO NO CADASTRO 🔥 */}
                                     <div className="grid grid-cols-2 gap-2">
-                                        <input placeholder="Bairro" value={bairroAuthModal} onChange={e => setBairroAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
+                                        <select
+                                            value={bairroAuthModal}
+                                            onChange={e => setBairroAuthModal(e.target.value)}
+                                            className="w-full p-3 rounded border border-gray-300 text-base bg-white"
+                                            required
+                                        >
+                                            <option value="">Selecione o Bairro</option>
+                                            {bairrosDisponiveis.map(b => (
+                                                <option key={`auth-${b}`} value={b}>{b}</option>
+                                            ))}
+                                        </select>
                                         <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                     </div>
                                 </>
