@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions'; // 🆕 Importação para chamar a Cloud Function
-import { db, auth, functions } from '../firebase'; // 🆕 Certifique-se de importar 'functions' do seu firebase.js
+import { db, auth } from '../firebase'; 
+import { vendaService } from '../services/vendaService'; // 🆕 Importando o serviço que criamos
 import { 
     IoClose,
     IoChevronBack,
@@ -19,7 +19,7 @@ import {
     IoCheckbox,
     IoSquareOutline,
     IoTime,
-    IoReceiptOutline // 🆕 Ícone para a nota
+    IoReceiptOutline 
 } from 'react-icons/io5';
 import { toast } from 'react-toastify';
 
@@ -30,13 +30,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [selecionados, setSelecionados] = useState({});
     const [carregando, setCarregando] = useState(false);
 
-    // 🆕 Estados para NFC-e
+    // Estados para NFC-e
     const [emitirNota, setEmitirNota] = useState(false);
     const [cpfNota, setCpfNota] = useState('');
 
     // --- CÁLCULOS FINANCEIROS ---
 
-    // 1. Total Consumido (Soma de todos os produtos na mesa)
     const calcularTotalConsumo = () => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         return listaItens.reduce((acc, item) => {
@@ -45,13 +44,11 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }, 0);
     };
 
-    // 2. Total Já Pago (Soma do histórico de pagamentos parciais)
     const calcularJaPago = () => {
         const historico = mesa?.pagamentosParciais || [];
         return historico.reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
     };
 
-    // 3. Restante a Pagar (Consumo - Pago)
     const calcularRestanteMesa = () => {
         const consumo = calcularTotalConsumo();
         const jaPago = calcularJaPago();
@@ -272,19 +269,15 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
 
-            // 🆕 2. Disparar Emissão de NFC-e se solicitado
+            // 🆕 2. Disparar Emissão de NFC-e se solicitado usando o Serviço
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
-                try {
-                    const emitirNfce = httpsCallable(functions, 'emitirNfcePlugNotas');
-                    await emitirNfce({ 
-                        vendaId: docRef.id, 
-                        cpf: cpfNota 
-                    });
+                const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
+                
+                if (resultadoNfce.sucesso) {
                     toast.success("Nota enviada para a Sefaz!");
-                } catch (error) {
-                    console.error("Erro ao solicitar NFC-e:", error);
-                    toast.error("Venda salva, mas ocorreu um erro ao enviar a nota: " + error.message);
+                } else {
+                    toast.error("Venda salva, mas ocorreu um erro na nota: " + resultadoNfce.error);
                 }
             }
 
@@ -529,7 +522,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         </p>
                     </div>
 
-                    {/* 🆕 TOGGLE PARA EMITIR NFC-E */}
+                    {/* TOGGLE PARA EMITIR NFC-E */}
                     <div className="mt-4 p-4 border-2 border-dashed border-gray-200 rounded-2xl">
                         <label className="flex items-center gap-3 cursor-pointer">
                             <input 

@@ -56,6 +56,12 @@ function Painel() {
     const audioRef = useRef(null);
     const { loading: authLoading, estabelecimentosGerenciados } = useAuth();
 
+    // 🔥 NOVO ESTADO: Data Selecionada (Padrão é a data de hoje YYYY-MM-DD)
+    const [dataSelecionada, setDataSelecionada] = useState(() => {
+        const hj = new Date();
+        return hj.getFullYear() + '-' + String(hj.getMonth() + 1).padStart(2, '0') + '-' + String(hj.getDate()).padStart(2, '0');
+    });
+
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [pedidos, setPedidos] = useState({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
     const [loading, setLoading] = useState(true);
@@ -73,7 +79,6 @@ function Painel() {
     const prevRecebidosRef = useRef([]);
     const pedidosJaImpressos = useRef(new Set());
 
-    const dataHojeFormatada = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
     const estabelecimentoAtivo = useMemo(() => estabelecimentosGerenciados?.[0] || null, [estabelecimentosGerenciados]);
 
     useEffect(() => {
@@ -83,7 +88,7 @@ function Painel() {
         setPrintQueue([]);
         setEstabelecimentoInfo(null);
         setLoading(true);
-    }, [estabelecimentoAtivo]);
+    }, [estabelecimentoAtivo, dataSelecionada]); // Recarrega se mudar a loja ou a data
 
     const limparDadosCliente = useCallback((clienteData) => {
         if (!clienteData || typeof clienteData !== 'object') return { nome: 'Cliente', telefone: '', endereco: {} };
@@ -91,7 +96,6 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-    // 🔥 FUNÇÃO INTELIGENTE: Decide se é "salao" ou "global" (delivery)
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
 
@@ -101,14 +105,11 @@ function Painel() {
             endereco = { ...endereco, ...clienteLimpo.endereco };
         }
 
-        // 1. Verifica se já veio com 'source' definido (ex: 'salao' vindo da TelaPedidos)
-        // 2. Se não tiver, tenta adivinhar pelo número da mesa
         let source = pedidoData.source;
         if (!source) {
             source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
         }
 
-        // Define o tipo visual
         const tipo = pedidoData.tipo || (source === 'salao' ? 'salao' : 'delivery');
 
         return {
@@ -116,7 +117,7 @@ function Painel() {
             id: pedidoData.id,
             cliente: clienteLimpo,
             endereco: endereco,
-            source: source, // Usa a fonte definida corretamente
+            source: source,
             tipo: tipo,
             status: pedidoData.status || 'recebido',
             itens: pedidoData.itens || [],
@@ -175,72 +176,74 @@ function Painel() {
     }, [pedidos, estabelecimentoAtivo, bloqueioAtualizacao]);
 
     // ==========================================
-    // 🔥 LISTENER UNIFICADO (CORRIGIDO)
+    // 🔥 LISTENER UNIFICADO (FILTRANDO PELA DATA)
     // ==========================================
     useEffect(() => {
         if (authLoading || !estabelecimentoAtivo) return;
 
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
+        // 🔥 Lógica de Data Escolhida
+        const [ano, mes, dia] = dataSelecionada.split('-').map(Number);
+        const startOfDay = new Date(ano, mes - 1, dia, 0, 0, 0, 0);
+        const endOfDay = new Date(ano, mes - 1, dia, 23, 59, 59, 999);
 
-        const isToday = (timestamp) => {
-            if (!timestamp) return true;
+        const dataHojeStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
+        const visualizandoHoje = dataSelecionada === dataHojeStr; // Verifica se está olhando para hoje
+
+        const isSelectedDate = (timestamp) => {
+            if (!timestamp) return false;
             const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
-            return date >= startOfToday;
+            return date >= startOfDay && date <= endOfDay;
         };
 
-const checkAutoPrint = (change) => {
+        const checkAutoPrint = (change) => {
+            // 🔥 Só imprime automaticamente se estiver visualizando a aba de HOJE
+            if (!visualizandoHoje) return;
+
             const data = change.doc.data();
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
-                
-                // 🔥 TRAVA NUCLEAR: Verifica o histórico do navegador inteiro (todas as abas)
                 const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
 
                 if (!pedidosJaImpressos.current.has(pedidoId) && !impressosLocal.includes(pedidoId)) {
-                    // 1. Marca na memória desta aba
                     pedidosJaImpressos.current.add(pedidoId); 
-                    
-                    // 2. Marca na memória do navegador (para bloquear outras abas)
                     impressosLocal.push(pedidoId);
-                    if (impressosLocal.length > 50) impressosLocal.shift(); // Guarda só os últimos 50
+                    if (impressosLocal.length > 50) impressosLocal.shift(); 
                     localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
-
-                    // 3. Adiciona à fila
                     setPrintQueue(prev => prev.includes(pedidoId) ? prev : [...prev, pedidoId]);
                 }
             }
         };
+
         const unsubscribers = [];
         getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo)).then(snap => { if (snap.exists()) setEstabelecimentoInfo(snap.data()); });
 
         let isFirstRun = true;
 
-        // 🔥 Agora escutamos APENAS a coleção de pedidos do estabelecimento
         const qPedidos = query(
             collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'),
-            orderBy('createdAt', 'asc') // Garante ordem de chegada
+            orderBy('createdAt', 'asc')
         );
+        
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) {
                 snapshot.docChanges().forEach(checkAutoPrint);
             }
 
+            // Filtra os pedidos com base na Data Escolhida no calendário
             const listaTodos = snapshot.docs
                 .map(d => processarDadosPedido({ id: d.id, ...d.data() }))
-                .filter(p => p && isToday(p.dataPedido || p.createdAt));
+                .filter(p => p && isSelectedDate(p.dataPedido || p.createdAt));
 
-            // Corrige status pendente visualmente
             listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento'].includes(p.status)) p.status = 'recebido'; });
 
             setPedidos(prev => ({
                 ...prev,
                 recebido: listaTodos.filter(p => p.status === 'recebido'),
                 preparo: listaTodos.filter(p => p.status === 'preparo'),
-                em_entrega: listaTodos.filter(p => p.status === 'em_entrega'), // Delivery
-                pronto_para_servir: listaTodos.filter(p => p.status === 'pronto_para_servir'), // Salão
+                em_entrega: listaTodos.filter(p => p.status === 'em_entrega'), 
+                pronto_para_servir: listaTodos.filter(p => p.status === 'pronto_para_servir'),
                 finalizado: listaTodos.filter(p => p.status === 'finalizado')
             }));
 
@@ -249,9 +252,13 @@ const checkAutoPrint = (change) => {
         }));
 
         return () => unsubscribers.forEach(u => u());
-    }, [estabelecimentoAtivo, authLoading, processarDadosPedido]);
+    }, [estabelecimentoAtivo, authLoading, processarDadosPedido, dataSelecionada]); // 👈 Refaz a busca se a data mudar
 
     useEffect(() => {
+        // 🔥 Impede que o sistema apite se você estiver olhando um dia no passado
+        const dataHojeStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
+        if (dataSelecionada !== dataHojeStr) return;
+
         const novosRecebidos = pedidos.recebido;
         if (novosRecebidos.length > prevRecebidosRef.current.length) {
             const idsAtuais = new Set(prevRecebidosRef.current.map(p => p.id));
@@ -264,16 +271,15 @@ const checkAutoPrint = (change) => {
             }
         }
         prevRecebidosRef.current = novosRecebidos;
-    }, [pedidos.recebido, notificationsEnabled, userInteracted]);
+    }, [pedidos.recebido, notificationsEnabled, userInteracted, dataSelecionada]);
 
-// 🔥 NOVO SISTEMA DE IMPRESSÃO VIA POP-UP BLINDADO
+    // 🔥 NOVO SISTEMA DE IMPRESSÃO VIA POP-UP BLINDADO
     useEffect(() => {
         if (!isPrinting && printQueue.length > 0 && estabelecimentoAtivo) {
             setIsPrinting(true);
             const pedidoId = printQueue[0];
             const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}`;
 
-            // Abre o Pop-up visual
             const width = 350;
             const height = 600;
             const left = (window.screen.width - width) / 2;
@@ -281,12 +287,10 @@ const checkAutoPrint = (change) => {
 
             const printWindow = window.open(url, `AutoPrint_${pedidoId}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
 
-            // Monitora quando a aba fechar
             if (printWindow) {
                 const timer = setInterval(() => {
                     if (printWindow.closed) {
                         clearInterval(timer);
-                        // Remove especificamente ESTE pedido da fila, evitando bugs do slice()
                         setPrintQueue(prev => prev.filter(id => id !== pedidoId)); 
                         setIsPrinting(false);
                     }
@@ -314,7 +318,17 @@ const checkAutoPrint = (change) => {
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-4 w-full md:w-auto">
                         <button onClick={() => navigate('/admin-dashboard')} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"><IoArrowBack size={20} /></button>
-                        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">Painel de Pedidos <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded">{dataHojeFormatada}</span></h1>
+                        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            Painel de Pedidos 
+                            {/* 🔥 AQUI ESTÁ O NOVO CALENDÁRIO */}
+                            <input 
+                                type="date" 
+                                value={dataSelecionada} 
+                                onChange={(e) => setDataSelecionada(e.target.value)}
+                                className="text-sm font-bold text-gray-700 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-inner"
+                                title="Selecione a data para ver os pedidos daquele dia"
+                            />
+                        </h1>
                     </div>
                     <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
                         <div className="flex bg-gray-100 p-1 rounded-lg">
@@ -329,7 +343,6 @@ const checkAutoPrint = (change) => {
                 <div className="flex flex-col md:flex-row gap-4 min-w-full md:min-w-0 h-full">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
-                        // 🔥 FILTRO INTELIGENTE DE ABA
                         let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
 
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));

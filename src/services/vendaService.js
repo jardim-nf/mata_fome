@@ -11,6 +11,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../firebase'; 
+import { getFunctions, httpsCallable } from 'firebase/functions'; // NOVO IMPORT
 
 export const vendaService = {
   
@@ -19,7 +20,6 @@ export const vendaService = {
     try {
       console.log('💾 Salvando venda no banco de dados...', vendaData);
 
-      // Sanitização de Dados (Evita erro de 'undefined' no Firestore)
       const dadosLimpos = {
         ...vendaData,
         usuarioId: vendaData.usuarioId || null,
@@ -29,9 +29,7 @@ export const vendaService = {
         origem: 'pdv_web'
       };
 
-      // Remove chaves que porventura ainda estejam undefined
       const payloadFinal = JSON.parse(JSON.stringify(dadosLimpos));
-      // Restaura o serverTimestamp (o JSON.stringify remove funções/objetos especiais)
       payloadFinal.createdAt = serverTimestamp();
 
       const vendasRef = collection(db, 'vendas');
@@ -47,55 +45,53 @@ export const vendaService = {
 
     } catch (error) {
       console.error('❌ Erro ao salvar venda:', error);
-      let mensagem = 'Erro ao salvar no banco de dados.';
-      
-      if (error.code === 'permission-denied') {
-        mensagem = 'Sem permissão para salvar. Verifique as Regras do Firestore.';
-      } else if (error.message && error.message.includes('undefined')) {
-        mensagem = 'Erro de dados: Um campo indefinido foi enviado ao banco.';
-      }
-
       return {
         success: false,
-        error: mensagem,
-        details: error.message
+        error: error.message || 'Erro ao salvar no banco de dados.'
       };
     }
   },
 
-  // 2. Placeholder para NFC-e
+  // 2. Chamar a Cloud Function da PlugNotas (NFC-e)
   async emitirNfce(vendaId, cpfCliente) {
-    console.log(`🧾 Solicitando NFC-e para venda ${vendaId}`);
-    await new Promise(r => setTimeout(r, 1000));
-    return {
+    console.log(`🧾 Solicitando NFC-e via PlugNotas para a venda ${vendaId}...`);
+    try {
+      const functions = getFunctions();
+      // O nome aqui deve coincidir com o nome exportado no functions/index.js
+      const emitirNfcePlugNotas = httpsCallable(functions, 'emitirNfcePlugNotas'); 
+      
+      const response = await emitirNfcePlugNotas({ 
+        vendaId: vendaId, 
+        cpf: cpfCliente 
+      });
+
+      console.log('✅ Retorno da PlugNotas:', response.data);
+      return response.data; // Retorna { sucesso: true, idPlugNotas: "..." }
+
+    } catch (error) {
+      console.error('❌ Erro ao chamar a emissão de NFC-e:', error);
+      return {
         success: false,
-        error: 'API Fiscal ainda não configurada no sistema.'
-    };
+        error: error.message || 'Erro de comunicação com o servidor fiscal.'
+      };
+    }
   },
 
   // 3. Buscar vendas por estabelecimento (Geral)
   async buscarVendasPorEstabelecimento(estabelecimentoId, limite = 50) {
     try {
       if (!estabelecimentoId) return [];
-      
       const q = query(
         collection(db, 'vendas'),
         where('estabelecimentoId', '==', estabelecimentoId),
         orderBy('createdAt', 'desc')
       );
-      
       const querySnapshot = await getDocs(q);
       const vendas = [];
-      
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        vendas.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
-        });
+        vendas.push({ id: doc.id, ...data, createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date() });
       });
-      
       return vendas;
     } catch (error) {
       console.error('Erro ao buscar vendas:', error);
@@ -108,28 +104,21 @@ export const vendaService = {
     try {
       const docRef = doc(db, 'vendas', vendaId);
       const docSnap = await getDoc(docRef);
-      
       if (docSnap.exists()) {
         const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null
-        };
-      } else {
-        return null;
+        return { id: docSnap.id, ...data, createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null };
       }
+      return null;
     } catch (error) {
       console.error('Erro ao buscar venda:', error);
       return null;
     }
   },
 
-  // 5. 🆕 Buscar vendas de um período específico (para o histórico de turnos)
+  // 5. Buscar vendas de um período específico
   async buscarVendasPorIntervalo(usuarioId, estabelecimentoId, dataInicio, dataFim) {
     try {
-      const fim = dataFim || new Date(); // Se não tem fim, usa agora
-      
+      const fim = dataFim || new Date(); 
       const q = query(
         collection(db, 'vendas'),
         where('estabelecimentoId', '==', estabelecimentoId),
@@ -138,20 +127,14 @@ export const vendaService = {
         where('createdAt', '<=', fim),
         orderBy('createdAt', 'desc')
       );
-
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => {
         const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
-        };
+        return { id: doc.id, ...data, createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt) };
       });
     } catch (error) {
       console.error("Erro ao buscar vendas do turno:", error);
       return [];
     }
   }
-
-}; // <-- O objeto vendaService fecha aqui!
+};

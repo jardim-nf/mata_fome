@@ -22,7 +22,7 @@ export const produtoService = {
     return mapeamentoNomes[categoriaId] || categoriaId;
   },
 
-  formatarProdutoReal(id, data, categoriaId) {
+formatarProdutoReal(id, data, categoriaId) {
     return {
       id,
       name: data.nome || data.name || 'Produto sem nome',
@@ -32,7 +32,17 @@ export const produtoService = {
       descricao: data.descricao || data.description || '',
       emEstoque: data.disponivel !== false && data.estoque !== false,
       imagem: data.imagem || '',
-      ativo: data.ativo !== false
+      ativo: data.ativo !== false,
+      // 👇 NOVA ESTRUTURA FISCAL ADICIONADA AQUI
+      fiscal: data.fiscal || {
+        ncm: '',
+        cfop: '', // Ex: 5102 ou 5405
+        cest: '', // Opcional/Obrigatório dependendo do NCM
+        origem: '0', // 0 = Nacional, 1 = Estrangeira, etc.
+        csosn: '102', // Padrão Simples Nacional: 102 = Tributada pelo Simples Nacional sem permissão de crédito
+        unidade: 'UN', // UN, KG, LT, etc.
+        aliquotaIcms: 0
+      }
     };
   },
 
@@ -90,17 +100,16 @@ export const produtoService = {
     }
   },
 
-  // ✅ CRIAÇÃO DE EXEMPLO NO CAMINHO CORRETO
-  async criarProdutosExemplo(estabelecimentoId) {
+async criarProdutosExemplo(estabelecimentoId) {
     const uid = estabelecimentoId || auth.currentUser?.uid;
     if (!uid) return 0;
 
     console.log(`📝 Criando exemplo em: estabelecimentos/${uid}/cardapio`);
     
     const produtosExemplo = [
-      { nome: "X-Burger Clássico", preco: 25.90, descricao: "Pão, hambúrguer, queijo", categoria: "os-classicos" },
-      { nome: "Coca-Cola Lata", preco: 8.00, descricao: "350ml", categoria: "bebidas" },
-      { nome: "Batata Frita", preco: 12.00, descricao: "Porção", categoria: "petiscos" }
+      { nome: "X-Burger Clássico", preco: 25.90, descricao: "Pão, hambúrguer, queijo", categoria: "os-classicos", ncm: "21069090", cfop: "5102" },
+      { nome: "Coca-Cola Lata", preco: 8.00, descricao: "350ml", categoria: "bebidas", ncm: "22021000", cfop: "5405" }, // Bebidas geralmente têm Substituição Tributária (5405)
+      { nome: "Batata Frita", preco: 12.00, descricao: "Porção", categoria: "petiscos", ncm: "20041000", cfop: "5102" }
     ];
 
     let count = 0;
@@ -124,7 +133,17 @@ export const produtoService = {
           ativo: true,
           disponivel: true,
           estoque: true,
-          createdAt: new Date()
+          createdAt: new Date(),
+          // 👇 GRAVANDO OS DADOS FISCAIS NO FIREBASE
+          fiscal: {
+            ncm: produto.ncm, 
+            cfop: produto.cfop,
+            cest: '',
+            origem: '0',
+            csosn: produto.cfop === '5405' ? '500' : '102', // 500 = ICMS cobrado anteriormente por substituição tributária
+            unidade: 'UN',
+            aliquotaIcms: 0
+          }
         });
         count++;
       } catch (error) {

@@ -1,7 +1,7 @@
 // src/pages/AdminMenuManagement.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, getDoc, orderBy, writeBatch, setDoc } from 'firebase/firestore'; // <-- setDoc adicionado aqui
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useHeader } from '../context/HeaderContext';
@@ -106,13 +106,14 @@ const ProductGridCard = ({
   return (
     <div className="group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl hover:border-blue-100 transition-all duration-300 flex flex-col h-full overflow-hidden relative">
         
-      {/* Imagem com Zoom Effect */}
+    {/* Imagem com Zoom Effect */}
       <div className="relative h-48 overflow-hidden bg-gray-50">
         {produto.imageUrl ? (
           <img 
             src={produto.imageUrl} 
             alt={produto.nome}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            // 👇 AS CLASSES FORAM ATUALIZADAS AQUI 👇
+            className="w-full h-full object-contain p-4 mix-blend-multiply transition-transform duration-500 group-hover:scale-110"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300">
@@ -164,7 +165,7 @@ const ProductGridCard = ({
                 </div>
                 <div className="text-right">
                     <p className="text-xs text-gray-400 font-medium uppercase">Estoque</p>
-                    <p className={`text-lg font-bold ${Number(produto.estoque) === 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                    <p className={`text-lg font-bold ${Number(produto.estoque) <= 0 ? 'text-red-500' : 'text-gray-700'}`}>
                         {produto.estoque}
                     </p>
                 </div>
@@ -222,7 +223,6 @@ function AdminMenuManagement() {
   const { setActions, clearActions } = useHeader();
   const navigate = useNavigate();
 
-  // Refs para controle de listeners (CORREÇÃO DO BUG)
   const itemListenersRef = useRef([]);
 
   const [establishmentName, setEstablishmentName] = useState('');
@@ -241,6 +241,11 @@ function AdminMenuManagement() {
     categoria: '',
     imageUrl: '',
     ativo: true,
+    fiscal: {
+      ncm: '',
+      cfop: '5102',
+      unidade: 'UN'
+    }
   });
   
   const [formErrors, setFormErrors] = useState({});
@@ -251,7 +256,10 @@ function AdminMenuManagement() {
   const [showActivateAllModal, setShowActivateAllModal] = useState(false);
   const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
 
-  // LÓGICA DE VARIAÇÕES
+  const [ncmResultados, setNcmResultados] = useState([]);
+  const [pesquisandoNcm, setPesquisandoNcm] = useState(false);
+  const [termoNcm, setTermoNcm] = useState('');
+
   const [variacoes, setVariacoes] = useState([]);
   const [variacoesErrors, setVariacoesErrors] = useState({});
 
@@ -313,7 +321,6 @@ function AdminMenuManagement() {
     }
   }, [primeiroEstabelecimento]);
 
-  // 🔥 CORE FIX: Listener para itens e categorias com limpeza correta
   useEffect(() => {
     if (!primeiroEstabelecimento) {
       setLoading(false);
@@ -326,14 +333,12 @@ function AdminMenuManagement() {
     const qCategorias = query(categoriasRef, orderBy('ordem', 'asc'));
 
     const unsubscribeCategorias = onSnapshot(qCategorias, (categoriasSnapshot) => {
-      // 1. Atualiza Categorias
       const fetchedCategories = categoriasSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       setCategories(fetchedCategories);
 
-      // 2. Limpa listeners antigos para evitar duplicidade e vazamento de memória
       itemListenersRef.current.forEach(unsub => unsub());
       itemListenersRef.current = [];
 
@@ -343,10 +348,8 @@ function AdminMenuManagement() {
         return;
       }
 
-      // 3. Cria novos listeners para cada categoria encontrada
       fetchedCategories.forEach(catData => {
         const itemsRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catData.id, 'itens');
-        // Ordenação padrão por nome pode ser feita no cliente ou aqui se tiver index
         const qItems = query(itemsRef); 
 
         const unsubscribeItems = onSnapshot(qItems, (itemsSnapshot) => {
@@ -358,7 +361,6 @@ function AdminMenuManagement() {
             variacoes: Array.isArray(itemDoc.data().variacoes) ? itemDoc.data().variacoes : []
           }));
 
-          // Atualização atômica do estado: Remove os antigos desta categoria e adiciona os novos
           setMenuItems(prevItems => {
             const outrosItens = prevItems.filter(item => item.categoriaId !== catData.id);
             return [...outrosItens, ...novosItensDaCategoria];
@@ -368,23 +370,20 @@ function AdminMenuManagement() {
         itemListenersRef.current.push(unsubscribeItems);
       });
       
-      // Remove loading visual após setup inicial
       setTimeout(() => setLoading(false), 800);
     });
 
     return () => {
-      // Cleanup geral ao desmontar
       unsubscribeCategorias();
       itemListenersRef.current.forEach(unsub => unsub());
     };
   }, [primeiroEstabelecimento]);
 
-  // ... (Funções Auxiliares mantidas)
   const getStockStatus = (item) => {
     const estoque = Number(item.estoque) || 0;
     const estoqueMinimo = Number(item.estoqueMinimo) || 0; 
 
-    if (estoque === 0) return 'esgotado';
+    if (estoque <= 0) return 'esgotado';
     if (estoque <= estoqueMinimo) return 'critico';
     if (estoque <= (estoqueMinimo * 2)) return 'baixo';
     return 'normal';
@@ -397,7 +396,6 @@ function AdminMenuManagement() {
     return ((precoVenda - custo) / precoVenda) * 100;
   };
 
-  // Filtragem e Paginação
   const availableCategories = useMemo(() =>
     ['Todos', ...new Set(categories.map(cat => cat.nome).filter(Boolean))],
     [categories]
@@ -414,18 +412,14 @@ function AdminMenuManagement() {
         (stockFilter === 'normal' && getStockStatus(item) === 'normal'))
     );
     
-    // Ordenação secundária por nome
     filtered.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-    
-    // Agrupar visualmente se quiser (opcional, aqui mantemos lista flat filtrada)
     return filtered;
   }, [menuItems, searchTerm, selectedCategory, stockFilter]);
 
   const ITEMS_PER_PAGE = viewMode === 'grid' ? 12 : 8;
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(filteredAndSortedItems, ITEMS_PER_PAGE);
 
-  // Estatísticas
-const stockStatistics = useMemo(() => {
+  const stockStatistics = useMemo(() => {
     const totalItems = menuItems.length;
     const criticalStock = menuItems.filter(item => getStockStatus(item) === 'critico').length;
     const lowStock = menuItems.filter(item => getStockStatus(item) === 'baixo').length;
@@ -447,7 +441,6 @@ const stockStatistics = useMemo(() => {
     return { totalItems, criticalStock, lowStock, outOfStock, normalStock, totalInventoryValue, activeItems, inactiveItems };
   }, [menuItems]);
 
-  // CRUD Functions
   const validateForm = () => {
     const errors = {};
     const varErrors = {};
@@ -475,7 +468,7 @@ const stockStatistics = useMemo(() => {
         }
 
         if (Number(v.custo) < 0 || isNaN(Number(v.custo))) vError.custo = 'Inválido';
-        if (Number(v.estoque) < 0 || isNaN(Number(v.estoque))) vError.estoque = 'Inválido';
+        if (isNaN(Number(v.estoque))) vError.estoque = 'Inválido';
         if (Number(v.estoqueMinimo) < 0 || isNaN(Number(v.estoqueMinimo))) vError.estoqueMinimo = 'Inválido';
         
         if (Object.keys(vError).length > 0) varErrors[v.id] = vError;
@@ -489,7 +482,7 @@ const stockStatistics = useMemo(() => {
     return Object.keys(errors).length === 0 && Object.keys(varErrors).length === 0;
   };
 
-const handleSaveItem = async (e) => {
+  const handleSaveItem = async (e) => {
     e.preventDefault();
     setFormLoading(true);
 
@@ -503,48 +496,49 @@ const handleSaveItem = async (e) => {
       if (!primeiroEstabelecimento) throw new Error("Sem estabelecimento");
 
       let imageUrl = formData.imageUrl;
+      
+      // 🔥 CORREÇÃO 2: Apagar imagem antiga ao enviar uma nova
       if (itemImage) {
         const fileName = `${Date.now()}_${itemImage.name}`;
         imageUrl = await uploadFile(itemImage, `estabelecimentos/${primeiroEstabelecimento}/cardapio/${fileName}`);
+        
+        // Se já existia uma imagem velha e fizemos upload de uma nova, apagamos a velha
+        if (editingItem && editingItem.imageUrl && editingItem.imageUrl !== imageUrl) {
+            try {
+                await deleteFileByUrl(editingItem.imageUrl);
+            } catch (err) {
+                console.warn("Erro a apagar a imagem antiga:", err);
+            }
+        }
       }
 
-      // Tenta achar a categoria existente
       const categoriaDoc = categories.find(cat => cat.nome === formData.categoria);
-      
       let categoriaIdParaSalvar = null;
 
       if (editingItem) {
-        // Se estiver editando, mantém o ID antigo (a menos que tenha mudado de categoria, mas vamos simplificar)
         categoriaIdParaSalvar = editingItem.categoriaId;
-        
-        // Se mudou o nome da categoria no input e ela já existe em outro lugar, usa o ID da nova
         if (categoriaDoc && categoriaDoc.id !== editingItem.categoriaId) {
             categoriaIdParaSalvar = categoriaDoc.id;
         }
       } else {
-        // Se for novo item, tenta pegar o ID da categoria existente
         categoriaIdParaSalvar = categoriaDoc ? categoriaDoc.id : null;
       }
 
-      // --- CORREÇÃO AQUI: CRIAÇÃO AUTOMÁTICA DA CATEGORIA ---
       if (!categoriaIdParaSalvar) {
           try {
              const novaCategoriaRef = await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio'), {
-                 nome: formData.categoria.trim().toUpperCase(), // Padroniza maiúsculo
-                 ordem: 999, // Joga pro final por padrão, depois você ordena lá na outra tela
+                 nome: formData.categoria.trim().toUpperCase(),
+                 ordem: 999,
                  ativo: true
              });
              categoriaIdParaSalvar = novaCategoriaRef.id;
-             console.log("Nova categoria criada automaticamente:", categoriaIdParaSalvar);
              toast.info(`Categoria "${formData.categoria}" criada automaticamente!`);
           } catch (err) {
-              console.error("Erro ao criar categoria automática:", err);
               toast.error("Erro ao criar nova categoria.");
               setFormLoading(false);
               return;
           }
       }
-      // -----------------------------------------------------
 
       const precosAtivos = variacoes
         .filter(v => v.ativo && Number(v.preco) > 0)
@@ -562,37 +556,34 @@ const handleSaveItem = async (e) => {
       const custosAtivos = variationsToSave.map(v => v.custo).filter(c => c > 0);
       const custoPrincipal = custosAtivos.length > 0 ? Math.min(...custosAtivos) : 0;
       
-      const totalStock = variationsToSave.reduce((sum, v) => sum + (v.estoque || 0), 0);
-      const totalEstoqueMinimo = variationsToSave.reduce((sum, v) => sum + (v.estoqueMinimo || 0), 0);
+      const totalStock = variationsToSave.reduce((sum, v) => sum + (Number(v.estoque) || 0), 0);
+      const totalEstoqueMinimo = variationsToSave.reduce((sum, v) => sum + (Number(v.estoqueMinimo) || 0), 0);
 
       const itemData = {
         nome: formData.nome.trim(),
         descricao: formData.descricao?.trim() || '',
         preco: precoPrincipal, 
         variacoes: variationsToSave, 
-        categoria: formData.categoria.trim().toUpperCase(), // Salva o nome da categoria também
+        categoria: formData.categoria.trim().toUpperCase(),
         imageUrl: imageUrl,
         ativo: formData.ativo,
         estoque: totalStock, 
         estoqueMinimo: totalEstoqueMinimo, 
         custo: custoPrincipal, 
+        fiscal: formData.fiscal,
         atualizadoEm: new Date()
       };
 
       if (editingItem) {
-        // Se mudou de categoria, precisaria deletar do antigo e criar no novo (estrutura Firestore de subcollections)
-        // Mas assumindo que você usa a estrutura subcollection: cardapio/{catId}/itens/{itemId}
-        
+        // 🔥 CORREÇÃO 1: Mover entre categorias mantendo O MESMO ID com setDoc
         if (editingItem.categoriaId !== categoriaIdParaSalvar) {
-            // MOVER DE CATEGORIA (Deletar da antiga e criar na nova)
-            await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', categoriaIdParaSalvar, 'itens'), {
+            await setDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', categoriaIdParaSalvar, 'itens', editingItem.id), {
                 ...itemData,
-                criadoEm: editingItem.criadoEm || new Date() // Mantém data original
+                criadoEm: editingItem.criadoEm || new Date()
             });
             await deleteDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', editingItem.categoriaId, 'itens', editingItem.id));
             toast.success("Item movido e atualizado!");
         } else {
-            // Atualização normal
             await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', categoriaIdParaSalvar, 'itens', editingItem.id), itemData);
             toast.success("Item atualizado!");
         }
@@ -609,6 +600,7 @@ const handleSaveItem = async (e) => {
       setFormLoading(false);
     }
   };
+
   const handleDeleteItem = async (item) => {
     if (!window.confirm(`Excluir "${item.nome}"?`)) return;
     try {
@@ -656,7 +648,10 @@ const handleSaveItem = async (e) => {
         categoria: item.categoria || '',
         imageUrl: item.imageUrl || '',
         ativo: item.ativo !== undefined ? item.ativo : true,
+        fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN' } 
       });
+      setTermoNcm(item.fiscal?.ncm || '');
+
       setVariacoes(item.variacoes?.length 
         ? item.variacoes.map(v => ({
             ...v, 
@@ -678,7 +673,8 @@ const handleSaveItem = async (e) => {
       setImagePreview(item.imageUrl || '');
     } else {
       setEditingItem(null);
-      setFormData({ nome: '', descricao: '', categoria: '', imageUrl: '', ativo: true }); 
+      setFormData({ nome: '', descricao: '', categoria: '', imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN' } }); 
+      setTermoNcm(''); 
       setVariacoes([{ id: Date.now().toString(), nome: 'Padrão', preco: '', descricao: '', ativo: true, estoque: 0, estoqueMinimo: 0, custo: 0 }]);
       setImagePreview('');
     }
@@ -689,7 +685,9 @@ const handleSaveItem = async (e) => {
   const closeItemForm = () => {
     setShowItemForm(false);
     setEditingItem(null);
-    setFormData({ nome: '', descricao: '', categoria: '', imageUrl: '', ativo: true });
+    setFormData({ nome: '', descricao: '', categoria: '', imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN' } });
+    setTermoNcm('');
+    setNcmResultados([]);
     setVariacoes([]);
     setImagePreview('');
     setItemImage(null);
@@ -709,7 +707,57 @@ const handleSaveItem = async (e) => {
     }
   };
 
-  // Header Configuration
+  const handleFiscalChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      fiscal: {
+        ...(prev.fiscal || { ncm: '', cfop: '5102', unidade: 'UN' }), 
+        [name]: value
+      }
+    }));
+  };
+
+  const buscarNcm = async (termo) => {
+    try {
+      const texto = termo || ''; 
+      setTermoNcm(texto);
+      
+      handleFiscalChange({ target: { name: 'ncm', value: texto } });
+
+      if (texto.length < 3) {
+        setNcmResultados([]);
+        return;
+      }
+
+      setPesquisandoNcm(true);
+      
+      const response = await fetch(`https://brasilapi.com.br/api/ncm/v1?search=${texto}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setNcmResultados(data.slice(0, 15)); 
+        } else {
+          setNcmResultados([]);
+        }
+      } else {
+        setNcmResultados([]);
+      }
+    } catch (error) {
+      console.error("⚠️ Erro silencioso ao buscar NCM na Brasil API:", error);
+      setNcmResultados([]);
+    } finally {
+      setPesquisandoNcm(false);
+    }
+  };
+
+  const selecionarNcm = (codigo) => {
+    handleFiscalChange({ target: { name: 'ncm', value: codigo } });
+    setTermoNcm(codigo);
+    setNcmResultados([]); 
+  };
+
   useEffect(() => {
     const actions = (
         <div className="flex items-center space-x-2 md:space-x-3">
@@ -738,7 +786,6 @@ const handleSaveItem = async (e) => {
     <div className="min-h-screen bg-[#F3F4F6] p-4 md:p-6 font-sans">
       <div className="max-w-7xl mx-auto">
         
-        {/* Dashboard Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
             <StatsCard title="Total Itens" value={stockStatistics.totalItems} icon={IoList} colorClass="text-blue-600" bgClass="bg-blue-50" />
             <StatsCard title="Ativos" value={stockStatistics.activeItems} icon={IoCheckmarkCircle} colorClass="text-emerald-600" bgClass="bg-emerald-50" />
@@ -755,7 +802,6 @@ const handleSaveItem = async (e) => {
             </div>
         </div>
 
-        {/* Barra de Filtros Flutuante */}
         <div className="sticky top-2 z-30 bg-white/90 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 p-2 mb-8 flex flex-col md:flex-row gap-2 md:items-center">
             <div className="relative flex-1">
                 <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -790,7 +836,6 @@ const handleSaveItem = async (e) => {
             </div>
         </div>
 
-        {/* Grid de Resultados */}
         <div className="min-h-[400px]">
             {paginatedItems.length > 0 ? (
                 <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" : "space-y-3"}>
@@ -808,9 +853,9 @@ const handleSaveItem = async (e) => {
                         ) : (
                             <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between hover:border-blue-200 transition-colors">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
-                                        {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-cover"/> : <IoImageOutline className="text-gray-400"/>}
-                                    </div>
+<div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+    {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-contain p-1 mix-blend-multiply"/> : <IoImageOutline className="text-gray-400"/>}
+</div>
                                     <div>
                                         <h3 className="font-bold text-gray-800">{item.nome}</h3>
                                         <div className="flex gap-2 text-xs text-gray-500">
@@ -845,14 +890,12 @@ const handleSaveItem = async (e) => {
             )}
         </div>
 
-        {/* Paginação */}
         {paginatedItems.length > 0 && (
             <div className="mt-8">
                 <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} />
             </div>
         )}
 
-        {/* --- MODAL FORMULÁRIO (Mantido praticamente igual, só ajustes de estilo) --- */}
         {showItemForm && (
             <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -865,7 +908,6 @@ const handleSaveItem = async (e) => {
                     </div>
                     
                     <form onSubmit={handleSaveItem} className="p-6 space-y-8">
-                        {/* Dados Básicos */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-4">
                                 <div>
@@ -877,6 +919,7 @@ const handleSaveItem = async (e) => {
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Categoria *</label>
                                     <input type="text" name="categoria" value={formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Selecione ou digite..." required disabled={!!editingItem} />
                                     <datalist id="cat-list">{categories.map(c => <option key={c.id} value={c.nome} />)}</datalist>
+                                    {formErrors.categoria && <span className="text-red-500 text-xs">{formErrors.categoria}</span>}
                                 </div>
                             </div>
                             <div>
@@ -885,7 +928,6 @@ const handleSaveItem = async (e) => {
                             </div>
                         </div>
 
-                        {/* Seção de Variações */}
                         <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2"><IoCash className="text-blue-600"/> Precificação e Estoque</h3>
@@ -949,6 +991,63 @@ const handleSaveItem = async (e) => {
                             {formErrors.variacoes && <p className="text-red-500 text-sm mt-2 text-center bg-red-50 p-2 rounded-lg">{formErrors.variacoes}</p>}
                         </div>
 
+                        {/* 👇 SEÇÃO FISCAL COM BUSCA NA BRASIL API 👇 */}
+                        <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
+                            <h3 className="font-bold text-emerald-800 mb-4 flex items-center gap-2">
+                                🏢 Dados Fiscais (NFC-e)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="relative">
+                                    <label className="block text-xs font-bold text-emerald-700 mb-1" title="Nomenclatura Comum do Mercosul">
+                                        NCM (Busque por nome ou código)
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        name="ncm" 
+                                        value={termoNcm || formData.fiscal?.ncm || ''} 
+                                        onChange={(e) => buscarNcm(e.target.value)} 
+                                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} 
+                                        className="w-full p-2.5 bg-white border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all" 
+                                        placeholder="Ex: Hambúrguer ou 21069090" 
+                                        autoComplete="off"
+                                    />
+                                    
+                                    {pesquisandoNcm && <span className="absolute right-3 top-9 text-xs text-emerald-500">Buscando...</span>}
+                                    
+                                    {ncmResultados.length > 0 && (
+                                        <div className="absolute z-50 w-full mt-1 bg-white border border-emerald-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                            {ncmResultados.map((item) => (
+                                                <div 
+                                                    key={item.codigo} 
+                                                    onClick={() => selecionarNcm(item.codigo)}
+                                                    className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer transition-colors"
+                                                >
+                                                    <p className="font-bold text-emerald-800 text-sm">{item.codigo}</p>
+                                                    <p className="text-xs text-gray-600 line-clamp-2" title={item.descricao}>{item.descricao}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-emerald-700 mb-1">CFOP Padrão</label>
+                                    <select name="cfop" value={formData.fiscal?.cfop || ''} onChange={handleFiscalChange} className="w-full p-2.5 bg-white border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all">
+                                        <option value="5102">5102 - Venda Normal (Lanches/Refeições)</option>
+                                        <option value="5405">5405 - Subst. Tributária (Bebidas Frias)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-emerald-700 mb-1">Unidade Comercial</label>
+                                    <select name="unidade" value={formData.fiscal?.unidade || 'UN'} onChange={handleFiscalChange} className="w-full p-2.5 bg-white border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all">
+                                        <option value="UN">UN - Unidade</option>
+                                        <option value="KG">KG - Quilograma</option>
+                                        <option value="LT">LT - Litro</option>
+                                        <option value="CX">CX - Caixa</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Imagem e Footer */}
                         <div className="flex gap-4 items-center bg-gray-50 p-4 rounded-xl border border-gray-200 border-dashed">
                              <div className="w-20 h-20 bg-white rounded-lg border flex items-center justify-center overflow-hidden shrink-0">
@@ -978,7 +1077,6 @@ const handleSaveItem = async (e) => {
             </div>
         )}
 
-        {/* Modal Ativar Todos */}
         {showActivateAllModal && (
              <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                 <div className="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm transform transition-all scale-100">

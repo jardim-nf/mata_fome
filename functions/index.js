@@ -14,10 +14,10 @@ const db = getFirestore();
 
 // Segredos
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
-const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY"); // 🔓 Liberado
+const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY"); 
 
 // ==================================================================
-// 1. SEU AGENTE DE IA (MANTIDO)
+// 1. SEU AGENTE DE IA
 // ==================================================================
 export const chatAgent = onCall({ 
     cors: true,
@@ -53,7 +53,7 @@ export const chatAgent = onCall({
 });
 
 // ==================================================================
-// 2. CRIAR PEDIDO SEGURO (MANTIDO)
+// 2. CRIAR PEDIDO SEGURO
 // ==================================================================
 export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
@@ -100,7 +100,9 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
             itensProcessados.push({
                 ...item,
                 preco: precoUnitarioReal,
-                precoFinal: precoFinalItem
+                precoFinal: precoFinalItem,
+                // Passa os dados fiscais reais do produto para o pedido
+                fiscal: produtoReal.fiscal || null
             });
         }
 
@@ -135,7 +137,7 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
 });
 
 // ==================================================================
-// 3. EMITIR NFC-E VIA PLUGNOTAS (INTEGRAÇÃO REAL)
+// 3. EMITIR NFC-E VIA PLUGNOTAS (CORRIGIDO PARA O PADRÃO PLUGNOTAS)
 // ==================================================================
 export const emitirNfcePlugNotas = onCall({ 
     cors: true,
@@ -161,40 +163,68 @@ export const emitirNfcePlugNotas = onCall({
         const estabelecimento = estabelecimentoSnap.data();
         
         if (!estabelecimento?.fiscal?.cnpj) {
-            throw new HttpsError('failed-precondition', 'Estabelecimento sem configuração fiscal.');
+            throw new HttpsError('failed-precondition', 'Estabelecimento sem configuração fiscal (CNPJ faltando).');
         }
 
         const configFiscal = estabelecimento.fiscal;
 
-        // 3. Montar os itens para o padrão PlugNotas
-        const itensNfce = venda.itens.map(item => ({
-            codigo: item.id || "001",
-            descricao: item.nome,
-            ncm: item.ncm || "21069090", // NCM Genérico para alimentação (ajuste conforme necessário)
-            cfop: "5102", // Venda de mercadoria adquirida/recebida de terceiros
-            valorUnitario: item.precoFinal,
-            quantidade: item.quantidade,
-            tributos: {
-                // Configuração básica para Simples Nacional (CSOSN 102)
-                icms: { origem: "0", csosn: "102" },
-                pis: { cst: "99" },
-                cofins: { cst: "99" }
-            }
-        }));
+        // 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS
+        const itensNfce = venda.itens.map((item, index) => {
+            const ncmReal = item.fiscal?.ncm || "21069090"; 
+            const cfopReal = item.fiscal?.cfop || "5102";
+            const unidadeReal = item.fiscal?.unidade || "UN";
+            
+            const precoFinal = Number(item.precoFinal || item.preco || 0);
+            const quantidade = Number(item.quantidade || 1);
+            const valorTotalItem = precoFinal * quantidade;
+
+            return {
+                codigo: item.id || `00${index + 1}`,
+                descricao: item.nome,
+                ncm: ncmReal,
+                cfop: cfopReal,
+                unidade: unidadeReal, 
+                // Alterado para o formato objeto exigido pelo PlugNotas
+                valorUnitario: {
+                    comercial: precoFinal,
+                    tributavel: precoFinal
+                },
+                valor: valorTotalItem, // Valor total do item adicionado
+                tributos: {
+                    icms: { 
+                        origem: "0", 
+                        csosn: cfopReal === "5405" ? "500" : "102" 
+                    },
+                    pis: { cst: "99" },
+                    cofins: { cst: "99" }
+                }
+            };
+        });
+
+        // Mapear o tipo de pagamento do seu PDV para o PlugNotas
+        let meioPagamento = "01"; // Padrão: Dinheiro
+        const metodoLower = String(venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "").toLowerCase();
+        
+        if (metodoLower.includes('pix')) meioPagamento = "17";
+        else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('cartao')) meioPagamento = "03";
+        else if (metodoLower.includes('débito') || metodoLower.includes('debito')) meioPagamento = "04";
 
         // 4. Montar o Payload Principal
         const payload = [{
-            idIntegracao: vendaId, // Seu ID interno para rastrear
+            idIntegracao: vendaId, 
             presencial: true,
             consumidorFinal: true,
-            naturezaOperacao: "Venda de Mercadoria",
+            natureza: "VENDA", // Alterado de naturezaOperacao para natureza
             ambiente: configFiscal.ambiente === "1" ? "PRODUCAO" : "HOMOLOGACAO",
-            destinatario: cpf ? { cpf: cpf.replace(/\D/g, '') } : undefined, // Envia CPF apenas se existir
+            emitente: {
+                cpfCnpj: String(configFiscal.cnpj).replace(/\D/g, '') // Garante que envia apenas números
+            },
+            destinatario: cpf ? { cpf: String(cpf).replace(/\D/g, '') } : undefined,
             itens: itensNfce,
             pagamentos: [{
-                // Mapeia o tipo de pagamento da sua venda (01=Dinheiro, 03=Crédito, 04=Débito, 17=PIX)
-                tPag: venda.metodoPagamento === "PIX" ? "17" : "01", 
-                vPag: venda.total
+                aVista: true, // Propriedade exigida pelo PlugNotas
+                meio: meioPagamento, // Alterado de tPag
+                valor: Number(venda.total || 0) // Alterado de vPag
             }]
         }];
 
@@ -210,12 +240,12 @@ export const emitirNfcePlugNotas = onCall({
 
         const result = await response.json();
 
+        // Se a API retornar erro de validação
         if (!response.ok) {
             logger.error("❌ Erro retornado pelo PlugNotas:", result);
-            throw new HttpsError('internal', `Falha no PlugNotas: ${result.message || 'Erro desconhecido'}`);
+            throw new HttpsError('internal', `Falha no PlugNotas: ${result.message || JSON.stringify(result.error)}`);
         }
 
-        // A API retorna o ID do processamento
         const idPlugNotas = result.documents[0].id;
 
         const fiscalData = {
@@ -226,7 +256,7 @@ export const emitirNfcePlugNotas = onCall({
             ambiente: configFiscal.ambiente === "1" ? "PRODUCAO" : "HOMOLOGACAO"
         };
 
-        // 6. Atualiza a venda no banco com o status de processamento
+        // 6. Atualiza a venda no banco com o status
         await vendaRef.update({ fiscal: fiscalData });
 
         logger.info(`✅ Venda enviada ao PlugNotas. ID PlugNotas: ${idPlugNotas}`);
@@ -240,7 +270,7 @@ export const emitirNfcePlugNotas = onCall({
     } catch (error) {
         logger.error("❌ Erro na Emissão NFC-e:", error);
         if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'Erro interno ao processar NFC-e.');
+        throw new HttpsError('internal', `Erro interno ao processar NFC-e: ${error.message}`);
     }
 });
 
@@ -248,7 +278,6 @@ export const emitirNfcePlugNotas = onCall({
 // 4. WEBHOOK PLUGNOTAS (RETORNO ASSÍNCRONO DA SEFAZ)
 // ==================================================================
 export const webhookPlugNotas = onRequest(async (req, res) => {
-    // O PlugNotas envia um POST com os dados do processamento
     if (req.method !== 'POST') {
         res.status(405).send('Method Not Allowed');
         return;
@@ -258,11 +287,10 @@ export const webhookPlugNotas = onRequest(async (req, res) => {
     logger.info(`🔔 Webhook Recebido do PlugNotas:`, data);
 
     try {
-        // idIntegracao é o ID da nossa venda que enviamos na emissão
         const { id, idIntegracao, status, pdf, xml, mensagem } = data;
 
         if (!idIntegracao) {
-            logger.warn("Webhook ignorado: Sem idIntegracao (ID da Venda).");
+            logger.warn("Webhook ignorado: Sem idIntegracao.");
             res.status(200).send('OK');
             return;
         }
@@ -276,27 +304,21 @@ export const webhookPlugNotas = onRequest(async (req, res) => {
             return;
         }
 
-        // Prepara a atualização no banco
         const updateData = {
             'fiscal.status': status,
             'fiscal.dataAtualizacao': FieldValue.serverTimestamp()
         };
 
-        // Se a Sefaz autorizou, salva os links
         if (status === 'CONCLUIDO') {
             if (pdf) updateData['fiscal.pdf'] = pdf;
             if (xml) updateData['fiscal.xml'] = xml;
-        } 
-        // Se deu erro, salva o motivo
-        else if (status === 'REJEITADO' || status === 'DENEGADO') {
+        } else if (status === 'REJEITADO' || status === 'DENEGADO') {
             updateData['fiscal.motivoRejeicao'] = mensagem || 'Rejeitada pela Sefaz';
         }
 
-        // Aplica a atualização no Firestore
         await vendaRef.update(updateData);
-        logger.info(`✅ Venda ${idIntegracao} atualizada com status: ${status}`);
+        logger.info(`✅ Venda ${idIntegracao} atualizada via Webhook: ${status}`);
 
-        // Responde 200 rápido para o PlugNotas saber que a notificação foi recebida
         res.status(200).json({ message: "Notificação processada com sucesso" });
 
     } catch (error) {
