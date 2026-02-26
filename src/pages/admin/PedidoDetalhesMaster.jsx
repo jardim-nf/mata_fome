@@ -497,10 +497,10 @@ function PedidoDetalhesMaster() {
                         )}
                     </div>
 
-                    {/* Botões de Ações Fiscais */}
+{/* Botões de Ações Fiscais */}
                     <div className="flex flex-col gap-2 border-t border-gray-50 pt-4">
                         
-                        {/* Se não foi emitida, ou se foi rejeitada, permite Emitir/Reprocessar */}
+                        {/* Se não foi emitida, ou se foi rejeitada/erro, permite Emitir/Reprocessar */}
                         {(!pedido.fiscal || pedido.fiscal.status === 'REJEITADO' || pedido.fiscal.status === 'REJEITADA' || pedido.fiscal.status === 'ERRO') && (
                             <button 
                                 onClick={handleReprocessarNfce}
@@ -561,6 +561,17 @@ function PedidoDetalhesMaster() {
                                 {'</>'} Ver XML de Retorno (Sefaz)
                             </button>
                         )}
+
+                        {/* 🔥 NOVO: Se foi CANCELADA, exibe o botão para recuperar o XML do cancelamento */}
+                        {(pedido.fiscal?.status === 'CANCELADO' || pedido.fiscal?.status === 'CANCELADA') && pedido.fiscal?.idPlugNotas && (
+                            <button 
+                                onClick={handleVerXml} 
+                                disabled={nfceStatus === 'loading'}
+                                className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-1 flex justify-center gap-2"
+                            >
+                                {'</>'} Baixar XML de Cancelamento
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -588,7 +599,7 @@ function PedidoDetalhesMaster() {
                                         </div>
                                         <div className="text-xs text-gray-500 mt-1 space-y-1">
                                             {item.variacaoSelecionada && <p className="text-gray-400">Var: <span className="text-gray-600">{item.variacaoSelecionada.nome}</span></p>}
-                                            {item.adicionais?.length > 0 && (
+                                            {iftem.adicionais?.length > 0 && (
                                                 <div className="pl-2 border-l-2 border-gray-200 my-1">
                                                     {item.adicionais.map((add, i) => <p key={i}>+ {add.quantidade}x {add.nome}</p>)}
                                                 </div>
