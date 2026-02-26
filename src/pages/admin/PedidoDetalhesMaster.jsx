@@ -453,91 +453,111 @@ function PedidoDetalhesMaster() {
                         )}
                     </div>
 
-                    {/* Botões de Ações Fiscais */}
+{/* Botões de Ações Fiscais */}
                     <div className="flex flex-col gap-2 border-t border-gray-50 pt-4">
-                        
-                        {/* Se o pedido foi cancelado no app ANTES de emitir a nota */}
-                        {pedido.status === 'cancelado' && !pedido.fiscal?.idPlugNotas ? (
-                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                <p className="text-xs text-gray-500 font-bold">Pedido cancelado internamente.</p>
-                                <p className="text-[10px] text-gray-400 mt-1">Nenhuma nota fiscal foi gerada na Sefaz para este pedido.</p>
-                            </div>
-                        ) : (
-                            <>
-                                {/* 1. Se no fue emitida o fue rechazada -> Emitir o Reprocesar */}
-                                {(!pedido.fiscal || pedido.fiscal.status === 'REJEITADO' || pedido.fiscal.status === 'REJEITADA' || pedido.fiscal.status === 'ERRO') && (
-                                    <button 
-                                        onClick={handleReprocessarNfce}
-                                        disabled={nfceStatus === 'loading'}
-                                        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
-                                    >
-                                        {nfceStatus === 'loading' ? 'Processando...' : (pedido.fiscal?.idPlugNotas ? '🔄 Corrigir e Reenviar' : '🧾 Emitir NFC-e')}
-                                    </button>
-                                )}
+                        {(() => {
+                            // 👇 MÁGICA AQUI: Converte qualquer status para MAIÚSCULO para evitar bugs de case-sensitive!
+                            const fStatus = pedido.fiscal?.status?.toUpperCase() || '';
+                            const temId = !!pedido.fiscal?.idPlugNotas;
 
-                                {/* 2. Si fue Autorizada -> Ver PDF, XML y Cancelar */}
-                                {(pedido.fiscal?.status === 'AUTORIZADA' || pedido.fiscal?.status === 'CONCLUIDO') && pedido.fiscal?.idPlugNotas && (
-                                    <>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button 
-                                                onClick={handleVerPdf} 
-                                                disabled={nfceStatus === 'loading'}
-                                                className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
-                                            >
-                                                📄 PDF
-                                            </button>
-                                            <button 
-                                                onClick={handleVerXml} 
-                                                disabled={nfceStatus === 'loading'}
-                                                className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
-                                            >
-                                                {'</>'} XML
-                                            </button>
-                                        </div>
+                            // Se o pedido foi cancelado no app ANTES de emitir a nota
+                            if (pedido.status === 'cancelado' && !temId) {
+                                return (
+                                    <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                        <p className="text-xs text-gray-500 font-bold">Pedido cancelado internamente.</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">Nenhuma nota fiscal foi gerada na Sefaz para este pedido.</p>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <>
+                                    {/* 1. Se não foi emitida ou foi rejeitada -> Emitir ou Reprocessar */}
+                                    {(!fStatus || fStatus === 'REJEITADO' || fStatus === 'REJEITADA' || fStatus === 'ERRO') && (
                                         <button 
-                                            onClick={handleCancelarNfce} 
+                                            onClick={handleReprocessarNfce}
                                             disabled={nfceStatus === 'loading'}
-                                            className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors mt-1 disabled:opacity-70"
+                                            className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
                                         >
-                                            Cancelar Nota (NFC-e)
+                                            {nfceStatus === 'loading' ? 'Processando...' : (temId ? '🔄 Corrigir e Reenviar' : '🧾 Emitir NFC-e')}
                                         </button>
-                                    </>
-                                )}
+                                    )}
 
-                                {/* 3. Si fue Rechazada -> Ver XML de Error */}
-                                {(pedido.fiscal?.status === 'REJEITADO' || pedido.fiscal?.status === 'REJEITADA') && pedido.fiscal?.idPlugNotas && (
-                                    <button 
-                                        onClick={handleVerXml} 
-                                        disabled={nfceStatus === 'loading'}
-                                        className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors mt-1"
-                                    >
-                                        {'</>'} Ver XML de Retorno (Sefaz)
-                                    </button>
-                                )}
+                                    {/* 2. Se está PROCESSANDO -> Apenas botão de Sincronizar */}
+                                    {fStatus === 'PROCESSANDO' && temId && (
+                                        <button 
+                                            onClick={handleConsultarStatus}
+                                            disabled={nfceStatus === 'loading'}
+                                            className="w-full py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
+                                        >
+                                            {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Sefaz'}
+                                        </button>
+                                    )}
 
-                                {/* 4. 🔥 Si ya fue CANCELADA en Sefaz -> Botón para el XML de Cancelación */}
-                                {(pedido.fiscal?.status === 'CANCELADO' || pedido.fiscal?.status === 'CANCELADA') && pedido.fiscal?.idPlugNotas && (
-                                    <button 
-                                        onClick={handleVerXml} 
-                                        disabled={nfceStatus === 'loading'}
-                                        className="w-full py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-1 flex justify-center gap-2"
-                                    >
-                                        {'</>'} Baixar XML Cancelamento
-                                    </button>
-                                )}
+                                    {/* 3. Se foi Autorizada -> Ver PDF, XML e Botão de Cancelar */}
+                                    {(fStatus === 'AUTORIZADA' || fStatus === 'CONCLUIDO') && temId && (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button 
+                                                    onClick={handleVerPdf} 
+                                                    disabled={nfceStatus === 'loading'}
+                                                    className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                                >
+                                                    📄 PDF
+                                                </button>
+                                                <button 
+                                                    onClick={handleVerXml} 
+                                                    disabled={nfceStatus === 'loading'}
+                                                    className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                                >
+                                                    {'</>'} XML
+                                                </button>
+                                            </div>
+                                            <button 
+                                                onClick={handleCancelarNfce} 
+                                                disabled={nfceStatus === 'loading'}
+                                                className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors mt-1 disabled:opacity-70"
+                                            >
+                                                Cancelar Nota (NFC-e)
+                                            </button>
+                                        </>
+                                    )}
 
-                                {/* 5. 🔄 SIEMPRE MOSTRAR el botón Sincronizar si existe un ID de integración */}
-                                {pedido.fiscal?.idPlugNotas && (
-                                    <button 
-                                        onClick={handleConsultarStatus}
-                                        disabled={nfceStatus === 'loading'}
-                                        className="w-full py-2 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-100 transition-colors mt-3 flex justify-center items-center gap-2"
-                                    >
-                                        {nfceStatus === 'loading' ? 'Consultando Sefaz...' : '🔄 Sincronizar Status (Sefaz)'}
-                                    </button>
-                                )}
-                            </>
-                        )}
+                                    {/* 4. Se foi Rejeitada -> Ver XML de Erro da Sefaz */}
+                                    {(fStatus === 'REJEITADO' || fStatus === 'REJEITADA') && temId && (
+                                        <button 
+                                            onClick={handleVerXml} 
+                                            disabled={nfceStatus === 'loading'}
+                                            className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors mt-1"
+                                        >
+                                            {'</>'} Ver XML de Retorno (Sefaz)
+                                        </button>
+                                    )}
+
+                                    {/* 5. 🔥 Se foi CANCELADA -> Baixar XML do Cancelamento */}
+                                    {(fStatus === 'CANCELADO' || fStatus === 'CANCELADA') && temId && (
+                                        <button 
+                                            onClick={handleVerXml} 
+                                            disabled={nfceStatus === 'loading'}
+                                            className="w-full py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-1 flex justify-center gap-2"
+                                        >
+                                            {'</>'} Baixar XML Cancelamento
+                                        </button>
+                                    )}
+
+                                    {/* 6. 🔄 SEMPRE mostrar o botão de Sincronizar se tiver ID (Útil para forçar atualização) */}
+                                    {temId && fStatus !== 'PROCESSANDO' && (
+                                        <button 
+                                            onClick={handleConsultarStatus}
+                                            disabled={nfceStatus === 'loading'}
+                                            className="w-full py-2 bg-white text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-50 transition-colors mt-3 flex justify-center items-center gap-2"
+                                        >
+                                            {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Status (Sefaz)'}
+                                        </button>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
 
