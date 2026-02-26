@@ -324,8 +324,7 @@ export const ModalFinalizacao = ({ visivel, venda, onClose, onFinalizar, salvand
     );
 };
 
-export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento }) => {
-    if (!visivel) return null;
+export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp }) => {    if (!visivel) return null;
 
     // Pega o status formatado para evitar erros de case-sensitive
     const statusNfceRecibo = dados?.fiscal?.status?.toUpperCase() || '';
@@ -372,7 +371,7 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                         </div>
                     )}
 
-                    <div className="flex gap-2 mb-3">
+<div className="flex gap-2 mb-3">
                         {/* BOTÕES DE EMISSÃO OU PDF */}
                         {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') ? (
                             <button onClick={() => onBaixarPdf(dados)} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
@@ -388,6 +387,13 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                         {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') && (
                             <button onClick={() => onBaixarXml(dados)} className="flex-1 bg-purple-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition-all flex items-center justify-center gap-2">
                                 {'</>'} XML
+                            </button>
+                        )}
+
+                        {/* 🔥 NOVO BOTÃO WHATSAPP 🔥 */}
+                        {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') && (
+                            <button onClick={() => onEnviarWhatsApp(dados)} className="flex-1 bg-green-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2" title="Enviar Nota via WhatsApp">
+                                📱 Whats
                             </button>
                         )}
                     </div>
@@ -414,8 +420,7 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
     );
 };
 
-export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento }) => {
-    const [filtro, setFiltro] = useState('todas');
+export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp }) => {    const [filtro, setFiltro] = useState('todas');
     const [buscaHistorico, setBuscaHistorico] = useState('');
     const [processandoLote, setProcessandoLote] = useState(false);
     const [agora, setAgora] = useState(new Date());
@@ -536,11 +541,18 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                                             </button>
                                         )}
 
-                                        {/* PDF SE AUTORIZADA */}
+{/* PDF SE AUTORIZADA */}
                                         {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
-                                            <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
-                                                📄 <span className="hidden sm:inline">PDF</span>
-                                            </button>
+                                             <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
+                                                 📄 <span className="hidden sm:inline">PDF</span>
+                                             </button>
+                                        )}
+                                        
+                                        {/* 🔥 NOVO BOTÃO WHATSAPP NO HISTÓRICO 🔥 */}
+                                        {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
+                                             <button onClick={() => onEnviarWhatsApp(v)} className="bg-green-50 text-green-600 border border-green-200 px-3 py-2 rounded-xl font-bold hover:bg-green-100 transition-colors text-sm flex items-center gap-1" title="Enviar Nota via WhatsApp">
+                                                 📱 <span className="hidden sm:inline">Whats</span>
+                                             </button>
                                         )}
 
                                         {/* XML NORMAL SE AUTORIZADA */}
