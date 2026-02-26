@@ -678,7 +678,7 @@ const handleBaixarXml = async (venda) => {
         }
     };
 
-// 👇 NOVA FUNÇÃO PARA ABRIR O PDF CORRIGIDA 👇
+// 👇 FUNÇÃO CORRIGIDA (SEM ABRIR LINK DIRETO DA API) 👇
 const handleBaixarPdf = async (venda) => {
     // 1. Pega os dados corretos da venda selecionada
     const idPlugnotas = venda.fiscal?.idPlugNotas; 
@@ -689,17 +689,25 @@ const handleBaixarPdf = async (venda) => {
         return;
     }
 
-    setNfceStatus('loading'); // Dá um feedback visual na app
+    setNfceStatus('loading'); // Dá um feedback visual de carregamento na tela
 
     try {
-        // 2. Chama a função que já corrigimos no vendaService
-        await vendaService.baixarPdfNfce(idPlugnotas, linkSefaz);
+        // 2. Chama a função segura que passa pelo seu Backend (que tem o Token)
+        // Se a nota já tiver o link público da Sefaz (linkSefaz), ele abre direto.
+        // Se não tiver, ele vai ao backend buscar o PDF binário com a x-api-key.
+        const res = await vendaService.baixarPdfNfce(idPlugnotas, linkSefaz);
+        
+        if (!res.success) {
+            alert("Erro ao gerar PDF: " + res.error);
+        }
     } catch (e) {
+        console.error(e);
         alert("Falha de comunicação ao tentar abrir o PDF.");
     } finally {
         if (nfceStatus === 'loading') setNfceStatus('idle'); 
     }
 };
+// 👆 FIM DA ALTERAÇÃO 👆
 // 👆 FIM DA ALTERAÇÃO 👆
     useEffect(() => { if (!estabelecimentoAtivo || !currentUser) return; const i = async () => { setVerificandoCaixa(true); const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo); if (c) { setCaixaAberto(c); const v = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50); setVendasBase(v); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else { setMostrarAberturaCaixa(true); } setVerificandoCaixa(false); }; i(); }, [currentUser, estabelecimentoAtivo]);
     useEffect(() => { if (!estabelecimentoAtivo) return; setCarregandoProdutos(true); setProdutos([]); setCategorias([]); const u = onSnapshot(query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc')), (s) => { const c = s.docs.map(d => ({ id: d.id, ...d.data() })); setCategorias([{ id: 'todos', name: 'Todos', icon: '🍽️' }, ...c.map(x => ({ id: x.nome || x.id, name: x.nome || x.id, icon: '🍕' }))]); let all = new Map(); let cp = 0; if (c.length === 0) { setProdutos([]); setCarregandoProdutos(false); return; } c.forEach(k => { onSnapshot(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'), (is) => { const it = is.docs.map(i => { const d = i.data(); const vs = d.variacoes?.filter(v => v.ativo) || []; return { ...d, id: i.id, name: d.nome || "S/ Nome", categoria: k.nome || "Geral", categoriaId: k.id, price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0), temVariacoes: vs.length > 0, variacoes: vs }; }); all.set(k.id, it); setProdutos(Array.from(all.values()).flat()); cp++; if (cp >= c.length) setCarregandoProdutos(false); }); }); }); return () => u(); }, [estabelecimentoAtivo]);
