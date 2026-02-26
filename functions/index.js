@@ -533,13 +533,13 @@ export const cancelarNfcePlugNotas = onCall({
             throw new HttpsError('failed-precondition', 'Esta venda não possui um ID válido na Plugnotas para cancelar.');
         }
 
-        // A API da Plugnotas exige que o cancelamento seja um array com o ID interno e a justificativa
-        const payload = [{
-            id: idPlugNotas,
+        // CORREÇÃO: O Payload é apenas um objeto com a justificativa
+        const payload = {
             justificativa: justificativa
-        }];
+        };
 
-        const response = await fetch("https://api.plugnotas.com.br/nfce/cancelar", {
+        // CORREÇÃO: O ID da nota vai na URL da requisição
+        const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}/cancelamento`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -548,18 +548,18 @@ export const cancelarNfcePlugNotas = onCall({
             body: JSON.stringify(payload)
         });
 
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
 
         if (!response.ok) {
             logger.error("❌ Erro ao cancelar no PlugNotas:", result);
-            throw new HttpsError('internal', `Falha na Sefaz: ${result.message || JSON.stringify(result.error)}`);
+            throw new HttpsError('internal', `Falha na Sefaz: ${result.message || JSON.stringify(result.error || 'Erro desconhecido')}`);
         }
 
-        // Atualiza a base de dados para indicar que o cancelamento foi enviado
+        // Atualiza a base de dados para indicar que o cancelamento está em processo
         await vendaRef.update({
-            'fiscal.status': 'PROCESSANDO_CANCELAMENTO',
+            'fiscal.status': 'PROCESSANDO', // Deixamos como processando até o webhook confirmar
             'fiscal.dataAtualizacao': FieldValue.serverTimestamp(),
-            'status': 'cancelada' // Muda o status geral do pedido para cancelado
+            'status': 'cancelada' // Status interno do seu sistema
         });
 
         logger.info(`✅ Solicitação de cancelamento enviada para NFC-e: ${idPlugNotas}`);

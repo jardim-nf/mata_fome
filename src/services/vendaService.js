@@ -179,11 +179,9 @@ export const vendaService = {
     }
   },
 
-// 8. Baixar PDF de forma segura (Base64) e abrir no navegador
+  // 8. Baixar PDF de forma segura (Base64) e abrir no navegador
   async baixarPdfNfce(idPlugNotas, linkPdfDireto = null) {
     try {
-      // CORREÇÃO: Se o link for da SEFAZ (público), abrimos direto.
-      // Se for da API da Plugnotas, NÃO podemos abrir direto porque exige token.
       if (linkPdfDireto && typeof linkPdfDireto === 'string' && linkPdfDireto.includes('sefaz')) {
         window.open(linkPdfDireto, '_blank');
         return { success: true };
@@ -193,14 +191,11 @@ export const vendaService = {
         return { success: false, error: 'ID da nota não encontrado.' };
       }
 
-      // Se for link da Plugnotas ou não tiver link, pede ao Backend (Firebase Functions)
-      // O Backend tem a x-api-key guardada em segurança e consegue fazer o download!
       const functions = getFunctions();
       const baixarPdfFn = httpsCallable(functions, 'baixarPdfNfcePlugNotas');
       const result = await baixarPdfFn({ idPlugNotas });
       
       if (result.data.sucesso && result.data.pdfBase64) {
-        // Transforma o PDF que veio em código (Base64) num ficheiro PDF real na tela do cliente
         const byteCharacters = atob(result.data.pdfBase64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -221,73 +216,24 @@ export const vendaService = {
       return { success: false, error: error.message };
     }
   },
-};
-// ==================================================================
-// 9. CANCELAR NFC-E VIA PLUGNOTAS
-// ==================================================================
-export const cancelarNfcePlugNotas = onCall({
-    cors: true,
-    secrets: [plugNotasApiKey]
-}, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
-    const { vendaId, justificativa } = request.data;
-    
-    if (!vendaId || !justificativa) {
-        throw new HttpsError('invalid-argument', 'O ID da venda e a justificativa são obrigatórios.');
-    }
-
+  // 9. Cancelar NFC-e na Sefaz (NOVA FUNÇÃO CORRETA PARA O FRONTEND)
+  async cancelarNfce(vendaId, justificativa) {
     try {
-        const vendaRef = db.collection('vendas').doc(vendaId);
-        const vendaSnap = await vendaRef.get();
-        if (!vendaSnap.exists) throw new HttpsError('not-found', 'Venda não encontrada.');
-        
-        const venda = vendaSnap.data();
-        const idPlugNotas = venda.fiscal?.idPlugNotas;
-
-        if (!idPlugNotas) {
-            throw new HttpsError('failed-precondition', 'Esta venda não possui um ID válido na Plugnotas para cancelar.');
-        }
-
-        // A API da Plugnotas exige que o cancelamento seja um array com o ID interno e a justificativa
-        const payload = [{
-            id: idPlugNotas,
-            justificativa: justificativa
-        }];
-
-        const response = await fetch("https://api.plugnotas.com.br/nfce/cancelar", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-api-key": plugNotasApiKey.value()
-            },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            logger.error("❌ Erro ao cancelar no PlugNotas:", result);
-            throw new HttpsError('internal', `Falha na Sefaz: ${result.message || JSON.stringify(result.error)}`);
-        }
-
-        // Atualiza a base de dados para indicar que o cancelamento foi enviado
-        await vendaRef.update({
-            'fiscal.status': 'PROCESSANDO_CANCELAMENTO',
-            'fiscal.dataAtualizacao': FieldValue.serverTimestamp(),
-            'status': 'cancelada' // Muda o status geral do pedido para cancelado
-        });
-
-        logger.info(`✅ Solicitação de cancelamento enviada para NFC-e: ${idPlugNotas}`);
-
-        return {
-            sucesso: true,
-            mensagem: 'Cancelamento solicitado com sucesso à Sefaz.'
-        };
-
+      const functions = getFunctions();
+      // Repare que aqui usamos httpsCallable em vez de onCall
+      const cancelarFn = httpsCallable(functions, 'cancelarNfcePlugNotas');
+      
+      const response = await cancelarFn({ vendaId, justificativa });
+      
+      if (response.data && response.data.sucesso) {
+        return { success: true };
+      }
+      
+      return { success: false, error: 'Resposta inválida do servidor ao tentar cancelar.' };
     } catch (error) {
-        logger.error("❌ Erro no Cancelamento NFC-e:", error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', error.message);
+      console.error("Erro ao cancelar NFC-e:", error);
+      return { success: false, error: error.message };
     }
-});
+  }
+};

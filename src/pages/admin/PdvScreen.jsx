@@ -503,7 +503,7 @@ const PdvScreen = () => {
         }
     };
     
-    const handleEmitirNfce = async () => {
+const handleEmitirNfce = async () => {
         if (!dadosRecibo?.id) return;
         setNfceStatus('loading'); // Fica processando
         try {
@@ -517,6 +517,18 @@ const PdvScreen = () => {
                 );
                 setVendasBase(atualizaVenda);
                 setVendasHistoricoExibicao(atualizaVenda);
+
+                // 👇 A CORREÇÃO ESTÁ AQUI: Atualiza o recibo aberto com o NOVO ID da Plugnotas 👇
+                setDadosRecibo(prev => ({
+                    ...prev,
+                    fiscal: { 
+                        ...prev.fiscal, 
+                        status: 'PROCESSANDO', 
+                        idPlugNotas: res.idPlugNotas 
+                    }
+                }));
+                // 👆 FIM DA CORREÇÃO 👆
+
             } else {
                 setNfceStatus('error');
                 tocarBeepErro();
