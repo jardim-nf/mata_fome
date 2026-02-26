@@ -168,7 +168,7 @@ export const emitirNfcePlugNotas = onCall({
 
         const configFiscal = estabelecimento.fiscal;
 
-// 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS
+        // 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS
         let somaDosItens = 0;
 
         const itensNfce = venda.itens.map((item, index) => {
@@ -243,7 +243,7 @@ export const emitirNfcePlugNotas = onCall({
         else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('cartao')) meioPagamento = "03";
         else if (metodoLower.includes('débito') || metodoLower.includes('debito')) meioPagamento = "04";
 
-// 4. Montar o Payload Principal
+        // 4. Montar o Payload Principal
         const payload = [{
             idIntegracao: vendaId,
             presencial: true,
@@ -262,7 +262,6 @@ export const emitirNfcePlugNotas = onCall({
             }]
         }];
 
-        // 👇 ADICIONE ESTA LINHA AQUI 👇
         logger.info("📦 [DEBUG PLUGNOTAS] Payload enviado:", JSON.stringify(payload, null, 2));
 
         // 5. Disparar para a API do PlugNotas
