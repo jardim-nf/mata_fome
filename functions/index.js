@@ -168,27 +168,29 @@ export const emitirNfcePlugNotas = onCall({
 
         const configFiscal = estabelecimento.fiscal;
 
-// 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS (Mapeado do JSON oficial)
+        // 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS (Mapeado do JSON oficial)
+        let somaDosItens = 0; // ADICIONADO: Variável para somar os itens exatamente
+
         const itensNfce = venda.itens.map((item, index) => {
             const ncmReal = item.fiscal?.ncm || "06029090"; 
             const cfopReal = item.fiscal?.cfop || "5102";
             
             const precoFinal = Number(item.precoFinal || item.preco || 0);
             const quantidade = Number(item.quantidade || 1);
-            const valorTotalItem = precoFinal * quantidade;
+            
+            // Garante 2 casas decimais no item para evitar bugs de matemática
+            const valorTotalItem = Number((precoFinal * quantidade).toFixed(2));
+            somaDosItens += valorTotalItem; // Soma no total geral
 
             return {
                 codigo: String(item.id || `00${index + 1}`),
                 descricao: item.nome ? String(item.nome) : `Produto ${index + 1}`,
                 ncm: String(ncmReal).replace(/\D/g, ''), 
                 cfop: String(cfopReal).replace(/\D/g, ''),
-                
-                // CORREÇÃO: Unidade passa a ser um objeto com as subdivisões
                 unidade: {
                     comercial: "UN",
                     tributavel: "UN"
                 },
-                // ADIÇÃO: A quantidade também deve seguir a mesma regra de objeto
                 quantidade: {
                     comercial: quantidade,
                     tributavel: quantidade
@@ -199,37 +201,32 @@ export const emitirNfcePlugNotas = onCall({
                 },
                 valor: valorTotalItem,
                 tributos: {
-                    // Bloco ICMS idêntico ao exigido para o Regime Normal
                     icms: {
                         origem: "0",
                         cst: cfopReal === "5405" ? "60" : "00",
-                        baseCalculo: {
-                            modalidadeDeterminacao: 0,
-                            valor: 0
-                        },
+                        baseCalculo: { modalidadeDeterminacao: 0, valor: 0 },
                         aliquota: 0,
                         valor: 0
                     },
                     pis: {
                         cst: "99",
-                        baseCalculo: {
-                            valor: 0,
-                            quantidade: 0
-                        },
+                        baseCalculo: { valor: 0, quantidade: 0 },
                         aliquota: 0,
                         valor: 0
                     },
                     cofins: {
                         cst: "07",
-                        baseCalculo: {
-                            valor: 0
-                        },
+                        baseCalculo: { valor: 0 },
                         aliquota: 0,
                         valor: 0
                     }
                 }
             };
         });
+
+        // Arredonda a soma total para 2 casas decimais com precisão
+        somaDosItens = Number(somaDosItens.toFixed(2));
+
         // Mapear o tipo de pagamento do seu PDV para o PlugNotas
         let meioPagamento = "01"; // Padrão: Dinheiro
         const metodoLower = String(venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "").toLowerCase();
@@ -243,17 +240,19 @@ export const emitirNfcePlugNotas = onCall({
             idIntegracao: vendaId, 
             presencial: true,
             consumidorFinal: true,
-            natureza: "VENDA", // Alterado de naturezaOperacao para natureza
+            natureza: "VENDA",
             ambiente: configFiscal.ambiente === "1" ? "PRODUCAO" : "HOMOLOGACAO",
             emitente: {
-                cpfCnpj: String(configFiscal.cnpj).replace(/\D/g, '') // Garante que envia apenas números
+                cpfCnpj: String(configFiscal.cnpj).replace(/\D/g, '')
             },
             destinatario: cpf ? { cpf: String(cpf).replace(/\D/g, '') } : undefined,
             itens: itensNfce,
             pagamentos: [{
-                aVista: true, // Propriedade exigida pelo PlugNotas
-                meio: meioPagamento, // Alterado de tPag
-                valor: Number(venda.total || 0) // Alterado de vPag
+                aVista: true,
+                meio: meioPagamento,
+                // CORREÇÃO MESTRA: Forçamos o pagamento a ser EXATAMENTE a soma dos itens
+                // Isso impede a Sefaz/PlugNotas de reclamar de diferença de valores ou exigir "valorTroco"
+                valor: somaDosItens 
             }]
         }];
 
