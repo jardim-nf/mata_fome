@@ -983,17 +983,25 @@ const handleBaixarPdf = async (venda) => {
                         <div className="md:hidden fixed inset-0 bg-gray-900/60 z-[105] backdrop-blur-sm transition-opacity" onClick={() => setMostrarCarrinhoMobile(false)}></div>
                     )}
 
-                    {/* BARRA DE ATALHOS OTIMIZADA */}
+{/* BARRA DE ATALHOS OTIMIZADA */}
                     <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-2 md:p-3 z-[100] flex justify-between md:justify-center gap-2 md:gap-4 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] no-print overflow-x-auto scrollbar-hide">
                         <div className="flex gap-2 min-w-max px-2">
                             <button onClick={() => inputBuscaRef.current?.focus()} className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 shadow-sm transition-all h-full"><kbd className="hidden md:inline-block bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-gray-500 font-mono">F1</kbd> <span className="text-lg md:hidden">🔍</span> <span className="md:inline">BUSCAR</span></button>
+                            
                             <button onClick={iniciarVendaBalcao} className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 shadow-sm transition-all h-full"><kbd className="hidden md:inline-block bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-gray-500 font-mono">F2</kbd> <span className="text-lg md:hidden">✨</span> <span className="md:inline">NOVA</span></button>
+                            
+                            {/* 🔥 NOVO BOTÃO F3 ADICIONADO AQUI 🔥 */}
+                            <button onClick={abrirHistoricoAtual} className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 shadow-sm transition-all h-full"><kbd className="hidden md:inline-block bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-gray-500 font-mono">F3</kbd> <span className="text-lg md:hidden">📜</span> <span className="md:inline">HISTÓRICO</span></button>
+
                             <button onClick={() => setMostrarSuspensas(true)} className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 shadow-sm transition-all relative h-full">
                                 <kbd className="hidden md:inline-block bg-white border border-blue-200 px-1.5 py-0.5 rounded text-blue-800 font-mono">F5</kbd> <span className="text-lg md:hidden">⏸️</span> <span className="md:inline">ESPERA</span>
                                 {vendasSuspensas.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full shadow-md animate-bounce">{vendasSuspensas.length}</span>}
                             </button>
+                            
                             <button onClick={abrirMovimentacao} className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 shadow-sm transition-all h-full"><kbd className="hidden md:inline-block bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-gray-500 font-mono">F8</kbd> <span className="text-lg md:hidden">💸</span> <span className="md:inline">MOVIM.</span></button>
+                            
                             <button onClick={prepararFechamento} className="bg-gray-900 hover:bg-black border border-gray-800 text-white px-3 md:px-4 py-2 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 shadow-sm transition-all h-full"><kbd className="hidden md:inline-block bg-gray-700 border border-gray-600 px-1.5 py-0.5 rounded text-gray-300 font-mono">F9</kbd> <span className="text-lg md:hidden">🔒</span> <span className="md:inline">FECHAR</span></button>
+                            
                             <button onClick={carregarListaTurnos} className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 shadow-sm transition-all h-full"><kbd className="hidden md:inline-block bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded text-gray-500 font-mono">F11</kbd> <span className="text-lg md:hidden">📋</span> <span className="md:inline">TURNOS</span></button>
                         </div>
                     </div>

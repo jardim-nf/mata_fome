@@ -42,7 +42,7 @@ export const ModalEdicaoItemCarrinho = ({ visivel, item, onClose, onConfirm }) =
                     <h3 className="font-bold text-xl text-gray-800 line-clamp-1">{item.name}</h3>
                     <button onClick={onClose} className="bg-gray-100 p-2 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
                 </div>
-                
+
                 <div className="mb-6">
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Quantidade</label>
                     <div className="flex items-center gap-3">
@@ -128,11 +128,11 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
         }
     });
 
-    const tSup = movimentacoes?.totalSuprimento || 0; 
+    const tSup = movimentacoes?.totalSuprimento || 0;
     const tSan = movimentacoes?.totalSangria || 0;
     const itensMov = movimentacoes?.itens || [];
-    
-    const esp = parseFloat(caixa.saldoInicial || 0) + tDin + tSup - tSan; 
+
+    const esp = parseFloat(caixa.saldoInicial || 0) + tDin + tSup - tSan;
     const dif = parseFloat(valorInformado || 0) - esp;
 
     return (
@@ -209,8 +209,8 @@ export const ModalFinalizacao = ({ visivel, venda, onClose, onFinalizar, salvand
     const [formaAtual, setFormaAtual] = useState('dinheiro');
     const [valorInput, setValorInput] = useState('');
 
-    useEffect(() => { 
-        if (visivel) { setFormaAtual('dinheiro'); setValorInput(''); } 
+    useEffect(() => {
+        if (visivel) { setFormaAtual('dinheiro'); setValorInput(''); }
     }, [visivel]);
 
     const vendaTotal = venda ? venda.total : 0;
@@ -355,9 +355,9 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     <span>TOTAL</span>
                     <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}>{formatarMoeda(dados.total)}</span>
                 </div>
-                
+
                 <div className="grid gap-3 no-print">
-                    
+
                     {isCanceladaRecibo && (
                         <div className="bg-red-50 p-2 rounded-lg border border-red-200 text-center text-xs font-bold text-red-600 uppercase mb-2">
                             PEDIDO CANCELADO
@@ -394,15 +394,15 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
 
                     {/* 🔥 XML DE CANCELAMENTO SE ESTIVER CANCELADA 🔥 */}
                     {isCanceladaRecibo && temIdRecibo && (
-                         <button 
+                        <button
                             // Como onBaixarXmlCancelamento pode não ter sido passado em todas as props, faz fallback para o onBaixarXml
-                            onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(dados) : onBaixarXml(dados)} 
+                            onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(dados) : onBaixarXml(dados)}
                             className="w-full bg-gray-100 text-gray-700 border border-gray-200 p-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex justify-center items-center gap-2 mb-3"
                         >
                             {'</>'} Baixar XML de Cancelamento
                         </button>
                     )}
-                    
+
                     <div className="flex gap-3">
                         <button onClick={() => window.print()} className="flex-1 border-2 border-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all">Imprimir</button>
                         <button onClick={onClose} className="flex-1 bg-emerald-600 text-white p-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">Próximo</button>
@@ -423,7 +423,7 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
     useEffect(() => {
         if (visivel) {
             setAgora(new Date());
-            setBuscaHistorico(''); 
+            setBuscaHistorico('');
         }
     }, [visivel]);
 
@@ -498,7 +498,8 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                             let tagNfce = null;
                             const dataVenda = v.createdAt?.toDate ? v.createdAt.toDate() : new Date(v.createdAt);
                             const minutosPassados = (agora - dataVenda) / (1000 * 60);
-                            const podeCancelar = !isCancelada && (statusNfce !== 'AUTORIZADA' || minutosPassados <= 30);
+
+                            // Removi o "podeCancelar" antigo pois agora a lógica está direto no botão novo abaixo
 
                             if (isCancelada) tagNfce = <span className="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-300">CANCELADA</span>;
                             else if (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') tagNfce = <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">AUTORIZADA</span>;
@@ -527,7 +528,7 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                                     </div>
                                     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                                         <span className={`font-bold text-xl hidden sm:block mr-2 ${isCancelada ? 'text-gray-400' : 'text-gray-800'}`}>{formatarMoeda(v.total)}</span>
-                                        
+
                                         {/* BOTÃO DE SINCRONIZAR (Consulta na API) */}
                                         {temId && (statusNfce === 'PROCESSANDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
                                             <button onClick={() => onConsultarStatus(v)} className="bg-gray-50 text-gray-600 border border-gray-200 px-3 py-2 rounded-xl font-bold hover:bg-gray-100 transition-colors text-sm flex items-center gap-1" title="Atualizar Status na Sefaz">
@@ -537,9 +538,9 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
 
                                         {/* PDF SE AUTORIZADA */}
                                         {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
-                                             <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
-                                                 📄 <span className="hidden sm:inline">PDF</span>
-                                             </button>
+                                            <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
+                                                📄 <span className="hidden sm:inline">PDF</span>
+                                            </button>
                                         )}
 
                                         {/* XML NORMAL SE AUTORIZADA */}
@@ -551,22 +552,45 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
 
                                         {/* 🔥 XML CANCELAMENTO SE CANCELADA 🔥 */}
                                         {isCancelada && temId && (
-                                            <button 
+                                            <button
                                                 // Se onBaixarXmlCancelamento não for passado, chama o onBaixarXml que fará o roteamento pela Sefaz
-                                                onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(v) : onBaixarXml(v)} 
-                                                className="bg-gray-100 text-gray-700 border border-gray-300 px-3 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm flex items-center gap-1" 
+                                                onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(v) : onBaixarXml(v)}
+                                                className="bg-gray-100 text-gray-700 border border-gray-300 px-3 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm flex items-center gap-1"
                                                 title="Baixar XML Cancelamento"
                                             >
                                                 {'</>'} <span className="hidden sm:inline">XML Canc.</span>
                                             </button>
                                         )}
 
-                                        {/* BOTÃO DE CANCELAR (VERMELHO) */}
-                                        {podeCancelar && (
-                                            <button onClick={() => onCancelarNfce(v)} className="bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 transition-colors text-sm">
-                                                {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
-                                            </button>
-                                        )}
+                                        {/* 🔥 BOTÃO DE CANCELAR COM BLOQUEIO DE 30 MINUTOS 🔥 */}
+                                        {(() => {
+                                            const passouDoTempo = (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && minutosPassados > 30;
+
+                                            if (!isCancelada) {
+                                                return (
+                                                    <button
+                                                        onClick={() => {
+                                                            if (passouDoTempo) {
+                                                                alert("⚠️ O prazo legal da Sefaz de 30 minutos para cancelar esta nota já expirou.");
+                                                                return;
+                                                            }
+                                                            onCancelarNfce(v);
+                                                        }}
+                                                        disabled={passouDoTempo}
+                                                        className={`px-3 py-2 rounded-xl font-bold text-sm border transition-colors flex items-center gap-1 ${passouDoTempo
+                                                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-70'
+                                                                : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                                            }`}
+                                                        title={passouDoTempo ? "Prazo de 30 min expirado para cancelamento" : "Cancelar"}
+                                                    >
+                                                        {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
+                                                        {passouDoTempo && <span className="text-[10px]">🔒</span>}
+                                                    </button>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+
                                         <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm border border-gray-200">Detalhes</button>
                                     </div>
                                 </div>
@@ -655,7 +679,7 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
         <div id="resumo-turno-overlay" className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[9600] p-4 backdrop-blur-sm">
             <div id="resumo-turno-content" className="bg-white w-full max-w-sm p-8 rounded-3xl shadow-2xl relative animate-slideUp">
                 <button onClick={onClose} className="absolute top-4 right-4 bg-gray-100 hover:bg-red-100 hover:text-red-500 p-2 rounded-full transition-colors no-print">✕</button>
-                
+
                 <div className="text-center border-b border-dashed border-gray-200 pb-4 mb-4">
                     <h2 className="font-black text-2xl text-gray-800 uppercase tracking-wide">FECHO DE CAIXA</h2>
                     <p className="text-gray-500 text-xs font-mono mt-1">Turno: {turno.id?.slice(-6).toUpperCase()}</p>
@@ -680,7 +704,7 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
                     <div className="border-t border-dashed border-gray-200 pt-3 flex flex-col gap-1">
                         <div className="flex justify-between text-emerald-600"><span>Suprimentos (+):</span> <b>{formatarMoeda(suprimento)}</b></div>
                         <div className="flex justify-between text-red-500"><span>Sangrias (-):</span> <b>{formatarMoeda(sangria)}</b></div>
-                        
+
                         {detalhesMov.length > 0 && (
                             <div className="mt-2 pl-2 border-l-2 border-gray-200 text-xs">
                                 {detalhesMov.map((mov, idx) => (
@@ -777,7 +801,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
-                
+
                 buffer += decoder.decode(value, { stream: true });
                 const matches = buffer.match(/\d+\.\d+|\d+\,\d+/g);
                 if (matches) {
@@ -785,7 +809,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                     if (parseFloat(pesoLido) > 0) {
                         setPeso(pesoLido);
                         clearTimeout(timeout);
-                        reader.cancel(); 
+                        reader.cancel();
                         break;
                     }
                 }
@@ -794,7 +818,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
         } catch (error) {
             console.error("Erro ao ler porta:", error);
             setErro("Falha na leitura. Tente novamente.");
-            try { await port.close(); } catch(e) {} 
+            try { await port.close(); } catch (e) { }
         } finally {
             setLendo(false);
         }
