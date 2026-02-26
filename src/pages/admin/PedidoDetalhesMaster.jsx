@@ -15,7 +15,7 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { auditLogger } from '../../utils/auditLogger';
-import { vendaService } from '../../services/vendaService'; // <-- IMPORTANTE: Adicionado o serviço de Vendas/Fiscal
+import { vendaService } from '../../services/vendaService';
 import { 
   FaStore, 
   FaUser, 
@@ -31,7 +31,7 @@ import {
   FaCheck,
   FaTimes,
   FaBan,
-  FaFileInvoice // <-- IMPORTANTE: Novo ícone para a área Fiscal
+  FaFileInvoice 
 } from 'react-icons/fa';
 
 // --- Header Minimalista ---
@@ -83,13 +83,12 @@ function PedidoDetalhesMaster() {
 
   const [pedido, setPedido] = useState(null);
   const [loadingPedido, setLoadingPedido] = useState(true);
-  const [updating, setUpdating] = useState(false); // Estado para loading de ação de status
-  const [nfceStatus, setNfceStatus] = useState('idle'); // Estado de loading para ações fiscais
+  const [updating, setUpdating] = useState(false); 
+  const [nfceStatus, setNfceStatus] = useState('idle'); 
   const [error, setError] = useState('');
   const [estabNome, setEstabNome] = useState('Carregando...');
   const [docRefPath, setDocRefPath] = useState(null);
 
-  // Carregar Pedido
   useEffect(() => {
     if (authLoading) return;
     if (!isMasterAdmin) {
@@ -104,7 +103,6 @@ function PedidoDetalhesMaster() {
         let foundEstabId = null;
         let path = null;
 
-        // Tenta encontrar o pedido (Root ou Subcoleção)
         let docSnap = await getDoc(doc(db, 'pedidos', id));
         if (docSnap.exists()) {
             foundData = { id: docSnap.id, ...docSnap.data() };
@@ -126,7 +124,6 @@ function PedidoDetalhesMaster() {
         setPedido(foundData);
         setDocRefPath(path);
         
-        // Nome do Estabelecimento
         foundEstabId = foundData.estabelecimentoId;
         if (!foundEstabId && path.path.includes('estabelecimentos/')) {
             const parts = path.path.split('/');
@@ -145,7 +142,7 @@ function PedidoDetalhesMaster() {
 
       } catch (err) {
         console.error(err);
-        setError("Não foi possível carregar este pedido.");
+        setError("Não foi posible cargar este pedido.");
       } finally {
         setLoadingPedido(false);
       }
@@ -154,7 +151,6 @@ function PedidoDetalhesMaster() {
     if (id) fetchPedido();
   }, [id, isMasterAdmin, authLoading, navigate]);
 
-  // --- FUNÇÃO: ALTERAR STATUS DO PEDIDO ---
   const handleStatusChange = async (newStatus) => {
     if (!window.confirm(`Tem certeza que deseja mudar o status para "${newStatus.toUpperCase()}"?`)) return;
     if (!docRefPath) return toast.error("Referência do pedido perdida.");
@@ -188,13 +184,10 @@ function PedidoDetalhesMaster() {
 
   // --- FUNÇÕES FISCAIS (NFC-E) ---
 
-  // 1. REPROCESSAR OU EMITIR NOTA
   const handleReprocessarNfce = async () => {
     setNfceStatus('loading');
     try {
-        // Envia o pedido novamente com o MESMO ID. A Plugnotas entende que é um reprocessamento.
         const res = await vendaService.emitirNfce(pedido.id, pedido.clienteCpf || pedido.cliente?.cpf);
-        
         if (res.sucesso || res.success) {
             toast.success("Nota enviada para reprocessamento com sucesso!");
             setPedido(prev => ({
@@ -215,7 +208,6 @@ function PedidoDetalhesMaster() {
     }
   };
 
-  // 2. ATUALIZAR STATUS MANUALMENTE
   const handleConsultarStatus = async () => {
     if (!pedido.fiscal?.idPlugNotas) return toast.error("A nota não possui ID de Integração.");
     setNfceStatus('loading');
@@ -243,7 +235,6 @@ function PedidoDetalhesMaster() {
     }
   };
 
-  // 3. VISUALIZAR XML
   const handleVerXml = async () => {
     const idPlugNotas = pedido.fiscal?.idPlugNotas;
     if (!idPlugNotas) return toast.error("A nota não possui ID na PlugNotas.");
@@ -261,7 +252,6 @@ function PedidoDetalhesMaster() {
     }
   };
 
-  // 4. VISUALIZAR PDF
   const handleVerPdf = async () => {
     const idPlugNotas = pedido.fiscal?.idPlugNotas;
     const linkSefaz = pedido.fiscal?.pdf;
@@ -271,23 +261,22 @@ function PedidoDetalhesMaster() {
     try {
         const res = await vendaService.baixarPdfNfce(idPlugNotas, linkSefaz);
         if (!res.success) {
-            toast.error("Erro ao gerar PDF: " + res.error);
+            toast.error("Erro ao generar PDF: " + res.error);
         }
     } catch (error) {
-        toast.error("Falha de comunicação ao tentar abrir o PDF.");
+        toast.error("Falha de comunicación ao tentar abrir o PDF.");
     } finally {
         setNfceStatus('idle');
     }
   };
 
-  // 5. CANCELAR NOTA
   const handleCancelarNfce = async () => {
     if (!pedido.fiscal?.idPlugNotas) return;
-    const justificativa = window.prompt("Digite o motivo do cancelamento da nota (MÍNIMO de 15 caracteres):");
+    const justificativa = window.prompt("Digite o motivo del cancelamento de la nota (MÍNIMO 15 caracteres):");
     if (!justificativa) return;
     
     if (justificativa.trim().length < 15) {
-        toast.warning("A justificativa deve ter pelo menos 15 caracteres para a SEFAZ aceitar.");
+        toast.warning("A justificativa debe ter pelo menos 15 caracteres.");
         return;
     }
 
@@ -295,23 +284,22 @@ function PedidoDetalhesMaster() {
     try {
         const res = await vendaService.cancelarNfce(pedido.id, justificativa.trim());
         if (res.success) {
-            toast.success("Solicitação de cancelamento enviada!");
+            toast.success("Solicitud de cancelamento enviada!");
             setPedido(prev => ({
                 ...prev,
-                status: 'cancelada',
+                status: 'cancelado',
                 fiscal: { ...prev.fiscal, status: 'PROCESSANDO' }
             }));
         } else {
             toast.error("Erro ao cancelar: " + res.error);
         }
     } catch (e) {
-        toast.error('Falha de comunicação ao tentar cancelar a nota.');
+        toast.error('Falha de comunicación ao tentar cancelar la nota.');
     } finally {
         setNfceStatus('idle');
     }
   };
 
-  // Renderizador de Badge de Status de Preparo
   const renderStatusBadge = (status) => {
       const s = (status || '').toLowerCase();
       let colorClass = 'bg-gray-100 text-gray-600';
@@ -321,7 +309,7 @@ function PedidoDetalhesMaster() {
       else if (s.includes('finalizado') || s.includes('entregue')) colorClass = 'bg-green-100 text-green-800';
       else if (s.includes('cancelado') || s.includes('recusado')) colorClass = 'bg-red-100 text-red-800';
 
-      return <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${colorClass}`}>{status || 'Desconhecido'}</span>;
+      return <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${colorClass}`}>{status || 'Desconocido'}</span>;
   };
 
   if (authLoading || loadingPedido) return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div></div>;
@@ -382,62 +370,29 @@ function PedidoDetalhesMaster() {
                         {renderStatusBadge(pedido.status)}
                     </div>
                     
-                    {/* Botões de Ação */}
                     <div className="space-y-2 pt-2 border-t border-gray-50">
                         <p className="text-xs font-bold text-gray-400 uppercase mb-2">Ações Rápidas</p>
                         
                         {pedido.status !== 'cancelado' && pedido.status !== 'finalizado' && (
                             <>
                                 {pedido.status === 'recebido' && (
-                                    <button 
-                                        onClick={() => handleStatusChange('preparo')} 
-                                        disabled={updating}
-                                        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2"
-                                    >
-                                        <FaCheck /> Aceitar / Preparar
-                                    </button>
+                                    <button onClick={() => handleStatusChange('preparo')} disabled={updating} className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2"><FaCheck /> Aceitar / Preparar</button>
                                 )}
                                 
                                 {pedido.status === 'preparo' && (
-                                    <button 
-                                        onClick={() => handleStatusChange(tipo === 'SALÃO' ? 'finalizado' : 'em_entrega')} 
-                                        disabled={updating}
-                                        className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors flex justify-center items-center gap-2"
-                                    >
-                                        <FaMotorcycle /> {tipo === 'SALÃO' ? 'Finalizar' : 'Saiu para Entrega'}
-                                    </button>
+                                    <button onClick={() => handleStatusChange(tipo === 'SALÃO' ? 'finalizado' : 'em_entrega')} disabled={updating} className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors flex justify-center items-center gap-2"><FaMotorcycle /> {tipo === 'SALÃO' ? 'Finalizar' : 'Saiu para Entrega'}</button>
                                 )}
 
                                 {pedido.status === 'em_entrega' && (
-                                    <button 
-                                        onClick={() => handleStatusChange('finalizado')} 
-                                        disabled={updating}
-                                        className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex justify-center items-center gap-2"
-                                    >
-                                        <FaCheck /> Confirmar Entrega
-                                    </button>
+                                    <button onClick={() => handleStatusChange('finalizado')} disabled={updating} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex justify-center items-center gap-2"><FaCheck /> Confirmar Entrega</button>
                                 )}
 
-                                <button 
-                                    onClick={() => handleStatusChange('cancelado')} 
-                                    disabled={updating}
-                                    className="w-full py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors flex justify-center items-center gap-2"
-                                >
-                                    <FaBan /> Cancelar Pedido
-                                </button>
+                                <button onClick={() => handleStatusChange('cancelado')} disabled={updating} className="w-full py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors flex justify-center items-center gap-2"><FaBan /> Cancelar Pedido</button>
                             </>
                         )}
 
-                        {pedido.status === 'cancelado' && (
-                            <div className="text-center text-red-500 text-xs font-bold py-2">
-                                Pedido Cancelado
-                            </div>
-                        )}
-                        {pedido.status === 'finalizado' && (
-                            <div className="text-center text-green-600 text-xs font-bold py-2">
-                                Pedido Concluído
-                            </div>
-                        )}
+                        {pedido.status === 'cancelado' && <div className="text-center text-red-500 text-xs font-bold py-2">Pedido Cancelado</div>}
+                        {pedido.status === 'finalizado' && <div className="text-center text-green-600 text-xs font-bold py-2">Pedido Concluído</div>}
                     </div>
                 </div>
 
@@ -481,6 +436,7 @@ function PedidoDetalhesMaster() {
                             <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
                                 pedido.fiscal.status === 'AUTORIZADA' || pedido.fiscal.status === 'CONCLUIDO' ? 'bg-green-100 text-green-700' : 
                                 pedido.fiscal.status === 'REJEITADO' || pedido.fiscal.status === 'REJEITADA' || pedido.fiscal.status === 'ERRO' ? 'bg-red-100 text-red-700' : 
+                                pedido.fiscal.status === 'CANCELADO' || pedido.fiscal.status === 'CANCELADA' ? 'bg-gray-100 text-gray-700 border border-gray-200' :
                                 'bg-yellow-100 text-yellow-700'
                             }`}>
                                 {pedido.fiscal.status}
@@ -497,80 +453,90 @@ function PedidoDetalhesMaster() {
                         )}
                     </div>
 
-{/* Botões de Ações Fiscais */}
+                    {/* Botões de Ações Fiscais */}
                     <div className="flex flex-col gap-2 border-t border-gray-50 pt-4">
                         
-                        {/* Se não foi emitida, ou se foi rejeitada/erro, permite Emitir/Reprocessar */}
-                        {(!pedido.fiscal || pedido.fiscal.status === 'REJEITADO' || pedido.fiscal.status === 'REJEITADA' || pedido.fiscal.status === 'ERRO') && (
-                            <button 
-                                onClick={handleReprocessarNfce}
-                                disabled={nfceStatus === 'loading'}
-                                className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
-                            >
-                                {nfceStatus === 'loading' ? 'Processando...' : (pedido.fiscal ? '🔄 Corrigir e Reenviar' : '🧾 Emitir NFC-e')}
-                            </button>
-                        )}
-
-                        {/* Se estiver PROCESSANDO, permite atualizar o status manualmente */}
-                        {(pedido.fiscal?.status === 'PROCESSANDO') && (
-                            <button 
-                                onClick={handleConsultarStatus}
-                                disabled={nfceStatus === 'loading'}
-                                className="w-full py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
-                            >
-                                {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Sefaz'}
-                            </button>
-                        )}
-
-                        {/* Se foi Autorizada, permite Baixar PDF/XML e Cancelar */}
-                        {(pedido.fiscal?.status === 'AUTORIZADA' || pedido.fiscal?.status === 'CONCLUIDO') && (
+                        {/* Se o pedido foi cancelado no app ANTES de emitir a nota */}
+                        {pedido.status === 'cancelado' && !pedido.fiscal?.idPlugNotas ? (
+                            <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                <p className="text-xs text-gray-500 font-bold">Pedido cancelado internamente.</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Nenhuma nota fiscal foi gerada na Sefaz para este pedido.</p>
+                            </div>
+                        ) : (
                             <>
-                                <div className="grid grid-cols-2 gap-2">
+                                {/* 1. Se no fue emitida o fue rechazada -> Emitir o Reprocesar */}
+                                {(!pedido.fiscal || pedido.fiscal.status === 'REJEITADO' || pedido.fiscal.status === 'REJEITADA' || pedido.fiscal.status === 'ERRO') && (
                                     <button 
-                                        onClick={handleVerPdf} 
+                                        onClick={handleReprocessarNfce}
                                         disabled={nfceStatus === 'loading'}
-                                        className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                        className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
                                     >
-                                        📄 PDF
+                                        {nfceStatus === 'loading' ? 'Processando...' : (pedido.fiscal?.idPlugNotas ? '🔄 Corrigir e Reenviar' : '🧾 Emitir NFC-e')}
                                     </button>
+                                )}
+
+                                {/* 2. Si fue Autorizada -> Ver PDF, XML y Cancelar */}
+                                {(pedido.fiscal?.status === 'AUTORIZADA' || pedido.fiscal?.status === 'CONCLUIDO') && pedido.fiscal?.idPlugNotas && (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button 
+                                                onClick={handleVerPdf} 
+                                                disabled={nfceStatus === 'loading'}
+                                                className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                            >
+                                                📄 PDF
+                                            </button>
+                                            <button 
+                                                onClick={handleVerXml} 
+                                                disabled={nfceStatus === 'loading'}
+                                                className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                            >
+                                                {'</>'} XML
+                                            </button>
+                                        </div>
+                                        <button 
+                                            onClick={handleCancelarNfce} 
+                                            disabled={nfceStatus === 'loading'}
+                                            className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors mt-1 disabled:opacity-70"
+                                        >
+                                            Cancelar Nota (NFC-e)
+                                        </button>
+                                    </>
+                                )}
+
+                                {/* 3. Si fue Rechazada -> Ver XML de Error */}
+                                {(pedido.fiscal?.status === 'REJEITADO' || pedido.fiscal?.status === 'REJEITADA') && pedido.fiscal?.idPlugNotas && (
                                     <button 
                                         onClick={handleVerXml} 
                                         disabled={nfceStatus === 'loading'}
-                                        className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                        className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors mt-1"
                                     >
-                                        {'</>'} XML
+                                        {'</>'} Ver XML de Retorno (Sefaz)
                                     </button>
-                                </div>
-                                <button 
-                                    onClick={handleCancelarNfce} 
-                                    disabled={nfceStatus === 'loading'}
-                                    className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors mt-1 disabled:opacity-70"
-                                >
-                                    Cancelar Nota (NFC-e)
-                                </button>
+                                )}
+
+                                {/* 4. 🔥 Si ya fue CANCELADA en Sefaz -> Botón para el XML de Cancelación */}
+                                {(pedido.fiscal?.status === 'CANCELADO' || pedido.fiscal?.status === 'CANCELADA') && pedido.fiscal?.idPlugNotas && (
+                                    <button 
+                                        onClick={handleVerXml} 
+                                        disabled={nfceStatus === 'loading'}
+                                        className="w-full py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-1 flex justify-center gap-2"
+                                    >
+                                        {'</>'} Baixar XML Cancelamento
+                                    </button>
+                                )}
+
+                                {/* 5. 🔄 SIEMPRE MOSTRAR el botón Sincronizar si existe un ID de integración */}
+                                {pedido.fiscal?.idPlugNotas && (
+                                    <button 
+                                        onClick={handleConsultarStatus}
+                                        disabled={nfceStatus === 'loading'}
+                                        className="w-full py-2 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-100 transition-colors mt-3 flex justify-center items-center gap-2"
+                                    >
+                                        {nfceStatus === 'loading' ? 'Consultando Sefaz...' : '🔄 Sincronizar Status (Sefaz)'}
+                                    </button>
+                                )}
                             </>
-                        )}
-
-                        {/* Se foi Rejeitada, permite ver o XML do retorno para analisar o erro bruto */}
-                        {(pedido.fiscal?.status === 'REJEITADO' || pedido.fiscal?.status === 'REJEITADA') && pedido.fiscal?.idPlugNotas && (
-                            <button 
-                                onClick={handleVerXml} 
-                                disabled={nfceStatus === 'loading'}
-                                className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors"
-                            >
-                                {'</>'} Ver XML de Retorno (Sefaz)
-                            </button>
-                        )}
-
-                        {/* 🔥 NOVO: Se foi CANCELADA, exibe o botão para recuperar o XML do cancelamento */}
-                        {(pedido.fiscal?.status === 'CANCELADO' || pedido.fiscal?.status === 'CANCELADA') && pedido.fiscal?.idPlugNotas && (
-                            <button 
-                                onClick={handleVerXml} 
-                                disabled={nfceStatus === 'loading'}
-                                className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-1 flex justify-center gap-2"
-                            >
-                                {'</>'} Baixar XML de Cancelamento
-                            </button>
                         )}
                     </div>
                 </div>
@@ -599,7 +565,7 @@ function PedidoDetalhesMaster() {
                                         </div>
                                         <div className="text-xs text-gray-500 mt-1 space-y-1">
                                             {item.variacaoSelecionada && <p className="text-gray-400">Var: <span className="text-gray-600">{item.variacaoSelecionada.nome}</span></p>}
-                                            {iftem.adicionais?.length > 0 && (
+                                            {item.adicionais?.length > 0 && (
                                                 <div className="pl-2 border-l-2 border-gray-200 my-1">
                                                     {item.adicionais.map((add, i) => <p key={i}>+ {add.quantidade}x {add.nome}</p>)}
                                                 </div>
