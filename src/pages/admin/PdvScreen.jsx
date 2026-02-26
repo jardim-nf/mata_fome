@@ -342,13 +342,58 @@ const PdvScreen = () => {
     };
 
 
-    const handleConsultarStatus = async (venda) => {
+// 👇 NOVA FUNÇÃO INTELIGENTE DE ATUALIZAR / REENVIAR 👇
+const handleConsultarStatus = async (venda) => {
+    const statusAtual = venda.fiscal?.status;
+
+    // SE ESTIVER REJEITADA -> COMPORTAMENTO DE REENVIO
+    if (statusAtual === 'REJEITADO' || statusAtual === 'REJEITADA' || statusAtual === 'ERRO') {
+        const confirmar = window.confirm("Esta nota foi rejeitada. Deseja tentar reenviá-la para a SEFAZ agora?");
+        if (!confirmar) return;
+
+        setNfceStatus('loading');
+        try {
+            // Chama a função de EMISSÃO novamente
+            const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
+            
+            if (res.sucesso || res.success) {
+                alert("✅ Nota reenviada para processamento!");
+                
+                // Atualiza as listas na tela na hora
+                const atualizaVenda = (lista) => lista.map(v => 
+                    v.id === venda.id ? { 
+                        ...v, 
+                        fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } 
+                    } : v 
+                );
+                
+                setVendasBase(atualizaVenda);
+                setVendasHistoricoExibicao(atualizaVenda);
+
+                // Se o recibo dessa venda estiver aberto, atualiza ele também
+                if (dadosRecibo?.id === venda.id) {
+                    setDadosRecibo(prev => ({
+                        ...prev, 
+                        fiscal: { ...prev.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas }
+                    }));
+                }
+            } else {
+                setNfceStatus('error');
+                alert("❌ Erro ao reenviar: " + res.error);
+            }
+        } catch (error) {
+            setNfceStatus('error');
+            alert('Falha de comunicação ao tentar reenviar.');
+        }
+    } 
+    // SE NÃO ESTIVER REJEITADA -> APENAS CONSULTA O STATUS ATUAL (Comportamento normal)
+    else {
         if (!venda.fiscal?.idPlugNotas) {
             alert("Esta venda não possui um ID de processamento no PlugNotas.");
             return;
         }
 
-        setNfceStatus('loading'); // Mostra que está carregando
+        setNfceStatus('loading');
 
         try {
             const res = await vendaService.consultarStatusNfce(venda.id, venda.fiscal.idPlugNotas);
@@ -371,8 +416,12 @@ const PdvScreen = () => {
                 setVendasBase(atualizaVenda);
                 setVendasHistoricoExibicao(atualizaVenda);
 
+                // Atualiza o recibo se estiver aberto
                 if (dadosRecibo?.id === venda.id) {
-                    setDadosRecibo(prev => ({...prev, fiscal: { ...prev.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
+                    setDadosRecibo(prev => ({
+                        ...prev, 
+                        fiscal: { ...prev.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }
+                    }));
                     setNfceStatus(res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO' ? 'success' : 'idle');
                     setNfceUrl(res.pdf);
                 }
@@ -386,7 +435,9 @@ const PdvScreen = () => {
             setNfceStatus('error');
             alert("Erro de conexão ao consultar a Sefaz.");
         }
-    };
+    }
+};
+// 👆 FIM DA ALTERAÇÃO 👆
 
     const removerItem = (uid) => setVendaAtual(prev => ({ ...prev, itens: prev.itens.filter(i => i.uid !== uid), total: prev.itens.filter(i => i.uid !== uid).reduce((s, i) => s + (i.price * i.quantity), 0) }));
 
@@ -648,34 +699,58 @@ const handleEmitirNfce = async () => {
         alert(`Processamento do Lote concluído!\n✅ Emitidas com Sucesso: ${sucesso}\n❌ Falharam novamente: ${erro}`);
     };
 
-    const handleCancelarNfce = async (venda) => {
-        const isNfce = venda.fiscal?.status === 'AUTORIZADA';
-        const msg = isNfce 
-            ? "⚠️ CANCELAMENTO DE NFC-e\n\nDigite o motivo para a Sefaz (mínimo 15 caracteres):"
-            : "⚠️ CANCELAMENTO DE VENDA\n\nDigite o motivo do cancelamento (mínimo 15 caracteres):";
+const handleCancelarNfce = async () => {
+    // 1. Verifica se temos uma venda aberta no recibo
+    if (!dadosRecibo?.id) return;
 
-        const justificativa = window.prompt(msg);
-        if (justificativa === null) return;
-        if (justificativa.trim().length < 15) { alert("❌ A justificativa tem de ter pelo menos 15 caracteres."); return; }
+    // 2. Pede ao utilizador o motivo do cancelamento
+    const justificativa = window.prompt("Digite o motivo do cancelamento da nota (MÍNIMO de 15 caracteres):");
 
-        const confirmacao = window.confirm(`Tem a certeza que deseja cancelar a venda #${venda.id.slice(-4)}?\nO valor será REMOVIDO do caixa atual.`);
-        if (!confirmacao) return;
+    // 3. Valida se o utilizador escreveu algo válido
+    if (!justificativa) {
+        return; // O utilizador clicou em "Cancelar" no prompt
+    }
+    if (justificativa.trim().length < 15) {
+        alert("⚠️ A justificativa deve ter pelo menos 15 caracteres para a SEFAZ aceitar.");
+        return;
+    }
 
-        try {
-            if (isNfce) {
-                const res = await vendaService.cancelarNfce(venda.id, justificativa);
-                if (!res.success) { alert("❌ Erro ao cancelar na Sefaz: " + (res.error || "Retorno inválido.")); return; }
-            }
+    setNfceStatus('loading'); // Dá feedback visual na tela
 
-            alert("✅ Venda cancelada com sucesso! O valor foi removido do caixa.");
-
-            const atualizaVenda = (lista) => lista.map(v => v.id === venda.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'CANCELADA' } } : v );
+    try {
+        // 4. Chama a função que criámos no vendaService
+        const res = await vendaService.cancelarNfce(dadosRecibo.id, justificativa.trim());
+        
+        if (res.success) {
+            alert("✅ Solicitação de cancelamento enviada com sucesso!");
+            
+            // Atualiza a tela imediatamente para mostrar que foi cancelada
+            setDadosRecibo(prev => ({
+                ...prev,
+                status: 'cancelada',
+                fiscal: { 
+                    ...prev.fiscal, 
+                    status: 'PROCESSANDO' // Fica a processar até a Sefaz dar o OK
+                }
+            }));
+            
+            // Atualiza também a lista por trás
+            const atualizaVenda = (lista) => lista.map(v =>
+                v.id === dadosRecibo.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'PROCESSANDO' } } : v
+            );
+            setVendasBase(atualizaVenda);
             setVendasHistoricoExibicao(atualizaVenda);
-            setVendasBase(prev => prev.map(v => v.id === venda.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'CANCELADA' } } : v));
-        } catch (e) {
-            alert("❌ Erro de comunicação ao tentar cancelar a venda.");
+
+        } else {
+            alert("❌ Erro ao cancelar: " + res.error);
         }
-    };
+    } catch (e) {
+        console.error("Erro na tela ao cancelar:", e);
+        alert('Falha de comunicação ao tentar cancelar a nota.');
+    } finally {
+        setNfceStatus('idle');
+    }
+};
 
 const handleBaixarXml = async (venda) => {
         if (!venda.fiscal?.idPlugNotas) {

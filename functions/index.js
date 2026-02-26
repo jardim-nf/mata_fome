@@ -528,17 +528,19 @@ export const cancelarNfcePlugNotas = onCall({
         
         const venda = vendaSnap.data();
         const idPlugNotas = venda.fiscal?.idPlugNotas;
+        const statusAtual = venda.fiscal?.status;
+
+        // VALIDAÇÃO 1: Só permite cancelar se estiver CONCLUIDO/AUTORIZADA
+        if (statusAtual !== 'CONCLUIDO' && statusAtual !== 'AUTORIZADA') {
+             throw new HttpsError('failed-precondition', `Não é possível cancelar. O status atual da nota é: ${statusAtual || 'Desconhecido'}. A nota precisa estar CONCLUIDA.`);
+        }
 
         if (!idPlugNotas) {
             throw new HttpsError('failed-precondition', 'Esta venda não possui um ID válido na Plugnotas para cancelar.');
         }
 
-        // CORREÇÃO: O Payload é apenas um objeto com a justificativa
-        const payload = {
-            justificativa: justificativa
-        };
+        const payload = { justificativa: justificativa.trim() };
 
-        // CORREÇÃO: O ID da nota vai na URL da requisição
         const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}/cancelamento`, {
             method: "POST",
             headers: {
@@ -548,18 +550,22 @@ export const cancelarNfcePlugNotas = onCall({
             body: JSON.stringify(payload)
         });
 
-        const result = await response.json().catch(() => ({}));
+        // Captura o erro real devolvido pela Plugnotas
+        const textResult = await response.text();
+        let result = {};
+        try { result = JSON.parse(textResult); } catch(e) { result = { message: textResult }; }
 
         if (!response.ok) {
             logger.error("❌ Erro ao cancelar no PlugNotas:", result);
-            throw new HttpsError('internal', `Falha na Sefaz: ${result.message || JSON.stringify(result.error || 'Erro desconhecido')}`);
+            // Mostra o erro exato da Plugnotas no ecrã (ex: "Prazo de cancelamento expirado")
+            throw new HttpsError('internal', `Falha da Sefaz/Plugnotas: ${result.message || JSON.stringify(result)}`);
         }
 
-        // Atualiza a base de dados para indicar que o cancelamento está em processo
+        // Se deu sucesso, atualiza a base de dados
         await vendaRef.update({
-            'fiscal.status': 'PROCESSANDO', // Deixamos como processando até o webhook confirmar
+            'fiscal.status': 'PROCESSANDO_CANCELAMENTO',
             'fiscal.dataAtualizacao': FieldValue.serverTimestamp(),
-            'status': 'cancelada' // Status interno do seu sistema
+            'status': 'cancelada' 
         });
 
         logger.info(`✅ Solicitação de cancelamento enviada para NFC-e: ${idPlugNotas}`);
