@@ -438,7 +438,44 @@ const handleConsultarStatus = async (venda) => {
     }
 };
 // 👆 FIM DA ALTERAÇÃO 👆
+// 👇 NOVA FUNÇÃO: ENVIAR PARA WHATSAPP 👇
+const handleEnviarWhatsApp = (venda) => {
+    const linkPdf = venda.fiscal?.pdf;
+    
+    if (!linkPdf) {
+        alert("⚠️ O link do PDF ainda não está disponível na nota.");
+        return;
+    }
 
+    // Tenta pegar o telefone se já existir na venda
+    const telefoneAntigo = venda.clienteTelefone || venda.cliente?.telefone || "";
+    
+    // Pede o número ao operador
+    let telefone = prompt("📱 Digite o número do WhatsApp do cliente (com DDD, só números):\n\nOu deixe em branco para escolher o contato direto na agenda do WhatsApp.", telefoneAntigo);
+    
+    // Se ele clicar em "Cancelar" na caixinha, a gente cancela a ação
+    if (telefone === null) return; 
+
+    // Limpa tudo que não for número (ex: parênteses, traços)
+    telefone = telefone.replace(/\D/g, '');
+    
+    // Formata o valor total para exibir na mensagem
+    const totalStr = Number(venda.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Mensagem pronta
+    const mensagem = `Olá! Agradecemos a preferência. 😃\n\nAqui está o link para visualizar e baixar a sua Nota Fiscal (NFC-e) referente à sua compra no valor de *${totalStr}*:\n\n📄 ${linkPdf}`;
+    const mensagemCodificada = encodeURIComponent(mensagem);
+
+    if (telefone.length >= 10) {
+        // Garante que o DDI (55) do Brasil seja adicionado se não tiver
+        const telefoneWhatsApp = telefone.startsWith('55') ? telefone : `55${telefone}`;
+        window.open(`https://wa.me/${telefoneWhatsApp}?text=${mensagemCodificada}`, '_blank');
+    } else {
+        // Se não tiver número, abre o WhatsApp para o cara escolher na lista de contatos dele
+        window.open(`https://api.whatsapp.com/send?text=${mensagemCodificada}`, '_blank');
+    }
+};
+// 👆 FIM DA FUNÇÃO WHATSAPP 👆
     const removerItem = (uid) => setVendaAtual(prev => ({ ...prev, itens: prev.itens.filter(i => i.uid !== uid), total: prev.itens.filter(i => i.uid !== uid).reduce((s, i) => s + (i.price * i.quantity), 0) }));
 
     const pdvSyncRef = useRef({});
@@ -1023,7 +1060,7 @@ const handleBaixarPdf = async (venda) => {
                     <ModalMovimentacao visivel={mostrarMovimentacao} onClose={() => setMostrarMovimentacao(false)} onConfirmar={handleSalvarMovimentacao} />
                     <ModalFinalizacao visivel={mostrarFinalizacao} venda={vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pagamentosAdicionados} setPagamentos={setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={descontoValor} setDesconto={setDescontoValor} acrescimo={acrescimoValor} setAcrescimo={setAcrescimoValor} />
                     
-                    <ModalRecibo 
+      <ModalRecibo 
                         visivel={mostrarRecibo} 
                         dados={dadosRecibo} 
                         onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} 
@@ -1034,13 +1071,13 @@ const handleBaixarPdf = async (venda) => {
                         onBaixarXml={handleBaixarXml}
                         onConsultarStatus={handleConsultarStatus}
                         onBaixarPdf={handleBaixarPdf}
-                        // 👇 PASSANDO A NOVA FUNÇÃO PARA O RECIBO 👇
                         onBaixarXmlCancelamento={async (venda) => {
                             try {
                                 const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6));
                                 if (!res.success) alert("Erro: " + res.error);
                             } catch (e) { alert("Erro ao baixar XML"); }
                         }}
+                        onEnviarWhatsApp={handleEnviarWhatsApp} // <--- ADICIONAR ESTA LINHA
                     />
                     
                     <ModalHistorico 
@@ -1055,13 +1092,13 @@ const handleBaixarPdf = async (venda) => {
                         onBaixarXml={handleBaixarXml} 
                         onConsultarStatus={handleConsultarStatus}
                         onBaixarPdf={handleBaixarPdf}
-                        // 👇 PASSANDO A NOVA FUNÇÃO PARA O HISTÓRICO 👇
                         onBaixarXmlCancelamento={async (venda) => {
                             try {
                                 const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6));
                                 if (!res.success) alert("Erro: " + res.error);
                             } catch (e) { alert("Erro ao baixar XML"); }
                         }}
+                        onEnviarWhatsApp={handleEnviarWhatsApp} // <--- ADICIONAR ESTA LINHA
                     />
 
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
