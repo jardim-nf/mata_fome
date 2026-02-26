@@ -178,23 +178,33 @@ export const emitirNfcePlugNotas = onCall({
             const quantidade = Number(item.quantidade || 1);
             const valorTotalItem = precoFinal * quantidade;
 
+            // Define se a empresa é Simples Nacional (1) ou Regime Normal (3)
+            const isSimplesNacional = configFiscal.regimeTributario === "1";
+            
+            const tributosIcms = { origem: "0" };
+            if (isSimplesNacional) {
+                tributosIcms.csosn = cfopReal === "5405" ? "500" : "102";
+            } else {
+                // Se a API pede CST, preenchemos o CST para Regime Normal
+                tributosIcms.cst = cfopReal === "5405" ? "60" : "00";
+            }
+
             return {
-                codigo: item.id || `00${index + 1}`,
-                descricao: item.nome,
-                ncm: ncmReal,
-                cfop: cfopReal,
-                unidade: unidadeReal, 
-                // Alterado para o formato objeto exigido pelo PlugNotas
+                codigo: String(item.id || `00${index + 1}`),
+                // CORREÇÃO 1: Garante que a descrição nunca vá vazia
+                descricao: item.nome ? String(item.nome) : `Produto ${index + 1}`,
+                ncm: String(ncmReal).replace(/\D/g, ''), 
+                cfop: String(cfopReal).replace(/\D/g, ''),
+                // CORREÇÃO 2: Garante que a unidade seja sempre uma String válida
+                unidade: String(unidadeReal), 
                 valorUnitario: {
                     comercial: precoFinal,
                     tributavel: precoFinal
                 },
-                valor: valorTotalItem, // Valor total do item adicionado
+                valor: valorTotalItem,
                 tributos: {
-                    icms: { 
-                        origem: "0", 
-                        csosn: cfopReal === "5405" ? "500" : "102" 
-                    },
+                    // CORREÇÃO 3: Envia 'cst' ou 'csosn' dependendo do regime tributário
+                    icms: tributosIcms,
                     pis: { cst: "99" },
                     cofins: { cst: "99" }
                 }
