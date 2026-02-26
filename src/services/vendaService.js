@@ -57,7 +57,6 @@ export const vendaService = {
     console.log(`🧾 Solicitando NFC-e via PlugNotas para a venda ${vendaId}...`);
     try {
       const functions = getFunctions();
-      // O nome aqui deve coincidir com o nome exportado no functions/index.js
       const emitirNfcePlugNotas = httpsCallable(functions, 'emitirNfcePlugNotas'); 
       
       const response = await emitirNfcePlugNotas({ 
@@ -146,18 +145,15 @@ export const vendaService = {
       const result = await baixarXmlFn({ idPlugNotas });
       
       if (result.data.sucesso) {
-        // Cria um arquivo Blob virtual com o texto do XML
         const blob = new Blob([result.data.xml], { type: 'application/xml' });
         const url = URL.createObjectURL(blob);
         
-        // Força o download no navegador
         const link = document.createElement('a');
         link.href = url;
         link.download = `NFCe_${numeroNota || idPlugNotas}.xml`;
         document.body.appendChild(link);
         link.click();
         
-        // Limpa a memória
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
@@ -182,15 +178,26 @@ export const vendaService = {
       return { sucesso: false, error: error.message };
     }
   },
+
   // 8. Baixar PDF de forma segura (Base64) e abrir no navegador
-  async baixarPdfNfce(idPlugNotas) {
+  async baixarPdfNfce(idPlugNotas, linkPdfDireto = null) {
     try {
+      // OTIMIZAÇÃO: Se já tivermos o link da Sefaz guardado no banco de dados, 
+      // não precisamos chamar a API, basta abrir a aba diretamente.
+      if (linkPdfDireto && typeof linkPdfDireto === 'string' && linkPdfDireto.startsWith('http')) {
+        window.open(linkPdfDireto, '_blank');
+        return { success: true };
+      }
+
+      if (!idPlugNotas) {
+        return { success: false, error: 'ID da nota não encontrado.' };
+      }
+
       const functions = getFunctions();
       const baixarPdfFn = httpsCallable(functions, 'baixarPdfNfcePlugNotas');
       const result = await baixarPdfFn({ idPlugNotas });
       
       if (result.data.sucesso && result.data.pdfBase64) {
-        // Converter a resposta Base64 de volta para um Arquivo PDF visível
         const byteCharacters = atob(result.data.pdfBase64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -199,11 +206,9 @@ export const vendaService = {
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: 'application/pdf' });
         
-        // Cria um link temporário na memória e abre numa nova aba
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
         
-        // Limpa a memória após alguns segundos
         setTimeout(() => URL.revokeObjectURL(url), 10000);
         return { success: true };
       }
@@ -213,6 +218,4 @@ export const vendaService = {
       return { success: false, error: error.message };
     }
   }
-  
 };
-
