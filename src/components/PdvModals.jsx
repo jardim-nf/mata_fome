@@ -324,7 +324,7 @@ export const ModalFinalizacao = ({ visivel, venda, onClose, onFinalizar, salvand
     );
 };
 
-export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml }) => {
+export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf }) => {
     if (!visivel) return null;
     return (
         <div id="recibo-overlay" className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm">
@@ -357,8 +357,9 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     )}
 
                     <div className="flex gap-2 mb-3">
-                        {nfceUrl ? (
-                            <button onClick={() => window.open(nfceUrl, '_blank')} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+                        {/* ALTERADO PARA CHAMAR A FUNÇÃO onBaixarPdf PARA PASSAR O TOKEN CORRETAMENTE */}
+                        {(dados?.fiscal?.status === 'AUTORIZADA' || dados?.fiscal?.status === 'CONCLUIDO') ? (
+                            <button onClick={() => onBaixarPdf(dados)} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
                                 📄 PDF
                             </button>
                         ) : (
@@ -386,7 +387,7 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
     );
 };
 
-export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml }) => {
+export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml, onConsultarStatus, onBaixarPdf }) => {
     const [filtro, setFiltro] = useState('todas');
     const [buscaHistorico, setBuscaHistorico] = useState('');
     const [processandoLote, setProcessandoLote] = useState(false);
@@ -495,17 +496,24 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                                             )}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                                         <span className={`font-bold text-xl hidden sm:block mr-2 ${isCancelada ? 'text-gray-400' : 'text-gray-800'}`}>{formatarMoeda(v.total)}</span>
                                         
-                                        {/* BOTÃO DIRETO PARA O PDF */}
-                                        {v.fiscal?.pdf && (
-                                             <button onClick={() => window.open(v.fiscal.pdf, '_blank')} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
+                                        {/* BOTÃO DE SINCRONIZAR (Consulta na API) */}
+                                        {v.fiscal?.idPlugNotas && (statusNfce === 'PROCESSANDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
+                                            <button onClick={() => onConsultarStatus(v)} className="bg-gray-50 text-gray-600 border border-gray-200 px-3 py-2 rounded-xl font-bold hover:bg-gray-100 transition-colors text-sm flex items-center gap-1" title="Atualizar Status na Sefaz">
+                                                🔄
+                                            </button>
+                                        )}
+
+                                        {/* ALTERADO PARA CHAMAR A FUNÇÃO onBaixarPdf PARA PASSAR O TOKEN CORRETAMENTE */}
+                                        {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
+                                             <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
                                                  📄 <span className="hidden sm:inline">PDF</span>
                                              </button>
                                         )}
 
-                                        {/* NOVO BOTÃO XML */}
+                                        {/* BOTÃO XML */}
                                         {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
                                             <button onClick={() => onBaixarXml(v)} className="bg-purple-50 text-purple-600 border border-purple-200 px-3 py-2 rounded-xl font-bold hover:bg-purple-100 transition-colors text-sm flex items-center gap-1" title="Baixar Arquivo XML">
                                                 {'</>'} <span className="hidden sm:inline">XML</span>
@@ -514,7 +522,7 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
 
                                         {podeCancelar && (
                                             <button onClick={() => onCancelarNfce(v)} className="bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 transition-colors text-sm">
-                                                {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar Venda'}
+                                                {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
                                             </button>
                                         )}
                                         <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm">Detalhes</button>
@@ -595,7 +603,7 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
     const vendasOutros = parseFloat(res.outros || 0);
     const suprimento = parseFloat(res.suprimento || 0);
     const sangria = parseFloat(res.sangria || 0);
-    const detalhesMov = res.detalhesMov || []; // <-- PUXANDO PARA O RECIBO
+    const detalhesMov = res.detalhesMov || [];
 
     const esperado = saldoInicial + vendasDinheiro + suprimento - sangria;
     const informado = parseFloat(turno.saldoFinalInformado || 0);
@@ -631,7 +639,6 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
                         <div className="flex justify-between text-emerald-600"><span>Suprimentos (+):</span> <b>{formatarMoeda(suprimento)}</b></div>
                         <div className="flex justify-between text-red-500"><span>Sangrias (-):</span> <b>{formatarMoeda(sangria)}</b></div>
                         
-                        {/* LISTA DETALHADA NO RECIBO DE IMPRESSÃO */}
                         {detalhesMov.length > 0 && (
                             <div className="mt-2 pl-2 border-l-2 border-gray-200 text-xs">
                                 {detalhesMov.map((mov, idx) => (
@@ -715,20 +722,14 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
     const [lendo, setLendo] = useState(false);
     const [erro, setErro] = useState('');
 
-    // FUNÇÃO QUE FAZ A LEITURA REAL DA PORTA
     const conectarElerPorta = async (port) => {
         try {
             setLendo(true);
             setErro('');
-            
-            // Abre a porta (configuração padrão da maioria das balanças)
             await port.open({ baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' });
-
             const reader = port.readable.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-
-            // Timeout de 2 segundos para não travar o sistema se a balança estiver desligada
             const timeout = setTimeout(() => { reader.cancel(); }, 2000);
 
             while (true) {
@@ -736,15 +737,13 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                 if (done) break;
                 
                 buffer += decoder.decode(value, { stream: true });
-                
-                // Procura formato de peso (ex: 0.450, 1.200)
                 const matches = buffer.match(/\d+\.\d+|\d+\,\d+/g);
                 if (matches) {
                     const pesoLido = matches[matches.length - 1].replace(',', '.');
                     if (parseFloat(pesoLido) > 0) {
                         setPeso(pesoLido);
                         clearTimeout(timeout);
-                        reader.cancel(); // Para a leitura com sucesso
+                        reader.cancel(); 
                         break;
                     }
                 }
@@ -753,25 +752,21 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
         } catch (error) {
             console.error("Erro ao ler porta:", error);
             setErro("Falha na leitura. Tente novamente.");
-            try { await port.close(); } catch(e) {} // Garante que a porta fecha
+            try { await port.close(); } catch(e) {} 
         } finally {
             setLendo(false);
         }
     };
 
-    // TENTA LER AUTOMATICAMENTE AO ABRIR O MODAL
     useEffect(() => {
         if (visivel) {
             setPeso('');
             setErro('');
-            
             const autoRead = async () => {
                 if ('serial' in navigator) {
                     try {
-                        // Verifica se o usuário já deu permissão para alguma balança antes
                         const ports = await navigator.serial.getPorts();
                         if (ports.length > 0) {
-                            // Se já tem permissão, puxa automático da primeira porta salva!
                             await conectarElerPorta(ports[0]);
                         }
                     } catch (e) {
@@ -779,19 +774,16 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                     }
                 }
             };
-            
             autoRead();
         }
     }, [visivel]);
 
-    // LER CLICANDO NO BOTÃO (Para a 1ª vez ou se o automático falhar)
     const solicitarPermissaoEler = async () => {
         if (!('serial' in navigator)) {
             setErro("Navegador incompatível. Use o Google Chrome no PC.");
             return;
         }
         try {
-            // Abre a janela do Chrome pedindo para escolher a COM da balança
             const port = await navigator.serial.requestPort();
             await conectarElerPorta(port);
         } catch (error) {
@@ -822,12 +814,8 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                         Aguardando balança...
                     </div>
                 ) : (
-                    <button 
-                        onClick={solicitarPermissaoEler} 
-                        className="w-full mb-6 bg-blue-50 text-blue-600 border-2 border-blue-200 p-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-blue-100 transition-all shadow-sm active:scale-95"
-                    >
-                        <span className="text-2xl">⚖️</span>
-                        Ler Balança Manualmente
+                    <button onClick={solicitarPermissaoEler} className="w-full mb-6 bg-blue-50 text-blue-600 border-2 border-blue-200 p-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-blue-100 transition-all shadow-sm active:scale-95">
+                        <span className="text-2xl">⚖️</span> Ler Balança Manualmente
                     </button>
                 )}
 
@@ -836,14 +824,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                 <div className="mb-6 relative group">
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Peso Lido (Kg)</label>
                     <span className="absolute left-4 top-[38px] text-gray-400 text-xl font-bold group-focus-within:text-emerald-600 transition-colors">Kg</span>
-                    <input 
-                        type="number" step="0.005" 
-                        className="w-full p-4 pl-12 bg-gray-50 border-2 border-gray-200 rounded-2xl text-3xl font-black text-gray-800 focus:border-emerald-500 focus:bg-white outline-none transition-all placeholder-gray-300" 
-                        placeholder="0.000" 
-                        autoFocus 
-                        value={peso} 
-                        onChange={(e) => setPeso(e.target.value)} 
-                    />
+                    <input type="number" step="0.005" className="w-full p-4 pl-12 bg-gray-50 border-2 border-gray-200 rounded-2xl text-3xl font-black text-gray-800 focus:border-emerald-500 focus:bg-white outline-none transition-all placeholder-gray-300" placeholder="0.000" autoFocus value={peso} onChange={(e) => setPeso(e.target.value)} />
                 </div>
 
                 <div className="bg-emerald-50 p-4 rounded-xl mb-6 text-center border border-emerald-100">
@@ -851,11 +832,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                     <p className="text-4xl font-black text-emerald-600">{formatarMoeda(totalCalculado)}</p>
                 </div>
 
-                <button 
-                    onClick={() => onConfirm(produto, pesoNum, totalCalculado)} 
-                    disabled={pesoNum <= 0 || lendo} 
-                    className="w-full bg-emerald-600 text-white p-5 rounded-2xl font-black text-xl hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none"
-                >
+                <button onClick={() => onConfirm(produto, pesoNum, totalCalculado)} disabled={pesoNum <= 0 || lendo} className="w-full bg-emerald-600 text-white p-5 rounded-2xl font-black text-xl hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none">
                     ADICIONAR
                 </button>
             </div>

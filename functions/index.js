@@ -416,8 +416,8 @@ export const consultarResumoNfce = onCall({
     if (!vendaId || !idPlugNotas) throw new HttpsError('invalid-argument', 'IDs obrigatórios.');
 
     try {
-        // Bate na rota de Resumo do PlugNotas
-        const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}`, {
+        // CORREÇÃO 1: Adicionado o /resumo no final da URL
+        const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}/resumo`, {
             method: "GET",
             headers: {
                 "x-api-key": plugNotasApiKey.value()
@@ -430,7 +430,12 @@ export const consultarResumoNfce = onCall({
             throw new HttpsError('internal', `Erro no PlugNotas: ${result.message || 'Falha na consulta'}`);
         }
 
-        const nota = result; // O Plugnotas retorna o objeto da nota direto
+        // CORREÇÃO 2: A rota /resumo devolve uma Array, então pegamos o item [0]
+        const nota = Array.isArray(result) ? result[0] : result; 
+        
+        if (!nota) {
+            throw new HttpsError('internal', 'Nota não encontrada no retorno da API.');
+        }
         
         // Monta os dados para atualizar o Firestore
         const updateData = {
@@ -458,6 +463,46 @@ export const consultarResumoNfce = onCall({
 
     } catch (error) {
         logger.error("❌ Erro ao consultar resumo:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+// ==================================================================
+// 8. BAIXAR PDF DA NFC-E (DIRETO DA API PLUGNOTAS)
+// ==================================================================
+export const baixarPdfNfcePlugNotas = onCall({
+    cors: true,
+    secrets: [plugNotasApiKey]
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+    
+    const { idPlugNotas } = request.data;
+    if (!idPlugNotas) throw new HttpsError('invalid-argument', 'ID do PlugNotas obrigatório.');
+
+    try {
+        const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}/pdf`, {
+            method: "GET",
+            headers: {
+                "x-api-key": plugNotasApiKey.value()
+            }
+        });
+
+        if (!response.ok) {
+            const erro = await response.json().catch(() => ({}));
+            throw new HttpsError('internal', `Erro no PlugNotas: ${erro.message || 'Falha ao baixar PDF'}`);
+        }
+
+        // O Plugnotas retorna o PDF como um arquivo binário. Transformamos em Base64 para enviar ao Frontend.
+        const arrayBuffer = await response.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
+        
+        return {
+            sucesso: true,
+            pdfBase64: base64
+        };
+
+    } catch (error) {
+        logger.error("❌ Erro ao baixar PDF:", error);
         throw new HttpsError('internal', error.message);
     }
 });

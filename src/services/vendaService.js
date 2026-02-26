@@ -181,5 +181,38 @@ export const vendaService = {
       console.error("Erro ao consultar status da NFC-e:", error);
       return { sucesso: false, error: error.message };
     }
+  },
+  // 8. Baixar PDF de forma segura (Base64) e abrir no navegador
+  async baixarPdfNfce(idPlugNotas) {
+    try {
+      const functions = getFunctions();
+      const baixarPdfFn = httpsCallable(functions, 'baixarPdfNfcePlugNotas');
+      const result = await baixarPdfFn({ idPlugNotas });
+      
+      if (result.data.sucesso && result.data.pdfBase64) {
+        // Converter a resposta Base64 de volta para um Arquivo PDF visível
+        const byteCharacters = atob(result.data.pdfBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        
+        // Cria um link temporário na memória e abre numa nova aba
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        
+        // Limpa a memória após alguns segundos
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        return { success: true };
+      }
+      return { success: false, error: 'Resposta inválida do servidor.' };
+    } catch (error) {
+      console.error("Erro ao exibir PDF:", error);
+      return { success: false, error: error.message };
+    }
   }
+  
 };
+

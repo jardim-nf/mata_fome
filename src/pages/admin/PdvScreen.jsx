@@ -665,27 +665,36 @@ const PdvScreen = () => {
         }
     };
 
-    const handleBaixarXml = async (venda) => {
-        // 1. Se o webhook já salvou a URL direta do XML no banco, abre ela na hora!
-        if (venda.fiscal?.xml) {
-            window.open(venda.fiscal.xml, '_blank');
+const handleBaixarXml = async (venda) => {
+        if (!venda.fiscal?.idPlugNotas) {
+            alert("A nota ainda não tem um ID do PlugNotas gerado.");
             return;
         }
+        try {
+            const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6));
+            if (!res.success) alert("Erro ao baixar XML: " + res.error);
+        } catch (e) {
+            alert("Falha de conexão ao tentar baixar o XML.");
+        }
+    };
 
-        // 2. Se não tem a URL, busca o código bruto via API do PlugNotas
+    // 👇 NOVA FUNÇÃO PARA O PDF 👇
+    const handleBaixarPdf = async (venda) => {
         if (!venda.fiscal?.idPlugNotas) {
             alert("A nota ainda não tem um ID do PlugNotas gerado.");
             return;
         }
 
+        setNfceStatus('loading'); // Dá um feedback visual
         try {
-            // Usa os últimos 6 digitos do ID da venda para nomear o arquivo
-            const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6));
+            const res = await vendaService.baixarPdfNfce(venda.fiscal.idPlugNotas);
             if (!res.success) {
-                alert("Erro ao baixar XML: " + res.error);
+                alert("Erro ao carregar PDF: " + res.error);
             }
         } catch (e) {
-            alert("Falha de conexão ao tentar baixar o XML.");
+            alert("Falha de conexão ao tentar baixar o PDF.");
+        } finally {
+            setNfceStatus('idle');
         }
     };
 
