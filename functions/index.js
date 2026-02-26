@@ -199,26 +199,17 @@ export const emitirNfcePlugNotas = onCall({
                     comercial: precoFinal,
                     tributavel: precoFinal
                 },
-                valor: valorTotalItem,
+valor: valorTotalItem,
                 tributos: {
                     icms: {
                         origem: "0",
-                        cst: cfopReal === "5405" ? "60" : "00",
-                        baseCalculo: { modalidadeDeterminacao: 0, valor: 0 },
-                        aliquota: 0,
-                        valor: 0
+                        csosn: cfopReal === "5405" ? "500" : "102"
                     },
                     pis: {
-                        cst: "99",
-                        baseCalculo: { valor: 0, quantidade: 0 },
-                        aliquota: 0,
-                        valor: 0
+                        cst: "99"
                     },
                     cofins: {
-                        cst: "07",
-                        baseCalculo: { valor: 0 },
-                        aliquota: 0,
-                        valor: 0
+                        cst: "99"
                     }
                 }
             };
