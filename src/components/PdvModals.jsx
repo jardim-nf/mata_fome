@@ -324,8 +324,14 @@ export const ModalFinalizacao = ({ visivel, venda, onClose, onFinalizar, salvand
     );
 };
 
-export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf }) => {
+export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento }) => {
     if (!visivel) return null;
+
+    // Pega o status formatado para evitar erros de case-sensitive
+    const statusNfceRecibo = dados?.fiscal?.status?.toUpperCase() || '';
+    const temIdRecibo = !!dados?.fiscal?.idPlugNotas;
+    const isCanceladaRecibo = dados?.status === 'cancelada' || statusNfceRecibo.includes('CANCEL');
+
     return (
         <div id="recibo-overlay" className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm">
             <div id="recibo-content" className="bg-white w-full max-w-sm p-8 rounded-3xl shadow-2xl relative">
@@ -338,18 +344,28 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     {dados.itens.map(i => (
                         <div key={i.uid} className="flex flex-col text-sm text-gray-600 border-b border-dashed border-gray-100 pb-2 last:border-0">
                             <div className="flex justify-between">
-                                <span><b className="text-gray-800">{i.quantity}x</b> {i.name}</span>
-                                <span className="font-mono">{formatarMoeda(i.price * i.quantity)}</span>
+                                <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}><b className="text-gray-800">{i.quantity}x</b> {i.name}</span>
+                                <span className={`font-mono ${isCanceladaRecibo ? 'line-through text-gray-400' : ''}`}>{formatarMoeda(i.price * i.quantity)}</span>
                             </div>
                             {i.observacao && <span className="text-xs text-gray-400 italic mt-0.5">Obs: {i.observacao}</span>}
                         </div>
                     ))}
                 </div>
-                <div className="flex justify-between text-xl font-black text-gray-800 mb-8 pt-4 border-t border-dashed border-gray-200"><span>TOTAL</span><span>{formatarMoeda(dados.total)}</span></div>
+                <div className="flex justify-between text-xl font-black text-gray-800 mb-8 pt-4 border-t border-dashed border-gray-200">
+                    <span>TOTAL</span>
+                    <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}>{formatarMoeda(dados.total)}</span>
+                </div>
                 
                 <div className="grid gap-3 no-print">
-                    {/* EXIBE O LOG/MOTIVO DA REJEIÇÃO SE TIVER ERRO */}
-                    {(dados?.fiscal?.status === 'REJEITADA' || dados?.fiscal?.status === 'REJEITADO' || dados?.fiscal?.status === 'DENEGADO') && (
+                    
+                    {isCanceladaRecibo && (
+                        <div className="bg-red-50 p-2 rounded-lg border border-red-200 text-center text-xs font-bold text-red-600 uppercase mb-2">
+                            PEDIDO CANCELADO
+                        </div>
+                    )}
+
+                    {/* LOG DE REJEIÇÃO */}
+                    {(statusNfceRecibo === 'REJEITADA' || statusNfceRecibo === 'REJEITADO' || statusNfceRecibo === 'DENEGADO') && (
                         <div className="bg-red-50 p-3 rounded-xl border border-red-200 text-xs text-red-600 mb-2">
                             <strong className="block mb-1">⚠️ Motivo da Rejeição:</strong>
                             {dados.fiscal.motivoRejeicao || dados.fiscal.mensagem || "Erro na Sefaz. Verifique os dados."}
@@ -357,24 +373,35 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     )}
 
                     <div className="flex gap-2 mb-3">
-                        {/* ALTERADO PARA CHAMAR A FUNÇÃO onBaixarPdf PARA PASSAR O TOKEN CORRETAMENTE */}
-                        {(dados?.fiscal?.status === 'AUTORIZADA' || dados?.fiscal?.status === 'CONCLUIDO') ? (
+                        {/* BOTÕES DE EMISSÃO OU PDF */}
+                        {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') ? (
                             <button onClick={() => onBaixarPdf(dados)} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
                                 📄 PDF
                             </button>
-                        ) : (
+                        ) : (!isCanceladaRecibo && (
                             <button onClick={onEmitirNfce} disabled={nfceStatus === 'loading'} className={`w-full text-white p-3 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${nfceStatus === 'loading' ? 'bg-orange-400 cursor-wait' : 'bg-orange-500 hover:bg-orange-600'}`}>
                                 {nfceStatus === 'loading' ? '⏳ Aguardando...' : '🧾 Emitir NFC-e'}
                             </button>
-                        )}
+                        ))}
 
-                        {/* BOTÃO DO XML NO RECIBO (Só aparece se a nota foi autorizada) */}
-                        {(dados?.fiscal?.status === 'AUTORIZADA' || dados?.fiscal?.status === 'CONCLUIDO') && (
+                        {/* XML NORMAL */}
+                        {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') && (
                             <button onClick={() => onBaixarXml(dados)} className="flex-1 bg-purple-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition-all flex items-center justify-center gap-2">
                                 {'</>'} XML
                             </button>
                         )}
                     </div>
+
+                    {/* 🔥 XML DE CANCELAMENTO SE ESTIVER CANCELADA 🔥 */}
+                    {isCanceladaRecibo && temIdRecibo && (
+                         <button 
+                            // Como onBaixarXmlCancelamento pode não ter sido passado em todas as props, faz fallback para o onBaixarXml
+                            onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(dados) : onBaixarXml(dados)} 
+                            className="w-full bg-gray-100 text-gray-700 border border-gray-200 p-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex justify-center items-center gap-2 mb-3"
+                        >
+                            {'</>'} Baixar XML de Cancelamento
+                        </button>
+                    )}
                     
                     <div className="flex gap-3">
                         <button onClick={() => window.print()} className="flex-1 border-2 border-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all">Imprimir</button>
@@ -387,7 +414,7 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
     );
 };
 
-export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml, onConsultarStatus, onBaixarPdf }) => {
+export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento }) => {
     const [filtro, setFiltro] = useState('todas');
     const [buscaHistorico, setBuscaHistorico] = useState('');
     const [processandoLote, setProcessandoLote] = useState(false);
@@ -463,8 +490,11 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                         </div>
                     ) : (
                         vendasFiltradas.map(v => {
-                            const statusNfce = v.fiscal?.status?.toUpperCase();
-                            const isCancelada = v.status === 'cancelada' || statusNfce === 'CANCELADA';
+                            // 👇 STATUS COM PROTEÇÃO 👇
+                            const statusNfce = v.fiscal?.status?.toUpperCase() || '';
+                            const isCancelada = v.status === 'cancelada' || statusNfce.includes('CANCEL');
+                            const temId = !!v.fiscal?.idPlugNotas;
+
                             let tagNfce = null;
                             const dataVenda = v.createdAt?.toDate ? v.createdAt.toDate() : new Date(v.createdAt);
                             const minutosPassados = (agora - dataVenda) / (1000 * 60);
@@ -488,7 +518,6 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                                             <div className="flex gap-2">
                                                 <span>{formatarHora(v.createdAt)}</span><span>•</span><span className="uppercase text-emerald-600">{v.formaPagamento}</span>
                                             </div>
-                                            {/* EXIBE O LOG DA REJEIÇÃO NA LISTA DE HISTÓRICO */}
                                             {(statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
                                                 <div className="text-red-500 text-[11px] mt-1.5 bg-red-50 px-2 py-1.5 rounded-lg inline-block border border-red-100">
                                                     ⚠️ <b>Motivo:</b> {v.fiscal?.motivoRejeicao || v.fiscal?.mensagem || 'Rejeitada pela Sefaz'}
@@ -500,32 +529,45 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                                         <span className={`font-bold text-xl hidden sm:block mr-2 ${isCancelada ? 'text-gray-400' : 'text-gray-800'}`}>{formatarMoeda(v.total)}</span>
                                         
                                         {/* BOTÃO DE SINCRONIZAR (Consulta na API) */}
-                                        {v.fiscal?.idPlugNotas && (statusNfce === 'PROCESSANDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
+                                        {temId && (statusNfce === 'PROCESSANDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
                                             <button onClick={() => onConsultarStatus(v)} className="bg-gray-50 text-gray-600 border border-gray-200 px-3 py-2 rounded-xl font-bold hover:bg-gray-100 transition-colors text-sm flex items-center gap-1" title="Atualizar Status na Sefaz">
                                                 🔄
                                             </button>
                                         )}
 
-                                        {/* ALTERADO PARA CHAMAR A FUNÇÃO onBaixarPdf PARA PASSAR O TOKEN CORRETAMENTE */}
+                                        {/* PDF SE AUTORIZADA */}
                                         {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
                                              <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
                                                  📄 <span className="hidden sm:inline">PDF</span>
                                              </button>
                                         )}
 
-                                        {/* BOTÃO XML */}
+                                        {/* XML NORMAL SE AUTORIZADA */}
                                         {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
                                             <button onClick={() => onBaixarXml(v)} className="bg-purple-50 text-purple-600 border border-purple-200 px-3 py-2 rounded-xl font-bold hover:bg-purple-100 transition-colors text-sm flex items-center gap-1" title="Baixar Arquivo XML">
                                                 {'</>'} <span className="hidden sm:inline">XML</span>
                                             </button>
                                         )}
 
+                                        {/* 🔥 XML CANCELAMENTO SE CANCELADA 🔥 */}
+                                        {isCancelada && temId && (
+                                            <button 
+                                                // Se onBaixarXmlCancelamento não for passado, chama o onBaixarXml que fará o roteamento pela Sefaz
+                                                onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(v) : onBaixarXml(v)} 
+                                                className="bg-gray-100 text-gray-700 border border-gray-300 px-3 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm flex items-center gap-1" 
+                                                title="Baixar XML Cancelamento"
+                                            >
+                                                {'</>'} <span className="hidden sm:inline">XML Canc.</span>
+                                            </button>
+                                        )}
+
+                                        {/* BOTÃO DE CANCELAR (VERMELHO) */}
                                         {podeCancelar && (
                                             <button onClick={() => onCancelarNfce(v)} className="bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 transition-colors text-sm">
                                                 {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
                                             </button>
                                         )}
-                                        <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm">Detalhes</button>
+                                        <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm border border-gray-200">Detalhes</button>
                                     </div>
                                 </div>
                             );

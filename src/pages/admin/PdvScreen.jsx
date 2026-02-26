@@ -1026,6 +1026,13 @@ const handleBaixarPdf = async (venda) => {
                         onBaixarXml={handleBaixarXml}
                         onConsultarStatus={handleConsultarStatus}
                         onBaixarPdf={handleBaixarPdf}
+                        // 👇 PASSANDO A NOVA FUNÇÃO PARA O RECIBO 👇
+                        onBaixarXmlCancelamento={async (venda) => {
+                            try {
+                                const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6));
+                                if (!res.success) alert("Erro: " + res.error);
+                            } catch (e) { alert("Erro ao baixar XML"); }
+                        }}
                     />
                     
                     <ModalHistorico 
@@ -1040,8 +1047,14 @@ const handleBaixarPdf = async (venda) => {
                         onBaixarXml={handleBaixarXml} 
                         onConsultarStatus={handleConsultarStatus}
                         onBaixarPdf={handleBaixarPdf}
+                        // 👇 PASSANDO A NOVA FUNÇÃO PARA O HISTÓRICO 👇
+                        onBaixarXmlCancelamento={async (venda) => {
+                            try {
+                                const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6));
+                                if (!res.success) alert("Erro: " + res.error);
+                            } catch (e) { alert("Erro ao baixar XML"); }
+                        }}
                     />
-                    {/* 👆 CONFIRME ESTAS DUAS TAGS 👆 */}
 
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
                     <ModalResumoTurno visivel={mostrarResumoTurno} turno={turnoSelecionadoResumo} onClose={() => { setMostrarResumoTurno(false); if (!caixaAberto) setMostrarAberturaCaixa(true); }} />
