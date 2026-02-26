@@ -939,6 +939,7 @@ const handleBaixarXml = async (venda) => {
                         nfceUrl={nfceUrl} 
                         onBaixarXml={handleBaixarXml}
                         onConsultarStatus={handleConsultarStatus}
+                        onBaixarPdf={handleBaixarPdf}
                     />
                     
                     <ModalHistorico 
@@ -952,20 +953,20 @@ const handleBaixarXml = async (venda) => {
                         onCancelarNfce={handleCancelarNfce} 
                         onBaixarXml={handleBaixarXml} 
                         onConsultarStatus={handleConsultarStatus}
+                        onBaixarPdf={handleBaixarPdf}
                     />
+                    {/* 👆 CONFIRME ESTAS DUAS TAGS 👆 */}
 
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
                     <ModalResumoTurno visivel={mostrarResumoTurno} turno={turnoSelecionadoResumo} onClose={() => { setMostrarResumoTurno(false); if (!caixaAberto) setMostrarAberturaCaixa(true); }} />
                     <ModalVendasSuspensas visivel={mostrarSuspensas} onClose={() => setMostrarSuspensas(false)} vendas={vendasSuspensas} onRestaurar={restaurarVendaSuspensa} onExcluir={excluirVendaSuspensa} />             
                     
-                    {/* MODAL DA BALANÇA */}
                     <ModalPesoBalanca 
                         visivel={produtoParaPeso !== null} 
                         produto={produtoParaPeso} 
                         onClose={() => setProdutoParaPeso(null)} 
                         onConfirm={adicionarItemPeso} 
                     />
-
                 </>
             )}
             
