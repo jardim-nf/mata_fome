@@ -341,6 +341,53 @@ const PdvScreen = () => {
         setItemParaEditar(null);
     };
 
+
+    const handleConsultarStatus = async (venda) => {
+        if (!venda.fiscal?.idPlugNotas) {
+            alert("Esta venda não possui um ID de processamento no PlugNotas.");
+            return;
+        }
+
+        setNfceStatus('loading'); // Mostra que está carregando
+
+        try {
+            const res = await vendaService.consultarStatusNfce(venda.id, venda.fiscal.idPlugNotas);
+            
+            if (res.sucesso) {
+                // Atualiza as listas na tela na hora
+                const atualizaVenda = (lista) => lista.map(v => 
+                    v.id === venda.id ? { 
+                        ...v, 
+                        fiscal: { 
+                            ...v.fiscal, 
+                            status: res.statusAtual, 
+                            pdf: res.pdf || v.fiscal?.pdf, 
+                            xml: res.xml || v.fiscal?.xml,
+                            motivoRejeicao: res.mensagem || v.fiscal?.motivoRejeicao
+                        } 
+                    } : v 
+                );
+                
+                setVendasBase(atualizaVenda);
+                setVendasHistoricoExibicao(atualizaVenda);
+
+                if (dadosRecibo?.id === venda.id) {
+                    setDadosRecibo(prev => ({...prev, fiscal: { ...prev.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
+                    setNfceStatus(res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO' ? 'success' : 'idle');
+                    setNfceUrl(res.pdf);
+                }
+
+                alert(`Status Sincronizado: ${res.statusAtual}`);
+            } else {
+                setNfceStatus('error');
+                alert("Erro ao consultar status: " + res.error);
+            }
+        } catch (error) {
+            setNfceStatus('error');
+            alert("Erro de conexão ao consultar a Sefaz.");
+        }
+    };
+
     const removerItem = (uid) => setVendaAtual(prev => ({ ...prev, itens: prev.itens.filter(i => i.uid !== uid), total: prev.itens.filter(i => i.uid !== uid).reduce((s, i) => s + (i.price * i.quantity), 0) }));
 
     const pdvSyncRef = useRef({});
@@ -455,36 +502,71 @@ const PdvScreen = () => {
             console.log("Áudio bloqueado", e);
         }
     };
-
-    const handleEmitirNfce = async () => {
+const handleEmitirNfce = async () => {
         if (!dadosRecibo?.id) return;
-        setNfceStatus('loading');
+        setNfceStatus('loading'); // Fica processando
         try {
             const res = await vendaService.emitirNfce(dadosRecibo.id, dadosRecibo.clienteCpf);
-            let novoStatus = '';
-            let novoPdf = null;
-            if (res.pdfUrl) {
-                setNfceUrl(res.pdfUrl);
-                setNfceStatus('success');
-                novoStatus = 'AUTORIZADA';
-                novoPdf = res.pdfUrl;
+            
+            // A API vai retornar sucesso indicando que mandou pro PlugNotas (o Webhook faz o resto)
+            if (res.sucesso || res.success) {
+                // Atualiza a lista visualmente para PROCESSANDO
+                const atualizaVenda = (lista) => lista.map(v =>
+                    v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v
+                );
+                setVendasBase(atualizaVenda);
+                setVendasHistoricoExibicao(atualizaVenda);
             } else {
                 setNfceStatus('error');
-                novoStatus = 'REJEITADA';
                 tocarBeepErro();
-                alert(res.error || "Erro ao emitir NFC-e.");
+                alert(res.error || "Erro ao solicitar emissão da NFC-e.");
             }
-            const atualizaVenda = (lista) => lista.map(v =>
-                v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: novoStatus, pdf: novoPdf } } : v
-            );
-            setVendasBase(atualizaVenda);
-            setVendasHistoricoExibicao(atualizaVenda);
         } catch (e) {
             setNfceStatus('error');
             tocarBeepErro();
-            alert('Erro ao processar a nota.');
+            alert('Erro de conexão ao processar a nota.');
         }
     };
+
+    // 👇 ADICIONE ESTE NOVO BLOCO AQUI 👇
+    // Fica escutando o Firebase em tempo real enquanto o recibo está aberto para pegar o retorno do Webhook
+    useEffect(() => {
+        let unsub = () => {};
+        if (mostrarRecibo && dadosRecibo?.id) {
+            unsub = onSnapshot(doc(db, 'vendas', dadosRecibo.id), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    
+                    // Atualiza apenas os dados fiscais no Recibo aberto para não bugar a tela
+                    setDadosRecibo(prev => ({ ...prev, fiscal: data.fiscal }));
+                    
+                    if (data.fiscal) {
+                        const st = data.fiscal.status?.toUpperCase();
+                        if (st === 'AUTORIZADA' || st === 'CONCLUIDO') {
+                            setNfceStatus('success');
+                            setNfceUrl(data.fiscal.pdf);
+                            
+                            // Atualiza nas listas de histórico
+                            const atualiza = prev => prev.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v);
+                            setVendasBase(atualiza);
+                            setVendasHistoricoExibicao(atualiza);
+                        } else if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'DENEGADO') {
+                            setNfceStatus('error');
+                            setNfceUrl(null);
+                            
+                            const atualiza = prev => prev.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v);
+                            setVendasBase(atualiza);
+                            setVendasHistoricoExibicao(atualiza);
+                        } else if (st === 'PROCESSANDO') {
+                            setNfceStatus('loading');
+                        }
+                    }
+                }
+            });
+        }
+        return () => unsub();
+    }, [mostrarRecibo, dadosRecibo?.id]);
+    // 👆 FIM DO BLOCO NOVO 👆
 
     const handleProcessarLoteNfce = async (vendasParaProcessar) => {
         if (!vendasParaProcessar || vendasParaProcessar.length === 0) return;
@@ -540,6 +622,31 @@ const PdvScreen = () => {
         }
     };
 
+// 👇 ADICIONE ESTA NOVA FUNÇÃO AQUI 👇
+    const handleBaixarXml = async (venda) => {
+        // 1. Se o webhook já salvou a URL direta do XML no banco, abre ela na hora!
+        if (venda.fiscal?.xml) {
+            window.open(venda.fiscal.xml, '_blank');
+            return;
+        }
+
+        // 2. Se não tem a URL, busca o código bruto via API do PlugNotas
+        if (!venda.fiscal?.idPlugNotas) {
+            alert("A nota ainda não tem um ID do PlugNotas gerado.");
+            return;
+        }
+
+        try {
+            // Usa os últimos 6 digitos do ID da venda para nomear o arquivo
+            const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6));
+            if (!res.success) {
+                alert("Erro ao baixar XML: " + res.error);
+            }
+        } catch (e) {
+            alert("Falha de conexão ao tentar baixar o XML.");
+        }
+    };
+    // 👆 FIM DA NOVA FUNÇÃO 👆
     useEffect(() => { if (!estabelecimentoAtivo || !currentUser) return; const i = async () => { setVerificandoCaixa(true); const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo); if (c) { setCaixaAberto(c); const v = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50); setVendasBase(v); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else { setMostrarAberturaCaixa(true); } setVerificandoCaixa(false); }; i(); }, [currentUser, estabelecimentoAtivo]);
     useEffect(() => { if (!estabelecimentoAtivo) return; setCarregandoProdutos(true); setProdutos([]); setCategorias([]); const u = onSnapshot(query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc')), (s) => { const c = s.docs.map(d => ({ id: d.id, ...d.data() })); setCategorias([{ id: 'todos', name: 'Todos', icon: '🍽️' }, ...c.map(x => ({ id: x.nome || x.id, name: x.nome || x.id, icon: '🍕' }))]); let all = new Map(); let cp = 0; if (c.length === 0) { setProdutos([]); setCarregandoProdutos(false); return; } c.forEach(k => { onSnapshot(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'), (is) => { const it = is.docs.map(i => { const d = i.data(); const vs = d.variacoes?.filter(v => v.ativo) || []; return { ...d, id: i.id, name: d.nome || "S/ Nome", categoria: k.nome || "Geral", categoriaId: k.id, price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0), temVariacoes: vs.length > 0, variacoes: vs }; }); all.set(k.id, it); setProdutos(Array.from(all.values()).flat()); cp++; if (cp >= c.length) setCarregandoProdutos(false); }); }); }); return () => u(); }, [estabelecimentoAtivo]);
 
@@ -758,8 +865,8 @@ const PdvScreen = () => {
                     <ModalFechamentoCaixa visivel={mostrarFechamentoCaixa} caixa={caixaAberto} vendasDoDia={vendasTurnoAtual} movimentacoes={movimentacoesDoTurno} onClose={() => setMostrarFechamentoCaixa(false)} onConfirmarFechamento={handleConfirmarFechamento} />
                     <ModalMovimentacao visivel={mostrarMovimentacao} onClose={() => setMostrarMovimentacao(false)} onConfirmar={handleSalvarMovimentacao} />
                     <ModalFinalizacao visivel={mostrarFinalizacao} venda={vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pagamentosAdicionados} setPagamentos={setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={descontoValor} setDesconto={setDescontoValor} acrescimo={acrescimoValor} setAcrescimo={setAcrescimoValor} />
-                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl} />
-                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce} />
+                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl}onBaixarXml={handleBaixarXml}/>
+                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce}onBaixarXml={handleBaixarXml} />
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
                     <ModalResumoTurno visivel={mostrarResumoTurno} turno={turnoSelecionadoResumo} onClose={() => { setMostrarResumoTurno(false); if (!caixaAberto) setMostrarAberturaCaixa(true); }} />
                     <ModalVendasSuspensas visivel={mostrarSuspensas} onClose={() => setMostrarSuspensas(false)} vendas={vendasSuspensas} onRestaurar={restaurarVendaSuspensa} onExcluir={excluirVendaSuspensa} />             

@@ -11,7 +11,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../firebase'; 
-import { getFunctions, httpsCallable } from 'firebase/functions'; // NOVO IMPORT
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 export const vendaService = {
   
@@ -135,6 +135,51 @@ export const vendaService = {
     } catch (error) {
       console.error("Erro ao buscar vendas do turno:", error);
       return [];
+    }
+  },
+
+  // 6. Baixar XML da NFC-e (DIRETO DA API PLUGNOTAS)
+  async baixarXmlNfce(idPlugNotas, numeroNota) {
+    try {
+      const functions = getFunctions();
+      const baixarXmlFn = httpsCallable(functions, 'baixarXmlNfcePlugNotas');
+      const result = await baixarXmlFn({ idPlugNotas });
+      
+      if (result.data.sucesso) {
+        // Cria um arquivo Blob virtual com o texto do XML
+        const blob = new Blob([result.data.xml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        
+        // Força o download no navegador
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `NFCe_${numeroNota || idPlugNotas}.xml`;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Limpa a memória
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        return { success: true };
+      }
+      return { success: false, error: 'Resposta inválida do servidor.' };
+    } catch (error) {
+      console.error("Erro ao baixar XML:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 7. Consultar Resumo da NFC-e (ATUALIZAÇÃO MANUAL VIA PLUGNOTAS)
+  async consultarStatusNfce(vendaId, idPlugNotas) {
+    try {
+      const functions = getFunctions();
+      const consultarFn = httpsCallable(functions, 'consultarResumoNfce');
+      const response = await consultarFn({ vendaId, idPlugNotas });
+      return response.data;
+    } catch (error) {
+      console.error("Erro ao consultar status da NFC-e:", error);
+      return { sucesso: false, error: error.message };
     }
   }
 };

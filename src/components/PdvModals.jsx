@@ -130,7 +130,7 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
 
     const tSup = movimentacoes?.totalSuprimento || 0; 
     const tSan = movimentacoes?.totalSangria || 0;
-    const itensMov = movimentacoes?.itens || []; // <-- AQUI PEGAMOS OS DETALHES
+    const itensMov = movimentacoes?.itens || [];
     
     const esp = parseFloat(caixa.saldoInicial || 0) + tDin + tSup - tSan; 
     const dif = parseFloat(valorInformado || 0) - esp;
@@ -152,7 +152,6 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
                         <p className="text-4xl font-black text-gray-800">{formatarMoeda(esp)}</p>
                     </div>
 
-                    {/* NOVA SEÇÃO: LISTA DE SANGRIAS E SUPRIMENTOS */}
                     {itensMov.length > 0 && (
                         <div className="mb-4 border border-gray-200 rounded-xl p-3 bg-white shadow-sm">
                             <p className="text-[10px] font-bold uppercase text-gray-400 mb-2 border-b border-gray-100 pb-1">Detalhes de Movimentação</p>
@@ -325,7 +324,7 @@ export const ModalFinalizacao = ({ visivel, venda, onClose, onFinalizar, salvand
     );
 };
 
-export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl }) => {
+export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml }) => {
     if (!visivel) return null;
     return (
         <div id="recibo-overlay" className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm">
@@ -347,8 +346,35 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     ))}
                 </div>
                 <div className="flex justify-between text-xl font-black text-gray-800 mb-8 pt-4 border-t border-dashed border-gray-200"><span>TOTAL</span><span>{formatarMoeda(dados.total)}</span></div>
+                
                 <div className="grid gap-3 no-print">
-                    <button onClick={onEmitirNfce} disabled={nfceStatus === 'loading'} className="w-full bg-orange-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-orange-600 transition-all">{nfceStatus === 'loading' ? 'Processando...' : nfceUrl ? '📄 Visualizar Nota' : '🧾 Emitir NFC-e'}</button>
+                    {/* EXIBE O LOG/MOTIVO DA REJEIÇÃO SE TIVER ERRO */}
+                    {(dados?.fiscal?.status === 'REJEITADA' || dados?.fiscal?.status === 'REJEITADO' || dados?.fiscal?.status === 'DENEGADO') && (
+                        <div className="bg-red-50 p-3 rounded-xl border border-red-200 text-xs text-red-600 mb-2">
+                            <strong className="block mb-1">⚠️ Motivo da Rejeição:</strong>
+                            {dados.fiscal.motivoRejeicao || dados.fiscal.mensagem || "Erro na Sefaz. Verifique os dados."}
+                        </div>
+                    )}
+
+                    <div className="flex gap-2 mb-3">
+                        {nfceUrl ? (
+                            <button onClick={() => window.open(nfceUrl, '_blank')} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+                                📄 PDF
+                            </button>
+                        ) : (
+                            <button onClick={onEmitirNfce} disabled={nfceStatus === 'loading'} className={`w-full text-white p-3 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${nfceStatus === 'loading' ? 'bg-orange-400 cursor-wait' : 'bg-orange-500 hover:bg-orange-600'}`}>
+                                {nfceStatus === 'loading' ? '⏳ Aguardando...' : '🧾 Emitir NFC-e'}
+                            </button>
+                        )}
+
+                        {/* BOTÃO DO XML NO RECIBO (Só aparece se a nota foi autorizada) */}
+                        {(dados?.fiscal?.status === 'AUTORIZADA' || dados?.fiscal?.status === 'CONCLUIDO') && (
+                            <button onClick={() => onBaixarXml(dados)} className="flex-1 bg-purple-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition-all flex items-center justify-center gap-2">
+                                {'</>'} XML
+                            </button>
+                        )}
+                    </div>
+                    
                     <div className="flex gap-3">
                         <button onClick={() => window.print()} className="flex-1 border-2 border-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all">Imprimir</button>
                         <button onClick={onClose} className="flex-1 bg-emerald-600 text-white p-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">Próximo</button>
@@ -360,7 +386,7 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
     );
 };
 
-export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce }) => {
+export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml }) => {
     const [filtro, setFiltro] = useState('todas');
     const [buscaHistorico, setBuscaHistorico] = useState('');
     const [processandoLote, setProcessandoLote] = useState(false);
@@ -378,8 +404,8 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
     const vendasFiltradas = vendas.filter(v => {
         if (filtro !== 'todas') {
             const statusNfce = v.fiscal?.status?.toUpperCase();
-            if (filtro === 'rejeitadas' && !(statusNfce === 'REJEITADA' || statusNfce === 'ERRO' || statusNfce === 'ERROR')) return false;
-            if (filtro === 'recibo' && (v.fiscal && (statusNfce === 'AUTORIZADA' || statusNfce === 'REJEITADA' || statusNfce === 'ERRO' || statusNfce === 'CANCELADA'))) return false;
+            if (filtro === 'rejeitadas' && !(statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO' || statusNfce === 'DENEGADO' || statusNfce === 'ERRO' || statusNfce === 'ERROR')) return false;
+            if (filtro === 'recibo' && (v.fiscal && (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' || statusNfce === 'REJEITADA' || statusNfce === 'ERRO' || statusNfce === 'CANCELADA'))) return false;
         }
 
         if (buscaHistorico.trim() !== '') {
@@ -444,30 +470,54 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                             const podeCancelar = !isCancelada && (statusNfce !== 'AUTORIZADA' || minutosPassados <= 30);
 
                             if (isCancelada) tagNfce = <span className="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-300">CANCELADA</span>;
-                            else if (statusNfce === 'AUTORIZADA') tagNfce = <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">AUTORIZADA</span>;
-                            else if (statusNfce === 'REJEITADA' || statusNfce === 'ERRO') tagNfce = <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">REJEITADA</span>;
+                            else if (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') tagNfce = <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">AUTORIZADA</span>;
+                            else if (statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO' || statusNfce === 'DENEGADO' || statusNfce === 'ERRO') tagNfce = <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">REJEITADA</span>;
+                            else if (statusNfce === 'PROCESSANDO') tagNfce = <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200 animate-pulse">⏳ PROCESSANDO</span>;
                             else tagNfce = <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">RECIBO (MEI)</span>;
 
                             return (
                                 <div key={v.id} className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm mb-3 border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all group">
-                                    <div>
+                                    <div className="flex-1 pr-4">
                                         <div className="flex items-center gap-3">
                                             <span className={`font-bold text-lg transition-colors ${isCancelada ? 'text-gray-400 line-through' : 'text-gray-800 group-hover:text-emerald-600'}`}>#{v.id.slice(-4)}</span>
                                             {tagNfce}
                                             {v.clienteCpf && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold">CPF: {v.clienteCpf}</span>}
                                         </div>
-                                        <div className="flex gap-2 text-sm text-gray-400 mt-1">
-                                            <span>{formatarHora(v.createdAt)}</span><span>•</span><span className="uppercase text-emerald-600">{v.formaPagamento}</span>
+                                        <div className="flex flex-col text-sm text-gray-400 mt-1">
+                                            <div className="flex gap-2">
+                                                <span>{formatarHora(v.createdAt)}</span><span>•</span><span className="uppercase text-emerald-600">{v.formaPagamento}</span>
+                                            </div>
+                                            {/* EXIBE O LOG DA REJEIÇÃO NA LISTA DE HISTÓRICO */}
+                                            {(statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
+                                                <div className="text-red-500 text-[11px] mt-1.5 bg-red-50 px-2 py-1.5 rounded-lg inline-block border border-red-100">
+                                                    ⚠️ <b>Motivo:</b> {v.fiscal?.motivoRejeicao || v.fiscal?.mensagem || 'Rejeitada pela Sefaz'}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3 sm:gap-6">
-                                        <span className={`font-bold text-xl hidden sm:block ${isCancelada ? 'text-gray-400' : 'text-gray-800'}`}>{formatarMoeda(v.total)}</span>
-                                        {podeCancelar && (
-                                            <button onClick={() => onCancelarNfce(v)} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-xl font-bold hover:bg-red-100 transition-colors text-sm">
-                                                {statusNfce === 'AUTORIZADA' ? 'Cancelar NFC-e' : 'Cancelar Venda'}
+                                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                                        <span className={`font-bold text-xl hidden sm:block mr-2 ${isCancelada ? 'text-gray-400' : 'text-gray-800'}`}>{formatarMoeda(v.total)}</span>
+                                        
+                                        {/* BOTÃO DIRETO PARA O PDF */}
+                                        {v.fiscal?.pdf && (
+                                             <button onClick={() => window.open(v.fiscal.pdf, '_blank')} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
+                                                 📄 <span className="hidden sm:inline">PDF</span>
+                                             </button>
+                                        )}
+
+                                        {/* NOVO BOTÃO XML */}
+                                        {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
+                                            <button onClick={() => onBaixarXml(v)} className="bg-purple-50 text-purple-600 border border-purple-200 px-3 py-2 rounded-xl font-bold hover:bg-purple-100 transition-colors text-sm flex items-center gap-1" title="Baixar Arquivo XML">
+                                                {'</>'} <span className="hidden sm:inline">XML</span>
                                             </button>
                                         )}
-                                        <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-5 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm">Detalhes</button>
+
+                                        {podeCancelar && (
+                                            <button onClick={() => onCancelarNfce(v)} className="bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-xl font-bold hover:bg-red-100 transition-colors text-sm">
+                                                {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar Venda'}
+                                            </button>
+                                        )}
+                                        <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm">Detalhes</button>
                                     </div>
                                 </div>
                             );

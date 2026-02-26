@@ -168,36 +168,47 @@ export const emitirNfcePlugNotas = onCall({
 
         const configFiscal = estabelecimento.fiscal;
 
-        // 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS (Mapeado do JSON oficial)
-        let somaDosItens = 0; // ADICIONADO: Variável para somar os itens exatamente
+// 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS
+        let somaDosItens = 0;
 
         const itensNfce = venda.itens.map((item, index) => {
-            const ncmReal = item.fiscal?.ncm || "06029090";
+            const ncmReal = item.fiscal?.ncm || "06029090"; 
             const cfopReal = item.fiscal?.cfop || "5102";
+            
+            // A MÁGICA ACONTECE AQUI: Agora lemos 'price', 'quantity' e 'name'
+            const valorBase = item.precoFinal || item.preco || item.price || 0;
+            const qtdBase = item.quantidade || item.quantity || 1;
+            const nomeBase = item.nome || item.name || `Produto ${index + 1}`;
 
-            const precoFinal = Number(item.precoFinal || item.preco || 0);
-            const quantidade = Number(item.quantidade || 1);
-
-            // Garante 2 casas decimais no item para evitar bugs de matemática
-            const valorTotalItem = Number((precoFinal * quantidade).toFixed(2));
-            somaDosItens += valorTotalItem; // Soma no total geral
+            const precoInformado = Number(String(valorBase).replace(',', '.'));
+            let quantidadeInformada = Number(String(qtdBase).replace(',', '.'));
+            
+            if (quantidadeInformada <= 0) quantidadeInformada = 1;
+            
+            // 2. CRAVAMOS O VALOR TOTAL DO ITEM (Exatamente 2 casas decimais)
+            const valorTotalItem = Number((precoInformado * quantidadeInformada).toFixed(2));
+            
+            // 3. Cálculo de trás para frente com 10 casas decimais para matemática perfeita da Sefaz
+            const valorUnitarioCalculado = Number((valorTotalItem / quantidadeInformada).toFixed(10));
+            
+            somaDosItens += valorTotalItem;
 
             return {
-                codigo: String(item.id || `00${index + 1}`),
-                descricao: item.nome ? String(item.nome) : `Produto ${index + 1}`,
-                ncm: String(ncmReal).replace(/\D/g, ''),
+                codigo: String(item.id || item.uid || `00${index + 1}`),
+                descricao: String(nomeBase), // Agora vai pegar o "ÁGUA MINERAL..." corretamente
+                ncm: String(ncmReal).replace(/\D/g, ''), 
                 cfop: String(cfopReal).replace(/\D/g, ''),
                 unidade: {
                     comercial: "UN",
                     tributavel: "UN"
                 },
                 quantidade: {
-                    comercial: quantidade,
-                    tributavel: quantidade
+                    comercial: quantidadeInformada,
+                    tributavel: quantidadeInformada
                 },
                 valorUnitario: {
-                    comercial: precoFinal,
-                    tributavel: precoFinal
+                    comercial: valorUnitarioCalculado,
+                    tributavel: valorUnitarioCalculado
                 },
                 valor: valorTotalItem,
                 tributos: {
@@ -205,14 +216,12 @@ export const emitirNfcePlugNotas = onCall({
                         origem: "0",
                         cst: cfopReal === "5405" ? "500" : "102"
                     },
-                    // PIS com os campos zerados exigidos pela Sefaz para o CST 99
                     pis: {
                         cst: "99",
                         baseCalculo: { valor: 0, quantidade: 0 },
                         aliquota: 0,
                         valor: 0
                     },
-                    // COFINS com os campos zerados exigidos pela Sefaz para o CST 99
                     cofins: {
                         cst: "99",
                         baseCalculo: { valor: 0 },
@@ -222,7 +231,8 @@ export const emitirNfcePlugNotas = onCall({
                 }
             };
         });
-        // Arredonda a soma total para 2 casas decimais com precisão
+
+        // Garantir que a soma geral para os Pagamentos também é absolutamente redonda
         somaDosItens = Number(somaDosItens.toFixed(2));
 
         // Mapear o tipo de pagamento do seu PDV para o PlugNotas
@@ -233,7 +243,7 @@ export const emitirNfcePlugNotas = onCall({
         else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('cartao')) meioPagamento = "03";
         else if (metodoLower.includes('débito') || metodoLower.includes('debito')) meioPagamento = "04";
 
-        // 4. Montar o Payload Principal
+// 4. Montar o Payload Principal
         const payload = [{
             idIntegracao: vendaId,
             presencial: true,
@@ -248,11 +258,12 @@ export const emitirNfcePlugNotas = onCall({
             pagamentos: [{
                 aVista: true,
                 meio: meioPagamento,
-                // CORREÇÃO MESTRA: Forçamos o pagamento a ser EXATAMENTE a soma dos itens
-                // Isso impede a Sefaz/PlugNotas de reclamar de diferença de valores ou exigir "valorTroco"
                 valor: somaDosItens
             }]
         }];
+
+        // 👇 ADICIONE ESTA LINHA AQUI 👇
+        logger.info("📦 [DEBUG PLUGNOTAS] Payload enviado:", JSON.stringify(payload, null, 2));
 
         // 5. Disparar para a API do PlugNotas
         const response = await fetch("https://api.plugnotas.com.br/nfce", {
@@ -350,5 +361,103 @@ export const webhookPlugNotas = onRequest(async (req, res) => {
     } catch (error) {
         logger.error("❌ Erro ao processar Webhook do PlugNotas:", error);
         res.status(500).send('Erro Interno');
+    }
+});
+
+// ==================================================================
+// 5. BAIXAR XML DA NFC-E (DIRETO DA API PLUGNOTAS)
+// ==================================================================
+export const baixarXmlNfcePlugNotas = onCall({
+    cors: true,
+    secrets: [plugNotasApiKey]
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+    
+    const { idPlugNotas } = request.data;
+    if (!idPlugNotas) throw new HttpsError('invalid-argument', 'ID do PlugNotas obrigatório.');
+
+    try {
+        const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}/xml`, {
+            method: "GET",
+            headers: {
+                "x-api-key": plugNotasApiKey.value()
+            }
+        });
+
+        if (!response.ok) {
+            const erro = await response.json().catch(() => ({}));
+            throw new HttpsError('internal', `Erro no PlugNotas: ${erro.message || 'Falha ao baixar XML'}`);
+        }
+
+        // O Plugnotas retorna o XML puro em formato de texto nesta rota
+        const xmlString = await response.text();
+        
+        return {
+            sucesso: true,
+            xml: xmlString
+        };
+
+    } catch (error) {
+        logger.error("❌ Erro ao baixar XML:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+// ==================================================================
+// 6. CONSULTAR RESUMO DA NFC-E (ATUALIZAÇÃO MANUAL)
+// ==================================================================
+export const consultarResumoNfce = onCall({
+    cors: true,
+    secrets: [plugNotasApiKey]
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { vendaId, idPlugNotas } = request.data;
+    if (!vendaId || !idPlugNotas) throw new HttpsError('invalid-argument', 'IDs obrigatórios.');
+
+    try {
+        // Bate na rota de Resumo do PlugNotas
+        const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}`, {
+            method: "GET",
+            headers: {
+                "x-api-key": plugNotasApiKey.value()
+            }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new HttpsError('internal', `Erro no PlugNotas: ${result.message || 'Falha na consulta'}`);
+        }
+
+        const nota = result; // O Plugnotas retorna o objeto da nota direto
+        
+        // Monta os dados para atualizar o Firestore
+        const updateData = {
+            'fiscal.status': nota.status,
+            'fiscal.dataAtualizacao': FieldValue.serverTimestamp()
+        };
+
+        if (nota.status === 'CONCLUIDO' || nota.status === 'AUTORIZADA') {
+            if (nota.pdf) updateData['fiscal.pdf'] = nota.pdf;
+            if (nota.xml) updateData['fiscal.xml'] = nota.xml;
+        } else if (nota.status === 'REJEITADO' || nota.status === 'REJEITADA' || nota.status === 'DENEGADO') {
+            updateData['fiscal.motivoRejeicao'] = nota.mensagem || 'Rejeitada pela Sefaz';
+        }
+
+        // Atualiza a venda no banco de dados
+        await db.collection('vendas').doc(vendaId).update(updateData);
+
+        return {
+            sucesso: true,
+            statusAtual: nota.status,
+            pdf: nota.pdf || null,
+            xml: nota.xml || null,
+            mensagem: nota.mensagem || null
+        };
+
+    } catch (error) {
+        logger.error("❌ Erro ao consultar resumo:", error);
+        throw new HttpsError('internal', error.message);
     }
 });
