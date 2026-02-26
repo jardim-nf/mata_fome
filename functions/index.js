@@ -201,17 +201,23 @@ export const emitirNfcePlugNotas = onCall({
                 },
                 valor: valorTotalItem,
                 tributos: {
-                    // Bloco ICMS para SIMPLES NACIONAL no formato exigido pelo PlugNotas
                     icms: {
                         origem: "0",
-                        // ATENÇÃO: O nome da propriedade mantém-se 'cst', mas os valores são os do CSOSN (102 ou 500)
                         cst: cfopReal === "5405" ? "500" : "102"
                     },
+                    // PIS com os campos zerados exigidos pela Sefaz para o CST 99
                     pis: {
-                        cst: "99"
+                        cst: "99",
+                        baseCalculo: { valor: 0, quantidade: 0 },
+                        aliquota: 0,
+                        valor: 0
                     },
+                    // COFINS com os campos zerados exigidos pela Sefaz para o CST 99
                     cofins: {
-                        cst: "99"
+                        cst: "99",
+                        baseCalculo: { valor: 0 },
+                        aliquota: 0,
+                        valor: 0
                     }
                 }
             };
