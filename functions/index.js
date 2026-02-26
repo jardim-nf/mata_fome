@@ -170,7 +170,7 @@ export const emitirNfcePlugNotas = onCall({
 
 // 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS (Mapeado do JSON oficial)
         const itensNfce = venda.itens.map((item, index) => {
-            const ncmReal = item.fiscal?.ncm || "06029090"; // Usando o NCM do seu exemplo como fallback
+            const ncmReal = item.fiscal?.ncm || "06029090"; 
             const cfopReal = item.fiscal?.cfop || "5102";
             
             const precoFinal = Number(item.precoFinal || item.preco || 0);
@@ -182,14 +182,24 @@ export const emitirNfcePlugNotas = onCall({
                 descricao: item.nome ? String(item.nome) : `Produto ${index + 1}`,
                 ncm: String(ncmReal).replace(/\D/g, ''), 
                 cfop: String(cfopReal).replace(/\D/g, ''),
-                unidade: "UN", // Fixado para garantir que seja String válida
+                
+                // CORREÇÃO: Unidade passa a ser um objeto com as subdivisões
+                unidade: {
+                    comercial: "UN",
+                    tributavel: "UN"
+                },
+                // ADIÇÃO: A quantidade também deve seguir a mesma regra de objeto
+                quantidade: {
+                    comercial: quantidade,
+                    tributavel: quantidade
+                },
                 valorUnitario: {
                     comercial: precoFinal,
                     tributavel: precoFinal
                 },
                 valor: valorTotalItem,
                 tributos: {
-                    // Bloco ICMS exatamente igual ao seu JSON (Regime Normal)
+                    // Bloco ICMS idêntico ao exigido para o Regime Normal
                     icms: {
                         origem: "0",
                         cst: cfopReal === "5405" ? "60" : "00",
@@ -200,7 +210,6 @@ export const emitirNfcePlugNotas = onCall({
                         aliquota: 0,
                         valor: 0
                     },
-                    // Bloco PIS exatamente igual ao seu JSON
                     pis: {
                         cst: "99",
                         baseCalculo: {
@@ -210,7 +219,6 @@ export const emitirNfcePlugNotas = onCall({
                         aliquota: 0,
                         valor: 0
                     },
-                    // Bloco COFINS exatamente igual ao seu JSON
                     cofins: {
                         cst: "07",
                         baseCalculo: {
