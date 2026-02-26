@@ -168,49 +168,45 @@ export const emitirNfcePlugNotas = onCall({
 
         const configFiscal = estabelecimento.fiscal;
 
-        // 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS
+// 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS
         const itensNfce = venda.itens.map((item, index) => {
             const ncmReal = item.fiscal?.ncm || "21069090"; 
             const cfopReal = item.fiscal?.cfop || "5102";
-            const unidadeReal = item.fiscal?.unidade || "UN";
+            
+            // CORREÇÃO 1: Força a unidade a ser sempre um texto limpo e válido
+            let unidadeReal = "UN";
+            if (item.fiscal && typeof item.fiscal.unidade === 'string' && item.fiscal.unidade.trim() !== '') {
+                unidadeReal = item.fiscal.unidade.trim().substring(0, 6);
+            }
             
             const precoFinal = Number(item.precoFinal || item.preco || 0);
             const quantidade = Number(item.quantidade || 1);
             const valorTotalItem = precoFinal * quantidade;
 
-            // Define se a empresa é Simples Nacional (1) ou Regime Normal (3)
-            const isSimplesNacional = configFiscal.regimeTributario === "1";
-            
-            const tributosIcms = { origem: "0" };
-            if (isSimplesNacional) {
-                tributosIcms.csosn = cfopReal === "5405" ? "500" : "102";
-            } else {
-                // Se a API pede CST, preenchemos o CST para Regime Normal
-                tributosIcms.cst = cfopReal === "5405" ? "60" : "00";
-            }
-
             return {
                 codigo: String(item.id || `00${index + 1}`),
-                // CORREÇÃO 1: Garante que a descrição nunca vá vazia
                 descricao: item.nome ? String(item.nome) : `Produto ${index + 1}`,
                 ncm: String(ncmReal).replace(/\D/g, ''), 
                 cfop: String(cfopReal).replace(/\D/g, ''),
-                // CORREÇÃO 2: Garante que a unidade seja sempre uma String válida
-                unidade: String(unidadeReal), 
+                unidade: unidadeReal, // Agora vai sempre como String válida
                 valorUnitario: {
                     comercial: precoFinal,
                     tributavel: precoFinal
                 },
                 valor: valorTotalItem,
                 tributos: {
-                    // CORREÇÃO 3: Envia 'cst' ou 'csosn' dependendo do regime tributário
-                    icms: tributosIcms,
+                    icms: { 
+                        origem: "0",
+                        // CORREÇÃO 2: Enviamos o CST exigido pelo PlugNotas
+                        cst: cfopReal === "5405" ? "60" : "00",
+                        // Enviamos também o CSOSN para o caso de a empresa alterar o regime mais tarde
+                        csosn: cfopReal === "5405" ? "500" : "102" 
+                    },
                     pis: { cst: "99" },
                     cofins: { cst: "99" }
                 }
             };
         });
-
         // Mapear o tipo de pagamento do seu PDV para o PlugNotas
         let meioPagamento = "01"; // Padrão: Dinheiro
         const metodoLower = String(venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "").toLowerCase();
