@@ -678,38 +678,29 @@ const handleBaixarXml = async (venda) => {
         }
     };
 
-// 👇 NOVA FUNÇÃO PARA ABRIR O PDF 👇
-    const handleBaixarPdf = async (venda) => {
-        if (!venda.fiscal?.idPlugNotas) {
-            alert("A nota ainda não tem um ID do PlugNotas gerado.");
-            return;
-        }
+// 👇 NOVA FUNÇÃO PARA ABRIR O PDF CORRIGIDA 👇
+const handleBaixarPdf = async (venda) => {
+    // 1. Pega os dados corretos da venda selecionada
+    const idPlugnotas = venda.fiscal?.idPlugNotas; 
+    const linkSefaz = venda.fiscal?.pdf; 
 
-        // 1. ABRE O SEPARADOR IMEDIATAMENTE (Isto evita o bloqueio de pop-ups do navegador)
-        const novaAba = window.open('', '_blank');
-        novaAba.document.write('<html><head><title>A carregar NFC-e...</title></head><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;color:#555;background:#f9fafb;"><h2>A gerar a sua nota fiscal, por favor aguarde... 🧾</h2></body></html>');
+    if (!idPlugnotas) {
+        alert("A nota ainda não tem um ID do PlugNotas gerado.");
+        return;
+    }
 
-        setNfceStatus('loading'); // Dá um feedback visual na app também
+    setNfceStatus('loading'); // Dá um feedback visual na app
 
-        try {
-            // 2. Vai ao backend buscar o PDF
-            const res = await vendaService.obterUrlPdfNfce(venda.fiscal.idPlugNotas);
-            
-            if (res.success) {
-                // 3. Redireciona o separador que já estava aberto para exibir o PDF no leitor nativo!
-                novaAba.location.href = res.url;
-            } else {
-                novaAba.close(); // Fecha se der erro
-                alert("Erro ao carregar PDF: " + res.error);
-            }
-        } catch (e) {
-            novaAba.close(); // Fecha se der erro
-            alert("Falha de comunicação ao tentar abrir o PDF.");
-        } finally {
-            if (nfceStatus === 'loading') setNfceStatus('idle'); 
-        }
-    };;
-
+    try {
+        // 2. Chama a função que já corrigimos no vendaService
+        await vendaService.baixarPdfNfce(idPlugnotas, linkSefaz);
+    } catch (e) {
+        alert("Falha de comunicação ao tentar abrir o PDF.");
+    } finally {
+        if (nfceStatus === 'loading') setNfceStatus('idle'); 
+    }
+};
+// 👆 FIM DA ALTERAÇÃO 👆
     useEffect(() => { if (!estabelecimentoAtivo || !currentUser) return; const i = async () => { setVerificandoCaixa(true); const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo); if (c) { setCaixaAberto(c); const v = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50); setVendasBase(v); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else { setMostrarAberturaCaixa(true); } setVerificandoCaixa(false); }; i(); }, [currentUser, estabelecimentoAtivo]);
     useEffect(() => { if (!estabelecimentoAtivo) return; setCarregandoProdutos(true); setProdutos([]); setCategorias([]); const u = onSnapshot(query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc')), (s) => { const c = s.docs.map(d => ({ id: d.id, ...d.data() })); setCategorias([{ id: 'todos', name: 'Todos', icon: '🍽️' }, ...c.map(x => ({ id: x.nome || x.id, name: x.nome || x.id, icon: '🍕' }))]); let all = new Map(); let cp = 0; if (c.length === 0) { setProdutos([]); setCarregandoProdutos(false); return; } c.forEach(k => { onSnapshot(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'), (is) => { const it = is.docs.map(i => { const d = i.data(); const vs = d.variacoes?.filter(v => v.ativo) || []; return { ...d, id: i.id, name: d.nome || "S/ Nome", categoria: k.nome || "Geral", categoriaId: k.id, price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0), temVariacoes: vs.length > 0, variacoes: vs }; }); all.set(k.id, it); setProdutos(Array.from(all.values()).flat()); cp++; if (cp >= c.length) setCarregandoProdutos(false); }); }); }); return () => u(); }, [estabelecimentoAtivo]);
 
