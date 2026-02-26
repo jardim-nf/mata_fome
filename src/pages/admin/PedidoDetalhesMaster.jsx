@@ -14,7 +14,8 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { auditLogger } from '../../utils/auditLogger'; // <--- IMPORTANTE: Importando o Logger
+import { auditLogger } from '../../utils/auditLogger';
+import { vendaService } from '../../services/vendaService'; // <-- IMPORTANTE: Adicionado o serviço de Vendas/Fiscal
 import { 
   FaStore, 
   FaUser, 
@@ -29,7 +30,8 @@ import {
   FaSignOutAlt,
   FaCheck,
   FaTimes,
-  FaBan
+  FaBan,
+  FaFileInvoice // <-- IMPORTANTE: Novo ícone para a área Fiscal
 } from 'react-icons/fa';
 
 // --- Header Minimalista ---
@@ -81,10 +83,11 @@ function PedidoDetalhesMaster() {
 
   const [pedido, setPedido] = useState(null);
   const [loadingPedido, setLoadingPedido] = useState(true);
-  const [updating, setUpdating] = useState(false); // Estado para loading de ação
+  const [updating, setUpdating] = useState(false); // Estado para loading de ação de status
+  const [nfceStatus, setNfceStatus] = useState('idle'); // Estado de loading para ações fiscais
   const [error, setError] = useState('');
   const [estabNome, setEstabNome] = useState('Carregando...');
-  const [docRefPath, setDocRefPath] = useState(null); // Guardar o caminho exato do doc para update
+  const [docRefPath, setDocRefPath] = useState(null);
 
   // Carregar Pedido
   useEffect(() => {
@@ -125,7 +128,6 @@ function PedidoDetalhesMaster() {
         
         // Nome do Estabelecimento
         foundEstabId = foundData.estabelecimentoId;
-        // Tenta extrair do path se não tiver no objeto
         if (!foundEstabId && path.path.includes('estabelecimentos/')) {
             const parts = path.path.split('/');
             foundEstabId = parts[1];
@@ -152,7 +154,7 @@ function PedidoDetalhesMaster() {
     if (id) fetchPedido();
   }, [id, isMasterAdmin, authLoading, navigate]);
 
-  // --- NOVA FUNÇÃO: ALTERAR STATUS + AUDIT LOG ---
+  // --- FUNÇÃO: ALTERAR STATUS DO PEDIDO ---
   const handleStatusChange = async (newStatus) => {
     if (!window.confirm(`Tem certeza que deseja mudar o status para "${newStatus.toUpperCase()}"?`)) return;
     if (!docRefPath) return toast.error("Referência do pedido perdida.");
@@ -161,21 +163,18 @@ function PedidoDetalhesMaster() {
     try {
         const oldStatus = pedido.status;
 
-        // 1. Atualiza no Firebase
         await updateDoc(docRefPath, { 
             status: newStatus,
             updatedAt: new Date()
         });
 
-        // 2. Registra no Audit Log (Instrumentação)
         await auditLogger(
             'PEDIDO_STATUS_ALTERADO',
-            { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, // Quem
-            { type: 'pedido', id: pedido.id, name: `Pedido ${formatId(pedido.id)}` }, // Onde
-            { de: oldStatus, para: newStatus, estabelecimento: estabNome } // Detalhes
+            { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, 
+            { type: 'pedido', id: pedido.id, name: `Pedido ${formatId(pedido.id)}` }, 
+            { de: oldStatus, para: newStatus, estabelecimento: estabNome } 
         );
 
-        // 3. Atualiza estado local e avisa
         setPedido(prev => ({ ...prev, status: newStatus }));
         toast.success(`Status alterado para ${newStatus}`);
 
@@ -187,7 +186,132 @@ function PedidoDetalhesMaster() {
     }
   };
 
-  // Renderizador de Status
+  // --- FUNÇÕES FISCAIS (NFC-E) ---
+
+  // 1. REPROCESSAR OU EMITIR NOTA
+  const handleReprocessarNfce = async () => {
+    setNfceStatus('loading');
+    try {
+        // Envia o pedido novamente com o MESMO ID. A Plugnotas entende que é um reprocessamento.
+        const res = await vendaService.emitirNfce(pedido.id, pedido.clienteCpf || pedido.cliente?.cpf);
+        
+        if (res.sucesso || res.success) {
+            toast.success("Nota enviada para reprocessamento com sucesso!");
+            setPedido(prev => ({
+                ...prev,
+                fiscal: {
+                    ...prev.fiscal,
+                    status: 'PROCESSANDO',
+                    idPlugNotas: res.idPlugNotas
+                }
+            }));
+        } else {
+            toast.error("Erro ao reprocessar: " + (res.error || res.message));
+        }
+    } catch (error) {
+        toast.error("Erro de comunicação ao reprocessar a nota.");
+    } finally {
+        setNfceStatus('idle');
+    }
+  };
+
+  // 2. ATUALIZAR STATUS MANUALMENTE
+  const handleConsultarStatus = async () => {
+    if (!pedido.fiscal?.idPlugNotas) return toast.error("A nota não possui ID de Integração.");
+    setNfceStatus('loading');
+    try {
+        const res = await vendaService.consultarStatusNfce(pedido.id, pedido.fiscal.idPlugNotas);
+        if (res.sucesso) {
+            toast.success(`Status Sincronizado: ${res.statusAtual}`);
+            setPedido(prev => ({
+                ...prev, 
+                fiscal: { 
+                    ...prev.fiscal, 
+                    status: res.statusAtual, 
+                    pdf: res.pdf || prev.fiscal?.pdf, 
+                    xml: res.xml || prev.fiscal?.xml,
+                    motivoRejeicao: res.mensagem || prev.fiscal?.motivoRejeicao
+                } 
+            }));
+        } else {
+            toast.error("Erro ao consultar status: " + res.error);
+        }
+    } catch (error) {
+        toast.error("Erro de conexão ao consultar a Sefaz.");
+    } finally {
+        setNfceStatus('idle');
+    }
+  };
+
+  // 3. VISUALIZAR XML
+  const handleVerXml = async () => {
+    const idPlugNotas = pedido.fiscal?.idPlugNotas;
+    if (!idPlugNotas) return toast.error("A nota não possui ID na PlugNotas.");
+
+    setNfceStatus('loading');
+    try {
+        const res = await vendaService.baixarXmlNfce(idPlugNotas, pedido.id.slice(-6));
+        if (!res.success) {
+            toast.error("Erro ao baixar XML: " + res.error);
+        }
+    } catch (error) {
+        toast.error("Erro de conexão ao tentar baixar o XML.");
+    } finally {
+        setNfceStatus('idle');
+    }
+  };
+
+  // 4. VISUALIZAR PDF
+  const handleVerPdf = async () => {
+    const idPlugNotas = pedido.fiscal?.idPlugNotas;
+    const linkSefaz = pedido.fiscal?.pdf;
+    if (!idPlugNotas) return toast.error("A nota não possui ID na PlugNotas.");
+
+    setNfceStatus('loading');
+    try {
+        const res = await vendaService.baixarPdfNfce(idPlugNotas, linkSefaz);
+        if (!res.success) {
+            toast.error("Erro ao gerar PDF: " + res.error);
+        }
+    } catch (error) {
+        toast.error("Falha de comunicação ao tentar abrir o PDF.");
+    } finally {
+        setNfceStatus('idle');
+    }
+  };
+
+  // 5. CANCELAR NOTA
+  const handleCancelarNfce = async () => {
+    if (!pedido.fiscal?.idPlugNotas) return;
+    const justificativa = window.prompt("Digite o motivo do cancelamento da nota (MÍNIMO de 15 caracteres):");
+    if (!justificativa) return;
+    
+    if (justificativa.trim().length < 15) {
+        toast.warning("A justificativa deve ter pelo menos 15 caracteres para a SEFAZ aceitar.");
+        return;
+    }
+
+    setNfceStatus('loading');
+    try {
+        const res = await vendaService.cancelarNfce(pedido.id, justificativa.trim());
+        if (res.success) {
+            toast.success("Solicitação de cancelamento enviada!");
+            setPedido(prev => ({
+                ...prev,
+                status: 'cancelada',
+                fiscal: { ...prev.fiscal, status: 'PROCESSANDO' }
+            }));
+        } else {
+            toast.error("Erro ao cancelar: " + res.error);
+        }
+    } catch (e) {
+        toast.error('Falha de comunicação ao tentar cancelar a nota.');
+    } finally {
+        setNfceStatus('idle');
+    }
+  };
+
+  // Renderizador de Badge de Status de Preparo
   const renderStatusBadge = (status) => {
       const s = (status || '').toLowerCase();
       let colorClass = 'bg-gray-100 text-gray-600';
@@ -317,19 +441,6 @@ function PedidoDetalhesMaster() {
                     </div>
                 </div>
 
-                {/* Card Loja */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-yellow-100 border border-yellow-200 flex items-center justify-center text-yellow-600">
-                            <FaStore />
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400 font-bold uppercase">Loja</p>
-                            <p className="text-sm font-bold text-gray-900 line-clamp-1">{estabNome}</p>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Card Cliente */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
@@ -348,23 +459,6 @@ function PedidoDetalhesMaster() {
                     </div>
                 </div>
 
-                {/* Card Entrega */}
-                {tipo === 'DELIVERY' && (
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 className="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
-                            {pedido.tipoEntrega === 'retirada' ? <FaBoxOpen /> : <FaMotorcycle />} 
-                            {pedido.tipoEntrega === 'retirada' ? 'Retirada' : 'Entrega'}
-                        </h3>
-                        {pedido.enderecoEntrega ? (
-                            <div className="text-sm text-gray-600 space-y-1">
-                                <p className="font-medium text-gray-900">{pedido.enderecoEntrega.rua}, {pedido.enderecoEntrega.numero}</p>
-                                <p>{pedido.enderecoEntrega.bairro} - {pedido.enderecoEntrega.cidade}</p>
-                                {pedido.enderecoEntrega.complemento && <p className="text-xs text-gray-400">Comp: {pedido.enderecoEntrega.complemento}</p>}
-                            </div>
-                        ) : <p className="text-sm text-gray-500">Retirada no balcão.</p>}
-                    </div>
-                )}
-
                 {/* Card Pagamento */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
@@ -373,6 +467,103 @@ function PedidoDetalhesMaster() {
                     <p className="font-bold text-gray-900 text-sm uppercase">{pedido.metodoPagamento || pedido.formaPagamento || 'Não informado'}</p>
                     {pedido.trocoPara && <p className="text-xs text-gray-500 mt-1">Troco para: R$ {pedido.trocoPara}</p>}
                 </div>
+
+                {/* 🔥 NOVO: Card Fiscal (NFC-e) */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <FaFileInvoice /> Área Fiscal (NFC-e)
+                    </h3>
+                    
+                    {/* Status da Nota na Sefaz */}
+                    <div className="mb-4">
+                        <p className="text-xs text-gray-500 font-bold uppercase mb-1">Status da Sefaz:</p>
+                        {pedido.fiscal?.status ? (
+                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                                pedido.fiscal.status === 'AUTORIZADA' || pedido.fiscal.status === 'CONCLUIDO' ? 'bg-green-100 text-green-700' : 
+                                pedido.fiscal.status === 'REJEITADO' || pedido.fiscal.status === 'REJEITADA' || pedido.fiscal.status === 'ERRO' ? 'bg-red-100 text-red-700' : 
+                                'bg-yellow-100 text-yellow-700'
+                            }`}>
+                                {pedido.fiscal.status}
+                            </span>
+                        ) : (
+                            <span className="text-sm font-medium text-gray-500">Não emitida</span>
+                        )}
+                        
+                        {/* Motivo de Rejeição */}
+                        {pedido.fiscal?.motivoRejeicao && (
+                            <div className="mt-2 p-3 bg-red-50 border border-red-100 text-red-700 text-xs rounded-lg font-medium leading-relaxed">
+                                ⚠️ <b>Motivo:</b> {pedido.fiscal.motivoRejeicao}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Botões de Ações Fiscais */}
+                    <div className="flex flex-col gap-2 border-t border-gray-50 pt-4">
+                        
+                        {/* Se não foi emitida, ou se foi rejeitada, permite Emitir/Reprocessar */}
+                        {(!pedido.fiscal || pedido.fiscal.status === 'REJEITADO' || pedido.fiscal.status === 'REJEITADA' || pedido.fiscal.status === 'ERRO') && (
+                            <button 
+                                onClick={handleReprocessarNfce}
+                                disabled={nfceStatus === 'loading'}
+                                className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
+                            >
+                                {nfceStatus === 'loading' ? 'Processando...' : (pedido.fiscal ? '🔄 Corrigir e Reenviar' : '🧾 Emitir NFC-e')}
+                            </button>
+                        )}
+
+                        {/* Se estiver PROCESSANDO, permite atualizar o status manualmente */}
+                        {(pedido.fiscal?.status === 'PROCESSANDO') && (
+                            <button 
+                                onClick={handleConsultarStatus}
+                                disabled={nfceStatus === 'loading'}
+                                className="w-full py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
+                            >
+                                {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Sefaz'}
+                            </button>
+                        )}
+
+                        {/* Se foi Autorizada, permite Baixar PDF/XML e Cancelar */}
+                        {(pedido.fiscal?.status === 'AUTORIZADA' || pedido.fiscal?.status === 'CONCLUIDO') && (
+                            <>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button 
+                                        onClick={handleVerPdf} 
+                                        disabled={nfceStatus === 'loading'}
+                                        className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                    >
+                                        📄 PDF
+                                    </button>
+                                    <button 
+                                        onClick={handleVerXml} 
+                                        disabled={nfceStatus === 'loading'}
+                                        className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
+                                    >
+                                        {'</>'} XML
+                                    </button>
+                                </div>
+                                <button 
+                                    onClick={handleCancelarNfce} 
+                                    disabled={nfceStatus === 'loading'}
+                                    className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors mt-1 disabled:opacity-70"
+                                >
+                                    Cancelar Nota (NFC-e)
+                                </button>
+                            </>
+                        )}
+
+                        {/* Se foi Rejeitada, permite ver o XML do retorno para analisar o erro bruto */}
+                        {(pedido.fiscal?.status === 'REJEITADO' || pedido.fiscal?.status === 'REJEITADA') && pedido.fiscal?.idPlugNotas && (
+                            <button 
+                                onClick={handleVerXml} 
+                                disabled={nfceStatus === 'loading'}
+                                className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors"
+                            >
+                                {'</>'} Ver XML de Retorno (Sefaz)
+                            </button>
+                        )}
+                    </div>
+                </div>
+
             </div>
 
             {/* COLUNA DIREITA: ITENS */}
