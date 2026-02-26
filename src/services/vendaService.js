@@ -235,5 +235,36 @@ export const vendaService = {
       console.error("Erro ao cancelar NFC-e:", error);
       return { success: false, error: error.message };
     }
+  },
+
+  // 10. Baixar XML de CANCELAMENTO (NFC-e)
+  async baixarXmlCancelamentoNfce(idPlugNotas, numeroNota) {
+    try {
+      const functions = getFunctions();
+      const baixarXmlFn = httpsCallable(functions, 'baixarXmlCancelamentoNfcePlugNotas');
+      const result = await baixarXmlFn({ idPlugNotas });
+      
+      if (result.data.sucesso) {
+        const blob = new Blob([result.data.xml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        // Nome diferente para identificar fácil o arquivo
+        link.download = `Cancelamento_NFCe_${numeroNota || idPlugNotas}.xml`;
+        document.body.appendChild(link);
+        link.click();
+        
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        return { success: true };
+      }
+      return { success: false, error: 'Resposta inválida do servidor.' };
+    } catch (error) {
+      console.error("Erro ao baixar XML de cancelamento:", error);
+      return { success: false, error: error.message };
+    }
   }
 };
+

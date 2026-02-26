@@ -299,7 +299,22 @@ function PedidoDetalhesMaster() {
         setNfceStatus('idle');
     }
   };
+const handleVerXmlCancelamento = async () => {
+    const idPlugNotas = pedido.fiscal?.idPlugNotas;
+    if (!idPlugNotas) return toast.error("A nota não possui ID na PlugNotas.");
 
+    setNfceStatus('loading');
+    try {
+        const res = await vendaService.baixarXmlCancelamentoNfce(idPlugNotas, pedido.id.slice(-6));
+        if (!res.success) {
+            toast.error("Erro ao baixar XML de Cancelamento: " + res.error);
+        }
+    } catch (error) {
+        toast.error("Erro de conexão ao tentar baixar o XML.");
+    } finally {
+        setNfceStatus('idle');
+    }
+  };
   const renderStatusBadge = (status) => {
       const s = (status || '').toLowerCase();
       let colorClass = 'bg-gray-100 text-gray-600';

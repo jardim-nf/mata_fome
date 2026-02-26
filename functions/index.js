@@ -581,3 +581,42 @@ export const cancelarNfcePlugNotas = onCall({
         throw new HttpsError('internal', error.message);
     }
 });
+
+// ==================================================================
+// 10. BAIXAR XML DE CANCELAMENTO DA NFC-E (DIRETO DA API PLUGNOTAS)
+// ==================================================================
+export const baixarXmlCancelamentoNfcePlugNotas = onCall({
+    cors: true,
+    secrets: [plugNotasApiKey]
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+    
+    const { idPlugNotas } = request.data;
+    if (!idPlugNotas) throw new HttpsError('invalid-argument', 'ID do PlugNotas obrigatório.');
+
+    try {
+        // ROTA ESPECÍFICA DA DOCUMENTAÇÃO PARA O XML DE CANCELAMENTO
+        const response = await fetch(`https://api.plugnotas.com.br/nfce/${idPlugNotas}/cancelamento/xml`, {
+            method: "GET",
+            headers: {
+                "x-api-key": plugNotasApiKey.value()
+            }
+        });
+
+        if (!response.ok) {
+            const erro = await response.json().catch(() => ({}));
+            throw new HttpsError('internal', `Erro no PlugNotas: ${erro.message || 'Falha ao baixar XML de cancelamento'}`);
+        }
+
+        const xmlString = await response.text();
+        
+        return {
+            sucesso: true,
+            xml: xmlString
+        };
+
+    } catch (error) {
+        logger.error("❌ Erro ao baixar XML de cancelamento:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
