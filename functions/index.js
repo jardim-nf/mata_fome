@@ -168,16 +168,10 @@ export const emitirNfcePlugNotas = onCall({
 
         const configFiscal = estabelecimento.fiscal;
 
-// 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS
+// 3. Montar os itens dinamicamente no PADRÃO PLUGNOTAS (Mapeado do JSON oficial)
         const itensNfce = venda.itens.map((item, index) => {
-            const ncmReal = item.fiscal?.ncm || "21069090"; 
+            const ncmReal = item.fiscal?.ncm || "06029090"; // Usando o NCM do seu exemplo como fallback
             const cfopReal = item.fiscal?.cfop || "5102";
-            
-            // CORREÇÃO 1: Força a unidade a ser sempre um texto limpo e válido
-            let unidadeReal = "UN";
-            if (item.fiscal && typeof item.fiscal.unidade === 'string' && item.fiscal.unidade.trim() !== '') {
-                unidadeReal = item.fiscal.unidade.trim().substring(0, 6);
-            }
             
             const precoFinal = Number(item.precoFinal || item.preco || 0);
             const quantidade = Number(item.quantidade || 1);
@@ -188,22 +182,43 @@ export const emitirNfcePlugNotas = onCall({
                 descricao: item.nome ? String(item.nome) : `Produto ${index + 1}`,
                 ncm: String(ncmReal).replace(/\D/g, ''), 
                 cfop: String(cfopReal).replace(/\D/g, ''),
-                unidade: unidadeReal, // Agora vai sempre como String válida
+                unidade: "UN", // Fixado para garantir que seja String válida
                 valorUnitario: {
                     comercial: precoFinal,
                     tributavel: precoFinal
                 },
                 valor: valorTotalItem,
                 tributos: {
-                    icms: { 
+                    // Bloco ICMS exatamente igual ao seu JSON (Regime Normal)
+                    icms: {
                         origem: "0",
-                        // CORREÇÃO 2: Enviamos o CST exigido pelo PlugNotas
                         cst: cfopReal === "5405" ? "60" : "00",
-                        // Enviamos também o CSOSN para o caso de a empresa alterar o regime mais tarde
-                        csosn: cfopReal === "5405" ? "500" : "102" 
+                        baseCalculo: {
+                            modalidadeDeterminacao: 0,
+                            valor: 0
+                        },
+                        aliquota: 0,
+                        valor: 0
                     },
-                    pis: { cst: "99" },
-                    cofins: { cst: "99" }
+                    // Bloco PIS exatamente igual ao seu JSON
+                    pis: {
+                        cst: "99",
+                        baseCalculo: {
+                            valor: 0,
+                            quantidade: 0
+                        },
+                        aliquota: 0,
+                        valor: 0
+                    },
+                    // Bloco COFINS exatamente igual ao seu JSON
+                    cofins: {
+                        cst: "07",
+                        baseCalculo: {
+                            valor: 0
+                        },
+                        aliquota: 0,
+                        valor: 0
+                    }
                 }
             };
         });
