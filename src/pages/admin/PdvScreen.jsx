@@ -502,7 +502,8 @@ const PdvScreen = () => {
             console.log("Áudio bloqueado", e);
         }
     };
-const handleEmitirNfce = async () => {
+    
+    const handleEmitirNfce = async () => {
         if (!dadosRecibo?.id) return;
         setNfceStatus('loading'); // Fica processando
         try {
@@ -528,7 +529,6 @@ const handleEmitirNfce = async () => {
         }
     };
 
-    // 👇 ADICIONE ESTE NOVO BLOCO AQUI 👇
     // Fica escutando o Firebase em tempo real enquanto o recibo está aberto para pegar o retorno do Webhook
     useEffect(() => {
         let unsub = () => {};
@@ -566,7 +566,50 @@ const handleEmitirNfce = async () => {
         }
         return () => unsub();
     }, [mostrarRecibo, dadosRecibo?.id]);
-    // 👆 FIM DO BLOCO NOVO 👆
+
+    // 👇 AUTO-POLLING ADICIONADO AQUI: PERGUNTA PARA A SEFAZ A CADA 3 SEGUNDOS ENQUANTO ESTIVER "LOADING" 👇
+    useEffect(() => {
+        let intervalo;
+
+        // Se o botão estiver "Aguardando..." e tivermos o ID do Plugnotas, vamos perguntar ativamente a cada 3 segundos
+        if (nfceStatus === 'loading' && dadosRecibo?.fiscal?.idPlugNotas) {
+            intervalo = setInterval(async () => {
+                try {
+                    console.log("🔄 Consultando Sefaz automaticamente...");
+                    // Usa aquela função de Resumo que criamos!
+                    const res = await vendaService.consultarStatusNfce(dadosRecibo.id, dadosRecibo.fiscal.idPlugNotas);
+                    
+                    // Se o status mudou (já não é PROCESSANDO), paramos de perguntar e atualizamos a tela
+                    if (res.sucesso && res.statusAtual !== 'PROCESSANDO') {
+                        clearInterval(intervalo);
+                        
+                        const novoStatus = (res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO') ? 'success' : 'error';
+                        setNfceStatus(novoStatus);
+                        if (novoStatus === 'success') setNfceUrl(res.pdf);
+
+                        // Atualiza as listas na tela na hora
+                        const atualizaVenda = (lista) => lista.map(v => 
+                            v.id === dadosRecibo.id ? { 
+                                ...v, 
+                                fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } 
+                            } : v 
+                        );
+                        setVendasBase(atualizaVenda);
+                        setVendasHistoricoExibicao(atualizaVenda);
+                        setDadosRecibo(prev => ({...prev, fiscal: { ...prev.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
+                        
+                        if (novoStatus === 'error') tocarBeepErro();
+                    }
+                } catch (error) {
+                    console.error("Erro na consulta automática", error);
+                }
+            }, 3000); // Pergunta de 3 em 3 segundos
+        }
+
+        // Limpa o intervalo se o modal fechar ou mudar de status
+        return () => clearInterval(intervalo);
+    }, [nfceStatus, dadosRecibo]);
+    // 👆 FIM DO AUTO-POLLING 👆
 
     const handleProcessarLoteNfce = async (vendasParaProcessar) => {
         if (!vendasParaProcessar || vendasParaProcessar.length === 0) return;
@@ -622,7 +665,6 @@ const handleEmitirNfce = async () => {
         }
     };
 
-// 👇 ADICIONE ESTA NOVA FUNÇÃO AQUI 👇
     const handleBaixarXml = async (venda) => {
         // 1. Se o webhook já salvou a URL direta do XML no banco, abre ela na hora!
         if (venda.fiscal?.xml) {
@@ -646,7 +688,7 @@ const handleEmitirNfce = async () => {
             alert("Falha de conexão ao tentar baixar o XML.");
         }
     };
-    // 👆 FIM DA NOVA FUNÇÃO 👆
+
     useEffect(() => { if (!estabelecimentoAtivo || !currentUser) return; const i = async () => { setVerificandoCaixa(true); const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo); if (c) { setCaixaAberto(c); const v = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50); setVendasBase(v); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else { setMostrarAberturaCaixa(true); } setVerificandoCaixa(false); }; i(); }, [currentUser, estabelecimentoAtivo]);
     useEffect(() => { if (!estabelecimentoAtivo) return; setCarregandoProdutos(true); setProdutos([]); setCategorias([]); const u = onSnapshot(query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc')), (s) => { const c = s.docs.map(d => ({ id: d.id, ...d.data() })); setCategorias([{ id: 'todos', name: 'Todos', icon: '🍽️' }, ...c.map(x => ({ id: x.nome || x.id, name: x.nome || x.id, icon: '🍕' }))]); let all = new Map(); let cp = 0; if (c.length === 0) { setProdutos([]); setCarregandoProdutos(false); return; } c.forEach(k => { onSnapshot(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'), (is) => { const it = is.docs.map(i => { const d = i.data(); const vs = d.variacoes?.filter(v => v.ativo) || []; return { ...d, id: i.id, name: d.nome || "S/ Nome", categoria: k.nome || "Geral", categoriaId: k.id, price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0), temVariacoes: vs.length > 0, variacoes: vs }; }); all.set(k.id, it); setProdutos(Array.from(all.values()).flat()); cp++; if (cp >= c.length) setCarregandoProdutos(false); }); }); }); return () => u(); }, [estabelecimentoAtivo]);
 
@@ -865,8 +907,32 @@ const handleEmitirNfce = async () => {
                     <ModalFechamentoCaixa visivel={mostrarFechamentoCaixa} caixa={caixaAberto} vendasDoDia={vendasTurnoAtual} movimentacoes={movimentacoesDoTurno} onClose={() => setMostrarFechamentoCaixa(false)} onConfirmarFechamento={handleConfirmarFechamento} />
                     <ModalMovimentacao visivel={mostrarMovimentacao} onClose={() => setMostrarMovimentacao(false)} onConfirmar={handleSalvarMovimentacao} />
                     <ModalFinalizacao visivel={mostrarFinalizacao} venda={vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pagamentosAdicionados} setPagamentos={setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={descontoValor} setDesconto={setDescontoValor} acrescimo={acrescimoValor} setAcrescimo={setAcrescimoValor} />
-                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl}onBaixarXml={handleBaixarXml}/>
-                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce}onBaixarXml={handleBaixarXml} />
+                    
+                    <ModalRecibo 
+                        visivel={mostrarRecibo} 
+                        dados={dadosRecibo} 
+                        onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} 
+                        onNovaVenda={iniciarVendaBalcao} 
+                        onEmitirNfce={handleEmitirNfce} 
+                        nfceStatus={nfceStatus} 
+                        nfceUrl={nfceUrl} 
+                        onBaixarXml={handleBaixarXml}
+                        onConsultarStatus={handleConsultarStatus}
+                    />
+                    
+                    <ModalHistorico 
+                        visivel={mostrarHistorico} 
+                        onClose={() => setMostrarHistorico(false)} 
+                        vendas={vendasHistoricoExibicao} 
+                        titulo={tituloHistorico} 
+                        onSelecionarVenda={selecionarVendaHistorico} 
+                        carregando={carregandoHistorico} 
+                        onProcessarLote={handleProcessarLoteNfce} 
+                        onCancelarNfce={handleCancelarNfce} 
+                        onBaixarXml={handleBaixarXml} 
+                        onConsultarStatus={handleConsultarStatus}
+                    />
+
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
                     <ModalResumoTurno visivel={mostrarResumoTurno} turno={turnoSelecionadoResumo} onClose={() => { setMostrarResumoTurno(false); if (!caixaAberto) setMostrarAberturaCaixa(true); }} />
                     <ModalVendasSuspensas visivel={mostrarSuspensas} onClose={() => setMostrarSuspensas(false)} vendas={vendasSuspensas} onRestaurar={restaurarVendaSuspensa} onExcluir={excluirVendaSuspensa} />             
