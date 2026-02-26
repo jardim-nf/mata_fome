@@ -220,5 +220,74 @@ export const vendaService = {
       console.error("Erro ao exibir PDF:", error);
       return { success: false, error: error.message };
     }
-  }
+  },
 };
+// ==================================================================
+// 9. CANCELAR NFC-E VIA PLUGNOTAS
+// ==================================================================
+export const cancelarNfcePlugNotas = onCall({
+    cors: true,
+    secrets: [plugNotasApiKey]
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { vendaId, justificativa } = request.data;
+    
+    if (!vendaId || !justificativa) {
+        throw new HttpsError('invalid-argument', 'O ID da venda e a justificativa são obrigatórios.');
+    }
+
+    try {
+        const vendaRef = db.collection('vendas').doc(vendaId);
+        const vendaSnap = await vendaRef.get();
+        if (!vendaSnap.exists) throw new HttpsError('not-found', 'Venda não encontrada.');
+        
+        const venda = vendaSnap.data();
+        const idPlugNotas = venda.fiscal?.idPlugNotas;
+
+        if (!idPlugNotas) {
+            throw new HttpsError('failed-precondition', 'Esta venda não possui um ID válido na Plugnotas para cancelar.');
+        }
+
+        // A API da Plugnotas exige que o cancelamento seja um array com o ID interno e a justificativa
+        const payload = [{
+            id: idPlugNotas,
+            justificativa: justificativa
+        }];
+
+        const response = await fetch("https://api.plugnotas.com.br/nfce/cancelar", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-api-key": plugNotasApiKey.value()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            logger.error("❌ Erro ao cancelar no PlugNotas:", result);
+            throw new HttpsError('internal', `Falha na Sefaz: ${result.message || JSON.stringify(result.error)}`);
+        }
+
+        // Atualiza a base de dados para indicar que o cancelamento foi enviado
+        await vendaRef.update({
+            'fiscal.status': 'PROCESSANDO_CANCELAMENTO',
+            'fiscal.dataAtualizacao': FieldValue.serverTimestamp(),
+            'status': 'cancelada' // Muda o status geral do pedido para cancelado
+        });
+
+        logger.info(`✅ Solicitação de cancelamento enviada para NFC-e: ${idPlugNotas}`);
+
+        return {
+            sucesso: true,
+            mensagem: 'Cancelamento solicitado com sucesso à Sefaz.'
+        };
+
+    } catch (error) {
+        logger.error("❌ Erro no Cancelamento NFC-e:", error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', error.message);
+    }
+});
