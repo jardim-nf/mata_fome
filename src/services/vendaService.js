@@ -179,12 +179,12 @@ export const vendaService = {
     }
   },
 
-  // 8. Baixar PDF de forma segura (Base64) e abrir no navegador
+// 8. Baixar PDF de forma segura (Base64) e abrir no navegador
   async baixarPdfNfce(idPlugNotas, linkPdfDireto = null) {
     try {
-      // OTIMIZAÇÃO: Se já tivermos o link da Sefaz guardado no banco de dados, 
-      // não precisamos chamar a API, basta abrir a aba diretamente.
-      if (linkPdfDireto && typeof linkPdfDireto === 'string' && linkPdfDireto.startsWith('http')) {
+      // CORREÇÃO: Se o link for da SEFAZ (público), abrimos direto.
+      // Se for da API da Plugnotas, NÃO podemos abrir direto porque exige token.
+      if (linkPdfDireto && typeof linkPdfDireto === 'string' && linkPdfDireto.includes('sefaz')) {
         window.open(linkPdfDireto, '_blank');
         return { success: true };
       }
@@ -193,11 +193,14 @@ export const vendaService = {
         return { success: false, error: 'ID da nota não encontrado.' };
       }
 
+      // Se for link da Plugnotas ou não tiver link, pede ao Backend (Firebase Functions)
+      // O Backend tem a x-api-key guardada em segurança e consegue fazer o download!
       const functions = getFunctions();
       const baixarPdfFn = httpsCallable(functions, 'baixarPdfNfcePlugNotas');
       const result = await baixarPdfFn({ idPlugNotas });
       
       if (result.data.sucesso && result.data.pdfBase64) {
+        // Transforma o PDF que veio em código (Base64) num ficheiro PDF real na tela do cliente
         const byteCharacters = atob(result.data.pdfBase64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
