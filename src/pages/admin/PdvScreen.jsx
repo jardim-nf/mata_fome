@@ -438,7 +438,7 @@ const handleConsultarStatus = async (venda) => {
     }
 };
 // 👆 FIM DA ALTERAÇÃO 👆
-// 👇 NOVA FUNÇÃO: ENVIAR PARA WHATSAPP COM TRANSFERÊNCIA DE PDF 👇
+// 👇 NOVA FUNÇÃO: ENVIAR PARA WHATSAPP (VERSÃO SEGURA COM LINK DIRETO) 👇
 const handleEnviarWhatsApp = (venda) => {
     const linkPdf = venda.fiscal?.pdf;
     
@@ -453,40 +453,28 @@ const handleEnviarWhatsApp = (venda) => {
     // Pede o número ao operador
     let telefone = prompt("📱 Digite o número do WhatsApp do cliente (com DDD, apenas números):\n\nOu deixe em branco para escolher o contacto diretamente no WhatsApp.", telefoneAntigo);
     
-    if (telefone === null) return; // Cancelou
+    // Se clicar em Cancelar, aborta
+    if (telefone === null) return; 
 
     // Limpa tudo o que não for número
     telefone = telefone.replace(/\D/g, '');
     
-    // 1. FORÇAR A TRANSFERÊNCIA (DOWNLOAD) DO PDF PARA O COMPUTADOR
-    try {
-        const linkDownload = document.createElement('a');
-        linkDownload.href = linkPdf;
-        linkDownload.target = '_blank';
-        linkDownload.download = `NFCe_${venda.id.slice(-6)}.pdf`;
-        document.body.appendChild(linkDownload);
-        linkDownload.click();
-        document.body.removeChild(linkDownload);
-    } catch (err) {
-        console.error("Erro ao tentar transferir o PDF:", err);
-    }
-
-    // Formata o valor total (mantendo o padrão R$ do Brasil, mas com o formato correto)
+    // Formata o valor total
     const totalStr = Number(venda.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    // Mensagem a instruir que o PDF segue em anexo
-    const mensagem = `Olá! Agradecemos a preferência. 😃\n\nSegue em anexo o ficheiro PDF da sua Nota Fiscal (NFC-e) referente à sua compra no valor de *${totalStr}*.\n\n(Caso prefira o link direto: ${linkPdf} )`;
+    // Mensagem pronta com o link direto clicável
+    const mensagem = `Olá! Agradecemos a preferência. 😃\n\nAqui está o link para visualizar e baixar a sua Nota Fiscal (NFC-e) referente à sua compra no valor de *${totalStr}*:\n\n📄 Acessar Nota Fiscal:\n${linkPdf}`;
+    
     const mensagemCodificada = encodeURIComponent(mensagem);
 
-    // 2. ABRIR O WHATSAPP (com um ligeiro atraso para o download iniciar primeiro)
-    setTimeout(() => {
-        if (telefone.length >= 10) {
-            const telefoneWhatsApp = telefone.startsWith('55') ? telefone : `55${telefone}`;
-            window.open(`https://wa.me/${telefoneWhatsApp}?text=${mensagemCodificada}`, '_blank');
-        } else {
-            window.open(`https://api.whatsapp.com/send?text=${mensagemCodificada}`, '_blank');
-        }
-    }, 800);
+    // Abre o WhatsApp com a mensagem preenchida
+    if (telefone.length >= 10) {
+        const telefoneWhatsApp = telefone.startsWith('55') ? telefone : `55${telefone}`;
+        window.open(`https://wa.me/${telefoneWhatsApp}?text=${mensagemCodificada}`, '_blank');
+    } else {
+        // Se deixou em branco, abre para escolher o contato
+        window.open(`https://api.whatsapp.com/send?text=${mensagemCodificada}`, '_blank');
+    }
 };
 // 👆 FIM DA FUNÇÃO WHATSAPP 👆
     const removerItem = (uid) => setVendaAtual(prev => ({ ...prev, itens: prev.itens.filter(i => i.uid !== uid), total: prev.itens.filter(i => i.uid !== uid).reduce((s, i) => s + (i.price * i.quantity), 0) }));
