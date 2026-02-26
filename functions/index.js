@@ -1,7 +1,7 @@
 // functions/index.js
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import { defineSecret } from "firebase-functions/params"; 
+import { defineSecret } from "firebase-functions/params";
 import OpenAI from "openai";
 
 // --- IMPORTS FIREBASE ADMIN ---
@@ -14,20 +14,20 @@ const db = getFirestore();
 
 // Segredos
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
-const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY"); 
+const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY");
 
 // ==================================================================
 // 1. SEU AGENTE DE IA
 // ==================================================================
-export const chatAgent = onCall({ 
+export const chatAgent = onCall({
     cors: true,
-    secrets: [openAiApiKey] 
+    secrets: [openAiApiKey]
 }, async (request) => {
-    
+
     const openai = new OpenAI({ apiKey: openAiApiKey.value() });
     const data = request.data || {};
     const { message, context = {} } = data;
-    const history = context.history || []; 
+    const history = context.history || [];
 
     if (!message) throw new HttpsError('invalid-argument', 'Mensagem vazia.');
 
@@ -41,7 +41,7 @@ export const chatAgent = onCall({
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [{ role: "system", content: systemPrompt }, ...history, { role: "user", content: message }],
-            temperature: 0, 
+            temperature: 0,
             max_tokens: 500,
         });
 
@@ -82,8 +82,8 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
 
             if (item.variacaoSelecionada) {
                 const variacoesReais = produtoReal.variacoes || [];
-                const variacaoEncontrada = variacoesReais.find(v => 
-                    (item.variacaoSelecionada.id && v.id === item.variacaoSelecionada.id) || 
+                const variacaoEncontrada = variacoesReais.find(v =>
+                    (item.variacaoSelecionada.id && v.id === item.variacaoSelecionada.id) ||
                     (item.variacaoSelecionada.nome && v.nome === item.variacaoSelecionada.nome)
                 );
                 if (variacaoEncontrada) precoUnitarioReal = Number(variacaoEncontrada.preco);
@@ -123,10 +123,10 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
 
         logger.info(`✅ Pedido Criado: ${novaVendaRef.id} | Total: R$ ${totalCalculado}`);
 
-        return { 
-            success: true, 
+        return {
+            success: true,
             vendaId: novaVendaRef.id,
-            totalValidado: totalCalculado 
+            totalValidado: totalCalculado
         };
 
     } catch (error) {
@@ -139,12 +139,12 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
 // ==================================================================
 // 3. EMITIR NFC-E VIA PLUGNOTAS (CORRIGIDO PARA O PADRÃO PLUGNOTAS)
 // ==================================================================
-export const emitirNfcePlugNotas = onCall({ 
+export const emitirNfcePlugNotas = onCall({
     cors: true,
-    secrets: [plugNotasApiKey] 
+    secrets: [plugNotasApiKey]
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
-    
+
     const { vendaId, cpf } = request.data;
     if (!vendaId) throw new HttpsError('invalid-argument', 'ID da venda obrigatório.');
 
@@ -161,7 +161,7 @@ export const emitirNfcePlugNotas = onCall({
         const estabelecimentoRef = db.collection('estabelecimentos').doc(venda.estabelecimentoId);
         const estabelecimentoSnap = await estabelecimentoRef.get();
         const estabelecimento = estabelecimentoSnap.data();
-        
+
         if (!estabelecimento?.fiscal?.cnpj) {
             throw new HttpsError('failed-precondition', 'Estabelecimento sem configuração fiscal (CNPJ faltando).');
         }
@@ -172,12 +172,12 @@ export const emitirNfcePlugNotas = onCall({
         let somaDosItens = 0; // ADICIONADO: Variável para somar os itens exatamente
 
         const itensNfce = venda.itens.map((item, index) => {
-            const ncmReal = item.fiscal?.ncm || "06029090"; 
+            const ncmReal = item.fiscal?.ncm || "06029090";
             const cfopReal = item.fiscal?.cfop || "5102";
-            
+
             const precoFinal = Number(item.precoFinal || item.preco || 0);
             const quantidade = Number(item.quantidade || 1);
-            
+
             // Garante 2 casas decimais no item para evitar bugs de matemática
             const valorTotalItem = Number((precoFinal * quantidade).toFixed(2));
             somaDosItens += valorTotalItem; // Soma no total geral
@@ -185,7 +185,7 @@ export const emitirNfcePlugNotas = onCall({
             return {
                 codigo: String(item.id || `00${index + 1}`),
                 descricao: item.nome ? String(item.nome) : `Produto ${index + 1}`,
-                ncm: String(ncmReal).replace(/\D/g, ''), 
+                ncm: String(ncmReal).replace(/\D/g, ''),
                 cfop: String(cfopReal).replace(/\D/g, ''),
                 unidade: {
                     comercial: "UN",
@@ -199,11 +199,13 @@ export const emitirNfcePlugNotas = onCall({
                     comercial: precoFinal,
                     tributavel: precoFinal
                 },
-valor: valorTotalItem,
+                valor: valorTotalItem,
                 tributos: {
+                    // Bloco ICMS para SIMPLES NACIONAL no formato exigido pelo PlugNotas
                     icms: {
                         origem: "0",
-                        csosn: cfopReal === "5405" ? "500" : "102"
+                        // ATENÇÃO: O nome da propriedade mantém-se 'cst', mas os valores são os do CSOSN (102 ou 500)
+                        cst: cfopReal === "5405" ? "500" : "102"
                     },
                     pis: {
                         cst: "99"
@@ -214,21 +216,20 @@ valor: valorTotalItem,
                 }
             };
         });
-
         // Arredonda a soma total para 2 casas decimais com precisão
         somaDosItens = Number(somaDosItens.toFixed(2));
 
         // Mapear o tipo de pagamento do seu PDV para o PlugNotas
         let meioPagamento = "01"; // Padrão: Dinheiro
         const metodoLower = String(venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "").toLowerCase();
-        
+
         if (metodoLower.includes('pix')) meioPagamento = "17";
         else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('cartao')) meioPagamento = "03";
         else if (metodoLower.includes('débito') || metodoLower.includes('debito')) meioPagamento = "04";
 
         // 4. Montar o Payload Principal
         const payload = [{
-            idIntegracao: vendaId, 
+            idIntegracao: vendaId,
             presencial: true,
             consumidorFinal: true,
             natureza: "VENDA",
@@ -243,7 +244,7 @@ valor: valorTotalItem,
                 meio: meioPagamento,
                 // CORREÇÃO MESTRA: Forçamos o pagamento a ser EXATAMENTE a soma dos itens
                 // Isso impede a Sefaz/PlugNotas de reclamar de diferença de valores ou exigir "valorTroco"
-                valor: somaDosItens 
+                valor: somaDosItens
             }]
         }];
 
@@ -268,7 +269,7 @@ valor: valorTotalItem,
         const idPlugNotas = result.documents[0].id;
 
         const fiscalData = {
-            status: 'PROCESSANDO', 
+            status: 'PROCESSANDO',
             idPlugNotas: idPlugNotas,
             idIntegracao: result.documents[0].idIntegracao,
             dataEnvio: FieldValue.serverTimestamp(),
