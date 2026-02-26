@@ -471,88 +471,61 @@ const handleVerXmlCancelamento = async () => {
 {/* Botões de Ações Fiscais */}
                     <div className="flex flex-col gap-2 border-t border-gray-50 pt-4">
                         {(() => {
-                            // 👇 MÁGICA AQUI: Converte qualquer status para MAIÚSCULO para evitar bugs de case-sensitive!
+                            // 👇 Lendo os status com proteção máxima
                             const fStatus = pedido.fiscal?.status?.toUpperCase() || '';
+                            const pStatus = pedido.status?.toLowerCase() || '';
                             const temId = !!pedido.fiscal?.idPlugNotas;
 
-                            // Se o pedido foi cancelado no app ANTES de emitir a nota
-                            if (pedido.status === 'cancelado' && !temId) {
+                            // Se o pedido foi cancelado no app ANTES de emitir a nota (sem ID)
+                            if ((pStatus === 'cancelado' || pStatus === 'cancelada') && !temId) {
                                 return (
                                     <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
                                         <p className="text-xs text-gray-500 font-bold">Pedido cancelado internamente.</p>
-                                        <p className="text-[10px] text-gray-400 mt-1">Nenhuma nota fiscal foi gerada na Sefaz para este pedido.</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">Nenhuma nota fiscal foi gerada na Sefaz.</p>
                                     </div>
                                 );
                             }
 
                             return (
                                 <>
-                                    {/* 1. Se não foi emitida ou foi rejeitada -> Emitir ou Reprocessar */}
+                                    {/* 1. Emitir / Reprocessar */}
                                     {(!fStatus || fStatus === 'REJEITADO' || fStatus === 'REJEITADA' || fStatus === 'ERRO') && (
-                                        <button 
-                                            onClick={handleReprocessarNfce}
-                                            disabled={nfceStatus === 'loading'}
-                                            className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
-                                        >
+                                        <button onClick={handleReprocessarNfce} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2">
                                             {nfceStatus === 'loading' ? 'Processando...' : (temId ? '🔄 Corrigir e Reenviar' : '🧾 Emitir NFC-e')}
                                         </button>
                                     )}
 
-                                    {/* 2. Se está PROCESSANDO -> Apenas botão de Sincronizar */}
-                                    {fStatus === 'PROCESSANDO' && temId && (
-                                        <button 
-                                            onClick={handleConsultarStatus}
-                                            disabled={nfceStatus === 'loading'}
-                                            className="w-full py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600 transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
-                                        >
+                                    {/* 2. Processando -> Apenas Sincronizar */}
+                                    {(fStatus === 'PROCESSANDO') && temId && (
+                                        <button onClick={handleConsultarStatus} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600 transition-colors flex justify-center items-center gap-2">
                                             {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Sefaz'}
                                         </button>
                                     )}
 
-                                    {/* 3. Se foi Autorizada -> Ver PDF, XML e Botão de Cancelar */}
+                                    {/* 3. Autorizada -> XML Normal, PDF e Cancelar */}
                                     {(fStatus === 'AUTORIZADA' || fStatus === 'CONCLUIDO') && temId && (
                                         <>
                                             <div className="grid grid-cols-2 gap-2">
-                                                <button 
-                                                    onClick={handleVerPdf} 
-                                                    disabled={nfceStatus === 'loading'}
-                                                    className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
-                                                >
-                                                    📄 PDF
-                                                </button>
-                                                <button 
-                                                    onClick={handleVerXml} 
-                                                    disabled={nfceStatus === 'loading'}
-                                                    className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center"
-                                                >
-                                                    {'</>'} XML
-                                                </button>
+                                                <button onClick={handleVerPdf} disabled={nfceStatus === 'loading'} className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center">📄 PDF</button>
+                                                <button onClick={handleVerXml} disabled={nfceStatus === 'loading'} className="py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors flex justify-center">{'</>'} XML</button>
                                             </div>
-                                            <button 
-                                                onClick={handleCancelarNfce} 
-                                                disabled={nfceStatus === 'loading'}
-                                                className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors mt-1 disabled:opacity-70"
-                                            >
+                                            <button onClick={handleCancelarNfce} disabled={nfceStatus === 'loading'} className="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition-colors mt-1">
                                                 Cancelar Nota (NFC-e)
                                             </button>
                                         </>
                                     )}
 
-                                    {/* 4. Se foi Rejeitada -> Ver XML de Erro da Sefaz */}
+                                    {/* 4. Rejeitada -> Ver XML do Erro */}
                                     {(fStatus === 'REJEITADO' || fStatus === 'REJEITADA') && temId && (
-                                        <button 
-                                            onClick={handleVerXml} 
-                                            disabled={nfceStatus === 'loading'}
-                                            className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors mt-1"
-                                        >
+                                        <button onClick={handleVerXml} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors mt-1">
                                             {'</>'} Ver XML de Retorno (Sefaz)
                                         </button>
                                     )}
 
-                                    {/* 5. 🔥 Se foi CANCELADA -> Baixar XML do Cancelamento */}
-                                    {(fStatus === 'CANCELADO' || fStatus === 'CANCELADA') && temId && (
+                                    {/* 5. 🔥 MODO FORÇA BRUTA: Se tiver QUALQUER indicativo de cancelamento no status e tiver ID, mostra o botão! */}
+                                    {(fStatus.includes('CANCEL') || pStatus === 'cancelada') && temId && (
                                         <button 
-                                            onClick={handleVerXml} 
+                                            onClick={handleVerXmlCancelamento} 
                                             disabled={nfceStatus === 'loading'}
                                             className="w-full py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-1 flex justify-center gap-2"
                                         >
@@ -560,13 +533,9 @@ const handleVerXmlCancelamento = async () => {
                                         </button>
                                     )}
 
-                                    {/* 6. 🔄 SEMPRE mostrar o botão de Sincronizar se tiver ID (Útil para forçar atualização) */}
+                                    {/* 6. 🔄 Sincronizador sempre visível se a nota tem ID */}
                                     {temId && fStatus !== 'PROCESSANDO' && (
-                                        <button 
-                                            onClick={handleConsultarStatus}
-                                            disabled={nfceStatus === 'loading'}
-                                            className="w-full py-2 bg-white text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-50 transition-colors mt-3 flex justify-center items-center gap-2"
-                                        >
+                                        <button onClick={handleConsultarStatus} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-white text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-50 transition-colors mt-3 flex justify-center items-center gap-2">
                                             {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Status (Sefaz)'}
                                         </button>
                                     )}
