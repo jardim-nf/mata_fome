@@ -712,31 +712,75 @@ const handleEmitirNfce = async () => {
     }, [nfceStatus, dadosRecibo]);
     // 👆 FIM DO AUTO-POLLING 👆
 
-    const handleProcessarLoteNfce = async (vendasParaProcessar) => {
+const handleProcessarLoteNfce = async (vendasParaProcessar) => {
         if (!vendasParaProcessar || vendasParaProcessar.length === 0) return;
-        const confirmacao = window.confirm(`Deseja tentar reemitir ${vendasParaProcessar.length} nota(s) fiscal(is)? Isso pode levar alguns instantes.`);
-        if (!confirmacao) return;
+        
+        if (!window.confirm(`Você selecionou ${vendasParaProcessar.length} nota(s) rejeitadas.\nO sistema vai consultar o status real de cada uma na Sefaz e, se continuarem rejeitadas, vai reprocessar usando o ID original para não duplicar.\nPodemos iniciar?`)) return;
 
-        let sucesso = 0; let erro = 0;
+        let sucesso = 0;
+        let canceladas = 0;
+        let falhas = 0;
         let listaAtualizada = [...vendasHistoricoExibicao];
 
-        for (const venda of vendasParaProcessar) {
+        for (let i = 0; i < vendasParaProcessar.length; i++) {
+            const venda = vendasParaProcessar[i];
+            const idPlugNotas = venda.fiscal?.idPlugNotas;
+
             try {
-                const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
-                let novoStatus = 'REJEITADA'; let novoPdf = null;
-                if (res.pdfUrl || res.success) {
-                    sucesso++; novoStatus = 'AUTORIZADA'; novoPdf = res.pdfUrl || res.pdf;
-                } else { erro++; }
-                listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: novoStatus, pdf: novoPdf } } : v );
-            } catch (e) { erro++; }
+                // 1. PRIMEIRO PASSO: Consultar o status real na Sefaz
+                let statusAtual = 'REJEITADO';
+                let pdfAtual = null;
+                
+                if (idPlugNotas) {
+                    const consultaRes = await vendaService.consultarStatusNfce(venda.id, idPlugNotas);
+                    
+                    if (consultaRes.sucesso) {
+                        statusAtual = consultaRes.statusAtual?.toUpperCase();
+                        pdfAtual = consultaRes.pdf || venda.fiscal?.pdf;
+                        
+                        // Se a Sefaz já AUTORIZOU (estava só desatualizado no Firebase)
+                        if (statusAtual === 'CONCLUIDO' || statusAtual === 'AUTORIZADA') {
+                            sucesso++;
+                            listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'AUTORIZADA', pdf: pdfAtual } } : v );
+                            continue; // Já resolveu, vai pra próxima nota
+                        }
+                        
+                        // Se a Sefaz já CANCELOU
+                        if (statusAtual === 'CANCELADO' || statusAtual === 'CANCELADA') {
+                            canceladas++;
+                            listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'CANCELADO' } } : v );
+                            continue; // Já resolveu, vai pra próxima nota
+                        }
+                    }
+                }
+
+                // 2. SEGUNDO PASSO: Se realmente estiver REJEITADA, reprocessa!
+                if (statusAtual === 'REJEITADO' || statusAtual === 'ERRO' || !idPlugNotas) {
+                    // O seu backend (Cloud Function) envia o mesmo venda.id para a Plugnotas
+                    const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
+                    
+                    if (res.sucesso || res.success) {
+                        sucesso++;
+                        listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
+                    } else {
+                        falhas++;
+                    }
+                }
+
+            } catch (error) {
+                console.error(`Erro ao processar lote na venda ${venda.id}:`, error);
+                falhas++;
+            }
         }
 
+        // 3. Atualiza as tabelas de histórico na tela
         setVendasHistoricoExibicao(listaAtualizada);
         setVendasBase(prev => prev.map(v => listaAtualizada.find(lu => lu.id === v.id) || v));
-        if (erro > 0) tocarBeepErro();
-        alert(`Processamento do Lote concluído!\n✅ Emitidas com Sucesso: ${sucesso}\n❌ Falharam novamente: ${erro}`);
+        
+        if (falhas > 0) tocarBeepErro();
+        
+        alert(`Varredura do Lote Concluída!\n\n✅ Notas resolvidas/reenviadas: ${sucesso}\n🚫 Notas atualizadas como canceladas: ${canceladas}\n❌ Notas que falharam: ${falhas}`);
     };
-
 const handleCancelarNfce = async () => {
     // 1. Verifica se temos uma venda aberta no recibo
     if (!dadosRecibo?.id) return;
