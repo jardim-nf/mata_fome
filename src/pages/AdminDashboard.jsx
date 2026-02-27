@@ -105,24 +105,6 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 font-sans pb-20">
       <div className="max-w-7xl mx-auto space-y-10">
 
-        {/* HEADER MODERNO */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-slate-100 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-50 to-transparent rounded-full -translate-y-1/2 translate-x-1/2 opacity-50"></div>
-          
-          <div className="flex items-center gap-5 relative z-10 w-full text-center md:text-left">
-            <div className="hidden sm:flex w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl items-center justify-center text-3xl shadow-inner"><IoPersonOutline /></div>
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight">Painel <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">{isRealAdmin ? 'Gestor' : 'Equipe'}</span></h1>
-              <p className="text-slate-500 font-medium mt-1">Bem-vindo(a) de volta, <b className="text-slate-700">{currentUser?.nome || 'Colaborador'}</b>!</p>
-            </div>
-          </div>
-
-          <div className="flex w-full md:w-auto gap-3 mt-6 md:mt-0 relative z-10">
-            <button onClick={() => navigate('/home')} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-slate-600 bg-white border-2 border-slate-200 rounded-xl hover:bg-slate-50 font-bold transition-all shadow-sm"><IoArrowBackOutline className="text-xl" /> Voltar</button>
-            <button onClick={() => { localStorage.clear(); sessionStorage.clear(); navigate('/home'); }} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-rose-600 bg-rose-50 border-2 border-rose-100 rounded-xl hover:bg-rose-100 hover:border-rose-200 font-bold transition-all shadow-sm"><IoLogOutOutline className="text-xl" /> Sair</button>
-          </div>
-        </div>
-
         {/* 🔥 PAINEL DE FATURAMENTO RETRÁTIL (COLLAPSIBLE) 🔥 */}
         {isRealAdmin && (
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-all duration-300">

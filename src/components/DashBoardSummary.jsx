@@ -1,293 +1,172 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, orderBy, doc, onSnapshot, getDoc, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { 
-  IoStatsChart, 
-  IoCart, 
-  IoRestaurant, 
-  IoCash, 
-  IoBicycle, 
-  IoEye, 
-  IoEyeOff, 
-  IoCalendarOutline,
-  IoTicket // <--- Importação garantida
-} from 'react-icons/io5';
+import { IoStatsChart, IoCart, IoRestaurant, IoCash, IoBicycle, IoCalendarOutline, IoTicket } from 'react-icons/io5';
 
-// --- COMPONENTE DO CARD (VISUAL) ---
-const StatCard = ({ title, value, subtext, icon: Icon, colorClass, loading }) => (
-  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden group">
-    <div className={`absolute right-0 top-0 w-24 h-24 ${colorClass} opacity-5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110`}></div>
-    
-    <div className="flex items-start justify-between mb-4 z-10">
-      <div>
-        <p className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-1">{title}</p>
-        {loading ? (
-          <div className="h-8 w-24 bg-gray-200 rounded animate-pulse"></div>
-        ) : (
-          <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight">{value}</h3>
-        )}
+// --- CARD VISUAL ULTRA COMPACTO ---
+const StatCard = ({ title, value, sub, icon: Icon, theme, loading }) => {
+  const t = {
+    green: 'bg-emerald-500 text-emerald-600 bg-emerald-50',
+    blue: 'bg-blue-500 text-blue-600 bg-blue-50',
+    orange: 'bg-orange-500 text-orange-600 bg-orange-50',
+    purple: 'bg-purple-500 text-purple-600 bg-purple-50',
+  }[theme].split(' ');
+
+  return (
+    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden group hover:shadow-md transition-all">
+      <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 transition-transform group-hover:scale-110 ${t[0]}`}></div>
+      <div className="flex justify-between items-start mb-2 z-10">
+        <div>
+          <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">{title}</p>
+          {loading ? <div className="h-8 w-24 bg-gray-100 rounded animate-pulse"></div> : <h3 className="text-2xl md:text-3xl font-black text-gray-800 tracking-tight">{value}</h3>}
+        </div>
+        <div className={`p-3 rounded-2xl ${t[1]} ${t[2]} shrink-0`}><Icon size={24} /></div>
       </div>
-      <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10 text-xl`}>
-        <Icon className={colorClass.replace('bg-', 'text-')} />
-      </div>
+      <p className="text-[10px] md:text-xs font-medium text-gray-500 mt-auto pt-3 border-t border-gray-50 z-10">{sub}</p>
     </div>
-    {subtext && <p className="text-xs text-gray-400 font-medium mt-auto z-10 border-t border-gray-50 pt-2">{subtext}</p>}
-  </div>
-);
+  );
+};
 
-// Recebendo a prop 'onVerRelatorio' para corrigir o erro
+// --- COMPONENTE PRINCIPAL ---
 const DashBoardSummary = ({ onVerRelatorio }) => {
   const { primeiroEstabelecimento } = useAuth(); 
   const [loading, setLoading] = useState(true);
-  const [nomeEstabelecimento, setNomeEstabelecimento] = useState('');
-  const [isExpanded, setIsExpanded] = useState(true);
 
-  // Estados dos pedidos brutos
+  // Estados do Filtro de Datas (Inicia com hoje)
+  const hojeStr = new Date().toISOString().split('T')[0];
+  const [dataInicio, setDataInicio] = useState(hojeStr);
+  const [dataFim, setDataFim] = useState(hojeStr);
+
   const [pedidosDelivery, setPedidosDelivery] = useState([]);
   const [pedidosSalao, setPedidosSalao] = useState([]);
 
-  // --- 1. BUSCA DE DADOS EM TEMPO REAL ---
+  // 1. BUSCA NO FIREBASE COM FILTRO DE DATAS
   useEffect(() => {
-    if (!primeiroEstabelecimento) { setLoading(false); return; }
+    if (!primeiroEstabelecimento || !dataInicio || !dataFim) return;
+    setLoading(true);
 
-    // Busca nome do estabelecimento
-    getDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento)).then(snap => {
-        if (snap.exists()) setNomeEstabelecimento(snap.data().nome);
-    });
+    // Ajusta os horários para pegar do início do primeiro dia até o final do último dia
+    const start = new Date(`${dataInicio}T00:00:00`);
+    const end = new Date(`${dataFim}T23:59:59.999`);
 
-    // --- QUERY 1: DELIVERY (App/Site) ---
-    const qDelivery = query(
-        collection(db, 'pedidos'),
-        where('estabelecimentoId', '==', primeiroEstabelecimento),
-        orderBy('createdAt', 'desc'),
-        limit(100) 
+    const qDel = query(collection(db, 'pedidos'),
+      where('estabelecimentoId', '==', primeiroEstabelecimento),
+      where('createdAt', '>=', start), where('createdAt', '<=', end)
     );
+    const unsubDel = onSnapshot(qDel, snap => setPedidosDelivery(snap.docs.map(d => d.data())));
 
-    const unsubDelivery = onSnapshot(qDelivery, (snapshot) => {
-        const pedidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'delivery' }));
-        setPedidosDelivery(pedidos);
-    });
-
-    // --- QUERY 2: SALÃO/MESA (POS) ---
-    const qSalao = query(
-        collection(db, 'estabelecimentos', primeiroEstabelecimento, 'vendas'),
-        orderBy('criadoEm', 'desc'),
-        limit(100)
+    const qSalao = query(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'vendas'),
+      where('criadoEm', '>=', start), where('criadoEm', '<=', end)
     );
-
-    const unsubSalao = onSnapshot(qSalao, (snapshot) => {
-        const vendas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'salao' }));
-        setPedidosSalao(vendas);
-        setLoading(false);
-    }, (error) => {
-        console.error("Erro ao ler vendas do salão:", error);
-        setLoading(false);
+    const unsubSalao = onSnapshot(qSalao, snap => {
+      setPedidosSalao(snap.docs.map(d => d.data()));
+      setLoading(false);
     });
 
-    return () => { unsubDelivery(); unsubSalao(); };
-  }, [primeiroEstabelecimento]);
+    return () => { unsubDel(); unsubSalao(); };
+  }, [primeiroEstabelecimento, dataInicio, dataFim]);
 
-  // --- 2. CÁLCULOS OTIMIZADOS ---
+  // 2. MATEMÁTICA ENXUTA
   const stats = useMemo(() => {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0); 
+    let fatSalao = 0, fatDel = 0, totalTaxas = 0, frota = {};
+    const parse = val => parseFloat(String(val || 0).replace(/[R$\s]/g, '').replace(',', '.')) || 0;
 
-    let totalFat = 0, fatSalao = 0, fatDelivery = 0;
-    let countSalao = 0, countDelivery = 0;
-    let somaTempos = 0, countTempos = 0;
-    
-    const motoboyMap = {};
+    pedidosSalao.forEach(p => p.status !== 'cancelado' && (fatSalao += parse(p.totalFinal || p.total || p.valorTotal)));
+    pedidosDelivery.forEach(p => {
+      if (p.status === 'cancelado') return;
+      fatDel += parse(p.totalFinal || p.total || p.valorTotal);
+      
+      if (p.motoboyNome || p.motoboyId) {
+        const moto = p.motoboyNome || 'Desconhecido';
+        if (!frota[moto]) frota[moto] = { nome: moto, qtd: 0, taxas: 0 };
+        frota[moto].qtd++;
+        frota[moto].taxas += parse(p.taxaEntrega || p.deliveryFee);
+        totalTaxas += parse(p.taxaEntrega || p.deliveryFee);
+      }
+    });
 
-    const getDate = (timestamp) => {
-        if (!timestamp) return null;
-        if (timestamp.toDate) return timestamp.toDate();
-        if (timestamp.seconds) return new Date(timestamp.seconds * 1000);
-        return new Date(timestamp); 
-    };
-
-    const parseCurrency = (val) => {
-        if (!val) return 0;
-        if (typeof val === 'number') return val;
-        const cleanStr = String(val).replace('R$', '').replace(/\s/g, '').replace(',', '.');
-        const num = parseFloat(cleanStr);
-        return isNaN(num) ? 0 : num;
-    };
-
-    const processarLista = (lista, origem) => {
-        lista.forEach(pedido => {
-            if (pedido.status === 'cancelado') return;
-
-            const dataObj = pedido.createdAt || pedido.criadoEm || pedido.dataPedido || pedido.updatedAt;
-            const dataPedido = getDate(dataObj);
-            
-            if (!dataPedido || dataPedido < hoje) return;
-
-            let valorCru = pedido.totalFinal ?? pedido.total ?? pedido.valorTotal ?? 0;
-            let valor = parseCurrency(valorCru);
-
-            if (pedido.tempoPreparo) {
-                somaTempos += Number(pedido.tempoPreparo);
-                countTempos++;
-            }
-
-            if (origem === 'salao' || pedido.tipo === 'salao') {
-                fatSalao += valor;
-                countSalao++;
-            } else {
-                fatDelivery += valor;
-                countDelivery++;
-
-                if (pedido.motoboyId || pedido.motoboyNome) {
-                    const idMoto = pedido.motoboyId || pedido.motoboyNome;
-                    const nomeMoto = pedido.motoboyNome || 'Desconhecido';
-                    const taxa = parseCurrency(pedido.taxaEntrega || pedido.deliveryFee || 0);
-
-                    if (!motoboyMap[idMoto]) {
-                        motoboyMap[idMoto] = { id: idMoto, nome: nomeMoto, qtd: 0, totalTaxas: 0 };
-                    }
-                    motoboyMap[idMoto].qtd += 1;
-                    motoboyMap[idMoto].totalTaxas += taxa;
-                }
-            }
-        });
-    };
-
-    processarLista(pedidosSalao, 'salao');
-    processarLista(pedidosDelivery, 'delivery');
-
-    totalFat = fatSalao + fatDelivery;
-    const totalPedidos = countSalao + countDelivery;
-    const entregadoresList = Object.values(motoboyMap).sort((a, b) => b.qtd - a.qtd);
-
+    const totPeds = pedidosSalao.length + pedidosDelivery.length;
     return {
-        pedidosHoje: totalPedidos,
-        faturamentoHoje: totalFat,
-        pedidosSalao: countSalao,
-        faturamentoSalao: fatSalao,
-        pedidosDelivery: countDelivery,
-        faturamentoDelivery: fatDelivery,
-        tempoMedio: countTempos > 0 ? `${Math.round(somaTempos / countTempos)} min` : '--',
-        ticketMedio: totalPedidos > 0 ? totalFat / totalPedidos : 0,
-        entregadoresAtivos: entregadoresList,
-        totalTaxasEntregadores: entregadoresList.reduce((acc, m) => acc + m.totalTaxas, 0)
+      fatTotal: fatSalao + fatDel, totPeds, fatSalao, fatDel, totalTaxas,
+      qtdSalao: pedidosSalao.length, qtdDel: pedidosDelivery.length,
+      ticket: totPeds ? (fatSalao + fatDel) / totPeds : 0,
+      entregadores: Object.values(frota).sort((a, b) => b.qtd - a.qtd)
     };
-
   }, [pedidosDelivery, pedidosSalao]);
 
-  const formatarMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+  const formata = val => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="space-y-6 mb-8">
+    <div className="space-y-4 md:space-y-6 mb-8 animate-fadeIn">
       
-      {/* CABEÇALHO */}
-      <div className="flex w-full justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm gap-4">
-        <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                <IoCalendarOutline size={20} />
-            </div>
-            <div>
-                <h2 className="text-lg font-bold text-gray-800 leading-tight">Painel Diário</h2>
-                <p className="text-xs text-gray-500">Dados de hoje ({new Date().toLocaleDateString('pt-BR')})</p>
-            </div>
+      {/* HEADER COM FILTRO DE DATAS */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm gap-4">
+        <div className="flex items-center gap-3 md:gap-4 shrink-0">
+          <div className="p-3 bg-gray-50 text-gray-800 rounded-xl"><IoCalendarOutline size={24} /></div>
+          <div>
+            <h2 className="text-lg md:text-xl font-black text-gray-800 leading-tight">Painel de Resultados</h2>
+            <p className="text-xs font-medium text-gray-500">Selecione o período desejado</p>
+          </div>
         </div>
-        <button 
-            onClick={() => setIsExpanded(!isExpanded)} 
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-200"
-        >
-            {isExpanded ? <><IoEyeOff className="text-lg" /> Ocultar</> : <><IoEye className="text-lg" /> Ver Detalhes</>}
-        </button>
+
+        {/* FILTROS DE DATA E BOTÕES */}
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+          <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 flex-1 xl:flex-none">
+            <span className="text-xs font-bold text-gray-400 mr-2 uppercase">De</span>
+            <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-transparent text-sm font-semibold text-gray-700 outline-none w-full" />
+          </div>
+          <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 flex-1 xl:flex-none">
+            <span className="text-xs font-bold text-gray-400 mr-2 uppercase">Até</span>
+            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-transparent text-sm font-semibold text-gray-700 outline-none w-full" />
+          </div>
+          
+          {onVerRelatorio && (
+            <button onClick={onVerRelatorio} className="flex items-center justify-center gap-2 bg-purple-50 text-purple-600 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-100 transition-colors shrink-0 w-full sm:w-auto">
+              <IoTicket size={18} /> Relatório de Tickets
+            </button>
+          )}
+        </div>
       </div>
 
-      {isExpanded && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-fadeIn">
-          <StatCard 
-            title="Faturamento Total" 
-            value={formatarMoeda(stats.faturamentoHoje)} 
-            subtext={`${stats.pedidosHoje} pedidos realizados hoje`} 
-            icon={IoCash} 
-            colorClass="bg-green-500" 
-            loading={loading} 
-          />
-          <StatCard 
-            title="Delivery" 
-            value={formatarMoeda(stats.faturamentoDelivery)} 
-            subtext={`${stats.pedidosDelivery} pedidos pelo App`} 
-            icon={IoCart} 
-            colorClass="bg-blue-500" 
-            loading={loading} 
-          />
-          <StatCard 
-            title="Mesa / Balcão" 
-            value={formatarMoeda(stats.faturamentoSalao)} 
-            subtext={`${stats.pedidosSalao} atendimentos`} 
-            icon={IoRestaurant} 
-            colorClass="bg-orange-500" 
-            loading={loading} 
-          />
-          <StatCard 
-            title="Ticket Médio" 
-            value={formatarMoeda(stats.ticketMedio)} 
-            subtext={`Tempo prep. médio: ${stats.tempoMedio}`} 
-            icon={IoStatsChart} 
-            colorClass="bg-purple-500" 
-            loading={loading} 
-          />
-        </div>
-      )}
+      {/* CARDS PRINCIPAIS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+        <StatCard title="Faturamento Total" value={formata(stats.fatTotal)} sub={`${stats.totPeds} pedidos no período`} icon={IoCash} theme="green" loading={loading} />
+        <StatCard title="Delivery" value={formata(stats.fatDel)} sub={`${stats.qtdDel} pedidos recebidos`} icon={IoCart} theme="blue" loading={loading} />
+        <StatCard title="Salão / Balcão" value={formata(stats.fatSalao)} sub={`${stats.qtdSalao} atendimentos`} icon={IoRestaurant} theme="orange" loading={loading} />
+        <StatCard title="Ticket Médio" value={formata(stats.ticket)} sub="Valor médio por pedido" icon={IoStatsChart} theme="purple" loading={loading} />
+      </div>
 
-      {/* SEÇÃO DE ENTREGADORES */}
-      {isExpanded && stats.entregadoresAtivos.length > 0 && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm animate-fadeIn">
-            <div className="flex justify-between items-end mb-6">
-                <h3 className="text-gray-800 font-bold flex items-center gap-2 text-lg">
-                    <IoBicycle className="text-orange-600 text-2xl" /> 
-                    Produtividade da Frota
-                    <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full">{stats.entregadoresAtivos.length} ativos</span>
-                </h3>
-                <div className="text-right">
-                      <p className="text-xs text-gray-400 font-bold uppercase">Total Repasses</p>
-                      <p className="text-xl font-bold text-green-600">{formatarMoeda(stats.totalTaxasEntregadores)}</p>
+      {/* ENTREGADORES */}
+      {!loading && stats.entregadores.length > 0 && (
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex justify-between items-center mb-5 pb-3 border-b border-gray-100">
+            <h3 className="text-gray-800 font-bold flex items-center gap-2 text-sm md:text-base">
+              <div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><IoBicycle size={20} /></div>
+              Frota Ativa no Período <span className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded-full">{stats.entregadores.length}</span>
+            </h3>
+            <div className="text-right">
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Repasses Totais</p>
+              <p className="text-lg md:text-xl font-black text-emerald-600">{formata(stats.totalTaxas)}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {stats.entregadores.map((moto, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-orange-200 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center font-bold text-gray-600 shadow-sm text-xs">
+                    {moto.nome.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-800 text-xs md:text-sm truncate max-w-[120px]">{moto.nome}</p>
+                    <p className="text-[10px] text-gray-500 font-medium">{moto.qtd} entregas</p>
+                  </div>
                 </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {stats.entregadoresAtivos.map((moto, index) => (
-                    <div key={moto.id || index} className="group bg-gray-50 hover:bg-white border border-gray-200 hover:border-orange-200 rounded-xl p-4 transition-all duration-200 shadow-sm hover:shadow-md">
-                        <div className="flex justify-between items-start mb-2">
-                            <div className="w-10 h-10 bg-white text-orange-600 border border-orange-100 rounded-full flex justify-center items-center font-bold text-sm shadow-sm">
-                                {moto.nome ? moto.nome.charAt(0).toUpperCase() : '?'}
-                            </div>
-                            <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-1 rounded-full group-hover:bg-orange-100 group-hover:text-orange-700 transition-colors">
-                                #{index + 1}
-                            </span>
-                        </div>
-                        
-                        <div>
-                            <p className="font-bold text-gray-800 text-sm truncate" title={moto.nome}>{moto.nome}</p>
-                            <p className="text-xs text-gray-500 mb-2">{moto.qtd} entregas hoje</p>
-                            <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
-                                <span className="text-[10px] text-gray-400 font-bold">A RECEBER</span>
-                                <span className="font-bold text-green-600 text-sm">{formatarMoeda(moto.totalTaxas)}</span>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-      )}
-
-      {/* BOTÃO DE RELATÓRIO DE TICKETS (CORRIGIDO)
-          Só aparece se a função 'onVerRelatorio' for passada pelo componente pai
-      */}
-      {onVerRelatorio && (
-        <div className="flex justify-end mb-4 px-2">
-            <button 
-                onClick={onVerRelatorio}
-                className="flex items-center gap-2 bg-white text-purple-700 border border-purple-200 px-4 py-2 rounded-xl font-bold text-sm hover:bg-purple-50 shadow-sm transition-all"
-            >
-                <IoTicket size={18} /> Ver Relatório de Tickets Impressos
-            </button>
+                <span className="font-black text-emerald-600 text-sm">{formata(moto.taxas)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
