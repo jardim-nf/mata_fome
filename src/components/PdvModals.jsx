@@ -500,9 +500,22 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
                             const isCancelada = v.status === 'cancelada' || statusNfce.includes('CANCEL');
                             const temId = !!v.fiscal?.idPlugNotas;
 
-                            let tagNfce = null;
-                            const dataVenda = v.createdAt?.toDate ? v.createdAt.toDate() : new Date(v.createdAt);
-                            const minutosPassados = (agora - dataVenda) / (1000 * 60);
+let tagNfce = null;
+
+// 🔥 NOVO: Cálculo baseado na hora do processamento do JSON da Sefaz
+let dataProcessamento = v.createdAt?.toDate ? v.createdAt.toDate() : new Date(v.createdAt || Date.now());
+
+// Tenta pegar a data de autorização ou atualização da nota fiscal primeiro
+if (v.fiscal?.dataAutorizacao) {
+    dataProcessamento = v.fiscal.dataAutorizacao?.toDate ? v.fiscal.dataAutorizacao.toDate() : new Date(v.fiscal.dataAutorizacao);
+} else if (v.fiscal?.updatedAt) {
+    dataProcessamento = v.fiscal.updatedAt?.toDate ? v.fiscal.updatedAt.toDate() : new Date(v.fiscal.updatedAt);
+} else if (v.updatedAt) {
+    // Fallback para a última atualização geral do pedido
+    dataProcessamento = v.updatedAt?.toDate ? v.updatedAt.toDate() : new Date(v.updatedAt);
+}
+
+const minutosPassados = (agora - dataProcessamento) / (1000 * 60);
 
                             // Removi o "podeCancelar" antigo pois agora a lógica está direto no botão novo abaixo
 
