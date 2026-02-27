@@ -591,30 +591,23 @@ const minutosPassados = (agora - dataProcessamento) / (1000 * 60);
                                         {(() => {
                                             const passouDoTempo = (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && minutosPassados > 30;
 
-                                            if (!isCancelada) {
-                                                return (
-                                                    <button
-                                                        onClick={() => {
-                                                            if (passouDoTempo) {
-                                                                alert("⚠️ O prazo legal da Sefaz de 30 minutos para cancelar esta nota já expirou.");
-                                                                return;
-                                                            }
-                                                            onCancelarNfce(v);
-                                                        }}
-                                                        disabled={passouDoTempo}
-                                                        className={`px-3 py-2 rounded-xl font-bold text-sm border transition-colors flex items-center gap-1 ${passouDoTempo
-                                                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-70'
-                                                                : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                                                            }`}
-                                                        title={passouDoTempo ? "Prazo de 30 min expirado para cancelamento" : "Cancelar"}
-                                                    >
-                                                        {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
-                                                        {passouDoTempo && <span className="text-[10px]">🔒</span>}
-                                                    </button>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
+                                           if (!isCancelada) {
+        return (
+            <button
+                onClick={() => {
+                    if (window.confirm("Deseja tentar cancelar esta venda/nota na Sefaz?")) {
+                        onCancelarNfce(v);
+                    }
+                }}
+                className="px-3 py-2 rounded-xl font-bold text-sm border transition-colors flex items-center gap-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                title="Cancelar NFC-e"
+            >
+                {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
+            </button>
+        );
+    }
+    return null;
+})()}
 
                                         <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm border border-gray-200">Detalhes</button>
                                     </div>
