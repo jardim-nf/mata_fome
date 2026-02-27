@@ -74,7 +74,6 @@ const PdvScreen = () => {
     const timeoutCodigoBarras = useRef(null);
     const inputBuscaRef = useRef(null);
 
-    // --- LÓGICA DE CARREGAMENTO ---
     useEffect(() => {
         if (!userData || !currentUser) return;
         const carregarLojas = async () => {
@@ -176,7 +175,12 @@ const PdvScreen = () => {
     };
 
     const salvarEdicaoItem = (uid, novaQuantidade, novaObservacao) => {
-        setVendaAtual(prev => { if (!prev) return null; const nv = prev.itens.map(i => i.uid === uid ? { ...i, quantity: novaQuantidade, observacao: novaObservacao } : i ); return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; }); setItemParaEditar(null);
+        setVendaAtual(prev => { 
+            if (!prev) return null; 
+            const nv = prev.itens.map(i => i.uid === uid ? { ...i, quantity: novaQuantidade, observacao: novaObservacao } : i ); 
+            return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; 
+        }); 
+        setItemParaEditar(null);
     };
 
     const handleConsultarStatus = async (venda) => {
@@ -361,9 +365,8 @@ const PdvScreen = () => {
     }, [caixaAberto, iniciarVendaBalcao, prepararFechamento, abrirHistoricoAtual, carregarListaTurnos, abrirMovimentacao, vendaAtual, suspenderVenda]);
 
     return (
-        // 🔥 A MÁGICA DE BLOQUEIO ESTÁ AQUI NA DIV PAI 🔥
-        // 'fixed top-0 left-0 right-0 bottom-0' gruda a div nos cantos da tela e impede o vazamento.
-        <div id="main-app-wrapper" className="fixed top-0 left-0 right-0 bottom-0 bg-slate-50 font-sans text-slate-800 flex flex-col overflow-hidden z-[9999]">
+        // 🔥 Container ajustado para fixed inset-0 (sem w-full nem h-dvh explícitos)
+        <div id="main-app-wrapper" className="fixed inset-0 flex flex-col bg-slate-100 font-sans text-slate-800 overflow-hidden z-[9999]">
             
             {/* Notificações Topo */}
             {barcodeAviso && (
@@ -379,36 +382,33 @@ const PdvScreen = () => {
                 </div>
             ) : (
                 <>
-                    {/* CONTAINER DO CORPO DA TELA (Divide entre Esquerda e Direita e gera o limite de Scroll) */}
-                    <div className="flex-1 flex relative overflow-hidden w-full h-full bg-white">
+                    {/* CORPO DA TELA - Com relative para ancorar o carrinho absolute no mobile */}
+                    <div className="flex-1 flex min-h-0 overflow-hidden bg-white relative">
                         
                         {/* ⬅️ LADO ESQUERDO: CATÁLOGO DE PRODUTOS */}
-                        <div className="flex-1 flex flex-col overflow-hidden bg-white">
-                            
-                            {/* HEADER DO PDV */}
+                        <div className="flex-1 flex flex-col min-w-0 min-h-0">
                             <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-white shrink-0">
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => navigate('/admin-dashboard')} className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors" title="Sair do PDV">
+                                    <button onClick={() => navigate('/admin-dashboard')} className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
                                         <IoArrowBack size={18} />
                                     </button>
                                     <div className="flex items-center gap-2">
                                         <div className={`w-2 h-2 rounded-full ${caixaAberto ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                                        <h1 className="text-sm font-black text-slate-800 uppercase truncate max-w-[150px] sm:max-w-[200px]">{nomeLoja}</h1>
+                                        <h1 className="text-sm font-black text-slate-800 uppercase truncate max-w-[150px]">{nomeLoja}</h1>
                                     </div>
                                 </div>
                                 <div className="flex items-center flex-1 max-w-sm ml-4">
                                     <div className="relative w-full">
                                         <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                         <input 
-                                            ref={inputBuscaRef} type="text" placeholder="Nome ou código (F1)..." 
-                                            className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-700 outline-none focus:border-emerald-400 transition-all" 
+                                            ref={inputBuscaRef} type="text" placeholder="Buscar (F1)..." 
+                                            className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-700 outline-none focus:bg-white focus:border-emerald-400 transition-all" 
                                             value={busca} onChange={e => setBusca(e.target.value)} 
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* BARRA DE CATEGORIAS */}
                             <div className="h-10 px-4 flex gap-1.5 items-center overflow-x-auto scrollbar-hide shrink-0 border-b border-slate-200 bg-slate-50">
                                 {categorias.map(c => (
                                     <button 
@@ -420,144 +420,162 @@ const PdvScreen = () => {
                                 ))}
                             </div>
 
-                            {/* 🔥 ÁREA DOS PRODUTOS (SCROLL APENAS AQUI) */}
-                            <div className="flex-1 overflow-y-auto p-4 bg-slate-100/50 pdv-scroll">
-                                {carregandoProdutos ? (
-                                    <div className="flex justify-center mt-10"><div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-200 border-t-emerald-600"></div></div>
-                                ) : (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
-                                        {produtosFiltrados.map(p => (
-                                            <button 
-                                                key={p.id} onClick={() => handleProdutoClick(p)} 
-                                                className="bg-white rounded-xl p-2 shadow-sm border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all group flex items-center gap-3 h-20 text-left"
-                                            >
-                                                {/* Miniatura */}
-                                                <div className="h-16 w-16 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 border border-slate-100 relative overflow-hidden">
-                                                    {p.imagem || p.foto || p.urlImagem || p.imageUrl ? (
-                                                        <img src={p.imagem || p.foto || p.urlImagem || p.imageUrl} alt={p.name} className="w-full h-full object-cover mix-blend-multiply" />
-                                                    ) : (
-                                                        <IoStorefrontOutline className="text-2xl text-slate-300" />
-                                                    )}
+                            {/* ÁREA DOS PRODUTOS */}
+                            <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-slate-100/50 pdv-scroll">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                                    {produtosFiltrados.map(p => (
+                                        <button 
+                                            key={p.id} 
+                                            onClick={() => handleProdutoClick(p)} 
+                                            className="bg-white rounded-xl p-2 shadow-sm border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all flex flex-row items-center gap-3 w-full text-left cursor-pointer group"
+                                        >
+                                            <div className="w-16 h-16 shrink-0 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100 relative overflow-hidden">
+                                                {p.imagem || p.foto || p.urlImagem || p.imageUrl ? (
+                                                    <img src={p.imagem || p.foto || p.urlImagem || p.imageUrl} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                ) : (
+                                                    <IoStorefrontOutline className="text-2xl text-slate-300" />
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col justify-center flex-1 min-w-0">
+                                                <div className="font-bold text-slate-800 text-[11px] sm:text-xs leading-normal break-words whitespace-normal">
+                                                    {p.name}
                                                 </div>
-                                                
-                                                {/* Textos */}
-                                                <div className="flex flex-col justify-center flex-1 h-full overflow-hidden">
-                                                    <h3 className="font-bold text-slate-800 text-[11px] leading-tight line-clamp-2">{p.name}</h3>
-                                                    <div className="flex items-center justify-between mt-1">
-                                                        <span className="font-black text-emerald-600 text-sm">{formatarMoeda(p.price)}</span>
-                                                        {(p.temVariacoes || p.vendidoPorPeso) && (
-                                                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${p.vendidoPorPeso ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
-                                                                {p.vendidoPorPeso ? 'PESO' : 'VARIA'}
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                <div className="font-black text-emerald-600 text-[13px] sm:text-sm whitespace-nowrap mt-1">
+                                                    {formatarMoeda(p.price)}
                                                 </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
-                        {/* ➡️ LADO DIREITO: CARRINHO (Usa absolute em mobile para não empurrar a tela para os lados) */}
-                        <div className={`
-                            absolute md:relative top-0 right-0 h-full z-[110]
-                            flex flex-col bg-white border-l border-slate-200 shadow-2xl md:shadow-none
-                            w-[85vw] sm:w-[320px] md:w-[350px] shrink-0
-                            transition-transform duration-300 ease-in-out
-                            ${mostrarCarrinhoMobile ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
-                        `}>
-                            {/* HEADER CARRINHO */}
+                        {/* ➡️ LADO DIREITO: CARRINHO (Absolute no mobile, relative no pc) */}
+                        <div className={`absolute md:relative top-0 right-0 bottom-0 flex flex-col shrink-0 min-h-0 w-[85vw] sm:w-[320px] md:w-[350px] bg-white border-l border-slate-200 z-[110] transition-transform duration-300 ${mostrarCarrinhoMobile ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:translate-x-0'}`}>
                             <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
-                                <div className="flex items-center gap-2">
-                                    <IoCart className="text-slate-600" size={18} />
-                                    <h2 className="font-black text-[13px] text-slate-800">Pedido #{vendaAtual?.id?.slice(-6).toUpperCase() || 'NOVO'}</h2>
-                                </div>
-                                <div className="flex gap-1.5">
-                                    <button onClick={() => setMostrarCarrinhoMobile(false)} className="md:hidden p-1.5 text-slate-500 font-bold bg-white border border-slate-200 rounded">✕</button>
-                                    <button onClick={suspenderVenda} disabled={!vendaAtual?.itens?.length} className="bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded text-[10px] font-bold disabled:opacity-50" title="Suspender (F4)">
-                                        PAUSAR
-                                    </button>
-                                    <button onClick={iniciarVendaBalcao} className="bg-white text-red-500 border border-red-200 hover:bg-red-50 px-2 py-1 rounded text-[10px] font-bold" title="Limpar">
-                                        LIMPAR
-                                    </button>
+                                <h2 className="font-black text-[13px] text-slate-800 flex items-center gap-2"><IoCart /> Pedido #{vendaAtual?.id?.slice(-6).toUpperCase() || 'NOVO'}</h2>
+                                <div className="flex gap-1">
+                                    <button onClick={() => setMostrarCarrinhoMobile(false)} className="md:hidden p-1 text-slate-500 font-bold bg-white border rounded">✕</button>
+                                    <button onClick={suspenderVenda} disabled={!vendaAtual?.itens?.length} className="bg-white text-blue-600 border px-1.5 py-1 rounded text-[10px] font-bold">PAUSAR</button>
+                                    <button onClick={iniciarVendaBalcao} className="bg-white text-red-500 border px-1.5 py-1 rounded text-[10px] font-bold">LIMPAR</button>
                                 </div>
                             </div>
 
-                            {/* 🔥 ÁREA DOS ITENS DO CARRINHO */}
-                            <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-white pdv-scroll">
+                            {/* LISTA DOS ITENS NO CARRINHO */}
+                            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 bg-white pdv-scroll">
                                 {vendaAtual?.itens?.length > 0 ? (
-                                    vendaAtual.itens.map((i) => (
-                                        <div key={i.uid} onClick={() => setItemParaEditar(i)} className="bg-white p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 cursor-pointer flex justify-between items-center group">
-                                            <div className="flex-1 pr-2">
-                                                <div className="flex items-start gap-1.5">
-                                                    <span className="bg-slate-100 border border-slate-200 text-slate-800 font-black text-[10px] px-1.5 rounded">{i.quantity}x</span>
-                                                    <span className="font-bold text-slate-800 text-[11px] leading-tight line-clamp-2">{i.name}</span>
-                                                </div>
-                                                {i.observacao && <p className="text-[9px] text-amber-600 bg-amber-50 px-1 rounded mt-1 line-clamp-1 inline-block">💬 {i.observacao}</p>}
+                                    vendaAtual.itens.map(i => (
+                                        <div 
+                                            key={i.uid} 
+                                            onClick={() => setItemParaEditar(i)} 
+                                            className="bg-white p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 cursor-pointer flex flex-row items-center gap-2 w-full transition-colors"
+                                        >
+                                            <div className="shrink-0">
+                                                <span className="inline-block text-center bg-slate-100 border border-slate-200 text-slate-800 font-black text-[11px] leading-normal min-w-[28px] px-1.5 py-1 rounded-md">
+                                                    {i.quantity}x
+                                                </span>
                                             </div>
-                                            <div className="text-right flex flex-col items-end gap-1 shrink-0">
-                                                <span className="font-black text-slate-900 text-xs">{formatarMoeda(i.price * i.quantity)}</span>
-                                                <button onClick={(e) => { e.stopPropagation(); removerItem(i.uid); }} className="text-red-500 text-[9px] font-bold uppercase opacity-0 group-hover:opacity-100">Remover</button>
+
+                                            <div className="flex flex-col flex-1 min-w-0">
+                                                <span className="font-bold text-slate-800 text-[11px] sm:text-xs leading-normal break-words whitespace-normal m-0">
+                                                    {i.name}
+                                                </span>
+                                                {i.observacao && (
+                                                    <span className="text-[10px] text-slate-500 font-medium break-words whitespace-normal mt-0.5 m-0">
+                                                        * {i.observacao}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="shrink-0 pl-1 text-right">
+                                                <span className="inline-block font-black text-slate-900 text-[13px] whitespace-nowrap">
+                                                    {formatarMoeda(i.price * i.quantity)}
+                                                </span>
                                             </div>
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-70">
-                                        <IoCart size={40} className="mb-2" />
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Caixa Livre</p>
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
+                                        <IoCart size={40} />
+                                        <p className="text-[10px] font-bold uppercase mt-2">Caixa Livre</p>
                                     </div>
                                 )}
                             </div>
 
-                            {/* TOTAL E PAGAR */}
                             {vendaAtual?.itens?.length > 0 && (
                                 <div className="p-3 bg-white border-t border-slate-200 shrink-0">
-                                    <div className="flex justify-between items-end mb-3 px-1">
-                                        <span className="text-[11px] font-bold text-slate-500 uppercase">Total:</span>
-                                        <span className="font-black text-emerald-600 text-2xl tracking-tight">{formatarMoeda(vendaAtual.total)}</span>
+                                    <div className="flex justify-between items-end mb-3 px-1 gap-2">
+                                        <span className="text-[11px] font-bold text-slate-500 uppercase shrink-0">Total:</span>
+                                        <span className="font-black text-emerald-600 text-xl sm:text-2xl whitespace-nowrap shrink-0">{formatarMoeda(vendaAtual.total)}</span>
                                     </div>
-                                    <button onClick={() => { setMostrarFinalizacao(true); setMostrarCarrinhoMobile(false); }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-[14px] hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-md">
+                                    <button onClick={() => { setMostrarFinalizacao(true); setMostrarCarrinhoMobile(false); }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-[14px] hover:bg-emerald-700 shadow-md flex items-center justify-center gap-2">
                                         <IoCheckmarkCircleOutline size={20} /> COBRAR (F10)
                                     </button>
                                 </div>
                             )}
                         </div>
 
-                        {/* OVERLAY MOBILE */}
-                        {mostrarCarrinhoMobile && <div className="absolute inset-0 bg-slate-900/60 z-[105] md:hidden" onClick={() => setMostrarCarrinhoMobile(false)}></div>}
+                        {mostrarCarrinhoMobile && <div className="absolute inset-0 bg-black/50 z-[105] md:hidden" onClick={() => setMostrarCarrinhoMobile(false)}></div>}
                     </div>
 
-                    {/* 🔥 BARRA DE ATALHOS INFERIOR FIXA */}
-                    <div className="h-12 w-full shrink-0 bg-slate-800 border-t border-slate-900 px-2 flex items-center justify-center gap-1 shadow-lg no-print overflow-x-auto scrollbar-hide text-white">
-                        <div className="flex gap-1 min-w-max">
-                            <button onClick={() => inputBuscaRef.current?.focus()} className="hover:bg-slate-700 px-3 py-1.5 rounded flex items-center gap-1.5 text-[10px] font-bold transition-colors">
-                                <kbd className="bg-slate-900 px-1 rounded text-emerald-400 font-mono">F1</kbd> BUSCAR
+{/* 🔥 BARRA DE ATALHOS INFERIOR - 100% RESPONSIVA 🔥 */}
+                    <div className="w-full shrink-0 border-t border-slate-900 p-2 sm:p-3 flex justify-center shadow-[0_-10px_20px_rgba(0,0,0,0.15)] z-[120] relative no-print">
+                        <div className="flex flex-wrap justify-center items-center gap-2 w-full max-w-7xl">
+                            
+                            <button onClick={() => inputBuscaRef.current?.focus()} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F1</kbd> BUSCAR
                             </button>
-                            <button onClick={iniciarVendaBalcao} className="hover:bg-slate-700 px-3 py-1.5 rounded flex items-center gap-1.5 text-[10px] font-bold transition-colors">
-                                <kbd className="bg-slate-900 px-1 rounded text-emerald-400 font-mono">F2</kbd> NOVA
+                            
+                            <button onClick={iniciarVendaBalcao} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F2</kbd> NOVA
                             </button>
-                            <button onClick={abrirHistoricoAtual} className="hover:bg-slate-700 px-3 py-1.5 rounded flex items-center gap-1.5 text-[10px] font-bold transition-colors">
-                                <kbd className="bg-slate-900 px-1 rounded text-emerald-400 font-mono">F3</kbd> HISTÓRICO
+                            
+                            <button onClick={abrirHistoricoAtual} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F3</kbd> HISTÓRICO
                             </button>
-                            <button onClick={() => setMostrarSuspensas(true)} className="hover:bg-slate-700 px-3 py-1.5 rounded flex items-center gap-1.5 text-[10px] font-bold transition-colors relative">
-                                <kbd className="bg-slate-900 px-1 rounded text-blue-400 font-mono">F5</kbd> ESPERA
-                                {vendasSuspensas.length > 0 && <span className="absolute top-0 right-0 bg-red-500 text-[8px] w-3 h-3 flex items-center justify-center rounded-full">{vendasSuspensas.length}</span>}
+                            
+                            <button onClick={suspenderVenda} className={`hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm ${!vendaAtual?.itens?.length ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-orange-400 font-mono leading-normal">F4</kbd> PAUSAR
                             </button>
-                            <div className="w-px h-4 bg-slate-600 mx-1 self-center hidden md:block"></div>
-                            <button onClick={abrirMovimentacao} className="hover:bg-slate-700 px-3 py-1.5 rounded flex items-center gap-1.5 text-[10px] font-bold transition-colors">
-                                <kbd className="bg-slate-900 px-1 rounded text-amber-400 font-mono">F8</kbd> CAIXA
+                            
+                            <button onClick={() => setMostrarSuspensas(true)} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm relative">
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-blue-400 font-mono leading-normal">F5</kbd> ESPERA
+                                {vendasSuspensas.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] min-w-[18px] px-1 py-0.5 flex items-center justify-center rounded-full leading-none shadow-md">{vendasSuspensas.length}</span>}
                             </button>
-                            <button onClick={prepararFechamento} className="bg-rose-600 hover:bg-rose-700 px-3 py-1.5 rounded flex items-center gap-1.5 text-[10px] font-bold transition-colors shadow-sm ml-1">
-                                <kbd className="bg-rose-900/50 px-1 rounded text-white font-mono">F9</kbd> FECHAR TURNO
+
+                            {/* Separador oculto em telas pequenas */}
+                            <div className="w-px h-6 bg-slate-600 mx-1 hidden sm:block"></div>
+
+                            <button onClick={abrirMovimentacao} className="hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-amber-400 font-mono leading-normal">F8</kbd> CAIXA
                             </button>
+                            
+                            <button onClick={prepararFechamento} className="bg-rose-900/40 hover:bg-rose-800 border border-rose-700/50 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                                <kbd className="bg-rose-700 px-1.5 py-0.5 rounded border border-rose-900 text-white font-mono leading-normal">F9</kbd> FECHAR TURNO
+                            </button>
+
+                            <button onClick={carregarListaTurnos} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F11</kbd> TURNOS
+                            </button>
+
                         </div>
                     </div>
 
-                    {/* BOTÃO MOBILE CARRINHO FLUTUANTE */}
-                    <button onClick={() => setMostrarCarrinhoMobile(true)} className={`md:hidden absolute bottom-16 right-4 bg-emerald-600 text-white p-3 rounded-full shadow-xl z-[90] flex items-center gap-2 transition-transform ${vendaAtual?.itens?.length > 0 ? 'scale-100' : 'scale-0'}`}>
-                        <IoCart size={20} />
-                        <span className="absolute -top-1 -right-1 bg-white text-emerald-600 font-black text-[9px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{vendaAtual?.itens?.length || 0}</span>
+                    {/* 🔥 Carrinho flutuante mobile (Posicionado de forma inteligente) 🔥 */}
+                    <button 
+                        onClick={() => setMostrarCarrinhoMobile(true)} 
+                        style={{ bottom: 'calc(1rem + var(--altura-da-barra, 60px))' }} 
+                        className={`md:hidden fixed right-4 bg-emerald-600 text-white p-4 rounded-full shadow-2xl z-[90] flex items-center gap-2 transition-transform ${vendaAtual?.itens?.length > 0 ? 'scale-100' : 'scale-0'}`}
+                    >
+                        <IoCart size={24} />
+                        <span className="absolute -top-1 -right-1 bg-white text-emerald-600 font-black text-[10px] min-w-[20px] h-5 flex items-center justify-center rounded-full shadow-sm">
+                            {vendaAtual?.itens?.length || 0}
+                        </span>
+                    </button>
+
+                    {/* Carrinho flutuante mobile */}
+                    <button onClick={() => setMostrarCarrinhoMobile(true)} className={`md:hidden absolute bottom-20 right-4 bg-emerald-600 text-white p-4 rounded-full shadow-2xl z-[90] flex items-center gap-2 transition-transform ${vendaAtual?.itens?.length > 0 ? 'scale-100' : 'scale-0'}`}>
+                        <IoCart size={24} /><span className="absolute -top-1 -right-1 bg-white text-emerald-600 font-black text-[10px] min-w-[20px] h-5 flex items-center justify-center rounded-full shadow-sm">{vendaAtual?.itens?.length || 0}</span>
                     </button>
 
                     {/* Modais Componentes */}
@@ -578,8 +596,22 @@ const PdvScreen = () => {
                 </>
             )}
             
-            {/* CSS PROTEGIDO PARA IMPRESSÃO ORIGINAL */}
             <style>{`
+                /* BLOQUEIO NUCLEAR DE ROLAGEM GLOBAL */
+                html, body {
+                    margin: 0;
+                    padding: 0;
+                    height: 100%;
+                    width: 100%;
+                    overflow: hidden !important;
+                    overscroll-behavior: none !important;
+                    touch-action: none !important; /* Trava o pull-to-refresh no celular */
+                }
+
+                .pdv-scroll {
+                    touch-action: auto !important; /* Deixa rolar só o que for lista de itens */
+                }
+
                 .pdv-scroll::-webkit-scrollbar { width: 4px; }
                 .pdv-scroll::-webkit-scrollbar-track { background: transparent; }
                 .pdv-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
@@ -588,7 +620,7 @@ const PdvScreen = () => {
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
                 @media print {
-                  html, body { height: auto !important; overflow: visible !important; background: white !important; }
+                  html, body { height: auto !important; overflow: visible !important; background: white !important; touch-action: auto !important; }
                   body * { visibility: hidden; }
                   #main-app-wrapper { position: static !important; overflow: visible !important; height: auto !important; display: block !important; }
                   #recibo-overlay, #resumo-turno-overlay { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: auto !important; background: none !important; visibility: visible !important; z-index: 9999 !important; display: block !important; }

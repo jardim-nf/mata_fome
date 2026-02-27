@@ -1,5 +1,6 @@
 // src/components/PdvModals.jsx
 import React, { useState, useEffect } from 'react';
+import { IoTimeOutline, IoClose, IoCheckmarkCircleOutline, IoStorefrontOutline } from 'react-icons/io5';
 
 // --- FUNÇÕES AUXILIARES ---
 export const formatarHora = (data) => {
@@ -294,7 +295,12 @@ export const ModalFinalizacao = ({ visivel, venda, onClose, onFinalizar, salvand
 
                             <div className="grid grid-cols-3 gap-2 mb-3">
                                 {['dinheiro', 'cartao', 'pix'].map(f =>
-                                    <button key={f} onClick={() => setFormaAtual(f)}
+                                    <button key={f} 
+                                        // 🔥 MÁGICA AQUI: Ao clicar, ele injeta o valor restante automático na caixinha!
+                                        onClick={() => {
+                                            setFormaAtual(f);
+                                            if (restante > 0) setValorInput(restante.toFixed(2));
+                                        }}
                                         className={`p-3 rounded-xl font-bold uppercase text-[10px] flex flex-col items-center gap-1 transition-all border ${formaAtual === f ? 'bg-gray-800 border-gray-800 text-white shadow-md scale-[1.02]' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50 hover:border-gray-300'}`}>
                                         <span className="text-2xl">{f === 'dinheiro' ? '💵' : f === 'cartao' ? '💳' : '💠'}</span>{f}
                                     </button>
@@ -324,7 +330,8 @@ export const ModalFinalizacao = ({ visivel, venda, onClose, onFinalizar, salvand
     );
 };
 
-export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp }) => {    if (!visivel) return null;
+export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp }) => {
+    if (!visivel) return null;
 
     // Pega o status formatado para evitar erros de case-sensitive
     const statusNfceRecibo = dados?.fiscal?.status?.toUpperCase() || '';
@@ -371,7 +378,7 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                         </div>
                     )}
 
-<div className="flex gap-2 mb-3">
+                    <div className="flex gap-2 mb-3">
                         {/* BOTÕES DE EMISSÃO OU PDF */}
                         {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') ? (
                             <button onClick={() => onBaixarPdf(dados)} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
@@ -420,7 +427,8 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
     );
 };
 
-export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp }) => {    const [filtro, setFiltro] = useState('todas');
+export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, carregando, titulo, onProcessarLote, onCancelarNfce, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp }) => {
+    const [filtro, setFiltro] = useState('todas');
     const [buscaHistorico, setBuscaHistorico] = useState('');
     const [processandoLote, setProcessandoLote] = useState(false);
     const [agora, setAgora] = useState(new Date());
@@ -462,158 +470,186 @@ export const ModalHistorico = ({ visivel, onClose, vendas, onSelecionarVenda, ca
     };
 
     return (
-        <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-[9300] p-4 backdrop-blur-sm no-print">
-            <div className="bg-white border border-gray-200 rounded-[2rem] shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col overflow-hidden animate-slideUp">
-                <div className="bg-white p-6 border-b border-gray-100 flex flex-col gap-4">
-                    <div className="flex justify-between items-center flex-col sm:flex-row gap-4">
-                        <h2 className="text-2xl font-bold text-gray-800">{titulo || "Histórico"}</h2>
-                        <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto scrollbar-hide">
-                            <button onClick={() => setFiltro('todas')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition ${filtro === 'todas' ? 'bg-white text-gray-800 shadow' : 'text-gray-500 hover:text-gray-700'}`}>Todas</button>
-                            <button onClick={() => setFiltro('rejeitadas')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition ${filtro === 'rejeitadas' ? 'bg-white text-red-500 shadow' : 'text-gray-500 hover:text-red-400'}`}>NFC-e Rejeitadas</button>
-                            <button onClick={() => setFiltro('recibo')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition ${filtro === 'recibo' ? 'bg-white text-blue-500 shadow' : 'text-gray-500 hover:text-blue-400'}`}>Apenas Recibo</button>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200 no-print">
+            <div className="bg-slate-50 w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+                
+                {/* HEADER & FILTROS */}
+                <div className="bg-white p-4 sm:p-6 border-b border-slate-200 flex flex-col gap-4 shrink-0">
+                    <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl shadow-inner">
+                                <IoTimeOutline size={26} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-slate-800 leading-none">{titulo || "Histórico de Vendas"}</h2>
+                                <p className="text-xs text-slate-500 font-medium mt-1">Consulte recibos, emita ou cancele notas fiscais</p>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                        
+                        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
                             {filtro === 'rejeitadas' && vendasFiltradas.length > 0 && (
-                                <button onClick={handleProcessar} disabled={processandoLote} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
+                                <button onClick={handleProcessar} disabled={processandoLote} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2 leading-normal">
                                     {processandoLote ? '⏳ Emitindo...' : '🔄 Processar Lote'}
                                 </button>
                             )}
-                            <button onClick={onClose} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200 text-gray-500 hidden sm:block transition-colors">✕</button>
+                            <button onClick={onClose} className="p-2 text-slate-400 bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+                                <IoClose size={24} />
+                            </button>
                         </div>
                     </div>
-                    <div className="relative w-full group">
-                        <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 group-focus-within:text-emerald-500 transition-colors">🔍</span>
-                        <input type="text" placeholder="Buscar por Nº do Pedido ou CPF do Cliente..." className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50 transition-all placeholder-gray-400" value={buscaHistorico} onChange={(e) => setBuscaHistorico(e.target.value)} autoFocus />
-                        {buscaHistorico && <button onClick={() => setBuscaHistorico('')} className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-red-500 transition-colors">✕</button>}
+
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between mt-2">
+                        {/* Botões de Filtro com Padding Correto (sem cortar) */}
+                        <div className="flex bg-slate-100 p-1.5 rounded-xl w-full lg:w-auto overflow-x-auto scrollbar-hide">
+                            <button onClick={() => setFiltro('todas')} className={`px-4 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wide whitespace-nowrap transition-all leading-normal ${filtro === 'todas' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Todas</button>
+                            <button onClick={() => setFiltro('rejeitadas')} className={`px-4 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wide whitespace-nowrap transition-all leading-normal ${filtro === 'rejeitadas' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-red-500'}`}>NFC-e Rejeitadas</button>
+                            <button onClick={() => setFiltro('recibo')} className={`px-4 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wide whitespace-nowrap transition-all leading-normal ${filtro === 'recibo' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-blue-500'}`}>Apenas Recibo</button>
+                        </div>
+
+                        {/* Barra de Busca */}
+                        <div className="relative w-full lg:max-w-sm group">
+                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">🔍</span>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar Nº Pedido ou CPF..." 
+                                className="w-full pl-9 pr-10 py-2.5 bg-slate-100 border border-transparent rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-emerald-400 transition-all placeholder-slate-400" 
+                                value={buscaHistorico} 
+                                onChange={(e) => setBuscaHistorico(e.target.value)} 
+                            />
+                            {buscaHistorico && <button onClick={() => setBuscaHistorico('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-red-500">✕</button>}
+                        </div>
                     </div>
                 </div>
-                <div className="flex-1 overflow-auto p-6 bg-gray-50 custom-scrollbar">
-                    {vendasFiltradas.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-70">
-                            <span className="text-5xl mb-4">📭</span>
-                            <p className="font-bold">{buscaHistorico ? "Nenhum resultado encontrado para a busca." : "Nenhuma venda encontrada para este filtro."}</p>
+
+                {/* LISTA DE VENDAS */}
+                <div className="flex-1 overflow-auto p-4 sm:p-6 pdv-scroll">
+                    {carregando ? (
+                        <div className="flex flex-col items-center justify-center h-40 gap-4">
+                            <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-emerald-600"></div>
+                            <span className="text-sm font-bold text-slate-500">Buscando vendas no sistema...</span>
+                        </div>
+                    ) : vendasFiltradas.length === 0 ? (
+                        <div className="h-48 flex flex-col items-center justify-center text-slate-400 bg-white border border-slate-200 border-dashed rounded-2xl">
+                            <span className="text-4xl mb-3 opacity-50">📭</span>
+                            <p className="font-bold text-sm">{buscaHistorico ? "Nenhum resultado encontrado." : "Nenhuma venda para este filtro."}</p>
                         </div>
                     ) : (
-                        vendasFiltradas.map(v => {
-                            // 👇 STATUS COM PROTEÇÃO 👇
-                            const statusNfce = v.fiscal?.status?.toUpperCase() || '';
-                            const isCancelada = v.status === 'cancelada' || statusNfce.includes('CANCEL');
-                            const temId = !!v.fiscal?.idPlugNotas;
+                        <div className="grid gap-3">
+                            {vendasFiltradas.map(v => {
+                                const statusNfce = v.fiscal?.status?.toUpperCase() || '';
+                                const isCancelada = v.status === 'cancelada' || statusNfce.includes('CANCEL');
+                                const temId = !!v.fiscal?.idPlugNotas;
 
-let tagNfce = null;
+                                let dataProcessamento = v.createdAt?.toDate ? v.createdAt.toDate() : new Date(v.createdAt || Date.now());
+                                if (v.fiscal?.dataAutorizacao) {
+                                    dataProcessamento = v.fiscal.dataAutorizacao?.toDate ? v.fiscal.dataAutorizacao.toDate() : new Date(v.fiscal.dataAutorizacao);
+                                } else if (v.fiscal?.updatedAt) {
+                                    dataProcessamento = v.fiscal.updatedAt?.toDate ? v.fiscal.updatedAt.toDate() : new Date(v.fiscal.updatedAt);
+                                } else if (v.updatedAt) {
+                                    dataProcessamento = v.updatedAt?.toDate ? v.updatedAt.toDate() : new Date(v.updatedAt);
+                                }
+                                const minutosPassados = (agora - dataProcessamento) / (1000 * 60);
 
-// 🔥 NOVO: Cálculo baseado na hora do processamento do JSON da Sefaz
-let dataProcessamento = v.createdAt?.toDate ? v.createdAt.toDate() : new Date(v.createdAt || Date.now());
+                                // BADGES COM PADDING E LEADING NORMAL PARA NÃO CORTAR
+                                let tagNfce = null;
+                                if (isCancelada) tagNfce = <span className="bg-slate-200 text-slate-600 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wide leading-normal">CANCELADA</span>;
+                                else if (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') tagNfce = <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wide leading-normal">AUTORIZADA</span>;
+                                else if (statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO' || statusNfce === 'DENEGADO' || statusNfce === 'ERRO') tagNfce = <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wide leading-normal">REJEITADA</span>;
+                                else if (statusNfce === 'PROCESSANDO') tagNfce = <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wide leading-normal animate-pulse">⏳ PROCESSANDO</span>;
+                                else tagNfce = <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wide leading-normal">RECIBO (MEI)</span>;
 
-// Tenta pegar a data de autorização ou atualização da nota fiscal primeiro
-if (v.fiscal?.dataAutorizacao) {
-    dataProcessamento = v.fiscal.dataAutorizacao?.toDate ? v.fiscal.dataAutorizacao.toDate() : new Date(v.fiscal.dataAutorizacao);
-} else if (v.fiscal?.updatedAt) {
-    dataProcessamento = v.fiscal.updatedAt?.toDate ? v.fiscal.updatedAt.toDate() : new Date(v.fiscal.updatedAt);
-} else if (v.updatedAt) {
-    // Fallback para a última atualização geral do pedido
-    dataProcessamento = v.updatedAt?.toDate ? v.updatedAt.toDate() : new Date(v.updatedAt);
-}
-
-const minutosPassados = (agora - dataProcessamento) / (1000 * 60);
-
-                            // Removi o "podeCancelar" antigo pois agora a lógica está direto no botão novo abaixo
-
-                            if (isCancelada) tagNfce = <span className="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-300">CANCELADA</span>;
-                            else if (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') tagNfce = <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">AUTORIZADA</span>;
-                            else if (statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO' || statusNfce === 'DENEGADO' || statusNfce === 'ERRO') tagNfce = <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">REJEITADA</span>;
-                            else if (statusNfce === 'PROCESSANDO') tagNfce = <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200 animate-pulse">⏳ PROCESSANDO</span>;
-                            else tagNfce = <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">RECIBO (MEI)</span>;
-
-                            return (
-                                <div key={v.id} className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm mb-3 border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all group">
-                                    <div className="flex-1 pr-4">
-                                        <div className="flex items-center gap-3">
-                                            <span className={`font-bold text-lg transition-colors ${isCancelada ? 'text-gray-400 line-through' : 'text-gray-800 group-hover:text-emerald-600'}`}>#{v.id.slice(-4)}</span>
-                                            {tagNfce}
-                                            {v.clienteCpf && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold">CPF: {v.clienteCpf}</span>}
-                                        </div>
-                                        <div className="flex flex-col text-sm text-gray-400 mt-1">
-                                            <div className="flex gap-2">
-                                                <span>{formatarHora(v.createdAt)}</span><span>•</span><span className="uppercase text-emerald-600">{v.formaPagamento}</span>
+                                return (
+                                    <div key={v.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center hover:shadow-md hover:border-emerald-300 transition-all group">
+                                        
+                                        {/* INFORMAÇÕES DA VENDA */}
+                                        <div className="flex-1 min-w-0 w-full">
+                                            <div className="flex items-center gap-3 flex-wrap mb-1.5">
+                                                <span className={`font-black text-lg transition-colors ${isCancelada ? 'text-slate-400 line-through' : 'text-slate-800 group-hover:text-emerald-600'}`}>#{v.id.slice(-4)}</span>
+                                                {tagNfce}
+                                                {v.clienteCpf && <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded-md text-[10px] font-bold leading-normal">CPF: {v.clienteCpf}</span>}
                                             </div>
+                                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">
+                                                <span>{formatarData(v.createdAt)} {formatarHora(v.createdAt)}</span>
+                                                <span className="text-slate-300">•</span>
+                                                <span className="uppercase text-emerald-600 font-bold">{v.formaPagamento}</span>
+                                            </div>
+
                                             {(statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
-                                                <div className="text-red-500 text-[11px] mt-1.5 bg-red-50 px-2 py-1.5 rounded-lg inline-block border border-red-100">
-                                                    ⚠️ <b>Motivo:</b> {v.fiscal?.motivoRejeicao || v.fiscal?.mensagem || 'Rejeitada pela Sefaz'}
+                                                <div className="mt-2 text-[11px] text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100 inline-block leading-normal">
+                                                    ⚠️ <strong className="font-bold">Motivo:</strong> {v.fiscal?.motivoRejeicao || v.fiscal?.mensagem || 'Rejeitada pela Sefaz'}
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* VALOR E BOTÕES DE AÇÃO */}
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full xl:w-auto gap-4 shrink-0 border-t xl:border-t-0 border-slate-100 pt-3 xl:pt-0">
+                                            
+                                            <span className={`font-black text-2xl shrink-0 ${isCancelada ? 'text-slate-400' : 'text-slate-800'}`}>
+                                                {formatarMoeda(v.total)}
+                                            </span>
+
+                                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                                
+                                                {temId && (statusNfce === 'PROCESSANDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
+                                                    <button onClick={() => onConsultarStatus(v)} className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-2 rounded-lg font-bold hover:bg-slate-200 transition-colors text-xs flex items-center gap-1.5 leading-normal" title="Atualizar Status na Sefaz">
+                                                        🔄 Sincronizar
+                                                    </button>
+                                                )}
+
+                                                {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
+                                                     <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-lg font-bold hover:bg-blue-100 transition-colors text-xs flex items-center gap-1.5 leading-normal">
+                                                         📄 PDF
+                                                     </button>
+                                                )}
+                                                
+                                                {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
+                                                     <button onClick={() => onEnviarWhatsApp(v)} className="bg-green-50 text-green-600 border border-green-200 px-3 py-2 rounded-lg font-bold hover:bg-green-100 transition-colors text-xs flex items-center gap-1.5 leading-normal">
+                                                         📱 Whats
+                                                     </button>
+                                                )}
+
+                                                {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
+                                                    <button onClick={() => onBaixarXml(v)} className="bg-purple-50 text-purple-600 border border-purple-200 px-3 py-2 rounded-lg font-bold hover:bg-purple-100 transition-colors text-xs flex items-center gap-1.5 leading-normal">
+                                                        {'</>'} XML
+                                                    </button>
+                                                )}
+
+                                                {isCancelada && temId && (
+                                                    <button
+                                                        onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(v) : onBaixarXml(v)}
+                                                        className="bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg font-bold hover:bg-slate-200 transition-colors text-xs flex items-center gap-1.5 leading-normal"
+                                                    >
+                                                        {'</>'} XML Canc.
+                                                    </button>
+                                                )}
+
+                                                {(() => {
+                                                    const passouDoTempo = (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && minutosPassados > 30;
+                                                    if (!isCancelada) {
+                                                        return (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (window.confirm("Deseja tentar cancelar esta venda/nota na Sefaz?")) onCancelarNfce(v);
+                                                                }}
+                                                                className="bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition-colors text-xs flex items-center gap-1.5 leading-normal"
+                                                            >
+                                                                {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
+                                                            </button>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+
+                                                <button onClick={() => onSelecionarVenda(v)} className="bg-slate-800 text-white border border-slate-800 px-4 py-2 rounded-lg font-bold hover:bg-slate-900 transition-colors text-xs leading-normal ml-auto sm:ml-0">
+                                                    Detalhes
+                                                </button>
+
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                                        <span className={`font-bold text-xl hidden sm:block mr-2 ${isCancelada ? 'text-gray-400' : 'text-gray-800'}`}>{formatarMoeda(v.total)}</span>
-
-                                        {/* BOTÃO DE SINCRONIZAR (Consulta na API) */}
-                                        {temId && (statusNfce === 'PROCESSANDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO') && (
-                                            <button onClick={() => onConsultarStatus(v)} className="bg-gray-50 text-gray-600 border border-gray-200 px-3 py-2 rounded-xl font-bold hover:bg-gray-100 transition-colors text-sm flex items-center gap-1" title="Atualizar Status na Sefaz">
-                                                🔄
-                                            </button>
-                                        )}
-
-{/* PDF SE AUTORIZADA */}
-                                        {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
-                                             <button onClick={() => onBaixarPdf(v)} className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors text-sm flex items-center gap-1" title="Visualizar Nota (PDF)">
-                                                 📄 <span className="hidden sm:inline">PDF</span>
-                                             </button>
-                                        )}
-                                        
-                                        {/* 🔥 NOVO BOTÃO WHATSAPP NO HISTÓRICO 🔥 */}
-                                        {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
-                                             <button onClick={() => onEnviarWhatsApp(v)} className="bg-green-50 text-green-600 border border-green-200 px-3 py-2 rounded-xl font-bold hover:bg-green-100 transition-colors text-sm flex items-center gap-1" title="Enviar Nota via WhatsApp">
-                                                 📱 <span className="hidden sm:inline">Whats</span>
-                                             </button>
-                                        )}
-
-                                        {/* XML NORMAL SE AUTORIZADA */}
-                                        {(statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && (
-                                            <button onClick={() => onBaixarXml(v)} className="bg-purple-50 text-purple-600 border border-purple-200 px-3 py-2 rounded-xl font-bold hover:bg-purple-100 transition-colors text-sm flex items-center gap-1" title="Baixar Arquivo XML">
-                                                {'</>'} <span className="hidden sm:inline">XML</span>
-                                            </button>
-                                        )}
-
-                                        {/* 🔥 XML CANCELAMENTO SE CANCELADA 🔥 */}
-                                        {isCancelada && temId && (
-                                            <button
-                                                // Se onBaixarXmlCancelamento não for passado, chama o onBaixarXml que fará o roteamento pela Sefaz
-                                                onClick={() => typeof onBaixarXmlCancelamento === 'function' ? onBaixarXmlCancelamento(v) : onBaixarXml(v)}
-                                                className="bg-gray-100 text-gray-700 border border-gray-300 px-3 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm flex items-center gap-1"
-                                                title="Baixar XML Cancelamento"
-                                            >
-                                                {'</>'} <span className="hidden sm:inline">XML Canc.</span>
-                                            </button>
-                                        )}
-
-                                        {/* 🔥 BOTÃO DE CANCELAR COM BLOQUEIO DE 30 MINUTOS 🔥 */}
-                                        {(() => {
-                                            const passouDoTempo = (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO') && minutosPassados > 30;
-
-                                           if (!isCancelada) {
-        return (
-            <button
-                onClick={() => {
-                    if (window.confirm("Deseja tentar cancelar esta venda/nota na Sefaz?")) {
-                        onCancelarNfce(v);
-                    }
-                }}
-                className="px-3 py-2 rounded-xl font-bold text-sm border transition-colors flex items-center gap-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                title="Cancelar NFC-e"
-            >
-                {statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' ? 'Cancelar NFC-e' : 'Cancelar'}
-            </button>
-        );
-    }
-    return null;
-})()}
-
-                                        <button onClick={() => onSelecionarVenda(v)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm border border-gray-200">Detalhes</button>
-                                    </div>
-                                </div>
-                            );
-                        })
+                                );
+                            })}
+                        </div>
                     )}
                 </div>
             </div>
@@ -621,56 +657,123 @@ const minutosPassados = (agora - dataProcessamento) / (1000 * 60);
     );
 };
 
-export const ModalListaTurnos = ({ visivel, onClose, turnos, carregando, onVerVendas, vendasDoDia }) => {
+export const ModalListaTurnos = ({ visivel, onClose, turnos, carregando, onVerVendas }) => {
     if (!visivel) return null;
-    return (
-        <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-[9200] p-4 backdrop-blur-sm no-print">
-            <div className="bg-white border border-gray-200 rounded-[2rem] shadow-2xl max-w-5xl w-full h-[80vh] flex flex-col overflow-hidden">
-                <div className="bg-white p-6 border-b border-gray-100 flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-gray-800">Meus Turnos</h2>
-                    <button onClick={onClose} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200 text-gray-500">✕</button>
-                </div>
-                <div className="flex-1 overflow-auto p-8 bg-gray-50 custom-scrollbar">
-                    <div className="space-y-3">
-                        {turnos.map(t => {
-                            let totalVendido = 0;
-                            if (t.status === 'aberto' && vendasDoDia) {
-                                totalVendido = vendasDoDia.reduce((acc, v) => {
-                                    if (v.status === 'cancelada' || v.fiscal?.status === 'CANCELADA') return acc;
-                                    return acc + (v.total || 0);
-                                }, 0);
-                            } else {
-                                totalVendido = t.resumoVendas?.total || 0;
-                            }
 
-                            return (
-                                <div key={t.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center hover:border-emerald-200 transition-colors">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-3 h-3 rounded-full ${t.status === 'aberto' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                                        <div>
-                                            <p className="font-bold text-gray-800">Data: {formatarData(t.dataAbertura)}</p>
-                                            <div className="text-xs text-gray-500 mt-1 flex flex-col gap-0.5">
-                                                <span>🟢 Início: {formatarData(t.dataAbertura)} às {formatarHora(t.dataAbertura)}</span>
-                                                <span>🔴 Fim: {t.dataFechamento ? `${formatarData(t.dataFechamento)} às ${formatarHora(t.dataFechamento)}` : <b className="text-emerald-500 uppercase">Em andamento</b>}</span>
+    // Ordenar para mostrar os mais recentes primeiro
+    const turnosOrdenados = [...(turnos || [])].sort((a, b) => {
+        const dataA = a.dataAbertura?.toDate ? a.dataAbertura.toDate() : new Date(a.dataAbertura);
+        const dataB = b.dataAbertura?.toDate ? b.dataAbertura.toDate() : new Date(b.dataAbertura);
+        return dataB - dataA;
+    });
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+            <div className="bg-slate-50 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+                
+                {/* HEADER */}
+                <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl shadow-inner">
+                            <IoTimeOutline size={26} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-slate-800 leading-none">Histórico de Turnos</h2>
+                            <p className="text-xs text-slate-500 font-medium mt-1">Selecione um turno para visualizar as vendas ou imprimir o resumo</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-slate-400 bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+                        <IoClose size={24} />
+                    </button>
+                </div>
+
+                {/* CORPO / LISTA */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 pdv-scroll">
+                    {carregando ? (
+                        <div className="flex flex-col items-center justify-center h-40 gap-4">
+                            <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-emerald-600"></div>
+                            <span className="text-sm font-bold text-slate-500">Buscando turnos no sistema...</span>
+                        </div>
+                    ) : turnosOrdenados.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-48 bg-white border border-slate-200 border-dashed rounded-2xl text-slate-400">
+                            <IoTimeOutline size={56} className="mb-3 text-slate-300" />
+                            <p className="font-bold text-sm">Nenhum turno registrado.</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3">
+                            {turnosOrdenados.map((turno, idx) => {
+                                const isOpen = turno.status !== 'fechado';
+                                const dAbertura = turno.dataAbertura?.toDate ? turno.dataAbertura.toDate() : new Date(turno.dataAbertura);
+                                const dFechamento = turno.dataFechamento ? (turno.dataFechamento?.toDate ? turno.dataFechamento.toDate() : new Date(turno.dataFechamento)) : null;
+
+                                return (
+                                    <div key={turno.id || idx} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center hover:shadow-md hover:border-emerald-300 transition-all group">
+                                        
+                                        <div className="flex items-center gap-4 flex-1">
+                                            {/* Ícone de Status */}
+                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 border-4 ${isOpen ? 'bg-emerald-100 text-emerald-600 border-emerald-50' : 'bg-slate-100 text-slate-500 border-slate-50'}`}>
+                                                {isOpen ? <IoCheckmarkCircleOutline size={24} /> : <IoStorefrontOutline size={24} />}
+                                            </div>
+
+                                            {/* Informações de Data */}
+                                            <div className="flex flex-col min-w-0">
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-sm leading-normal ${isOpen ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                                        {isOpen ? '🟢 Em Andamento' : '🔒 Encerrado'}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-slate-400 font-mono leading-normal">ID: {turno.id?.slice(-6).toUpperCase() || 'N/A'}</span>
+                                                </div>
+                                                
+                                                <div className="text-sm font-bold text-slate-700 leading-tight truncate">
+                                                    <span className="text-slate-400 font-medium mr-1">Abertura:</span> 
+                                                    {formatarData(dAbertura)} {formatarHora(dAbertura)}
+                                                </div>
+                                                
+                                                {dFechamento && (
+                                                    <div className="text-xs text-slate-500 font-medium mt-0.5 truncate">
+                                                        <span className="mr-1">Fechamento:</span> 
+                                                        {formatarData(dFechamento)} {formatarHora(dFechamento)}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="text-right">
-                                            <p className="text-xs text-gray-400 font-bold uppercase">Total Vendido</p>
-                                            <p className="text-xl font-black text-gray-800">{formatarMoeda(totalVendido)}</p>
+
+                                        {/* Valores e Botões de Ação */}
+                                        <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-3 pl-16 md:pl-0 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0">
+                                            
+                                            <div className="text-left md:text-right shrink-0 hidden sm:block mr-2">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Saldo Inicial</p>
+                                                <p className="font-black text-slate-800 text-[14px] leading-tight">{formatarMoeda(turno.saldoInicial || 0)}</p>
+                                            </div>
+                                            
+                                            <div className="flex gap-2 w-full sm:w-auto">
+                                                {/* NOVO BOTÃO DE RECIBO DO TURNO */}
+                                                <button 
+                                                    onClick={() => {
+                                                        // Dispara o evento que o PdvScreen já está escutando para abrir o modal de Resumo!
+                                                        document.dispatchEvent(new CustomEvent('abrirRelatorioTurno', { detail: turno }));
+                                                    }}
+                                                    className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-2.5 rounded-lg text-xs font-black flex justify-center items-center gap-1.5 transition-all shadow-sm leading-normal"
+                                                    title="Imprimir Relatório do Turno"
+                                                >
+                                                    🖨️ RECIBO
+                                                </button>
+
+                                                <button 
+                                                    onClick={() => onVerVendas(turno)}
+                                                    className="flex-1 sm:flex-none bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 px-3 py-2.5 rounded-lg text-xs font-black flex justify-center items-center gap-1.5 transition-all shadow-sm leading-normal"
+                                                >
+                                                    VER VENDAS
+                                                </button>
+                                            </div>
+
                                         </div>
-                                        <div className="flex flex-col gap-2">
-                                            <button onClick={() => onVerVendas(t)} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-bold transition-all border border-gray-200 text-xs">Ver Vendas</button>
-                                            {t.status === 'fechado' && (
-                                                <button onClick={() => { document.dispatchEvent(new CustomEvent('abrirRelatorioTurno', { detail: t })); }} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-4 py-2 rounded-lg font-bold transition-all border border-emerald-200 text-xs">📄 Relatório</button>
-                                            )}
-                                        </div>
+
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -688,69 +791,104 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
     const suprimento = parseFloat(res.suprimento || 0);
     const sangria = parseFloat(res.sangria || 0);
     const detalhesMov = res.detalhesMov || [];
+    const qtdVendas = res.qtd || 0;
 
     const esperado = saldoInicial + vendasDinheiro + suprimento - sangria;
     const informado = parseFloat(turno.saldoFinalInformado || 0);
     const diferenca = parseFloat(turno.diferenca || 0);
+    
+    const isAberto = turno.status !== 'fechado';
 
     return (
-        <div id="resumo-turno-overlay" className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[9600] p-4 backdrop-blur-sm">
-            <div id="resumo-turno-content" className="bg-white w-full max-w-sm p-8 rounded-3xl shadow-2xl relative animate-slideUp">
-                <button onClick={onClose} className="absolute top-4 right-4 bg-gray-100 hover:bg-red-100 hover:text-red-500 p-2 rounded-full transition-colors no-print">✕</button>
+        <div id="resumo-turno-overlay" className="fixed inset-0 bg-slate-900/70 flex items-center justify-center z-[9600] p-4 backdrop-blur-sm no-print">
+            {/* Removido o fundo cinza/amarelado e colocado bg-white */}
+            <div id="resumo-turno-content" className="bg-white w-full max-w-sm p-0 rounded-lg shadow-2xl relative animate-in zoom-in-95 duration-200 overflow-hidden border border-slate-300 print:border-none print:shadow-none print:w-[80mm]">
+                
+                {/* Botão Fechar (Oculto na impressão) */}
+                <button onClick={onClose} className="absolute top-3 right-3 bg-slate-100 hover:bg-red-100 hover:text-red-500 p-2 rounded-full transition-colors no-print z-10">✕</button>
 
-                <div className="text-center border-b border-dashed border-gray-200 pb-4 mb-4">
-                    <h2 className="font-black text-2xl text-gray-800 uppercase tracking-wide">FECHO DE CAIXA</h2>
-                    <p className="text-gray-500 text-xs font-mono mt-1">Turno: {turno.id?.slice(-6).toUpperCase()}</p>
-                </div>
-
-                <div className="space-y-4 mb-6 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2 print:max-h-none print:overflow-visible text-sm text-gray-600">
-                    <div className="flex flex-col gap-1">
-                        <div className="flex justify-between"><span>Abertura:</span> <b>{formatarData(turno.dataAbertura)} {formatarHora(turno.dataAbertura)}</b></div>
-                        <div className="flex justify-between"><span>Fecho:</span> <b>{turno.dataFechamento ? `${formatarData(turno.dataFechamento)} ${formatarHora(turno.dataFechamento)}` : 'AGORA'}</b></div>
+                <div className="p-6">
+                    {/* CABEÇALHO DO RECIBO */}
+                    <div className="text-center pb-4 mb-4 border-b-2 border-dashed border-slate-300">
+                        <h2 className="font-black text-2xl text-slate-800 uppercase tracking-widest">RELATÓRIO</h2>
+                        <h3 className="font-bold text-sm text-slate-600 uppercase tracking-widest">Turno de Caixa</h3>
+                        <p className="text-slate-500 text-[11px] font-mono mt-2">ID: {turno.id?.toUpperCase()}</p>
+                        
+                        <div className={`mt-3 inline-block px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${isAberto ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                            {isAberto ? '🟢 CAIXA EM ANDAMENTO' : '🔒 CAIXA ENCERRADO'}
+                        </div>
                     </div>
 
-                    <div className="border-t border-dashed border-gray-200 pt-3 flex flex-col gap-1">
-                        <div className="flex justify-between text-gray-800"><span>Saldo Inicial (Fundo):</span> <b>{formatarMoeda(saldoInicial)}</b></div>
-                    </div>
+                    {/* CORPO DO RECIBO */}
+                    <div className="space-y-3 mb-6 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2 print:max-h-none print:overflow-visible text-[13px] text-slate-700">
+                        
+                        {/* DATAS */}
+                        <div className="flex flex-col gap-1 mb-2">
+                            <div className="flex justify-between"><span>Abertura:</span> <b className="font-mono">{formatarData(turno.dataAbertura)} {formatarHora(turno.dataAbertura)}</b></div>
+                            <div className="flex justify-between"><span>Fechamento:</span> <b className="font-mono">{turno.dataFechamento ? `${formatarData(turno.dataFechamento)} ${formatarHora(turno.dataFechamento)}` : '--/--/---- --:--'}</b></div>
+                        </div>
 
-                    <div className="border-t border-dashed border-gray-200 pt-3 flex flex-col gap-1">
-                        <div className="flex justify-between"><span>Vendas em Dinheiro:</span> <b>{formatarMoeda(vendasDinheiro)}</b></div>
-                        <div className="flex justify-between"><span>Vendas Outros (Cartão/Pix):</span> <b>{formatarMoeda(vendasOutros)}</b></div>
-                        <div className="flex justify-between font-bold text-gray-800 mt-1"><span>Total Faturado:</span> <span>{formatarMoeda(vendasTotal)}</span></div>
-                    </div>
+                        <div className="border-t border-dashed border-slate-300 pt-3 flex justify-between items-center text-slate-900">
+                            <span className="font-bold uppercase text-[11px]">Saldo Inicial (Fundo)</span> 
+                            <b className="font-mono text-sm">{formatarMoeda(saldoInicial)}</b>
+                        </div>
 
-                    <div className="border-t border-dashed border-gray-200 pt-3 flex flex-col gap-1">
-                        <div className="flex justify-between text-emerald-600"><span>Suprimentos (+):</span> <b>{formatarMoeda(suprimento)}</b></div>
-                        <div className="flex justify-between text-red-500"><span>Sangrias (-):</span> <b>{formatarMoeda(sangria)}</b></div>
+                        {/* VENDAS */}
+                        <div className="border-t border-dashed border-slate-300 pt-3 flex flex-col gap-1">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="font-bold uppercase text-[11px]">Resumo de Vendas</span>
+                                <span className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-bold">{qtdVendas} pedido(s)</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600"><span>Dinheiro:</span> <b className="font-mono">{formatarMoeda(vendasDinheiro)}</b></div>
+                            <div className="flex justify-between text-slate-600"><span>Cartão/Pix/Outros:</span> <b className="font-mono">{formatarMoeda(vendasOutros)}</b></div>
+                            <div className="flex justify-between font-black text-slate-900 mt-2 text-[15px]"><span>TOTAL FATURADO:</span> <span className="font-mono">{formatarMoeda(vendasTotal)}</span></div>
+                        </div>
 
-                        {detalhesMov.length > 0 && (
-                            <div className="mt-2 pl-2 border-l-2 border-gray-200 text-xs">
-                                {detalhesMov.map((mov, idx) => (
-                                    <div key={idx} className="flex justify-between text-gray-500 italic mb-1">
-                                        <span className="truncate pr-2">- {mov.descricao}</span>
-                                        <span>{formatarMoeda(mov.valor)}</span>
-                                    </div>
-                                ))}
+                        {/* MOVIMENTAÇÕES */}
+                        <div className="border-t border-dashed border-slate-300 pt-3 flex flex-col gap-1">
+                            <span className="font-bold uppercase text-[11px] mb-1">Movimentações</span>
+                            <div className="flex justify-between text-emerald-600"><span>Suprimentos (+):</span> <b className="font-mono">{formatarMoeda(suprimento)}</b></div>
+                            <div className="flex justify-between text-red-500"><span>Sangrias (-):</span> <b className="font-mono">{formatarMoeda(sangria)}</b></div>
+
+                            {detalhesMov.length > 0 && (
+                                <div className="mt-2 pl-2 border-l-2 border-slate-300 text-[11px]">
+                                    {detalhesMov.map((mov, idx) => (
+                                        <div key={idx} className="flex justify-between text-slate-500 italic mb-1">
+                                            <span className="truncate pr-2">- {mov.descricao}</span>
+                                            <span className="font-mono">{formatarMoeda(mov.valor)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* RESULTADO FINAL */}
+                        {!isAberto && (
+                            // Removido o bg-slate-100 para deixar o bloco do total com o mesmo fundo branco
+                            <div className="border-t-2 border-slate-800 pt-3 p-3 rounded-lg mt-4 border border-slate-300 print:border-t-2 print:border-black print:rounded-none">
+                                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1"><span>Dinheiro Esperado:</span> <span className="font-mono">{formatarMoeda(esperado)}</span></div>
+                                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-2"><span>Dinheiro Informado:</span> <span className="font-mono">{formatarMoeda(informado)}</span></div>
+                                
+                                <div className={`flex justify-between text-[15px] font-black mt-2 pt-2 border-t border-slate-300 ${diferenca < 0 ? 'text-red-600' : diferenca > 0 ? 'text-emerald-600' : 'text-slate-800'}`}>
+                                    <span>{diferenca < 0 ? 'QUEBRA (-)' : diferenca > 0 ? 'SOBRA (+)' : 'CAIXA EXATO'}</span>
+                                    <span className="font-mono">{formatarMoeda(diferenca)}</span>
+                                </div>
                             </div>
                         )}
                     </div>
-
-                    <div className="border-t border-dashed border-gray-200 pt-3 bg-gray-50 p-3 rounded-xl mt-2">
-                        <div className="flex justify-between text-xs uppercase font-bold text-gray-500 mb-1"><span>Dinheiro Esperado:</span> <span>{formatarMoeda(esperado)}</span></div>
-                        <div className="flex justify-between text-xs uppercase font-bold text-gray-500 mb-2"><span>Dinheiro Informado:</span> <span>{formatarMoeda(informado)}</span></div>
-                        <div className={`flex justify-between text-lg font-black ${diferenca < 0 ? 'text-red-500' : diferenca > 0 ? 'text-emerald-500' : 'text-gray-800'}`}>
-                            <span>{diferenca < 0 ? 'QUEBRA DE CAIXA:' : diferenca > 0 ? 'SOBRA DE CAIXA:' : 'DIFERENÇA:'}</span>
-                            <span>{formatarMoeda(diferenca)}</span>
-                        </div>
+                    
+                    <div className="text-center text-[10px] text-slate-400 font-mono border-t border-dashed border-slate-300 pt-4 print:block">
+                        *** FIM DO RELATÓRIO ***
                     </div>
                 </div>
 
-                <div className="grid gap-3 no-print">
-                    <button onClick={() => window.print()} className="w-full border-2 border-gray-200 p-3 rounded-xl font-bold text-gray-700 hover:bg-gray-50 transition-all flex justify-center items-center gap-2">
-                        🖨️ Imprimir Fechamento
+                {/* BOTÕES (Ocultos na impressão) */}
+                <div className="grid gap-2 p-4 bg-white border-t border-slate-200 no-print rounded-b-lg">
+                    <button onClick={() => window.print()} className="w-full border border-slate-300 text-slate-700 bg-slate-50 p-3 rounded-xl font-bold hover:bg-slate-100 transition-all flex justify-center items-center gap-2">
+                        🖨️ IMPRIMIR RECIBO
                     </button>
-                    <button onClick={onClose} className="w-full bg-emerald-600 text-white p-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">
-                        Concluir
+                    <button onClick={onClose} className="w-full bg-slate-800 text-white p-3 rounded-xl font-bold hover:bg-black shadow-lg transition-all">
+                        FECHAR
                     </button>
                 </div>
             </div>
