@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+@layer base {
+  body {
+    font-family: 'Poppins', sans-serif;
+  }
+}
+
+/* 🖨️ ESTILO DE IMPRESSÃO - VERSÃO BLINDADA */
+@media print {
+  
+  /* 1. Trava a página para não criar folhas extras em branco */
+  html, body {
+    height: 100vh !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /* 2. ESCONDE TUDO NA TELA FORÇADAMENTE */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* 3. REVELA APENAS O CUPOM E SEUS FILHOS */
+  #printable-receipt, 
+  #printable-receipt * {
+    visibility: visible !important;
+  }
+
+  /* 4. POSICIONA O CUPOM NO TOPO DO PAPEL */
+  #printable-receipt {
+    position: fixed !important; /* Fixed garante que vá para o topo do papel */
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important; /* Ocupa a largura total do papel (58mm/80mm) */
+    margin: 0 !important;
+    padding: 0 !important;
+    
+    /* Reseta estilos visuais para ficar plano no papel */
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    max-width: none !important;
+    z-index: 999999 !important; /* Garante que fique acima de tudo */
+  }
+
+  /* 5. Esconde elementos marcados com 'no-print' */
+  .no-print {
+    display: none !important;
+  }
+
+  /* 6. Ajustes de Fonte para legibilidade térmica */
+  #printable-receipt .font-mono {
+    font-family: 'Courier New', Courier, monospace !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    color: black !important;
+  }
+  
+  /* Garante bordas pretas */
+  #printable-receipt .border-dashed {
+    border-color: black !important;
+    border-style: dashed !important;
+  }
+}
