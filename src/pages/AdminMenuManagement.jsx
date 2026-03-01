@@ -909,7 +909,7 @@ function AdminMenuManagement() {
             </div>
         )}
 
-        {/* 👇 MODAL TOTALMENTE TRAVADO CONTRA BUGS 👇 */}
+       {/* 👇 MODAL 100% CORRIGIDO E RESPONSIVO 👇 */}
         {showItemForm && (
             <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-[9999] transition-all duration-300 sm:p-4">
                 
@@ -918,7 +918,7 @@ function AdminMenuManagement() {
                     className="bg-white w-full sm:max-w-4xl flex flex-col h-[92vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl shadow-2xl relative animate-slide-up overflow-hidden"
                 >
                     
-                    {/* Header Fixo */}
+                    {/* 1. HEADER FIXO */}
                     <div className="flex-none bg-white z-10 flex justify-between items-center p-5 sm:p-6 border-b border-gray-100">
                         <div>
                             <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{editingItem ? 'Editar Produto' : 'Novo Produto'}</h2>
@@ -929,7 +929,7 @@ function AdminMenuManagement() {
                         </button>
                     </div>
                     
-                    {/* Corpo Scrollável */}
+                    {/* 2. CORPO SCROLLÁVEL (Aqui fica o overflow-y-auto) */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-6 pb-8">
                         <div className="space-y-6 sm:space-y-8">
                             
@@ -1118,7 +1118,7 @@ function AdminMenuManagement() {
                         </div>
                     </div>
 
-                    {/* Footer Fixo */}
+                    {/* 3. FOOTER FIXO (Sempre Visível) */}
                     <div className="flex-none bg-white border-t border-gray-100 p-4 sm:p-6 flex gap-3 sm:gap-4 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
                         <button type="button" onClick={closeItemForm} className="hidden sm:block px-8 py-3.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">
                             Cancelar
