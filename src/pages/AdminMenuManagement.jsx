@@ -909,16 +909,17 @@ function AdminMenuManagement() {
             </div>
         )}
 
-       {/* 👇 MODAL 100% CORRIGIDO E RESPONSIVO 👇 */}
+ {/* 👇 MODAL 100% CORRIGIDO (ESTILO APLICATIVO NATIVO) 👇 */}
         {showItemForm && (
             <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-[9999] transition-all duration-300 sm:p-4">
                 
+                {/* FORMULÁRIO COM FLEX-COL (Trava o topo e o rodapé) */}
                 <form 
                     onSubmit={handleSaveItem} 
                     className="bg-white w-full sm:max-w-4xl flex flex-col h-[92vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl shadow-2xl relative animate-slide-up overflow-hidden"
                 >
                     
-                    {/* 1. HEADER FIXO */}
+                    {/* 1. CABEÇALHO TRAVADO (Não rola) */}
                     <div className="flex-none bg-white z-10 flex justify-between items-center p-5 sm:p-6 border-b border-gray-100">
                         <div>
                             <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{editingItem ? 'Editar Produto' : 'Novo Produto'}</h2>
@@ -929,11 +930,11 @@ function AdminMenuManagement() {
                         </button>
                     </div>
                     
-                    {/* 2. CORPO SCROLLÁVEL (Aqui fica o overflow-y-auto) */}
+                    {/* 2. MEIO DO FORMULÁRIO (Somente esta parte rola!) */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-6 pb-8">
                         <div className="space-y-6 sm:space-y-8">
                             
-                            {/* Bloco 1: Informações Básicas */}
+                            {/* Bloco 1: Nome, Categoria, etc */}
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
                                 <div className="lg:col-span-7 space-y-5">
                                     <div>
@@ -1013,7 +1014,6 @@ function AdminMenuManagement() {
                                                     </div>
                                                 </div>
 
-                                                {/* Checkbox Ativo para Mobile/Desktop */}
                                                 <div className="col-span-6 sm:col-span-12 flex items-center sm:justify-end mt-2 sm:mt-0">
                                                      <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200">
                                                         <input type="checkbox" checked={v.ativo !== false} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
@@ -1118,7 +1118,7 @@ function AdminMenuManagement() {
                         </div>
                     </div>
 
-                    {/* 3. FOOTER FIXO (Sempre Visível) */}
+                    {/* 3. RODAPÉ TRAVADO (O BOTÃO SALVAR FICA AQUI) */}
                     <div className="flex-none bg-white border-t border-gray-100 p-4 sm:p-6 flex gap-3 sm:gap-4 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
                         <button type="button" onClick={closeItemForm} className="hidden sm:block px-8 py-3.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">
                             Cancelar
