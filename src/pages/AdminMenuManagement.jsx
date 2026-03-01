@@ -647,6 +647,7 @@ function AdminMenuManagement() {
     } catch(e) { toast.error("Erro em massa"); } finally { setBulkOperationLoading(false); }
   };
 
+  // 🔥 Processamento Seguro dos Dados do Produto 🔥
   const openItemForm = useCallback((item = null) => {
     if (item) {
       setEditingItem(item);
@@ -1069,3 +1070,141 @@ function AdminMenuManagement() {
                       </div>
                     ))}
                   </div>
+                  
+                  {isModoMultiplasVariacoes && (
+                    <button type="button" onClick={adicionarVariacao} className="mt-6 w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-base flex items-center justify-center gap-2 rounded-2xl transition-colors border border-blue-200 border-dashed">
+                      <IoAddCircleOutline className="text-2xl"/> Adicionar Outro Tamanho / Variação
+                    </button>
+                  )}
+                  {formErrors.variacoes && <p className="text-red-500 text-sm mt-3 text-center bg-red-50 p-4 rounded-xl border border-red-100">{formErrors.variacoes}</p>}
+                </div>
+
+                {/* BLOCO 3: FISCAL */}
+                <div className="bg-emerald-50/40 p-5 sm:p-8 rounded-3xl border border-emerald-100 shadow-sm space-y-6">
+                    <h3 className="text-lg font-bold text-emerald-800 flex items-center gap-2">
+                        🏢 Emissão de Nota (NFC-e)
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div className="relative">
+                            <label className="block text-sm font-semibold text-emerald-800 mb-2">
+                                NCM (Busca BrasilAPI)
+                            </label>
+                            <input 
+                                type="text" 
+                                name="ncm" 
+                                value={termoNcm || formData.fiscal?.ncm || ''} 
+                                onChange={(e) => buscarNcm(e.target.value)} 
+                                onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} 
+                                className="w-full p-4 bg-white border border-emerald-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none" 
+                                placeholder="Ex: Hambúrguer, 2202..." 
+                                autoComplete="off"
+                            />
+                            {pesquisandoNcm && <span className="absolute right-6 top-[52px] text-xs font-bold text-emerald-500 animate-pulse">Buscando...</span>}
+                            {ncmResultados.length > 0 && (
+                                <div className="absolute z-50 w-full mt-2 bg-white border border-emerald-200 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
+                                    {ncmResultados.map((item) => (
+                                        <div 
+                                            key={item.codigo} 
+                                            onClick={() => selecionarNcm(item.codigo)}
+                                            className="p-4 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer transition-colors"
+                                        >
+                                            <p className="font-bold text-emerald-800 text-sm">{item.codigo}</p>
+                                            <p className="text-xs text-gray-600 line-clamp-2 mt-1">{item.descricao}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-emerald-800 mb-2">CFOP</label>
+                            <select name="cfop" value={formData.fiscal?.cfop || ''} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <option value="5102">5102 - Tributado Normal</option>
+                                <option value="5405">5405 - Subst. Tributária</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-emerald-800 mb-2">Medida</label>
+                            <select name="unidade" value={formData.fiscal?.unidade || 'UN'} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <option value="UN">UN - Unidade</option>
+                                <option value="KG">KG - Quilograma</option>
+                                <option value="LT">LT - Litro</option>
+                                <option value="CX">CX - Caixa</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* BLOCO 4: IMAGEM E VISIBILIDADE */}
+                <div className="grid md:grid-cols-2 gap-6">
+                    <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-200 shadow-sm flex items-center gap-4">
+                            <div className="w-20 h-20 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                            {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <IoImageOutline className="text-3xl text-gray-300"/>}
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Foto do Produto</label>
+                                <input type="file" accept="image/*" onChange={handleFormChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer" />
+                            </div>
+                    </div>
+
+                    <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-center shadow-sm">
+                        <label htmlFor="ativoMain" className="flex items-center gap-4 cursor-pointer w-full justify-center">
+                            <div className={`w-16 h-8 rounded-full p-1 transition-colors duration-300 ease-in-out shadow-inner ${formData.ativo ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                                <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${formData.ativo ? 'translate-x-8' : 'translate-x-0'}`}></div>
+                            </div>
+                            <input type="checkbox" id="ativoMain" name="ativo" checked={formData.ativo} onChange={handleFormChange} className="hidden" />
+                            <div className="flex flex-col">
+                                <span className="text-base font-bold text-gray-800">Cardápio Digital</span>
+                                <span className="text-sm font-medium text-gray-500 mt-0.5">{formData.ativo ? 'Visível aos clientes' : 'Oculto'}</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+              </div>
+
+              {/* FOOTER FIXO (Absolute forçado pro fundo) */}
+              <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-5 flex justify-end gap-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-20">
+                  <button
+                      type="button"
+                      onClick={closeItemForm}
+                      className="hidden sm:block px-8 py-3.5 rounded-xl border border-gray-300 font-semibold text-gray-600 hover:bg-gray-100 transition-all text-lg"
+                  >
+                      Cancelar
+                  </button>
+                  
+                  <button
+                      type="submit"
+                      disabled={formLoading}
+                      className="w-full sm:w-auto px-10 py-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all transform hover:scale-[1.02] text-lg flex items-center justify-center gap-2"
+                  >
+                      {formLoading ? 'Salvando...' : <><IoCheckmarkCircle size={24}/> Salvar Produto</>}
+                  </button>
+              </div>
+
+            </form>
+          </div>
+        )}
+
+        {showActivateAllModal && (
+             <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                <div className="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm transform transition-all scale-100">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <IoRefresh className="text-3xl text-green-600"/>
+                    </div>
+                    <h3 className="text-xl font-bold mb-2 text-gray-800">Ativar Todos?</h3>
+                    <p className="text-gray-500 mb-6 text-sm">Isso ativará todos os itens que estão invisíveis no cardápio atualmente.</p>
+                    <div className="flex gap-3">
+                        <button onClick={() => setShowActivateAllModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors">Cancelar</button>
+                        <button onClick={activateAllItems} disabled={bulkOperationLoading} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-200 transition-colors">
+                            {bulkOperationLoading ? 'Ativando...' : 'Confirmar'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default withEstablishmentAuth(AdminMenuManagement);
