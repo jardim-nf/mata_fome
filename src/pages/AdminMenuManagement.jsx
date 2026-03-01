@@ -75,7 +75,7 @@ const ProductGridCard = ({
     }
 
     const variacoesAtivas = produto.variacoes.filter(v => 
-      v.ativo && v.preco && !isNaN(Number(v.preco)) && Number(v.preco) > 0
+      v.ativo !== false && v.preco && !isNaN(Number(v.preco)) && Number(v.preco) > 0
     );
 
     if (variacoesAtivas.length === 0) {
@@ -119,7 +119,7 @@ const ProductGridCard = ({
         )}
         
         <div className="absolute top-3 left-3 flex flex-col gap-2">
-            {!produto.ativo && (
+            {produto.ativo === false && (
                 <span className="bg-gray-900/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
                     <IoEyeOff /> Inativo
                 </span>
@@ -174,12 +174,12 @@ const ProductGridCard = ({
                 <button
                     onClick={onToggleStatus}
                     className={`py-2 rounded-xl text-xs font-bold transition-colors ${
-                        produto.ativo 
+                        produto.ativo !== false
                         ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' 
                         : 'bg-green-100 text-green-700 hover:bg-green-200'
                     }`}
                 >
-                    {produto.ativo ? 'Pausar' : 'Ativar'}
+                    {produto.ativo !== false ? 'Pausar' : 'Ativar'}
                 </button>
                 <div className="flex gap-2">
                     <button
@@ -263,9 +263,17 @@ function AdminMenuManagement() {
   const [variacoes, setVariacoes] = useState([]);
   const [variacoesErrors, setVariacoesErrors] = useState({});
 
+  // Helper para formatar moeda vinda de string com vírgula do banco antigo
+  const parsePrecoSeguro = (valor) => {
+      if (valor === undefined || valor === null || valor === '') return 0;
+      if (typeof valor === 'number') return valor;
+      const numero = Number(String(valor).replace(',', '.'));
+      return isNaN(numero) ? 0 : numero;
+  };
+
   const adicionarVariacao = () => {
     const novaVariacao = {
-      id: Date.now().toString(),
+      id: `var-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Chave super única
       nome: '',
       preco: '',
       descricao: '',
@@ -435,8 +443,8 @@ function AdminMenuManagement() {
       return total + variationsCost;
     }, 0);
     
-    const activeItems = menuItems.filter(item => item.ativo).length;
-    const inactiveItems = menuItems.filter(item => !item.ativo).length;
+    const activeItems = menuItems.filter(item => item.ativo !== false).length;
+    const inactiveItems = menuItems.filter(item => item.ativo === false).length;
     
     return { totalItems, criticalStock, lowStock, outOfStock, normalStock, totalInventoryValue, activeItems, inactiveItems };
   }, [menuItems]);
@@ -539,7 +547,7 @@ function AdminMenuManagement() {
       }
 
       const precosAtivos = variacoes
-        .filter(v => v.ativo && Number(v.preco) > 0)
+        .filter(v => v.ativo !== false && Number(v.preco) > 0)
         .map(v => Number(v.preco));
       const precoPrincipal = precosAtivos.length > 0 ? Math.min(...precosAtivos) : 0;
 
@@ -614,7 +622,7 @@ function AdminMenuManagement() {
   const toggleItemStatus = async (item) => {
     try {
         await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id), {
-            ativo: !item.ativo,
+            ativo: item.ativo === false ? true : false,
             atualizadoEm: new Date()
         });
     } catch(e) { toast.error("Erro ao alterar status"); }
@@ -624,7 +632,7 @@ function AdminMenuManagement() {
     setBulkOperationLoading(true);
     try {
         const batch = writeBatch(db);
-        const inativos = menuItems.filter(i => !i.ativo);
+        const inativos = menuItems.filter(i => i.ativo === false);
         if(inativos.length === 0) { toast.info("Todos já ativos"); setShowActivateAllModal(false); setBulkOperationLoading(false); return; }
         
         inativos.forEach(item => {
@@ -637,6 +645,7 @@ function AdminMenuManagement() {
     } catch(e) { toast.error("Erro em massa"); } finally { setBulkOperationLoading(false); }
   };
 
+  // 🔥 CORREÇÃO PRINCIPAL: Processamento Seguro dos Dados do Produto 🔥
   const openItemForm = useCallback((item = null) => {
     if (item) {
       setEditingItem(item);
@@ -646,35 +655,40 @@ function AdminMenuManagement() {
         categoria: item.categoria || '',
         codigoBarras: item.codigoBarras || '', 
         imageUrl: item.imageUrl || '',
-        ativo: item.ativo !== undefined ? item.ativo : true,
+        ativo: item.ativo !== false, // Fallback mais seguro
         fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN' } 
       });
       setTermoNcm(item.fiscal?.ncm || '');
 
-      setVariacoes(item.variacoes?.length 
-        ? item.variacoes.map(v => ({
+      // Criação das variações de forma segura, garantindo ID único mesmo no map
+      const loadedVariacoes = item.variacoes && item.variacoes.length > 0 
+        ? item.variacoes.map((v, index) => ({
             ...v, 
-            id: v.id || Date.now().toString(), 
-            preco: (Number(v.preco) || 0).toString(), 
+            id: v.id || `var-${Date.now()}-${index}`, // ID garantido para não bugar o Layout
+            nome: v.nome || 'Padrão',
+            preco: parsePrecoSeguro(v.preco).toString(), 
             estoque: Number(v.estoque) || 0,
             estoqueMinimo: Number(v.estoqueMinimo) || 0,
-            custo: Number(v.custo || item.custo) || 0 
+            custo: Number(v.custo || item.custo) || 0,
+            ativo: v.ativo !== false
         })) 
         : [{ 
-            id: Date.now().toString(), 
+            id: `var-${Date.now()}-default`, 
             nome: 'Padrão', 
-            preco: (Number(item.preco) || 0).toString(), 
+            preco: parsePrecoSeguro(item.preco).toString(), 
             ativo: true, 
-            estoque: 0, 
-            estoqueMinimo: 0,
-            custo: item.custo || 0 
-        }]);
+            estoque: Number(item.estoque) || 0, 
+            estoqueMinimo: Number(item.estoqueMinimo) || 0,
+            custo: Number(item.custo) || 0 
+        }];
+        
+      setVariacoes(loadedVariacoes);
       setImagePreview(item.imageUrl || '');
     } else {
       setEditingItem(null);
       setFormData({ nome: '', descricao: '', categoria: '', codigoBarras: '', imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN' } }); 
       setTermoNcm(''); 
-      setVariacoes([{ id: Date.now().toString(), nome: 'Padrão', preco: '', descricao: '', ativo: true, estoque: 0, estoqueMinimo: 0, custo: 0 }]);
+      setVariacoes([{ id: `var-${Date.now()}-new`, nome: 'Padrão', preco: '', descricao: '', ativo: true, estoque: 0, estoqueMinimo: 0, custo: 0 }]);
       setImagePreview('');
     }
     setFormErrors({});
@@ -860,7 +874,7 @@ function AdminMenuManagement() {
                                         <div className="flex gap-2 text-xs text-gray-500">
                                             <span>{item.categoria}</span>
                                             <span>•</span>
-                                            <span className={item.ativo ? 'text-green-600' : 'text-red-500'}>{item.ativo ? 'Ativo' : 'Inativo'}</span>
+                                            <span className={item.ativo !== false ? 'text-green-600' : 'text-red-500'}>{item.ativo !== false ? 'Ativo' : 'Inativo'}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -895,17 +909,17 @@ function AdminMenuManagement() {
             </div>
         )}
 
-        {/* 👇 MODAL 100% CORRIGIDO (ESTILO APLICATIVO NATIVO) 👇 */}
+        {/* 👇 MODAL TOTALMENTE TRAVADO CONTRA BUGS 👇 */}
         {showItemForm && (
             <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-[9999] transition-all duration-300 sm:p-4">
                 
                 <form 
                     onSubmit={handleSaveItem} 
-                    className="bg-white w-full sm:max-w-4xl flex flex-col h-[92vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl shadow-2xl relative animate-slide-up"
+                    className="bg-white w-full sm:max-w-4xl flex flex-col h-[92vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl shadow-2xl relative animate-slide-up overflow-hidden"
                 >
                     
-                    {/* 1. Header Fixo no Topo */}
-                    <div className="flex-none bg-white z-10 flex justify-between items-center p-5 sm:p-6 border-b border-gray-100 rounded-t-3xl sm:rounded-3xl">
+                    {/* Header Fixo */}
+                    <div className="flex-none bg-white z-10 flex justify-between items-center p-5 sm:p-6 border-b border-gray-100">
                         <div>
                             <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{editingItem ? 'Editar Produto' : 'Novo Produto'}</h2>
                             <p className="text-xs sm:text-sm text-gray-500 mt-1">Preencha os dados do cardápio</p>
@@ -915,7 +929,7 @@ function AdminMenuManagement() {
                         </button>
                     </div>
                     
-                    {/* 2. Corpo do Formulário com Rolagem Independente */}
+                    {/* Corpo Scrollável */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-6 pb-8">
                         <div className="space-y-6 sm:space-y-8">
                             
@@ -954,8 +968,8 @@ function AdminMenuManagement() {
                                     <h3 className="font-bold text-gray-800 flex items-center gap-2 text-base"><IoCash className="text-blue-600 text-xl"/> Precificação e Estoque</h3>
                                     
                                     <div className="flex bg-gray-100 p-1 rounded-lg w-full sm:w-auto">
-                                        <button type="button" onClick={() => setVariacoes([{id: Date.now().toString(), nome: 'Padrão', preco: variacoes[0]?.preco || '', ativo: true, estoque: variacoes[0]?.estoque || 0, estoqueMinimo: variacoes[0]?.estoqueMinimo || 0, custo: variacoes[0]?.custo || 0 }])} className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all ${variacoes.length === 1 && variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Preço Único</button>
-                                        <button type="button" onClick={() => { if(variacoes.length===1 && variacoes[0].nome==='Padrão') setVariacoes([{id: Date.now().toString(), nome: 'Tamanho Único', preco: variacoes[0].preco, ativo: true, estoque: variacoes[0].estoque, estoqueMinimo: variacoes[0].estoqueMinimo, custo: variacoes[0].custo}]); }} className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all ${variacoes.length > 1 || variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Múltiplos Tamanhos</button>
+                                        <button type="button" onClick={() => setVariacoes([{id: `var-${Date.now()}-unico`, nome: 'Padrão', preco: variacoes[0]?.preco || '', ativo: true, estoque: variacoes[0]?.estoque || 0, estoqueMinimo: variacoes[0]?.estoqueMinimo || 0, custo: variacoes[0]?.custo || 0 }])} className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all ${variacoes.length === 1 && variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Preço Único</button>
+                                        <button type="button" onClick={() => { if(variacoes.length===1 && variacoes[0].nome==='Padrão') setVariacoes([{id: `var-${Date.now()}-multi`, nome: 'Tamanho Único', preco: variacoes[0].preco, ativo: true, estoque: variacoes[0].estoque, estoqueMinimo: variacoes[0].estoqueMinimo, custo: variacoes[0].custo}]); }} className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all ${variacoes.length > 1 || variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Múltiplos Tamanhos</button>
                                     </div>
                                 </div>
 
@@ -1002,8 +1016,8 @@ function AdminMenuManagement() {
                                                 {/* Checkbox Ativo para Mobile/Desktop */}
                                                 <div className="col-span-6 sm:col-span-12 flex items-center sm:justify-end mt-2 sm:mt-0">
                                                      <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200">
-                                                        <input type="checkbox" checked={v.ativo} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
-                                                        <span className="text-xs font-bold text-gray-600">Ativo</span>
+                                                        <input type="checkbox" checked={v.ativo !== false} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
+                                                        <span className="text-xs font-bold text-gray-600">Ativa</span>
                                                      </label>
                                                 </div>
                                             </div>
@@ -1104,12 +1118,11 @@ function AdminMenuManagement() {
                         </div>
                     </div>
 
-                    {/* 3. Footer Fixo no Rodapé (SEMPRE VISÍVEL) */}
-                    <div className="flex-none bg-white border-t border-gray-100 p-4 sm:p-6 flex gap-3 sm:gap-4 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] rounded-b-3xl">
+                    {/* Footer Fixo */}
+                    <div className="flex-none bg-white border-t border-gray-100 p-4 sm:p-6 flex gap-3 sm:gap-4 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
                         <button type="button" onClick={closeItemForm} className="hidden sm:block px-8 py-3.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">
                             Cancelar
                         </button>
-                        {/* Botão de cancelar no Mobile */}
                         <button type="button" onClick={closeItemForm} className="sm:hidden flex-1 py-4 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">
                             Cancelar
                         </button>
