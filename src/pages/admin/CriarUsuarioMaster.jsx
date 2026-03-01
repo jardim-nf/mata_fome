@@ -142,7 +142,9 @@ function CriarUsuarioMaster() {
         }));
     };
 
-    // FUNÇÃO MELHORADA PARA CRIAR USUÁRIO
+// FUNÇÃO MELHORADA PARA CRIAR USUÁRIO
+
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoadingForm(true);
@@ -162,43 +164,32 @@ function CriarUsuarioMaster() {
         }
 
         try {
+            // Ajustamos os nomes (displayName e password) para casar EXATAMENTE 
+            // com o que o seu backend (functions/index.js) está esperando ler.
             const userDataForCF = {
-                nome: formData.nome.trim(),
+                displayName: formData.nome.trim(),
                 email: formData.email.trim().toLowerCase(),
-                senha: formData.senha,
+                password: formData.senha, 
                 estabelecimentos: formData.estabelecimentosGerenciados,
                 isAdmin: formData.isAdmin,
                 isMasterAdmin: formData.isMasterAdmin,
-                ativo: formData.ativo
+                ativo: formData.ativo,
+                // Passamos o 'role' que o backend também espera
+                role: formData.isMasterAdmin ? 'master' : (formData.isAdmin ? 'admin' : 'usuario')
             };
 
             console.log('📤 Enviando dados para Cloud Function:', userDataForCF);
 
-            // 🌐 Chamada para Cloud Function com timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos
+            // 🌐 USANDO HTTPSCALLABLE (Padrão Oficial do Firebase)
+            const functions = getFunctions();
+            const criarUsuario = httpsCallable(functions, 'createUserByMasterAdminHttp');
+            
+            // O Firebase cuida do JSON.stringify e do Envio do Token de Autenticação automaticamente!
+            const response = await criarUsuario(userDataForCF);
+            
+            // O retorno real da função fica dentro de .data
+            const result = response.data; 
 
-            const response = await fetch(
-                'https://us-central1-matafome-98455.cloudfunctions.net/createUserByMasterAdminHttp',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(userDataForCF),
-                    signal: controller.signal
-                }
-            );
-
-            clearTimeout(timeoutId);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Erro na resposta:', errorText);
-                throw new Error(`Erro ${response.status}: ${errorText}`);
-            }
-
-            const result = await response.json();
             console.log('✅ Usuário criado via CF:', result);
 
             // Log de auditoria
@@ -207,7 +198,7 @@ function CriarUsuarioMaster() {
                 'CREATE_USER',
                 `Usuário criado: ${userDataForCF.email}`,
                 { 
-                    userId: result.userId,
+                    userId: result.uid,
                     email: userDataForCF.email,
                     roles: {
                         isAdmin: userDataForCF.isAdmin,
@@ -216,19 +207,17 @@ function CriarUsuarioMaster() {
                 }
             );
 
-            toast.success(result.message || 'Usuário criado com sucesso!');
+            toast.success(result.mensagem || 'Usuário criado com sucesso!');
             navigate('/master/usuarios');
 
         } catch (error) {
             console.error('❌ Erro ao criar usuário via CF:', error);
             
-            let errorMessage = 'Erro ao criar usuário';
-            if (error.name === 'AbortError') {
-                errorMessage = 'Timeout: A requisição demorou muito para responder';
-            } else if (error.message.includes('CORS')) {
-                errorMessage = 'Erro de CORS. Verifique a configuração da Cloud Function.';
-            } else {
-                errorMessage = error.message;
+            let errorMessage = 'Erro ao criar usuário.';
+            
+            // Extraindo a mensagem real de erro enviada pelo backend
+            if (error.message) {
+                errorMessage = error.message; 
             }
 
             toast.error(errorMessage);
@@ -237,7 +226,6 @@ function CriarUsuarioMaster() {
             setLoadingForm(false);
         }
     };
-
     // Loading state
     if (authLoading) {
         return (
