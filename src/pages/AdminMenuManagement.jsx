@@ -263,6 +263,9 @@ function AdminMenuManagement() {
   const [variacoes, setVariacoes] = useState([]);
   const [variacoesErrors, setVariacoesErrors] = useState({});
 
+  // Variável limpa para o JSX não dar erro no build
+  const isModoMultiplasVariacoes = variacoes.length > 1 || (variacoes.length === 1 && variacoes[0]?.nome !== 'Padrão');
+
   const parsePrecoSeguro = (valor) => {
       if (valor === undefined || valor === null || valor === '') return 0;
       if (typeof valor === 'number') return valor;
@@ -272,7 +275,7 @@ function AdminMenuManagement() {
 
   const adicionarVariacao = () => {
     const novaVariacao = {
-      id: `var-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Chave super única
+      id: `var-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       nome: '',
       preco: '',
       descricao: '',
@@ -644,7 +647,6 @@ function AdminMenuManagement() {
     } catch(e) { toast.error("Erro em massa"); } finally { setBulkOperationLoading(false); }
   };
 
-  // 🔥 Processamento Seguro dos Dados do Produto 🔥
   const openItemForm = useCallback((item = null) => {
     if (item) {
       setEditingItem(item);
@@ -907,299 +909,163 @@ function AdminMenuManagement() {
             </div>
         )}
 
-        {/* MODAL 100% CORRIGIDO - TELA CHEIA E ROLAGEM LIMITADA */}
+        {/* MODAL DE CADASTRO/EDIÇÃO EM TELA CHEIA (TIPO APP) */}
         {showItemForm && (
-            <div className="fixed inset-0 z-[9999] bg-white flex flex-col animate-fade-in">
+          <div className="fixed inset-0 z-[9999] bg-white flex flex-col animate-fade-in">
 
-                {/* HEADER FIXO */}
-                <div className="h-20 sm:h-24 border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between bg-white shrink-0 shadow-sm z-20">
+            {/* HEADER FIXO */}
+            <div className="h-20 border-b border-gray-200 px-6 sm:px-8 flex items-center justify-between bg-white shrink-0 shadow-sm z-20">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                  {editingItem ? 'Editar Produto' : 'Novo Produto'}
+                </h2>
+                <p className="text-xs sm:text-sm text-gray-500">
+                  Gerenciamento completo do item
+                </p>
+              </div>
+              <button
+                onClick={closeItemForm}
+                className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold transition-all flex items-center gap-2"
+              >
+                <span className="hidden sm:block">Voltar</span>
+                <IoClose size={20} className="sm:hidden" />
+              </button>
+            </div>
+
+            {/* CONTEÚDO COM SCROLL E ESPAÇO PARA O RODAPÉ */}
+            <form
+              onSubmit={handleSaveItem}
+              className="flex-1 overflow-y-auto bg-gray-50 flex flex-col relative"
+            >
+              <div className="p-4 sm:p-8 pb-32 max-w-5xl w-full mx-auto space-y-6 sm:space-y-10">
+
+                {/* BLOCO 1: DADOS BÁSICOS */}
+                <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+                  <h3 className="text-lg font-bold text-gray-800">Informações do Produto</h3>
+
+                  <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
-                        {editingItem ? 'Editar Produto' : 'Novo Produto'}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                        Gerenciamento completo do item
-                        </p>
+                      <label className="block text-sm font-semibold mb-2">Nome do Produto *</label>
+                      <input
+                        type="text"
+                        name="nome"
+                        value={formData.nome}
+                        onChange={handleFormChange}
+                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        placeholder="Ex: X-Burger Especial"
+                        required
+                      />
+                      {formErrors.nome && <span className="text-red-500 text-xs mt-1 block">{formErrors.nome}</span>}
                     </div>
 
-                    <button
-                        onClick={closeItemForm}
-                        className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold transition-all shadow-sm flex items-center gap-2"
-                    >
-                        <span className="hidden sm:block">Voltar</span>
-                        <IoClose size={20} className="sm:hidden" />
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">Categoria *</label>
+                        <input
+                          type="text"
+                          name="categoria"
+                          value={formData.categoria}
+                          onChange={handleFormChange}
+                          list="cat-list"
+                          className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="Digite ou selecione"
+                          required
+                          disabled={!!editingItem}
+                        />
+                        <datalist id="cat-list">
+                          {categories.map(c => (<option key={c.id} value={c.nome} />))}
+                        </datalist>
+                        {formErrors.categoria && <span className="text-red-500 text-xs mt-1 block">{formErrors.categoria}</span>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold mb-2 flex items-center gap-1">
+                          <IoBarcodeOutline className="text-lg text-gray-500"/> Código Barras
+                        </label>
+                        <input 
+                          type="text" 
+                          name="codigoBarras" 
+                          value={formData.codigoBarras} 
+                          onChange={handleFormChange} 
+                          className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm" 
+                          placeholder="EAN/GTIN" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Descrição</label>
+                    <textarea
+                      name="descricao"
+                      value={formData.descricao}
+                      onChange={handleFormChange}
+                      className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                      rows={3}
+                      placeholder="Ingredientes, detalhes..."
+                    />
+                  </div>
                 </div>
 
-                {/* CONTEÚDO COM SCROLL (Flex-1 preenche o resto da tela) */}
-                <form
-                    onSubmit={handleSaveItem}
-                    className="flex-1 overflow-y-auto bg-gray-50/50 flex flex-col relative"
-                >
-                    {/* Miolo que Rola (pb-32 afasta os ultimos inputs do rodapé) */}
-                    <div className="flex-1 p-4 sm:p-8 pb-32 max-w-5xl w-full mx-auto space-y-6 sm:space-y-10">
+                {/* BLOCO 2: VARIAÇÕES DE PREÇO */}
+                <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 pb-4 gap-4">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><IoCash className="text-blue-600"/> Preço & Estoque</h3>
+                    <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
+                      <button type="button" onClick={() => setVariacoes([{id: `var-${Date.now()}-unico`, nome: 'Padrão', preco: variacoes[0]?.preco || '', ativo: true, estoque: variacoes[0]?.estoque || 0, estoqueMinimo: variacoes[0]?.estoqueMinimo || 0, custo: variacoes[0]?.custo || 0 }])} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${variacoes.length === 1 && variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Preço Único</button>
+                      <button type="button" onClick={() => { if(variacoes.length===1 && variacoes[0].nome==='Padrão') setVariacoes([{id: `var-${Date.now()}-multi`, nome: 'Tamanho Único', preco: variacoes[0].preco, ativo: true, estoque: variacoes[0].estoque, estoqueMinimo: variacoes[0].estoqueMinimo, custo: variacoes[0].custo}]); }} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${variacoes.length > 1 || variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Múltiplos Tamanhos</button>
+                    </div>
+                  </div>
 
-                        {/* BLOCO 1: DADOS BÁSICOS */}
-                        <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200 space-y-6">
-                            <h3 className="text-lg font-bold text-gray-800">Dados Básicos</h3>
-
-                            <div className="grid md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2">Nome do Produto *</label>
-                                    <input
-                                        type="text"
-                                        name="nome"
-                                        value={formData.nome}
-                                        onChange={handleFormChange}
-                                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
-                                        placeholder="Ex: X-Burger Especial"
-                                        required
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2">Categoria *</label>
-                                        <input
-                                            type="text"
-                                            name="categoria"
-                                            value={formData.categoria}
-                                            onChange={handleFormChange}
-                                            list="cat-list"
-                                            className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="Digite ou selecione"
-                                            required
-                                            disabled={!!editingItem}
-                                        />
-                                        <datalist id="cat-list">
-                                            {categories.map(c => (<option key={c.id} value={c.nome} />))}
-                                        </datalist>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2 flex items-center gap-1">
-                                            <IoBarcodeOutline className="text-lg text-gray-500"/> Código Barras
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="codigoBarras" 
-                                            value={formData.codigoBarras} 
-                                            onChange={handleFormChange} 
-                                            className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-mono" 
-                                            placeholder="EAN/GTIN" 
-                                        />
-                                    </div>
-                                </div>
+                  <div className="space-y-4">
+                    {variacoes.map((v) => (
+                      <div key={v.id} className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative group">
+                        {variacoes.length > 1 && (
+                          <button type="button" onClick={() => removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full shadow-md hover:bg-red-200 transition-colors z-10">
+                            <IoClose size={18}/>
+                          </button>
+                        )}
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-5">
+                          {(variacoes.length > 1 || v.nome !== 'Padrão') && (
+                            <div className="sm:col-span-4">
+                              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Nome da Variação</label>
+                              <input type="text" value={v.nome} onChange={e => atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none" placeholder="Ex: Grande, 500ml" />
+                            </div>
+                          )}
+                          
+                          <div className={`grid grid-cols-2 gap-4 ${variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
+                            <div>
+                              <label className="text-xs font-bold text-emerald-600 mb-2 block uppercase tracking-wider">Preço Venda</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600/50 font-bold">R$</span>
+                                <input type="number" value={v.preco} onChange={e => atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full pl-10 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-800 focus:border-emerald-500 outline-none" placeholder="0.00" step="0.01" />
+                              </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold mb-2">Descrição</label>
-                                <textarea
-                                    name="descricao"
-                                    value={formData.descricao}
-                                    onChange={handleFormChange}
-                                    className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                                    rows={3}
-                                    placeholder="Ingredientes, detalhes..."
-                                />
+                              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Custo Base (R$)</label>
+                              <input type="number" value={v.custo} onChange={e => atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="0.00" step="0.01" />
                             </div>
+
+                            <div>
+                              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Estoque Atual</label>
+                              <input type="number" value={v.estoque} onChange={e => atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="Atual" />
+                            </div>
+
+                            <div>
+                              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Estoque Min</label>
+                              <input type="number" value={v.estoqueMinimo} onChange={e => atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-orange-500 outline-none" placeholder="Mínimo" />
+                            </div>
+                          </div>
+
+                          <div className="sm:col-span-12 flex items-center justify-between sm:justify-end mt-2 pt-4 border-t border-gray-200 border-dashed">
+                             <span className="text-sm font-bold text-gray-700 sm:hidden">Variação Ativa?</span>
+                             <label className="flex items-center gap-3 cursor-pointer bg-white px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
+                                <input type="checkbox" checked={v.ativo !== false} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500" />
+                                <span className="text-sm font-bold text-gray-700 hidden sm:block">Variação Ativa</span>
+                             </label>
+                          </div>
                         </div>
-
-                        {/* BLOCO 2: VARIAÇÕES DE PREÇO */}
-                        <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200 space-y-6">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 pb-4 gap-4">
-                                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><IoCash className="text-blue-600"/> Preço & Estoque</h3>
-                                <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
-                                    <button type="button" onClick={() => setVariacoes([{id: `var-${Date.now()}-unico`, nome: 'Padrão', preco: variacoes[0]?.preco || '', ativo: true, estoque: variacoes[0]?.estoque || 0, estoqueMinimo: variacoes[0]?.estoqueMinimo || 0, custo: variacoes[0]?.custo || 0 }])} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${variacoes.length === 1 && variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Preço Único</button>
-                                    <button type="button" onClick={() => { if(variacoes.length===1 && variacoes[0].nome==='Padrão') setVariacoes([{id: `var-${Date.now()}-multi`, nome: 'Tamanho Único', preco: variacoes[0].preco, ativo: true, estoque: variacoes[0].estoque, estoqueMinimo: variacoes[0].estoqueMinimo, custo: variacoes[0].custo}]); }} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${variacoes.length > 1 || variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Múltiplos Tamanhos</button>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                {variacoes.map((v) => (
-                                    <div key={v.id} className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative group">
-                                        {variacoes.length > 1 && (
-                                            <button type="button" onClick={() => removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full shadow-md hover:bg-red-200 transition-colors z-10">
-                                                <IoClose size={18}/>
-                                            </button>
-                                        )}
-                                        
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-5">
-                                            {(variacoes.length > 1 || v.nome !== 'Padrão') && (
-                                                <div className="sm:col-span-4">
-                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Nome da Variação</label>
-                                                    <input type="text" value={v.nome} onChange={e => atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none" placeholder="Ex: Grande, 500ml" />
-                                                </div>
-                                            )}
-                                            
-                                            <div className={`grid grid-cols-2 gap-4 ${variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
-                                                <div>
-                                                    <label className="text-xs font-bold text-emerald-600 mb-2 block uppercase tracking-wider">Preço Venda</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600/50 font-bold">R$</span>
-                                                        <input type="number" value={v.preco} onChange={e => atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full pl-10 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-800 focus:border-emerald-500 outline-none" placeholder="0.00" step="0.01" />
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Custo Base (R$)</label>
-                                                    <input type="number" value={v.custo} onChange={e => atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="0.00" step="0.01" />
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Estoque Atual</label>
-                                                    <input type="number" value={v.estoque} onChange={e => atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="Atual" />
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Estoque Min</label>
-                                                    <input type="number" value={v.estoqueMinimo} onChange={e => atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-orange-500 outline-none" placeholder="Mínimo" />
-                                                </div>
-                                            </div>
-
-                                            <div className="sm:col-span-12 flex items-center justify-between sm:justify-end mt-2 pt-4 border-t border-gray-200 border-dashed">
-                                                 <span className="text-sm font-bold text-gray-700 sm:hidden">Variação Ativa?</span>
-                                                 <label className="flex items-center gap-3 cursor-pointer bg-white px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
-                                                    <input type="checkbox" checked={v.ativo !== false} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500" />
-                                                    <span className="text-sm font-bold text-gray-700 hidden sm:block">Variação Ativa</span>
-                                                 </label>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                
-                                {(variacoes.length > 1 || (variacoes.length === 1 && variacoes[0].nome !== 'Padrão')) && (
-                                    <button type="button" onClick={adicionarVariacao} className="mt-6 w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-base flex items-center justify-center gap-2 rounded-2xl transition-colors border border-blue-200 border-dashed">
-                                        <IoAddCircleOutline className="text-2xl"/> Adicionar Outro Tamanho / Variação
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* BLOCO 3: FISCAL */}
-                            <div className="bg-emerald-50/40 p-5 sm:p-8 rounded-3xl border border-emerald-100 shadow-sm space-y-6">
-                                <h3 className="text-lg font-bold text-emerald-800 flex items-center gap-2">
-                                    🏢 Emissão de Nota (NFC-e)
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                    <div className="relative">
-                                        <label className="block text-sm font-semibold text-emerald-800 mb-2">
-                                            NCM (Busca BrasilAPI)
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="ncm" 
-                                            value={termoNcm || formData.fiscal?.ncm || ''} 
-                                            onChange={(e) => buscarNcm(e.target.value)} 
-                                            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} 
-                                            className="w-full p-4 bg-white border border-emerald-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none" 
-                                            placeholder="Ex: Hambúrguer, 2202..." 
-                                            autoComplete="off"
-                                        />
-                                        {pesquisandoNcm && <span className="absolute right-6 top-[52px] text-xs font-bold text-emerald-500 animate-pulse">Buscando...</span>}
-                                        {ncmResultados.length > 0 && (
-                                            <div className="absolute z-50 w-full mt-2 bg-white border border-emerald-200 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
-                                                {ncmResultados.map((item) => (
-                                                    <div 
-                                                        key={item.codigo} 
-                                                        onClick={() => selecionarNcm(item.codigo)}
-                                                        className="p-4 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer transition-colors"
-                                                    >
-                                                        <p className="font-bold text-emerald-800 text-sm">{item.codigo}</p>
-                                                        <p className="text-xs text-gray-600 line-clamp-2 mt-1">{item.descricao}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-emerald-800 mb-2">CFOP</label>
-                                        <select name="cfop" value={formData.fiscal?.cfop || ''} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none">
-                                            <option value="5102">5102 - Tributado Normal</option>
-                                            <option value="5405">5405 - Subst. Tributária</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-emerald-800 mb-2">Medida</label>
-                                        <select name="unidade" value={formData.fiscal?.unidade || 'UN'} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none">
-                                            <option value="UN">UN - Unidade</option>
-                                            <option value="KG">KG - Quilograma</option>
-                                            <option value="LT">LT - Litro</option>
-                                            <option value="CX">CX - Caixa</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* BLOCO 4: IMAGEM E VISIBILIDADE */}
-                            <div className="grid md:grid-cols-2 gap-6">
-                                <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-200 shadow-sm flex items-center gap-4">
-                                     <div className="w-20 h-20 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                                        {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <IoImageOutline className="text-3xl text-gray-300"/>}
-                                     </div>
-                                     <div className="flex-1">
-                                         <label className="block text-base font-bold text-gray-800 mb-2">Foto do Produto</label>
-                                         <input type="file" accept="image/*" onChange={handleFormChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer" />
-                                     </div>
-                                </div>
-
-                                <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-center shadow-sm">
-                                    <label htmlFor="ativoMain" className="flex items-center gap-4 cursor-pointer w-full justify-center">
-                                        <div className={`w-16 h-8 rounded-full p-1 transition-colors duration-300 ease-in-out shadow-inner ${formData.ativo ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                                            <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${formData.ativo ? 'translate-x-8' : 'translate-x-0'}`}></div>
-                                        </div>
-                                        <input type="checkbox" id="ativoMain" name="ativo" checked={formData.ativo} onChange={handleFormChange} className="hidden" />
-                                        <div className="flex flex-col">
-                                            <span className="text-base font-bold text-gray-800">Cardápio Digital</span>
-                                            <span className="text-sm font-medium text-gray-500 mt-0.5">{formData.ativo ? 'Visível aos clientes' : 'Oculto'}</span>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-
-                    </div>
-
-                    {/* FOOTER FIXO (Absolute forçado pro fundo) */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-5 flex justify-end gap-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-20">
-                        <button
-                            type="button"
-                            onClick={closeItemForm}
-                            className="hidden sm:block px-8 py-3.5 rounded-xl border border-gray-300 font-semibold text-gray-600 hover:bg-gray-100 transition-all text-lg"
-                        >
-                            Cancelar
-                        </button>
-                        
-                        <button
-                            type="submit"
-                            disabled={formLoading}
-                            className="w-full sm:w-auto px-10 py-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all transform hover:scale-[1.02] text-lg flex items-center justify-center gap-2"
-                        >
-                            {formLoading ? 'Salvando...' : <><IoCheckmarkCircle size={24}/> Salvar Produto</>}
-                        </button>
-                    </div>
-
-                </form>
-            </div>
-        )}
-
-        {showActivateAllModal && (
-             <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                <div className="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm transform transition-all scale-100">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <IoRefresh className="text-3xl text-green-600"/>
-                    </div>
-                    <h3 className="text-xl font-bold mb-2 text-gray-800">Ativar Todos?</h3>
-                    <p className="text-gray-500 mb-6 text-sm">Isso ativará todos os itens que estão invisíveis no cardápio atualmente.</p>
-                    <div className="flex gap-3">
-                        <button onClick={() => setShowActivateAllModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors">Cancelar</button>
-                        <button onClick={activateAllItems} disabled={bulkOperationLoading} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-200 transition-colors">
-                            {bulkOperationLoading ? 'Ativando...' : 'Confirmar'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default withEstablishmentAuth(AdminMenuManagement);
+                      </div>
+                    ))}
+                  </div>
