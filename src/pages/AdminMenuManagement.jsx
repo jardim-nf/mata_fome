@@ -895,11 +895,10 @@ function AdminMenuManagement() {
             </div>
         )}
 
-        {/* 👇 MODAL 100% REESTRUTURADO PARA NÃO CORTAR (ESTILO APLICATIVO NATIVO) 👇 */}
+        {/* 👇 MODAL 100% CORRIGIDO (ESTILO APLICATIVO NATIVO) 👇 */}
         {showItemForm && (
             <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-[9999] transition-all duration-300 sm:p-4">
                 
-                {/* Form Wrapper - Usa flex-col para garantir Header/Body/Footer perfeitos */}
                 <form 
                     onSubmit={handleSaveItem} 
                     className="bg-white w-full sm:max-w-4xl flex flex-col h-[92vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl shadow-2xl relative animate-slide-up"
@@ -1110,6 +1109,7 @@ function AdminMenuManagement() {
                         <button type="button" onClick={closeItemForm} className="hidden sm:block px-8 py-3.5 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">
                             Cancelar
                         </button>
+                        {/* Botão de cancelar no Mobile */}
                         <button type="button" onClick={closeItemForm} className="sm:hidden flex-1 py-4 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">
                             Cancelar
                         </button>
