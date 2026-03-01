@@ -263,7 +263,6 @@ function AdminMenuManagement() {
   const [variacoes, setVariacoes] = useState([]);
   const [variacoesErrors, setVariacoesErrors] = useState({});
 
-  // Helper para formatar moeda vinda de string com vírgula do banco antigo
   const parsePrecoSeguro = (valor) => {
       if (valor === undefined || valor === null || valor === '') return 0;
       if (typeof valor === 'number') return valor;
@@ -273,7 +272,7 @@ function AdminMenuManagement() {
 
   const adicionarVariacao = () => {
     const novaVariacao = {
-      id: `var-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Chave super única
+      id: `var-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       nome: '',
       preco: '',
       descricao: '',
@@ -645,7 +644,6 @@ function AdminMenuManagement() {
     } catch(e) { toast.error("Erro em massa"); } finally { setBulkOperationLoading(false); }
   };
 
-  // 🔥 Processamento Seguro dos Dados do Produto 🔥
   const openItemForm = useCallback((item = null) => {
     if (item) {
       setEditingItem(item);
@@ -908,141 +906,151 @@ function AdminMenuManagement() {
             </div>
         )}
 
-        {/* 👇 MODAL 100% TELA CHEIA NO MOBILE / CARD NO DESKTOP 👇 */}
+        {/* 👇 MODAL 100% CORRIGIDO (ESTILO APLICATIVO NATIVO DE TELA INTEIRA) 👇 */}
         {showItemForm && (
-            <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[9999] flex sm:items-center justify-center transition-opacity">
+            <div className="fixed inset-0 z-[9999] bg-gray-50 flex flex-col animate-slide-up">
                 
-                <form 
-                    onSubmit={handleSaveItem} 
-                    className="bg-white flex flex-col shadow-2xl animate-slide-up 
-                               absolute inset-0 w-full h-full rounded-none
-                               sm:relative sm:inset-auto sm:h-auto sm:max-h-[90vh] sm:max-w-4xl sm:rounded-3xl"
-                >
-                    
-                    {/* 1. CABEÇALHO FIXO NO TOPO */}
-                    <div className="flex-none bg-white z-10 flex justify-between items-center p-4 pt-8 sm:p-6 sm:pt-6 border-b border-gray-100 shadow-sm">
-                        <div>
-                            <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{editingItem ? 'Editar Produto' : 'Novo Produto'}</h2>
-                            <p className="text-xs sm:text-sm text-gray-500 mt-1">Preencha os dados do cardápio</p>
-                        </div>
-                        <button type="button" onClick={closeItemForm} className="p-3 bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-500 rounded-full transition-colors shadow-sm">
-                            <IoClose size={24} />
-                        </button>
+                {/* 1. CABEÇALHO TRAVADO (Não rola) */}
+                <div className="flex-none h-20 border-b border-gray-200 px-4 sm:px-8 flex items-center justify-between bg-white shadow-sm z-20">
+                    <div>
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                            {editingItem ? 'Editar Produto' : 'Novo Produto'}
+                        </h2>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1">Gerenciamento completo do item</p>
                     </div>
+                    <button 
+                        type="button" 
+                        onClick={closeItemForm} 
+                        className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold transition-all flex items-center gap-2"
+                    >
+                        <span className="hidden sm:block">Voltar</span>
+                        <IoClose size={20} className="sm:hidden" />
+                    </button>
+                </div>
+
+                {/* FORMULÁRIO ENVOLVENDO CORPO E RODAPÉ */}
+                <form onSubmit={handleSaveItem} className="flex-1 overflow-y-auto relative z-10 flex flex-col">
                     
-                    {/* 2. MEIO DO FORMULÁRIO (Somente esta parte tem barra de rolagem!) */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-gray-50/50">
-                        <div className="space-y-5 sm:space-y-8 max-w-3xl mx-auto pb-4">
+                    {/* 2. MEIO DO FORMULÁRIO (Somente esta parte rola! pb-32 para não esconder atrás do rodapé) */}
+                    <div className="flex-1 p-4 sm:p-8 pb-32 w-full max-w-5xl mx-auto space-y-6 sm:space-y-8">
+                        
+                        {/* Bloco 1: Nome, Categoria, etc */}
+                        <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+                            <h3 className="text-lg font-bold text-gray-800">Dados Básicos</h3>
                             
-                            {/* Bloco 1: Nome, Categoria, etc */}
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm">
-                                <div className="lg:col-span-7 space-y-4 sm:space-y-5">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Nome do Produto *</label>
+                                    <input type="text" name="nome" value={formData.nome} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" placeholder="Ex: X-Burger Especial" required />
+                                    {formErrors.nome && <span className="text-red-500 text-xs mt-1 block">{formErrors.nome}</span>}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Nome do Produto *</label>
-                                        <input type="text" name="nome" value={formData.nome} onChange={handleFormChange} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all text-sm font-medium" placeholder="Ex: X-Burger Especial" required />
-                                        {formErrors.nome && <span className="text-red-500 text-xs mt-1 block">{formErrors.nome}</span>}
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Categoria *</label>
+                                        <input type="text" name="categoria" value={formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" placeholder="Selecione..." required disabled={!!editingItem} />
+                                        <datalist id="cat-list">{categories.map(c => <option key={c.id} value={c.nome} />)}</datalist>
+                                        {formErrors.categoria && <span className="text-red-500 text-xs mt-1 block">{formErrors.categoria}</span>}
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria *</label>
-                                            <input type="text" name="categoria" value={formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all text-sm font-medium" placeholder="Selecione ou digite..." required disabled={!!editingItem} />
-                                            <datalist id="cat-list">{categories.map(c => <option key={c.id} value={c.nome} />)}</datalist>
-                                            {formErrors.categoria && <span className="text-red-500 text-xs mt-1 block">{formErrors.categoria}</span>}
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 mb-1.5 flex items-center gap-1">
-                                                <IoBarcodeOutline className="text-lg text-gray-500"/> Código de Barras
-                                            </label>
-                                            <input type="text" name="codigoBarras" value={formData.codigoBarras} onChange={handleFormChange} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-mono text-sm tracking-wider" placeholder="EAN/GTIN" />
-                                        </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                                            <IoBarcodeOutline className="text-lg text-gray-500"/> Código Barras
+                                        </label>
+                                        <input type="text" name="codigoBarras" value={formData.codigoBarras} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-mono" placeholder="EAN/GTIN" />
                                     </div>
                                 </div>
-                                <div className="lg:col-span-5 flex flex-col">
-                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Descrição</label>
-                                    <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all flex-1 min-h-[100px] resize-none text-sm" placeholder="Liste os ingredientes, detalhes do preparo..." />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Descrição</label>
+                                <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all min-h-[100px] resize-none" placeholder="Liste os ingredientes, detalhes do preparo..." />
+                            </div>
+                        </div>
+
+                        {/* Bloco 2: Precificação e Estoque */}
+                        <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
+                                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><IoCash className="text-blue-600"/> Preço & Estoque</h3>
+                                
+                                <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
+                                    <button type="button" onClick={() => setVariacoes([{id: `var-${Date.now()}-unico`, nome: 'Padrão', preco: variacoes[0]?.preco || '', ativo: true, estoque: variacoes[0]?.estoque || 0, estoqueMinimo: variacoes[0]?.estoqueMinimo || 0, custo: variacoes[0]?.custo || 0 }])} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${variacoes.length === 1 && variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Preço Único</button>
+                                    <button type="button" onClick={() => { if(variacoes.length===1 && variacoes[0].nome==='Padrão') setVariacoes([{id: `var-${Date.now()}-multi`, nome: 'Tamanho Único', preco: variacoes[0].preco, ativo: true, estoque: variacoes[0].estoque, estoqueMinimo: variacoes[0].estoqueMinimo, custo: variacoes[0].custo}]); }} className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${variacoes.length > 1 || variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Múltiplos Tamanhos</button>
                                 </div>
                             </div>
 
-                            {/* Bloco 2: Precificação e Estoque */}
-                            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3">
-                                    <h3 className="font-bold text-gray-800 flex items-center gap-2 text-base"><IoCash className="text-blue-600 text-xl"/> Precificação e Estoque</h3>
-                                    
-                                    <div className="flex bg-gray-100 p-1 rounded-lg w-full sm:w-auto">
-                                        <button type="button" onClick={() => setVariacoes([{id: `var-${Date.now()}-unico`, nome: 'Padrão', preco: variacoes[0]?.preco || '', ativo: true, estoque: variacoes[0]?.estoque || 0, estoqueMinimo: variacoes[0]?.estoqueMinimo || 0, custo: variacoes[0]?.custo || 0 }])} className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all ${variacoes.length === 1 && variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Preço Único</button>
-                                        <button type="button" onClick={() => { if(variacoes.length===1 && variacoes[0].nome==='Padrão') setVariacoes([{id: `var-${Date.now()}-multi`, nome: 'Tamanho Único', preco: variacoes[0].preco, ativo: true, estoque: variacoes[0].estoque, estoqueMinimo: variacoes[0].estoqueMinimo, custo: variacoes[0].custo}]); }} className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all ${variacoes.length > 1 || variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Múltiplos Tamanhos</button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    {variacoes.map((v, idx) => (
-                                        <div key={v.id} className="bg-gray-50 p-4 sm:p-5 rounded-xl border border-gray-200 relative group">
-                                            {variacoes.length > 1 && (
-                                                <button type="button" onClick={() => removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full shadow-md hover:bg-red-200 transition-colors z-10">
-                                                    <IoClose size={16}/>
-                                                </button>
+                            <div className="space-y-4">
+                                {variacoes.map((v, idx) => (
+                                    <div key={v.id} className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative group">
+                                        {variacoes.length > 1 && (
+                                            <button type="button" onClick={() => removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full shadow-md hover:bg-red-200 transition-colors z-10">
+                                                <IoClose size={18}/>
+                                            </button>
+                                        )}
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-5">
+                                            {(variacoes.length > 1 || v.nome !== 'Padrão') && (
+                                                <div className="sm:col-span-4">
+                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Nome da Variação</label>
+                                                    <input type="text" value={v.nome} onChange={e => atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none" placeholder="Ex: Grande, 500ml" />
+                                                    {variacoesErrors[v.id]?.nome && <span className="text-red-500 text-xs mt-1 block">{variacoesErrors[v.id].nome}</span>}
+                                                </div>
                                             )}
                                             
-                                            <div className="grid grid-cols-12 gap-3 sm:gap-4">
-                                                {(variacoes.length > 1 || v.nome !== 'Padrão') && (
-                                                    <div className="col-span-12 sm:col-span-4">
-                                                        <label className="text-xs font-bold text-gray-500 mb-1.5 block uppercase tracking-wider">Nome da Variação</label>
-                                                        <input type="text" value={v.nome} onChange={e => atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-3 sm:p-2.5 bg-white border border-gray-200 rounded-lg text-sm font-bold focus:border-blue-500 outline-none" placeholder="Ex: Grande, 500ml, etc" />
-                                                        {variacoesErrors[v.id]?.nome && <span className="text-red-500 text-[10px]">{variacoesErrors[v.id].nome}</span>}
-                                                    </div>
-                                                )}
-                                                
-                                                <div className={`col-span-6 ${(variacoes.length > 1 || v.nome !== 'Padrão') ? 'sm:col-span-3' : 'sm:col-span-4'}`}>
-                                                    <label className="text-xs font-bold text-emerald-600 mb-1.5 block uppercase tracking-wider">Preço Venda</label>
+                                            <div className={`grid grid-cols-2 gap-4 ${variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
+                                                <div>
+                                                    <label className="text-xs font-bold text-emerald-600 mb-2 block uppercase tracking-wider">Preço Final (R$)</label>
                                                     <div className="relative">
                                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600/50 font-bold">R$</span>
-                                                        <input type="number" value={v.preco} onChange={e => atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full pl-9 p-3 sm:p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold text-emerald-800 focus:border-emerald-500 outline-none" placeholder="0.00" step="0.01" />
+                                                        <input type="number" value={v.preco} onChange={e => atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full pl-10 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-800 focus:border-emerald-500 outline-none" placeholder="0.00" step="0.01" />
                                                     </div>
                                                     {variacoesErrors[v.id]?.preco && <span className="text-red-500 text-[10px]">{variacoesErrors[v.id].preco}</span>}
                                                 </div>
 
-                                                <div className={`col-span-6 ${(variacoes.length > 1 || v.nome !== 'Padrão') ? 'sm:col-span-2' : 'sm:col-span-3'}`}>
-                                                    <label className="text-xs font-bold text-gray-500 mb-1.5 block uppercase tracking-wider">Custo (R$)</label>
-                                                    <input type="number" value={v.custo} onChange={e => atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-3 sm:p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-500 outline-none" placeholder="0.00" step="0.01" />
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Custo Base (R$)</label>
+                                                    <input type="number" value={v.custo} onChange={e => atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="0.00" step="0.01" />
                                                 </div>
 
-                                                <div className={`col-span-12 ${(variacoes.length > 1 || v.nome !== 'Padrão') ? 'sm:col-span-3' : 'sm:col-span-2'}`}>
-                                                    <label className="text-xs font-bold text-gray-500 mb-1.5 block uppercase tracking-wider">Estoque Atual / Mínimo</label>
-                                                    <div className="flex gap-2">
-                                                        <input type="number" value={v.estoque} onChange={e => atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-3 sm:p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:border-blue-500 outline-none" placeholder="Atual" title="Estoque Atual" />
-                                                        <input type="number" value={v.estoqueMinimo} onChange={e => atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} className="w-full p-3 sm:p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:border-orange-500 outline-none" placeholder="Mínimo" title="Estoque Mínimo" />
-                                                    </div>
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Qtd Estoque</label>
+                                                    <input type="number" value={v.estoque} onChange={e => atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="Atual" />
                                                 </div>
 
-                                                <div className="col-span-12 flex items-center justify-between sm:justify-end mt-2 sm:mt-0 bg-white sm:bg-transparent p-2 sm:p-0 rounded-lg border sm:border-0 border-gray-200">
-                                                     <span className="text-sm font-bold text-gray-700 sm:hidden">Variação Ativa?</span>
-                                                     <label className="flex items-center gap-2 cursor-pointer bg-gray-50 sm:bg-white px-3 py-2 rounded-lg border border-gray-200">
-                                                        <input type="checkbox" checked={v.ativo !== false} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-5 h-5 sm:w-4 sm:h-4 rounded text-blue-600 focus:ring-blue-500" />
-                                                        <span className="text-xs font-bold text-gray-600 hidden sm:block">Ativa</span>
-                                                     </label>
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Estoque Mínimo</label>
+                                                    <input type="number" value={v.estoqueMinimo} onChange={e => atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:border-orange-500 outline-none" placeholder="Mínimo" />
                                                 </div>
+                                            </div>
+
+                                            {/* Checkbox Ativo da Variação */}
+                                            <div className="sm:col-span-12 flex items-center justify-between sm:justify-end mt-2 pt-4 border-t border-gray-200 border-dashed">
+                                                 <span className="text-sm font-bold text-gray-700 sm:hidden">Variação Ativa no Cardápio?</span>
+                                                 <label className="flex items-center gap-3 cursor-pointer bg-white px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
+                                                    <input type="checkbox" checked={v.ativo !== false} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500" />
+                                                    <span className="text-sm font-bold text-gray-700 hidden sm:block">Variação Ativa</span>
+                                                 </label>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                                 
                                 {(variacoes.length > 1 || (variacoes.length === 1 && variacoes[0].nome !== 'Padrão')) && (
-                                    <button type="button" onClick={adicionarVariacao} className="mt-5 w-full py-3.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-sm flex items-center justify-center gap-2 rounded-xl transition-colors border border-blue-100 border-dashed">
-                                        <IoAddCircleOutline className="text-xl"/> Adicionar Outro Tamanho / Variação
+                                    <button type="button" onClick={adicionarVariacao} className="mt-6 w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-base flex items-center justify-center gap-2 rounded-2xl transition-colors border border-blue-200 border-dashed">
+                                        <IoAddCircleOutline className="text-2xl"/> Adicionar Outro Tamanho / Variação
                                     </button>
                                 )}
-                                {formErrors.variacoes && <p className="text-red-500 text-sm mt-3 text-center bg-red-50 p-3 rounded-xl border border-red-100">{formErrors.variacoes}</p>}
+                                {formErrors.variacoes && <p className="text-red-500 text-sm mt-3 text-center bg-red-50 p-4 rounded-xl border border-red-100">{formErrors.variacoes}</p>}
                             </div>
 
                             {/* Bloco 3: Fiscal */}
-                            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-emerald-100 shadow-sm">
-                                <h3 className="font-bold text-emerald-800 mb-4 flex items-center gap-2 text-base">
+                            <div className="bg-white p-5 sm:p-8 rounded-3xl border border-emerald-100 shadow-sm">
+                                <h3 className="text-lg font-bold text-emerald-800 mb-6 flex items-center gap-2">
                                     🏢 Dados para Emissão de Nota (NFC-e)
                                 </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-                                    <div className="relative bg-emerald-50/50 p-3 rounded-xl border border-emerald-50">
-                                        <label className="block text-xs font-bold text-emerald-700 mb-1.5" title="Nomenclatura Comum do Mercosul">
-                                            Busca NCM (Nome ou Código)
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    <div className="relative bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
+                                        <label className="block text-sm font-semibold text-emerald-800 mb-2">
+                                            NCM (Busca BrasilAPI)
                                         </label>
                                         <input 
                                             type="text" 
@@ -1050,38 +1058,38 @@ function AdminMenuManagement() {
                                             value={termoNcm || formData.fiscal?.ncm || ''} 
                                             onChange={(e) => buscarNcm(e.target.value)} 
                                             onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} 
-                                            className="w-full p-3 bg-white border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all shadow-sm" 
+                                            className="w-full p-4 bg-white border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all shadow-sm" 
                                             placeholder="Ex: Água, Hambúrguer, 2202..." 
                                             autoComplete="off"
                                         />
                                         
-                                        {pesquisandoNcm && <span className="absolute right-6 top-12 text-xs font-bold text-emerald-500 animate-pulse">Buscando...</span>}
+                                        {pesquisandoNcm && <span className="absolute right-6 top-[52px] text-xs font-bold text-emerald-500 animate-pulse">Buscando...</span>}
                                         
                                         {ncmResultados.length > 0 && (
-                                            <div className="absolute z-50 w-full mt-2 bg-white border border-emerald-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                                            <div className="absolute z-50 w-full mt-2 bg-white border border-emerald-200 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
                                                 {ncmResultados.map((item) => (
                                                     <div 
                                                         key={item.codigo} 
                                                         onClick={() => selecionarNcm(item.codigo)}
-                                                        className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer transition-colors"
+                                                        className="p-4 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer transition-colors"
                                                     >
                                                         <p className="font-bold text-emerald-800 text-sm">{item.codigo}</p>
-                                                        <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">{item.descricao}</p>
+                                                        <p className="text-xs text-gray-600 line-clamp-2 mt-1">{item.descricao}</p>
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
-                                    <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-50">
-                                        <label className="block text-xs font-bold text-emerald-700 mb-1.5">CFOP (Tipo de Venda)</label>
-                                        <select name="cfop" value={formData.fiscal?.cfop || ''} onChange={handleFiscalChange} className="w-full p-3 bg-white border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all shadow-sm">
-                                            <option value="5102">5102 - Tributado (Lanches, Refeições)</option>
-                                            <option value="5405">5405 - Subst. Tributária (Refrigerantes, Cervejas)</option>
+                                    <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
+                                        <label className="block text-sm font-semibold text-emerald-800 mb-2">CFOP</label>
+                                        <select name="cfop" value={formData.fiscal?.cfop || ''} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all shadow-sm">
+                                            <option value="5102">5102 - Tributado Normal</option>
+                                            <option value="5405">5405 - Subst. Tributária</option>
                                         </select>
                                     </div>
-                                    <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-50">
-                                        <label className="block text-xs font-bold text-emerald-700 mb-1.5">Medida Comercial</label>
-                                        <select name="unidade" value={formData.fiscal?.unidade || 'UN'} onChange={handleFiscalChange} className="w-full p-3 bg-white border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all shadow-sm">
+                                    <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
+                                        <label className="block text-sm font-semibold text-emerald-800 mb-2">Medida</label>
+                                        <select name="unidade" value={formData.fiscal?.unidade || 'UN'} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all shadow-sm">
                                             <option value="UN">UN - Unidade</option>
                                             <option value="KG">KG - Quilograma</option>
                                             <option value="LT">LT - Litro</option>
@@ -1092,50 +1100,48 @@ function AdminMenuManagement() {
                             </div>
 
                             {/* Bloco 4: Imagem e Visibilidade */}
-                            <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
-                                <div className="flex-1 flex gap-4 items-center bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                     <div className="w-20 h-20 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                                        {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <IoImageOutline className="text-3xl text-gray-300"/>}
+                            <div className="flex flex-col sm:flex-row gap-5">
+                                <div className="flex-1 flex flex-col sm:flex-row gap-5 items-center bg-white p-5 sm:p-8 rounded-3xl border border-gray-100 shadow-sm">
+                                     <div className="w-24 h-24 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                                        {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <IoImageOutline className="text-4xl text-gray-300"/>}
                                      </div>
-                                     <div className="flex-1">
-                                         <label className="block text-sm font-bold text-gray-700 mb-2">Foto do Produto</label>
-                                         <input type="file" accept="image/*" onChange={handleFormChange} className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer transition-colors" />
+                                     <div className="flex-1 w-full text-center sm:text-left">
+                                         <label className="block text-base font-bold text-gray-800 mb-3">Foto do Produto</label>
+                                         <input type="file" accept="image/*" onChange={handleFormChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer transition-colors" />
                                      </div>
                                 </div>
 
-                                <div className="sm:w-1/3 bg-blue-50 p-4 sm:p-5 rounded-2xl border border-blue-100 flex items-center justify-center shadow-sm">
-                                    <label htmlFor="ativoMain" className="flex items-center justify-between sm:justify-center gap-3 cursor-pointer w-full">
-                                        <div className="flex flex-col sm:text-right">
-                                            <span className="text-sm font-bold text-gray-800">Cardápio Digital</span>
-                                            <span className="text-xs font-medium text-gray-500">{formData.ativo ? 'Visível aos clientes' : 'Oculto'}</span>
-                                        </div>
-                                        <div className={`w-14 h-7 rounded-full p-1 transition-colors duration-300 ease-in-out shadow-inner ${formData.ativo ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                                            <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${formData.ativo ? 'translate-x-7' : 'translate-x-0'}`}></div>
+                                <div className="sm:w-1/3 bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-center shadow-sm">
+                                    <label htmlFor="ativoMain" className="flex flex-row-reverse sm:flex-col items-center justify-between sm:justify-center gap-4 cursor-pointer w-full">
+                                        <div className={`w-16 h-8 rounded-full p-1 transition-colors duration-300 ease-in-out shadow-inner ${formData.ativo ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                                            <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${formData.ativo ? 'translate-x-8' : 'translate-x-0'}`}></div>
                                         </div>
                                         <input type="checkbox" id="ativoMain" name="ativo" checked={formData.ativo} onChange={handleFormChange} className="hidden" />
+                                        <div className="flex flex-col sm:text-center">
+                                            <span className="text-base font-bold text-gray-800">Cardápio Digital</span>
+                                            <span className="text-sm font-medium text-gray-500 mt-1">{formData.ativo ? 'Visível aos clientes' : 'Oculto do App'}</span>
+                                        </div>
                                     </label>
                                 </div>
                             </div>
+
                         </div>
                     </div>
 
-                    {/* 3. RODAPÉ FIXO NO FUNDO DA TELA (pb-8 para afastar da barra do iPhone) */}
-                    <div className="flex-none bg-white border-t border-gray-100 p-4 pb-8 sm:p-6 sm:pb-6 flex gap-3 sm:gap-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
-                        <button type="button" onClick={closeItemForm} className="hidden sm:block px-8 py-4 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">
+                    {/* 3. RODAPÉ FIXO NO FUNDO DA TELA (Sempre visível sobrepondo o conteúdo) */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 sm:p-6 flex justify-end gap-3 sm:gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-20">
+                        <button type="button" onClick={closeItemForm} className="hidden sm:block px-8 py-4 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors text-lg">
                             Cancelar
                         </button>
                         <button type="button" onClick={closeItemForm} className="sm:hidden w-1/3 py-4 bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center">
                             Voltar
                         </button>
                         
-                        <button type="submit" disabled={formLoading} className="flex-1 bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:scale-100 text-base sm:text-lg flex justify-center items-center gap-2">
-                            {formLoading ? (
-                                <>Salvando...</>
-                            ) : (
-                                <><IoCheckmarkCircle size={22}/> Salvar Alterações</>
-                            )}
+                        <button type="submit" disabled={formLoading} className="flex-1 sm:w-[400px] sm:flex-none bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:scale-100 text-lg flex justify-center items-center gap-2">
+                            {formLoading ? 'Salvando...' : <><IoCheckmarkCircle size={24}/> Salvar Produto</>}
                         </button>
                     </div>
+
                 </form>
             </div>
         )}
