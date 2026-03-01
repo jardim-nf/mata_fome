@@ -130,7 +130,7 @@ const PedidoCard = ({
 
         switch (statusAlvo) {
             case 'recebido': frasePrincipal = `Recebemos seu pedido *#${idCurto}*! 📝\nJá vamos conferir e enviar para a cozinha.`; break;
-            case 'preparo': frasePrincipal = `Boas notícias! 👨‍🍳🔥\nSeu pedido *#${idCurto}* já começou a ser preparado.`; break;
+            case 'preparo': frasePrincipal = `Boas notícias! 👨‍🍳🔥\nSeu pedido *#${idCurto}* foi recebido com sucesso!!.`; break;
             case 'em_entrega': 
                 const infoMoto = item.motoboyNome ? ` com o entregador *${item.motoboyNome}*` : '';
                 frasePrincipal = `Saiu para entrega! 🛵💨\nSeu pedido *#${idCurto}* está a caminho${infoMoto}.`; 
