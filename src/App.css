@@ -1,39 +1,39 @@
 /* src/App.css */
 
 :root {
-  /* NOVAS CORES BASEADAS NA IMAGEM DA LOGO E ESTILO LARANJA */
-  --cor-de-destaque-principal: hsl(0, 0%, 3%); /* Amarelo vibrante: #FFC107 ou #FFDA63 */
-  --cor-secundaria-laranja: hsl(28, 89%, 55%);   /* Laranja/Marrom da bolsa: #E67E22 ou #F48024 */
-  --cor-texto-escuro: hsl(0, 0%, 0%);           /* Preto */
-  --cor-fundo-claro: hsl(0, 0%, 100%);          /* Branco puro */
-  --cor-cinza-texto: hsl(0, 0%, 0%);           /* Cinza para textos gerais: #4A4A4A */
-  --cor-principal: #4f46e5; /* Indigo 600 */
-  --cor-principal-hover: #4338ca; /* Indigo 700 */
-  --fundo-pagina: #f1f5f9; /* Slate 100 */
-  --texto-titulo: #1e293b; /* Slate 800 */
+  /* PALETA DE CORES IDEAFOOD */
+  --cor-de-destaque-principal: #FFD400; /* Amarelo IdeaFood */
+  --cor-texto-escuro: #000000;          /* Preto */
+  --cor-fundo-claro: #FFFFFF;           /* Branco puro */
+  --cor-cinza-texto: #4A4A4A;           /* Cinza para textos gerais */
+  
+  --cor-principal: #FFD400; 
+  --cor-principal-hover: #E6BE00; 
+  --fundo-pagina: #f8fafc; /* Slate 50 */
+  --texto-titulo: #0f172a; /* Slate 900 */
   --texto-corpo: #475569; /* Slate 600 */
 
-  /* Mapeando as variáveis antigas para as novas para facilitar a transição */
-  --vermelho-principal: var(--cor-de-destaque-principal); /* Será o amarelo */
-  --marrom-escuro: var(--cor-texto-escuro);           /* Será o preto */
-  --bege-claro: var(--cor-fundo-claro);               /* Será o branco */
-  --verde-destaque: var(--cor-secundaria-laranja);    /* O verde se torna o laranja (ou redefina para um verde se ainda tiver um elemento verde) */
-  --branco: var(--cor-fundo-claro);                  /* Continua branco */
-  --preto: var(--cor-texto-escuro);                   /* Continua preto */
-  --cinza-texto: var(--cor-cinza-texto);               /* Continua cinza */
+  /* Fallbacks legados (caso algum componente antigo ainda os use) */
+  --vermelho-principal: var(--cor-de-destaque-principal); 
+  --marrom-escuro: var(--cor-texto-escuro);           
+  --bege-claro: var(--cor-fundo-claro);               
+  --verde-destaque: var(--cor-de-destaque-principal);    
+  --branco: var(--cor-fundo-claro);                  
+  --preto: var(--cor-texto-escuro);                   
+  --cinza-texto: var(--cor-cinza-texto);               
 }
 
 body {
   margin: 0;
   font-family: 'Poppins', sans-serif;
-  background-color: var(--cor-fundo-claro); /* Fundo agora branco */
-  color: var(--cor-texto-escuro); /* Cor de texto padrão agora preto */
+  background-color: var(--cor-fundo-claro);
+  color: var(--cor-texto-escuro); 
 }
 
 /* Estilos gerais do Header */
 header {
-  background-color: var(--cor-de-destaque-principal); /* Amarelo para o header */
-  color: var(--cor-texto-escuro); /* Texto do header em preto */
+  background-color: var(--cor-fundo-claro); 
+  color: var(--cor-texto-escuro); 
   padding: 1rem 2rem;
 }
 
@@ -41,19 +41,19 @@ header {
 .hero {
   padding: 4rem 2rem;
   text-align: center;
-  background-color: var(--cor-secundaria-laranja); /* Fundo hero em laranja */
-  color: var(--cor-texto-escuro); /* Cor de texto para o hero agora preto */
+  background-color: var(--cor-fundo-claro); 
+  color: var(--cor-texto-escuro); 
 }
 
 .hero h1 {
   font-size: 3rem;
   margin-bottom: 1rem;
-  color: var(--cor-texto-escuro); /* Título do hero em preto para contrastar com laranja */
+  color: var(--cor-texto-escuro); 
 }
 
 .hero p {
   font-size: 1.2rem;
   max-width: 600px;
   margin: 0 auto;
-  color: var(--cor-texto-escuro); /* Texto do hero em preto */
+  color: var(--cor-texto-escuro); 
 }

@@ -9,7 +9,7 @@ import {
     ArrowLeft, 
     Home, 
     ChevronRight,
-    LogOut // Ícone adicionado para o botão de sair
+    LogOut 
 } from 'lucide-react';
 
 function Header() {
@@ -35,7 +35,6 @@ function Header() {
         else if (temPermissao('Painel de Pedidos')) homeLink = "/painel";
     }
 
-    // Define o que é tela principal (onde não tem voltar, mas tem o botão Sair)
     const telasPrincipais = ['/', '/login', '/register', '/master-dashboard', '/dashboard', '/controle-salao', '/painel'];
     const isInternalPage = !telasPrincipais.includes(location.pathname);
 
@@ -93,11 +92,8 @@ function Header() {
     return (
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 w-full transition-all">
             <div className="max-w-7xl mx-auto px-4 lg:px-8">
-                
-                {/* LINHA PRINCIPAL: ESQUERDA - CENTRO - DIREITA */}
                 <div className="flex items-center justify-between h-16 md:h-20">
                     
-                    {/* ⬅️ Lado Esquerdo: Navegação / Voltar */}
                     <div className="flex-1 flex items-center justify-start gap-3">
                         {isInternalPage && (
                             <button
@@ -109,7 +105,6 @@ function Header() {
                             </button>
                         )}
                         
-                        {/* Breadcrumbs (Apenas Desktop) */}
                         {isInternalPage && getBreadcrumbs().length > 0 && (
                             <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-400 font-medium">
                                 <Link to={homeLink} className="hover:text-emerald-600 transition-colors p-1">
@@ -132,7 +127,6 @@ function Header() {
                         )}
                     </div>
 
-                    {/* 🎯 Centro: Títulos sempre perfeitamente alinhados */}
                     <div className="flex-[2] flex flex-col items-center justify-center text-center">
                         <h1 className="text-lg md:text-xl font-black text-gray-800 leading-tight truncate px-2">
                             {getDynamicTitle()}
@@ -144,17 +138,13 @@ function Header() {
                         )}
                     </div>
 
-                    {/* ➡️ Lado Direito: Ações da Tela e Botão de Sair */}
                     <div className="flex-1 flex items-center justify-end gap-2 md:gap-4">
-                        
-                        {/* Ações Dinâmicas injetadas por outras telas */}
                         {headerActions && (
                             <div className="flex items-center gap-2">
                                 {headerActions}
                             </div>
                         )}
                         
-                        {/* Botão de Sair (Exibido apenas nas telas principais em Desktop) */}
                         {!isInternalPage && currentUser && (
                             <button
                                 onClick={handleLogout}
@@ -166,7 +156,6 @@ function Header() {
                             </button>
                         )}
 
-                        {/* Botão Menu Mobile */}
                         <button 
                             className="md:hidden p-2 -mr-2 text-gray-600 hover:text-emerald-600 transition-colors"
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -178,11 +167,9 @@ function Header() {
                 </div>
             </div>
 
-            {/* --- MENU MOBILE RESPONSIVO --- */}
             {isMenuOpen && (
                 <div className="md:hidden bg-white border-t border-gray-100 absolute w-full shadow-[0_10px_40px_rgba(0,0,0,0.1)] z-50 animate-slideUp origin-top">
                     <nav className="px-4 py-3 space-y-1">
-                        
                         <Link 
                             to={homeLink}
                             className="flex items-center gap-3 py-3 px-3 text-gray-700 font-bold hover:bg-gray-50 rounded-xl transition-colors"
@@ -225,7 +212,6 @@ function Header() {
                             </Link>
                         )}
 
-                        {/* Botão de Sair no Mobile */}
                         {currentUser && (
                             <button
                                 onClick={() => { setIsMenuOpen(false); handleLogout(); }}
@@ -249,7 +235,6 @@ function Header() {
     );
 }
 
-// Funções auxiliares mantidas
 const getPageTitle = (pathname) => {
     const titles = {
         '/admin/gerenciar-cardapio': 'Cardápio',
@@ -266,7 +251,7 @@ const getPageTitle = (pathname) => {
         '/admin/ordenar-categorias': 'Categorias',
         '/admin/gestao-funcionarios': 'Equipe'
     };
-    return titles[pathname] || 'NaMão System';
+    return titles[pathname] || 'IdeaFood'; // Alterado de NaMão System
 };
 
 const getPageSubtitle = (pathname) => {

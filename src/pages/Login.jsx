@@ -132,7 +132,7 @@ export default function LoginPage() {
         {/* Cabeçalho */}
         <div className="text-center mb-8">
             <div className="w-16 h-16 bg-yellow-500 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg transform -rotate-3">
-                <span className="text-2xl font-bold text-white">DF</span>
+                <span className="text-2xl font-bold text-white">IF</span>
             </div>
             <h1 className="text-3xl font-bold text-gray-900">
                 {isRegistering ? 'Criar Nova Conta' : 'Bem-vindo'}
@@ -228,7 +228,6 @@ export default function LoginPage() {
             <button 
                 onClick={() => {
                     setIsRegistering(!isRegistering);
-                    setError(''); // Limpa erros ao trocar
                 }}
                 className="text-yellow-600 font-bold hover:text-yellow-700 hover:underline transition-colors text-lg"
             >

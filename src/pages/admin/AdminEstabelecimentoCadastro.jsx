@@ -286,9 +286,9 @@ const handleSubmit = async (e) => {
             <header className="fixed top-0 left-0 right-0 z-50 p-6 flex justify-between items-center bg-white shadow-lg border-b border-gray-200 backdrop-blur-sm bg-white/95">
                 <div className="font-extrabold text-2xl text-gray-900 cursor-pointer hover:text-yellow-500 transition-colors duration-300 flex items-center gap-2" onClick={() => navigate('/')}>
                     <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">DF</span>
+                        <span className="text-white font-bold text-sm">IF</span>
                     </div>
-                    DEU FOME <span className="text-yellow-500">.</span>
+                    IdeaFood <span className="text-yellow-500">.</span>
                 </div>
                 <div className="flex items-center space-x-4">
                     <Link to="/master/estabelecimentos" className="px-4 py-2 rounded-full bg-gray-100 text-gray-700 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-200 hover:shadow-lg transform hover:-translate-y-0.5 flex items-center gap-2">

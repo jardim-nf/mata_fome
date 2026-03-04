@@ -3,7 +3,7 @@ import { IoPrint, IoClose, IoTicket } from 'react-icons/io5';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase'; 
 
-const GeradorTickets = ({ onClose, estabelecimentoNome = "Mata Fome", estabelecimentoId }) => {
+const GeradorTickets = ({ onClose, estabelecimentoNome = "IdeaFood", estabelecimentoId }) => {
     const [nomeItem, setNomeItem] = useState('');
     const [valorItem, setValorItem] = useState('');
     const [quantidade, setQuantidade] = useState(10); 

@@ -36,7 +36,7 @@ function DashboardHeader({ currentUser, logout, navigate }) {
                     <FaStore />
                 </div>
                 <span className="text-gray-900 font-extrabold text-xl tracking-tight">
-                    Na<span className="text-yellow-500">Mão</span>
+                    Idea<span className="text-yellow-500">Food</span>
                 </span>
             </div>
           </div>

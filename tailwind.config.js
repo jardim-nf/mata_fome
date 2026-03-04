@@ -7,7 +7,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#FFD400',    // amarelo DevBrota
+        primary: '#FFD400',    // amarelo IdeaFood
         secondary: '#000000',  // preto
         accent: '#FFFFFF',     // branco
       },

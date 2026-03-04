@@ -68,14 +68,14 @@ function DashboardHeader({ currentUser, logout, navigate }) {
           {/* LOGO AREA */}
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
             {LOGO_URL ? (
-                <img src={LOGO_URL} alt="NaMão Logo" className="h-8 w-auto" />
+                <img src={LOGO_URL} alt="IdeaFood Logo" className="h-8 w-auto" />
             ) : (
                 <div className="flex items-center gap-1">
                     <div className="bg-yellow-400 text-black font-bold p-1 rounded-sm transform -skew-x-12">
                         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" /></svg>
                     </div>
                     <span className="text-gray-900 font-extrabold text-xl tracking-tight">
-                        Na<span className="text-yellow-500">Mão</span>
+                        Idea<span className="text-yellow-500">Food</span>
                     </span>
                 </div>
             )}
@@ -404,7 +404,7 @@ function MasterDashboard() {
         </div>
 
         <div className="text-center mt-12 text-gray-300 text-xs">
-          NaMão System © {new Date().getFullYear()} • v3.1 Minimal
+          IdeaFood © {new Date().getFullYear()} • v3.1 Minimal
         </div>
       </main>
     </div>

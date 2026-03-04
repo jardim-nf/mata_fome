@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
-// ✅ Validação nativa
 const validateEmail = (email) => {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return re.test(email);
@@ -21,7 +20,6 @@ const validateName = (name) => {
   return name.trim().length >= 2;
 };
 
-// ✅ Hook para estabelecimentos com cache
 const useEstabelecimentos = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +28,10 @@ const useEstabelecimentos = () => {
   useEffect(() => {
     let isMounted = true;
     const CACHE_KEY = 'estabelecimentos_cache_v1';
-    const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutos
+    const CACHE_EXPIRY = 5 * 60 * 1000;
 
     const fetchEstabelecimentos = async () => {
       try {
-        // Tentar carregar do cache primeiro
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
           const { data: cachedData, timestamp } = JSON.parse(cached);
@@ -47,7 +44,6 @@ const useEstabelecimentos = () => {
           }
         }
 
-        // Fetch do Firestore
         const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
         const listaEstabelecimentos = querySnapshot.docs.map(doc => ({
           id: doc.id,
@@ -58,7 +54,6 @@ const useEstabelecimentos = () => {
           setData(listaEstabelecimentos);
           setLoading(false);
           
-          // Salvar no cache
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             data: listaEstabelecimentos,
             timestamp: Date.now()
@@ -70,7 +65,6 @@ const useEstabelecimentos = () => {
           setError("Não foi possível carregar os estabelecimentos. Tente novamente mais tarde.");
           setLoading(false);
           
-          // Tentar usar cache expirado como fallback
           const cached = localStorage.getItem(CACHE_KEY);
           if (cached) {
             const { data: cachedData } = JSON.parse(cached);
@@ -90,13 +84,12 @@ const useEstabelecimentos = () => {
   return { data, loading, error };
 };
 
-// ✅ WhatsApp Button (mesmo visual)
 const WhatsAppFloatingButton = () => {
   const [isHovered, setIsHovered] = useState(false);
 
   const handleWhatsAppClick = useCallback(() => {
     const phoneNumber = "55229998102575";
-    const message = "Olá! Gostaria de mais informações sobre o NaMão.";
+    const message = "Olá! Gostaria de mais informações sobre o IdeaFood.";
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   }, []);
@@ -122,9 +115,7 @@ const WhatsAppFloatingButton = () => {
         <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.87 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893-.001-3.189-1.262-6.187-3.55-8.444"/>
         </svg>
-        
         <div className="absolute inset-0 border-2 border-green-400 rounded-full animate-ping opacity-75"></div>
-        
         <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
           <span className="text-white text-xs font-bold">!!!</span>
         </div>
@@ -133,7 +124,6 @@ const WhatsAppFloatingButton = () => {
   );
 };
 
-// ✅ Auth Button (mesmo visual)
 const AuthButtonElegant = ({ onLoginClick }) => {
   const { currentUser, loading, isAdmin, isMasterAdmin, logout } = useAuth();
   const navigate = useNavigate();
@@ -195,15 +185,14 @@ const AuthButtonElegant = ({ onLoginClick }) => {
   );
 };
 
-// ✅ Hero Section (MESMO VISUAL original)
 const HeroSectionModern = ({ onExploreClick }) => {
   return (
     <section className="relative w-full overflow-hidden bg-gradient-to-br from-white to-yellow-50 pt-24 md:pt-32">
       <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between py-12 md:py-20 px-4">
         <div className="w-full lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0 z-10">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-black mb-4 leading-tight">
-            Deu Fome? <br className="hidden md:inline"/> 
-            <span className="text-yellow-500"> Ta NaMão!</span>
+            Bateu a fome? <br className="hidden md:inline"/> 
+            <span className="text-yellow-500"> Pede no IdeaFood!</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-700 mb-8 max-w-lg mx-auto lg:mx-0">
             Sua plataforma própria de delivery, com os melhores estabelecimentos da cidade, 
@@ -239,7 +228,7 @@ const HeroSectionModern = ({ onExploreClick }) => {
           
           <img
             src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/pizza.png?alt=media&token=aac1a9a6-5381-41df-b728-c394fba7b762" 
-            alt="Pizza Deliciosa"
+            alt="Pizza Deliciosa IdeaFood"
             className="relative z-10 w-full max-w-md md:max-w-lg lg:max-w-none lg:w-auto h-auto rounded-xl shadow-2xl transform translate-y-8 lg:translate-y-0 rotate-3 animate-float"
           />
           
@@ -251,7 +240,6 @@ const HeroSectionModern = ({ onExploreClick }) => {
   );
 };
 
-// ✅ Benefits Section (MESMO VISUAL original)
 const BenefitsSection = () => {
   return (
     <section className="bg-gradient-to-br from-gray-50 to-white py-20 md:py-28 px-4">
@@ -391,7 +379,7 @@ const BenefitsSection = () => {
               { platform: "Ifood", commission: "25-35%", color: "bg-red-500" },
               { platform: "Rappi", commission: "28-38%", color: "bg-blue-500" },
               { platform: "Uber Eats", commission: "30-40%", color: "bg-green-500" },
-              { platform: "Deu Fome", commission: "0%", color: "bg-white text-yellow-500" }
+              { platform: "IdeaFood", commission: "0%", color: "bg-white text-yellow-500" }
             ].map((platform, index) => (
               <div key={index} className={`p-4 rounded-xl ${platform.color} shadow-lg transform hover:scale-105 transition-transform duration-300`}>
                 <div className="font-bold text-lg mb-2">{platform.platform}</div>
@@ -427,7 +415,6 @@ const BenefitsSection = () => {
   );
 };
 
-// ✅ Login Modal (MESMO VISUAL original)
 const LoginModal = ({ isOpen, onClose, onSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -611,7 +598,6 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
   );
 };
 
-// ✅ Componente Principal Home
 function Home() {
   const { data: estabelecimentos, loading, error } = useEstabelecimentos();
   const [searchTerm, setSearchTerm] = useState('');
@@ -672,7 +658,7 @@ function Home() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white text-black">
         <div className="text-3xl font-bold mb-4 animate-pulse">
-          NaMão <span className="text-yellow-500">.</span>
+          IdeaFood <span className="text-yellow-500">.</span>
         </div>
         <div className="w-16 h-16 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="mt-4 text-gray-600">Carregando estabelecimentos...</p>
@@ -702,7 +688,7 @@ function Home() {
           className="font-extrabold text-2xl md:text-3xl text-black cursor-pointer hover:text-gray-800 transition-colors duration-300 flex items-center"
           onClick={() => navigate('/')}
         >
-          NaMão<span className="text-yellow-500">.</span>
+          IdeaFood<span className="text-yellow-500">.</span>
         </div>
         <AuthButtonElegant onLoginClick={openLoginModal} />
       </header>
@@ -824,7 +810,7 @@ function Home() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="font-extrabold text-2xl text-white mb-4">
-                NaMão<span className="text-yellow-500">.</span>
+                IdeaFood<span className="text-yellow-500">.</span>
               </div>
               <p className="text-sm sm:text-base">
                 Sua experiência de delivery, elevada. Conectamos você aos melhores estabelecimentos da cidade.
@@ -852,7 +838,7 @@ function Home() {
             <div>
               <h4 className="text-white font-semibold mb-4">Contato</h4>
               <ul className="space-y-2 text-sm">
-                <li>📧 contato@namao.com</li>
+                <li>📧 contato@ideafood.com.br</li>
                 <li>📱 (22) 999810 - 2575</li>
                 <li>📍 Brasil </li>
               </ul>
@@ -861,7 +847,7 @@ function Home() {
           
           <div className="border-t border-gray-800 pt-8 text-center">
             <p className="font-medium text-sm">
-              &copy; {new Date().getFullYear()} NaMão. Todos os direitos reservados.
+              &copy; {new Date().getFullYear()} IdeaFood. Todos os direitos reservados.
             </p>
             <p className="font-normal text-xs mt-2">
               Feito com ❤️ para transformar o delivery

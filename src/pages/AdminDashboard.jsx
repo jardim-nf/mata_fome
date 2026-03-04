@@ -171,7 +171,9 @@ const AdminDashboard = () => {
         </div>
 
         {/* FOOTER */}
-        <div className="text-center pt-8 border-t border-slate-200 mt-12"><p className="text-slate-400 font-medium text-sm">NaMão System • Gestão Inteligente</p></div>
+        <div className="text-center pt-8 border-t border-slate-200 mt-12">
+            <p className="text-slate-400 font-medium text-sm">IdeaFood • Gestão Inteligente</p>
+        </div>
       </div>
     </div>
   );
