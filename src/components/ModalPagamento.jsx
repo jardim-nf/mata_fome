@@ -1,7 +1,8 @@
+// src/components/ModalPagamento.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../firebase'; 
-import { vendaService } from '../services/vendaService'; // 🆕 Importando o serviço que criamos
+import { vendaService } from '../services/vendaService'; 
 import { 
     IoClose,
     IoChevronBack,
@@ -34,6 +35,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [emitirNota, setEmitirNota] = useState(false);
     const [cpfNota, setCpfNota] = useState('');
 
+    // Estado para a Taxa de Serviço (10%)
+    const [incluirTaxa, setIncluirTaxa] = useState(false);
+
     // --- CÁLCULOS FINANCEIROS ---
 
     const calcularTotalConsumo = () => {
@@ -44,6 +48,11 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         }, 0);
     };
 
+    const calcularValorTaxa = () => {
+        if (!incluirTaxa) return 0;
+        return calcularTotalConsumo() * 0.10;
+    };
+
     const calcularJaPago = () => {
         const historico = mesa?.pagamentosParciais || [];
         return historico.reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
@@ -51,8 +60,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
     const calcularRestanteMesa = () => {
         const consumo = calcularTotalConsumo();
+        const taxa = calcularValorTaxa();
         const jaPago = calcularJaPago();
-        return Math.max(0, consumo - jaPago);
+        return Math.max(0, (consumo + taxa) - jaPago);
     };
 
     // --- AGRUPAMENTO DE ITENS (Para visualização) ---
@@ -76,10 +86,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             agrupados[pessoa].itens.push(item);
             agrupados[pessoa].total += (item.preco * qtd);
         });
+
+        // Se houver taxa de serviço, ela precisa ser rateada no modo individual ou mostrada no ticket
         return agrupados;
     }, [mesa]);
 
-    // --- INICIALIZAÇÃO ---
+    // --- INICIALIZAÇÃO E ATUALIZAÇÃO ---
     useEffect(() => {
         const restanteMesa = calcularRestanteMesa();
         const listaItens = mesa?.itens || mesa?.pedidos || [];
@@ -109,7 +121,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 selecionadosIniciais[key] = false;
             } else {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
-                    const valorSugerido = Math.min(dados.total, restanteMesa);
+                    // Adiciona a parcela de 10% do que a pessoa consumiu (se a taxa estiver ativa)
+                    const taxaPessoa = incluirTaxa ? (dados.total * 0.10) : 0;
+                    const valorSugerido = Math.min(dados.total + taxaPessoa, restanteMesa);
+                    
                     pagamentosIniciais[pessoa] = {
                         valor: valorSugerido, 
                         formaPagamento: 'dinheiro',
@@ -121,7 +136,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             setPagamentos(pagamentosIniciais);
             setSelecionados(selecionadosIniciais);
         }
-    }, [tipoPagamento, agruparItensPorPessoa, mesa]);
+    }, [tipoPagamento, agruparItensPorPessoa, mesa, incluirTaxa]);
 
     // --- AÇÕES UI ---
     const toggleSelecao = (pessoa) => {
@@ -166,6 +181,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
     const handleImprimirConferencia = () => {
         const totalConsumo = calcularTotalConsumo();
+        const valorTaxa = calcularValorTaxa();
         const jaPago = calcularJaPago();
         const restante = calcularRestanteMesa();
         
@@ -217,6 +233,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
                 <div class="resumo-box">
                     <div class="linha-resumo"><span>TOTAL CONSUMO:</span><span>R$ ${totalConsumo.toFixed(2)}</span></div>
+                    ${incluirTaxa ? `<div class="linha-resumo"><span>TAXA SERVIÇO (10%):</span><span>R$ ${valorTaxa.toFixed(2)}</span></div>` : ''}
                     ${jaPago > 0 ? `<div class="linha-resumo"><span>(-) JÁ PAGO:</span><span>R$ ${jaPago.toFixed(2)}</span></div>` : ''}
                     <div class="linha-total"><span>A PAGAR:</span><span>R$ ${restante.toFixed(2)}</span></div>
                 </div>
@@ -241,9 +258,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             }, 0);
 
             const totalConsumo = calcularTotalConsumo();
+            const valorTaxa = calcularValorTaxa();
             const jaPagoAntigo = calcularJaPago();
             const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
-            const restanteFinal = totalConsumo - totalJaPagoNovo;
+            
+            // O Restante final é (Consumo + Taxa) - O que já foi pago
+            const restanteFinal = (totalConsumo + valorTaxa) - totalJaPagoNovo;
             
             const mesaQuitada = restanteFinal <= 0.10;
 
@@ -260,6 +280,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 pagamentos: pagamentosValidos,
                 total: totalPagoAgora,
                 valorOriginal: totalConsumo,
+                taxaServicoCobrada: incluirTaxa ? valorTaxa : 0, // Registra se pagou a taxa
                 tipoPagamento: tipoPagamento,
                 status: mesaQuitada ? 'pago' : 'pago_parcial',
                 criadoEm: serverTimestamp(),
@@ -269,7 +290,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
 
-            // 🆕 2. Disparar Emissão de NFC-e se solicitado usando o Serviço
+            // 2. Disparar Emissão de NFC-e
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
                 const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
@@ -359,11 +380,35 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">
                         Total Consumo: R$ {calcularTotalConsumo().toFixed(2)}
                     </p>
+
+                    {incluirTaxa && (
+                        <p className="text-white text-sm font-medium mt-1 bg-white/20 inline-block px-3 py-1 rounded-full">
+                            + 10% Garçom: R$ {calcularValorTaxa().toFixed(2)}
+                        </p>
+                    )}
                     
                     <button onClick={handleImprimirConferencia} className="mt-4 w-full py-2 bg-white/20 text-white hover:bg-white/30 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
                         <IoPrint className="text-lg" /> Imprimir Conferência
                     </button>
                 </div>
+            </div>
+
+            {/* BOTÃO TAXA DE GARÇOM 10% */}
+            <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <h4 className="font-bold text-gray-900">Taxa de Serviço (10%)</h4>
+                    <p className="text-xs text-gray-500">Adicionar 10% do garçom na conta</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                        type="checkbox" 
+                        value="" 
+                        className="sr-only peer" 
+                        checked={incluirTaxa}
+                        onChange={(e) => setIncluirTaxa(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
             </div>
 
             {renderHistoricoPagamentos()}
@@ -454,6 +499,11 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                                         <span>{((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</span>
                                                     </div>
                                                 ))}
+                                                {incluirTaxa && (
+                                                    <div className="flex justify-between text-blue-600 font-medium">
+                                                        <span>Taxa Serviço (10%) rateada</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -478,13 +528,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
     const renderizarEtapa3 = () => {
         const totalConsumo = calcularTotalConsumo();
+        const valorTaxa = calcularValorTaxa();
         const jaPago = calcularJaPago();
         const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
             return selecionados[pessoa] ? acc + dados.valor : acc;
         }, 0);
         
         const totalPagoGeral = jaPago + totalPagoAgora;
-        const restanteFinal = totalConsumo - totalPagoGeral;
+        const restanteFinal = (totalConsumo + valorTaxa) - totalPagoGeral;
         
         const vaiQuitar = restanteFinal <= 0.10;
         const troco = restanteFinal < -0.10 ? Math.abs(restanteFinal) : 0;
@@ -501,6 +552,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         <span>Total Consumo</span>
                         <span>R$ {totalConsumo.toFixed(2)}</span>
                     </div>
+                    {incluirTaxa && (
+                        <div className="flex justify-between items-center mb-1 text-blue-600 font-bold text-xs">
+                            <span>Taxa de Serviço (10%)</span>
+                            <span>+ R$ {valorTaxa.toFixed(2)}</span>
+                        </div>
+                    )}
                     {jaPago > 0 && (
                         <div className="flex justify-between items-center mb-3 text-green-600 font-bold text-xs border-b border-gray-100 pb-2">
                             <span>Já Pago (Anterior)</span>
@@ -508,7 +565,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         </div>
                     )}
                     
-                    <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100">
+                    <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100 mt-2">
                         <span className="text-lg font-bold text-gray-900">Pagando Agora</span>
                         <span className="text-3xl font-black text-blue-600">R$ {totalPagoAgora.toFixed(2)}</span>
                     </div>
