@@ -1,4 +1,4 @@
-// src/services/produtoService.js - VERSÃO CORRIGIDA PARA CAMINHO HIERÁRQUICO
+// src/services/produtoService.js - VERSÃO CORRIGIDA PARA CAMINHO HIERÁRQUICO COM CÓDIGO DE BARRAS
 import { 
   collection, 
   getDocs, 
@@ -22,7 +22,7 @@ export const produtoService = {
     return mapeamentoNomes[categoriaId] || categoriaId;
   },
 
-formatarProdutoReal(id, data, categoriaId) {
+  formatarProdutoReal(id, data, categoriaId) {
     return {
       id,
       name: data.nome || data.name || 'Produto sem nome',
@@ -33,7 +33,9 @@ formatarProdutoReal(id, data, categoriaId) {
       emEstoque: data.disponivel !== false && data.estoque !== false,
       imagem: data.imagem || '',
       ativo: data.ativo !== false,
-      // 👇 NOVA ESTRUTURA FISCAL ADICIONADA AQUI
+      // 👇 NOVO CAMPO: CÓDIGO DE BARRAS (GTIN/EAN)
+      codigoBarras: data.codigoBarras || data.ean || data.gtin || '',
+      // 👇 ESTRUTURA FISCAL
       fiscal: data.fiscal || {
         ncm: '',
         cfop: '', // Ex: 5102 ou 5405
@@ -100,16 +102,17 @@ formatarProdutoReal(id, data, categoriaId) {
     }
   },
 
-async criarProdutosExemplo(estabelecimentoId) {
+  async criarProdutosExemplo(estabelecimentoId) {
     const uid = estabelecimentoId || auth.currentUser?.uid;
     if (!uid) return 0;
 
     console.log(`📝 Criando exemplo em: estabelecimentos/${uid}/cardapio`);
     
     const produtosExemplo = [
-      { nome: "X-Burger Clássico", preco: 25.90, descricao: "Pão, hambúrguer, queijo", categoria: "os-classicos", ncm: "21069090", cfop: "5102" },
-      { nome: "Coca-Cola Lata", preco: 8.00, descricao: "350ml", categoria: "bebidas", ncm: "22021000", cfop: "5405" }, // Bebidas geralmente têm Substituição Tributária (5405)
-      { nome: "Batata Frita", preco: 12.00, descricao: "Porção", categoria: "petiscos", ncm: "20041000", cfop: "5102" }
+      // Adicionado código de barras de exemplo para testes
+      { nome: "X-Burger Clássico", preco: 25.90, descricao: "Pão, hambúrguer, queijo", categoria: "os-classicos", ncm: "21069090", cfop: "5102", codigoBarras: "7891234567890" },
+      { nome: "Coca-Cola Lata", preco: 8.00, descricao: "350ml", categoria: "bebidas", ncm: "22021000", cfop: "5405", codigoBarras: "7894900011517" }, // Bebidas geralmente têm Substituição Tributária (5405)
+      { nome: "Batata Frita", preco: 12.00, descricao: "Porção", categoria: "petiscos", ncm: "20041000", cfop: "5102", codigoBarras: "" }
     ];
 
     let count = 0;
@@ -133,6 +136,8 @@ async criarProdutosExemplo(estabelecimentoId) {
           ativo: true,
           disponivel: true,
           estoque: true,
+          // 👇 GRAVANDO O CÓDIGO DE BARRAS NO BANCO
+          codigoBarras: produto.codigoBarras || '', 
           createdAt: new Date(),
           // 👇 GRAVANDO OS DADOS FISCAIS NO FIREBASE
           fiscal: {
