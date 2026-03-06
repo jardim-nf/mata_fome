@@ -811,7 +811,7 @@ function Menu() {
                                 <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-500 bg-white px-3 py-1 rounded-full border border-red-100 hover:bg-gray-100 transition-colors"><IoLogOutOutline size={18} /><span>Sair</span></button>
                             )}
                         </div>
-                        <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-4 border-white bg-white" alt="Logo" />
+                        <img src={estabelecimentoInfo.imageUrl} className="w-24 h-24 rounded-xl object-cover border-4 border-white bg-white" alt="Logo" />
                         <div className="flex-1 text-white">
                             
                             <h1 className="text-3xl font-bold mb-2 flex flex-wrap items-center gap-3">
