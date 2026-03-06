@@ -28,7 +28,7 @@ import {
     IoBarcodeOutline
 } from 'react-icons/io5';
 
-// 🛠️ Função Utilitária para Normalizar Texto (Remove acentos e deixa em minúsculo)
+// 🛠️ FUNÇÃO DE NORMALIZAÇÃO (O SEGREDO DA BUSCA EFICAZ)
 const normalizeText = (text) => 
     text?.toString()
       .toLowerCase()
@@ -49,7 +49,7 @@ const SkeletonLoader = () => (
   </div>
 );
 
-// 🎨 Componente Product Card
+// 🎨 Componente Product Card Melhorado
 const ProductGridCard = ({ 
   produto, 
   onEdit, 
@@ -69,8 +69,8 @@ const ProductGridCard = ({
 
   const getProfitColor = (margin) => {
     if (margin >= 50) return 'bg-emerald-500'; 
-    if (margin >= 30) return 'bg-blue-500';     
-    return 'bg-amber-500';                      
+    if (margin >= 30) return 'bg-blue-500';    
+    return 'bg-amber-500';                     
   };
 
   const mostrarPrecosVariacoes = () => {
@@ -272,10 +272,23 @@ function AdminMenuManagement() {
       return isNaN(numero) ? 0 : numero;
   };
 
+  const adicionarVariacao = () => {
+    setVariacoes([...variacoes, { id: `var-${Date.now()}`, nome: '', preco: '', descricao: '', ativo: true, estoque: 0, estoqueMinimo: 0, custo: 0 }]);
+  };
+
+  const atualizarVariacao = (id, field, value) => {
+    setVariacoes(variacoes.map(v => v.id === id ? { ...v, [field]: value } : v));
+  };
+
+  const removerVariacao = (id) => {
+    if (variacoes.length <= 1) return toast.error('Mínimo 1 variação.');
+    setVariacoes(variacoes.filter(v => v.id !== id));
+  };
+
   const estabelecimentosGerenciados = useMemo(() => userData?.estabelecimentosGerenciados || [], [userData]);
   const primeiroEstabelecimento = estabelecimentosGerenciados[0];
 
-  // 1. Efeito para carregar dados
+  // 📡 FETCH DATA
   useEffect(() => {
     if (!primeiroEstabelecimento) { setLoading(false); return; }
     setLoading(true);
@@ -312,32 +325,27 @@ function AdminMenuManagement() {
     return () => { unsubscribeCategorias(); itemListenersRef.current.forEach(unsub => unsub()); };
   }, [primeiroEstabelecimento]);
 
-  // 🔍 2. Lógica de Busca Eficaz (Multi-campo e Sem Acento)
+  // 🔍 LÓGICA DE BUSCA E FILTRO (MELHORADA)
   const filteredAndSortedItems = useMemo(() => {
     const searchNormalized = normalizeText(searchTerm);
 
     let filtered = menuItems.filter(item => {
-      // Filtro de Categoria
       const matchCategory = selectedCategory === 'Todos' || item.categoria === selectedCategory;
-
-      // Filtro de Texto (Nome, Descrição e Código de Barras)
+      
       const matchSearch = 
         normalizeText(item.nome).includes(searchNormalized) ||
         normalizeText(item.descricao).includes(searchNormalized) ||
         normalizeText(item.codigoBarras).includes(searchNormalized);
 
-      // Filtro de Estoque
-      const status = (item) => {
-        const estoque = Number(item.estoque) || 0;
-        const estoqueMinimo = Number(item.estoqueMinimo) || 0;
-        if (estoque <= 0) return 'esgotado';
-        if (estoque <= estoqueMinimo) return 'critico';
-        if (estoque <= (estoqueMinimo * 2)) return 'baixo';
-        return 'normal';
+      const getS = (i) => {
+          const e = Number(i.estoque) || 0;
+          const m = Number(i.estoqueMinimo) || 0;
+          if (e <= 0) return 'esgotado';
+          if (e <= m) return 'critico';
+          return 'normal';
       };
-      
-      const itemStatus = status(item);
-      const matchStock = stockFilter === 'todos' || stockFilter === itemStatus;
+      const status = getS(item);
+      const matchStock = stockFilter === 'todos' || stockFilter === status;
 
       return matchCategory && matchSearch && matchStock;
     });
@@ -346,16 +354,16 @@ function AdminMenuManagement() {
     return filtered;
   }, [menuItems, searchTerm, selectedCategory, stockFilter]);
 
-  // 📄 3. Paginação
+  // 📄 PAGINAÇÃO
   const ITEMS_PER_PAGE = viewMode === 'grid' ? 12 : 8;
   const { currentPage, totalPages, paginatedItems, goToPage } = usePagination(filteredAndSortedItems, ITEMS_PER_PAGE);
 
-  // Efeito para resetar página quando buscar ou filtrar
+  // RESET DA PÁGINA AO BUSCAR
   useEffect(() => {
     goToPage(1);
   }, [searchTerm, selectedCategory, stockFilter, goToPage]);
 
-  // Lógica de Estatísticas
+  // ESTATÍSTICAS
   const stockStatistics = useMemo(() => {
     const getS = (i) => {
         const e = Number(i.estoque) || 0;
@@ -374,19 +382,88 @@ function AdminMenuManagement() {
     };
   }, [menuItems]);
 
-  // Funções de CRUD e formulário (Mantidas conforme seu original)
-  const handleToggleStatus = async (item) => {
-    try { await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id), { ativo: item.ativo === false }); }
-    catch(e) { toast.error("Erro ao alterar status"); }
+  // CRUD ACTIONS
+  const handleSaveItem = async (e) => {
+    e.preventDefault();
+    setFormLoading(true);
+
+    // Validação Básica
+    if (!formData.nome.trim() || !formData.categoria.trim()) {
+        toast.error("Nome e Categoria são obrigatórios.");
+        setFormLoading(false);
+        return;
+    }
+
+    try {
+      let imageUrl = formData.imageUrl;
+      if (itemImage) {
+        imageUrl = await uploadFile(itemImage, `estabelecimentos/${primeiroEstabelecimento}/cardapio/${Date.now()}_${itemImage.name}`);
+        if (editingItem?.imageUrl) await deleteFileByUrl(editingItem.imageUrl).catch(() => null);
+      }
+
+      const catDoc = categories.find(c => c.nome === formData.categoria.toUpperCase());
+      let catId = catDoc?.id;
+
+      if (!catId) {
+        const newCat = await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio'), { nome: formData.categoria.toUpperCase(), ordem: 99, ativo: true });
+        catId = newCat.id;
+      }
+
+      const itemData = {
+        ...formData,
+        nome: formData.nome.trim(),
+        categoria: formData.categoria.toUpperCase(),
+        imageUrl,
+        variacoes: variacoes.map(v => ({ ...v, preco: Number(v.preco), estoque: Number(v.estoque), custo: Number(v.custo) })),
+        estoque: variacoes.reduce((acc, v) => acc + Number(v.estoque), 0),
+        preco: Math.min(...variacoes.map(v => Number(v.preco))),
+        atualizadoEm: new Date()
+      };
+
+      if (editingItem) {
+        if (editingItem.categoriaId !== catId) {
+            await setDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catId, 'itens', editingItem.id), itemData);
+            await deleteDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', editingItem.categoriaId, 'itens', editingItem.id));
+        } else {
+            await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catId, 'itens', editingItem.id), itemData);
+        }
+        toast.success("Atualizado!");
+      } else {
+        await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catId, 'itens'), { ...itemData, criadoEm: new Date() });
+        toast.success("Criado!");
+      }
+      closeItemForm();
+    } catch (err) { toast.error("Erro ao salvar."); }
+    finally { setFormLoading(false); }
   };
 
   const handleDeleteItem = async (item) => {
-    if (!window.confirm(`Excluir "${item.nome}"?`)) return;
+    if (!window.confirm(`Excluir ${item.nome}?`)) return;
     try {
         if (item.imageUrl) await deleteFileByUrl(item.imageUrl);
         await deleteDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id));
-        toast.success("Item excluído.");
-    } catch (e) { toast.error("Erro ao excluir"); }
+        toast.success("Excluído!");
+    } catch(e) { toast.error("Erro ao excluir"); }
+  };
+
+  const toggleItemStatus = async (item) => {
+    await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id), { ativo: item.ativo === false });
+  };
+
+  // NCM SEARCH (BrasilAPI)
+  const buscarNcm = async (termo) => {
+    setTermoNcm(termo);
+    handleFiscalChange({ target: { name: 'ncm', value: termo } });
+    if (termo.length < 3) return setNcmResultados([]);
+    setPesquisandoNcm(true);
+    try {
+        const res = await fetch(`https://brasilapi.com.br/api/ncm/v1?search=${termo}`);
+        if (res.ok) {
+            const data = await res.json();
+            setNcmResultados(Array.isArray(data) ? data.slice(0, 10) : []);
+        }
+    } catch(e) { console.error(e); }
+    finally { setPesquisandoNcm(false); }
   };
 
   const openItemForm = useCallback((item = null) => {
@@ -402,20 +479,35 @@ function AdminMenuManagement() {
         fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN' } 
       });
       setTermoNcm(item.fiscal?.ncm || '');
-      setVariacoes(item.variacoes?.length ? item.variacoes.map(v => ({...v, preco: v.preco.toString()})) : [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: item.preco.toString(), ativo: true, estoque: item.estoque, custo: item.custo }]);
+      setVariacoes(item.variacoes?.length ? item.variacoes.map(v => ({...v, preco: v.preco.toString()})) : [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: item.preco.toString(), ativo: true, estoque: item.estoque || 0, custo: item.custo || 0 }]);
       setImagePreview(item.imageUrl || '');
     } else {
       setEditingItem(null);
       setFormData({ nome: '', descricao: '', categoria: '', codigoBarras: '', imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN' } });
       setVariacoes([{ id: `v-${Date.now()}`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }]);
       setImagePreview('');
+      setTermoNcm('');
     }
     setShowItemForm(true);
   }, []);
 
-  const closeItemForm = () => { setShowItemForm(false); setEditingItem(null); };
+  const closeItemForm = () => { setShowItemForm(false); setItemImage(null); };
 
-  // Efeito para o Header
+  const handleFormChange = (e) => {
+    const { name, value, type, checked, files } = e.target;
+    if (type === 'file') {
+        if (files[0]) { setItemImage(files[0]); setImagePreview(URL.createObjectURL(files[0])); }
+    } else {
+        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    }
+  };
+
+  const handleFiscalChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, fiscal: { ...prev.fiscal, [name]: value } }));
+  };
+
+  // HEADER ACTIONS
   useEffect(() => {
     const actions = (
         <div className="flex items-center space-x-2">
@@ -423,7 +515,7 @@ function AdminMenuManagement() {
                 <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}><IoGrid/></button>
                 <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}><IoMenu/></button>
             </div>
-            <button onClick={() => openItemForm()} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl shadow-lg text-sm transition-all">
+            <button onClick={() => openItemForm()} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl shadow-lg text-sm transition-all transform hover:scale-105">
                 <IoAddCircleOutline className="text-xl"/> <span className="hidden sm:inline">Novo Item</span>
             </button>
         </div>
@@ -438,7 +530,7 @@ function AdminMenuManagement() {
     <div className="min-h-screen bg-[#F3F4F6] p-4 md:p-6 font-sans pb-24">
       <div className="max-w-7xl mx-auto">
         
-        {/* Dashboard de Stats */}
+        {/* DASHBOARD STATS */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
             <StatsCard title="Total Itens" value={stockStatistics.totalItems} icon={IoList} colorClass="text-blue-600" bgClass="bg-blue-50" />
             <StatsCard title="Ativos" value={stockStatistics.activeItems} icon={IoCheckmarkCircle} colorClass="text-emerald-600" bgClass="bg-emerald-50" />
@@ -449,13 +541,13 @@ function AdminMenuManagement() {
             </div>
         </div>
 
-        {/* Barra de Busca e Filtros */}
-        <div className="sticky top-2 z-30 bg-white/90 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 p-2 mb-8 flex flex-col md:row gap-2 md:items-center">
+        {/* BARRA DE PESQUISA EFICAZ */}
+        <div className="sticky top-2 z-30 bg-white/90 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 p-2 mb-8 flex flex-col md:flex-row gap-2 md:items-center">
             <div className="relative flex-1">
                 <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input 
                     type="text" 
-                    placeholder="Buscar por nome, descrição ou EAN..." 
+                    placeholder="Buscar por nome, ingrediente ou código..." 
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)} 
                     className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none" 
@@ -463,11 +555,11 @@ function AdminMenuManagement() {
             </div>
             
             <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm font-medium outline-none">
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm font-medium outline-none cursor-pointer">
                     {['Todos', ...new Set(categories.map(c => c.nome))].map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm font-medium outline-none">
-                    <option value="todos">Todos Status</option>
+                <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm font-medium outline-none cursor-pointer">
+                    <option value="todos">Estoque (Todos)</option>
                     <option value="critico">⚠️ Crítico</option>
                     <option value="esgotado">🚫 Esgotado</option>
                     <option value="normal">✅ Normal</option>
@@ -475,7 +567,7 @@ function AdminMenuManagement() {
             </div>
         </div>
 
-        {/* Listagem de Produtos */}
+        {/* LISTAGEM */}
         <div className="min-h-[400px]">
             {paginatedItems.length > 0 ? (
                 <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" : "space-y-3"}>
@@ -486,25 +578,25 @@ function AdminMenuManagement() {
                                 produto={item} 
                                 onEdit={() => openItemForm(item)}
                                 onDelete={() => handleDeleteItem(item)}
-                                onToggleStatus={() => handleToggleStatus(item)}
-                                stockStatus={normalizeText(item.estoque) === "0" ? 'esgotado' : (Number(item.estoque) <= Number(item.estoqueMinimo) ? 'critico' : 'normal')}
-                                profitMargin={((Number(item.preco) - Number(item.custo)) / Number(item.preco)) * 100}
+                                onToggleStatus={() => toggleItemStatus(item)}
+                                stockStatus={item.estoque <= 0 ? 'esgotado' : (item.estoque <= item.estoqueMinimo ? 'critico' : 'normal')}
+                                profitMargin={((item.preco - item.custo) / item.preco) * 100}
                             />
                         ) : (
-                            <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                            <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between hover:border-blue-200 transition-colors">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden">
-                                        {item.imageUrl && <img src={item.imageUrl} className="w-full h-full object-contain p-1"/>}
+                                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
+                                        {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-contain p-1 mix-blend-multiply"/> : <IoImageOutline className="text-gray-300"/>}
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-gray-800">{item.nome}</h3>
-                                        <p className="text-xs text-gray-500">{item.categoria} • {item.ativo !== false ? 'Ativo' : 'Inativo'}</p>
+                                        <p className="text-xs text-gray-500">{item.categoria} • {item.ativo !== false ? <span className="text-green-600">Ativo</span> : <span className="text-red-500">Inativo</span>}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <div className="text-right">
+                                    <div className="text-right hidden sm:block">
                                         <p className="font-bold">R$ {Number(item.preco).toFixed(2)}</p>
-                                        <p className="text-xs text-gray-400">Qtd: {item.estoque}</p>
+                                        <p className="text-xs text-gray-400">Estoque: {item.estoque}</p>
                                     </div>
                                     <button onClick={() => openItemForm(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><IoPricetag/></button>
                                 </div>
@@ -516,33 +608,188 @@ function AdminMenuManagement() {
                 <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-gray-300">
                     <IoCube className="text-4xl text-gray-300 mb-4" />
                     <h3 className="text-xl font-bold text-gray-600">Nenhum item encontrado</h3>
-                    <p className="text-gray-400">Tente ajustar a sua busca ou filtros.</p>
+                    <p className="text-gray-400">Tente mudar o termo de busca ou filtros.</p>
                 </div>
             )}
         </div>
 
-        {/* Paginação */}
-        {paginatedItems.length > 0 && (
-            <div className="mt-8">
-                <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} />
-            </div>
-        )}
+        {paginatedItems.length > 0 && <div className="mt-8"><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} /></div>}
 
-        {/* Modal de Formulário (Simplificado para o exemplo, mantendo sua estrutura de tela cheia) */}
+        {/* 👇 MODAL 100% TELA CHEIA (ESTILO NATIVO) 👇 */}
         {showItemForm && (
-            <div className="fixed inset-0 z-[9999] bg-white flex flex-col animate-fade-in overflow-y-auto">
-                <div className="h-20 border-b px-8 flex items-center justify-between shrink-0">
-                    <h2 className="text-2xl font-bold">{editingItem ? 'Editar' : 'Novo'} Produto</h2>
-                    <button onClick={closeItemForm} className="p-2 bg-gray-100 rounded-full"><IoClose size={24}/></button>
-                </div>
-                <div className="p-8 max-w-4xl mx-auto w-full">
-                    {/* Aqui entrariam seus campos de formulário idênticos ao que você já tem */}
-                    <p className="text-center text-gray-400">Interface de edição ativa para: <b>{formData.nome || 'Novo Item'}</b></p>
-                    <div className="mt-10 flex justify-center">
-                        <button onClick={() => toast.info("Use o botão de salvar do seu form original")} className="bg-blue-600 text-white px-10 py-4 rounded-xl font-bold">Entendido</button>
+          <div className="fixed inset-0 z-[9999] bg-white flex flex-col animate-fade-in">
+            {/* HEADER FIXO DO MODAL */}
+            <div className="flex-none h-20 sm:h-24 border-b border-gray-200 px-4 sm:px-8 flex items-center justify-between bg-white shadow-sm z-20">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{editingItem ? 'Editar Produto' : 'Novo Produto'}</h2>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">Gestão de Cardápio & Estoque</p>
+              </div>
+              <button type="button" onClick={closeItemForm} className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold transition-all flex items-center gap-2">
+                <span className="hidden sm:block">Voltar</span>
+                <IoClose size={20} className="sm:hidden" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveItem} className="flex-1 overflow-hidden flex flex-col bg-gray-50">
+              {/* CORPO DO FORM COM SCROLL */}
+              <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 sm:py-10 pb-32 w-full custom-scrollbar">
+                <div className="max-w-5xl mx-auto space-y-6 sm:space-y-10">
+
+                    {/* DADOS BÁSICOS */}
+                    <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200 space-y-6">
+                        <h3 className="text-lg font-bold text-gray-800">Dados Gerais</h3>
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-semibold mb-2 text-gray-700">Nome do Produto *</label>
+                                <input type="text" name="nome" value={formData.nome} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" placeholder="Ex: X-Burger Especial" required />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2 text-gray-700">Categoria *</label>
+                                    <input type="text" name="categoria" value={formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" placeholder="Selecione..." required />
+                                    <datalist id="cat-list">{categories.map(c => (<option key={c.id} value={c.nome} />))}</datalist>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2 text-gray-700">Cód. Barras</label>
+                                    <input type="text" name="codigoBarras" value={formData.codigoBarras} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-mono" placeholder="EAN" />
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold mb-2 text-gray-700">Descrição</label>
+                            <textarea name="description" value={formData.descricao} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all min-h-[100px] resize-none" placeholder="Ingredientes e detalhes..."/>
+                        </div>
+                    </div>
+
+                    {/* PREÇO & VARIAÇÕES */}
+                    <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200 space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-4">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><IoCash className="text-blue-600"/> Preços & Estoque</h3>
+                            <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
+                                <button type="button" onClick={() => setVariacoes([{id: `v-unique`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }])} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all ${variacoes.length === 1 && variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>Preço Único</button>
+                                <button type="button" onClick={() => { if(variacoes.length===1 && variacoes[0].nome==='Padrão') setVariacoes([{id: `v-multi`, nome: 'Médio', preco: '', ativo: true, estoque: 0, custo: 0}]); }} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all ${variacoes.length > 1 || variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>Vários Tamanhos</button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {variacoes.map((v) => (
+                                <div key={v.id} className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative group">
+                                    {variacoes.length > 1 && (
+                                        <button type="button" onClick={() => removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full shadow-md"><IoClose size={18}/></button>
+                                    )}
+                                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-5">
+                                        {(variacoes.length > 1 || v.nome !== 'Padrão') && (
+                                            <div className="sm:col-span-4">
+                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Nome da Variação</label>
+                                                <input type="text" value={v.nome} onChange={e => atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold" placeholder="Ex: Grande" />
+                                            </div>
+                                        )}
+                                        <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 ${variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
+                                            <div>
+                                                <label className="text-xs font-bold text-emerald-600 mb-2 block uppercase">Venda (R$)</label>
+                                                <input type="number" step="0.01" value={v.preco} onChange={e => atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-800" placeholder="0.00" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Custo (R$)</label>
+                                                <input type="number" step="0.01" value={v.custo} onChange={e => atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm" placeholder="0.00" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Estoque</label>
+                                                <input type="number" value={v.estoque} onChange={e => atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm" placeholder="Qtd" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Status</label>
+                                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded-xl border border-gray-200">
+                                                    <input type="checkbox" checked={v.ativo !== false} onChange={e => atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-4 h-4 text-blue-600" />
+                                                    <span className="text-[10px] font-bold">ATIVO</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {isModoMultiplasVariacoes && (
+                            <button type="button" onClick={adicionarVariacao} className="w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold flex items-center justify-center gap-2 rounded-2xl transition-colors border-2 border-dashed border-blue-200">
+                                <IoAddCircleOutline className="text-2xl"/> Adicionar Variação
+                            </button>
+                        )}
+                    </div>
+
+                    {/* FISCAL (NFC-e) */}
+                    <div className="bg-emerald-50/40 p-5 sm:p-8 rounded-3xl border border-emerald-100 shadow-sm space-y-6">
+                        <h3 className="text-lg font-bold text-emerald-800 flex items-center gap-2">🏢 Emissão de Nota (NFC-e)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div className="relative">
+                                <label className="block text-sm font-semibold text-emerald-800 mb-2">NCM (Busca BrasilAPI)</label>
+                                <input type="text" name="ncm" value={termoNcm} onChange={(e) => buscarNcm(e.target.value)} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl outline-none" placeholder="Pesquisar..." autoComplete="off" />
+                                {pesquisandoNcm && <span className="absolute right-4 top-12 text-[10px] animate-pulse">Buscando...</span>}
+                                {ncmResultados.length > 0 && (
+                                    <div className="absolute z-50 w-full mt-2 bg-white border border-emerald-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                        {ncmResultados.map((item) => (
+                                            <div key={item.codigo} onClick={() => { setTermoNcm(item.codigo); handleFiscalChange({ target: { name: 'ncm', value: item.codigo } }); setNcmResultados([]); }} className="p-3 border-b hover:bg-emerald-50 cursor-pointer transition-colors">
+                                                <p className="font-bold text-emerald-800 text-xs">{item.codigo}</p>
+                                                <p className="text-[10px] text-gray-500 line-clamp-1">{item.descricao}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-emerald-800 mb-2">CFOP</label>
+                                <select name="cfop" value={formData.fiscal?.cfop} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl">
+                                    <option value="5102">5102 - Venda Normal</option>
+                                    <option value="5405">5405 - Subs. Tributária</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-emerald-800 mb-2">Unidade</label>
+                                <select name="unidade" value={formData.fiscal?.unidade} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl">
+                                    <option value="UN">UN - Unidade</option>
+                                    <option value="KG">KG - Quilograma</option>
+                                    <option value="LT">LT - Litro</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* IMAGEM E VISIBILIDADE */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm flex items-center gap-4">
+                            <div className="w-24 h-24 bg-gray-50 rounded-2xl border flex items-center justify-center overflow-hidden shrink-0">
+                                {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <IoImageOutline className="text-4xl text-gray-300"/>}
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-base font-bold text-gray-800 mb-2">Foto</label>
+                                <input type="file" accept="image/*" onChange={handleFormChange} className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-100 file:text-blue-700 font-bold" />
+                            </div>
+                        </div>
+
+                        <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-center">
+                            <label htmlFor="ativoMain" className="flex items-center gap-4 cursor-pointer">
+                                <div className={`w-14 h-7 rounded-full p-1 transition-colors ${formData.ativo ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                                    <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform ${formData.ativo ? 'translate-x-7' : 'translate-x-0'}`}></div>
+                                </div>
+                                <input type="checkbox" id="ativoMain" name="ativo" checked={formData.ativo} onChange={handleFormChange} className="hidden" />
+                                <div>
+                                    <p className="font-bold text-gray-800">Visível no Cardápio?</p>
+                                    <p className="text-xs text-gray-500">{formData.ativo ? 'Os clientes podem pedir' : 'Produto pausado'}</p>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
-            </div>
+              </div>
+
+              {/* FOOTER FIXO DO MODAL */}
+              <div className="flex-none bg-white border-t px-4 sm:px-8 py-5 flex justify-end gap-4 shadow-inner z-20 pb-10 sm:pb-5">
+                  <button type="button" onClick={closeItemForm} className="hidden sm:block px-8 py-4 rounded-xl border font-bold text-gray-600 hover:bg-gray-50 transition-all text-lg">Cancelar</button>
+                  <button type="submit" disabled={formLoading} className="w-full sm:w-auto px-10 py-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-xl transition-all transform hover:scale-[1.02] text-lg flex items-center justify-center gap-2">
+                      {formLoading ? 'Processando...' : <><IoCheckmarkCircle size={24}/> Salvar Produto</>}
+                  </button>
+              </div>
+            </form>
+          </div>
         )}
 
       </div>
