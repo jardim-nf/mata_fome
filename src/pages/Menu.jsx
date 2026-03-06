@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, doc, serverTimestamp, writeBatch, increment, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, doc, serverTimestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
@@ -16,14 +16,17 @@ import { useAI } from '../context/AIContext';
 import AIChatAssistant from '../components/AIChatAssistant';
 import AIWidgetButton from '../components/AIWidgetButton';
 
-import { IoLocationSharp, IoTime, IoLogOutOutline, IoPerson, IoCart, IoChevronForward, IoAdd, IoRemove, IoTrash } from 'react-icons/io5';
+import { IoLocationSharp, IoTime, IoLogOutOutline, IoCart, IoChevronForward, IoAdd, IoRemove, IoTrash } from 'react-icons/io5';
+
+// 🔥 IMPORTAÇÃO DO ESTOQUE RESTAURADA 🔥
+import { estoqueService } from '../services/estoqueService';
 
 function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
 
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
-    const { isWidgetOpen, closeWidget, openWidget } = useAI();
+    const { isWidgetOpen } = useAI();
 
     const [showAICenter, setShowAICenter] = useState(false);
     const [deveReabrirChat, setDeveReabrirChat] = useState(false);
@@ -85,6 +88,7 @@ function Menu() {
     const [showRaspadinha, setShowRaspadinha] = useState(false);
     const [jaJogouRaspadinha, setJaJogouRaspadinha] = useState(false);
     const [premioRaspadinha, setPremioRaspadinha] = useState(null);
+    const [valorGatilhoRaspadinha, setValorGatilhoRaspadinha] = useState(9999);
 
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [visibleItemsCount, setVisibleItemsCount] = useState({});
@@ -140,40 +144,35 @@ function Menu() {
         }
     }, [carrinho, triggerCheckout]);
 
-// --- 🔥 LÓGICA DE LOJA ABERTA OU FECHADA (100% AUTOMÁTICA PELO HORÁRIO) 🔥 ---
+    // --- 🔥 LÓGICA DE LOJA ABERTA OU FECHADA (100% AUTOMÁTICA PELO HORÁRIO) 🔥 ---
     const isLojaAberta = useMemo(() => {
         if (!estabelecimentoInfo) return false;
 
-        // Se não tiver hora configurada, assumimos que está aberta (para não quebrar lojas novas)
+        // Se não tiver hora configurada, assumimos que está aberta (para não quebrar lojas antigas)
         if (!estabelecimentoInfo.horaAbertura || !estabelecimentoInfo.horaFechamento) return true;
 
         try {
-            // Pegar hora exata do cliente
             const horaAtual = currentTime.getHours();
             const minAtual = currentTime.getMinutes();
             const tempoAtual = (horaAtual * 60) + minAtual;
 
-            // Converter as horas do Firebase para minutos
             const [hAbre, mAbre] = estabelecimentoInfo.horaAbertura.split(':').map(Number);
             const tempoAbre = (hAbre * 60) + (mAbre || 0);
 
             const [hFecha, mFecha] = estabelecimentoInfo.horaFechamento.split(':').map(Number);
             const tempoFecha = (hFecha * 60) + (mFecha || 0);
 
-            // Se o admin colocar ex: 00:00 até 00:00, consideramos 24h aberta.
             if (tempoAbre === tempoFecha) return true;
 
-            // Lógica de "Mesmo dia" vs "Vira a madrugada"
             if (tempoAbre < tempoFecha) {
-                // Exemplo: Abre 08:00 e Fecha 18:00 (Mesmo dia)
+                // Ex: Abre 08:00 e Fecha 18:00 (Mesmo dia)
                 return tempoAtual >= tempoAbre && tempoAtual <= tempoFecha;
             } else {
-                // Exemplo: Abre 18:00 e Fecha 02:00 da manhã (Vira a noite)
+                // Ex: Abre 18:00 e Fecha 02:00 da manhã (Vira a noite)
                 return tempoAtual >= tempoAbre || tempoAtual <= tempoFecha;
             }
         } catch (error) {
             console.error("Erro ao calcular horário:", error);
-            // Em caso de falha no cálculo, libera para não travar a loja injustamente
             return true; 
         }
     }, [estabelecimentoInfo, currentTime]);
@@ -521,21 +520,18 @@ function Menu() {
             const cupomData = querySnapshot.docs[0].data();
             const agora = new Date();
 
-            // Validar datas
             if (cupomData.validadeFim.toDate() < agora) {
                 toast.error("Este cupom já expirou.");
                 setCouponLoading(false);
                 return;
             }
 
-            // Validar valor mínimo
             if (cupomData.minimoPedido && subtotalCalculado < cupomData.minimoPedido) {
                 toast.warn(`O valor mínimo para este cupom é ${formatarMoeda(cupomData.minimoPedido)}`);
                 setCouponLoading(false);
                 return;
             }
 
-            // Calcular desconto
             let valorDesc = 0;
             if (cupomData.tipoDesconto === 'percentual') {
                 valorDesc = (subtotalCalculado * cupomData.valorDesconto) / 100;
@@ -558,7 +554,6 @@ function Menu() {
     };
 
     const prepararParaPagamento = () => {
-        // 🔥 TRAVA DE HORÁRIO
         if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
         
         if (!currentUser) return handleAbrirLogin();
@@ -612,8 +607,6 @@ function Menu() {
         setShowPaymentModal(true);
     };
 
-    const baixarEstoque = async (itensVendidos) => { /* Estoque movido para checkoutPage e pdv */ };
-
     const handlePagamentoSucesso = async (result) => {
         setProcessandoPagamento(true);
         try {
@@ -644,6 +637,13 @@ function Menu() {
 
             const docRef = await addDoc(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos'), pedidoFinal);
 
+            // 🔥 BAIXA DE ESTOQUE APÓS PAGAMENTO BEM SUCEDIDO NO MENU ONLINE 🔥
+            try {
+                await estoqueService.darBaixaEstoque(actualEstabelecimentoId, carrinho);
+            } catch (errEstoque) {
+                console.warn("Erro ao dar baixa no estoque:", errEstoque);
+            }
+
             setConfirmedOrderDetails({ id: docRef.id });
             setShowOrderConfirmationModal(true);
             setCarrinho([]);
@@ -656,8 +656,50 @@ function Menu() {
         }
     };
 
-    const handlePagamentoFalha = (error) => toast.error(`Falha: ${error.message}`);
-    const handleGanharRaspadinha = (premio) => { /* ... */ };
+    // 🔥 GATILHO E LÓGICA DA RASPADINHA RESTAURADA 🔥
+    useEffect(() => {
+        if (estabelecimentoInfo && estabelecimentoInfo.valorMinimoRaspadinha) {
+            setValorGatilhoRaspadinha(parseFloat(estabelecimentoInfo.valorMinimoRaspadinha));
+        } else {
+            setValorGatilhoRaspadinha(100); 
+        }
+    }, [estabelecimentoInfo]);
+
+    useEffect(() => {
+        if (subtotalCalculado >= valorGatilhoRaspadinha && !jaJogouRaspadinha && !premioRaspadinha) {
+            const timer = setTimeout(() => {
+                setShowRaspadinha(true);
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [subtotalCalculado, jaJogouRaspadinha, premioRaspadinha, valorGatilhoRaspadinha]);
+
+    const handleGanharRaspadinha = (premio) => {
+        setShowRaspadinha(false);
+        setJaJogouRaspadinha(true);
+        setPremioRaspadinha(premio);
+
+        if (premio.type === 'desconto') {
+            const valorDoDesconto = subtotalCalculado * (premio.valor / 100);
+            setDiscountAmount(valorDoDesconto);
+            toast.success(`🎉 Ganhou ${premio.valor}% de desconto!`);
+        } 
+        else if (premio.type === 'frete') {
+            setTaxaEntregaCalculada(0);
+            toast.success('🎉 Ganhou Frete Grátis!');
+        } 
+        else if (premio.type === 'brinde') {
+            setCarrinho(prev => [...prev, {
+                ...premio.produto,
+                qtd: 1,
+                cartItemId: uuidv4(),
+                precoFinal: 0,
+                nome: `${premio.produto.nome} (Brinde)`,
+                observacao: 'Ganho na raspadinha'
+            }]);
+            toast.success(`🎉 Ganhou ${premio.produto.nome}!`);
+        }
+    };
 
     // --- EFFECTS ---
     useEffect(() => {
@@ -693,7 +735,6 @@ function Menu() {
                 taxasSnap.forEach(doc => {
                     bairrosList.push(doc.data().nomeBairro);
                 });
-                // Remove duplicados e ordena alfabeticamente
                 const bairrosUnicos = [...new Set(bairrosList)].sort();
                 setBairrosDisponiveis(bairrosUnicos);
 
@@ -1006,6 +1047,8 @@ function Menu() {
 
             {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} onSuccess={handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
+            
+            {/* COMPONENTE DA RASPADINHA AQUI */}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
 
             {/* 🔥 MODAL DE LOGIN 🔥 */}
