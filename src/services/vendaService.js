@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { estoqueService } from './estoqueService'; // 🔥 IMPORTAÇÃO DO SERVIÇO DE ESTOQUE
 
 export const vendaService = {
   
@@ -37,6 +38,9 @@ export const vendaService = {
 
       console.log('✅ Venda salva com sucesso! ID:', docRef.id);
       
+      // 🔥 NOVA LINHA: CHAMA A BAIXA DE ESTOQUE APÓS SALVAR A VENDA
+      await estoqueService.darBaixaEstoque(vendaData.estabelecimentoId, vendaData.itens);
+
       return {
         success: true,
         vendaId: docRef.id,
@@ -267,4 +271,3 @@ export const vendaService = {
     }
   }
 };
-

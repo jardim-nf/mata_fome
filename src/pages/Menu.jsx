@@ -49,7 +49,9 @@ function Menu() {
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
-    // 🔥 NOVO ESTADO: Bairros Disponíveis do Estabelecimento
+    // 🔥 ESTADO DE HORA ATUAL (Atualiza a cada 1 min)
+    const [currentTime, setCurrentTime] = useState(new Date());
+
     const [bairrosDisponiveis, setBairrosDisponiveis] = useState([]);
 
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
@@ -108,6 +110,12 @@ function Menu() {
         }
     });
 
+    // --- TEMPORIZADOR PARA CHECAR HORA ---
+    useEffect(() => {
+        const interval = setInterval(() => setCurrentTime(new Date()), 60000); // Roda a cada 60s
+        return () => clearInterval(interval);
+    }, []);
+
     // --- FORÇAR LOGIN ---
     useEffect(() => {
         if (!authLoading) {
@@ -131,6 +139,45 @@ function Menu() {
             }, 200);
         }
     }, [carrinho, triggerCheckout]);
+
+// --- 🔥 LÓGICA DE LOJA ABERTA OU FECHADA (100% AUTOMÁTICA PELO HORÁRIO) 🔥 ---
+    const isLojaAberta = useMemo(() => {
+        if (!estabelecimentoInfo) return false;
+
+        // Se não tiver hora configurada, assumimos que está aberta (para não quebrar lojas novas)
+        if (!estabelecimentoInfo.horaAbertura || !estabelecimentoInfo.horaFechamento) return true;
+
+        try {
+            // Pegar hora exata do cliente
+            const horaAtual = currentTime.getHours();
+            const minAtual = currentTime.getMinutes();
+            const tempoAtual = (horaAtual * 60) + minAtual;
+
+            // Converter as horas do Firebase para minutos
+            const [hAbre, mAbre] = estabelecimentoInfo.horaAbertura.split(':').map(Number);
+            const tempoAbre = (hAbre * 60) + (mAbre || 0);
+
+            const [hFecha, mFecha] = estabelecimentoInfo.horaFechamento.split(':').map(Number);
+            const tempoFecha = (hFecha * 60) + (mFecha || 0);
+
+            // Se o admin colocar ex: 00:00 até 00:00, consideramos 24h aberta.
+            if (tempoAbre === tempoFecha) return true;
+
+            // Lógica de "Mesmo dia" vs "Vira a madrugada"
+            if (tempoAbre < tempoFecha) {
+                // Exemplo: Abre 08:00 e Fecha 18:00 (Mesmo dia)
+                return tempoAtual >= tempoAbre && tempoAtual <= tempoFecha;
+            } else {
+                // Exemplo: Abre 18:00 e Fecha 02:00 da manhã (Vira a noite)
+                return tempoAtual >= tempoAbre || tempoAtual <= tempoFecha;
+            }
+        } catch (error) {
+            console.error("Erro ao calcular horário:", error);
+            // Em caso de falha no cálculo, libera para não travar a loja injustamente
+            return true; 
+        }
+    }, [estabelecimentoInfo, currentTime]);
+
 
     // --- FUNÇÕES AUXILIARES ---
 
@@ -195,7 +242,7 @@ function Menu() {
                 endereco: {
                     rua: ruaAuthModal || '',
                     numero: numeroAuthModal || '',
-                    bairro: bairroAuthModal || '', // Salva o bairro selecionado da lista
+                    bairro: bairroAuthModal || '',
                     cidade: cidadeAuthModal || ''
                 },
                 criadoEm: Timestamp.now()
@@ -215,20 +262,10 @@ function Menu() {
     const handleLoginDoChat = () => { setShowAICenter(false); setDeveReabrirChat(true); handleAbrirLogin(); };
     const verificarReaberturaChat = () => { if (deveReabrirChat) { setShowAICenter(true); setDeveReabrirChat(false); } };
 
-    const formatarHorarios = useCallback((horarios) => {
-        if (!horarios || typeof horarios !== 'object') return "Horário não informado";
-        return Object.entries(horarios).map(([dia, horario]) => {
-            if (!horario?.abertura || !horario?.fechamento) return `${dia}: Fechado`;
-            return `${dia}: ${horario.abertura} - ${horario.fechamento}`;
-        }).join(' | ');
-    }, []);
-
     const normalizarTexto = (texto) => {
         if (!texto) return '';
         return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
     };
-
-    const superNormalizar = (t) => normalizarTexto(t).replace(/[^a-z0-9]/g, '');
 
     const formatarItemCarrinho = (item) => {
         let nome = item.nome;
@@ -381,6 +418,8 @@ function Menu() {
     };
 
     const handleAdicionarRapido = (item) => {
+        // 🔥 TRAVA DE HORÁRIO
+        if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
         if (!currentUser) { handleAbrirLogin(); return; }
 
         const precoBase = item.precoFinal !== undefined ? item.precoFinal : item.preco;
@@ -399,6 +438,8 @@ function Menu() {
     };
 
     const handleComprarAgora = (item) => {
+        // 🔥 TRAVA DE HORÁRIO
+        if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
         if (!currentUser) { toast.info('Faça login para continuar.'); handleAbrirLogin(); return; }
 
         const itemLimpo = { ...item, observacao: '', isBuyNow: true };
@@ -415,6 +456,8 @@ function Menu() {
     };
 
     const handleAbrirModalProduto = (item) => {
+        // 🔥 TRAVA DE HORÁRIO
+        if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
         if (!currentUser) { toast.info('Faça login para continuar.'); handleAbrirLogin(); return; }
 
         const itemLimpo = { ...item, observacao: '' };
@@ -460,6 +503,7 @@ function Menu() {
 
     const handleAdicionarPorIA = useCallback((dadosDoChat) => { return 'ADDED'; }, [allProdutos, currentUser]);
     const handleLogout = async () => { try { await logout(); setCarrinho([]); window.location.reload(); } catch (e) { console.error(e); } };
+    
     const handleApplyCoupon = async () => {
         if (!couponCodeInput) return;
         setCouponLoading(true);
@@ -514,6 +558,9 @@ function Menu() {
     };
 
     const prepararParaPagamento = () => {
+        // 🔥 TRAVA DE HORÁRIO
+        if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
+        
         if (!currentUser) return handleAbrirLogin();
         if (carrinho.length === 0) return toast.warn('Carrinho vazio.');
 
@@ -528,7 +575,6 @@ function Menu() {
             return;
         }
 
-        // 🔥 NOVA VALIDAÇÃO DE BAIRRO
         if (!isRetirada && !bairro) {
             toast.error("Por favor, SELECIONE O BAIRRO para entrega.");
             return;
@@ -566,7 +612,7 @@ function Menu() {
         setShowPaymentModal(true);
     };
 
-    const baixarEstoque = async (itensVendidos) => { /* ... */ };
+    const baixarEstoque = async (itensVendidos) => { /* Estoque movido para checkoutPage e pdv */ };
 
     const handlePagamentoSucesso = async (result) => {
         setProcessandoPagamento(true);
@@ -597,8 +643,6 @@ function Menu() {
             if (!actualEstabelecimentoId) throw new Error("ID do estabelecimento não encontrado");
 
             const docRef = await addDoc(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos'), pedidoFinal);
-
-            try { await baixarEstoque(pedidoParaPagamento.itens); } catch (errEstoque) { console.warn("Erro estoque:", errEstoque); }
 
             setConfirmedOrderDetails({ id: docRef.id });
             setShowOrderConfirmationModal(true);
@@ -717,6 +761,7 @@ function Menu() {
     return (
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
             <div className="max-w-7xl mx-auto px-4 w-full">
+                
                 {/* CABEÇALHO */}
                 {estabelecimentoInfo && (
                     <div className="rounded-xl p-6 mb-6 mt-6 border flex gap-6 items-center shadow-lg relative" style={{ backgroundColor: coresEstabelecimento.primaria }}>
@@ -727,10 +772,28 @@ function Menu() {
                         </div>
                         <img src={estabelecimentoInfo.logoUrl} className="w-24 h-24 rounded-xl object-cover border-4 border-white bg-white" alt="Logo" />
                         <div className="flex-1 text-white">
-                            <h1 className="text-3xl font-bold mb-2">{estabelecimentoInfo.nome}</h1>
+                            
+                            <h1 className="text-3xl font-bold mb-2 flex flex-wrap items-center gap-3">
+                                {estabelecimentoInfo.nome}
+                                {/* 🔥 BADGE DE FECHADO 🔥 */}
+                                {!isLojaAberta && (
+                                    <span className="text-xs bg-red-600 text-white px-3 py-1 rounded-full font-black tracking-widest border-2 border-white shadow-sm uppercase animate-pulse">
+                                        FECHADO
+                                    </span>
+                                )}
+                            </h1>
+
                             <div className="text-sm text-white/90 font-medium">
                                 <p className="flex items-center gap-2"><IoLocationSharp className="text-white" /> {estabelecimentoInfo.endereco?.rua}</p>
-                                <p className="flex items-center gap-2"><IoTime className="text-white" /> {formatarHorarios(estabelecimentoInfo.horarioFuncionamento)}</p>
+                                
+                                {/* 🔥 MOSTRAR NOVO FORMATO DE HORA OU O ANTIGO 🔥 */}
+                                <p className="flex items-center gap-2">
+                                    <IoTime className="text-white" /> 
+                                    {estabelecimentoInfo.horaAbertura && estabelecimentoInfo.horaFechamento 
+                                        ? `Aberto das ${estabelecimentoInfo.horaAbertura} às ${estabelecimentoInfo.horaFechamento}`
+                                        : "Horário não informado"
+                                    }
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -755,7 +818,7 @@ function Menu() {
                             <h2 className="text-2xl font-bold mb-4">{cat}</h2>
                             <div className="grid gap-4 md:grid-cols-2">
                                 {items.slice(0, visible).map(item => (
-                                    <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 p-2">
+                                    <div key={item.id} className={`bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 p-2 ${!isLojaAberta ? 'opacity-75 grayscale-[0.3]' : ''}`}>
                                         <CardapioItem
                                             item={item}
                                             onAddItem={() => handleAbrirModalProduto(item)}
@@ -784,7 +847,7 @@ function Menu() {
                                         <input className="w-full p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
                                     </div>
 
-                                    {/* 🔥 O INPUT DE BAIRRO FOI TROCADO POR UM SELECT 🔥 */}
+                                    {/* 🔥 SELECT DE BAIRRO 🔥 */}
                                     <select
                                         className="w-full p-3 rounded border text-gray-900 text-base bg-white"
                                         value={bairro}
@@ -795,7 +858,6 @@ function Menu() {
                                             <option key={b} value={b}>{b}</option>
                                         ))}
                                     </select>
-
                                 </div>
                             )}
                             <div className="flex gap-2">
@@ -804,58 +866,61 @@ function Menu() {
                             </div>
                         </div>
                     </div>
-            {/* --- ÁREA DE CUPOM DE DESCONTO --- */}
-                                <div className="mt-6 mb-4 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Cupom de Desconto</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Possui um código?"
-                                            value={couponCodeInput}
-                                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
-                                            className="flex-1 p-2 border rounded-lg text-sm"
-                                            disabled={appliedCoupon}
-                                        />
-                                        <button
-                                            onClick={handleApplyCoupon}
-                                            disabled={couponLoading || !couponCodeInput || appliedCoupon}
-                                            className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold disabled:opacity-50"
-                                        >
-                                            {couponLoading ? '...' : appliedCoupon ? 'Aplicado' : 'Aplicar'}
-                                        </button>
-                                    </div>
-                                    {appliedCoupon && (
-                                        <div className="flex justify-between items-center mt-2">
-                                            <span className="text-xs text-green-600 font-bold">✅ Cupom {appliedCoupon.codigo} ativo</span>
-                                            <button
-                                                onClick={() => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); }}
-                                                className="text-xs text-red-500 underline"
-                                            >
-                                                Remover
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
+
+                    {/* --- ÁREA DE CUPOM DE DESCONTO --- */}
                     <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900 w-full transition-all duration-300">
+                        
+                        <div className="mt-2 mb-6 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Cupom de Desconto</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Possui um código?"
+                                    value={couponCodeInput}
+                                    onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                                    className="flex-1 p-2 border rounded-lg text-sm"
+                                    disabled={appliedCoupon}
+                                />
+                                <button
+                                    onClick={handleApplyCoupon}
+                                    disabled={couponLoading || !couponCodeInput || appliedCoupon}
+                                    className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold disabled:opacity-50"
+                                >
+                                    {couponLoading ? '...' : appliedCoupon ? 'Aplicado' : 'Aplicar'}
+                                </button>
+                            </div>
+                            {appliedCoupon && (
+                                <div className="flex justify-between items-center mt-2">
+                                    <span className="text-xs text-green-600 font-bold">✅ Cupom {appliedCoupon.codigo} ativo</span>
+                                    <button
+                                        onClick={() => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCodeInput(''); }}
+                                        className="text-xs text-red-500 underline"
+                                    >
+                                        Remover
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                             <IoCart className="text-green-600" /> Resumo do Pedido
                         </h3>
                         {carrinho.length === 0 ? <p className="text-gray-500 py-4 text-center">Seu carrinho está vazio.</p> : (
                             <>
-                                <div className="space-y-4 mb-4 max-h-60 overflow-y-auto">
+                                <div className="space-y-4 mb-4 max-h-60 overflow-y-auto pr-2">
                                     {carrinho.map(item => (
                                         <div key={item.cartItemId} className="flex justify-between items-start border-b pb-3">
-                                            <div className="flex-1">
+                                            <div className="flex-1 pr-2">
                                                 <p className="font-bold text-sm text-gray-900">{formatarItemCarrinho(item)}</p>
                                                 <p className="text-xs text-gray-500">R$ {item.precoFinal.toFixed(2)} cada</p>
                                             </div>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2">
                                                 <div className="flex items-center border border-gray-200 rounded-lg">
                                                     <button onClick={() => alterarQuantidade(item.cartItemId, -1)} className="px-2 py-1 text-red-500 hover:bg-gray-100 rounded-l-lg"><IoRemove /></button>
                                                     <span className="px-2 text-sm font-bold">{item.qtd}</span>
                                                     <button onClick={() => alterarQuantidade(item.cartItemId, 1)} className="px-2 py-1 text-green-600 hover:bg-gray-100 rounded-r-lg"><IoAdd /></button>
                                                 </div>
-                                                <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 p-1 hover:bg-red-50 rounded"><IoTrash /></button>
+                                                <button onClick={() => removerDoCarrinho(item.cartItemId)} className="text-red-500 p-1.5 hover:bg-red-50 rounded"><IoTrash /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -866,7 +931,6 @@ function Menu() {
                                         <span>R$ {subtotalCalculado.toFixed(2)}</span>
                                     </div>
                                     
-                                    {/* 🔥 ADICIONADO: Linha da Taxa de Entrega 🔥 */}
                                     {!isRetirada && (
                                         <div className="flex justify-between text-gray-700">
                                             <span>Taxa de Entrega:</span>
@@ -886,8 +950,15 @@ function Menu() {
                                     )}
                                 </div>
 
-                                {/* 🔥 CORRIGIDO: Bloqueio real do botão se não tiver bairro válido 🔥 */}
-                                {!isRetirada && (!bairro || !bairrosDisponiveis.includes(bairro)) ? (
+                                {/* 🔥 BOTÃO DE FINALIZAR COM BLOQUEIOS DE HORA E BAIRRO 🔥 */}
+                                {!isLojaAberta ? (
+                                    <button 
+                                        disabled
+                                        className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-gray-500 bg-gray-200 cursor-not-allowed border-2 border-gray-300"
+                                    >
+                                        ⛔ Loja Fechada no Momento
+                                    </button>
+                                ) : !isRetirada && (!bairro || !bairrosDisponiveis.includes(bairro)) ? (
                                     <button 
                                         disabled
                                         className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-gray-500 bg-gray-200 cursor-not-allowed border-2 border-gray-300"
@@ -902,8 +973,7 @@ function Menu() {
                                         ✅ Finalizar Pedido
                                     </button>
                                 )}
-                    
-                            </> /* ✅ CORREÇÃO 2: Faltava fechar o fragmento aqui! */
+                            </>
                         )}
                     </div>
                 </div>

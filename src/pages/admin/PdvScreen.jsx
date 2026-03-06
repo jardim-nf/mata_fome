@@ -160,16 +160,39 @@ const PdvScreen = () => {
         if (!vendaAtual) { const novaVenda = { id: Date.now().toString(), itens: [], total: 0 }; setVendaAtual(novaVenda); setTimeout(() => cb(novaVenda), 0); } else cb(null);
     }, [vendaAtual]);
 
+    // 🔥 AQUI FOI ALTERADO PARA SALVAR O CATEGORIAID
     const adicionarItemPeso = (produto, pesoKg, totalCalculado) => {
-        setVendaAtual(prev => { if (!prev) return null; const nv = [...prev.itens, { uid: `${produto.id}-peso-${Date.now()}`, id: produto.id, name: `${produto.name} (${pesoKg} Kg)`, price: totalCalculado, quantity: 1, observacao: `Peso: ${pesoKg} Kg`, pesoKg }]; return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; });
+        setVendaAtual(prev => { 
+            if (!prev) return null; 
+            const nv = [...prev.itens, { 
+                uid: `${produto.id}-peso-${Date.now()}`, 
+                id: produto.id, 
+                name: `${produto.name} (${pesoKg} Kg)`, 
+                price: totalCalculado, 
+                quantity: 1, 
+                observacao: `Peso: ${pesoKg} Kg`, 
+                pesoKg,
+                categoriaId: produto.categoriaId || produto.categoria // 🔥 SALVANDO PARA O ESTOQUE
+            }]; 
+            return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; 
+        });
         setProdutoParaPeso(null); setBusca(''); inputBuscaRef.current?.focus();
     };
 
+    // 🔥 AQUI FOI ALTERADO PARA SALVAR O CATEGORIAID
     const adicionarItem = (p, v, vendaRef = null) => {
         setVendaAtual(prev => {
             const target = prev || vendaRef; if (!target) return null;
             const uid = `${p.id}-${v ? v.id : 'p'}`; const ex = target.itens.find(i => i.uid === uid);
-            const nv = ex ? target.itens.map(i => i.uid === uid ? { ...i, quantity: i.quantity + 1 } : i) : [...target.itens, { uid, id: p.id, name: v ? `${p.name} ${v.nome}` : p.name, price: v ? Number(v.preco) : p.price, quantity: 1, observacao: '' }];
+            const nv = ex ? target.itens.map(i => i.uid === uid ? { ...i, quantity: i.quantity + 1 } : i) : [...target.itens, { 
+                uid, 
+                id: p.id, 
+                name: v ? `${p.name} ${v.nome}` : p.name, 
+                price: v ? Number(v.preco) : p.price, 
+                quantity: 1, 
+                observacao: '',
+                categoriaId: p.categoriaId || p.categoria // 🔥 SALVANDO PARA O ESTOQUE
+            }];
             return { ...target, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) };
         }); setProdutoParaSelecao(null); setBusca(''); inputBuscaRef.current?.focus();
     };

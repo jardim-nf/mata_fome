@@ -6,11 +6,11 @@ import useCarrinho from '../hooks/useCarrinho';
 import PaymentSelector from '../components/PaymentSelector';
 import RaspadinhaModal from '../components/RaspadinhaModal';
 import { toast } from 'react-toastify';
-
+import { estoqueService } from '../services/estoqueService';
 // 🔥 IMPORTS DO FIREBASE
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore'; // Importei doc e getDoc
+import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore'; 
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -137,7 +137,11 @@ const CheckoutPage = () => {
             estabelecimentoId: estabelecimentoId
         };
 
+        // Salva o pedido no Firestore
         await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'), pedido);
+
+        // 🔥 NOVA LINHA: CHAMA A BAIXA DE ESTOQUE APÓS SALVAR O PEDIDO
+        await estoqueService.darBaixaEstoque(estabelecimentoId, carrinho);
 
         toast.success('🎉 Pedido enviado para a loja!');
         limparCarrinho();

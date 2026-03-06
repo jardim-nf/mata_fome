@@ -3,6 +3,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../firebase'; 
 import { vendaService } from '../services/vendaService'; 
+// 🔥 IMPORTAÇÃO DO SERVIÇO DE ESTOQUE
+import { estoqueService } from '../services/estoqueService'; 
+
 import { 
     IoClose,
     IoChevronBack,
@@ -87,7 +90,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             agrupados[pessoa].total += (item.preco * qtd);
         });
 
-        // Se houver taxa de serviço, ela precisa ser rateada no modo individual ou mostrada no ticket
         return agrupados;
     }, [mesa]);
 
@@ -121,7 +123,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 selecionadosIniciais[key] = false;
             } else {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
-                    // Adiciona a parcela de 10% do que a pessoa consumiu (se a taxa estiver ativa)
                     const taxaPessoa = incluirTaxa ? (dados.total * 0.10) : 0;
                     const valorSugerido = Math.min(dados.total + taxaPessoa, restanteMesa);
                     
@@ -262,7 +263,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             const jaPagoAntigo = calcularJaPago();
             const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
             
-            // O Restante final é (Consumo + Taxa) - O que já foi pago
             const restanteFinal = (totalConsumo + valorTaxa) - totalJaPagoNovo;
             
             const mesaQuitada = restanteFinal <= 0.10;
@@ -280,7 +280,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 pagamentos: pagamentosValidos,
                 total: totalPagoAgora,
                 valorOriginal: totalConsumo,
-                taxaServicoCobrada: incluirTaxa ? valorTaxa : 0, // Registra se pagou a taxa
+                taxaServicoCobrada: incluirTaxa ? valorTaxa : 0, 
                 tipoPagamento: tipoPagamento,
                 status: mesaQuitada ? 'pago' : 'pago_parcial',
                 criadoEm: serverTimestamp(),
@@ -290,7 +290,16 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
 
-            // 2. Disparar Emissão de NFC-e
+            // 🔥 2. BAIXA DE ESTOQUE (SÓ QUANDO A MESA FECHAR 100%)
+            // Isso evita dar baixa 2x nos itens se a pessoa pagar parcial.
+            if (modo === 'total' || mesaQuitada) {
+                const todosItensDaMesa = mesa?.itens || mesa?.pedidos || [];
+                if (todosItensDaMesa.length > 0) {
+                    await estoqueService.darBaixaEstoque(estabelecimentoId, todosItensDaMesa);
+                }
+            }
+
+            // 3. Disparar Emissão de NFC-e
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
                 const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
@@ -302,7 +311,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 }
             }
 
-            // 3. Atualizar Mesa
+            // 4. Atualizar Mesa
             if (mesa.id) {
                 if (modo === 'total' || mesaQuitada) {
                     await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
@@ -600,7 +609,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                     type="text" 
                                     placeholder="CPF na Nota (Opcional)"
                                     value={cpfNota}
-                                    onChange={(e) => setCpfNota(e.target.value.replace(/\D/g, ''))} // Apenas números
+                                    onChange={(e) => setCpfNota(e.target.value.replace(/\D/g, ''))} 
                                     className="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                     maxLength={11}
                                 />
