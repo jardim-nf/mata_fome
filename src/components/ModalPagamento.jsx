@@ -33,11 +33,15 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [selecionados, setSelecionados] = useState({});
     const [carregando, setCarregando] = useState(false);
 
+    // Estados para NFC-e
     const [emitirNota, setEmitirNota] = useState(false);
     const [cpfNota, setCpfNota] = useState('');
+
+    // Estado para a Taxa de Serviço (10%)
     const [incluirTaxa, setIncluirTaxa] = useState(false);
 
     // --- CÁLCULOS FINANCEIROS ---
+
     const calcularTotalConsumo = () => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         return listaItens.reduce((acc, item) => {
@@ -63,7 +67,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         return Math.max(0, (consumo + taxa) - jaPago);
     };
 
-    // --- AGRUPAMENTO DE ITENS ---
+    // --- AGRUPAMENTO DE ITENS (Para visualização) ---
     const agruparItensPorPessoa = useMemo(() => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         if (listaItens.length === 0) return {};
@@ -88,7 +92,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         return agrupados;
     }, [mesa]);
 
-    // --- INICIALIZAÇÃO ---
+    // --- INICIALIZAÇÃO E ATUALIZAÇÃO ---
     useEffect(() => {
         const restanteMesa = calcularRestanteMesa();
         const listaItens = mesa?.itens || mesa?.pedidos || [];
@@ -96,7 +100,11 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         if (tipoPagamento === 'unico') {
             const key = 'Pagamento Único';
             setPagamentos({
-                [key]: { valor: restanteMesa, formaPagamento: 'dinheiro', itens: listaItens }
+                [key]: {
+                    valor: restanteMesa,
+                    formaPagamento: 'dinheiro',
+                    itens: listaItens
+                }
             });
             setSelecionados({ [key]: true });
         } else if (tipoPagamento === 'individual') {
@@ -106,14 +114,22 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             if (Object.keys(grupos).length === 0) {
                 const key = 'Mesa / Restante';
-                pagamentosIniciais[key] = { valor: restanteMesa, formaPagamento: 'dinheiro', itens: listaItens };
+                pagamentosIniciais[key] = {
+                    valor: restanteMesa,
+                    formaPagamento: 'dinheiro',
+                    itens: listaItens
+                };
                 selecionadosIniciais[key] = false;
             } else {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
                     const taxaPessoa = incluirTaxa ? (dados.total * 0.10) : 0;
                     const valorSugerido = Math.min(dados.total + taxaPessoa, restanteMesa);
                     
-                    pagamentosIniciais[pessoa] = { valor: valorSugerido, formaPagamento: 'dinheiro', itens: dados.itens };
+                    pagamentosIniciais[pessoa] = {
+                        valor: valorSugerido, 
+                        formaPagamento: 'dinheiro',
+                        itens: dados.itens 
+                    };
                     selecionadosIniciais[pessoa] = false;
                 });
             }
@@ -128,7 +144,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     };
 
     const editarFormaPagamento = (pessoaId, novaForma) => {
-        setPagamentos(prev => ({ ...prev, [pessoaId]: { ...prev[pessoaId], formaPagamento: novaForma } }));
+        setPagamentos(prev => ({
+            ...prev,
+            [pessoaId]: { ...prev[pessoaId], formaPagamento: novaForma }
+        }));
     };
 
     const editarValorPagamento = (pessoaId, novoValor) => {
@@ -136,13 +155,19 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         if (typeof novoValor === 'string') valorFormatado = novoValor.replace(',', '.');
         const valorNovoFloat = parseFloat(valorFormatado) || 0;
 
-        setPagamentos(prev => ({ ...prev, [pessoaId]: { ...prev[pessoaId], valor: valorNovoFloat } }));
+        setPagamentos(prev => ({
+            ...prev,
+            [pessoaId]: { ...prev[pessoaId], valor: valorNovoFloat }
+        }));
         setSelecionados(prev => ({ ...prev, [pessoaId]: true }));
     };
 
     const adicionarPessoa = () => {
         const novaPessoa = `Pagante Extra ${Object.keys(pagamentos).length + 1}`;
-        setPagamentos(prev => ({ ...prev, [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] } }));
+        setPagamentos(prev => ({
+            ...prev,
+            [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] } 
+        }));
         setSelecionados(prev => ({ ...prev, [novaPessoa]: true }));
     };
 
@@ -224,6 +249,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
 
+    // --- FINALIZAR E EMITIR NOTA ---
     const handleFinalizar = async (modo) => {
         setCarregando(true);
         try {
@@ -263,7 +289,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
 
-            // 2. BAIXA DE ESTOQUE
+            // 🔥 2. BAIXA DE ESTOQUE
             if (modo === 'total' || mesaQuitada) {
                 const todosItensDaMesa = mesa?.itens || mesa?.pedidos || [];
                 if (todosItensDaMesa.length > 0) {
@@ -271,12 +297,16 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 }
             }
 
-            // 3. Emitir NFC-e
+            // 3. Disparar Emissão de NFC-e
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
                 const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
-                if (resultadoNfce.sucesso) toast.success("Nota enviada para a Sefaz!");
-                else toast.error("Venda salva, erro na nota: " + resultadoNfce.error);
+                
+                if (resultadoNfce.sucesso) {
+                    toast.success("Nota enviada para a Sefaz!");
+                } else {
+                    toast.error("Venda salva, mas ocorreu um erro na nota: " + resultadoNfce.error);
+                }
             }
 
             // 4. Atualizar Mesa
@@ -338,79 +368,73 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     <span className="text-sm text-gray-600">Já abatido da conta:</span>
                     <span className="text-lg font-bold text-green-600">- R$ {jaPago.toFixed(2)}</span>
                 </div>
+                <div className="mt-1 text-xs text-gray-400 text-right">
+                    (Este valor já está descontado do total a pagar)
+                </div>
             </div>
         );
     };
 
-    // 🔥 ETAPA 1: AGORA EM GRID LARGO
     const renderizarEtapa1 = () => (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* LADO ESQUERDO: Resumo */}
-                <div className="flex flex-col h-full">
-                    <div className="bg-[#3b82f6] rounded-3xl p-6 md:p-8 shadow-xl shadow-blue-200 text-center relative overflow-hidden flex-1 flex flex-col justify-center">
-                         <div className="relative z-10">
-                            <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                <IoWallet className="text-4xl text-white" />
-                            </div>
-                            <h2 className="text-xl md:text-2xl font-bold text-blue-100 mb-1">Restante a Pagar</h2>
-                            <span className="text-5xl md:text-6xl font-black text-white block mb-4">R$ {calcularRestanteMesa().toFixed(2)}</span>
-                            
-                            <p className="text-blue-100 text-sm font-bold mt-2 uppercase tracking-widest bg-black/10 inline-block px-4 py-2 rounded-xl">
-                                Total Consumo: R$ {calcularTotalConsumo().toFixed(2)}
-                            </p>
-
-                            {incluirTaxa && (
-                                <p className="text-white text-sm font-medium mt-3 bg-white/20 inline-block px-4 py-2 rounded-full">
-                                    + 10% Garçom: R$ {calcularValorTaxa().toFixed(2)}
-                                </p>
-                            )}
-                        </div>
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="bg-[#3b82f6] rounded-3xl p-6 shadow-xl shadow-blue-200 text-center relative overflow-hidden">
+                 <div className="relative z-10">
+                    <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <IoWallet className="text-3xl text-white" />
                     </div>
-                </div>
+                    <h2 className="text-xl font-bold text-blue-100 mb-1">Restante a Pagar</h2>
+                    <span className="text-5xl font-black text-white">R$ {calcularRestanteMesa().toFixed(2)}</span>
+                    <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">
+                        Total Consumo: R$ {calcularTotalConsumo().toFixed(2)}
+                    </p>
 
-                {/* LADO DIREITO: Botões e Configurações */}
-                <div className="flex flex-col justify-center space-y-4">
-                    <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-5 flex items-center justify-between">
-                        <div>
-                            <h4 className="font-bold text-gray-900 text-lg">Taxa de Serviço (10%)</h4>
-                            <p className="text-sm text-gray-500">Adicionar 10% do garçom na conta</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer scale-110">
-                            <input 
-                                type="checkbox" 
-                                className="sr-only peer" 
-                                checked={incluirTaxa}
-                                onChange={(e) => setIncluirTaxa(e.target.checked)}
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-
-                    {renderHistoricoPagamentos()}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onClick={() => { setTipoPagamento('unico'); setEtapa(2); }} className="bg-white p-6 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50 flex flex-col items-center justify-center gap-3 text-center transition-all shadow-sm">
-                            <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600"><IoPerson size={28} /></div>
-                            <div><h4 className="font-bold text-gray-900 text-lg">Quitar Restante</h4><p className="text-xs text-gray-500 mt-1">Pagar todo o valor</p></div>
-                        </button>
-                        
-                        <button onClick={() => { setTipoPagamento('individual'); setEtapa(2); }} className="bg-white p-6 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:bg-green-50 flex flex-col items-center justify-center gap-3 text-center transition-all shadow-sm">
-                            <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center text-green-600"><IoPeople size={28} /></div>
-                            <div><h4 className="font-bold text-gray-900 text-lg">Dividir / Parcial</h4><p className="text-xs text-gray-500 mt-1">Abater valor ou dividir</p></div>
-                        </button>
-                    </div>
-
-                    <button onClick={handleImprimirConferencia} className="w-full py-4 bg-gray-800 text-white hover:bg-black rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all shadow-lg mt-2">
-                        <IoPrint className="text-xl" /> Imprimir Conferência
+                    {incluirTaxa && (
+                        <p className="text-white text-sm font-medium mt-1 bg-white/20 inline-block px-3 py-1 rounded-full">
+                            + 10% Garçom: R$ {calcularValorTaxa().toFixed(2)}
+                        </p>
+                    )}
+                    
+                    <button onClick={handleImprimirConferencia} className="mt-4 w-full py-2 bg-white/20 text-white hover:bg-white/30 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
+                        <IoPrint className="text-lg" /> Imprimir Conferência
                     </button>
                 </div>
+            </div>
+
+            {/* BOTÃO TAXA DE GARÇOM 10% */}
+            <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <h4 className="font-bold text-gray-900">Taxa de Serviço (10%)</h4>
+                    <p className="text-xs text-gray-500">Adicionar 10% do garçom na conta</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                        type="checkbox" 
+                        value="" 
+                        className="sr-only peer" 
+                        checked={incluirTaxa}
+                        onChange={(e) => setIncluirTaxa(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+
+            {renderHistoricoPagamentos()}
+
+            <div className="space-y-3">
+                <button onClick={() => { setTipoPagamento('unico'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50/30 flex items-center gap-4 text-left transition-all">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600"><IoPerson size={24} /></div>
+                    <div className="flex-1"><h4 className="font-bold text-gray-900">Quitar Restante</h4><p className="text-xs text-gray-500">Pagar todo o valor pendente</p></div>
+                    <IoChevronForward className="text-gray-300" />
+                </button>
+                <button onClick={() => { setTipoPagamento('individual'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:bg-green-50/30 flex items-center gap-4 text-left transition-all">
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600"><IoPeople size={24} /></div>
+                    <div className="flex-1"><h4 className="font-bold text-gray-900">Pagamento Parcial / Dividir</h4><p className="text-xs text-gray-500">Abater valor ou dividir entre pessoas</p></div>
+                    <IoChevronForward className="text-gray-300" />
+                </button>
             </div>
         </div>
     );
 
-    // 🔥 ETAPA 2: GRID PARA A LISTA DE PAGANTES
     const renderizarEtapa2 = () => {
         const formasPagamento = [
             { id: 'dinheiro', icon: <IoCash />, label: 'Dinheiro' },
@@ -420,55 +444,76 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         ];
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-300 flex flex-col h-full">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setEtapa(1)} className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50"><IoChevronBack className="text-xl" /></button>
-                        <h3 className="text-2xl font-black text-gray-900">Quem vai pagar agora?</h3>
-                    </div>
-                    {tipoPagamento === 'individual' && (
-                        <button onClick={adicionarPessoa} className="hidden sm:flex items-center gap-2 py-2 px-4 bg-white border-2 border-dashed border-gray-300 text-gray-600 font-bold rounded-xl hover:border-blue-400 hover:text-blue-500 transition-all">
-                            <IoAdd size={20} /> Adicionar Pagante
-                        </button>
-                    )}
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-300">
+                <div className="flex items-center gap-2 mb-4">
+                    <button onClick={() => setEtapa(1)} className="p-2 hover:bg-gray-100 rounded-lg"><IoChevronBack className="text-xl" /></button>
+                    <h3 className="text-lg font-black text-gray-900">Quem vai pagar agora?</h3>
                 </div>
                 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                {tipoPagamento === 'individual' && (
+                     <div className="bg-blue-50 text-blue-800 p-3 rounded-xl text-xs font-bold mb-4 flex gap-2 items-center border border-blue-100">
+                         <IoCheckmark className="text-lg" />
+                         Selecione quem vai pagar neste momento.
+                     </div>
+                )}
+
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                     {Object.entries(pagamentos).map(([pessoa, dados]) => (
-                        <div key={pessoa} className={`bg-white rounded-2xl p-5 border transition-all ${selecionados[pessoa] ? 'border-blue-500 ring-2 ring-blue-100 shadow-md' : 'border-gray-200 opacity-60 grayscale-[0.5]'}`}>
-                            <div className="flex justify-between items-center mb-4">
+                        <div key={pessoa} className={`bg-white rounded-2xl p-4 border transition-all ${selecionados[pessoa] ? 'border-blue-500 ring-1 ring-blue-200 shadow-md' : 'border-gray-200 opacity-70 grayscale-[0.5]'}`}>
+                            <div className="flex justify-between items-center mb-3">
                                 <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => toggleSelecao(pessoa)}>
                                     <div className={`text-2xl transition-transform active:scale-90 ${selecionados[pessoa] ? 'text-blue-600' : 'text-gray-300'}`}>
                                         {selecionados[pessoa] ? <IoCheckbox /> : <IoSquareOutline />}
                                     </div>
-                                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center font-bold text-gray-600 text-lg">{pessoa.charAt(0)}</div>
-                                    <div><h4 className="font-bold text-gray-900 text-base">{pessoa}</h4></div>
+                                    <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center font-bold text-gray-600">{pessoa.charAt(0)}</div>
+                                    <div><h4 className="font-bold text-gray-900 text-sm">{pessoa}</h4></div>
                                 </div>
                                 {tipoPagamento === 'individual' && Object.keys(pagamentos).length > 1 && (
-                                    <button onClick={() => removerPessoa(pessoa)} className="text-red-400 hover:text-red-600 p-2"><IoRemove size={20} /></button>
+                                    <button onClick={() => removerPessoa(pessoa)} className="text-red-400 hover:text-red-600 p-2"><IoRemove /></button>
                                 )}
                             </div>
                             
                             {selecionados[pessoa] && (
                                 <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <div className="relative mb-4">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R$</span>
-                                        <input 
-                                            type="number" 
-                                            className="w-full bg-blue-50/50 border border-blue-200 rounded-xl pl-10 pr-4 py-4 text-2xl font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                                            placeholder="0.00"
-                                            value={dados.valor}
-                                            onChange={(e) => editarValorPagamento(pessoa, e.target.value)}
-                                            onClick={(e) => e.target.select()} 
-                                        />
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="relative flex-1">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">R$</span>
+                                            <input 
+                                                type="number" 
+                                                className="w-full bg-blue-50/50 border border-blue-200 rounded-lg pl-8 pr-3 py-3 text-lg font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                placeholder="0.00"
+                                                value={dados.valor}
+                                                onChange={(e) => editarValorPagamento(pessoa, e.target.value)}
+                                                onClick={(e) => e.target.select()} 
+                                            />
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2 mb-2">
                                         {formasPagamento.map(forma => (
-                                            <button key={forma.id} onClick={() => editarFormaPagamento(pessoa, forma.id)} className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${dados.formaPagamento === forma.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-[1.02]' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
-                                                <div className="text-2xl mb-1">{forma.icon}</div><span className="text-[9px] font-bold uppercase tracking-wider">{forma.label}</span>
+                                            <button key={forma.id} onClick={() => editarFormaPagamento(pessoa, forma.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${dados.formaPagamento === forma.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-105' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
+                                                <div className="text-xl mb-1">{forma.icon}</div><span className="text-[8px] font-bold uppercase">{forma.label}</span>
                                             </button>
                                         ))}
                                     </div>
+                                    
+                                    {dados.itens && dados.itens.filter(i => i.preco > 0).length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                            <p className="text-[10px] text-gray-400 font-bold mb-1">CONSUMO:</p>
+                                            <div className="text-xs text-gray-500 space-y-1 max-h-20 overflow-y-auto">
+                                                {dados.itens.filter(i => i.preco > 0).map((item, idx) => (
+                                                    <div key={idx} className="flex justify-between">
+                                                        <span>{item.quantidade || 1}x {item.nome}</span>
+                                                        <span>{((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                                {incluirTaxa && (
+                                                    <div className="flex justify-between text-blue-600 font-medium">
+                                                        <span>Taxa Serviço (10%) rateada</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -476,16 +521,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 </div>
                 
                 {tipoPagamento === 'individual' && (
-                    <button onClick={adicionarPessoa} className="sm:hidden mt-2 w-full py-4 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 font-bold">
+                    <button onClick={adicionarPessoa} className="mt-4 w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all">
                         <IoAdd /> Adicionar Pagante Manual
                     </button>
                 )}
                 
-                <div className="mt-auto pt-4">
-                    <button onClick={() => setEtapa(3)} className="w-full py-5 bg-gray-900 text-white rounded-2xl font-bold text-lg shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">
-                        Conferir e Finalizar <IoChevronForward />
-                    </button>
-                </div>
+                <button onClick={() => setEtapa(3)} className="mt-4 w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">
+                    Conferir e Finalizar <IoChevronForward />
+                </button>
             </div>
         );
     };
@@ -505,67 +548,67 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         const troco = restanteFinal < -0.10 ? Math.abs(restanteFinal) : 0;
 
         return (
-            <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-right-8 duration-300">
-                <div className="flex items-center gap-3 mb-4">
-                    <button onClick={() => setEtapa(2)} className="p-3 bg-gray-100 rounded-xl hover:bg-gray-200"><IoChevronBack className="text-xl" /></button>
-                    <h3 className="text-2xl font-black text-gray-900">Confirmação Final</h3>
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-300">
+                <div className="text-center relative">
+                    <button onClick={() => setEtapa(2)} className="absolute top-0 left-0 p-2 bg-gray-100 rounded-xl hover:bg-gray-200"><IoChevronBack /></button>
+                    <h3 className="text-xl font-black text-gray-900">Confirmação</h3>
                 </div>
                 
-                <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-xl">
-                    <div className="flex justify-between items-center mb-2 text-gray-500 font-medium text-sm md:text-base">
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl">
+                    <div className="flex justify-between items-center mb-1 text-gray-400 font-medium text-xs">
                         <span>Total Consumo</span>
                         <span>R$ {totalConsumo.toFixed(2)}</span>
                     </div>
                     {incluirTaxa && (
-                        <div className="flex justify-between items-center mb-2 text-blue-600 font-bold text-sm md:text-base">
+                        <div className="flex justify-between items-center mb-1 text-blue-600 font-bold text-xs">
                             <span>Taxa de Serviço (10%)</span>
                             <span>+ R$ {valorTaxa.toFixed(2)}</span>
                         </div>
                     )}
                     {jaPago > 0 && (
-                        <div className="flex justify-between items-center mb-4 text-green-600 font-bold text-sm md:text-base border-b border-gray-100 pb-4">
-                            <span>Já Pago Anteriormente</span>
+                        <div className="flex justify-between items-center mb-3 text-green-600 font-bold text-xs border-b border-gray-100 pb-2">
+                            <span>Já Pago (Anterior)</span>
                             <span>- R$ {jaPago.toFixed(2)}</span>
                         </div>
                     )}
                     
-                    <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100 mt-4">
-                        <span className="text-xl font-bold text-gray-900">Pagando Agora</span>
-                        <span className="text-4xl font-black text-blue-600">R$ {totalPagoAgora.toFixed(2)}</span>
+                    <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100 mt-2">
+                        <span className="text-lg font-bold text-gray-900">Pagando Agora</span>
+                        <span className="text-3xl font-black text-blue-600">R$ {totalPagoAgora.toFixed(2)}</span>
                     </div>
 
-                    <div className={`p-5 rounded-2xl text-center mb-6 ${!vaiQuitar ? 'bg-orange-50 text-orange-700' : (troco > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600')}`}>
-                        <p className="text-sm font-bold uppercase tracking-widest mb-2 opacity-80">Situação Após Pagamento</p>
-                        <p className="text-2xl md:text-3xl font-black">
+                    <div className={`p-4 rounded-2xl text-center mb-6 ${!vaiQuitar ? 'bg-orange-50 text-orange-700' : (troco > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600')}`}>
+                        <p className="text-xs font-bold uppercase tracking-wider mb-1">Situação da Mesa Após Pagamento</p>
+                        <p className="text-xl font-black">
                             {!vaiQuitar && `Faltarão R$ ${restanteFinal.toFixed(2)}`}
-                            {vaiQuitar && troco === 0 && `Conta Quitada (Mesa Fechada)`}
+                            {vaiQuitar && troco === 0 && `Conta Quitada (Mesa Fecha)`}
                             {vaiQuitar && troco > 0 && `Conta Quitada (Troco: R$ ${troco.toFixed(2)})`}
                         </p>
                     </div>
 
                     {/* TOGGLE PARA EMITIR NFC-E */}
-                    <div className="mt-6 p-5 border-2 border-dashed border-gray-200 rounded-2xl">
+                    <div className="mt-4 p-4 border-2 border-dashed border-gray-200 rounded-2xl">
                         <label className="flex items-center gap-3 cursor-pointer">
                             <input 
                                 type="checkbox" 
                                 checked={emitirNota}
                                 onChange={(e) => setEmitirNota(e.target.checked)}
-                                className="w-6 h-6 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                                className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
                             />
-                            <div className="flex items-center gap-2 text-gray-700 font-bold text-lg">
-                                <IoReceiptOutline className="text-emerald-600 text-2xl" />
+                            <div className="flex items-center gap-2 text-gray-700 font-bold">
+                                <IoReceiptOutline className="text-emerald-600 text-lg" />
                                 Emitir Nota Fiscal (NFC-e)
                             </div>
                         </label>
                         
                         {emitirNota && (
-                            <div className="mt-4 animate-in fade-in slide-in-from-top-2">
+                            <div className="mt-3 animate-in fade-in slide-in-from-top-2">
                                 <input 
                                     type="text" 
                                     placeholder="CPF na Nota (Opcional)"
                                     value={cpfNota}
                                     onChange={(e) => setCpfNota(e.target.value.replace(/\D/g, ''))} 
-                                    className="w-full p-4 bg-gray-50 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-emerald-500 outline-none font-medium"
+                                    className="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                     maxLength={11}
                                 />
                             </div>
@@ -573,12 +616,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-3 pt-4">
+                <div className="flex flex-col gap-3">
                     {!vaiQuitar && (
                         <button 
                             onClick={() => handleFinalizar('parcial')}
                             disabled={carregando}
-                            className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             {carregando ? 'Processando...' : `Receber R$ ${totalPagoAgora.toFixed(2)} e Manter Aberta`}
                         </button>
@@ -588,7 +631,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         <button 
                             onClick={() => handleFinalizar('total')} 
                             disabled={carregando} 
-                            className="w-full py-5 bg-green-600 hover:bg-green-700 rounded-2xl font-bold text-lg shadow-xl shadow-green-200 text-white active:scale-95 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-green-600 hover:bg-green-700 rounded-2xl font-bold shadow-lg shadow-green-200 text-white active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             {carregando ? 'Processando...' : (troco > 0 ? 'Encerrar com Troco' : 'Encerrar Mesa (Tudo Pago)')}
                         </button>
@@ -599,25 +642,16 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+        // 🔥 A MÁGICA ESTÁ AQUI: sm:items-start e sm:pt-16 colam o Modal no topo da tela! 🔥
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-start sm:pt-16 justify-center">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
             
-            {/* 🔥 AQUI ESTÁ A MÁGICA: Mudei de max-w-md (Telemóvel) para max-w-4xl (Monitor Lardo) 🔥 */}
-            <div className="relative w-full max-w-4xl bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-10 duration-300">
-                
-                {/* Header do Modal */}
-                <div className="p-4 sm:p-6 flex justify-between items-center border-b border-gray-100 bg-gray-50/80">
-                    <span className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <IoWallet className="text-lg text-blue-500" />
-                        Pagamento • Mesa {mesa?.numero}
-                    </span>
-                    <button onClick={onClose} className="p-2 bg-white border border-gray-200 rounded-full text-gray-500 hover:text-red-500 hover:bg-red-50 shadow-sm transition-colors">
-                        <IoClose size={24} />
-                    </button>
+            <div className="relative w-full max-w-md bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-10 duration-300">
+                <div className="p-4 flex justify-between items-center border-b border-gray-100">
+                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">Pagamento</span>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"><IoClose size={24} /></button>
                 </div>
-                
-                {/* Conteúdo Dinâmico */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-[#f8faff]">
+                <div className="flex-1 overflow-y-auto p-6 bg-[#f8faff] custom-scrollbar">
                     {etapa === 1 && renderizarEtapa1()}
                     {etapa === 2 && renderizarEtapa2()}
                     {etapa === 3 && renderizarEtapa3()}
