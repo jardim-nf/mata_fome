@@ -253,14 +253,24 @@ const PaginaImpressao = () => {
     return (
         <div className="bg-white min-h-screen">
             <style>{`
-                @media print {
-                    @page { margin: 0; size: auto; }
-                    body { margin: 0; padding: 0; background: white; }
-                    .no-print { display: none !important; }
-                    /* Garante texto preto puro */
-                    * { color: black !important; }
-                }
-            `}</style>
+    @media print {
+        @page { margin: 0; size: auto; }
+        body { margin: 0; padding: 0; background: white; }
+        .no-print { display: none !important; }
+        
+        /* Força TUDO a ser preto puro */
+        * { 
+            color: black !important; 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact;
+        }
+        
+        /* Ajuste bordas que estão como gray-200 ou gray-300 */
+        .border-gray-200, .border-gray-300 {
+            border-color: black !important;
+        }
+    }
+`}</style>
 
             <button onClick={() => window.print()} className="no-print fixed top-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50">
                 <IoPrint size={24} />

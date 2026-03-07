@@ -306,7 +306,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">
                                                     {adicionais.map((adic, idx) => (
-                                                        <div key={idx} className="flex items-center text-[10px] font-bold text-gray-700">
+                                                        <div key={idx} className="flex items-center text-[10px] font-bold text-gray-400">
                                                             <span className="mr-1">+</span><span>{adic.quantidade || 1}x {adic.nome}</span>
                                                         </div>
                                                     ))}

@@ -12,6 +12,18 @@
 
 /* 🖨️ ESTILO DE IMPRESSÃO - VERSÃO BLINDADA */
 @media print {
+
+  #printable-receipt *, 
+  #area-impressao *,
+  .font-mono * {
+    color: black !important;
+    background: transparent !important;
+  }
+
+  /* Força todas as bordas tracejadas ou sólidas a serem pretas */
+  .border-dotted, .border-dashed, .border-b {
+    border-color: black !important;
+  }
   
   /* 1. Trava a página para não criar folhas extras em branco */
   html, body {
