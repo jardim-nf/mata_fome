@@ -574,11 +574,13 @@ const TelaPedidos = () => {
                 </div>
             )}
 
+{/* MODAL PRINCIPAL: RESUMO DO PEDIDO */}
             {showOrderSummary && (
                 <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
-                    {/* MODAL DA COMANDA AUMENTADO (max-w-3xl) PARA LER MELHOR NO COMPUTADOR */}
-                    <div className="relative w-full max-w-3xl bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
+                    
+                    {/* AQUI ESTÁ A CORREÇÃO: Voltou para max-w-lg para não ficar gigante no meio do ecrã */}
+                    <div className="relative w-full max-w-lg bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
                         
                         <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-center shrink-0">
                             <div><h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2><p className="text-xs text-gray-500 mt-0.5">Confira e envie para produção</p></div>
@@ -637,6 +639,7 @@ const TelaPedidos = () => {
                             ))}
                         </div>
                         
+                        {/* RODAPÉ INTELIGENTE DO MODAL */}
                         <div className="p-4 bg-white border-t border-gray-100 shrink-0">
                             <div className="flex justify-between items-end mb-4">
                                 <span className="text-sm text-gray-500 font-bold">Total Geral</span>
