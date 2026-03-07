@@ -20,7 +20,7 @@ const isItemCozinha = (item) => {
     return !TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
 };
 
-// --- GRUPO DE PEDIDOS DA MESA (DESIGN REFINADO & RESPONSIVO) ---
+// --- GRUPO DE PEDIDOS DA MESA ---
 const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
@@ -64,7 +64,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
         <div className="space-y-4">
             {pedidosAgrupados.map((grupo, index) => (
                 <div key={`grupo-${grupo.mesaNumero}-${index}`} className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                    {/* CABEÇALHO DA MESA COM FLEX-WRAP PARA NÃO CORTAR */}
                     <div className="bg-slate-50/50 p-3 border-b border-slate-200/60 border-dashed flex flex-wrap justify-between items-center gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="font-black text-slate-800 text-base flex items-center gap-2">
@@ -83,7 +82,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                             {grupo.totalItens} itens
                         </span>
                     </div>
-                    {/* Lista de Pedidos (Já filtrados) */}
                     <div className="p-3 space-y-3 bg-white">
                         {grupo.pedidos.map(pedido => (
                             <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={onUpdateStatus} onExcluir={onExcluir} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} showMesaInfo={false} isAgrupado={true} motoboysDisponiveis={[]} onAtribuirMotoboy={null} />
@@ -384,12 +382,23 @@ function Painel() {
                 </div>
             </header>
 
-            {/* COLUNAS KANBAN DEFINITIVO */}
             <main className="flex-1 p-4 md:p-6 overflow-x-auto bg-slate-50">
                 <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
-                        let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
+                        
+                        // 🔥 AQUI ESTÁ A MÁGICA NOVA 🔥
+                        // Filtramos a lista de pedidos ANTES de contar e exibir na coluna
+                        let listaPedidos = (pedidos[statusKey] || []).filter(p => {
+                            if (abaAtiva === 'cozinha') {
+                                // Para a cozinha, só mostra se for do salão E tiver algum item que não seja bebida
+                                if (p.source !== 'salao') return false;
+                                return (p.itens || []).some(isItemCozinha);
+                            } else {
+                                // Para o delivery, exibe normal
+                                return p.source === 'global';
+                            }
+                        });
 
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
 
