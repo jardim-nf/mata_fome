@@ -247,11 +247,19 @@ function Painel() {
             return date >= startOfDay && date <= endOfDay;
         };
 
-        const checkAutoPrint = (change) => {
+const checkAutoPrint = (change) => {
             if (!visualizandoHoje) return;
             const data = change.doc.data();
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
+
+            // 🔥 A TRAVA DE SEGURANÇA ENTRA AQUI 🔥
+            // Filtra os itens do pedido para ver se tem alguma comida real
+            const rawItens = Array.isArray(data.itens) ? data.itens : [];
+            const itensCozinha = rawItens.filter(isItemCozinha);
+            
+            // Se o pedido for SÓ BEBIDA ou BOMBONIERE (0 itens de cozinha), ABORTA o Auto-Print!
+            if (itensCozinha.length === 0) return;
 
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
                 const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
@@ -315,11 +323,14 @@ function Painel() {
         prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted, dataSelecionada]);
 
-    useEffect(() => {
+useEffect(() => {
         if (!isPrinting && printQueue.length > 0 && estabelecimentoAtivo) {
             setIsPrinting(true);
             const pedidoId = printQueue[0];
-            const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}`;
+            
+            // 🔥 ADICIONEI O "&setor=cozinha" AQUI NO FINAL DO URL 🔥
+            const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}&setor=cozinha`;
+            
             const width = 350; const height = 600;
             const left = (window.screen.width - width) / 2; const top = (window.screen.height - height) / 2;
             const printWindow = window.open(url, `AutoPrint_${pedidoId}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
