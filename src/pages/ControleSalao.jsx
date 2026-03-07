@@ -354,9 +354,11 @@ export default function ControleSalao() {
 
     if (!estabelecimentoId && !loading) return <div className="p-10 text-center"><IoAlertCircle className="mx-auto text-4xl text-red-500 mb-2" />Sem acesso ao estabelecimento.</div>;
 
-    return (
-        <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 pb-20">
-            <div className="w-full max-w-[2400px] mx-auto">
+return (
+        // Substituído para não ter padding lateral excessivo em telas grandes
+        <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 w-full">
+            {/* Removido o max-w-[2400px], agora usa apenas w-full para esticar tudo */}
+            <div className="w-full">
 
                 <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
 
@@ -397,7 +399,6 @@ export default function ControleSalao() {
                     />
                 )}
 
-                {/* 👇 ADICIONE A CHAMADA DO MODAL AQUI 👇 */}
                 {isModalComissaoOpen && (
                     <RelatorioGarcomModal 
                         isOpen={isModalComissaoOpen}
@@ -405,12 +406,12 @@ export default function ControleSalao() {
                         estabelecimentoId={estabelecimentoId}
                     />
                 )}
-                {/* 👆 FIM DA CHAMADA DO MODAL 👆 */}
 
-                <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2">
-                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                {/* HEADER STICKY (Fixado no topo) */}
+                <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2 w-full">
+                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 w-full">
 
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1 shrink-0">
                             <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-gray-600 font-bold text-xs flex items-center gap-1 w-fit">
                                 <IoArrowBack /> Voltar
                             </button>
@@ -422,15 +423,15 @@ export default function ControleSalao() {
                             </div>
                         </div>
 
-                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
+                        {/* Estatísticas */}
+                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:flex-1 xl:justify-center">
                             <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
                             <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
                         </div>
 
-                        {/* 👇 AQUI ESTÁ O BLOCO LIMPO! APENAS A BUSCA E O FILTRO 👇 */}
-                        <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-
+                        {/* BUSCA E FILTROS */}
+                        <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto shrink-0 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
                             <div className="relative w-full sm:w-48 md:w-64">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <IoSearch className="text-gray-400" />
@@ -465,9 +466,11 @@ export default function ControleSalao() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh]">
+                {/* GRELHA DAS MESAS */}
+                <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh] w-full">
                     {mesasFiltradas.length > 0 ? (
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
+                        // Aqui troquei as colunas fixas por auto-fill, assim ele preenche todas as mesas até ao fim do monitor!
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3 w-full">
                             {mesasFiltradas.map(mesa => (
                                 <MesaCard
                                     key={mesa.id}
@@ -479,7 +482,7 @@ export default function ControleSalao() {
                             ))}
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-32 text-center text-gray-400">
+                        <div className="flex flex-col items-center justify-center py-32 text-center text-gray-400 w-full">
                             <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-2"><IoRestaurant className="text-2xl text-gray-300" /></div>
                             <p className="text-sm font-medium">Nenhuma mesa encontrada.</p>
                             {mesas.length === 0 && (
