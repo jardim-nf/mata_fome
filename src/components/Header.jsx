@@ -91,7 +91,8 @@ function Header() {
 
     return (
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 w-full transition-all">
-            <div className="max-w-7xl mx-auto px-4 lg:px-8">
+            {/* 🔥 AQUI ESTAVA A TRAVA (max-w-7xl mx-auto). AGORA É w-full 🔥 */}
+            <div className="w-full px-4 lg:px-8">
                 <div className="flex items-center justify-between h-16 md:h-20">
                     
                     <div className="flex-1 flex items-center justify-start gap-3">
@@ -251,7 +252,7 @@ const getPageTitle = (pathname) => {
         '/admin/ordenar-categorias': 'Categorias',
         '/admin/gestao-funcionarios': 'Equipe'
     };
-    return titles[pathname] || 'IdeaFood'; // Alterado de NaMão System
+    return titles[pathname] || 'IdeaFood';
 };
 
 const getPageSubtitle = (pathname) => {

@@ -103,12 +103,11 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 font-sans pb-20">
-      <div className="max-w-7xl mx-auto space-y-10">
+      {/* 🔥 AQUI ESTAVA A TRAVA (max-w-7xl mx-auto). AGORA É w-full 🔥 */}
+      <div className="w-full space-y-10">
 
-        {/* 🔥 PAINEL DE FATURAMENTO RETRÁTIL (COLLAPSIBLE) 🔥 */}
         {isRealAdmin && (
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-all duration-300">
-            {/* Cabeçalho Clicável */}
             <button 
               onClick={() => setShowSummary(!showSummary)}
               className="w-full flex items-center justify-between p-5 sm:p-6 hover:bg-slate-50 transition-colors focus:outline-none"
@@ -127,7 +126,6 @@ const AdminDashboard = () => {
               </div>
             </button>
 
-            {/* Conteúdo do Faturamento (Aparece apenas se showSummary for true) */}
             {showSummary && (
               <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/50 animate-fadeIn">
                 <DashBoardSummary />
@@ -136,11 +134,8 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* MÓDULOS AGRUPADOS */}
         <div className="space-y-12">
           {menuGroups.map((grupo, idx) => {
-            
-            // Filtra os itens que o usuário atual tem permissão para ver
             const itensPermitidos = grupo.items.filter(item => {
               if (item.adminOnly && !isRealAdmin) return false;
               if (item.perm && !item.permOuAdmin && !temPermissao(item.perm)) return false;
@@ -148,7 +143,6 @@ const AdminDashboard = () => {
               return true;
             });
 
-            // Se o usuário não tiver permissão para NENHUM item deste grupo, oculta o grupo inteiro
             if (itensPermitidos.length === 0) return null;
 
             return (
@@ -158,7 +152,7 @@ const AdminDashboard = () => {
                   <p className="text-sm text-slate-500 font-medium">{grupo.description}</p>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-fr">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-fr">
                   {itensPermitidos.map((item, itemIdx) => (
                     <Link key={itemIdx} to={item.path} className="h-full">
                       <ActionButton title={item.title} subtitle={item.sub} icon={item.icon} themeColor={item.cor} />
@@ -170,7 +164,6 @@ const AdminDashboard = () => {
           })}
         </div>
 
-        {/* FOOTER */}
         <div className="text-center pt-8 border-t border-slate-200 mt-12">
             <p className="text-slate-400 font-medium text-sm">IdeaFood • Gestão Inteligente</p>
         </div>
