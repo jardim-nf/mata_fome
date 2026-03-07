@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { IoPrint } from 'react-icons/io5';
 
 const TERMOS_BEBIDA = [
-    'bebida', 'refrigerante', 'suco', 'cerveja', 'agua', 'água', 
+    'bebida', 'bebidas', 'refrigerante', 'suco', 'cerveja', 'agua', 'água', 
     'drink', 'vinho', 'dose', 'long neck', 'lata', 'garrafa', 'h2oh', 'coca', 'guarana'
 ];
 
