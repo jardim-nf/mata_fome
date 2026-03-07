@@ -59,7 +59,7 @@ import AuditLogs from './pages/admin/AuditLogs';
 import AdminPlansManagement from './pages/admin/AdminPlansManagement';
 import FinanceiroMaster from './pages/admin/FinanceiroMaster';
 import ConfigFiscalScreen from './pages/admin/ConfigFiscalScreen';
-
+import ImpressaoIsolada from "./pages/ImpressaoIsolada";
 function App() {
   return (
     <Router>
@@ -83,7 +83,7 @@ function App() {
                     {/* Rotas legadas de impressão manual */}
                     <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
                     <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
-                    
+                    <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
                     <Route path="/cardapio" element={<ListaEstabelecimentos />} />
                     <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
                     

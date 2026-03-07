@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 
-// Importa os componentes de impressão
+// Mantemos APENAS o nosso componente principal que tem a inteligência do Setor
 import ComandaParaImpressao from '../components/ComandaParaImpressao';
-import ComandaSalaoImpressao from '../components/ComandaSalaoImpressao';
 
 export default function ImpressaoIsolada() {
     const [searchParams] = useSearchParams();
@@ -15,10 +14,8 @@ export default function ImpressaoIsolada() {
     const [estabelecimento, setEstabelecimento] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    
-    const componentRef = useRef();
 
-    // Buscar dados do pedido
+    // Buscar dados do pedido usando CollectionGroup para achar em qualquer loja
     useEffect(() => {
         const buscarDados = async () => {
             if (!pedidoId) {
@@ -27,18 +24,31 @@ export default function ImpressaoIsolada() {
                 return;
             }
             try {
-                // Busca Pedido
+                let dadosPedido = null;
+
+                // Primeiro tenta buscar na raiz (legado)
                 const pedidoRef = doc(db, 'pedidos', pedidoId);
                 let pedidoSnap = await getDoc(pedidoRef);
                 
-                if (!pedidoSnap.exists()) {
-                    throw new Error("Pedido não encontrado.");
+                if (pedidoSnap.exists()) {
+                    dadosPedido = { id: pedidoSnap.id, ...pedidoSnap.data() };
+                } else {
+                    // Se não achar na raiz, procura nas pastas dos estabelecimentos (novo formato)
+                    const q = query(collectionGroup(db, 'pedidos'), where('id', '==', pedidoId));
+                    const querySnap = await getDocs(q);
+                    
+                    if (!querySnap.empty) {
+                        dadosPedido = { id: querySnap.docs[0].id, ...querySnap.docs[0].data() };
+                    }
+                }
+
+                if (!dadosPedido) {
+                    throw new Error("Pedido não encontrado no banco de dados.");
                 }
                 
-                const dadosPedido = { id: pedidoSnap.id, ...pedidoSnap.data() };
                 setPedido(dadosPedido);
 
-                // Busca Estabelecimento
+                // Busca Estabelecimento para cabçalho (Opcional)
                 if (dadosPedido.estabelecimentoId) {
                     const estabelecimentoRef = doc(db, 'estabelecimentos', dadosPedido.estabelecimentoId);
                     const estabelecimentoSnap = await getDoc(estabelecimentoRef);
@@ -69,7 +79,7 @@ export default function ImpressaoIsolada() {
         }
     }, [loading, pedido]);
 
-    // Fechar após impressão
+    // Fechar a aba de impressão automaticamente após imprimir ou cancelar
     useEffect(() => {
         const handleAfterPrint = () => {
             setTimeout(() => {
@@ -86,28 +96,19 @@ export default function ImpressaoIsolada() {
 
     if (loading) {
         return (
-            <div style={{ 
-                padding: '20px', 
-                textAlign: 'center',
-                fontFamily: 'Arial, sans-serif'
-            }}>
-                Carregando comanda...
+            <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                Carregando comanda para impressão...
             </div>
         );
     }
 
     if (error) {
         return (
-            <div style={{ 
-                padding: '20px', 
-                textAlign: 'center',
-                color: 'red',
-                fontFamily: 'Arial, sans-serif'
-            }}>
-                Erro: {error}
-                <br />
-                <button onClick={() => window.close()} style={{ marginTop: '10px' }}>
-                    Fechar
+            <div style={{ padding: '20px', textAlign: 'center', color: 'red', fontFamily: 'Arial, sans-serif' }}>
+                <strong>Erro:</strong> {error}
+                <br /><br />
+                <button onClick={() => window.close()} style={{ padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    Fechar Janela
                 </button>
             </div>
         );
@@ -115,19 +116,11 @@ export default function ImpressaoIsolada() {
 
     return (
         <div>
-            {pedido.tipo === 'salao' || pedido.source === 'salao' ? (
-                <ComandaSalaoImpressao 
-                    ref={componentRef} 
-                    pedido={pedido} 
-                    estabelecimento={estabelecimento} 
-                />
-            ) : (
-                <ComandaParaImpressao 
-                    ref={componentRef} 
-                    pedido={pedido} 
-                    estabelecimento={estabelecimento} 
-                />
-            )}
+            {/* Agora a tela manda TUDO direto para a comanda inteligente que filtra bar/cozinha */}
+            <ComandaParaImpressao 
+                pedido={pedido} 
+                estabelecimento={estabelecimento} 
+            />
         </div>
     );
 }

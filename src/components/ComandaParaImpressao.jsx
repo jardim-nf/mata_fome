@@ -16,7 +16,11 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const [searchParams] = useSearchParams();
     const { primeiroEstabelecimento, loading: authLoading } = useAuth();
     
+    // Captura tanto "modo" quanto "setor" para manter compatibilidade com links antigos
     const modoImpressao = searchParams.get('modo'); 
+    const setorParam = searchParams.get('setor');
+    const setor = setorParam || modoImpressao; // Unifica a lógica
+
     const estabIdUrl = searchParams.get('estabId');
 
     const [pedidoState, setPedidoState] = useState(null);
@@ -101,7 +105,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }
     }, [pedido, loading, erro, pedidoProp]);
 
-    // --- 3. CÁLCULOS FINANCEIROS (COM BLINDAGEM DE ARRAYS E IDENTIFICAÇÃO DE DESCONTO OCULTO) ---
+    // --- 3. CÁLCULOS FINANCEIROS ---
     const totais = useMemo(() => {
         if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
 
@@ -114,9 +118,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         const taxa = Number(pedido.taxaEntrega) || 0;
         let desconto = Number(pedido.desconto) || 0;
         
-        // 🔥 A MÁGICA ACONTECE AQUI:
-        // Se o banco salvou um "totalFinal" com desconto, mas não salvou o campo "desconto",
-        // calculamos a diferença para não exibir o total errado na via impressa.
+        // Se o banco salvou um "totalFinal" com desconto, mas não salvou o campo "desconto"
         const totalNoBanco = Number(pedido.totalFinal) || 0;
         if (desconto === 0 && totalNoBanco > 0 && totalNoBanco < (consumo + taxa)) {
             desconto = (consumo + taxa) - totalNoBanco;
@@ -132,17 +134,27 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         return { consumo, taxa, desconto: Math.abs(desconto), totalGeral, jaPago, restante };
     }, [pedido]);
 
-    // --- 4. AGRUPAMENTO DE ITENS (COM BLINDAGEM DE ARRAYS) ---
+    // --- 4. AGRUPAMENTO DE ITENS E FILTRO POR SETOR ---
     const itensAgrupados = useMemo(() => {
         if (!pedido || !Array.isArray(pedido.itens)) return {};
         let itensParaProcessar = [...pedido.itens];
         
-        if (modoImpressao === 'cozinha') {
+        // FILTRAGEM BASEADA NO SETOR DA IMPRESSORA
+        if (setor === 'cozinha') {
+            // Cozinha: Remove as bebidas
             itensParaProcessar = itensParaProcessar.filter(item => {
                 const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
                 const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
                 const textoCompleto = `${nome} ${categoria}`;
                 return !TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
+            });
+        } else if (setor === 'bar') {
+            // Bar: Deixa APENAS as bebidas
+            itensParaProcessar = itensParaProcessar.filter(item => {
+                const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
+                const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+                const textoCompleto = `${nome} ${categoria}`;
+                return TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
             });
         }
 
@@ -154,14 +166,15 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             acc[nomePessoa].push(item);
             return acc;
         }, {});
-    }, [pedido, modoImpressao]);
+    }, [pedido, setor]);
 
-const formatMoney = (val) => {
-    return Number(val || 0).toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    });
-};
+    const formatMoney = (val) => {
+        return Number(val || 0).toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        });
+    };
+
     const formatarPagamento = (p) => {
         const metodo = p.formaPagamento || p.metodoPagamento || p.paymentMethod || '';
         const metodoString = String(metodo).toLowerCase().trim();
@@ -247,11 +260,13 @@ const formatMoney = (val) => {
                 
                 <div className="text-center border-b-2 border-black pb-2 mb-2">
                     <h1 className="text-xl font-black uppercase">{pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}</h1>
-                    {/* A SENHA ROBUSTA: */}
+                    
                     <p className="text-[12px] mt-1 font-bold">PEDIDO #{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
                     <p className="text-[10px]">{stringData}</p>
                     
-                    {modoImpressao === 'cozinha' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}
+                    {/* TARJAS DO SETOR */}
+                    {setor === 'cozinha' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}
+                    {setor === 'bar' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR / BEBIDAS **</div>}
                 </div>
 
                 <div className="mb-3 border-b-2 border-dashed border-black pb-2">
@@ -273,19 +288,19 @@ const formatMoney = (val) => {
                 </div>
 
                 <div className="mb-2">
-                    {!temItens ? <div className="text-center py-4 border border-black p-2">Sem itens para este setor.</div> : 
+                    {!temItens ? <div className="text-center py-4 border border-black p-2 font-bold uppercase">Nenhum item para este setor.</div> : 
                         Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
                             <div key={nomePessoa} className="mb-2">
                                 {pedido.mesaNumero && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
                                 {itens.map((item, index) => {
-                                    // Garantia contra dados legados de adicionais
                                     const adicionais = Array.isArray(item.adicionais) ? item.adicionais : [];
                                     
                                     return (
                                         <div key={index} className="mb-2 border-b border-dotted border-gray-400 pb-1 last:border-0">
                                             <div className="flex justify-between items-start">
                                                 <span className="font-black text-sm flex-1 pr-2 uppercase">{item.quantidade || 1}x {item.nome || item.produto?.nome}</span>
-                                                {modoImpressao !== 'cozinha' && <span className="font-bold whitespace-nowrap">{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}
+                                                {/* Preço escondido apenas se for ticket da cozinha */}
+                                                {setor !== 'cozinha' && <span className="font-bold whitespace-nowrap">{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}
                                             </div>
                                             {item.variacaoSelecionada && <div className="pl-3 text-xs font-bold mt-0.5">Opção: {item.variacaoSelecionada.nome}</div>}
                                             {adicionais.length > 0 && (
@@ -306,13 +321,12 @@ const formatMoney = (val) => {
                     }
                 </div>
 
-                {modoImpressao !== 'cozinha' && (
+                {setor !== 'cozinha' && (
                     <div className="border-t-2 border-black pt-2 mt-2">
                         <div className="flex justify-between text-xs font-bold"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
                         
                         {totais.taxa > 0 && <div className="flex justify-between text-xs"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
                         
-                        {/* DESTAQUE PARA O DESCONTO */}
                         {totais.desconto > 0 && <div className="flex justify-between text-sm font-black uppercase border-y border-dashed border-black py-1 my-1"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
                         
                         {totais.jaPago > 0 ? (

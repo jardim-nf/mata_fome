@@ -10,11 +10,19 @@ import {
     IoArrowBack, IoCart, IoSearch, IoAdd,
     IoRemove, IoRestaurant, IoClose,
     IoPerson, IoPencil, IoAddCircle, IoCheckmarkCircle,
-    IoPersonAdd, IoTrash, IoCheckmarkDoneCircle
+    IoPersonAdd, IoTrash, IoCheckmarkDoneCircle, IoPrint
 } from 'react-icons/io5';
 
-// IMPORTS DOS MODAIS
 import VariacoesModal from '../components/VariacoesModal';
+
+// --- HELPER PARA IDENTIFICAR SETOR (BAR OU COZINHA) ---
+const getSetorItem = (categoria) => {
+    const c = (categoria || '').toLowerCase();
+    const isBebida = ['bebida', 'drink', 'suco', 'refrigerante', 'agua', 'cerveja'].some(t => c.includes(t));
+    return isBebida 
+        ? { nome: 'Bar', icon: '🍺', corTexto: 'text-blue-600', corBg: 'bg-blue-50', border: 'border-blue-200' }
+        : { nome: 'Cozinha', icon: '🍳', corTexto: 'text-orange-600', corBg: 'bg-orange-50', border: 'border-orange-200' };
+};
 
 // --- COMPONENTE ITEM DO CARDÁPIO ---
 const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
@@ -26,6 +34,7 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
     }, [produto]);
 
     const precoExibicao = parseFloat(produto.preco || 0).toFixed(2);
+    const setor = getSetorItem(produto.categoria);
 
     return (
         <div
@@ -46,7 +55,12 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
             </div>
 
             <div className="flex-1 flex flex-col justify-center min-w-0 py-1">
-                <h3 className="font-bold text-gray-900 text-base leading-tight mb-1 truncate">{produto.nome}</h3>
+                <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-bold text-gray-900 text-base leading-tight truncate pr-2">{produto.nome}</h3>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${setor.corBg} ${setor.corTexto} ${setor.border}`}>
+                        {setor.icon} {setor.nome}
+                    </span>
+                </div>
                 <p className="text-xs text-gray-500 line-clamp-2 mb-2 leading-relaxed">{produto.descricao || 'Sem descrição'}</p>
                 <div className="flex items-center gap-2">
                     <span className="font-black text-sm" style={{ color: cores.destaque }}>R$ {precoExibicao}</span>
@@ -57,17 +71,14 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
     );
 });
 
-// --- TELA PEDIDOS PRINCIPAL ---
 const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
     const { estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate();
     const { user, userData } = useAuth(); 
     
-    // Define qual ID usar (Logado ou URL)
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId;
 
-    // Estados
     const [mesa, setMesa] = useState(null);
     const [cardapio, setCardapio] = useState([]);
     const [categorias, setCategorias] = useState(['Todos']);
@@ -78,6 +89,9 @@ const TelaPedidos = () => {
     const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
     const [salvando, setSalvando] = useState(false);
     const [showOrderSummary, setShowOrderSummary] = useState(false);
+
+    // Estado NOVO: Armazena o ID do pedido que acabou de ser gerado para enviar à impressora
+    const [pedidoRecemEnviadoId, setPedidoRecemEnviadoId] = useState(null);
 
     const [ocupantes, setOcupantes] = useState(['Mesa']);
     const [clienteSelecionado, setClienteSelecionado] = useState('Mesa');
@@ -97,13 +111,11 @@ const TelaPedidos = () => {
     const [ordemCategorias, setOrdemCategorias] = useState([]);
     const [senhaMasterEstabelecimento, setSenhaMasterEstabelecimento] = useState('');
 
-    // --- HELPER ---
     const normalizarTexto = (texto) => {
         if (!texto) return '';
         return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
     };
 
-    // --- FUNÇÃO: ENRIQUECER COM ADICIONAIS GLOBAIS ---
     const enrichWithGlobalAdicionais = (item) => {
         const termosAdicionais = ['adicionais', 'adicional', 'extra', 'extras', 'complemento', 'complementos', 'acrescimo', 'acrescimos', 'molho', 'molhos', 'opcoes', 'opções'];
         const categoriaItemNorm = normalizarTexto(item.categoria || '');
@@ -118,9 +130,7 @@ const TelaPedidos = () => {
             'mercearia', 'mercearias', 'tabacaria', 'cigarro'
         ];
 
-        if (categoriasBloqueadas.some(bloq => categoriaItemNorm.includes(bloq))) {
-            return item;
-        }
+        if (categoriasBloqueadas.some(bloq => categoriaItemNorm.includes(bloq))) return item;
 
         const globais = cardapio.filter(p => {
             const cat = normalizarTexto(p.categoria || '');
@@ -133,7 +143,6 @@ const TelaPedidos = () => {
         return { ...item, adicionais: [...(item.adicionais || []), ...globaisFiltrados] };
     };
 
-    // --- CARREGAMENTO INICIAL ---
     useEffect(() => {
         if (!estabelecimentoId) return;
 
@@ -216,7 +225,6 @@ const TelaPedidos = () => {
         carregarConfigECardapio();
     }, [estabelecimentoId]);
 
-    // --- REALTIME MESA ---
     useEffect(() => {
         if (!estabelecimentoId || !mesaId) return;
         setLoading(true);
@@ -264,9 +272,7 @@ const TelaPedidos = () => {
         const { nome, variacaoSelecionada, observacao, precoFinal, adicionaisSelecionados, ...restoDoItem } = itemConfig;
         
         let nomeFinal = nome;
-        if (variacaoSelecionada) {
-            nomeFinal += ` - ${variacaoSelecionada.nome}`;
-        }
+        if (variacaoSelecionada) nomeFinal += ` - ${variacaoSelecionada.nome}`;
         
         const temAdicionais = adicionaisSelecionados && adicionaisSelecionados.length > 0;
         const listaFinalAdicionais = temAdicionais ? adicionaisSelecionados : [];
@@ -367,7 +373,29 @@ const TelaPedidos = () => {
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { itens: novaLista, total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0) });
     };
 
-    // --- 🔥 SALVAR ALTERAÇÕES (CORRIGIDO PARA O CONTROLE DE SALÃO) ---
+// --- FUNÇÃO PARA ABRIR A JANELA DE IMPRESSÃO (AGORA COM LOGS) ---
+    const dispararImpressao = (pedidoIdParaImpressao, setor) => {
+        console.log("🖨️ === INICIANDO COMANDO DE IMPRESSÃO ===");
+        console.log("👉 Botão Clicado (Setor):", setor === '' ? 'Todos' : setor);
+        console.log("👉 ID do Pedido Recém Enviado:", pedidoIdParaImpressao);
+        console.log("👉 ID da Mesa Aberta:", mesaId);
+
+        // Se acabou de enviar, usa o ID gerado. Se apenas abriu a mesa velha, usa o ID da mesa como fallback.
+        const idAlvo = pedidoIdParaImpressao || mesaId;
+        
+        console.log("🎯 ID Alvo Final que vai para o link:", idAlvo);
+
+        let url = `/impressao-isolada?pedidoId=${idAlvo}`;
+        if (setor) {
+            url += `&setor=${setor}`;
+        }
+        
+        console.log("🔗 URL Final Gerada:", url);
+        console.log("==========================================");
+
+        window.open(url, '_blank', 'width=800,height=600');
+    };
+
     const salvarAlteracoes = async () => {
         setSalvando(true);
         try {
@@ -376,11 +404,8 @@ const TelaPedidos = () => {
             
             const batch = writeBatch(db);
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            let idPedidoGerado = null;
 
-            // 1. Atualiza Estoque (Opcional, não quebra se falhar a permissão)
-            // Se o usuário não tiver permissão de editar cardápio, isso poderia travar o batch.
-            // Para garantir, vamos fazer separado ou assumir que o sistema permite.
-            // Se for cliente, cuidado.
             const promessas = novos.map(async item => {
                 if(!item.categoriaId || !item.produtoIdOriginal) return null;
                 try {
@@ -391,9 +416,7 @@ const TelaPedidos = () => {
                         snap = await getDoc(ref);
                     }
                     if(snap.exists()) return { item, itemRef: ref, itemSnap: snap };
-                } catch(e) {
-                    console.warn("Sem permissão para ler/atualizar estoque, ignorando...", e);
-                }
+                } catch(e) {}
                 return null;
             });
             
@@ -417,53 +440,35 @@ const TelaPedidos = () => {
                     } else {
                         batch.update(ref, { estoque: increment(-itemV.quantidade) });
                     }
-                } catch (e) {
-                     console.warn("Erro ao preparar update de estoque no batch", e);
-                }
+                } catch (e) {}
             });
 
-            // 2. Cria o Pedido para a Cozinha (Se houver itens de cozinha)
             if(novos.length > 0) {
-                const idPedido = `pedido_${mesaId}_${Date.now()}`;
+                idPedidoGerado = `pedido_${mesaId}_${Date.now()}`;
                 
-                // Filtra o que vai pra cozinha (Ex: Bebidas não vão, se for a regra)
-                const isBebida = (cat) => {
-                    const c = (cat || '').toLowerCase();
-                    return c.includes('bebida') || c.includes('drink') || c.includes('suco') || c.includes('refrigerante') || c.includes('agua') || c.includes('cerveja');
-                };
-                
-                // Se quiser mandar TUDO para a cozinha, remova o filtro.
-                // Aqui mantive sua lógica de filtrar bebidas.
-                const cozinha = novos.filter(i => !isBebida(i.categoria));
-                
-                if(cozinha.length > 0) {
-                    // 🔥 SALVA NA COLEÇÃO 'pedidos' DO ESTABELECIMENTO
-                    const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedido);
-                    batch.set(pedidoRef, {
-                        id: idPedido, 
-                        mesaId, 
-                        mesaNumero: mesa?.numero, 
-                        itens: cozinha.map(i => ({...i, status: 'recebido'})), 
-                        status: 'recebido', 
-                        total: cozinha.reduce((a,i)=>a+(i.preco*i.quantidade),0), 
-                        dataPedido: serverTimestamp(), 
-                        createdAt: serverTimestamp(), // Adicionado para garantir ordenação
-                        source: 'salao'
-                    });
-                }
+                // Salva todos os itens novos na coleção pedidos para podermos buscar na impressão
+                const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoGerado);
+                batch.set(pedidoRef, {
+                    id: idPedidoGerado, 
+                    mesaId, 
+                    mesaNumero: mesa?.numero, 
+                    itens: novos.map(i => ({...i, status: 'recebido'})), 
+                    status: 'recebido', 
+                    total: novos.reduce((a,i)=>a+(i.preco*i.quantidade),0), 
+                    dataPedido: serverTimestamp(), 
+                    createdAt: serverTimestamp(), 
+                    source: 'salao'
+                });
 
-                // 3. Atualiza a Mesa (Controle de Salão)
-                const itensUpd = resumoPedido.map(i => (!i.status || i.status === 'pendente') ? { ...i, status: 'enviado', pedidoCozinhaId: cozinha.length > 0 ? idPedido : null } : i);
+                const itensUpd = resumoPedido.map(i => (!i.status || i.status === 'pendente') ? { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado } : i);
                 
-                // 🔥 CORREÇÃO: status 'ocupada' ao invés de 'com_pedido' para o Controle de Salão reconhecer
                 batch.update(mesaRef, { 
                     itens: itensUpd, 
-                    status: 'ocupada', // <-- Isso faz o card ficar vermelho/ocupado no Controle
+                    status: 'ocupada', 
                     total: total, 
                     updatedAt: serverTimestamp() 
                 });
             } else {
-                // Se não tem novos itens (apenas atualização de qtd ou algo assim), só atualiza a mesa
                 batch.update(mesaRef, { 
                     itens: resumoPedido, 
                     total: total, 
@@ -471,13 +476,15 @@ const TelaPedidos = () => {
                 });
             }
 
-await batch.commit();
+            await batch.commit();
             toast.success("Pedido enviado!");
             
-            // --- ADICIONE ESTAS DUAS LINHAS AQUI ---
-            setShowOrderSummary(false); // 1. Fecha o modal do resumo/carrinho
-            navigate('/controle-salao'); // 2. Volta para a tela das mesas
-            // ---------------------------------------
+            // Grava o ID gerado para que os botões de impressão saibam o que imprimir
+            if (idPedidoGerado) {
+                setPedidoRecemEnviadoId(idPedidoGerado);
+            }
+
+            // ATENÇÃO: NÃO Fechamos o modal aqui. Ele fica aberto para a pessoa clicar em "Imprimir"
 
         } catch(e) { 
             console.error("Erro ao salvar:", e); 
@@ -496,6 +503,9 @@ await batch.commit();
 
     const totalGeral = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
     const totalItens = resumoPedido.reduce((acc, i) => acc + i.quantidade, 0);
+
+    // Verifica se ainda existem itens não enviados
+    const temItensPendentes = resumoPedido.some(i => !i.status || i.status === 'pendente');
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div></div>;
 
@@ -571,43 +581,106 @@ await batch.commit();
                 </div>
             )}
 
+            {/* MODAL PRINCIPAL: RESUMO DO PEDIDO */}
             {showOrderSummary && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+                <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
                     <div className="relative w-full max-w-lg bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
-                        <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-center"><div><h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2><p className="text-xs text-gray-500 mt-0.5">Confira os itens antes de enviar</p></div><button onClick={() => setShowOrderSummary(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200"><IoClose /></button></div>
+                        
+                        <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-center shrink-0">
+                            <div><h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2><p className="text-xs text-gray-500 mt-0.5">Confira e envie para produção</p></div>
+                            <button onClick={() => setShowOrderSummary(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200"><IoClose /></button>
+                        </div>
+                        
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
                             {Object.entries(itensAgrupados).map(([pessoa, itens]) => (
                                 <div key={pessoa} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                                    <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center"><div className="flex items-center gap-2 font-bold text-gray-700"><IoPerson className="text-gray-400" /> {pessoa}</div><span className="text-sm font-bold text-gray-900">R$ {itens.reduce((a, i) => a + (i.preco * i.quantidade), 0).toFixed(2)}</span></div>
+                                    <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center">
+                                        <div className="flex items-center gap-2 font-bold text-gray-700"><IoPerson className="text-gray-400" /> {pessoa}</div>
+                                        <span className="text-sm font-bold text-gray-900">R$ {itens.reduce((a, i) => a + (i.preco * i.quantidade), 0).toFixed(2)}</span>
+                                    </div>
                                     <div className="divide-y divide-gray-100">
-                                        {itens.map((item, idx) => (
+                                        {itens.map((item, idx) => {
+                                            const setorItem = getSetorItem(item.categoria);
+                                            return (
                                             <div key={idx} className="p-4 flex gap-3">
                                                 <div className="flex-1">
-                                                    <div className="flex justify-between items-start"><h4 className="font-bold text-gray-900">{item.quantidade > 1 && <span className="text-red-500 mr-1">{item.quantidade}x</span>}{item.nome}</h4><span className="font-bold text-gray-900 text-sm">R$ {(item.preco * item.quantidade).toFixed(2)}</span></div>
+                                                    <div className="flex justify-between items-start">
+                                                        <h4 className="font-bold text-gray-900 pr-2">{item.quantidade > 1 && <span className="text-red-500 mr-1">{item.quantidade}x</span>}{item.nome}</h4>
+                                                        <span className="font-bold text-gray-900 text-sm">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                                                    </div>
+
+                                                    {/* TAGS DO SETOR E STATUS AQUI */}
+                                                    <div className="flex items-center gap-2 mt-1 mb-1">
+                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${setorItem.corBg} ${setorItem.corTexto} ${setorItem.border}`}>
+                                                            {setorItem.icon} {setorItem.nome}
+                                                        </span>
+                                                        <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${item.status && item.status !== 'pendente' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-600 border-orange-200'}`}>
+                                                            {item.status && item.status !== 'pendente' ? 'Enviado' : 'Pendente'}
+                                                        </span>
+                                                    </div>
+
                                                     {item.observacao && <p className="text-xs text-orange-600 mt-1">Obs: {item.observacao}</p>}
-                                                    {item.adicionadoPor && (<div className="flex items-center gap-1 mt-1 text-[10px] text-gray-400 font-medium"><IoPersonAdd className="text-gray-300" size={10} /> <span>Add por: {item.adicionadoPor}</span></div>)}
+                                                    {item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0 && (
+                                                        <p className="text-[10px] text-gray-500 mt-0.5 font-bold">+ {item.adicionaisSelecionados.map(a => a.nome).join(', ')}</p>
+                                                    )}
+                                                    
                                                     <div className="mt-3 flex items-center justify-between">
-                                                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md border ${item.status && item.status !== 'pendente' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>{item.status && item.status !== 'pendente' ? 'Enviado' : 'Pendente'}</span>
-                                                        {item.status && item.status !== 'pendente' ? (<button onClick={() => { setItemParaExcluir(item); setSenhaDigitada(''); setModalSenhaAberto(true); }} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 px-2 py-1 rounded border border-red-100 hover:bg-red-50"><IoTrash /> Excluir</button>) : (<div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1"><button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-red-500"><IoRemove /></button><span className="font-bold text-sm w-4 text-center">{item.quantidade}</span><button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade + 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-green-600"><IoAdd /></button></div>)}
+                                                        {item.adicionadoPor ? (<div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium"><IoPersonAdd className="text-gray-300" size={10} /> <span>{item.adicionadoPor}</span></div>) : <div></div>}
+                                                        {item.status && item.status !== 'pendente' ? (
+                                                            <button onClick={() => { setItemParaExcluir(item); setSenhaDigitada(''); setModalSenhaAberto(true); }} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 px-2 py-1 rounded border border-red-100 hover:bg-red-50"><IoTrash /> Excluir</button>
+                                                        ) : (
+                                                            <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
+                                                                <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-red-500"><IoRemove /></button>
+                                                                <span className="font-bold text-sm w-4 text-center">{item.quantidade}</span>
+                                                                <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade + 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-green-600"><IoAdd /></button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <div className="p-4 bg-white border-t border-gray-100">
-                            <div className="flex justify-between items-end mb-4"><span className="text-sm text-gray-500 font-bold">Total Geral</span><span className="text-3xl font-black text-gray-900">R$ {totalGeral.toFixed(2)}</span></div>
-                            <button onClick={salvarAlteracoes} disabled={salvando} className="w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70" style={{ backgroundColor: coresEstabelecimento.destaque }}>{salvando ? 'Processando...' : (<> <IoCheckmarkDoneCircle className="text-2xl" /> Confirmar Pedido </>)}</button>
+                        
+                        {/* RODAPÉ INTELIGENTE (CONFIRMAR OU IMPRIMIR) */}
+                        <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+                            <div className="flex justify-between items-end mb-4">
+                                <span className="text-sm text-gray-500 font-bold">Total Geral</span>
+                                <span className="text-3xl font-black text-gray-900">R$ {totalGeral.toFixed(2)}</span>
+                            </div>
+                            
+                            {temItensPendentes ? (
+                                <button onClick={salvarAlteracoes} disabled={salvando} className="w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+                                    {salvando ? 'Processando...' : (<> <IoCheckmarkDoneCircle className="text-2xl" /> Confirmar Pedido </>)}
+                                </button>
+                            ) : (
+                                <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2 duration-300">
+                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex justify-center mb-3">
+                                        <IoPrint className="mr-1 text-sm" /> Mande para a Impressora:
+                                    </span>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => dispararImpressao(pedidoRecemEnviadoId, 'cozinha')} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
+                                            <span className="text-xl">🍳</span> Cozinha
+                                        </button>
+                                        <button onClick={() => dispararImpressao(pedidoRecemEnviadoId, 'bar')} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
+                                            <span className="text-xl">🍺</span> Bar
+                                        </button>
+                                        <button onClick={() => dispararImpressao(pedidoRecemEnviadoId, '')} className="flex-1 bg-gray-200 hover:bg-gray-800 hover:text-white text-gray-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-gray-300 hover:border-transparent">
+                                            <span className="text-xl">🧾</span> Tudo
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
 
             {modalSenhaAberto && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                     <div className="bg-white p-6 rounded-2xl w-full max-w-xs text-center shadow-2xl">
                         <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3"><IoTrash className="text-2xl" /></div>
                         <h3 className="font-bold text-lg text-gray-900">Excluir Item Enviado?</h3>

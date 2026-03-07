@@ -8,7 +8,7 @@ import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline } from "react-icons/io5";
 
-// --- GRUPO DE PEDIDOS DA MESA (DESIGN REFINADO) ---
+// --- GRUPO DE PEDIDOS DA MESA (DESIGN REFINADO & RESPONSIVO) ---
 const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
@@ -42,22 +42,22 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
         <div className="space-y-4">
             {pedidosAgrupados.map((grupo, index) => (
                 <div key={`grupo-${grupo.mesaNumero}-${index}`} className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                    {/* Cabeçalho do Grupo Estilo "Comanda" */}
-                    <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-200/60 border-dashed flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <span className="font-black text-slate-800 text-lg flex items-center gap-2">
-                                <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm">
+                    {/* CABEÇALHO DA MESA COM FLEX-WRAP PARA NÃO CORTAR */}
+                    <div className="bg-slate-50/50 p-3 border-b border-slate-200/60 border-dashed flex flex-wrap justify-between items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-black text-slate-800 text-base flex items-center gap-2">
+                                <span className="w-7 h-7 shrink-0 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm">
                                     <IoRestaurant />
                                 </span>
                                 Mesa {grupo.mesaNumero}
                             </span>
                             {grupo.loteHorario && (
-                                <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full flex items-center gap-1 font-mono font-medium">
+                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full flex items-center gap-1 font-mono font-medium shrink-0">
                                     <IoTime className="w-3.5 h-3.5" /> {grupo.loteHorario}
                                 </span>
                             )}
                         </div>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full border border-slate-200/60">
+                        <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200/60 shrink-0">
                             {grupo.totalItens} itens
                         </span>
                     </div>
@@ -78,7 +78,6 @@ function Painel() {
     const audioRef = useRef(null);
     const { loading: authLoading, estabelecimentosGerenciados } = useAuth();
 
-    // Estado Data Selecionada
     const [dataSelecionada, setDataSelecionada] = useState(() => {
         const hj = new Date();
         return hj.getFullYear() + '-' + String(hj.getMonth() + 1).padStart(2, '0') + '-' + String(hj.getDate()).padStart(2, '0');
@@ -217,9 +216,9 @@ function Painel() {
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
                 const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
                 if (!pedidosJaImpressos.current.has(pedidoId) && !impressosLocal.includes(pedidoId)) {
-                    pedidosJaImpressos.current.add(pedidoId); 
+                    pedidosJaImpressos.current.add(pedidoId);
                     impressosLocal.push(pedidoId);
-                    if (impressosLocal.length > 50) impressosLocal.shift(); 
+                    if (impressosLocal.length > 50) impressosLocal.shift();
                     localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
                     setPrintQueue(prev => prev.includes(pedidoId) ? prev : [...prev, pedidoId]);
                 }
@@ -231,7 +230,7 @@ function Painel() {
 
         let isFirstRun = true;
         const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), orderBy('createdAt', 'asc'));
-        
+
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
 
@@ -245,7 +244,7 @@ function Painel() {
                 ...prev,
                 recebido: listaTodos.filter(p => p.status === 'recebido'),
                 preparo: listaTodos.filter(p => p.status === 'preparo'),
-                em_entrega: listaTodos.filter(p => p.status === 'em_entrega'), 
+                em_entrega: listaTodos.filter(p => p.status === 'em_entrega'),
                 pronto_para_servir: listaTodos.filter(p => p.status === 'pronto_para_servir'),
                 finalizado: listaTodos.filter(p => p.status === 'finalizado')
             }));
@@ -288,7 +287,7 @@ function Painel() {
                 const timer = setInterval(() => {
                     if (printWindow.closed) {
                         clearInterval(timer);
-                        setPrintQueue(prev => prev.filter(id => id !== pedidoId)); 
+                        setPrintQueue(prev => prev.filter(id => id !== pedidoId));
                         setIsPrinting(false);
                     }
                 }, 500);
@@ -303,14 +302,13 @@ function Painel() {
     }, [printQueue, isPrinting, estabelecimentoAtivo]);
 
     const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'finalizado'], [abaAtiva]);
-    
-    // 🔥 PALETA DE CORES NOVA (SOFT UI) 🔥
-    const STATUS_UI = { 
-        recebido: { title: 'Novos', icon: '📥', dot: 'bg-rose-500', bgBadge: 'bg-rose-100', textBadge: 'text-rose-700' }, 
-        preparo: { title: 'Em Preparo', icon: '🔥', dot: 'bg-amber-500', bgBadge: 'bg-amber-100', textBadge: 'text-amber-700' }, 
-        em_entrega: { title: 'Em Entrega', icon: '🛵', dot: 'bg-blue-500', bgBadge: 'bg-blue-100', textBadge: 'text-blue-700' }, 
-        pronto_para_servir: { title: 'Pronto (Mesa)', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700' }, 
-        finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700' } 
+
+    const STATUS_UI = {
+        recebido: { title: 'Novos', icon: '📥', dot: 'bg-rose-500', bgBadge: 'bg-rose-100', textBadge: 'text-rose-700' },
+        preparo: { title: 'Em Preparo', icon: '🔥', dot: 'bg-amber-500', bgBadge: 'bg-amber-100', textBadge: 'text-amber-700' },
+        em_entrega: { title: 'Em Entrega', icon: '🛵', dot: 'bg-blue-500', bgBadge: 'bg-blue-100', textBadge: 'text-blue-700' },
+        pronto_para_servir: { title: 'Pronto (Mesa)', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700' },
+        finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700' }
     };
 
     if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
@@ -319,12 +317,9 @@ function Painel() {
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
-            
-            {/* HEADER MODERNO */}
+
             <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 sticky top-0 z-30 px-4 py-3 md:py-4">
-                <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-                    
-                    {/* Esquerda: Voltar e Título */}
+                <div className="w-full px-2 mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-4 w-full md:w-auto">
                         <button onClick={() => navigate('/admin-dashboard')} className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors">
                             <IoArrowBack size={20} />
@@ -335,10 +330,7 @@ function Painel() {
                         </div>
                     </div>
 
-                    {/* Centro/Direita: Filtros e Controles */}
                     <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
-                        
-                        {/* Toggle Inteligente */}
                         <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
                             <button onClick={() => setAbaAtiva('delivery')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}>
                                 <IoBicycle className="text-lg" /> Delivery
@@ -348,21 +340,19 @@ function Painel() {
                             </button>
                         </div>
 
-                        {/* Filtro de Data Estilo Pill */}
                         <div className="relative group">
                             <IoCalendarOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-hover:text-blue-500 transition-colors pointer-events-none" />
-                            <input 
-                                type="date" 
-                                value={dataSelecionada} 
+                            <input
+                                type="date"
+                                value={dataSelecionada}
                                 onChange={(e) => setDataSelecionada(e.target.value)}
                                 className="pl-9 pr-4 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-xl outline-none focus:ring-2 focus:ring-blue-500/50 hover:border-slate-300 cursor-pointer shadow-sm transition-all"
                                 title="Filtrar por data"
                             />
                         </div>
 
-                        {/* Botão de Som Discreto */}
-                        <button 
-                            onClick={() => { setNotificationsEnabled(!notificationsEnabled); setUserInteracted(true); toast.info(notificationsEnabled ? "Som desativado" : "Som ativado"); }} 
+                        <button
+                            onClick={() => { setNotificationsEnabled(!notificationsEnabled); setUserInteracted(true); toast.info(notificationsEnabled ? "Som desativado" : "Som ativado"); }}
                             className={`p-2.5 rounded-xl border transition-all ${notificationsEnabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}
                             title="Ativar/Desativar Som"
                         >
@@ -372,19 +362,18 @@ function Painel() {
                 </div>
             </header>
 
-            {/* COLUNAS KANBAN CLEAN */}
-            <main className="flex-1 p-4 md:p-6 overflow-x-auto">
-                <div className="flex flex-col md:flex-row gap-5 min-w-full md:min-w-0 h-full max-w-[1600px] mx-auto">
+            {/* COLUNAS KANBAN DEFINITIVO */}
+            <main className="flex-1 p-4 md:p-6 overflow-x-auto bg-slate-50">
+                <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
                         let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
 
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
-                        
+
                         return (
-                            <div key={statusKey} className="flex-1 flex flex-col bg-slate-100/50 rounded-3xl border border-slate-200/80 min-h-[500px] md:h-[calc(100vh-140px)] overflow-hidden shadow-sm">
+                            <div key={statusKey} className="flex-1 shrink-0 min-w-[320px] flex flex-col bg-slate-100/50 rounded-2xl md:rounded-3xl border border-slate-200/80 min-h-[500px] md:h-[calc(100vh-140px)] overflow-hidden shadow-sm">
                                 
-                                {/* Cabeçalho da Coluna */}
                                 <div className="px-5 py-4 border-b border-slate-200/80 flex justify-between items-center bg-white/40 backdrop-blur-sm">
                                     <div className="flex items-center gap-2.5">
                                         <div className={`w-2.5 h-2.5 rounded-full ${config.dot}`}></div>
@@ -394,8 +383,7 @@ function Painel() {
                                         {listaPedidos.length}
                                     </span>
                                 </div>
-                                
-                                {/* Área de Scroll dos Cartões */}
+
                                 <div className="flex-1 p-3 overflow-y-auto custom-scrollbar">
                                     {listaPedidos.length === 0 ? (
                                         <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -187,6 +187,9 @@ const PaginaImpressao = () => {
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState('');
 
+    // 🔥 REF PARA BLOQUEAR A DUPLA IMPRESSÃO
+    const jaImprimiu = useRef(false);
+
     useEffect(() => {
         if (!idUrl || authLoading) return;
 
@@ -226,8 +229,11 @@ const PaginaImpressao = () => {
                     if (estabSnap.exists()) setEstabelecimento(estabSnap.data());
                 }
 
-                // Auto-Print
-                setTimeout(() => window.print(), 800);
+                // 🔥 Auto-Print COM BLOQUEIO DE DUPLICAÇÃO 🔥
+                if (!jaImprimiu.current) {
+                    jaImprimiu.current = true;
+                    setTimeout(() => window.print(), 800);
+                }
 
             } catch (err) {
                 console.error(err);

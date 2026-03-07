@@ -608,6 +608,7 @@ function Menu() {
     };
 
     const handlePagamentoSucesso = async (result) => {
+        if (processandoPagamento) return;
         setProcessandoPagamento(true);
         try {
             let formaPagamento = 'A Combinar';
