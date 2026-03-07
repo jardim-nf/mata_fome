@@ -13,35 +13,29 @@ const isItemCozinha = (item) => {
     try {
         if (!item || typeof item !== 'object') return false;
         
-        const nome = typeof item.nome === 'string' ? item.nome.toLowerCase() : '';
-        const prodNome = item.produto && typeof item.produto.nome === 'string' ? item.produto.nome.toLowerCase() : '';
-        const categoria = typeof item.categoria === 'string' ? item.categoria.toLowerCase() : '';
-        const prodCategoria = item.produto && typeof item.produto.categoria === 'string' ? item.produto.categoria.toLowerCase() : '';
+        const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
+        const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+        const textoCompleto = `${nome} ${categoria}`;
         
-        // 1. Bloqueia direto pela Categoria (Mais seguro)
-        const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces'];
+        // 🔥 ADICIONADO 'bomboniere' E 'doce' NA LISTA DE BLOQUEIO ABSOLUTO
+        const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];
         const temCategoriaBloqueada = categoriasBloqueadas.some(cat => 
-            categoria.includes(cat) || prodCategoria.includes(cat)
+            categoria.includes(cat)
         );
         if (temCategoriaBloqueada) return false;
 
-        // 2. Bloqueia por palavras chaves no Nome do Produto
-        // Nota: Evitei usar 'doce' sozinho para não bloquear 'batata doce'
         const palavrasBloqueadas = [
             'refrigerante', 'suco', 'cerveja', 'long neck', 'drink', 'vinho', 
             'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral',
-            'sorvete', 'bala ', 'chiclete', 'chocolate', 'pirulito'
+            'sorvete', 'bala ', 'chiclete', 'chocolate', 'pirulito', ' Halls', 'Mentos'
         ];
         
-        const nomeCompleto = `${nome} ${prodNome}`;
-        const temNomeBloqueado = palavrasBloqueadas.some(palavra => nomeCompleto.includes(palavra));
-        
+        const temNomeBloqueado = palavrasBloqueadas.some(palavra => textoCompleto.includes(palavra));
         if (temNomeBloqueado) return false;
         
-        // Se passou por tudo, é comida!
-        return true;
+        return true; 
     } catch (error) {
-        return true; // Se der erro bizarro, mantém na tela para não sumir dados
+        return true; 
     }
 };
 
