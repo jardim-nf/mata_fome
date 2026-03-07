@@ -5,11 +5,11 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { IoPrint } from 'react-icons/io5';
 
-// 🔥 LISTA AMPLIADA PARA BLOQUEAR BEBIDAS E BOMBONIERE NA COZINHA
+// 🔥 LISTA DE BLOQUEIO PARA COZINHA (Bebidas e Bomboniere não saem lá)
 const TERMOS_BLOQUEADOS_COZINHA = [
     'bebida', 'refrigerante', 'suco', 'cerveja', 'agua', 'água', 
     'drink', 'vinho', 'dose', 'long neck', 'lata', 'garrafa', 'h2oh', 'coca', 'guarana',
-    'bomboniere', 'doce', 'sobremesa', 'chiclete', 'bala ', 'chocolate', 'halls', 'mentos'
+    'bomboniere', 'doce', 'sobremesa', 'chiclete', 'bala ', 'chocolate', 'halls', 'mentos', 'pirulito'
 ];
 
 const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
@@ -18,10 +18,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const [searchParams] = useSearchParams();
     const { primeiroEstabelecimento, loading: authLoading } = useAuth();
     
-    const modoImpressao = searchParams.get('modo'); 
-    const setorParam = searchParams.get('setor');
-    const setor = setorParam || modoImpressao; 
-
+    const setor = searchParams.get('setor') || searchParams.get('modo'); 
     const estabIdUrl = searchParams.get('estabId');
 
     const [pedidoState, setPedidoState] = useState(null);
@@ -30,181 +27,210 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
     const pedido = pedidoProp || pedidoState;
 
+    // --- 1. BUSCA O PEDIDO ---
     useEffect(() => {
         if (pedidoProp) { setLoading(false); return; }
-        if (!idUrl) { setLoading(false); setErro("ID não fornecido."); return; }
-        if (authLoading) return;
+        if (!idUrl || authLoading) return;
 
         const buscarPedido = async () => {
             setLoading(true);
-            setErro('');
             try {
-                let encontrou = false, dados = null;
+                let dados = null;
                 const refGlobal = doc(db, 'pedidos', idUrl);
-                let docSnap = await getDoc(refGlobal);
+                const snap = await getDoc(refGlobal);
                 
-                if (docSnap.exists()) {
-                    dados = { id: docSnap.id, ...docSnap.data() };
-                    encontrou = true;
+                if (snap.exists()) {
+                    dados = { id: snap.id, ...snap.data() };
                 } else {
                     const lojaId = estabIdUrl || primeiroEstabelecimento;
                     if (lojaId) {
                         const refLoja = doc(db, 'estabelecimentos', lojaId, 'pedidos', idUrl);
-                        docSnap = await getDoc(refLoja);
-                        if (docSnap.exists()) {
-                            dados = { id: docSnap.id, ...docSnap.data() };
-                            encontrou = true;
-                        }
+                        const snapLoja = await getDoc(refLoja);
+                        if (snapLoja.exists()) dados = { id: snapLoja.id, ...snapLoja.data() };
                     }
                 }
 
-                if (!encontrou) {
+                if (!dados) {
                     const q = query(collectionGroup(db, 'pedidos'), where('id', '==', idUrl));
-                    const querySnap = await getDocs(q);
-                    if (!querySnap.empty) {
-                        dados = { id: querySnap.docs[0].id, ...querySnap.docs[0].data() };
-                        encontrou = true;
-                    }
+                    const qSnap = await getDocs(q);
+                    if (!qSnap.empty) dados = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
                 }
 
-                if (encontrou && dados) {
-                    setPedidoState(dados);
-                } else {
-                    throw new Error("Pedido não encontrado.");
-                }
-            } catch (error) { 
-                setErro(error.message); 
-            } 
+                if (dados) setPedidoState(dados);
+                else setErro("Pedido não encontrado.");
+            } catch (e) { setErro("Erro ao carregar dados."); }
             finally { setLoading(false); }
         };
         buscarPedido();
     }, [idUrl, authLoading, primeiroEstabelecimento, estabIdUrl, pedidoProp]);
 
+    // --- 2. AUTO-PRINT ---
     useEffect(() => {
-        if (!pedidoProp && pedido && !loading && !erro) {
-            document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
-            const timer = setTimeout(() => { 
-                window.focus();
-                window.onafterprint = () => { window.close(); };
-                window.print(); 
-            }, 1200);
-            return () => clearTimeout(timer);
+        if (pedido && !loading && !erro) {
+            document.title = `TICKET_${pedido.id?.slice(-4)}`;
+            const t = setTimeout(() => { 
+                window.print();
+                window.onafterprint = () => window.close();
+            }, 1000);
+            return () => clearTimeout(t);
         }
-    }, [pedido, loading, erro, pedidoProp]);
+    }, [pedido, loading, erro]);
 
+    // --- 3. CÁLCULOS ---
     const totais = useMemo(() => {
-        if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
+        if (!pedido) return { subtotal: 0, totalGeral: 0, jaPago: 0, restante: 0 };
         const itens = Array.isArray(pedido.itens) ? pedido.itens : [];
-        const consumo = itens.reduce((acc, item) => item.preco > 0 ? acc + (item.preco * (item.quantidade || 1)) : acc, 0);
+        const subtotal = itens.reduce((acc, i) => acc + ((i.precoFinal || i.preco || 0) * (i.quantidade || 1)), 0);
         const taxa = Number(pedido.taxaEntrega) || 0;
-        let desconto = Number(pedido.desconto) || 0;
-        const totalGeral = consumo + taxa - Math.abs(desconto);
+        const desc = Number(pedido.desconto) || 0;
+        const totalGeral = (pedido.totalFinal || (subtotal + taxa - desc));
+        
         const pagamentos = Array.isArray(pedido.pagamentosParciais) ? pedido.pagamentosParciais : [];
         const jaPago = pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
-        return { consumo, taxa, desconto: Math.abs(desconto), totalGeral, jaPago, restante: Math.max(0, totalGeral - jaPago) };
+
+        return { subtotal, totalGeral, jaPago, restante: Math.max(0, totalGeral - jaPago) };
     }, [pedido]);
 
+    // --- 4. FILTRAGEM POR SETOR ---
     const itensAgrupados = useMemo(() => {
-        if (!pedido || !Array.isArray(pedido.itens)) return {};
-        let itensParaProcessar = [...pedido.itens];
-        
-        // 🔥 LÓGICA DE FILTRAGEM DE SETOR MELHORADA
+        if (!pedido?.itens) return {};
+        let lista = [...pedido.itens];
+
         if (setor === 'cozinha') {
-            itensParaProcessar = itensParaProcessar.filter(item => {
-                const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
-                const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
-                const textoCompleto = `${nome} ${categoria}`;
-                // NÃO deixa passar se for bebida ou bomboniere
-                return !TERMOS_BLOQUEADOS_COZINHA.some(termo => textoCompleto.includes(termo));
+            lista = lista.filter(i => {
+                const txt = `${i.nome} ${i.categoria}`.toLowerCase();
+                return !TERMOS_BLOQUEADOS_COZINHA.some(t => txt.includes(t));
             });
         } else if (setor === 'bar') {
-            itensParaProcessar = itensParaProcessar.filter(item => {
-                const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
-                const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
-                const textoCompleto = `${nome} ${categoria}`;
-                // Deixa passar APENAS se for bebida ou bomboniere
-                return TERMOS_BLOQUEADOS_COZINHA.some(termo => textoCompleto.includes(termo));
+            lista = lista.filter(i => {
+                const txt = `${i.nome} ${i.categoria}`.toLowerCase();
+                return TERMOS_BLOQUEADOS_COZINHA.some(t => txt.includes(t));
             });
         }
 
-        return itensParaProcessar.reduce((acc, item) => {
-            if (item.preco <= 0 && setor !== 'cozinha') return acc;
-            const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
-            if (!acc[nomePessoa]) acc[nomePessoa] = [];
-            acc[nomePessoa].push(item);
+        return lista.reduce((acc, item) => {
+            const dono = item.cliente || item.clienteNome || 'Geral';
+            if (!acc[dono]) acc[dono] = [];
+            acc[dono].push(item);
             return acc;
         }, {});
     }, [pedido, setor]);
 
-    const formatMoney = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const formatMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    const formatarPagamento = (p) => {
-        const metodo = String(p.formaPagamento || p.metodoPagamento || '').toLowerCase().trim();
-        if (metodo.includes('dinheiro') || metodo === '4') return 'DINHEIRO';
-        if (metodo.includes('pix') || metodo === '1') return 'PIX';
-        if (metodo.includes('credito') || metodo === '2') return 'CRÉDITO';
-        if (metodo.includes('debito') || metodo === '3') return 'DÉBITO';
-        return metodo.toUpperCase() || 'A COMBINAR';
-    };
-
-    if (loading) return <div className="bg-white p-4 text-center font-bold">Carregando...</div>;
-    if (erro) return <div className="bg-white p-4 text-red-600 font-bold">ERRO: {erro}</div>;
+    if (loading) return <div className="p-10 text-center font-bold">Gerando Ticket...</div>;
+    if (erro) return <div className="p-10 text-center text-red-600 font-bold">{erro}</div>;
     if (!pedido) return null;
 
+    const endereco = pedido.endereco || pedido.cliente?.endereco;
+    const isDelivery = !pedido.mesaNumero || pedido.mesaNumero === 0;
+
     return (
-        <>
+        <div className="bg-white">
             <style>{`
                 @media print {
-                    @page { margin: 0; }
-                    html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
-                    body * { visibility: hidden; }
-                    #area-impressao, #area-impressao * { visibility: visible !important; color: black !important; background: transparent !important; }
-                    #area-impressao { position: absolute; left: 0; top: 0; width: 58mm !important; padding: 2mm; }
-                    .no-print { display: none !important; }
+                    @page { margin: 0; size: 58mm auto; }
+                    body { margin: 0; padding: 0; background: white; }
+                    .no-print { display: none; }
                 }
+                #ticket { 
+                    width: 58mm; 
+                    font-family: 'Courier New', Courier, monospace; 
+                    font-size: 11px; 
+                    line-height: 1.1;
+                    color: black;
+                    padding: 1mm;
+                    margin: 0 auto;
+                }
+                .dashed { border-bottom: 1px dashed black; }
+                .bold { font-weight: bold; }
+                .text-center { text-align: center; }
+                .big { font-size: 14px; }
             `}</style>
 
-            <div id="area-impressao" className="bg-white text-black font-mono text-xs leading-tight w-full mx-auto" style={{ maxWidth: '58mm' }}>
-                <div className="text-center border-b-2 border-black pb-2 mb-2">
-                    <h1 className="text-xl font-black uppercase">{pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}</h1>
-                    <p className="text-[12px] mt-1 font-bold">PEDIDO #{pedido.senha || pedido.id?.slice(-4).toUpperCase()}</p>
-                    <p className="text-[10px]">{new Date().toLocaleString('pt-BR')}</p>
+            <div id="ticket">
+                {/* CABEÇALHO */}
+                <div className="text-center dashed pb-1 mb-1">
+                    <h2 className="bold big uppercase">{pedido.mesaNumero ? `MESA ${pedido.mesaNumero}` : 'DELIVERY'}</h2>
+                    <p className="bold">#{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
+                    <p style={{ fontSize: '9px' }}>{new Date().toLocaleString('pt-BR')}</p>
+                    {setor && <div className="mt-1 border border-black bold uppercase p-0.5">** {setor} **</div>}
+                </div>
+
+                {/* CLIENTE E ENTREGA (TURBINADO) */}
+                <div className="dashed pb-1 mb-1">
+                    <p className="bold uppercase">{pedido.clienteNome || pedido.cliente?.nome || 'CLIENTE'}</p>
+                    {(pedido.telefone || pedido.cliente?.telefone) && <p className="bold">Tel: {pedido.telefone || pedido.cliente?.telefone}</p>}
                     
-                    {setor === 'cozinha' && <div className="mt-1 border-2 border-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}
-                    {setor === 'bar' && <div className="mt-1 border-2 border-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR / BOMBONIERE **</div>}
+                    {isDelivery && endereco && (
+                        <div className="mt-1 border-t pt-1">
+                            <p className="bold underline">ENDEREÇO DE ENTREGA:</p>
+                            <p className="bold">{endereco.rua}, {endereco.numero}</p>
+                            <p>{endereco.bairro} - {endereco.cidade || ''}</p>
+                            {endereco.complemento && <p className="italic">({endereco.complemento})</p>}
+                            {pedido.pontoReferencia && <p className="bold">Ref: {pedido.pontoReferencia}</p>}
+                        </div>
+                    )}
                 </div>
 
-                <div>
-                    {Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
-                        <div key={nomePessoa} className="mb-2">
-                            {pedido.mesaNumero && nomePessoa !== 'Geral' && <div className="font-black text-[12px] border-b border-black mb-1">👤 {nomePessoa}</div>}
-                            {itens.map((item, index) => (
-                                <div key={index} className="mb-1 border-b border-dotted border-black pb-1 last:border-0">
-                                    <div className="flex justify-between font-black">
-                                        <span className="uppercase">{item.quantidade || 1}x {item.nome}</span>
-                                        {setor !== 'cozinha' && <span>{formatMoney((item.preco || 0) * (item.quantidade || 1))}</span>}
+                {/* ITENS */}
+                <div className="mb-1">
+                    {Object.keys(itensAgrupados).length === 0 ? <p className="text-center italic">Sem itens.</p> : 
+                        Object.entries(itensAgrupados).map(([pessoa, itens]) => (
+                            <div key={pessoa} className="mb-1">
+                                {pedido.mesaNumero && pessoa !== 'Geral' && <div className="bold border-b mb-1">👤 {pessoa}</div>}
+                                {itens.map((item, i) => (
+                                    <div key={i} className="mb-1">
+                                        <div className="flex justify-between bold">
+                                            <span className="uppercase">{item.quantidade || 1}x {item.nome}</span>
+                                            {setor !== 'cozinha' && <span>{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}
+                                        </div>
+                                        {item.variacaoSelecionada && <div className="pl-2">- {item.variacaoSelecionada.nome}</div>}
+                                        {item.observacao && <div className="bg-black text-white px-1 mt-0.5 bold uppercase" style={{fontSize: '9px'}}>OBS: {item.observacao}</div>}
                                     </div>
-                                    {item.observacao && <div className="bg-black text-white px-1 text-[10px] uppercase font-bold mt-1">OBS: {item.observacao}</div>}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
+                                ))}
+                            </div>
+                        ))
+                    }
                 </div>
 
+                {/* FINANCEIRO (Não sai na cozinha) */}
                 {setor !== 'cozinha' && (
-                    <div className="border-t-2 border-black pt-1 mt-2">
-                        <div className="flex justify-between font-black text-sm"><span>TOTAL:</span><span>{formatMoney(totais.totalGeral)}</span></div>
-                        <div className="mt-2 border border-black p-1 text-center font-bold uppercase">
-                            Pagamento: {formatarPagamento(pedido)}
+                    <div className="border-t pt-1 mt-1">
+                        <div className="flex justify-between"><span>Subtotal:</span><span>{formatMoney(totais.subtotal)}</span></div>
+                        {pedido.taxaEntrega > 0 && <div className="flex justify-between"><span>Taxa Entrega:</span><span>{formatMoney(pedido.taxaEntrega)}</span></div>}
+                        {pedido.desconto > 0 && <div className="flex justify-between bold"><span>Desconto:</span><span>-{formatMoney(pedido.desconto)}</span></div>}
+                        
+                        <div className="flex justify-between bold mt-1 big">
+                            <span>TOTAL:</span><span>{formatMoney(totais.totalGeral)}</span>
                         </div>
+
+                        {totais.jaPago > 0 && (
+                            <>
+                                <div className="flex justify-between"><span>JÁ PAGO:</span><span>-{formatMoney(totais.jaPago)}</span></div>
+                                <div className="flex justify-between bold big border-t mt-1"><span>A PAGAR:</span><span>{formatMoney(totais.restante)}</span></div>
+                            </>
+                        )}
+
+                        <div className="mt-1 border border-black p-0.5 text-center bold uppercase">
+                            PAGAMENTO: {pedido.formaPagamento || 'A COMBINAR'}
+                        </div>
+                        
+                        {/* LÓGICA DE TROCO */}
+                        {pedido.trocoPara > 0 && (
+                            <div className="text-center mt-1 border-t pt-1">
+                                <p>Troco para: {formatMoney(pedido.trocoPara)}</p>
+                                <p className="bold big">DEVOLVER: {formatMoney(pedido.trocoPara - totais.restante)}</p>
+                            </div>
+                        )}
                     </div>
                 )}
-                
-                <div className="text-center mt-4 text-[9px] border-t border-black pt-1">
-                    *** FIM DO TICKET ***
+
+                <div className="text-center mt-3 dashed pt-1" style={{ fontSize: '8px' }}>
+                    *** OBRIGADO PELA PREFERÊNCIA ***
                 </div>
             </div>
-        </>
+        </div>
     );
 };
 
