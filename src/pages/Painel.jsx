@@ -8,13 +8,51 @@ import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline } from "react-icons/io5";
 
-// --- GRUPO DE PEDIDOS DA MESA (DESIGN REFINADO & RESPONSIVO) ---
+// --- FUNÇÃO ANTI-TRAVAMENTO PARA CORTAR BEBIDAS E BOMBONIERE ---
+const isItemCozinha = (item) => {
+    try {
+        if (!item || typeof item !== 'object') return false;
+        
+        const nome = typeof item.nome === 'string' ? item.nome.toLowerCase() : '';
+        const prodNome = item.produto && typeof item.produto.nome === 'string' ? item.produto.nome.toLowerCase() : '';
+        const categoria = typeof item.categoria === 'string' ? item.categoria.toLowerCase() : '';
+        const prodCategoria = item.produto && typeof item.produto.categoria === 'string' ? item.produto.categoria.toLowerCase() : '';
+        
+        // 1. Bloqueia direto pela Categoria (Mais seguro)
+        const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces'];
+        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => 
+            categoria.includes(cat) || prodCategoria.includes(cat)
+        );
+        if (temCategoriaBloqueada) return false;
+
+        // 2. Bloqueia por palavras chaves no Nome do Produto
+        // Nota: Evitei usar 'doce' sozinho para não bloquear 'batata doce'
+        const palavrasBloqueadas = [
+            'refrigerante', 'suco', 'cerveja', 'long neck', 'drink', 'vinho', 
+            'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral',
+            'sorvete', 'bala ', 'chiclete', 'chocolate', 'pirulito'
+        ];
+        
+        const nomeCompleto = `${nome} ${prodNome}`;
+        const temNomeBloqueado = palavrasBloqueadas.some(palavra => nomeCompleto.includes(palavra));
+        
+        if (temNomeBloqueado) return false;
+        
+        // Se passou por tudo, é comida!
+        return true;
+    } catch (error) {
+        return true; // Se der erro bizarro, mantém na tela para não sumir dados
+    }
+};
+
+// --- GRUPO DE PEDIDOS DA MESA ---
 const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
         pedidos.forEach(pedido => {
             if (!pedido || !pedido.id) return;
             const chave = `${pedido.mesaNumero || '0'}-${pedido.loteHorario || 'principal'}`;
+            
             if (!grupos[chave]) {
                 grupos[chave] = {
                     mesaNumero: pedido.mesaNumero || 0,
@@ -26,7 +64,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                 };
             }
             grupos[chave].pedidos.push(pedido);
-            grupos[chave].totalItens += pedido.itens?.length || 0;
+            grupos[chave].totalItens += (pedido.itens || []).length;
         });
         return Object.values(grupos);
     }, [pedidos]);
@@ -34,7 +72,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
     if (pedidosAgrupados.length === 0) return (
         <div className="flex flex-col items-center justify-center py-12 text-slate-400 opacity-60">
             <IoRestaurant className="text-5xl mb-3 text-slate-300" />
-            <p className="font-medium">Sem pedidos de mesa</p>
+            <p className="font-medium">Sem pedidos de cozinha</p>
         </div>
     );
 
@@ -42,7 +80,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
         <div className="space-y-4">
             {pedidosAgrupados.map((grupo, index) => (
                 <div key={`grupo-${grupo.mesaNumero}-${index}`} className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                    {/* CABEÇALHO DA MESA COM FLEX-WRAP PARA NÃO CORTAR */}
                     <div className="bg-slate-50/50 p-3 border-b border-slate-200/60 border-dashed flex flex-wrap justify-between items-center gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="font-black text-slate-800 text-base flex items-center gap-2">
@@ -61,7 +98,6 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                             {grupo.totalItens} itens
                         </span>
                     </div>
-                    {/* Lista de Pedidos */}
                     <div className="p-3 space-y-3 bg-white">
                         {grupo.pedidos.map(pedido => (
                             <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={onUpdateStatus} onExcluir={onExcluir} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} showMesaInfo={false} isAgrupado={true} motoboysDisponiveis={[]} onAtribuirMotoboy={null} />
@@ -117,8 +153,18 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
+    // 🔥 FILTRO ACONTECE AQUI NA RAIZ (IMPEDE TRAVAMENTOS E CONTAGENS FANTASMAS)
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
+        
+        // 1. Pega os itens e tira bebidas e afins
+        const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
+        const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
+        
+        // 2. Se cortou tudo (era um pedido só de cerveja, por ex), RETORNA NULL.
+        // Isso faz o pedido deixar de existir na memória do Painel.
+        if (itensFiltradosParaCozinha.length === 0) return null;
+
         const clienteLimpo = limparDadosCliente(pedidoData.cliente);
         let endereco = pedidoData.endereco || {};
         if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
@@ -136,7 +182,7 @@ function Painel() {
             source: source,
             tipo: tipo,
             status: pedidoData.status || 'recebido',
-            itens: pedidoData.itens || [],
+            itens: itensFiltradosParaCozinha, // Substitui os itens originais apenas pelos de comida
             mesaNumero: pedidoData.mesaNumero || 0,
             loteHorario: pedidoData.loteHorario || ''
         };
@@ -234,9 +280,10 @@ function Painel() {
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
 
+            // O MAP chama a nossa função blindada lá em cima. Se for nulo (só tinha bebida), ele é filtrado fora!
             const listaTodos = snapshot.docs
                 .map(d => processarDadosPedido({ id: d.id, ...d.data() }))
-                .filter(p => p && isSelectedDate(p.dataPedido || p.createdAt));
+                .filter(p => p !== null && isSelectedDate(p.dataPedido || p.createdAt));
 
             listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento'].includes(p.status)) p.status = 'recebido'; });
 
@@ -362,7 +409,6 @@ function Painel() {
                 </div>
             </header>
 
-            {/* COLUNAS KANBAN DEFINITIVO */}
             <main className="flex-1 p-4 md:p-6 overflow-x-auto bg-slate-50">
                 <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
                     {colunasAtivas.map(statusKey => {
