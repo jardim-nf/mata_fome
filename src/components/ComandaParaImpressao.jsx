@@ -213,12 +213,11 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
     return (
         <>
-            {/* O CSS NUCLEAR QUE RESOLVE O PROBLEMA DA PÁGINA BRANCA */}
+{/* O CSS NUCLEAR QUE RESOLVE O PROBLEMA DA PÁGINA BRANCA E CORES APAGADAS */}
             <style>{`
                 @media print {
                     @page { margin: 0; }
                     
-                    /* Anula qualquer Tailwind global no root/body */
                     html, body, #root {
                         height: auto !important;
                         min-height: auto !important;
@@ -229,20 +228,29 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                         padding: 0 !important;
                     }
 
-                    /* Esconde toda a interface que possa bugar o layout */
                     body * { visibility: hidden; }
 
-                    /* Salva e exibe apenas a div da impressora */
+                    /* FORÇA TUDO A SER PRETO ABSOLUTO */
                     #area-impressao, #area-impressao * {
                         visibility: visible !important;
                         color: black !important;
+                        background-color: transparent !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                        text-shadow: none !important;
+                        box-shadow: none !important;
                     }
                     
+                    /* FORÇA AS BORDAS CINZAS A SEREM PRETAS */
+                    #area-impressao .border-gray-400 {
+                        border-color: black !important;
+                    }
+
                     #area-impressao {
                         position: absolute !important;
                         left: 0 !important;
                         top: 0 !important;
-                        width: 80mm !important;
+                        width: 58mm !important; /* Seu ajuste de 58mm garantido aqui */
                         margin: 0 !important;
                         padding: 2mm !important;
                     }
