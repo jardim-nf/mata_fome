@@ -24,7 +24,7 @@ const getSetorItem = (categoria) => {
         : { nome: 'Cozinha', icon: '🍳', corTexto: 'text-orange-600', corBg: 'bg-orange-50', border: 'border-orange-200' };
 };
 
-// --- COMPONENTE ITEM DO CARDÁPIO ---
+// --- COMPONENTE ITEM DO CARDÁPIO (ETIQUETA ENTRE NOME E DESCRIÇÃO) ---
 const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
     const hasOpcoes = useMemo(() => {
         return (produto.opcoes && produto.opcoes.length > 0) || 
@@ -39,32 +39,38 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
     return (
         <div
             onClick={() => abrirModalOpcoes(produto)}
-            className="bg-white p-3 rounded-2xl border border-gray-100 flex gap-4 active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow-md group"
+            className="bg-white p-2 rounded-xl border border-gray-200 flex gap-2.5 active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow-md group h-full"
         >
             <div className="relative flex-shrink-0">
                 {produto.imageUrl ? (
-                    <img src={produto.imageUrl} className="w-24 h-24 rounded-xl object-cover bg-gray-50" alt={produto.nome} />
+                    <img src={produto.imageUrl} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" alt={produto.nome} />
                 ) : (
-                    <div className="w-24 h-24 rounded-xl bg-gray-50 flex items-center justify-center text-gray-300">
-                        <IoRestaurant className="text-3xl opacity-50" />
+                    <div className="w-20 h-20 rounded-lg bg-gray-50 flex items-center justify-center text-gray-300 border border-gray-100">
+                        <IoRestaurant className="text-2xl opacity-50" />
                     </div>
                 )}
-                <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow-sm">
-                    <IoAddCircle className="text-3xl transition-transform group-hover:scale-110" style={{ color: cores.destaque }} />
+                <div className="absolute -bottom-1.5 -right-1.5 bg-white rounded-full p-0.5 shadow-sm">
+                    <IoAddCircle className="text-2xl transition-transform group-hover:scale-110" style={{ color: cores.destaque }} />
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col justify-center min-w-0 py-1">
-                <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-bold text-gray-900 text-base leading-tight truncate pr-2">{produto.nome}</h3>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${setor.corBg} ${setor.corTexto} ${setor.border}`}>
+            <div className="flex-1 flex flex-col justify-center min-w-0 py-0.5">
+                {/* 1. NOME DO PRODUTO LIVRE NO TOPO */}
+                <h3 className="font-bold text-gray-900 text-sm leading-tight pr-1 mb-1">{produto.nome}</h3>
+                
+                {/* 2. ETIQUETA DO SETOR BEM AQUI (ENTRE O NOME E A DESCRIÇÃO) */}
+                <div className="mb-1">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap inline-flex items-center gap-1 w-fit ${setor.corBg} ${setor.corTexto} ${setor.border}`}>
                         {setor.icon} {setor.nome}
                     </span>
                 </div>
-                <p className="text-xs text-gray-500 line-clamp-2 mb-2 leading-relaxed">{produto.descricao || 'Sem descrição'}</p>
-                <div className="flex items-center gap-2">
+
+                {/* 3. DESCRIÇÃO DO PRODUTO LOGO ABAIXO */}
+                <p className="text-[11px] text-gray-500 line-clamp-2 mb-1 leading-tight">{produto.descricao || 'Sem descrição'}</p>
+                
+                <div className="flex items-center gap-2 mt-auto pt-1">
                     <span className="font-black text-sm" style={{ color: cores.destaque }}>R$ {precoExibicao}</span>
-                    {hasOpcoes && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Opções</span>}
+                    {hasOpcoes && <span className="text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Opções</span>}
                 </div>
             </div>
         </div>
@@ -90,7 +96,6 @@ const TelaPedidos = () => {
     const [salvando, setSalvando] = useState(false);
     const [showOrderSummary, setShowOrderSummary] = useState(false);
 
-    // Estado NOVO: Armazena o ID do pedido que acabou de ser gerado para enviar à impressora
     const [pedidoRecemEnviadoId, setPedidoRecemEnviadoId] = useState(null);
 
     const [ocupantes, setOcupantes] = useState(['Mesa']);
@@ -373,26 +378,10 @@ const TelaPedidos = () => {
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { itens: novaLista, total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0) });
     };
 
-// --- FUNÇÃO PARA ABRIR A JANELA DE IMPRESSÃO (AGORA COM LOGS) ---
     const dispararImpressao = (pedidoIdParaImpressao, setor) => {
-        console.log("🖨️ === INICIANDO COMANDO DE IMPRESSÃO ===");
-        console.log("👉 Botão Clicado (Setor):", setor === '' ? 'Todos' : setor);
-        console.log("👉 ID do Pedido Recém Enviado:", pedidoIdParaImpressao);
-        console.log("👉 ID da Mesa Aberta:", mesaId);
-
-        // Se acabou de enviar, usa o ID gerado. Se apenas abriu a mesa velha, usa o ID da mesa como fallback.
         const idAlvo = pedidoIdParaImpressao || mesaId;
-        
-        console.log("🎯 ID Alvo Final que vai para o link:", idAlvo);
-
         let url = `/impressao-isolada?pedidoId=${idAlvo}`;
-        if (setor) {
-            url += `&setor=${setor}`;
-        }
-        
-        console.log("🔗 URL Final Gerada:", url);
-        console.log("==========================================");
-
+        if (setor) url += `&setor=${setor}`;
         window.open(url, '_blank', 'width=800,height=600');
     };
 
@@ -446,7 +435,6 @@ const TelaPedidos = () => {
             if(novos.length > 0) {
                 idPedidoGerado = `pedido_${mesaId}_${Date.now()}`;
                 
-                // Salva todos os itens novos na coleção pedidos para podermos buscar na impressão
                 const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoGerado);
                 batch.set(pedidoRef, {
                     id: idPedidoGerado, 
@@ -479,12 +467,9 @@ const TelaPedidos = () => {
             await batch.commit();
             toast.success("Pedido enviado!");
             
-            // Grava o ID gerado para que os botões de impressão saibam o que imprimir
             if (idPedidoGerado) {
                 setPedidoRecemEnviadoId(idPedidoGerado);
             }
-
-            // ATENÇÃO: NÃO Fechamos o modal aqui. Ele fica aberto para a pessoa clicar em "Imprimir"
 
         } catch(e) { 
             console.error("Erro ao salvar:", e); 
@@ -504,15 +489,14 @@ const TelaPedidos = () => {
     const totalGeral = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
     const totalItens = resumoPedido.reduce((acc, i) => acc + i.quantidade, 0);
 
-    // Verifica se ainda existem itens não enviados
     const temItensPendentes = resumoPedido.some(i => !i.status || i.status === 'pendente');
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div></div>;
 
     return (
-        <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden flex flex-col">
-            <header className="bg-white px-4 py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0">
-                <div className="flex items-center justify-between">
+        <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden flex flex-col w-full">
+            <header className="bg-white px-4 py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
+                <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3">
                         <button onClick={() => navigate('/controle-salao')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><IoArrowBack className="text-xl" /></button>
                         <div>
@@ -550,42 +534,51 @@ const TelaPedidos = () => {
                     <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
                     {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-3 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
                 </div>
-                <div className="flex gap-2 overflow-x-auto hide-scrollbar px-1 pb-1">
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar px-1 pb-1 w-full">
                     {categoriasOrdenadas.map(cat => (<button key={cat} onClick={() => setCategoriaAtiva(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent shadow-md' : 'bg-white text-gray-500 border-gray-200'}`} style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria } : {}}>{cat}</button>))}
                     <div className="w-2 flex-shrink-0"></div>
                 </div>
             </header>
-
-            <main className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
-                {produtosFiltrados.map((prod, idx) => (
-                    <CardapioItem
-                        key={`${prod.id}-${idx}`}
-                        produto={prod}
-                        abrirModalOpcoes={(p) => {
-                            const itemEnriquecido = enrichWithGlobalAdicionais(p);
-                            const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
-                            if (temOpcoes) setProdutoEmSelecao(itemEnriquecido);
-                            else confirmarAdicaoAoCarrinho({ ...itemEnriquecido, precoFinal: parseFloat(p.preco), quantidade: 1 });
-                        }}
-                        cores={coresEstabelecimento}
-                    />
-                ))}
+{/* AQUI FOI ALTERADO PARA APROVEITAR 100% DA TELA COM ITENS MAIS APERTADOS */}
+            <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:px-6 pb-28 w-full">
+                {/* Reduzi o minmax para 210px e os gaps para ficarem mais juntos */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2 sm:gap-3 w-full">
+                    {produtosFiltrados.map((prod, idx) => (
+                        <CardapioItem
+                            key={`${prod.id}-${idx}`}
+                            produto={prod}
+                            abrirModalOpcoes={(p) => {
+                                const itemEnriquecido = enrichWithGlobalAdicionais(p);
+                                const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
+                                if (temOpcoes) setProdutoEmSelecao(itemEnriquecido);
+                                else confirmarAdicaoAoCarrinho({ ...itemEnriquecido, precoFinal: parseFloat(p.preco), quantidade: 1 });
+                            }}
+                            cores={coresEstabelecimento}
+                        />
+                    ))}
+                </div>
             </main>
 
             {resumoPedido.length > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
-                    <div className="flex justify-between items-center max-w-md mx-auto">
-                        <div><span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Parcial</span><div className="text-2xl font-black text-gray-900">R$ {totalGeral.toFixed(2)}</div></div>
-                        <button onClick={() => setShowOrderSummary(true)} className="px-6 py-3 rounded-xl text-white font-bold shadow-lg active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>Ver Comanda</button>
+                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 lg:p-5 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40">
+                    {/* BARRA INFERIOR EXPANDIDA PARA ENCOSTAR NAS LATERAIS */}
+                    <div className="flex justify-between items-center w-full px-2 sm:px-6 lg:px-10">
+                        <div>
+                            <span className="text-xs md:text-sm text-gray-400 font-bold uppercase tracking-wider">Total Parcial</span>
+                            <div className="text-2xl md:text-3xl font-black text-gray-900">R$ {totalGeral.toFixed(2)}</div>
+                        </div>
+                        <button onClick={() => setShowOrderSummary(true)} className="px-8 py-3 md:py-4 rounded-xl text-white font-bold shadow-xl active:scale-95 transition-all text-base md:text-lg" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+                            Ver Comanda
+                        </button>
                     </div>
                 </div>
             )}
 
-            {/* MODAL PRINCIPAL: RESUMO DO PEDIDO */}
             {showOrderSummary && (
                 <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
-                    <div className="relative w-full max-w-lg bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
+                    {/* MODAL DA COMANDA AUMENTADO (max-w-3xl) PARA LER MELHOR NO COMPUTADOR */}
+                    <div className="relative w-full max-w-3xl bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
                         
                         <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-center shrink-0">
                             <div><h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2><p className="text-xs text-gray-500 mt-0.5">Confira e envie para produção</p></div>
@@ -610,7 +603,6 @@ const TelaPedidos = () => {
                                                         <span className="font-bold text-gray-900 text-sm">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
                                                     </div>
 
-                                                    {/* TAGS DO SETOR E STATUS AQUI */}
                                                     <div className="flex items-center gap-2 mt-1 mb-1">
                                                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${setorItem.corBg} ${setorItem.corTexto} ${setorItem.border}`}>
                                                             {setorItem.icon} {setorItem.nome}
@@ -645,7 +637,6 @@ const TelaPedidos = () => {
                             ))}
                         </div>
                         
-                        {/* RODAPÉ INTELIGENTE (CONFIRMAR OU IMPRIMIR) */}
                         <div className="p-4 bg-white border-t border-gray-100 shrink-0">
                             <div className="flex justify-between items-end mb-4">
                                 <span className="text-sm text-gray-500 font-bold">Total Geral</span>

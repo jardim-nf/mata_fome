@@ -4,11 +4,10 @@ import Header from './Header';
 import Footer from './Footer'; 
 
 // Lista de rotas/prefixos que NÃO DEVEM exibir o Header e Footer
-// Exemplo: rotas do PDV da loja, login, etc.
 const rotasSemLayout = [
     '/login', 
     '/register'
-    // Adicione aqui outras rotas que devem ocupar o ecrã todo sem header
+    // Podes adicionar aqui outras rotas que devem ocupar o ecrã todo sem header
 ]; 
 
 // Função auxiliar para normalizar e checar a rota
@@ -27,18 +26,16 @@ function Layout() {
     const exibirLayoutCompleto = !shouldHideLayout(location.pathname, rotasSemLayout);
     
     return (
-        // 1. Fundo cinza clarinho (bg-gray-50) e cor de texto padrão suave
         <div className="flex flex-col min-h-screen bg-gray-50 font-sans text-gray-800 selection:bg-emerald-200 selection:text-emerald-900">
             
             {exibirLayoutCompleto && <Header />}
             
-            {/* 2. Container Principal Responsivo */}
+            {/* REMOVIDO o 'max-w-7xl mx-auto' -> AGORA USA A LARGURA TOTAL DO MONITOR */}
             <main className={`flex-grow flex flex-col w-full ${
                 exibirLayoutCompleto 
-                ? 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 transition-all duration-300' 
+                ? 'w-full px-4 sm:px-6 lg:px-8 py-6 md:py-8 transition-all duration-300' 
                 : ''
             }`}> 
-                {/* O Outlet é onde as suas páginas (Dashboard, Cardápio, etc) vão aparecer */}
                 <div className="flex-1 w-full animate-fadeIn">
                     <Outlet />
                 </div>
@@ -46,7 +43,6 @@ function Layout() {
             
             {exibirLayoutCompleto && <Footer />}
 
-            {/* Animação suave ao trocar de página */}
             <style>{`
                 @keyframes fadeIn {
                     from { opacity: 0; transform: translateY(5px); }
