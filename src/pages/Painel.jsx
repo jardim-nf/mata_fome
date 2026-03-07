@@ -8,25 +8,47 @@ import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline } from "react-icons/io5";
 
+// --- FUNÇÃO AUXILIAR PARA IDENTIFICAR BEBIDAS ---
+const TERMOS_BEBIDA = ['bebida', 'refrigerante', 'suco', 'cerveja', 'agua', 'água', 'drink', 'vinho', 'dose', 'long neck', 'lata', 'garrafa', 'h2oh', 'coca', 'guarana'];
+
+const isItemCozinha = (item) => {
+    const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
+    const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+    const textoCompleto = `${nome} ${categoria}`;
+    
+    // Se incluir termo de bebida, não é cozinha
+    return !TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
+};
+
 // --- GRUPO DE PEDIDOS DA MESA (DESIGN REFINADO & RESPONSIVO) ---
 const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
         pedidos.forEach(pedido => {
             if (!pedido || !pedido.id) return;
-            const chave = `${pedido.mesaNumero || '0'}-${pedido.loteHorario || 'principal'}`;
+
+            // Filtra os itens do pedido para deixar APENAS COZINHA
+            const itensCozinha = (pedido.itens || []).filter(isItemCozinha);
+            
+            // Se o pedido não tem nenhum item de cozinha, ignoramos ele nesta view
+            if (itensCozinha.length === 0) return;
+
+            // Criamos uma cópia do pedido apenas com os itens de cozinha para exibir no card
+            const pedidoFiltrado = { ...pedido, itens: itensCozinha };
+
+            const chave = `${pedidoFiltrado.mesaNumero || '0'}-${pedidoFiltrado.loteHorario || 'principal'}`;
             if (!grupos[chave]) {
                 grupos[chave] = {
-                    mesaNumero: pedido.mesaNumero || 0,
-                    loteHorario: pedido.loteHorario || '',
+                    mesaNumero: pedidoFiltrado.mesaNumero || 0,
+                    loteHorario: pedidoFiltrado.loteHorario || '',
                     pedidos: [],
                     totalItens: 0,
-                    status: pedido.status || 'recebido',
-                    pessoas: pedido.pessoas || 1
+                    status: pedidoFiltrado.status || 'recebido',
+                    pessoas: pedidoFiltrado.pessoas || 1
                 };
             }
-            grupos[chave].pedidos.push(pedido);
-            grupos[chave].totalItens += pedido.itens?.length || 0;
+            grupos[chave].pedidos.push(pedidoFiltrado);
+            grupos[chave].totalItens += pedidoFiltrado.itens.length;
         });
         return Object.values(grupos);
     }, [pedidos]);
@@ -34,7 +56,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
     if (pedidosAgrupados.length === 0) return (
         <div className="flex flex-col items-center justify-center py-12 text-slate-400 opacity-60">
             <IoRestaurant className="text-5xl mb-3 text-slate-300" />
-            <p className="font-medium">Sem pedidos de mesa</p>
+            <p className="font-medium">Sem pedidos de cozinha nesta mesa</p>
         </div>
     );
 
@@ -61,7 +83,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                             {grupo.totalItens} itens
                         </span>
                     </div>
-                    {/* Lista de Pedidos */}
+                    {/* Lista de Pedidos (Já filtrados) */}
                     <div className="p-3 space-y-3 bg-white">
                         {grupo.pedidos.map(pedido => (
                             <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={onUpdateStatus} onExcluir={onExcluir} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} showMesaInfo={false} isAgrupado={true} motoboysDisponiveis={[]} onAtribuirMotoboy={null} />
