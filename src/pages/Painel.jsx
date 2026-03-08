@@ -6,7 +6,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline } from "react-icons/io5";
+import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint } from "react-icons/io5";
 
 // --- FUNÇÃO ANTI-TRAVAMENTO PARA CORTAR BEBIDAS E BOMBONIERE ---
 const isItemCozinha = (item) => {
@@ -17,11 +17,8 @@ const isItemCozinha = (item) => {
         const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
         const textoCompleto = `${nome} ${categoria}`;
         
-        // 🔥 ADICIONADO 'bomboniere' E 'doce' NA LISTA DE BLOQUEIO ABSOLUTO
         const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];
-        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => 
-            categoria.includes(cat)
-        );
+        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => categoria.includes(cat));
         if (temCategoriaBloqueada) return false;
 
         const palavrasBloqueadas = [
@@ -126,6 +123,30 @@ function Painel() {
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
+    // 🔥 ESTADO DE CONFIGURAÇÃO DE IMPRESSÃO (TUDO, COZINHA, DESLIGADO)
+    // Lê o localStorage para saber qual foi a última escolha deste computador
+    const [modoImpressao, setModoImpressaoState] = useState(() => {
+        const salvo = localStorage.getItem('config_modo_impressao_painel');
+        // 'tudo', 'cozinha', ou 'desligado'
+        return salvo || 'tudo'; 
+    });
+    const modoImpressaoRef = useRef(modoImpressao); // Ref para usar dentro do Firebase sem bugar
+
+    // Função para ciclar entre os modos de impressão
+    const alternarModoImpressao = () => {
+        let novoModo = 'tudo';
+        if (modoImpressao === 'tudo') novoModo = 'cozinha';
+        else if (modoImpressao === 'cozinha') novoModo = 'desligado';
+        
+        setModoImpressaoState(novoModo);
+        modoImpressaoRef.current = novoModo;
+        localStorage.setItem('config_modo_impressao_painel', novoModo);
+        
+        if (novoModo === 'tudo') toast.info("🖨️ Auto-Print: Imprimindo TODOS os pedidos", { autoClose: 2000 });
+        else if (novoModo === 'cozinha') toast.info("🍳 Auto-Print: Só pedidos da COZINHA", { autoClose: 2000 });
+        else toast.warning("❌ Auto-Print: DESATIVADO", { autoClose: 2000 });
+    };
+
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
     const pedidosJaImpressos = useRef(new Set());
@@ -147,16 +168,12 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-    // 🔥 FILTRO ACONTECE AQUI NA RAIZ (IMPEDE TRAVAMENTOS E CONTAGENS FANTASMAS)
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
         
-        // 1. Pega os itens e tira bebidas e afins
         const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
         const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
         
-        // 2. Se cortou tudo (era um pedido só de cerveja, por ex), RETORNA NULL.
-        // Isso faz o pedido deixar de existir na memória do Painel.
         if (itensFiltradosParaCozinha.length === 0) return null;
 
         const clienteLimpo = limparDadosCliente(pedidoData.cliente);
@@ -176,7 +193,7 @@ function Painel() {
             source: source,
             tipo: tipo,
             status: pedidoData.status || 'recebido',
-            itens: itensFiltradosParaCozinha, // Substitui os itens originais apenas pelos de comida
+            itens: itensFiltradosParaCozinha, 
             mesaNumero: pedidoData.mesaNumero || 0,
             loteHorario: pedidoData.loteHorario || ''
         };
@@ -247,20 +264,26 @@ function Painel() {
             return date >= startOfDay && date <= endOfDay;
         };
 
-const checkAutoPrint = (change) => {
+        const checkAutoPrint = (change) => {
             if (!visualizandoHoje) return;
             const data = change.doc.data();
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
-            // 🔥 A TRAVA DE SEGURANÇA ENTRA AQUI 🔥
-            // Filtra os itens do pedido para ver se tem alguma comida real
-            const rawItens = Array.isArray(data.itens) ? data.itens : [];
-            const itensCozinha = rawItens.filter(isItemCozinha);
+            // 🔥 A MÁGICA DA CONFIGURAÇÃO ESTÁ AQUI 🔥
+            const configAtual = modoImpressaoRef.current;
             
-            // Se o pedido for SÓ BEBIDA ou BOMBONIERE (0 itens de cozinha), ABORTA o Auto-Print!
-            if (itensCozinha.length === 0) return;
+            // Se estiver desligado, não faz nada!
+            if (configAtual === 'desligado') return;
 
+            // Se for "Só Cozinha", ele filtra. Se não tiver comida, aborta.
+            if (configAtual === 'cozinha') {
+                const rawItens = Array.isArray(data.itens) ? data.itens : [];
+                const itensCozinha = rawItens.filter(isItemCozinha);
+                if (itensCozinha.length === 0) return; // Só tinha bebida, aborta!
+            }
+
+            // Se chegou aqui, ou é 'tudo' ou é 'cozinha' e passou no filtro
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
                 const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
                 if (!pedidosJaImpressos.current.has(pedidoId) && !impressosLocal.includes(pedidoId)) {
@@ -282,7 +305,6 @@ const checkAutoPrint = (change) => {
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
 
-            // O MAP chama a nossa função blindada lá em cima. Se for nulo (só tinha bebida), ele é filtrado fora!
             const listaTodos = snapshot.docs
                 .map(d => processarDadosPedido({ id: d.id, ...d.data() }))
                 .filter(p => p !== null && isSelectedDate(p.dataPedido || p.createdAt));
@@ -323,13 +345,14 @@ const checkAutoPrint = (change) => {
         prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted, dataSelecionada]);
 
-useEffect(() => {
+    useEffect(() => {
         if (!isPrinting && printQueue.length > 0 && estabelecimentoAtivo) {
             setIsPrinting(true);
             const pedidoId = printQueue[0];
             
-            // 🔥 ADICIONEI O "&setor=cozinha" AQUI NO FINAL DO URL 🔥
-            const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}&setor=cozinha`;
+            // 🔥 Define o URL com base na configuração 🔥
+            const setorQuery = modoImpressao === 'cozinha' ? '&setor=cozinha' : '';
+            const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}${setorQuery}`;
             
             const width = 350; const height = 600;
             const left = (window.screen.width - width) / 2; const top = (window.screen.height - height) / 2;
@@ -351,7 +374,7 @@ useEffect(() => {
                 }, 2000);
             }
         }
-    }, [printQueue, isPrinting, estabelecimentoAtivo]);
+    }, [printQueue, isPrinting, estabelecimentoAtivo, modoImpressao]);
 
     const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'finalizado'], [abaAtiva]);
 
@@ -383,6 +406,21 @@ useEffect(() => {
                     </div>
 
                     <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
+                        
+                        {/* 🔥 NOVO BOTÃO DE CONFIGURAÇÃO DE IMPRESSÃO 🔥 */}
+                        <button
+                            onClick={alternarModoImpressao}
+                            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border font-bold text-xs transition-all shadow-sm
+                                ${modoImpressao === 'tudo' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                                  modoImpressao === 'cozinha' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
+                                  'bg-gray-100 text-gray-500 border-gray-300 opacity-80'}`}
+                            title="Clique para mudar o que imprime automaticamente"
+                        >
+                            {modoImpressao === 'tudo' && <><IoPrint size={18} className="text-blue-500" /><span className="hidden sm:inline">Auto: TUDO</span></>}
+                            {modoImpressao === 'cozinha' && <><IoPrint size={18} className="text-orange-500" /><span className="hidden sm:inline">Auto: COZINHA</span></>}
+                            {modoImpressao === 'desligado' && <><IoPrint size={18} className="text-gray-400" /><span className="hidden sm:inline">Auto: DESLIGADO</span></>}
+                        </button>
+
                         <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
                             <button onClick={() => setAbaAtiva('delivery')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}>
                                 <IoBicycle className="text-lg" /> Delivery
