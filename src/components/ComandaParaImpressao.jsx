@@ -105,6 +105,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     }, [pedido, loading, erro, pedidoProp]);
 
     // --- 3. CÁLCULOS FINANCEIROS COMPLETOS ---
+// --- 3. CÁLCULOS FINANCEIROS COMPLETOS ---
     const totais = useMemo(() => {
         if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
 
@@ -114,7 +115,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             return item.preco > 0 ? acc + (item.preco * (item.quantidade || 1)) : acc;
         }, 0);
 
-        const taxa = Number(pedido.taxaEntrega) || 0;
+        // 🔥 CORREÇÃO DO FRETE: Procura por várias nomenclaturas possíveis no banco de dados
+        const taxa = Number(pedido.taxaEntrega || pedido.frete || pedido.valorFrete || pedido.valorEntrega || 0);
         let desconto = Number(pedido.desconto) || 0;
         
         // Se o banco salvou um "totalFinal" com desconto, mas não salvou o campo "desconto"
@@ -190,17 +192,19 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     };
 
     const formatarPagamento = (p) => {
-        const metodo = p.formaPagamento || p.metodoPagamento || p.paymentMethod || '';
+        // Aceita a string direta ou busca do objeto
+        const metodo = typeof p === 'string' ? p : (p.formaPagamento || p.metodoPagamento || p.paymentMethod || '');
         const metodoString = String(metodo).toLowerCase().trim();
         
         switch(metodoString) {
             case 'dinheiro': case 'cash': case '4': return 'DINHEIRO';
             case 'pix': case '1': return 'PIX';
-            case 'cartao': case 'card': return 'CARTÃO NA ENTREGA';
-            case 'credit_card': case 'credito': case '2': return 'CRÉDITO NA ENTREGA';
-            case 'debit_card': case 'debito': case '3': return 'DÉBITO NA ENTREGA';
+            case 'cartao': case 'card': return 'CARTÃO (MÁQUINA)';
+            case 'credit_card': case 'credito': case 'cartao_credito': case '2': return 'CRÉDITO (MÁQUINA)';
+            case 'debit_card': case 'debito': case 'cartao_debito': case '3': return 'DÉBITO (MÁQUINA)';
             case 'online': return 'PAGO ONLINE';
-            default: return metodo.toUpperCase() || 'A COMBINAR';
+            case 'vr': case 'vale_refeicao': case 'voucher': return 'VALE REFEIÇÃO';
+            default: return metodoString ? metodoString.toUpperCase() : 'A COMBINAR';
         }
     };
 
@@ -340,43 +344,70 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 {/* BLOCO FINANCEIRO (COM TAXA DE ENTREGA) */}
                 {setor !== 'cozinha' && (
                     <div className="border-t-2 border-black pt-2 mt-2">
+                        {/* 1. RESUMO DOS VALORES */}
                         <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
                         
-                        {/* 🔥 TAXA DE ENTREGA RECUPERADA AQUI 🔥 */}
                         {totais.taxa > 0 && <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
                         
                         {totais.desconto > 0 && <div className="flex justify-between text-sm font-black uppercase border-y border-dashed border-black py-1 my-1"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
                         
-                        {totais.jaPago > 0 ? (
-                            <>
-                                <div className="flex justify-between text-sm font-bold mt-1 border-t border-dotted border-gray-400 pt-1 uppercase">
-                                    <span>TOTAL CONTA:</span>
-                                    <span>{formatMoney(totais.totalGeral)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm font-bold text-gray-700 uppercase">
-                                    <span>(-) JÁ PAGO:</span>
+                        <div className="flex justify-between text-[15px] font-black mt-1 border-t border-dashed border-black pt-1 uppercase">
+                            <span>TOTAL:</span>
+                            <span>{formatMoney(totais.totalGeral)}</span>
+                        </div>
+
+                        {/* 2. HISTÓRICO SE JÁ PAGOU ALGO ANTES */}
+                        {totais.jaPago > 0 && (
+                            <div className="mt-2 border-t border-dotted border-gray-400 pt-1">
+                                <p className="text-[10px] font-bold uppercase underline mb-1">Valores já pagos:</p>
+                                {Array.isArray(pedido.pagamentosParciais) && pedido.pagamentosParciais.map((pag, idx) => (
+                                    <div key={idx} className="flex justify-between text-[11px] font-bold text-gray-700 uppercase">
+                                        <span>{formatarPagamento(pag.formaPagamento || pag.metodoPagamento)}</span>
+                                        <span>{formatMoney(pag.valor)}</span>
+                                    </div>
+                                ))}
+                                <div className="flex justify-between text-[12px] font-black text-gray-800 uppercase mt-1 pt-1">
+                                    <span>(-) ABATIMENTO:</span>
                                     <span>{formatMoney(totais.jaPago)}</span>
                                 </div>
-                                <div className="flex justify-between text-[16px] font-black mt-2 border-t-2 border-black pt-1 uppercase">
-                                    <span>A PAGAR:</span>
-                                    <span className="bg-gray-200 px-1">{formatMoney(totais.restante)}</span>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="flex justify-between text-[16px] font-black mt-1 border-t border-dotted border-black pt-1 uppercase">
-                                <span>TOTAL:</span>
-                                <span className="bg-gray-200 px-1">{formatMoney(totais.totalGeral)}</span>
                             </div>
                         )}
 
-                        <div className="mt-3 border-2 border-black p-1 text-center">
-                            <p className="font-bold text-xs uppercase">PAGAMENTO:</p>
-                            <p className="font-black text-sm uppercase">{formatarPagamento(pedido)}</p>
-                            
-                            {precisaTroco && (
-                                <div className="mt-1 border-t border-black pt-1">
-                                    <p className="text-xs font-bold uppercase">Troco para: {formatMoney(valorTroco)}</p>
-                                    <p className="text-sm font-black italic uppercase">DEVOLVER: {formatMoney(trocoDevolver)}</p>
+                        {/* 3. CAIXA DE AÇÃO PARA O ENTREGADOR */}
+                        <div className="mt-4 border-2 border-black text-center overflow-hidden">
+                            {totais.restante <= 0 ? (
+                                <div className="bg-black text-white py-3">
+                                    <p className="font-black text-[16px] uppercase tracking-wide">✅ PEDIDO PAGO</p>
+                                    <p className="text-[11px] font-bold tracking-widest mt-1">NÃO COBRAR DO CLIENTE</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col">
+                                    {/* Tarja preta colada nas bordas */}
+                                    <div className="bg-black text-white text-[13px] font-black uppercase py-1.5 tracking-wider">
+                                        COBRAR NA ENTREGA
+                                    </div>
+                                    
+                                    {/* Valor Gigante e Centralizado */}
+                                    <div className="py-3">
+                                        <span className="text-[24px] font-black leading-none block">{formatMoney(totais.restante)}</span>
+                                    </div>
+                                    
+                                    {/* Forma de Pagamento com linha pontilhada padronizada */}
+                                    <div className="border-t-2 border-dashed border-gray-400 mx-3 py-2 mb-1">
+                                        <span className="text-[13px] font-bold uppercase tracking-wide">
+                                            FORMA: {formatarPagamento(pedido)}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Bloco de Troco com destaque cinza (se precisar) */}
+                                    {precisaTroco && (
+                                        <div className="bg-gray-100 border-t-2 border-black py-2 px-2 flex flex-col items-center">
+                                            <span className="text-[11px] font-bold uppercase mb-1">Troco para: {formatMoney(valorTroco)}</span>
+                                            <span className="text-[16px] font-black uppercase bg-white border-2 border-black px-3 py-1 shadow-sm">
+                                                DEVOLVER: {formatMoney(trocoDevolver)}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
