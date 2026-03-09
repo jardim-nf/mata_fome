@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, useRef } from 'react'; // <-- Adicione useRef aquiimport { useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +15,7 @@ const TERMOS_BOMBONIERE = [
 ];
 
 const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
+    const jaImprimiu = useRef(false);
     const params = useParams();
     const idUrl = params.id || params.pedidoId;
     const [searchParams] = useSearchParams();
@@ -89,21 +89,20 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
     // --- 2. DISPARA A IMPRESSÃO ---
     useEffect(() => {
-        if (!pedidoProp && pedido && !loading && !erro) {
-            document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
-            
-            const timer = setTimeout(() => { 
-                window.focus();
-                window.onafterprint = () => {
-                    window.close();
-                };
-                window.print(); 
-            }, 1200); 
-            
-            return () => clearTimeout(timer);
-        }
-    }, [pedido, loading, erro, pedidoProp]);
-
+    if (!pedidoProp && pedido && !loading && !erro) {
+        document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
+        
+        const timer = setTimeout(() => { 
+            window.focus();
+            window.onafterprint = () => {
+                window.close();
+            };
+            window.print(); 
+        }, 1200); 
+        
+        return () => clearTimeout(timer);
+    }
+}, [pedido, loading, erro, pedidoProp]);
     // --- 3. CÁLCULOS FINANCEIROS COMPLETOS ---
 // --- 3. CÁLCULOS FINANCEIROS COMPLETOS ---
     const totais = useMemo(() => {
