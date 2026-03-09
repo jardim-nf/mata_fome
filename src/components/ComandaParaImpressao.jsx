@@ -283,7 +283,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     <p className="text-[10px]">{stringData}</p>
                     
                     {setor === 'cozinha' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}
-                    {setor === 'bar' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR / BOMBONIERE **</div>}
+                    {setor === 'bar' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR **</div>}
                 </div>
 
                 {/* NOME DO CLIENTE E ENDEREÇO COM CAIXA AO REDOR */}
