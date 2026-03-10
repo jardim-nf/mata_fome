@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom'; // <--- ESTA LINHA AQUI FAZ PARAR O ERRO
+import React, { useEffect, useState, useMemo } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -15,8 +15,11 @@ const TERMOS_BOMBONIERE = [
     'bomboniere', 'doce', 'sobremesa', 'chiclete', 'bala', 'chocolate', 'halls', 'mentos', 'sorvete'
 ];
 
+// 👇 1. TRAVA GLOBAL (FORA DO COMPONENTE) 👇
+// Isto impede o loop infinito mesmo que o React recarregue a página
+let ultimoPedidoImpresso = null;
+
 const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
-    const jaImprimiu = useRef(false);
     const params = useParams();
     const idUrl = params.id || params.pedidoId;
     const [searchParams] = useSearchParams();
@@ -90,22 +93,28 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
     // --- 2. DISPARA A IMPRESSÃO ---
     useEffect(() => {
-    if (!pedidoProp && pedido && !loading && !erro) {
-        document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
-        
-        const timer = setTimeout(() => { 
-            window.focus();
-            window.onafterprint = () => {
-                window.close();
-            };
-            window.print(); 
-        }, 1200); 
-        
-        return () => clearTimeout(timer);
-    }
-}, [pedido, loading, erro, pedidoProp]);
+        if (!pedidoProp && pedido && !loading && !erro) {
+            document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
+            
+            // 👇 2. A CHECAGEM DA TRAVA ENTRA AQUI 👇
+            // Só manda imprimir se for um ID diferente do último impresso
+            if (ultimoPedidoImpresso !== pedido.id) {
+                ultimoPedidoImpresso = pedido.id; // Salva para não imprimir de novo
+                
+                const timer = setTimeout(() => { 
+                    window.focus();
+                    window.onafterprint = () => {
+                        window.close();
+                    };
+                    window.print(); 
+                }, 1200); 
+                
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [pedido, loading, erro, pedidoProp]);
+
     // --- 3. CÁLCULOS FINANCEIROS COMPLETOS ---
-// --- 3. CÁLCULOS FINANCEIROS COMPLETOS ---
     const totais = useMemo(() => {
         if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
 
@@ -417,7 +426,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 <div className="text-center mt-6 text-[10px] font-bold border-t border-black pt-2 uppercase">
                     *** OBRIGADO PELA PREFERÊNCIA ***
                     <br/>
-                    {new Date().toLocaleTimeString()}
+                    {new Date().toLocaleTimeString('pt-PT')}
                 </div>
             </div>
         </>
