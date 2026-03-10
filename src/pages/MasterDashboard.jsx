@@ -240,29 +240,39 @@ function MasterDashboard() {
 
   const [dadosBrutos, setDadosBrutos] = useState({ pedidos: [], vendas: [] });
 
-  const calcularTotais = (novosDados, tipo) => {
+const calcularTotais = (novosDados, tipo) => {
     setDadosBrutos(prev => {
       const atualizado = { ...prev, [tipo]: novosDados };
       const tudo = [...atualizado.pedidos, ...atualizado.vendas];
       const hoje = startOfDay(new Date());
 
+      // 🔥 HELPER ROBUSTO PARA LER QUALQUER FORMATO DE DATA DO FIREBASE 🔥
+      const extrairDataSegura = (campoData) => {
+          if (!campoData) return null;
+          if (typeof campoData.toDate === 'function') return campoData.toDate(); // Padrão Firebase Timestamp
+          if (campoData.seconds) return new Date(campoData.seconds * 1000); // Raw Firebase Timestamp
+          const dataConvertida = new Date(campoData); // Formato String (ISO) ou Number
+          return isNaN(dataConvertida.getTime()) ? null : dataConvertida;
+      };
+
       const doDia = tudo.filter(item => {
-        const data = item.createdAt?.toDate ? item.createdAt.toDate() : 
-                     (item.dataPedido?.toDate ? item.dataPedido.toDate() : 
-                     (item.adicionadoEm?.toDate ? item.adicionadoEm.toDate() : null));
-        return data && data >= hoje;
+        // Tenta pegar a data de onde ela existir
+        const dataItem = extrairDataSegura(item.createdAt) || extrairDataSegura(item.dataPedido) || extrairDataSegura(item.adicionadoEm);
+        // Verifica se a data é válida e se é maior ou igual a meia-noite de hoje
+        return dataItem && dataItem >= hoje;
       });
 
       setFinanceiro({
-        totalHistorico: tudo.reduce((acc, item) => acc + (item.totalFinal || item.total || 0), 0),
+        // Adicionado o "Number()" para evitar bugs se o preço estiver salvo como string ("150.00" ao invés de 150)
+        totalHistorico: tudo.reduce((acc, item) => acc + (Number(item.totalFinal) || Number(item.total) || 0), 0),
         qtdPedidosTotal: tudo.length,
-        faturamentoHoje: doDia.reduce((acc, item) => acc + (item.totalFinal || item.total || 0), 0),
+        faturamentoHoje: doDia.reduce((acc, item) => acc + (Number(item.totalFinal) || Number(item.total) || 0), 0),
         qtdHoje: doDia.length
       });
+      
       return atualizado;
     });
   };
-
   useEffect(() => {
     if (!authLoading && currentUser && isMasterAdmin) {
       fetchHistoricalData();

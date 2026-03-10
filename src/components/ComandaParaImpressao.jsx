@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react'; // <-- Adicione useRef aquiimport { useParams, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom'; // <--- ESTA LINHA AQUI FAZ PARAR O ERRO
 import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';

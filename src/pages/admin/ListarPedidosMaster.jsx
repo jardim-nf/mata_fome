@@ -188,18 +188,26 @@ const usePedidosMaster = (filterEstabelecimento, estabMap) => {
     const unsubscribes = [];
     let mounted = true;
 
-    const setupListeners = () => {
+const setupListeners = () => {
       let strategies = [];
 
       if (filterEstabelecimento === 'todos') {
         strategies = [
-          { name: 'GLOBAL_PEDIDOS', q: query(collectionGroup(db, 'pedidos'), orderBy('dataPedido', 'desc'), limit(LIMIT)) },
-          { name: 'GLOBAL_VENDAS', q: query(collectionGroup(db, 'vendas'), orderBy('updatedAt', 'desc'), limit(LIMIT)) }
+          // 1. Busca pedidos de Delivery (Raiz)
+          { name: 'GLOBAL_PEDIDOS_RAIZ', q: query(collection(db, 'pedidos'), orderBy('createdAt', 'desc'), limit(LIMIT)) },
+          // 2. Busca pedidos de Salão/Mesa (Subcoleções)
+          { name: 'GLOBAL_PEDIDOS_SALAO', q: query(collectionGroup(db, 'pedidos'), orderBy('createdAt', 'desc'), limit(LIMIT)) },
+          // 3. Busca o histórico de Vendas finalizadas
+          { name: 'GLOBAL_VENDAS', q: query(collectionGroup(db, 'vendas'), orderBy('createdAt', 'desc'), limit(LIMIT)) }
         ];
       } else {
         strategies = [
-          { name: 'LOCAL_PEDIDOS', q: query(collection(db, 'estabelecimentos', filterEstabelecimento, 'pedidos'), orderBy('dataPedido', 'desc'), limit(LIMIT)) },
-          { name: 'LOCAL_VENDAS', q: query(collection(db, 'estabelecimentos', filterEstabelecimento, 'vendas'), orderBy('updatedAt', 'desc'), limit(LIMIT)) }
+          // 1. Busca pedidos de Delivery DAQUELA LOJA (Raiz)
+          { name: 'LOCAL_PEDIDOS_RAIZ', q: query(collection(db, 'pedidos'), where('estabelecimentoId', '==', filterEstabelecimento), orderBy('createdAt', 'desc'), limit(LIMIT)) },
+          // 2. Busca pedidos de Salão DAQUELA LOJA (Subcoleção direta)
+          { name: 'LOCAL_PEDIDOS_SALAO', q: query(collection(db, 'estabelecimentos', filterEstabelecimento, 'pedidos'), orderBy('createdAt', 'desc'), limit(LIMIT)) },
+          // 3. Busca o histórico de Vendas DAQUELA LOJA
+          { name: 'LOCAL_VENDAS', q: query(collection(db, 'estabelecimentos', filterEstabelecimento, 'vendas'), orderBy('createdAt', 'desc'), limit(LIMIT)) }
         ];
       }
 
@@ -215,6 +223,7 @@ const usePedidosMaster = (filterEstabelecimento, estabMap) => {
                 let finalEstabId = filterEstabelecimento !== 'todos' ? filterEstabelecimento : item.estabelecimentoId;
                 let eNome = filterEstabelecimento !== 'todos' ? estabMap[filterEstabelecimento] : item.estabelecimentoNome;
 
+                // Se não tiver o ID, tenta extrair do caminho da URL do Firestore
                 if (!finalEstabId && item._path && item._path.includes('estabelecimentos/')) {
                   const parts = item._path.split('/');
                   const index = parts.indexOf('estabelecimentos');
@@ -228,8 +237,11 @@ const usePedidosMaster = (filterEstabelecimento, estabMap) => {
                   cNome = item.mesaNumero ? `Mesa ${item.mesaNumero}` : 'Mesa (Balcão)';
                 }
                 
+                // Define o tipo com base de onde o dado veio
                 let tipoExibicao = 'DELIVERY';
-                if (strat.name.includes('VENDAS') || item.source === 'salao' || item.mesaId) tipoExibicao = 'SALÃO';
+                if (strat.name.includes('VENDAS') || strat.name.includes('SALAO') || item.source === 'salao' || item.mesaId) {
+                    tipoExibicao = 'SALÃO';
+                }
 
                 let statusRaw = safeString(item.status).toLowerCase().trim();
                 
@@ -247,22 +259,22 @@ const usePedidosMaster = (filterEstabelecimento, estabMap) => {
 
               setItemsMap(prev => {
                 const next = { ...prev };
+                // Usando o ID garante que, se um pedido for buscado 2x, ele não duplique
                 processed.forEach(p => next[p.id] = p);
                 return next;
               });
               
               setLoading(false);
             } catch (err) {
-              console.error('Erro ao processar pedidos:', err);
-              if (mounted) {
-                setError('Erro ao processar dados dos pedidos');
-              }
+              console.error(`Erro ao processar pedidos (${strat.name}):`, err);
+              if (mounted) setError('Erro ao processar dados dos pedidos');
             }
           },
           (err) => {
-            console.error('Erro no snapshot:', err);
-            if (mounted) {
-              setError('Falha na conexão com o servidor');
+            console.error(`Erro no snapshot (${strat.name}):`, err);
+            // Evita crash total se faltar algum Index no Firestore para alguma das buscas
+            if (mounted && filterEstabelecimento !== 'todos') {
+              // Somente exibe erro crítico se for algo local, a collectionGroup pode falhar sem index e a gente deixa passar para pegar na raiz
               setLoading(false);
             }
           }
