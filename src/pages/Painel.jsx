@@ -168,36 +168,42 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-    const processarDadosPedido = useCallback((pedidoData) => {
-        if (!pedidoData || !pedidoData.id) return null;
-        
-        const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
-        const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
-        
-        if (itensFiltradosParaCozinha.length === 0) return null;
+const processarDadosPedido = useCallback((pedidoData) => {
+    if (!pedidoData || !pedidoData.id) return null;
+    
+    const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
+    
+    // 🔥 Mudança: Não matamos o pedido se não houver item de cozinha.
+    // Apenas identificamos o que é de cozinha.
+    const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
 
-        const clienteLimpo = limparDadosCliente(pedidoData.cliente);
-        let endereco = pedidoData.endereco || {};
-        if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
-            endereco = { ...endereco, ...clienteLimpo.endereco };
-        }
-        let source = pedidoData.source;
-        if (!source) source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
-        const tipo = pedidoData.tipo || (source === 'salao' ? 'salao' : 'delivery');
+    const clienteLimpo = limparDadosCliente(pedidoData.cliente);
+    let endereco = pedidoData.endereco || {};
+    if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
+        endereco = { ...endereco, ...clienteLimpo.endereco };
+    }
+    
+    let source = pedidoData.source;
+    // Se não tiver source, tentamos identificar pela mesa
+    if (!source) {
+        source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
+    }
 
-        return {
-            ...pedidoData,
-            id: pedidoData.id,
-            cliente: clienteLimpo,
-            endereco: endereco,
-            source: source,
-            tipo: tipo,
-            status: pedidoData.status || 'recebido',
-            itens: itensFiltradosParaCozinha, 
-            mesaNumero: pedidoData.mesaNumero || 0,
-            loteHorario: pedidoData.loteHorario || ''
-        };
-    }, [limparDadosCliente]);
+    return {
+        ...pedidoData,
+        id: pedidoData.id,
+        cliente: clienteLimpo,
+        endereco: endereco,
+        source: source,
+        status: pedidoData.status || 'recebido',
+        // Se estivermos na aba Cozinha, mostramos só itens de cozinha. 
+        // Se for Delivery, mostramos tudo.
+        itens: rawItens, 
+        itensCozinha: itensFiltradosParaCozinha, // Guardamos a lista filtrada separada
+        mesaNumero: pedidoData.mesaNumero || 0,
+        loteHorario: pedidoData.loteHorario || ''
+    };
+}, [limparDadosCliente]);
 
     useEffect(() => {
         if (!estabelecimentoAtivo) return;
@@ -456,8 +462,12 @@ function Painel() {
                 <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
-                        let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
-
+let listaPedidos = (pedidos[statusKey] || []).filter(p => 
+    abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global'
+);
+if (abaAtiva === 'cozinha') {
+    listaPedidos = listaPedidos.filter(p => p.itensCozinha.length > 0);
+}
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
 
                         return (
