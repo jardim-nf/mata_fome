@@ -20,6 +20,18 @@ import {
     IoAlertCircle
 } from 'react-icons/io5';
 
+// 🔥 FUNÇÃO NOVA: Formata o Timestamp do Firebase para o input mantendo o fuso horário local (Brasil)
+const formatarDataParaInput = (timestamp) => {
+    if (!timestamp) return '';
+    const data = timestamp.toDate();
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    const dia = String(data.getDate()).padStart(2, '0');
+    const horas = String(data.getHours()).padStart(2, '0');
+    const minutos = String(data.getMinutes()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}T${horas}:${minutos}`;
+};
+
 function AdminCouponManagement() {
     const { estabelecimentoIdPrincipal } = useAuth();
 
@@ -54,7 +66,6 @@ function AdminCouponManagement() {
                 ...doc.data() 
             }));
             setCupons(cuponsData);
-            console.log("🎫 Cupons carregados:", cuponsData.length);
             setLoading(false);
         }, (err) => {
             console.error("❌ Erro ao buscar cupons:", err);
@@ -77,7 +88,7 @@ function AdminCouponManagement() {
         setEditingCouponId(null);
     };
 
-    // --- FUNÇÕES AUXILIARES DE STATUS (MOVIDAS PARA O TOPO) ---
+    // --- FUNÇÕES AUXILIARES DE STATUS ---
     const isExpirado = (validadeFim) => {
         if (!validadeFim) return false;
         return validadeFim.toDate() < new Date(); 
@@ -100,7 +111,7 @@ function AdminCouponManagement() {
         }
     };
     
-    // --- ESTATÍSTICAS (DEFINIDA APÓS AS FUNÇÕES) ---
+    // --- ESTATÍSTICAS ---
     const estatisticas = {
         total: cupons.length,
         ativos: cupons.filter(c => isAtivo(c)).length,
@@ -160,14 +171,11 @@ function AdminCouponManagement() {
             };
 
             if (editingCouponId) {
-                console.log(`📝 Editando cupom ${editingCouponId}...`);
                 const couponRef = doc(cuponsCollectionRef, editingCouponId);
                 await updateDoc(couponRef, newCouponData);
                 toast.success('✅ Cupom atualizado com sucesso!');
             } else {
-                // 1. Verificação de duplicidade (Requer permissão de LEITURA)
-                console.log(`🔍 Verificando duplicidade para código: ${newCouponData.codigo}`);
-                
+                // Verificação de duplicidade
                 const q = query(cuponsCollectionRef, where('codigo', '==', newCouponData.codigo));
                 const existingCoupons = await getDocs(q); 
                 
@@ -177,8 +185,7 @@ function AdminCouponManagement() {
                     return;
                 }
                 
-                // 2. Criação do documento (Requer permissão de ESCRITA)
-                console.log('➕ Criando novo cupom...');
+                // Criação do documento
                 await addDoc(cuponsCollectionRef, { 
                     ...newCouponData, 
                     criadoEm: new Date() 
@@ -187,11 +194,9 @@ function AdminCouponManagement() {
             }
             resetForm();
         } catch (err) {
-            // 🔑 CAPTURA DE ERRO MELHORADA
             console.error("❌ ERRO NO SALVAMENTO DO CUPOM:", err);
-            
             if (err.code === 'permission-denied') {
-                toast.error("🔒 Permissão negada! Verifique as Regras de Segurança do Firestore para a coleção /cupons.");
+                toast.error("🔒 Permissão negada! Verifique as Regras de Segurança do Firestore.");
             } else if (err.code === 'unavailable') {
                  toast.error("🌐 Erro de conexão. Tente novamente.");
             } else {
@@ -208,9 +213,11 @@ function AdminCouponManagement() {
         setTipoDesconto(coupon.tipoDesconto);
         setValorDesconto(coupon.valorDesconto?.toString() || '');
         setMinimoPedido(coupon.minimoPedido?.toString() || '');
-        // NOTA: Converte o Timestamp do Firebase para a string de formato 'datetime-local'
-        setValidadeInicio(coupon.validadeInicio ? coupon.validadeInicio.toDate().toISOString().slice(0, 16) : '');
-        setValidadeFim(coupon.validadeFim ? coupon.validadeFim.toDate().toISOString().slice(0, 16) : '');
+        
+        // 🔥 CORREÇÃO AQUI: Usa a função customizada para não alterar o fuso horário
+        setValidadeInicio(formatarDataParaInput(coupon.validadeInicio));
+        setValidadeFim(formatarDataParaInput(coupon.validadeFim));
+        
         setUsosMaximos(coupon.usosMaximos?.toString() || '');
         setAtivo(coupon.ativo);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -278,15 +285,16 @@ function AdminCouponManagement() {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-<div className="w-full text-sm sm:text-base lg:max-w-6xl lg:mx-auto">
-                {/* Header */}
+            <div className="w-full text-sm sm:text-base lg:max-w-6xl lg:mx-auto">
+                
+                {/* Header Superior - (Mantido para caso tenha botão voltar) */}
 
                 {/* Estatísticas */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Total de Cupons</p>
+                                <p className="text-sm font-medium text-gray-600">Total</p>
                                 <p className="text-2xl font-bold text-gray-900">{estatisticas.total}</p>
                             </div>
                             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -298,7 +306,7 @@ function AdminCouponManagement() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Cupons Ativos</p>
+                                <p className="text-sm font-medium text-gray-600">Ativos</p>
                                 <p className="text-2xl font-bold text-green-600">{estatisticas.ativos}</p>
                             </div>
                             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -310,7 +318,7 @@ function AdminCouponManagement() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Cupons Expirados</p>
+                                <p className="text-sm font-medium text-gray-600">Expirados</p>
                                 <p className="text-2xl font-bold text-orange-600">{estatisticas.expirados}</p>
                             </div>
                             <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -322,7 +330,7 @@ function AdminCouponManagement() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Usos Totais</p>
+                                <p className="text-sm font-medium text-gray-600">Usos</p>
                                 <p className="text-2xl font-bold text-purple-600">{estatisticas.usosTotais}</p>
                             </div>
                             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -424,7 +432,7 @@ function AdminCouponManagement() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Data de Início *
+                                    Data e Hora de Início *
                                 </label>
                                 <input 
                                     type="datetime-local" 
@@ -437,7 +445,7 @@ function AdminCouponManagement() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Data de Fim *
+                                    Data e Hora de Fim *
                                 </label>
                                 <input 
                                     type="datetime-local" 
@@ -529,26 +537,26 @@ function AdminCouponManagement() {
                             <div className="space-y-4">
                                 {cupons.map(cupom => {
                                     const expirado = isExpirado(cupom.validadeFim);
-                                    const ativo = isAtivo(cupom);
+                                    const ativoCupom = isAtivo(cupom);
                                     return (
                                         <div 
                                             key={cupom.id} 
-                                            className={`flex items-center justify-between p-4 rounded-lg border transition-colors group ${
+                                            className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-lg border transition-colors group gap-4 ${
                                                 expirado 
                                                     ? 'bg-red-50 border-red-200' 
-                                                    : ativo
+                                                    : ativoCupom
                                                         ? 'bg-green-50 border-green-200 hover:bg-green-100' 
                                                         : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                                                }`}
+                                            }`}
                                         >
-                                            <div className="flex items-center space-x-4 flex-1">
-                                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                                            <div className="flex items-center space-x-4 flex-1 w-full">
+                                                <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${
                                                     expirado 
                                                         ? 'bg-red-100 text-red-600' 
-                                                        : ativo
+                                                        : ativoCupom
                                                             ? 'bg-green-100 text-green-600' 
                                                             : 'bg-gray-100 text-gray-600'
-                                                    }`}>
+                                                }`}>
                                                     <IoGiftOutline className="text-xl" />
                                                 </div>
                                                 <div className="flex-1">
@@ -557,19 +565,22 @@ function AdminCouponManagement() {
                                                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                                                             expirado 
                                                                 ? 'bg-red-500 text-white' 
-                                                                : ativo
+                                                                : ativoCupom
                                                                     ? 'bg-green-500 text-white' 
                                                                     : 'bg-gray-500 text-white'
-                                                            }`}>
-                                                            {expirado ? 'Expirado' : ativo ? 'Ativo' : 'Inativo'}
+                                                        }`}>
+                                                            {expirado ? 'Expirado' : ativoCupom ? 'Ativo' : 'Inativo'}
                                                         </span>
                                                     </div>
-                                                    <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
                                                         <span className="font-semibold text-blue-600">{formatarDesconto(cupom)}</span>
                                                         {cupom.minimoPedido && (
                                                             <span>Mín: R$ {cupom.minimoPedido.toFixed(2).replace('.', ',')}</span>
                                                         )}
-                                                        <span>Validade: {cupom.validadeFim?.toDate().toLocaleDateString('pt-BR')}</span>
+                                                        {/* 🔥 CORREÇÃO NA EXIBIÇÃO: Agora mostra a DATA e a HORA */}
+                                                        <span title="Data final de validade">
+                                                            Até: {cupom.validadeFim?.toDate().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                                        </span>
                                                         <span className="flex items-center space-x-1">
                                                             {cupom.usosMaximos ? (
                                                                 <>
@@ -585,19 +596,17 @@ function AdminCouponManagement() {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="flex space-x-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity w-full sm:w-auto justify-end border-t sm:border-0 pt-3 sm:pt-0 border-gray-200">
                                                 <button
                                                     onClick={() => handleEditClick(cupom)}
-                                                    className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                                                    aria-label="Editar"
+                                                    className="flex-1 sm:flex-none p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center justify-center"
                                                     title="Editar cupom"
                                                 >
                                                     <IoPencil />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteCoupon(cupom.id, cupom.codigo)}
-                                                    className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                                    aria-label="Excluir"
+                                                    className="flex-1 sm:flex-none p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center"
                                                     title="Excluir cupom"
                                                 >
                                                     <IoTrash />
