@@ -116,12 +116,32 @@ export default function ControleSalao() {
     const [isModalTicketsOpen, setIsModalTicketsOpen] = useState(false);
     const [isRelatorioOpen, setIsRelatorioOpen] = useState(false);
     const [isHistoricoMesasOpen, setIsHistoricoMesasOpen] = useState(false);
-    const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false); // 👈 ADICIONE AQUI
+    const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
+
+    // 🔥 NOVO: Estado que guarda o tempo atual e atualiza a cada 1 minuto
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    useEffect(() => {
+        // Relógio invisível: Força o React a recalcular os tempos das mesas
+        const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
 
     const estabelecimentoId = useMemo(() => {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
+
+    // 🔥 NOVO: Função que verifica se passaram 10 minutos
+    const verificarMesaOciosa = (mesa) => {
+        if (mesa.status !== 'ocupada' || (mesa.itens && mesa.itens.length > 0)) return false;
+        if (!mesa.updatedAt) return false;
+
+        const dataAbertura = mesa.updatedAt.toDate ? mesa.updatedAt.toDate() : new Date(mesa.updatedAt);
+        const minutosDecorridos = Math.floor((currentTime - dataAbertura) / 60000);
+        
+        return minutosDecorridos >= 10; // 10 minutos sem pedir nada = alerta
+    };
 
     useEffect(() => {
         const fetchNomeEstabelecimento = async () => {
@@ -153,7 +173,7 @@ export default function ControleSalao() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    // --- BOTÕES DO HEADER PRINCIPAL (MANTIDOS E INTACTOS) ---
+    // --- BOTÕES DO HEADER PRINCIPAL ---
     useEffect(() => {
         setActions(
             <div className="flex gap-2">
@@ -164,7 +184,6 @@ export default function ControleSalao() {
                 >
                     <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Histórico (F4)</span>
                 </button>
-                {/* 👇 ADICIONE ESTE NOVO BOTÃO AQUI 👇 */}
                 <button
                     onClick={() => setIsModalComissaoOpen(true)}
                     className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
@@ -172,22 +191,6 @@ export default function ControleSalao() {
                 >
                     <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
                 </button>
-                {/* 👆 FIM DO NOVO BOTÃO 👆  PARA CARNAVAL E EVENTOS GRANDES
-                <button
-                    onClick={() => setIsRelatorioOpen(true)}
-                    className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
-                    title="Ver histórico de tickets"
-                >
-                    <IoDocumentText className="text-lg" /> <span className="hidden sm:inline">Relatório</span>
-                </button>
-
-                <button
-                    onClick={() => setIsModalTicketsOpen(true)}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
-                >
-                    <IoTicket className="text-lg" /> <span className="hidden sm:inline">Tickets</span>
-                </button>
-*/}
                 <button
                     onClick={() => setIsModalOpen(true)}
                     className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
@@ -237,61 +240,55 @@ export default function ControleSalao() {
         catch (error) { toast.error("Erro."); }
     };
 
-const handleMesaClick = (mesa) => {
-    // 1. Se a mesa já está ocupada, vai direto para a tela dela (já era assim)
-    if (mesa.status !== 'livre') {
-        navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`);
-        return;
-    }
-
-    if (!usuarioLogado || !usuarioLogado.uid) {
-        toast.error("Erro de autenticação. Recarregue a página.");
-        return;
-    }
-
-    // 🔥 2. A MÁGICA ACONTECE AQUI: Abre o modal INSTANTANEAMENTE!
-    setMesaParaAbrir(mesa);
-    setIsModalAbrirMesaOpen(true);
-
-    // 3. Faz o bloqueio de segurança no Firebase em background (sem o await travando a tela)
-    const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
-
-    runTransaction(db, async (transaction) => {
-        const mesaDoc = await transaction.get(mesaRef);
-        if (!mesaDoc.exists()) throw "Mesa não existe mais!";
-        
-        const data = mesaDoc.data();
-        if (data.status !== 'livre') throw "Esta mesa acabou de ser ocupada!";
-
-        if (data.bloqueadoPor && data.bloqueadoPor !== usuarioLogado.uid) {
-            const agora = new Date();
-            let tempoBloqueio = 0;
-            if (data.bloqueadoEm) {
-                const dataBloqueio = data.bloqueadoEm.toDate ? data.bloqueadoEm.toDate() : new Date(data.bloqueadoEm);
-                tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60;
-            }
-            if (tempoBloqueio < 2) {
-                throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
-            }
+    const handleMesaClick = (mesa) => {
+        if (mesa.status !== 'livre') {
+            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`);
+            return;
         }
 
-        // Grava o bloqueio
-        transaction.update(mesaRef, {
-            bloqueadoPor: usuarioLogado.uid,
-            bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
-            bloqueadoEm: serverTimestamp()
-        });
+        if (!usuarioLogado || !usuarioLogado.uid) {
+            toast.error("Erro de autenticação. Recarregue a página.");
+            return;
+        }
 
-    }).catch((error) => {
-        // Se por um grande azar outro garçom pegou a mesa 1 segundo antes,
-        // o sistema fecha o modal automaticamente e avisa quem já pegou.
-        console.error("Conflito ao abrir mesa:", error);
-        const msg = typeof error === 'string' ? error : "Erro: Mesa sendo acessada por outro usuário.";
-        toast.warning(msg);
-        setIsModalAbrirMesaOpen(false);
-        setMesaParaAbrir(null);
-    });
-};
+        setMesaParaAbrir(mesa);
+        setIsModalAbrirMesaOpen(true);
+
+        const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
+
+        runTransaction(db, async (transaction) => {
+            const mesaDoc = await transaction.get(mesaRef);
+            if (!mesaDoc.exists()) throw "Mesa não existe mais!";
+            
+            const data = mesaDoc.data();
+            if (data.status !== 'livre') throw "Esta mesa acabou de ser ocupada!";
+
+            if (data.bloqueadoPor && data.bloqueadoPor !== usuarioLogado.uid) {
+                const agora = new Date();
+                let tempoBloqueio = 0;
+                if (data.bloqueadoEm) {
+                    const dataBloqueio = data.bloqueadoEm.toDate ? data.bloqueadoEm.toDate() : new Date(data.bloqueadoEm);
+                    tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60;
+                }
+                if (tempoBloqueio < 2) {
+                    throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
+                }
+            }
+
+            transaction.update(mesaRef, {
+                bloqueadoPor: usuarioLogado.uid,
+                bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
+                bloqueadoEm: serverTimestamp()
+            });
+
+        }).catch((error) => {
+            console.error("Conflito ao abrir mesa:", error);
+            const msg = typeof error === 'string' ? error : "Erro: Mesa sendo acessada por outro usuário.";
+            toast.warning(msg);
+            setIsModalAbrirMesaOpen(false);
+            setMesaParaAbrir(null);
+        });
+    };
 
     const handleCancelarAbertura = async () => {
         setIsModalAbrirMesaOpen(false);
@@ -309,30 +306,27 @@ const handleMesaClick = (mesa) => {
         }
     };
 
-const handleConfirmarAbertura = (qtd, nomeCliente) => {
-    if (!mesaParaAbrir) return;
-    
-    // 1. Fecha o modal imediatamente para dar sensação de velocidade
-    setIsModalAbrirMesaOpen(false);
-    
-    // 2. Dispara a atualização para o Firebase em background (sem o "await")
-    updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
-        status: 'ocupada',
-        pessoas: qtd,
-        nome: nomeCliente || '',
-        tipo: 'mesa',
-        updatedAt: serverTimestamp(),
-        bloqueadoPor: null,
-        bloqueadoPorNome: null,
-        bloqueadoEm: null
-    }).catch((error) => {
-        console.error("Erro ao sincronizar abertura da mesa:", error);
-        toast.error("Erro ao sincronizar com o servidor.");
-    });
+    const handleConfirmarAbertura = (qtd, nomeCliente) => {
+        if (!mesaParaAbrir) return;
+        
+        setIsModalAbrirMesaOpen(false);
+        
+        updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
+            status: 'ocupada',
+            pessoas: qtd,
+            nome: nomeCliente || '',
+            tipo: 'mesa',
+            updatedAt: serverTimestamp(),
+            bloqueadoPor: null,
+            bloqueadoPorNome: null,
+            bloqueadoEm: null
+        }).catch((error) => {
+            console.error("Erro ao sincronizar abertura da mesa:", error);
+            toast.error("Erro ao sincronizar com o servidor.");
+        });
 
-    // 3. Navega IMEDIATAMENTE para a tela de pedidos da mesa
-    navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
-};
+        navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
+    };
 
     const handlePagamentoConcluido = () => { setIsModalPagamentoOpen(false); setMesaParaPagamento(null); };
 
@@ -363,10 +357,8 @@ const handleConfirmarAbertura = (qtd, nomeCliente) => {
 
     if (!estabelecimentoId && !loading) return <div className="p-10 text-center"><IoAlertCircle className="mx-auto text-4xl text-red-500 mb-2" />Sem acesso ao estabelecimento.</div>;
 
-return (
-        // Substituído para não ter padding lateral excessivo em telas grandes
+    return (
         <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 w-full">
-            {/* Removido o max-w-[2400px], agora usa apenas w-full para esticar tudo */}
             <div className="w-full">
 
                 <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
@@ -383,7 +375,6 @@ return (
                     <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handlePagamentoConcluido} />
                 )}
 
-                {/* MODAL DE TICKETS (IMPRESSÃO) */}
                 {isModalTicketsOpen && (
                     <GeradorTickets
                         onClose={() => setIsModalTicketsOpen(false)}
@@ -392,7 +383,6 @@ return (
                     />
                 )}
 
-                {/* MODAL DE RELATÓRIO CAIXA */}
                 {isRelatorioOpen && (
                     <RelatorioTicketsModal
                         onClose={() => setIsRelatorioOpen(false)}
@@ -416,7 +406,6 @@ return (
                     />
                 )}
 
-                {/* HEADER STICKY (Fixado no topo) */}
                 <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2 w-full">
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 w-full">
 
@@ -432,14 +421,12 @@ return (
                             </div>
                         </div>
 
-                        {/* Estatísticas */}
                         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:flex-1 xl:justify-center">
                             <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
                             <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
                         </div>
 
-                        {/* BUSCA E FILTROS */}
                         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto shrink-0 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
                             <div className="relative w-full sm:w-48 md:w-64">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -475,15 +462,15 @@ return (
                     </div>
                 </div>
 
-                {/* GRELHA DAS MESAS */}
                 <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh] w-full">
                     {mesasFiltradas.length > 0 ? (
-                        // Aqui troquei as colunas fixas por auto-fill, assim ele preenche todas as mesas até ao fim do monitor!
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3 w-full">
                             {mesasFiltradas.map(mesa => (
                                 <MesaCard
                                     key={mesa.id}
                                     mesa={mesa}
+                                    isOciosa={verificarMesaOciosa(mesa)} // 🔥 ENVIANDO O STATUS
+                                    currentTime={currentTime} // 🔥 ENVIANDO O TEMPO REAL PARA O RELÓGIO GIRAR
                                     onClick={() => handleMesaClick(mesa)}
                                     onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
                                     onExcluir={() => handleExcluirMesa(mesa.id)}
