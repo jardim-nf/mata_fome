@@ -124,15 +124,12 @@ function Painel() {
     const [isPrinting, setIsPrinting] = useState(false);
 
     // 🔥 ESTADO DE CONFIGURAÇÃO DE IMPRESSÃO (TUDO, COZINHA, DESLIGADO)
-    // Lê o localStorage para saber qual foi a última escolha deste computador
     const [modoImpressao, setModoImpressaoState] = useState(() => {
         const salvo = localStorage.getItem('config_modo_impressao_painel');
-        // 'tudo', 'cozinha', ou 'desligado'
         return salvo || 'tudo'; 
     });
-    const modoImpressaoRef = useRef(modoImpressao); // Ref para usar dentro do Firebase sem bugar
+    const modoImpressaoRef = useRef(modoImpressao); 
 
-    // Função para ciclar entre os modos de impressão
     const alternarModoImpressao = () => {
         let novoModo = 'tudo';
         if (modoImpressao === 'tudo') novoModo = 'cozinha';
@@ -168,42 +165,48 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-const processarDadosPedido = useCallback((pedidoData) => {
-    if (!pedidoData || !pedidoData.id) return null;
-    
-    const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
-    
-    // 🔥 Mudança: Não matamos o pedido se não houver item de cozinha.
-    // Apenas identificamos o que é de cozinha.
-    const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
+    // 🔥 A CORREÇÃO PRINCIPAL ESTÁ AQUI 🔥
+    const processarDadosPedido = useCallback((pedidoData) => {
+        if (!pedidoData || !pedidoData.id) return null;
+        
+        const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
+        const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
 
-    const clienteLimpo = limparDadosCliente(pedidoData.cliente);
-    let endereco = pedidoData.endereco || {};
-    if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
-        endereco = { ...endereco, ...clienteLimpo.endereco };
-    }
-    
-    let source = pedidoData.source;
-    // Se não tiver source, tentamos identificar pela mesa
-    if (!source) {
-        source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
-    }
+        const clienteLimpo = limparDadosCliente(pedidoData.cliente);
+        let endereco = pedidoData.endereco || {};
+        if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
+            endereco = { ...endereco, ...clienteLimpo.endereco };
+        }
+        
+        let source = pedidoData.source;
+        let tipo = pedidoData.tipo;
+        
+        // Verifica se tem alguma mesa informada (Mesmo que seja texto, tipo "S1")
+        const temMesa = pedidoData.mesaNumero && String(pedidoData.mesaNumero).trim() !== '' && String(pedidoData.mesaNumero) !== '0';
+        
+        // Força a origem e o tipo CORRETOS para que o PedidoCard não desenhe "Delivery"
+        if (source === 'salao' || temMesa) {
+            source = 'salao';
+            tipo = 'mesa';
+        } else {
+            if (!source) source = 'global';
+            if (!tipo) tipo = 'delivery';
+        }
 
-    return {
-        ...pedidoData,
-        id: pedidoData.id,
-        cliente: clienteLimpo,
-        endereco: endereco,
-        source: source,
-        status: pedidoData.status || 'recebido',
-        // Se estivermos na aba Cozinha, mostramos só itens de cozinha. 
-        // Se for Delivery, mostramos tudo.
-        itens: rawItens, 
-        itensCozinha: itensFiltradosParaCozinha, // Guardamos a lista filtrada separada
-        mesaNumero: pedidoData.mesaNumero || 0,
-        loteHorario: pedidoData.loteHorario || ''
-    };
-}, [limparDadosCliente]);
+        return {
+            ...pedidoData,
+            id: pedidoData.id,
+            cliente: clienteLimpo,
+            endereco: endereco,
+            source: source,
+            tipo: tipo, // Garante que o PedidoCard vai receber que é uma "mesa"
+            status: pedidoData.status || 'recebido',
+            itens: rawItens, 
+            itensCozinha: itensFiltradosParaCozinha, 
+            mesaNumero: pedidoData.mesaNumero || 0,
+            loteHorario: pedidoData.loteHorario || ''
+        };
+    }, [limparDadosCliente]);
 
     useEffect(() => {
         if (!estabelecimentoAtivo) return;
@@ -276,20 +279,15 @@ const processarDadosPedido = useCallback((pedidoData) => {
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
-            // 🔥 A MÁGICA DA CONFIGURAÇÃO ESTÁ AQUI 🔥
             const configAtual = modoImpressaoRef.current;
-            
-            // Se estiver desligado, não faz nada!
             if (configAtual === 'desligado') return;
 
-            // Se for "Só Cozinha", ele filtra. Se não tiver comida, aborta.
             if (configAtual === 'cozinha') {
                 const rawItens = Array.isArray(data.itens) ? data.itens : [];
                 const itensCozinha = rawItens.filter(isItemCozinha);
-                if (itensCozinha.length === 0) return; // Só tinha bebida, aborta!
+                if (itensCozinha.length === 0) return; 
             }
 
-            // Se chegou aqui, ou é 'tudo' ou é 'cozinha' e passou no filtro
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
                 const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
                 if (!pedidosJaImpressos.current.has(pedidoId) && !impressosLocal.includes(pedidoId)) {
@@ -356,7 +354,6 @@ const processarDadosPedido = useCallback((pedidoData) => {
             setIsPrinting(true);
             const pedidoId = printQueue[0];
             
-            // 🔥 Define o URL com base na configuração 🔥
             const setorQuery = modoImpressao === 'cozinha' ? '&setor=cozinha' : '';
             const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}${setorQuery}`;
             
@@ -413,7 +410,6 @@ const processarDadosPedido = useCallback((pedidoData) => {
 
                     <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
                         
-                        {/* 🔥 NOVO BOTÃO DE CONFIGURAÇÃO DE IMPRESSÃO 🔥 */}
                         <button
                             onClick={alternarModoImpressao}
                             className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border font-bold text-xs transition-all shadow-sm
@@ -462,12 +458,12 @@ const processarDadosPedido = useCallback((pedidoData) => {
                 <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
-let listaPedidos = (pedidos[statusKey] || []).filter(p => 
-    abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global'
-);
-if (abaAtiva === 'cozinha') {
-    listaPedidos = listaPedidos.filter(p => p.itensCozinha.length > 0);
-}
+                        let listaPedidos = (pedidos[statusKey] || []).filter(p => 
+                            abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global'
+                        );
+                        if (abaAtiva === 'cozinha') {
+                            listaPedidos = listaPedidos.filter(p => p.itensCozinha.length > 0);
+                        }
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
 
                         return (
