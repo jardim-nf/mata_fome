@@ -237,54 +237,61 @@ export default function ControleSalao() {
         catch (error) { toast.error("Erro."); }
     };
 
-    const handleMesaClick = async (mesa) => {
-        if (mesa.status !== 'livre') {
-            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`);
-            return;
+const handleMesaClick = (mesa) => {
+    // 1. Se a mesa já está ocupada, vai direto para a tela dela (já era assim)
+    if (mesa.status !== 'livre') {
+        navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`);
+        return;
+    }
+
+    if (!usuarioLogado || !usuarioLogado.uid) {
+        toast.error("Erro de autenticação. Recarregue a página.");
+        return;
+    }
+
+    // 🔥 2. A MÁGICA ACONTECE AQUI: Abre o modal INSTANTANEAMENTE!
+    setMesaParaAbrir(mesa);
+    setIsModalAbrirMesaOpen(true);
+
+    // 3. Faz o bloqueio de segurança no Firebase em background (sem o await travando a tela)
+    const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
+
+    runTransaction(db, async (transaction) => {
+        const mesaDoc = await transaction.get(mesaRef);
+        if (!mesaDoc.exists()) throw "Mesa não existe mais!";
+        
+        const data = mesaDoc.data();
+        if (data.status !== 'livre') throw "Esta mesa acabou de ser ocupada!";
+
+        if (data.bloqueadoPor && data.bloqueadoPor !== usuarioLogado.uid) {
+            const agora = new Date();
+            let tempoBloqueio = 0;
+            if (data.bloqueadoEm) {
+                const dataBloqueio = data.bloqueadoEm.toDate ? data.bloqueadoEm.toDate() : new Date(data.bloqueadoEm);
+                tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60;
+            }
+            if (tempoBloqueio < 2) {
+                throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
+            }
         }
 
-        if (!usuarioLogado || !usuarioLogado.uid) {
-            toast.error("Erro de autenticação. Recarregue a página.");
-            return;
-        }
+        // Grava o bloqueio
+        transaction.update(mesaRef, {
+            bloqueadoPor: usuarioLogado.uid,
+            bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
+            bloqueadoEm: serverTimestamp()
+        });
 
-        const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
-
-        try {
-            await runTransaction(db, async (transaction) => {
-                const mesaDoc = await transaction.get(mesaRef);
-                if (!mesaDoc.exists()) throw "Mesa não existe mais!";
-                const data = mesaDoc.data();
-                if (data.status !== 'livre') throw "Esta mesa acabou de ser ocupada!";
-
-                if (data.bloqueadoPor && data.bloqueadoPor !== usuarioLogado.uid) {
-                    const agora = new Date();
-                    let tempoBloqueio = 0;
-                    if (data.bloqueadoEm) {
-                        const dataBloqueio = data.bloqueadoEm.toDate ? data.bloqueadoEm.toDate() : new Date(data.bloqueadoEm);
-                        tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60;
-                    }
-                    if (tempoBloqueio < 2) {
-                        throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
-                    }
-                }
-
-                transaction.update(mesaRef, {
-                    bloqueadoPor: usuarioLogado.uid,
-                    bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
-                    bloqueadoEm: serverTimestamp()
-                });
-            });
-
-            setMesaParaAbrir(mesa);
-            setIsModalAbrirMesaOpen(true);
-
-        } catch (error) {
-            console.error("Conflito ao abrir mesa:", error);
-            const msg = typeof error === 'string' ? error : "Erro: Mesa sendo acessada por outro usuário.";
-            toast.warning(msg);
-        }
-    };
+    }).catch((error) => {
+        // Se por um grande azar outro garçom pegou a mesa 1 segundo antes,
+        // o sistema fecha o modal automaticamente e avisa quem já pegou.
+        console.error("Conflito ao abrir mesa:", error);
+        const msg = typeof error === 'string' ? error : "Erro: Mesa sendo acessada por outro usuário.";
+        toast.warning(msg);
+        setIsModalAbrirMesaOpen(false);
+        setMesaParaAbrir(null);
+    });
+};
 
     const handleCancelarAbertura = async () => {
         setIsModalAbrirMesaOpen(false);
@@ -302,28 +309,30 @@ export default function ControleSalao() {
         }
     };
 
-    const handleConfirmarAbertura = async (qtd, nomeCliente) => {
-        if (!mesaParaAbrir) return;
-        setIsOpeningTable(true);
-        try {
-            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
-                status: 'ocupada',
-                pessoas: qtd,
-                nome: nomeCliente || '',
-                tipo: 'mesa',
-                updatedAt: serverTimestamp(),
-                bloqueadoPor: null,
-                bloqueadoPorNome: null,
-                bloqueadoEm: null
-            });
-            setIsModalAbrirMesaOpen(false);
-            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
-        } catch (error) {
-            toast.error("Erro ao abrir");
-        } finally {
-            setIsOpeningTable(false);
-        }
-    };
+const handleConfirmarAbertura = (qtd, nomeCliente) => {
+    if (!mesaParaAbrir) return;
+    
+    // 1. Fecha o modal imediatamente para dar sensação de velocidade
+    setIsModalAbrirMesaOpen(false);
+    
+    // 2. Dispara a atualização para o Firebase em background (sem o "await")
+    updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
+        status: 'ocupada',
+        pessoas: qtd,
+        nome: nomeCliente || '',
+        tipo: 'mesa',
+        updatedAt: serverTimestamp(),
+        bloqueadoPor: null,
+        bloqueadoPorNome: null,
+        bloqueadoEm: null
+    }).catch((error) => {
+        console.error("Erro ao sincronizar abertura da mesa:", error);
+        toast.error("Erro ao sincronizar com o servidor.");
+    });
+
+    // 3. Navega IMEDIATAMENTE para a tela de pedidos da mesa
+    navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
+};
 
     const handlePagamentoConcluido = () => { setIsModalPagamentoOpen(false); setMesaParaPagamento(null); };
 
