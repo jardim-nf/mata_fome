@@ -123,7 +123,7 @@ function Painel() {
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
-    // 🔥 ESTADO DE CONFIGURAÇÃO DE IMPRESSÃO (TUDO, COZINHA, DESLIGADO)
+    // ESTADO DE CONFIGURAÇÃO DE IMPRESSÃO (TUDO, COZINHA, DESLIGADO)
     const [modoImpressao, setModoImpressaoState] = useState(() => {
         const salvo = localStorage.getItem('config_modo_impressao_painel');
         return salvo || 'tudo'; 
@@ -165,7 +165,6 @@ function Painel() {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-    // 🔥 A CORREÇÃO PRINCIPAL ESTÁ AQUI 🔥
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
         
@@ -181,10 +180,8 @@ function Painel() {
         let source = pedidoData.source;
         let tipo = pedidoData.tipo;
         
-        // Verifica se tem alguma mesa informada (Mesmo que seja texto, tipo "S1")
         const temMesa = pedidoData.mesaNumero && String(pedidoData.mesaNumero).trim() !== '' && String(pedidoData.mesaNumero) !== '0';
         
-        // Força a origem e o tipo CORRETOS para que o PedidoCard não desenhe "Delivery"
         if (source === 'salao' || temMesa) {
             source = 'salao';
             tipo = 'mesa';
@@ -199,7 +196,7 @@ function Painel() {
             cliente: clienteLimpo,
             endereco: endereco,
             source: source,
-            tipo: tipo, // Garante que o PedidoCard vai receber que é uma "mesa"
+            tipo: tipo,
             status: pedidoData.status || 'recebido',
             itens: rawItens, 
             itensCozinha: itensFiltradosParaCozinha, 
@@ -278,6 +275,28 @@ function Painel() {
             const data = change.doc.data();
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
+
+            // 🔥 CADEADO DUPLO: BLOQUEIO DE PEDIDOS ANTIGOS 🔥
+            const timestamp = data.createdAt || data.dataPedido;
+            if (timestamp) {
+                const dataDoPedido = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
+                const hoje = new Date();
+                
+                // Regra 1: O pedido TEM que ser exatamente da mesma data de hoje (dia, mês e ano)
+                if (
+                    dataDoPedido.getDate() !== hoje.getDate() ||
+                    dataDoPedido.getMonth() !== hoje.getMonth() ||
+                    dataDoPedido.getFullYear() !== hoje.getFullYear()
+                ) {
+                    return; // Bloqueia e cancela a impressão
+                }
+                
+                // Regra 2: O pedido não pode ter mais de 3 horas de "vida"
+                const diffHoras = (hoje - dataDoPedido) / (1000 * 60 * 60);
+                if (diffHoras > 3) {
+                    return; // Bloqueia e cancela a impressão
+                }
+            }
 
             const configAtual = modoImpressaoRef.current;
             if (configAtual === 'desligado') return;
