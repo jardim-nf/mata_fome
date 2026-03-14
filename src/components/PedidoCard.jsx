@@ -117,6 +117,7 @@ const PedidoCard = ({
     };
 
     // --- WHATSAPP AUTOMÁTICO ---
+// --- WHATSAPP AUTOMÁTICO ---
     const enviarWhatsApp = (statusAlvo) => {
         const telefone = item.cliente?.telefone || item.telefone;
         if (!telefone) return; 
@@ -130,7 +131,7 @@ const PedidoCard = ({
 
         switch (statusAlvo) {
             case 'recebido': frasePrincipal = `Recebemos seu pedido *#${idCurto}*! 📝\nJá vamos conferir e enviar para a cozinha.`; break;
-            case 'preparo': frasePrincipal = `Boas notícias! 👨‍🍳🔥\nSeu pedido *#${idCurto}* foi recebido com sucesso!!.`; break;
+            case 'preparo': frasePrincipal = `Boas notícias! 👨‍🍳🔥\nSeu pedido *#${idCurto}* foi recebido com sucesso!`; break;
             case 'em_entrega': 
                 const infoMoto = item.motoboyNome ? ` com o entregador *${item.motoboyNome}*` : '';
                 frasePrincipal = `Saiu para entrega! 🛵💨\nSeu pedido *#${idCurto}* está a caminho${infoMoto}.`; 
@@ -143,7 +144,14 @@ const PedidoCard = ({
             default: frasePrincipal = `Atualização do pedido *#${idCurto}*: Status *${getStatusConfig(statusAlvo).label.toUpperCase()}*.`;
         }
         
-        const msgFinal = `Olá, *${nomeCliente}*! 👋\n\n${frasePrincipal}${mostrarTotal ? `\n\n💰 *Valor Total: ${totalFormatado}*` : ''}`;
+        // 🔥 LÓGICA PARA PEDIR O COMPROVANTE DO PIX 🔥
+        let avisoPix = "";
+        // Verifica se a forma de pagamento é PIX e se o pedido acabou de chegar
+        if (item.formaPagamento?.toLowerCase() === 'pix' && (statusAlvo === 'recebido' || statusAlvo === 'preparo')) {
+            avisoPix = "\n\n🧾 *Seu pagamento foi via PIX. Por favor, me envie o seu comprovante por aqui.*";
+        }
+        
+        const msgFinal = `Olá, *${nomeCliente}*! 👋\n\n${frasePrincipal}${mostrarTotal ? `\n\n💰 *Valor Total: ${totalFormatado}*` : ''}${avisoPix}`;
         const numeroFormatado = telefone.replace(/\D/g, '');
         window.open(`https://wa.me/55${numeroFormatado}?text=${encodeURIComponent(msgFinal)}`, '_blank');
     };
