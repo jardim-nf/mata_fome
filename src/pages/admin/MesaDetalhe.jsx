@@ -36,6 +36,21 @@ export default function MesaDetalhe() {
     });
   };
 
+  // 🔥 NOVA FUNÇÃO: Solicitar impressão no PC do Caixa 🔥
+  const solicitarImpressao = async () => {
+    try {
+      const mesaRef = doc(db, "mesas", id);
+      await updateDoc(mesaRef, {
+        solicitarImpressaoConferencia: true,
+        timestampImpressao: new Date().toISOString() // Ajuda a evitar impressões duplicadas antigas
+      });
+      alert("Conferência enviada para a impressora do caixa!");
+    } catch (erro) {
+      console.error("Erro ao solicitar impressão:", erro);
+      alert("Erro ao comunicar com a impressora.");
+    }
+  };
+
   if (!mesa) return <p>Carregando...</p>;
 
   return (
@@ -60,13 +75,23 @@ export default function MesaDetalhe() {
         ))}
       </div>
 
-      <div className="mt-4 flex gap-2">
+      {/* Ajustei a div dos botões para usar flex-wrap caso a tela do garçom seja muito pequena */}
+      <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={adicionarItem}
           className="px-4 py-2 bg-blue-500 text-white rounded"
         >
           Adicionar Item
         </button>
+
+        {/* 🔥 NOVO BOTÃO: Imprimir Conferência 🔥 */}
+        <button
+          onClick={solicitarImpressao}
+          className="px-4 py-2 bg-yellow-500 text-white rounded"
+        >
+          Imprimir Conferência
+        </button>
+
         <button
           onClick={() => setModalAberto(true)}
           className="px-4 py-2 bg-green-500 text-white rounded"
