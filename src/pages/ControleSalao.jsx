@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, onSnapshot, addDoc, doc, getDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, runTransaction } from "firebase/firestore";
+// 🔥 ADICIONADO 'where' AQUI NA IMPORTAÇÃO 🔥
+import { collection, onSnapshot, addDoc, doc, getDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, runTransaction, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { useHeader } from '../context/HeaderContext';
@@ -119,7 +120,7 @@ export default function ControleSalao() {
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
 
-    // 🔥 NOVO: Estado que guarda o tempo atual e atualiza a cada 1 minuto
+    // Estado que guarda o tempo atual e atualiza a cada 1 minuto
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
@@ -132,7 +133,7 @@ export default function ControleSalao() {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
 
-    // 🔥 NOVO: Função que verifica se passaram 10 minutos
+    // Função que verifica se passaram 10 minutos
     const verificarMesaOciosa = (mesa) => {
         if (mesa.status !== 'ocupada' || (mesa.itens && mesa.itens.length > 0)) return false;
         if (!mesa.updatedAt) return false;
@@ -172,6 +173,50 @@ export default function ControleSalao() {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
+
+    // 🔥 NOVO: useEffect PARA ESCUTAR PEDIDOS DE IMPRESSÃO (Ouvinte Principal) 🔥
+    useEffect(() => {
+        if (!estabelecimentoId) return;
+
+        // Escuta apenas as mesas que têm a flag "solicitarImpressaoConferencia" como true
+        const q = query(
+            collection(db, "estabelecimentos", estabelecimentoId, "mesas"),
+            where("solicitarImpressaoConferencia", "==", true)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach(async (change) => {
+                if (change.type === "added" || change.type === "modified") {
+                    const mesaDoc = change.doc;
+                    const mesaId = mesaDoc.id;
+                    const mesaData = mesaDoc.data();
+
+                    // Verificação de segurança para não imprimir infinitamente
+                    if (mesaData.solicitarImpressaoConferencia) {
+                        toast.info(`Imprimindo conferência da Mesa ${mesaData.numero}...`);
+                        
+                        // 1. Abre a tela de impressão numa nova aba/pop-up
+                        // Ajuste a rota '/impressao' caso a sua rota principal no App.jsx seja diferente
+                        const urlImpressao = `/impressao?origem=salao&estabId=${estabelecimentoId}&pedidoId=${mesaId}`;
+                        window.open(urlImpressao, "_blank", "width=400,height=600");
+
+                        // 2. Reseta a flag imediatamente para não causar looping
+                        try {
+                            await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesaId), {
+                                solicitarImpressaoConferencia: false
+                            });
+                        } catch (err) {
+                            console.error("Erro ao limpar flag de impressão da mesa:", err);
+                        }
+                    }
+                }
+            });
+        });
+
+        return () => unsubscribe();
+    }, [estabelecimentoId]);
+    // 🔥 FIM DO OUVINTE DE IMPRESSÃO 🔥
+
 
     // --- BOTÕES DO HEADER PRINCIPAL ---
     useEffect(() => {
@@ -469,8 +514,8 @@ export default function ControleSalao() {
                                 <MesaCard
                                     key={mesa.id}
                                     mesa={mesa}
-                                    isOciosa={verificarMesaOciosa(mesa)} // 🔥 ENVIANDO O STATUS
-                                    currentTime={currentTime} // 🔥 ENVIANDO O TEMPO REAL PARA O RELÓGIO GIRAR
+                                    isOciosa={verificarMesaOciosa(mesa)}
+                                    currentTime={currentTime}
                                     onClick={() => handleMesaClick(mesa)}
                                     onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
                                     onExcluir={() => handleExcluirMesa(mesa.id)}
