@@ -179,7 +179,31 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         setSelecionados(novosS);
     };
 
-    const handleImprimirConferencia = () => {
+const handleImprimirConferencia = async () => {
+        // 1. Verifica se quem clicou está no celular ou no PC
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 1024;
+
+        if (isMobileDevice) {
+            // =======================================================
+            // LÓGICA DO CELULAR (GARÇOM): Manda o aviso pro Firestore
+            // =======================================================
+            try {
+                const mesaRef = doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesa.id);
+                await updateDoc(mesaRef, {
+                    solicitarImpressaoConferencia: true,
+                    timestampImpressao: new Date().toISOString() 
+                });
+                toast.success("Conferência enviada para a impressora do caixa!");
+            } catch (erro) {
+                console.error("Erro ao solicitar impressão:", erro);
+                toast.error("Erro ao comunicar com a impressora.");
+            }
+            return; // 🛑 IMPORTANTE: O 'return' faz o celular parar aqui e não ler o HTML abaixo!
+        }
+
+        // =======================================================
+        // LÓGICA DO COMPUTADOR (CAIXA): Gera o HTML e imprime na hora
+        // =======================================================
         const totalConsumo = calcularTotalConsumo();
         const valorTaxa = calcularValorTaxa();
         const jaPago = calcularJaPago();
