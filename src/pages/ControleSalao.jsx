@@ -178,7 +178,17 @@ export default function ControleSalao() {
     useEffect(() => {
         if (!estabelecimentoId) return;
 
-        // Escuta apenas as mesas que têm a flag "solicitarImpressaoConferencia" como true
+        // 🛑 TRAVA DE SEGURANÇA PARA CELULARES 🛑
+        // Verifica se o aparelho é um celular/tablet. Se for, ele NÃO escuta a impressora!
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Se for celular (ou tela pequena), encerra a função aqui e o aparelho fica "surdo" para a impressora
+        if (isMobileDevice || window.innerWidth < 1024) {
+            console.log("Aparelho mobile ou tela pequena detectado: Ouvinte de impressão bloqueado na tela do garçom.");
+            return; 
+        }
+
+        // Daqui para baixo, só o Computador do Caixa vai executar
         const q = query(
             collection(db, "estabelecimentos", estabelecimentoId, "mesas"),
             where("solicitarImpressaoConferencia", "==", true)
@@ -196,7 +206,6 @@ export default function ControleSalao() {
                         toast.info(`Imprimindo conferência da Mesa ${mesaData.numero}...`);
                         
                         // 1. Abre a tela de impressão numa nova aba/pop-up
-                        // Ajuste a rota '/impressao' caso a sua rota principal no App.jsx seja diferente
                         const urlImpressao = `/impressao?origem=salao&estabId=${estabelecimentoId}&pedidoId=${mesaId}`;
                         window.open(urlImpressao, "_blank", "width=400,height=600");
 
