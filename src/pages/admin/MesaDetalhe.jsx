@@ -109,7 +109,7 @@ export default function MesaDetalhe() {
           // 🔥 BÔNUS: Agora o pagamento vai pro estabelecimento certo! (Tirei o SEU_ID_AQUI)
           estabelecimentoId={estabelecimentoId} 
           onClose={() => setModalAberto(false)}
-          onSucesso={() => navigate("/controle-salao")}
+          onSucesso={() => navigate(`/estabelecimento/${estabelecimentoId}/salao`)} 
         />
       )}
     </div>
