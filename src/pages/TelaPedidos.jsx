@@ -495,53 +495,94 @@ const TelaPedidos = () => {
 
     return (
         <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden flex flex-col w-full">
-            <header className="bg-white px-4 py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
-                <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => navigate('/controle-salao')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><IoArrowBack className="text-xl" /></button>
-                        <div>
-                            <h1 className="font-black text-xl text-gray-900 leading-none">Mesa {mesa?.numero}</h1>
-                            <p className="text-xs text-gray-500 font-medium truncate max-w-[150px]">
-                                Pedindo para: <span className="font-bold truncate" style={{ color: coresEstabelecimento.destaque }}>{clienteSelecionado}</span>
-                            </p>
-                        </div>
-                    </div>
-                    <button onClick={() => setShowOrderSummary(true)} className="relative p-3 rounded-2xl text-white shadow-lg active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
-                        <IoCart className="text-xl" />
-                        {totalItens > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-white">{totalItens}</span>}
+            
+{/* NOVO HEADER COM BLOCOS FANTASMAS PARA PROTEGER AS SOMBRAS */}
+<header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
+    
+    {/* TOPO: VOLTAR E CARRINHO */}
+    <div className="flex items-center justify-between w-full px-4">
+        <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/controle-salao')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><IoArrowBack className="text-xl" /></button>
+            <div>
+                <h1 className="font-black text-xl text-gray-900 leading-none">Mesa {mesa?.numero}</h1>
+                <p className="text-xs text-gray-500 font-medium truncate max-w-[150px]">
+                    Pedindo para: <span className="font-bold truncate" style={{ color: coresEstabelecimento.destaque }}>{clienteSelecionado}</span>
+                </p>
+            </div>
+        </div>
+        <button onClick={() => setShowOrderSummary(true)} className="relative p-3 rounded-2xl text-white shadow-lg active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+            <IoCart className="text-xl" />
+            {totalItens > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-white">{totalItens}</span>}
+        </button>
+    </div>
+    
+    {/* LISTA DE OCUPANTES (SCROLL HORIZONTAL) */}
+    {/* Note o pl-4 aqui para dar o recuo esquerdo */}
+    <div className="flex items-center gap-2 overflow-x-auto py-3 pl-4 hide-scrollbar w-full">
+        {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
+            <div key={idx} className="flex-shrink-0">
+                {editandoNomeIndex === idx ? (
+                    <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => salvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && salvarEdicaoPessoa(idx)} />
+                ) : (
+                    <button onClick={() => setClienteSelecionado(nome)} className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`} style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}>
+                        <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />{nome}
+                        {clienteSelecionado === nome && (<div onClick={(e) => { e.stopPropagation(); iniciarEdicaoPessoa(idx, nome); }} className="ml-1 p-1 bg-white/20 rounded-full hover:bg-white/40 transition-colors" title="Editar nome"><IoPencil className="text-[10px] text-white" /></div>)}
                     </button>
-                </div>
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 px-1 hide-scrollbar w-full">
-                    {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
-                        <div key={idx} className="flex-shrink-0">
-                            {editandoNomeIndex === idx ? (
-                                <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => salvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && salvarEdicaoPessoa(idx)} />
-                            ) : (
-                                <button onClick={() => setClienteSelecionado(nome)} className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`} style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}>
-                                    <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />{nome}
-                                    {clienteSelecionado === nome && (<div onClick={(e) => { e.stopPropagation(); iniciarEdicaoPessoa(idx, nome); }} className="ml-1 p-1 bg-white/20 rounded-full hover:bg-white/40 transition-colors" title="Editar nome"><IoPencil className="text-[10px] text-white" /></div>)}
-                                </button>
-                            )}
-                        </div>
-                    ))}
-                    <div className="flex-shrink-0">
-                        {isAddingPerson ? (<input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm w-32 shadow-md animate-in fade-in zoom-in duration-200" style={{ borderColor: coresEstabelecimento.destaque }} placeholder="Nome..." value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={confirmarNovaPessoa} onKeyDown={e => e.key === 'Enter' && confirmarNovaPessoa()} />) : (<button onClick={iniciarAdicaoPessoa} className="w-10 h-10 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center border-2 border-dashed border-gray-300 hover:border-gray-400 hover:text-gray-600 transition-colors active:scale-95"><IoPersonAdd className="text-lg" /></button>)}
-                    </div>
-                    <div className="w-2 flex-shrink-0"></div>
-                </div>
-                <div className="relative w-full">
-                    <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-                    <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
-                    {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-3 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
-                </div>
-                <div className="flex gap-2 overflow-x-auto hide-scrollbar px-1 pb-1 w-full">
-                    {categoriasOrdenadas.map(cat => (<button key={cat} onClick={() => setCategoriaAtiva(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent shadow-md' : 'bg-white text-gray-500 border-gray-200'}`} style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria } : {}}>{cat}</button>))}
-                    <div className="w-2 flex-shrink-0"></div>
-                </div>
-            </header>
-{/* AQUI FOI ALTERADO PARA APROVEITAR 100% DA TELA COM ITENS MAIS APERTADOS */}
+                )}
+            </div>
+        ))}
+        
+        <div className="flex-shrink-0">
+            {isAddingPerson ? (
+                <input 
+                    autoFocus 
+                    className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm w-36 shadow-md animate-in fade-in zoom-in duration-200" 
+                    style={{ borderColor: coresEstabelecimento.destaque }} 
+                    placeholder="Nome..." 
+                    value={novoNomeTemp} 
+                    onChange={e => setNovoNomeTemp(e.target.value)} 
+                    onBlur={confirmarNovaPessoa} 
+                    onKeyDown={e => e.key === 'Enter' && confirmarNovaPessoa()} 
+                />
+            ) : (
+                <button 
+                    onClick={iniciarAdicaoPessoa} 
+                    className="px-4 py-2 h-full min-h-[38px] rounded-xl bg-gray-50 text-gray-500 flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all active:scale-95"
+                >
+                    <IoPersonAdd className="text-lg" />
+                    <span className="text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+                        Adicionar Pessoa
+                    </span>
+                </button>
+            )}
+        </div>
+        
+        {/* 🔥 O SEGREDO DEFINITIVO AQUI: Um bloco com um PONTO INVISÍVEL */}
+        <div className="flex-shrink-0 w-6 h-1 text-transparent select-none pointer-events-none">
+            .
+        </div>
+    </div>
+
+    {/* BUSCA DE PRODUTOS */}
+    <div className="relative w-full px-4">
+        <IoSearch className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
+        <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
+        {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-7 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
+    </div>
+
+    {/* CATEGORIAS (SCROLL HORIZONTAL) */}
+    <div className="flex gap-2 overflow-x-auto hide-scrollbar py-3 pl-4 w-full">
+        {categoriasOrdenadas.map(cat => (<button key={cat} onClick={() => setCategoriaAtiva(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent shadow-md' : 'bg-white text-gray-500 border-gray-200'}`} style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria } : {}}>{cat}</button>))}
+        
+        {/* 🔥 Ponto invisível nas categorias também para garantir */}
+        <div className="flex-shrink-0 w-6 h-1 text-transparent select-none pointer-events-none">
+            .
+        </div>
+    </div>
+</header>
+
+            {/* AQUI FOI ALTERADO PARA APROVEITAR 100% DA TELA COM ITENS MAIS APERTADOS */}
             <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:px-6 pb-28 w-full">
-                {/* Reduzi o minmax para 210px e os gaps para ficarem mais juntos */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2 sm:gap-3 w-full">
                     {produtosFiltrados.map((prod, idx) => (
                         <CardapioItem
@@ -574,7 +615,7 @@ const TelaPedidos = () => {
                 </div>
             )}
 
-{/* MODAL PRINCIPAL: RESUMO DO PEDIDO */}
+            {/* MODAL PRINCIPAL: RESUMO DO PEDIDO */}
             {showOrderSummary && (
                 <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />

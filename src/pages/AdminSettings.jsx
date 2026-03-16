@@ -4,27 +4,64 @@ import { useAuth } from '../context/AuthContext';
 import withAuth from '../hocs/withAuth';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions'; // Import do Firebase Functions
+import { useSearchParams } from 'react-router-dom'; // Captura o código da URL na volta do Mercado Pago
 import { toast } from 'react-toastify';
-import { IoSave, IoLockClosed, IoTime, IoGameController, IoCalendarOutline } from 'react-icons/io5'; 
+import { IoSave, IoLockClosed, IoTime, IoGameController, IoCalendarOutline, IoWalletOutline, IoCheckmarkCircle } from 'react-icons/io5'; 
+import { SiMercadopago } from 'react-icons/si'; // Ícone oficial do MP
 
 const AdminSettings = () => {
   const { primeiroEstabelecimento } = useAuth(); 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [vinculando, setVinculando] = useState(false);
 
-  // Estados do Formulário
+  // Estados do Formulário (Os seus originais)
   const [senhaMaster, setSenhaMaster] = useState('');
   const [tempoMinimo, setTempoMinimo] = useState('');
   const [tempoMaximo, setTempoMaximo] = useState('');
-  
-  // Valor da Raspadinha
   const [valorMinimoRaspadinha, setValorMinimoRaspadinha] = useState('100');
-
-  // Horário de Funcionamento Automático
   const [horaAbertura, setHoraAbertura] = useState('18:00');
   const [horaFechamento, setHoraFechamento] = useState('23:30');
 
-  // Carregar dados ao iniciar
+  // Estado Novo (Mercado Pago)
+  const [mpConectado, setMpConectado] = useState(false);
+
+  // =========================================================
+  // 1. CAPTURA DO CÓDIGO OAUTH (QUANDO O CLIENTE VOLTA DO MP)
+  // =========================================================
+  useEffect(() => {
+    const code = searchParams.get('code');
+    // Se a URL tiver um código e já tivermos o ID do restaurante
+    if (code && primeiroEstabelecimento) {
+      const finalizarVinculo = async () => {
+        setVinculando(true);
+        try {
+          const functions = getFunctions();
+          const vincularFn = httpsCallable(functions, 'vincularMercadoPago');
+          
+          await vincularFn({ code, estabelecimentoId: primeiroEstabelecimento });
+          
+          toast.success("Conta Mercado Pago vinculada com sucesso! 🚀");
+          setMpConectado(true);
+          
+          // Limpa a URL para o código longo não ficar aparecendo lá em cima
+          setSearchParams({}); 
+        } catch (error) {
+          console.error("Erro ao vincular:", error);
+          toast.error("Falha ao vincular conta. Tente novamente.");
+        } finally {
+          setVinculando(false);
+        }
+      };
+      finalizarVinculo();
+    }
+  }, [searchParams, primeiroEstabelecimento, setSearchParams]);
+
+  // =========================================================
+  // 2. CARREGAR DADOS AO INICIAR A PÁGINA
+  // =========================================================
   useEffect(() => {
     const fetchSettings = async () => {
       if (!primeiroEstabelecimento) return;
@@ -41,6 +78,9 @@ const AdminSettings = () => {
           setValorMinimoRaspadinha(data.valorMinimoRaspadinha || '100');
           setHoraAbertura(data.horaAbertura || '18:00');
           setHoraFechamento(data.horaFechamento || '23:30');
+          
+          // Verifica se o restaurante já fez o vínculo
+          setMpConectado(data.mp_conectado || false); 
         }
       } catch (error) {
         console.error("Erro ao carregar configurações:", error);
@@ -53,7 +93,22 @@ const AdminSettings = () => {
     fetchSettings();
   }, [primeiroEstabelecimento]);
 
-  // Salvar alterações
+  // =========================================================
+  // 3. AÇÃO DO BOTÃO "CONECTAR MERCADO PAGO"
+  // =========================================================
+  const handleConectarMP = () => {
+    const clientId = '310854362032422'; // O Client ID que você viu na imagem
+    const redirectUri = encodeURIComponent('https://matafome-98455.web.app/admin/configuracoes');
+    
+    const url = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${primeiroEstabelecimento}`;
+    
+    // Redireciona o lojista
+    window.location.href = url;
+  };
+
+  // =========================================================
+  // 4. SALVAR TODAS AS CONFIGURAÇÕES MANUAIS
+  // =========================================================
   const handleSave = async (e) => {
     e.preventDefault();
     if (!primeiroEstabelecimento) return;
@@ -81,25 +136,76 @@ const AdminSettings = () => {
     }
   };
 
-  if (loading) {
+  // =========================================================
+  // TELAS DE CARREGAMENTO
+  // =========================================================
+  if (loading || vinculando) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mb-4"></div>
+        {vinculando && <p className="font-bold text-gray-600 animate-pulse">Finalizando conexão com o Mercado Pago...</p>}
       </div>
     );
   }
 
+  // =========================================================
+  // INTERFACE PRINCIPAL
+  // =========================================================
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
         
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Configurações Gerais</h1>
-          <p className="text-gray-500">Gerencie segurança, horários e gamificação do sistema.</p>
+          <p className="text-gray-500">Gerencie segurança, horários, pagamentos e gamificação do sistema.</p>
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
           
+          {/* BLOCO NOVO: Mercado Pago (OAuth) */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-4 border-b pb-4">
+              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                <IoWalletOutline size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">Pagamentos Automáticos</h2>
+                <p className="text-sm text-gray-500">Receba via PIX direto na sua conta</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50 p-6 rounded-2xl border border-gray-200">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                  <SiMercadopago size={32} className="text-[#009EE3]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-800">Mercado Pago</h3>
+                  <p className="text-xs text-gray-500">Taxa de 0,99% no PIX com recebimento na hora</p>
+                </div>
+              </div>
+
+              {mpConectado ? (
+                <div className="flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full font-bold text-sm">
+                  <IoCheckmarkCircle size={20} /> Conta Conectada
+                </div>
+              ) : (
+                <button 
+                  type="button"
+                  onClick={handleConectarMP}
+                  className="bg-[#009EE3] hover:bg-[#0081BA] text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-blue-100 active:scale-95 whitespace-nowrap"
+                >
+                  Conectar Minha Conta
+                </button>
+              )}
+            </div>
+            {!mpConectado && (
+              <p className="mt-4 text-[10px] text-gray-400 uppercase tracking-widest font-bold text-center md:text-left">
+                * Você será redirecionado para o Mercado Pago para autorizar a conexão.
+              </p>
+            )}
+          </div>
+
           {/* BLOCO 1: Horário de Funcionamento Automático */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-4 border-b pb-4">
@@ -204,7 +310,8 @@ const AdminSettings = () => {
             </div>
           </div>
 
-          <div className="flex justify-end pt-4">
+          {/* BOTÃO FINALIZAR */}
+          <div className="flex justify-end pt-4 pb-10">
             <button type="submit" disabled={saving} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-green-200 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
               {saving ? 'Salvando...' : <><IoSave size={20} /> Salvar Alterações</>}
             </button>

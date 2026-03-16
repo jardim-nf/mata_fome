@@ -2,7 +2,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, setDoc as setDocFirestore, doc, serverTimestamp } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  Timestamp, 
+  setDoc,
+  doc, 
+  serverTimestamp 
+} from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import CardapioItem from '../components/CardapioItem';
 import { useAuth } from '../context/AuthContext';
@@ -18,7 +28,6 @@ import AIWidgetButton from '../components/AIWidgetButton';
 
 import { IoLocationSharp, IoTime, IoLogOutOutline, IoCart, IoChevronForward, IoAdd, IoRemove, IoTrash } from 'react-icons/io5';
 
-// 🔥 IMPORTAÇÃO DO ESTOQUE RESTAURADA 🔥
 import { estoqueService } from '../services/estoqueService';
 
 function Menu() {
@@ -31,7 +40,6 @@ function Menu() {
     const [showAICenter, setShowAICenter] = useState(false);
     const [deveReabrirChat, setDeveReabrirChat] = useState(false);
 
-    // --- ESTADOS ---
     const [allProdutos, setAllProdutos] = useState([]);
     const [produtosFiltrados, setProdutosFiltrados] = useState([]);
     const [carrinho, setCarrinho] = useState([]);
@@ -52,15 +60,12 @@ function Menu() {
     const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
     const [actualEstabelecimentoId, setActualEstabelecimentoId] = useState(null);
 
-    // 🔥 ESTADO DE HORA ATUAL (Atualiza a cada 1 min)
     const [currentTime, setCurrentTime] = useState(new Date());
-
     const [bairrosDisponiveis, setBairrosDisponiveis] = useState([]);
-
+    const [pontoReferencia, setPontoReferencia] = useState('');
     const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
     const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
 
-    // --- ESTADOS DO LOGIN ---
     const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     const [forceLogin, setForceLogin] = useState(false);
     const [isRegisteringInModal, setIsRegisteringInModal] = useState(false);
@@ -75,7 +80,7 @@ function Menu() {
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
-
+const [referenciaAuthModal, setReferenciaAuthModal] = useState('');
     const auth = getAuth();
 
     const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -114,13 +119,11 @@ function Menu() {
         }
     });
 
-    // --- TEMPORIZADOR PARA CHECAR HORA ---
     useEffect(() => {
-        const interval = setInterval(() => setCurrentTime(new Date()), 60000); // Roda a cada 60s
+        const interval = setInterval(() => setCurrentTime(new Date()), 60000); 
         return () => clearInterval(interval);
     }, []);
 
-    // --- FORÇAR LOGIN ---
     useEffect(() => {
         if (!authLoading) {
             if (!currentUser) {
@@ -133,7 +136,6 @@ function Menu() {
         }
     }, [authLoading, currentUser]);
 
-    // --- AUTO-CHECKOUT ---
     useEffect(() => {
         if (triggerCheckout && carrinho.length > 0) {
             setTriggerCheckout(false);
@@ -144,11 +146,8 @@ function Menu() {
         }
     }, [carrinho, triggerCheckout]);
 
-    // --- 🔥 LÓGICA DE LOJA ABERTA OU FECHADA (100% AUTOMÁTICA PELO HORÁRIO) 🔥 ---
     const isLojaAberta = useMemo(() => {
         if (!estabelecimentoInfo) return false;
-
-        // Se não tiver hora configurada, assumimos que está aberta (para não quebrar lojas antigas)
         if (!estabelecimentoInfo.horaAbertura || !estabelecimentoInfo.horaFechamento) return true;
 
         try {
@@ -165,10 +164,8 @@ function Menu() {
             if (tempoAbre === tempoFecha) return true;
 
             if (tempoAbre < tempoFecha) {
-                // Ex: Abre 08:00 e Fecha 18:00 (Mesmo dia)
                 return tempoAtual >= tempoAbre && tempoAtual <= tempoFecha;
             } else {
-                // Ex: Abre 18:00 e Fecha 02:00 da manhã (Vira a noite)
                 return tempoAtual >= tempoAbre || tempoAtual <= tempoFecha;
             }
         } catch (error) {
@@ -176,9 +173,6 @@ function Menu() {
             return true; 
         }
     }, [estabelecimentoInfo, currentTime]);
-
-
-    // --- FUNÇÕES AUXILIARES ---
 
     const scrollToResumo = useCallback(() => {
         const elementoResumo = document.getElementById('resumo-carrinho');
@@ -228,13 +222,29 @@ function Menu() {
         }
     };
 
-    const handleRegisterModal = async (e) => {
+const handleRegisterModal = async (e) => {
         e.preventDefault();
         setLoginLoading(true);
         try {
             const cred = await createUserWithEmailAndPassword(auth, emailAuthModal, passwordAuthModal);
-            await setDocFirestore(doc(db, 'usuarios', cred.user.uid), { email: emailAuthModal, nome: nomeAuthModal, isAdmin: false, isMasterAdmin: false, estabelecimentos: [], estabelecimentosGerenciados: [], criadoEm: Timestamp.now() });
-            await setDocFirestore(doc(db, 'clientes', cred.user.uid), {
+            
+            // 1. Salva nos usuários
+            await setDoc(doc(db, 'usuarios', cred.user.uid), { 
+                email: emailAuthModal, 
+                nome: nomeAuthModal, 
+                telefone: telefoneAuthModal,
+                endereco: {
+                    rua: ruaAuthModal || '',
+                    numero: numeroAuthModal || '',
+                    bairro: bairroAuthModal || '',
+                    cidade: cidadeAuthModal || '',
+                    referencia: referenciaAuthModal || '' // <--- SALVANDO AQUI
+                },
+                isAdmin: false, isMasterAdmin: false, estabelecimentos: [], estabelecimentosGerenciados: [], criadoEm: Timestamp.now() 
+            });
+
+            // 2. Salva nos clientes
+            await setDoc(doc(db, 'clientes', cred.user.uid), {
                 nome: nomeAuthModal,
                 telefone: telefoneAuthModal,
                 email: emailAuthModal,
@@ -242,7 +252,8 @@ function Menu() {
                     rua: ruaAuthModal || '',
                     numero: numeroAuthModal || '',
                     bairro: bairroAuthModal || '',
-                    cidade: cidadeAuthModal || ''
+                    cidade: cidadeAuthModal || '',
+                    referencia: referenciaAuthModal || '' // <--- SALVANDO AQUI
                 },
                 criadoEm: Timestamp.now()
             });
@@ -296,8 +307,6 @@ function Menu() {
             return acc;
         }, {});
     };
-
-    // --- CÁLCULOS ---
 
     const subtotalCalculado = useMemo(() => {
         return carrinho.reduce((acc, item) => {
@@ -386,8 +395,6 @@ function Menu() {
         }
     };
 
-    // --- FUNÇÕES DE ADIÇÃO E MANIPULAÇÃO ---
-
     const enrichWithGlobalAdicionais = (item) => {
         const termosAdicionais = ['adicionais', 'adicional', 'extra', 'extras', 'complemento', 'complementos', 'acrescimo', 'acrescimos', 'molho', 'molhos', 'opcoes', 'opções'];
         const categoriaItemNorm = normalizarTexto(item.categoria || '');
@@ -417,7 +424,6 @@ function Menu() {
     };
 
     const handleAdicionarRapido = (item) => {
-        // 🔥 TRAVA DE HORÁRIO
         if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
         if (!currentUser) { handleAbrirLogin(); return; }
 
@@ -437,7 +443,6 @@ function Menu() {
     };
 
     const handleComprarAgora = (item) => {
-        // 🔥 TRAVA DE HORÁRIO
         if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
         if (!currentUser) { toast.info('Faça login para continuar.'); handleAbrirLogin(); return; }
 
@@ -455,7 +460,6 @@ function Menu() {
     };
 
     const handleAbrirModalProduto = (item) => {
-        // 🔥 TRAVA DE HORÁRIO
         if (!isLojaAberta) return toast.error("A loja está fechada no momento!");
         if (!currentUser) { toast.info('Faça login para continuar.'); handleAbrirLogin(); return; }
 
@@ -592,9 +596,18 @@ function Menu() {
             produtoIdOriginal: item.id,
             categoriaId: item.categoriaId
         }));
-
+        
+        const novoVendaId = `ord_${Date.now()}`; 
+        
+        // 🔥 AQUI NÓS SALVAMOS A REFERÊNCIA NO PEDIDO PARA A IMPRESSORA PEGAR 🔥
         const pedidoRaw = {
-            cliente: { nome: nomeCliente, telefone: telefoneCliente, endereco: isRetirada ? null : { rua, numero, bairro, cidade, complemento }, userId: currentUser.uid },
+            vendaId: novoVendaId, 
+            cliente: { 
+                nome: nomeCliente, 
+                telefone: telefoneCliente, 
+                endereco: isRetirada ? null : { rua, numero, bairro, cidade, complemento, referencia: pontoReferencia }, 
+                userId: currentUser.uid 
+            },
             estabelecimentoId: actualEstabelecimentoId,
             itens: itensFormatados,
             totalFinal: Number(finalOrderTotal),
@@ -610,22 +623,25 @@ function Menu() {
     const handlePagamentoSucesso = async (result) => {
         if (processandoPagamento) return;
         setProcessandoPagamento(true);
+
         try {
             let formaPagamento = 'A Combinar';
             let trocoPara = '';
 
             if (result.method === 'pix') {
-                formaPagamento = 'pix';
+                formaPagamento = 'pix'; 
+            } else if (result.method === 'pix_manual') {
+                formaPagamento = 'pix_manual'; 
             } else if (result.method === 'card') {
-                formaPagamento = result.details.type || 'cartao';
+                formaPagamento = result.details?.type || 'cartao';
             } else if (result.method === 'cash') {
                 formaPagamento = 'dinheiro';
-                trocoPara = result.details.trocoPara || '';
+                trocoPara = result.details?.trocoPara || '';
             }
 
             const pedidoFinal = cleanData({
                 ...pedidoParaPagamento,
-                status: 'recebido',
+                status: 'recebido', 
                 formaPagamento,
                 metodoPagamento: formaPagamento,
                 trocoPara: Number(trocoPara) || 0,
@@ -636,28 +652,34 @@ function Menu() {
 
             if (!actualEstabelecimentoId) throw new Error("ID do estabelecimento não encontrado");
 
-            const docRef = await addDoc(collection(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos'), pedidoFinal);
+            const idDoPedidoReal = result.vendaId || pedidoParaPagamento.vendaId; 
 
-            // 🔥 BAIXA DE ESTOQUE APÓS PAGAMENTO BEM SUCEDIDO NO MENU ONLINE 🔥
+            await setDoc(
+                doc(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos', idDoPedidoReal), 
+                pedidoFinal
+            );
+
             try {
                 await estoqueService.darBaixaEstoque(actualEstabelecimentoId, carrinho);
             } catch (errEstoque) {
                 console.warn("Erro ao dar baixa no estoque:", errEstoque);
             }
 
-            setConfirmedOrderDetails({ id: docRef.id });
+            setConfirmedOrderDetails({ id: idDoPedidoReal });
             setShowOrderConfirmationModal(true);
             setCarrinho([]);
             setShowPaymentModal(false);
+            
+            toast.success("Pedido enviado com sucesso!");
+
         } catch (e) {
-            console.error("Erro:", e);
-            toast.error("Erro ao salvar pedido.");
+            console.error("Erro ao salvar pedido:", e);
+            toast.error("Erro ao finalizar pedido. Tente novamente.");
         } finally {
             setProcessandoPagamento(false);
         }
     };
 
-    // 🔥 GATILHO E LÓGICA DA RASPADINHA RESTAURADA 🔥
     useEffect(() => {
         if (estabelecimentoInfo && estabelecimentoInfo.valorMinimoRaspadinha) {
             setValorGatilhoRaspadinha(parseFloat(estabelecimentoInfo.valorMinimoRaspadinha));
@@ -702,7 +724,6 @@ function Menu() {
         }
     };
 
-    // --- EFFECTS ---
     useEffect(() => {
         if (!estabelecimentoSlug) return;
         const load = async () => {
@@ -730,7 +751,6 @@ function Menu() {
                 if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
                 setAllProdutos(prods);
 
-                // 🔥 BUSCAR BAIRROS PARA O SELECT
                 const taxasSnap = await getDocs(collection(db, 'estabelecimentos', id, 'taxasDeEntrega'));
                 const bairrosList = [];
                 taxasSnap.forEach(doc => {
@@ -744,6 +764,7 @@ function Menu() {
         load();
     }, [estabelecimentoSlug, navigate]);
 
+    // 🔥 AQUI ELE PUXA O PONTO DE REFERÊNCIA DO FIREBASE QUANDO O CLIENTE LOGA 🔥
     useEffect(() => {
         if (!authLoading && currentUser && currentClientData) {
             setNomeCliente(currentClientData.nome || '');
@@ -753,6 +774,7 @@ function Menu() {
                 setNumero(currentClientData.endereco.numero || '');
                 setBairro(currentClientData.endereco.bairro || '');
                 setCidade(currentClientData.endereco.cidade || '');
+                setPontoReferencia(currentClientData.endereco.referencia || ''); 
             }
         }
     }, [currentUser, currentClientData, authLoading]);
@@ -817,7 +839,6 @@ function Menu() {
                             
                             <h1 className="text-3xl font-bold mb-2 flex flex-wrap items-center gap-3">
                                 {estabelecimentoInfo.nome}
-                                {/* 🔥 BADGE DE FECHADO 🔥 */}
                                 {!isLojaAberta && (
                                     <span className="text-xs bg-red-600 text-white px-3 py-1 rounded-full font-black tracking-widest border-2 border-white shadow-sm uppercase animate-pulse">
                                         FECHADO
@@ -828,7 +849,6 @@ function Menu() {
                             <div className="text-sm text-white/90 font-medium">
                                 <p className="flex items-center gap-2"><IoLocationSharp className="text-white" /> {estabelecimentoInfo.endereco?.rua}</p>
                                 
-                                {/* 🔥 MOSTRAR NOVO FORMATO DE HORA OU O ANTIGO 🔥 */}
                                 <p className="flex items-center gap-2">
                                     <IoTime className="text-white" /> 
                                     {estabelecimentoInfo.horaAbertura && estabelecimentoInfo.horaFechamento 
@@ -875,7 +895,7 @@ function Menu() {
                     );
                 })}
 
-                {/* RESUMO E DADOS */}
+{/* RESUMO E DADOS */}
                 <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
                     <div className="bg-white p-6 rounded-xl border shadow-lg text-left w-full">
                         <h3 className="text-xl font-bold mb-4 text-gray-900">👤 Seus Dados</h3>
@@ -889,7 +909,6 @@ function Menu() {
                                         <input className="w-full p-3 rounded border text-center text-gray-900 text-base" placeholder="Nº *" value={numero} onChange={e => setNumero(e.target.value)} />
                                     </div>
 
-                                    {/* 🔥 SELECT DE BAIRRO 🔥 */}
                                     <select
                                         className="w-full p-3 rounded border text-gray-900 text-base bg-white"
                                         value={bairro}
@@ -900,6 +919,15 @@ function Menu() {
                                             <option key={b} value={b}>{b}</option>
                                         ))}
                                     </select>
+
+                                    {/* CAMPO DE PONTO DE REFERÊNCIA */}
+                                    <input 
+                                        id="input-referencia" 
+                                        className="w-full p-3 rounded border text-gray-900 text-base" 
+                                        placeholder="Ponto de Referência (Opcional)" 
+                                        value={pontoReferencia} 
+                                        onChange={e => setPontoReferencia(e.target.value)} 
+                                    />
                                 </div>
                             )}
                             <div className="flex gap-2">
@@ -992,7 +1020,6 @@ function Menu() {
                                     )}
                                 </div>
 
-                                {/* 🔥 BOTÃO DE FINALIZAR COM BLOQUEIOS DE HORA E BAIRRO 🔥 */}
                                 {!isLojaAberta ? (
                                     <button 
                                         disabled
@@ -1028,7 +1055,7 @@ function Menu() {
                     <div className="flex flex-col">
                         <span className="text-xs text-gray-500 font-bold uppercase">Total a Pagar</span>
                         <span className="text-2xl font-black text-gray-900">{formatarMoeda(finalOrderTotal)}</span>
-                        <span className="text-xs text-green-600 font-medium">{carrinho.length} itens</span>
+                        <span className="text-xs text-green-600 font-medium">{carrinho.length} items</span>
                     </div>
                     <button
                         onClick={scrollToResumo}
@@ -1045,11 +1072,25 @@ function Menu() {
             <AIWidgetButton bottomOffset={carrinho.length > 0 ? '100px' : '24px'} />
 
             {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleConfirmarVariacoes} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
+            
+            {showPaymentModal && pedidoParaPagamento && (
+              <PaymentModal 
+                isOpen={showPaymentModal} 
+                onClose={() => setShowPaymentModal(false)} 
+                amount={finalOrderTotal} 
+                orderId={pedidoParaPagamento.vendaId} 
+                cartItems={carrinho} 
+                onSuccess={handlePagamentoSucesso} 
+                coresEstabelecimento={coresEstabelecimento} 
+                pixKey={estabelecimentoInfo?.chavePix} 
+                establishmentName={estabelecimentoInfo?.nome} 
+                estabelecimentoId={actualEstabelecimentoId} 
+                hasMercadoPago={!!estabelecimentoInfo?.tokenMercadoPago || !!estabelecimentoInfo?.mercadoPagoAccessToken} 
+              />
+            )}
 
-            {showPaymentModal && pedidoParaPagamento && <PaymentModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} amount={finalOrderTotal} orderId={`ord_${Date.now()}`} cartItems={carrinho} onSuccess={handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} />}
             {showOrderConfirmationModal && <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900"><div className="bg-white p-8 rounded-2xl text-center shadow-2xl"><h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2><button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button></div></div>}
             
-            {/* COMPONENTE DA RASPADINHA AQUI */}
             {showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => setShowRaspadinha(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
 
             {/* 🔥 MODAL DE LOGIN 🔥 */}
@@ -1070,7 +1111,6 @@ function Menu() {
                                         <input placeholder="Nº" value={numeroAuthModal} onChange={e => setNumeroAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base text-center" required />
                                     </div>
 
-                                    {/* 🔥 SELECT DE BAIRRO NO CADASTRO 🔥 */}
                                     <div className="grid grid-cols-2 gap-2">
                                         <select
                                             value={bairroAuthModal}
@@ -1085,6 +1125,7 @@ function Menu() {
                                         </select>
                                         <input placeholder="Cidade" value={cidadeAuthModal} onChange={e => setCidadeAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />
                                     </div>
+                                    <input placeholder="Ponto de Referência (Opcional)" value={referenciaAuthModal} onChange={e => setReferenciaAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" />
                                 </>
                             )}
                             <input type="email" placeholder="Email" value={emailAuthModal} onChange={e => setEmailAuthModal(e.target.value)} className="w-full p-3 rounded border border-gray-300 text-base" required />

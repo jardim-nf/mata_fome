@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { IoPrint } from 'react-icons/io5';
 
 const TERMOS_BEBIDA = [
-    'bebida', 'bebidas', 'refrigerante', 'suco', 'cerveja', 'agua', 'água', 
+    'bebida', 'bebidas', 'refrigerante', 'suco', 'cerveja', 'agua', 'água',
     'drink', 'vinho', 'dose', 'long neck', 'lata', 'garrafa', 'h2oh', 'coca', 'guarana'
 ];
 
@@ -24,11 +24,11 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const idUrl = params.id || params.pedidoId;
     const [searchParams] = useSearchParams();
     const { primeiroEstabelecimento, loading: authLoading } = useAuth();
-    
+
     // Captura tanto "modo" quanto "setor" para manter compatibilidade com links antigos
-    const modoImpressao = searchParams.get('modo'); 
+    const modoImpressao = searchParams.get('modo');
     const setorParam = searchParams.get('setor');
-    const setor = setorParam || modoImpressao; 
+    const setor = setorParam || modoImpressao;
 
     const estabIdUrl = searchParams.get('estabId');
 
@@ -52,7 +52,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 let encontrou = false, dados = null;
                 const refGlobal = doc(db, 'pedidos', idUrl);
                 let docSnap = await getDoc(refGlobal);
-                
+
                 if (docSnap.exists()) {
                     dados = { id: docSnap.id, ...docSnap.data() };
                     encontrou = true;
@@ -82,10 +82,10 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 } else {
                     throw new Error("Pedido não encontrado.");
                 }
-            } catch (error) { 
-                console.error("🖨️ [Comanda] Erro:", error); 
-                setErro(error.message); 
-            } 
+            } catch (error) {
+                console.error("🖨️ [Comanda] Erro:", error);
+                setErro(error.message);
+            }
             finally { setLoading(false); }
         };
         buscarPedido();
@@ -95,20 +95,20 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     useEffect(() => {
         if (!pedidoProp && pedido && !loading && !erro) {
             document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
-            
+
             // 👇 2. A CHECAGEM DA TRAVA ENTRA AQUI 👇
             // Só manda imprimir se for um ID diferente do último impresso
             if (ultimoPedidoImpresso !== pedido.id) {
                 ultimoPedidoImpresso = pedido.id; // Salva para não imprimir de novo
-                
-                const timer = setTimeout(() => { 
+
+                const timer = setTimeout(() => {
                     window.focus();
                     window.onafterprint = () => {
                         window.close();
                     };
-                    window.print(); 
-                }, 1200); 
-                
+                    window.print();
+                }, 1200);
+
                 return () => clearTimeout(timer);
             }
         }
@@ -119,7 +119,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
 
         const itens = Array.isArray(pedido.itens) ? pedido.itens : [];
-        
+
         const consumo = itens.reduce((acc, item) => {
             return item.preco > 0 ? acc + (item.preco * (item.quantidade || 1)) : acc;
         }, 0);
@@ -127,7 +127,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         // 🔥 CORREÇÃO DO FRETE: Procura por várias nomenclaturas possíveis no banco de dados
         const taxa = Number(pedido.taxaEntrega || pedido.frete || pedido.valorFrete || pedido.valorEntrega || 0);
         let desconto = Number(pedido.desconto) || 0;
-        
+
         // Se o banco salvou um "totalFinal" com desconto, mas não salvou o campo "desconto"
         const totalNoBanco = Number(pedido.totalFinal) || 0;
         if (desconto === 0 && totalNoBanco > 0 && totalNoBanco < (consumo + taxa)) {
@@ -150,7 +150,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const itensAgrupados = useMemo(() => {
         if (!pedido || !Array.isArray(pedido.itens)) return {};
         let itensParaProcessar = [...pedido.itens];
-        
+
         // 🔥 AQUI ESTÁ A CORREÇÃO:
         // Se for Delivery, não filtra nada (imprime tudo).
         // Se for Salão (Cozinha/Bar), aplica os filtros.
@@ -161,10 +161,10 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
                     const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
                     const textoCompleto = `${nome} ${categoria}`;
-                    
+
                     const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
                     const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
-                    
+
                     return !isBebida && !isBomboniere; // Só passa se NÃO for bebida E NÃO for bomboniere
                 });
             } else if (setor === 'bar') {
@@ -173,7 +173,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
                     const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
                     const textoCompleto = `${nome} ${categoria}`;
-                    
+
                     const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
                     const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
 
@@ -184,7 +184,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
         return itensParaProcessar.reduce((acc, item) => {
             // Ignora itens com preço 0 apenas no ticket de produção da cozinha (para não sujar a tela com adicionais grátis)
-            if (item.preco <= 0 && setor === 'cozinha') return acc; 
+            if (item.preco <= 0 && setor === 'cozinha') return acc;
 
             const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
             if (!acc[nomePessoa]) acc[nomePessoa] = [];
@@ -204,8 +204,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         // Aceita a string direta ou busca do objeto
         const metodo = typeof p === 'string' ? p : (p.formaPagamento || p.metodoPagamento || p.paymentMethod || '');
         const metodoString = String(metodo).toLowerCase().trim();
-        
-        switch(metodoString) {
+
+        switch (metodoString) {
             case 'dinheiro': case 'cash': case '4': return 'DINHEIRO';
             case 'pix': case '1': return 'PIX';
             case 'cartao': case 'card': return 'CARTÃO (MÁQUINA)';
@@ -226,6 +226,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const telefoneCliente = pedido.telefone || pedido.cliente?.telefone || null;
     const temItens = Object.keys(itensAgrupados).length > 0;
     
+    // Busca a referência em vários lugares possíveis do banco, priorizando o enderecoFinal.referencia
+    const referenciaFinal = enderecoFinal?.referencia || pedido.pontoReferencia || pedido.referencia || null;
+
     // Fallback robusto para a data
     let stringData = new Date().toLocaleString('pt-BR');
     if (pedido.createdAt?.toDate) stringData = pedido.createdAt.toDate().toLocaleString('pt-BR');
@@ -282,7 +285,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             </button>
 
             <div id="area-impressao" className="bg-white text-black font-mono text-xs leading-tight w-full mx-auto" style={{ maxWidth: '80mm' }}>
-                
+
                 {/* CABEÇALHO (COMO NA FOTO: DELIVERY COM ÍCONE) */}
                 <div className="text-center border-b-2 border-black pb-2 mb-2">
                     <h1 className="text-xl font-black uppercase flex items-center justify-center gap-1">
@@ -290,8 +293,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     </h1>
                     <p className="text-[12px] mt-1 font-bold">#{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
                     <p className="text-[10px]">{stringData}</p>
-                    
-                    {setor === 'cozinha' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}
+
+                    {setor === 'cozinha' && !isDelivery && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}                  
                     {setor === 'bar' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR **</div>}
                 </div>
 
@@ -299,14 +302,20 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 <div className="mb-3 border-b-2 border-dashed border-black pb-2">
                     <p className="font-black text-sm uppercase mb-1">{nomeClientePrincipal}</p>
                     {telefoneCliente && <p className="text-xs font-bold mb-1">Tel: {telefoneCliente}</p>}
-                    
+
                     {isDelivery && enderecoFinal && (
                         <div className="border-2 border-black p-1 mt-1">
                             <p className="font-bold text-xs uppercase underline">ENTREGA:</p>
                             <p className="font-bold text-[13px] uppercase mt-1">{enderecoFinal.rua}, {enderecoFinal.numero}</p>
                             <p className="text-xs uppercase">{enderecoFinal.bairro}</p>
                             {enderecoFinal.complemento && <p className="text-xs italic uppercase">({enderecoFinal.complemento})</p>}
-                            {pedido.pontoReferencia && <p className="text-[10px] font-bold mt-1 uppercase">REF: {pedido.pontoReferencia}</p>}
+                            
+                            {/* REF IMPRIMINDO CORRETAMENTE E QUEBRANDO TEXTO LONGO */}
+                            {referenciaFinal && (
+                                <p className="text-[10px] font-bold mt-1 uppercase break-words whitespace-normal">
+                                    REF: {referenciaFinal}
+                                </p>
+                            )}
                         </div>
                     )}
                     {!isDelivery && !pedido.mesaNumero && (
@@ -318,7 +327,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
                 {/* ITENS */}
                 <div className="mb-2">
-                    {!temItens ? <div className="text-center py-4 border border-black p-2 font-bold uppercase">Nenhum item para este setor.</div> : 
+                    {!temItens ? <div className="text-center py-4 border border-black p-2 font-bold uppercase">Nenhum item para este setor.</div> :
                         Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
                             <div key={nomePessoa} className="mb-2">
                                 {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
@@ -329,8 +338,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             <div className="flex justify-between items-start">
                                                 <span className="font-black text-[13px] flex-1 pr-2 uppercase">{item.quantidade || 1}X {item.nome || item.produto?.nome}</span>
                                                 {/* Preço escondido apenas se for ticket da cozinha */}
-                                                {setor !== 'cozinha' && <span className="font-bold whitespace-nowrap text-[13px]">{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}
-                                            </div>
+                                                {(setor !== 'cozinha' || isDelivery) && <span className="font-bold whitespace-nowrap text-[13px]">{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}                                            </div>
                                             {item.variacaoSelecionada && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">
@@ -341,7 +349,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                                     ))}
                                                 </div>
                                             )}
-                                            {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block">OBS: {item.observacao}</div>}
+                                            {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block break-words whitespace-normal">OBS: {item.observacao}</div>}
                                         </div>
                                     );
                                 })}
@@ -351,15 +359,15 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 </div>
 
                 {/* BLOCO FINANCEIRO (COM TAXA DE ENTREGA) */}
-                {setor !== 'cozinha' && (
+                {(setor !== 'cozinha' || isDelivery) && (
                     <div className="border-t-2 border-black pt-2 mt-2">
                         {/* 1. RESUMO DOS VALORES */}
                         <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
-                        
+
                         {totais.taxa > 0 && <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
-                        
+
                         {totais.desconto > 0 && <div className="flex justify-between text-sm font-black uppercase border-y border-dashed border-black py-1 my-1"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
-                        
+
                         <div className="flex justify-between text-[15px] font-black mt-1 border-t border-dashed border-black pt-1 uppercase">
                             <span>TOTAL:</span>
                             <span>{formatMoney(totais.totalGeral)}</span>
@@ -395,19 +403,19 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                     <div className="bg-black text-white text-[13px] font-black uppercase py-1.5 tracking-wider">
                                         COBRAR NA ENTREGA
                                     </div>
-                                    
+
                                     {/* Valor Gigante e Centralizado */}
                                     <div className="py-3">
                                         <span className="text-[24px] font-black leading-none block">{formatMoney(totais.restante)}</span>
                                     </div>
-                                    
+
                                     {/* Forma de Pagamento com linha pontilhada padronizada */}
                                     <div className="border-t-2 border-dashed border-gray-400 mx-3 py-2 mb-1">
                                         <span className="text-[13px] font-bold uppercase tracking-wide">
                                             FORMA: {formatarPagamento(pedido)}
                                         </span>
                                     </div>
-                                    
+
                                     {/* Bloco de Troco com destaque cinza (se precisar) */}
                                     {precisaTroco && (
                                         <div className="bg-gray-100 border-t-2 border-black py-2 px-2 flex flex-col items-center">
@@ -422,10 +430,10 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                         </div>
                     </div>
                 )}
-                
+
                 <div className="text-center mt-6 text-[10px] font-bold border-t border-black pt-2 uppercase">
                     *** OBRIGADO PELA PREFERÊNCIA ***
-                    <br/>
+                    <br />
                     {new Date().toLocaleTimeString('pt-PT')}
                 </div>
             </div>

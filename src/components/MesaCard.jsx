@@ -9,11 +9,14 @@ const formatarDinheiro = (val) => {
     }).format(val || 0);
 };
 
-// 🔥 ADICIONADO: prop 'onExcluir'
-const MesaCard = ({ mesa, onClick, onPagar, onExcluir }) => {
+// 🔥 ADICIONADO: prop 'isOciosa' que vem do ControleSalao
+const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
     
     // Cores do STATUS (Parte Superior)
     const cardStyle = useMemo(() => {
+        // Se a mesa estiver ociosa, a borda e o fundo ganham tons de laranja para chamar atenção
+        if (isOciosa) return 'bg-orange-50 border-orange-400 text-orange-900 shadow-sm';
+
         switch (mesa.status) {
             case 'livre': return 'bg-white border-gray-200 text-gray-400';
             case 'ocupada': return 'bg-red-50 border-red-200 text-red-800';
@@ -21,7 +24,7 @@ const MesaCard = ({ mesa, onClick, onPagar, onExcluir }) => {
             case 'pagamento': return 'bg-yellow-50 border-yellow-200 text-yellow-800';
             default: return 'bg-white border-gray-200';
         }
-    }, [mesa.status]);
+    }, [mesa.status, isOciosa]);
 
     const tempoDecorrido = useMemo(() => {
         if (!mesa.updatedAt || mesa.status === 'livre') return '';
@@ -57,7 +60,12 @@ const MesaCard = ({ mesa, onClick, onPagar, onExcluir }) => {
                 <div className="flex justify-between items-start mb-2">
                     <span className="text-3xl font-black leading-none tracking-tighter opacity-90">{mesa.numero}</span>
                     
-                    {mesa.status !== 'livre' && (
+{/* Exibe 'Sem Pedido' se for ociosa, senão exibe o tempo formatado */}
+{isOciosa ? (
+    <span className="text-[10px] font-black bg-orange-500 text-white px-2 py-1 rounded-full flex items-center gap-1 shadow-md animate-pulse uppercase tracking-wider">
+        <IoTime size={12}/> Não Pede a algum tempo
+    </span>
+) : mesa.status !== 'livre' && (
                         <span className="text-[10px] font-bold bg-white/60 px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
                             <IoTime size={10}/> {tempoDecorrido}
                         </span>

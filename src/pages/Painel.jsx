@@ -123,16 +123,13 @@ function Painel() {
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
-    // 🔥 ESTADO DE CONFIGURAÇÃO DE IMPRESSÃO (TUDO, COZINHA, DESLIGADO)
-    // Lê o localStorage para saber qual foi a última escolha deste computador
+    // ESTADO DE CONFIGURAÇÃO DE IMPRESSÃO (TUDO, COZINHA, DESLIGADO)
     const [modoImpressao, setModoImpressaoState] = useState(() => {
         const salvo = localStorage.getItem('config_modo_impressao_painel');
-        // 'tudo', 'cozinha', ou 'desligado'
         return salvo || 'tudo'; 
     });
-    const modoImpressaoRef = useRef(modoImpressao); // Ref para usar dentro do Firebase sem bugar
+    const modoImpressaoRef = useRef(modoImpressao); 
 
-    // Função para ciclar entre os modos de impressão
     const alternarModoImpressao = () => {
         let novoModo = 'tudo';
         if (modoImpressao === 'tudo') novoModo = 'cozinha';
@@ -173,17 +170,25 @@ function Painel() {
         
         const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
         const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
-        
-        if (itensFiltradosParaCozinha.length === 0) return null;
 
         const clienteLimpo = limparDadosCliente(pedidoData.cliente);
         let endereco = pedidoData.endereco || {};
         if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) {
             endereco = { ...endereco, ...clienteLimpo.endereco };
         }
+        
         let source = pedidoData.source;
-        if (!source) source = (pedidoData.mesaNumero && Number(pedidoData.mesaNumero) > 0) ? 'salao' : 'global';
-        const tipo = pedidoData.tipo || (source === 'salao' ? 'salao' : 'delivery');
+        let tipo = pedidoData.tipo;
+        
+        const temMesa = pedidoData.mesaNumero && String(pedidoData.mesaNumero).trim() !== '' && String(pedidoData.mesaNumero) !== '0';
+        
+        if (source === 'salao' || temMesa) {
+            source = 'salao';
+            tipo = 'mesa';
+        } else {
+            if (!source) source = 'global';
+            if (!tipo) tipo = 'delivery';
+        }
 
         return {
             ...pedidoData,
@@ -193,7 +198,8 @@ function Painel() {
             source: source,
             tipo: tipo,
             status: pedidoData.status || 'recebido',
-            itens: itensFiltradosParaCozinha, 
+            itens: rawItens, 
+            itensCozinha: itensFiltradosParaCozinha, 
             mesaNumero: pedidoData.mesaNumero || 0,
             loteHorario: pedidoData.loteHorario || ''
         };
@@ -270,20 +276,37 @@ function Painel() {
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
-            // 🔥 A MÁGICA DA CONFIGURAÇÃO ESTÁ AQUI 🔥
+            // 🔥 CADEADO DUPLO: BLOQUEIO DE PEDIDOS ANTIGOS 🔥
+            const timestamp = data.createdAt || data.dataPedido;
+            if (timestamp) {
+                const dataDoPedido = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
+                const hoje = new Date();
+                
+                // Regra 1: O pedido TEM que ser exatamente da mesma data de hoje (dia, mês e ano)
+                if (
+                    dataDoPedido.getDate() !== hoje.getDate() ||
+                    dataDoPedido.getMonth() !== hoje.getMonth() ||
+                    dataDoPedido.getFullYear() !== hoje.getFullYear()
+                ) {
+                    return; // Bloqueia e cancela a impressão
+                }
+                
+                // Regra 2: O pedido não pode ter mais de 3 horas de "vida"
+                const diffHoras = (hoje - dataDoPedido) / (1000 * 60 * 60);
+                if (diffHoras > 3) {
+                    return; // Bloqueia e cancela a impressão
+                }
+            }
+
             const configAtual = modoImpressaoRef.current;
-            
-            // Se estiver desligado, não faz nada!
             if (configAtual === 'desligado') return;
 
-            // Se for "Só Cozinha", ele filtra. Se não tiver comida, aborta.
             if (configAtual === 'cozinha') {
                 const rawItens = Array.isArray(data.itens) ? data.itens : [];
                 const itensCozinha = rawItens.filter(isItemCozinha);
-                if (itensCozinha.length === 0) return; // Só tinha bebida, aborta!
+                if (itensCozinha.length === 0) return; 
             }
 
-            // Se chegou aqui, ou é 'tudo' ou é 'cozinha' e passou no filtro
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
                 const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
                 if (!pedidosJaImpressos.current.has(pedidoId) && !impressosLocal.includes(pedidoId)) {
@@ -350,7 +373,6 @@ function Painel() {
             setIsPrinting(true);
             const pedidoId = printQueue[0];
             
-            // 🔥 Define o URL com base na configuração 🔥
             const setorQuery = modoImpressao === 'cozinha' ? '&setor=cozinha' : '';
             const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}${setorQuery}`;
             
@@ -407,7 +429,6 @@ function Painel() {
 
                     <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
                         
-                        {/* 🔥 NOVO BOTÃO DE CONFIGURAÇÃO DE IMPRESSÃO 🔥 */}
                         <button
                             onClick={alternarModoImpressao}
                             className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border font-bold text-xs transition-all shadow-sm
@@ -456,8 +477,12 @@ function Painel() {
                 <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
-                        let listaPedidos = (pedidos[statusKey] || []).filter(p => abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global');
-
+                        let listaPedidos = (pedidos[statusKey] || []).filter(p => 
+                            abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global'
+                        );
+                        if (abaAtiva === 'cozinha') {
+                            listaPedidos = listaPedidos.filter(p => p.itensCozinha.length > 0);
+                        }
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
 
                         return (

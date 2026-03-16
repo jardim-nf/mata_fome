@@ -18,8 +18,9 @@ function ClienteLogin() {
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState(''); // <--- NOVO: Campo Cidade adicionado
+  const [cidade, setCidade] = useState(''); 
   const [complemento, setComplemento] = useState('');
+  const [pontoReferencia, setPontoReferencia] = useState(''); // <--- NOVO: Estado para Ponto de Referência
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
@@ -54,8 +55,9 @@ function ClienteLogin() {
             rua: rua.trim(),
             numero: numero.trim(),
             bairro: bairro.trim(),
-            cidade: cidade.trim(), // <--- SALVANDO CIDADE
-            complemento: complemento.trim()
+            cidade: cidade.trim(), 
+            complemento: complemento.trim(),
+            referencia: pontoReferencia.trim() // <--- SALVANDO O PONTO DE REFERÊNCIA
           },
           isAdmin: false,       
           isMasterAdmin: false, 
@@ -75,6 +77,7 @@ function ClienteLogin() {
         setBairro('');
         setCidade('');
         setComplemento('');
+        setPontoReferencia(''); // <--- LIMPANDO O CAMPO
 
       } else {
         // --- LOGIN ---
@@ -111,7 +114,7 @@ function ClienteLogin() {
     setError('');
     // Limpa inputs
     setNome(''); setTelefone(''); 
-    setRua(''); setNumero(''); setBairro(''); setCidade(''); setComplemento('');
+    setRua(''); setNumero(''); setBairro(''); setCidade(''); setComplemento(''); setPontoReferencia(''); // <--- LIMPANDO AQUI TAMBÉM
     setEmail(''); setPassword('');
   };
 
@@ -206,6 +209,18 @@ function ClienteLogin() {
                   placeholder="Ex: Apt 101, Ao lado da padaria"
                   value={complemento}
                   onChange={(e) => setComplemento(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
+                />
+              </div>
+
+              {/* Endereço - Linha 5 (Ponto de Referência) */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--marrom-escuro)] mb-1">Ponto de Referência <span className="text-gray-400 text-xs">(Opcional)</span></label>
+                <input
+                  type="text"
+                  placeholder="Ex: Em frente à praça"
+                  value={pontoReferencia}
+                  onChange={(e) => setPontoReferencia(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--vermelho-principal)] focus:border-transparent outline-none transition-all"
                 />
               </div>

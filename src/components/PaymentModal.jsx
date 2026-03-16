@@ -1,8 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { IoClose, IoCash, IoCard, IoQrCode, IoCopy, IoCheckmarkCircle, IoTime, IoChevronDown, IoChevronUp } from 'react-icons/io5';
+import {
+  IoClose,
+  IoCash,
+  IoCard,
+  IoQrCode,
+  IoCopy,
+  IoCheckmarkCircle,
+  IoChevronDown,
+  IoChevronUp,
+  IoShieldCheckmark // 🔥 NOVO ÍCONE ADICIONADO AQUI
+} from 'react-icons/io5';
 import { toast } from 'react-toastify';
+import { httpsCallable } from 'firebase/functions';
+import { doc, onSnapshot } from 'firebase/firestore'; 
+import { functions, auth, db } from '../firebase';
 
-// --- FUNÇÕES ÚTEIS PARA PIX ---
+// --- FUNÇÕES ÚTEIS PARA PIX MANUAL ---
 const sanitizeTxId = (text) => {
     if (!text) return '***';
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "");
@@ -15,12 +28,11 @@ const sanitizeText = (text) => {
 
 const sanitizeKey = (key) => {
     if (!key) return '';
-    
-    // 🔥 CORREÇÃO: Adicionado o \- e o \+ para permitir traços e o sinal de mais (+)
     let cleanKey = key.trim().replace(/[^a-zA-Z0-9@.\-+]/g, "");
     return cleanKey;
 };
-// --- GERADOR DE PAYLOAD PIX (EMVCo) ---
+
+// --- GERADOR DE PAYLOAD PIX MANUAL (EMVCo) ---
 const generatePixPayload = ({ key, name, city, transactionId, amount }) => {
     const cleanKey = sanitizeKey(key);
     const cleanName = sanitizeText(name || 'LOJA').substring(0, 25);
@@ -63,235 +75,497 @@ const generatePixPayload = ({ key, name, city, transactionId, amount }) => {
     return `${payloadBase}${crcStr}`;
 };
 
-const PaymentModal = ({ 
-    isOpen, 
-    onClose, 
-    amount, 
-    orderId, 
-    cartItems = [], 
-    onSuccess, 
-    coresEstabelecimento, 
-    pixKey, 
-    establishmentName 
+const PaymentModal = ({
+  isOpen,
+  onClose,
+  amount,
+  orderId,
+  cartItems = [],
+  onSuccess,
+  coresEstabelecimento,
+  establishmentName,
+  estabelecimentoId,
+  hasMercadoPago, // 🔥 Prop que avisa se a loja tem MP
+  pixKey          // 🔥 Chave PIX do dono da loja
 }) => {
-    const [method, setMethod] = useState(null);
-    const [pixCode, setPixCode] = useState('');
-    const [trocoPara, setTrocoPara] = useState('');
-    const [cartaoTipo, setCartaoTipo] = useState('credito');
-    const [showDetails, setShowDetails] = useState(false);
+  const [method, setMethod] = useState(null);
+  const [trocoPara, setTrocoPara] = useState('');
+  const [cartaoTipo, setCartaoTipo] = useState('credito');
+  const [showDetails, setShowDetails] = useState(false);
 
-    // Gera o código PIX
-    useEffect(() => {
-        if (method === 'pix' && pixKey) {
-            try {
-                const txIdSeguro = orderId ? orderId.replace(/-/g, '').slice(-20) : '***';
-                const valorFinal = Number(amount);
+  const [pixCode, setPixCode] = useState('');
+  const [pixManualCode, setPixManualCode] = useState(''); // Estado separado para o PIX Manual
+  const [pixQrBase64, setPixQrBase64] = useState('');
+  const [pixPaymentId, setPixPaymentId] = useState('');
+  const [loadingPix, setLoadingPix] = useState(false);
 
-                const code = generatePixPayload({
-                    key: pixKey,
-                    name: establishmentName || 'LOJA',
-                    city: 'BRASIL',
-                    transactionId: txIdSeguro,
-                    amount: valorFinal
-                });
-                setPixCode(code);
-            } catch (e) {
-                console.error("Erro QR Code:", e);
-                toast.error("Erro ao gerar QR Code");
-            }
+  const corDestaque = coresEstabelecimento?.destaque || '#059669';
+
+  // 🔥 1. GERAÇÃO DO PIX AUTOMÁTICO (Mercado Pago)
+  useEffect(() => {
+    const gerarPix = async () => {
+      if (!isOpen || method !== 'pix' || !orderId || !amount) return;
+      if (pixCode) return;
+
+      try {
+        setLoadingPix(true);
+        setPixCode('');
+        setPixQrBase64('');
+        setPixPaymentId('');
+
+        const user = auth.currentUser;
+
+        if (!user) {
+          throw new Error('Usuário não autenticado. Faça login antes de gerar o PIX.');
         }
-    }, [method, pixKey, amount, establishmentName, orderId]);
 
-    const handleCopyPix = () => {
-        if (!pixCode) return;
-        navigator.clipboard.writeText(pixCode);
-        toast.success("Código PIX copiado!");
+        console.log("📦 DADOS ENVIADOS PARA O PIX MP:", {
+          vendaId: orderId,
+          valor: amount,
+          estabelecimentoId: estabelecimentoId 
+        });
+
+        const criarPixFn = httpsCallable(functions, 'gerarPixMercadoPago');
+        const response = await criarPixFn({
+          vendaId: orderId,
+          valor: Number(amount),
+          estabelecimentoId: estabelecimentoId, 
+          descricao: `Pedido ${orderId} - ${establishmentName || 'Loja'}`
+        });
+
+        const data = response?.data;
+
+        if (!data?.sucesso) {
+          throw new Error('Não foi possível gerar o PIX.');
+        }
+
+        setPixCode(data.copiaECola || '');
+        setPixQrBase64(data.qrCodeBase64 || '');
+        setPixPaymentId(data.idPagamento || '');
+      } catch (error) {
+        console.error('❌ Erro ao gerar PIX Mercado Pago:', error);
+        toast.error(error?.message || 'Erro ao gerar PIX');
+      } finally {
+        setLoadingPix(false);
+      }
     };
 
-    const handleConfirm = () => {
-        let paymentData = { method, amount: Number(amount) };
+    gerarPix();
+  }, [isOpen, method, orderId, amount, establishmentName, estabelecimentoId, pixCode]);
+
+  // 🔥 2. GERAÇÃO DO PIX MANUAL (Copia e Cola Local)
+  useEffect(() => {
+      if (method === 'pix_manual' && pixKey) {
+          try {
+              const txIdSeguro = orderId ? orderId.replace(/-/g, '').slice(-20) : '***';
+              const code = generatePixPayload({
+                  key: pixKey,
+                  name: establishmentName || 'LOJA',
+                  city: 'BRASIL',
+                  transactionId: txIdSeguro,
+                  amount: Number(amount)
+              });
+              setPixManualCode(code);
+          } catch (e) {
+              console.error("Erro QR Code Manual:", e);
+              toast.error("Erro ao gerar QR Code PIX.");
+          }
+      }
+  }, [method, pixKey, amount, establishmentName, orderId]);
+
+
+  // 🔥 3. ESPIÃO DO PIX (Fica escutando o banco de dados pro MP)
+  useEffect(() => {
+    if (!isOpen || method !== 'pix' || !orderId) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'pagamentos_pix', orderId), (docSnap) => {
+      if (docSnap.exists()) {
+        const dadosPix = docSnap.data();
         
-        if (method === 'pix') {
-            paymentData.details = { pixCode };
-        } else if (method === 'cash') {
-            paymentData.details = { 
-                // 🔥 CORREÇÃO AQUI: Mandamos o valor original para o backend calcular/salvar
-                trocoPara: trocoPara ? Number(trocoPara) : 0,
-                troco: trocoPara ? Number(trocoPara) - Number(amount) : 0 
-            };
-        } else if (method === 'card') {
-            paymentData.details = { type: cartaoTipo };
+        if (dadosPix.status === 'pago' || dadosPix.status === 'approved' || dadosPix.status === 'success') {
+          console.log("💰 Pagamento detectado pelo espião!");
+          toast.success('🤑 PIX confirmado na hora!');
+          
+          onSuccess({
+            method: 'pix',
+            amount: Number(amount),
+            details: {
+              pixCode,
+              pixPaymentId: dadosPix.idPagamentoMP || pixPaymentId,
+              status: 'pago'
+            }
+          });
         }
+      }
+    });
 
-        onSuccess(paymentData);
+    return () => unsubscribe();
+  }, [isOpen, method, orderId, amount, pixCode, pixPaymentId, onSuccess]);
+
+  // COPIAR CÓDIGO (Serve para os dois tipos de PIX)
+  const handleCopyPix = async () => {
+    const codeToCopy = method === 'pix_manual' ? pixManualCode : pixCode;
+    if (!codeToCopy) return;
+
+    try {
+      await navigator.clipboard.writeText(codeToCopy);
+      toast.success('Código PIX copiado!');
+    } catch (error) {
+      console.error('Erro ao copiar PIX:', error);
+      toast.error('Não foi possível copiar o código PIX.');
+    }
+  };
+
+  const handleConfirm = () => {
+    let paymentData = {
+      method,
+      amount: Number(amount)
     };
 
-    if (!isOpen) return null;
+    if (method === 'pix_manual') {
+      paymentData.details = { pixCode: pixManualCode };
+    } else if (method === 'pix') {
+      paymentData.details = {
+        pixCode,
+        pixPaymentId,
+        status: 'pendente'
+      };
+    } else if (method === 'cash') {
+      paymentData.details = {
+        trocoPara: trocoPara ? Number(trocoPara) : 0,
+        troco: trocoPara ? Number(trocoPara) - Number(amount) : 0
+      };
+    } else if (method === 'card') {
+      paymentData.details = {
+        type: cartaoTipo
+      };
+    }
 
-    const corDestaque = coresEstabelecimento?.destaque || '#059669';
+    onSuccess(paymentData);
+  };
 
-    return (
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-            
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                
-                {/* Header */}
-                <div className="p-6 text-center border-b border-gray-100 bg-gray-50 flex-shrink-0 relative">
-                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                        <IoClose size={24} />
-                    </button>
-                    <h2 className="text-2xl font-black text-gray-900">Pagamento</h2>
-                    <p className="text-gray-500 text-sm mt-1">Finalize seu pedido</p>
-                    <div className="mt-4">
-                        <span className="text-4xl font-black" style={{ color: corDestaque }}>
-                            R$ {Number(amount).toFixed(2)}
-                        </span>
-                    </div>
+  const resetStateAndClose = () => {
+    setMethod(null);
+    setTrocoPara('');
+    setCartaoTipo('credito');
+    setPixCode('');
+    setPixQrBase64('');
+    setPixPaymentId('');
+    setPixManualCode('');
+    setLoadingPix(false);
+    onClose();
+  };
 
-                    {cartItems.length > 0 && (
-                        <button 
-                            onClick={() => setShowDetails(!showDetails)}
-                            className="mt-2 text-xs font-bold text-gray-500 flex items-center justify-center gap-1 mx-auto hover:text-gray-800 transition-colors"
-                        >
-                            {showDetails ? 'Ocultar Detalhes' : 'Ver Detalhes'} 
-                            {showDetails ? <IoChevronUp /> : <IoChevronDown />}
-                        </button>
-                    )}
-                </div>
+  if (!isOpen) return null;
 
-                {/* Body (Rolável) */}
-                <div className="p-6 overflow-y-auto flex-1">
-                    {!method ? (
-                        <div className="space-y-3">
-                            <button 
-                                onClick={() => setMethod('pix')}
-                                className="w-full bg-green-50 hover:bg-green-100 border border-green-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
-                            >
-                                <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-green-200 group-hover:scale-110 transition-transform">
-                                    <IoQrCode />
-                                </div>
-                                <div className="text-left">
-                                    <h3 className="font-bold text-gray-900">PIX (Instantâneo)</h3>
-                                    <p className="text-xs text-gray-500">QR Code na hora</p>
-                                </div>
-                            </button>
+  return (
+    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={resetStateAndClose}
+      />
 
-                            <button 
-                                onClick={() => setMethod('card')}
-                                className="w-full bg-blue-50 hover:bg-blue-100 border border-blue-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
-                            >
-                                <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
-                                    <IoCard />
-                                </div>
-                                <div className="text-left">
-                                    <h3 className="font-bold text-gray-900">Cartão</h3>
-                                    <p className="text-xs text-gray-500">Maquininha na entrega</p>
-                                </div>
-                            </button>
+      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="p-6 text-center border-b border-gray-100 bg-gray-50 flex-shrink-0 relative">
+          <button
+            onClick={resetStateAndClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          >
+            <IoClose size={24} />
+          </button>
 
-                            <button 
-                                onClick={() => setMethod('cash')}
-                                className="w-full bg-orange-50 hover:bg-orange-100 border border-orange-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
-                            >
-                                <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-orange-200 group-hover:scale-110 transition-transform">
-                                    <IoCash />
-                                </div>
-                                <div className="text-left">
-                                    <h3 className="font-bold text-gray-900">Dinheiro</h3>
-                                    <p className="text-xs text-gray-500">Pagar na entrega</p>
-                                </div>
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="animate-in slide-in-from-right duration-200">
-                            <button onClick={() => setMethod(null)} className="text-sm text-gray-400 font-bold mb-4 hover:text-gray-600 flex items-center gap-1">
-                                ← Voltar
-                            </button>
+          <h2 className="text-2xl font-black text-gray-900">Pagamento</h2>
+          <p className="text-gray-500 text-sm mt-1">Finalize seu pedido</p>
 
-                            {method === 'pix' && (
-                                <div className="text-center space-y-4">
-                                    {pixKey ? (
-                                        <>
-                                            <div className="bg-white p-4 rounded-2xl border-2 border-dashed border-gray-300 inline-block mx-auto">
-                                                <img 
-                                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`} 
-                                                    alt="QR Code Pix" 
-                                                    className="w-48 h-48 mix-blend-multiply"
-                                                />
-                                            </div>
-                                            <div className="bg-gray-50 p-3 rounded-xl flex items-center justify-between gap-2 border border-gray-200">
-                                                <p className="text-xs text-gray-500 truncate max-w-[200px] font-mono select-all">
-                                                    {pixCode || "Gerando..."}
-                                                </p>
-                                                <button onClick={handleCopyPix} className="text-white bg-green-600 font-bold text-xs flex items-center gap-1 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors shadow-sm">
-                                                    <IoCopy /> Copiar
-                                                </button>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex flex-col items-center">
-                                            <IoClose className="text-3xl mb-2" />
-                                            <strong>Chave PIX não configurada.</strong>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+          <div className="mt-4">
+            <span
+              className="text-4xl font-black"
+              style={{ color: corDestaque }}
+            >
+              R$ {Number(amount || 0).toFixed(2)}
+            </span>
+          </div>
 
-                            {method === 'card' && (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-3">Qual tipo de cartão?</label>
-                                    <div className="flex gap-3">
-                                        <button onClick={() => setCartaoTipo('credito')} className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${cartaoTipo === 'credito' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                                            <IoCard size={24} /> Crédito
-                                        </button>
-                                        <button onClick={() => setCartaoTipo('debito')} className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${cartaoTipo === 'debito' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                                            <IoCard size={24} /> Débito
-                                        </button>
-                                    </div>
-                                    <div className="mt-6 bg-blue-50 p-4 rounded-xl text-blue-800 text-sm border border-blue-100">
-                                        ℹ️ A maquininha será levada até você.
-                                    </div>
-                                </div>
-                            )}
-
-                            {method === 'cash' && (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Vai precisar de troco?</label>
-                                    <div className="relative mb-2">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">R$</span>
-                                        <input 
-                                            type="number" 
-                                            placeholder="Para quanto?" 
-                                            className="w-full pl-10 p-4 rounded-xl border-2 border-gray-200 focus:outline-none focus:border-orange-500 font-bold text-lg text-gray-900"
-                                            value={trocoPara}
-                                            onChange={e => setTrocoPara(e.target.value)}
-                                        />
-                                    </div>
-                                    {trocoPara && Number(trocoPara) < Number(amount) && <p className="text-xs text-red-500 font-bold mt-2 ml-1">O valor deve ser maior que o total.</p>}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer */}
-                {method && (
-                    <div className="p-6 border-t border-gray-100 bg-gray-50 safe-area-bottom flex-shrink-0">
-                        <button 
-                            onClick={handleConfirm}
-                            disabled={(method === 'pix' && !pixKey) || (method === 'cash' && trocoPara && Number(trocoPara) < Number(amount))}
-                            className="w-full py-4 rounded-xl font-bold text-white shadow-lg text-lg flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
-                            style={{ backgroundColor: corDestaque }}
-                        >
-                            <IoCheckmarkCircle className="text-2xl" />
-                            {method === 'pix' ? `Já paguei R$ ${Number(amount).toFixed(2)}` : 'Confirmar Pedido'}
-                        </button>
-                    </div>
-                )}
-            </div>
+          {cartItems.length > 0 && (
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="mt-2 text-xs font-bold text-gray-500 flex items-center justify-center gap-1 mx-auto hover:text-gray-800 transition-colors"
+            >
+              {showDetails ? 'Ocultar Detalhes' : 'Ver Detalhes'}
+              {showDetails ? <IoChevronUp /> : <IoChevronDown />}
+            </button>
+          )}
         </div>
-    );
+
+        {/* Itens */}
+        {showDetails && cartItems.length > 0 && (
+          <div className="px-6 py-4 border-b border-gray-100 bg-white max-h-40 overflow-y-auto">
+            <div className="space-y-2">
+              {cartItems.map((item, index) => {
+                const nome = item?.nome || item?.name || 'Item';
+                const qtd = Number(item?.quantidade || item?.quantity || 1);
+                const preco = Number(item?.precoFinal || item?.preco || item?.price || 0);
+
+                return (
+                  <div key={`${nome}-${index}`} className="flex justify-between gap-4 text-sm">
+                    <div className="text-gray-700">
+                      {qtd}x {nome}
+                    </div>
+                    <div className="font-bold text-gray-900 whitespace-nowrap">
+                      R$ {(preco * qtd).toFixed(2)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Body */}
+        <div className="p-6 overflow-y-auto flex-1">
+          {!method ? (
+            <div className="space-y-3">
+              
+              {/* 🔥 SÓ MOSTRA O PIX AUTOMÁTICO SE A LOJA TIVER MERCADO PAGO 🔥 */}
+              {hasMercadoPago && (
+                  <button
+                    onClick={() => setMethod('pix')}
+                    className="w-full bg-blue-50 hover:bg-blue-100 border border-blue-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+                  >
+                    <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
+                      <IoShieldCheckmark />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-bold text-gray-900">PIX Automático</h3>
+                      <p className="text-xs text-gray-500">Aprovação imediata na tela</p>
+                    </div>
+                  </button>
+              )}
+
+              {/* PIX MANUAL (CHAVE DA LOJA) */}
+              <button 
+                  onClick={() => setMethod('pix_manual')}
+                  className="w-full bg-green-50 hover:bg-green-100 border border-green-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+              >
+                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-green-200 group-hover:scale-110 transition-transform">
+                      <IoQrCode />
+                  </div>
+                  <div className="text-left">
+                      <h3 className="font-bold text-gray-900">PIX Copia e Cola</h3>
+                      <p className="text-xs text-gray-500">Enviar comprovante pelo WhatsApp</p>
+                  </div>
+              </button>
+
+              <button
+                onClick={() => setMethod('card')}
+                className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+              >
+                <div className="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-slate-200 group-hover:scale-110 transition-transform">
+                  <IoCard />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-bold text-gray-900">Cartão</h3>
+                  <p className="text-xs text-gray-500">Maquininha na entrega</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setMethod('cash')}
+                className="w-full bg-orange-50 hover:bg-orange-100 border border-orange-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+              >
+                <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-orange-200 group-hover:scale-110 transition-transform">
+                  <IoCash />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-bold text-gray-900">Dinheiro</h3>
+                  <p className="text-xs text-gray-500">Pagar na entrega</p>
+                </div>
+              </button>
+            </div>
+          ) : (
+            <div className="animate-in slide-in-from-right duration-200">
+              <button
+                onClick={() => setMethod(null)}
+                className="text-sm text-gray-400 font-bold mb-4 hover:text-gray-600 flex items-center gap-1"
+              >
+                ← Voltar
+              </button>
+
+              {/* TELA DO PIX AUTOMÁTICO (MERCADO PAGO) */}
+              {method === 'pix' && (
+                <div className="text-center space-y-4">
+                  {loadingPix ? (
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                      <p className="text-sm text-gray-500 font-medium">Gerando PIX Seguro...</p>
+                    </div>
+                  ) : pixCode && pixQrBase64 ? (
+                    <>
+                      <div className="bg-white p-4 rounded-2xl border-2 border-dashed border-gray-300 inline-block mx-auto">
+                        <img
+                          src={`data:image/png;base64,${pixQrBase64}`}
+                          alt="QR Code Pix Mercado Pago"
+                          className="w-48 h-48"
+                        />
+                      </div>
+
+                      <div className="bg-gray-50 p-3 rounded-xl flex items-center justify-between gap-2 border border-gray-200">
+                        <p className="text-xs text-gray-500 truncate max-w-[200px] font-mono select-all">
+                          {pixCode}
+                        </p>
+                        <button
+                          onClick={handleCopyPix}
+                          className="text-white bg-blue-600 font-bold text-xs flex items-center gap-1 hover:bg-blue-700 px-3 py-2 rounded-lg transition-colors shadow-sm"
+                        >
+                          <IoCopy /> Copiar
+                        </button>
+                      </div>
+
+                      <div className="bg-blue-50 p-4 rounded-xl text-blue-700 text-sm border border-blue-200">
+                        Após pagar, esta tela fechará sozinha!
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex flex-col items-center">
+                      <IoClose className="text-3xl mb-2" />
+                      <strong>Não foi possível gerar o PIX. Tente outra forma.</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TELA DO PIX MANUAL (CHAVE DA LOJA) */}
+              {method === 'pix_manual' && (
+                  <div className="text-center space-y-4">
+                      {pixKey ? (
+                          <>
+                              <div className="bg-white p-4 rounded-2xl border-2 border-dashed border-gray-300 inline-block mx-auto">
+                                  <img 
+                                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixManualCode)}`} 
+                                      alt="QR Code Pix Manual" 
+                                      className="w-48 h-48 mix-blend-multiply"
+                                  />
+                              </div>
+                              <div className="bg-gray-50 p-3 rounded-xl flex items-center justify-between gap-2 border border-gray-200">
+                                  <p className="text-xs text-gray-500 truncate max-w-[200px] font-mono select-all">
+                                      {pixManualCode || "Gerando..."}
+                                  </p>
+                                  <button onClick={handleCopyPix} className="text-white bg-green-600 font-bold text-xs flex items-center gap-1 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors shadow-sm">
+                                      <IoCopy /> Copiar
+                                  </button>
+                              </div>
+                          </>
+                      ) : (
+                          <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex flex-col items-center">
+                              <IoClose className="text-3xl mb-2" />
+                              <strong>A loja ainda não cadastrou a Chave PIX.</strong>
+                          </div>
+                      )}
+                  </div>
+              )}
+
+              {method === 'card' && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-3">
+                    Qual tipo de cartão?
+                  </label>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setCartaoTipo('credito')}
+                      className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${
+                        cartaoTipo === 'credito'
+                          ? 'border-slate-700 bg-slate-50 text-slate-800'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      <IoCard size={24} />
+                      Crédito
+                    </button>
+
+                    <button
+                      onClick={() => setCartaoTipo('debito')}
+                      className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all flex flex-col items-center gap-2 ${
+                        cartaoTipo === 'debito'
+                          ? 'border-slate-700 bg-slate-50 text-slate-800'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      <IoCard size={24} />
+                      Débito
+                    </button>
+                  </div>
+
+                  <div className="mt-6 bg-slate-100 p-4 rounded-xl text-slate-700 text-sm border border-slate-200">
+                    ℹ️ A maquininha será levada até você.
+                  </div>
+                </div>
+              )}
+
+              {method === 'cash' && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Vai precisar de troco?
+                  </label>
+
+                  <div className="relative mb-2">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">
+                      R$
+                    </span>
+                    <input
+                      type="number"
+                      placeholder="Para quanto?"
+                      className="w-full pl-10 p-4 rounded-xl border-2 border-gray-200 focus:outline-none focus:border-orange-500 font-bold text-lg text-gray-900"
+                      value={trocoPara}
+                      onChange={(e) => setTrocoPara(e.target.value)}
+                    />
+                  </div>
+
+                  {trocoPara && Number(trocoPara) < Number(amount) && (
+                    <p className="text-xs text-red-500 font-bold mt-2 ml-1">
+                      O valor deve ser maior que o total.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {method && (
+          <div className="p-6 border-t border-gray-100 bg-gray-50 safe-area-bottom flex-shrink-0">
+            {/* O botão só esconde se for PIX Automático do Mercado Pago, onde o sistema fecha sozinho */}
+            {method === 'pix' ? (
+              <div className="flex flex-col items-center gap-2 animate-pulse">
+                <div className="flex items-center gap-2 text-blue-600 font-bold">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                  </span>
+                  Aguardando pagamento...
+                </div>
+                <p className="text-xs text-gray-400">A tela fechará sozinha.</p>
+              </div>
+            ) : (
+              <button
+                onClick={handleConfirm}
+                disabled={
+                  (method === 'cash' && trocoPara && Number(trocoPara) < Number(amount)) ||
+                  (method === 'pix_manual' && !pixKey)
+                }
+                className="w-full py-4 rounded-xl font-bold text-white shadow-lg text-lg flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                style={{ backgroundColor: corDestaque }}
+              >
+                <IoCheckmarkCircle className="text-2xl" />
+                {method === 'pix_manual' ? `Já paguei R$ ${Number(amount).toFixed(2)}` : 'Confirmar Pedido'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default PaymentModal;

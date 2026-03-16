@@ -1,8 +1,8 @@
 // src/components/AddUserModal.jsx
 import React, { useState } from 'react';
-import { doc, setDoc, Timestamp } from 'firebase/firestore'; // Importante: Timestamp agora está aqui!
+import { doc, setDoc, Timestamp } from 'firebase/firestore'; 
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { db } from '../firebase'; // Verifique o caminho correto para o seu firebase.js
+import { db } from '../firebase'; 
 import { toast } from 'react-toastify';
 
 function AddUserModal({ showModal, onClose, onUserAdded }) {
@@ -18,13 +18,13 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
     addressNeighborhood: '',
     addressCity: '',
     addressComplement: '',
+    addressReference: '', // Campo já estava aqui
   });
   const [addingUser, setAddingUser] = useState(false);
   const [addUserError, setAddUserError] = useState('');
 
-  const auth = getAuth(); // Instância do Auth para criar usuários
+  const auth = getAuth(); 
 
-  // Função genérica para atualizar o estado do formulário
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prevData) => ({
@@ -38,7 +38,8 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
     setAddingUser(true);
     setAddUserError('');
 
-    const { name, email, password, isAdmin, isMasterAdmin, phoneNumber, addressStreet, addressNumber, addressNeighborhood, addressCity, addressComplement } = formData;
+    // 1. Adicionado addressReference na desestruturação
+    const { name, email, password, isAdmin, isMasterAdmin, phoneNumber, addressStreet, addressNumber, addressNeighborhood, addressCity, addressComplement, addressReference } = formData;
 
     if (!name.trim() || !email.trim() || !password.trim() || password.length < 6) {
       setAddUserError('Nome, Email e Senha (mín. 6 caracteres) são obrigatórios.');
@@ -47,11 +48,10 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
     }
 
     try {
-      // 1. Criar usuário no Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Salvar perfil do usuário no Firestore na coleção 'usuarios'
+      // 2. Adicionado a referência no Firestore
       await setDoc(doc(db, 'usuarios', user.uid), {
         nome: name.trim(),
         email: email.trim(),
@@ -62,22 +62,23 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
           bairro: addressNeighborhood.trim() || null,
           cidade: addressCity.trim() || null,
           complemento: addressComplement.trim() || null,
+          referencia: addressReference.trim() || null, // <- SALVANDO NO BANCO
         },
         isAdmin: isAdmin,
         isMasterAdmin: isMasterAdmin,
-        criadoEm: Timestamp.now(), // Adiciona timestamp de criação
+        criadoEm: Timestamp.now(),
       });
 
       toast.success(`Usuário ${name} cadastrado com sucesso! A lista será atualizada.`);
       
-      // Limpar formulário para que ele esteja pronto para um novo cadastro se o modal for reaberto
+      // 3. Adicionado addressReference para limpar o state
       setFormData({
         name: '', email: '', password: '', isAdmin: false, isMasterAdmin: false,
-        phoneNumber: '', addressStreet: '', addressNumber: '', addressNeighborhood: '', addressCity: '', addressComplement: '',
+        phoneNumber: '', addressStreet: '', addressNumber: '', addressNeighborhood: '', addressCity: '', addressComplement: '', addressReference: '',
       });
       
-      onClose(); // Fecha o modal
-      onUserAdded(); // Notifica o componente pai que um usuário foi adicionado
+      onClose(); 
+      onUserAdded(); 
 
     } catch (err) {
       let msg = "Erro ao cadastrar usuário.";
@@ -94,7 +95,6 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
     }
   };
 
-  // Não renderiza nada se o modal não deve ser exibido
   if (!showModal) return null; 
 
   return (
@@ -123,7 +123,6 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
 
-          {/* Permissões */}
           <h3 className="text-lg font-semibold text-gray-700 mt-6">Permissões:</h3>
           <div className="flex items-center space-x-4">
             <input type="checkbox" id="isAdmin" name="isAdmin" checked={formData.isAdmin} onChange={handleChange}
@@ -137,7 +136,6 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
           </div>
           <p className="text-xs text-gray-500 mt-2">Master Admin anula Administrador de Estabelecimento. Use com cautela.</p>
 
-          {/* Dados Opcionais */}
           <h3 className="text-lg font-semibold text-gray-700 mt-6">Dados Opcionais:</h3>
           <div>
             <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">Telefone</label>
@@ -149,7 +147,7 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
             <input type="text" id="addressStreet" name="addressStreet" value={formData.addressStreet} onChange={handleChange}
                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label htmlFor="addressNumber" className="block text-sm font-medium text-gray-700">Número</label>
               <input type="text" id="addressNumber" name="addressNumber" value={formData.addressNumber} onChange={handleChange}
@@ -171,9 +169,16 @@ function AddUserModal({ showModal, onClose, onUserAdded }) {
             <input type="text" id="addressComplement" name="addressComplement" value={formData.addressComplement} onChange={handleChange}
                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
           </div>
+          {/* 4. Campo de Ponto de Referência adicionado no layout */}
+          <div>
+            <label htmlFor="addressReference" className="block text-sm font-medium text-gray-700">Ponto de Referência</label>
+            <input type="text" id="addressReference" name="addressReference" value={formData.addressReference} onChange={handleChange}
+                   placeholder="Ex: Próximo à padaria..."
+                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
+          </div>
 
           <button type="submit" disabled={addingUser}
-                  className="w-full py-3 px-4 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 font-semibold text-lg">
+                  className="w-full py-3 px-4 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 font-semibold text-lg mt-4">
             {addingUser ? 'Cadastrando...' : 'Cadastrar Usuário'}
           </button>
         </form>

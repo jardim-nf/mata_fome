@@ -4,10 +4,11 @@ import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
 import OpenAI from "openai";
 
+import { MercadoPagoConfig, Payment } from 'mercadopago';
 // --- IMPORTS FIREBASE ADMIN ---
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-
+import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore"; // Mantenha esta linha específica
 // Inicializa o Admin SDK
 initializeApp();
 const db = getFirestore();
@@ -15,7 +16,7 @@ const db = getFirestore();
 // Segredos
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
 const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY");
-
+const mercadoPagoToken = defineSecret("MP_ACCESS_TOKEN");
 // ==================================================================
 // 1. SEU AGENTE DE IA
 // ==================================================================
@@ -617,6 +618,165 @@ export const baixarXmlCancelamentoNfcePlugNotas = onCall({
 
     } catch (error) {
         logger.error("❌ Erro ao baixar XML de cancelamento:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+// ==================================================================
+// 11. GERAR PIX MERCADO PAGO (CORRIGIDO)
+// ==================================================================
+export const gerarPixMercadoPago = onCall(
+  {
+    region: 'us-central1',
+    secrets: [mercadoPagoToken],
+    maxInstances: 1
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Faça login primeiro.');
+
+    const { vendaId, valor, descricao, estabelecimentoId } = request.data || {};
+
+    if (!vendaId || !valor || !estabelecimentoId) {
+      throw new HttpsError('invalid-argument', 'Dados ausentes: vendaId, valor ou estabelecimentoId.');
+    }
+
+    try {
+      const client = new MercadoPagoConfig({ accessToken: mercadoPagoToken.value() });
+      const payment = new Payment(client);
+
+      // 🔥 URL CORRIGIDA COM SEU ID DE PROJETO
+const webhookUrl = 'https://us-central1-matafome-98455.cloudfunctions.net/webhookMercadoPago'; // 🔥 Coloquei o seu ID real aqui
+      const result = await payment.create({
+        body: {
+          transaction_amount: Number(valor),
+          description: descricao || `Pedido ${vendaId}`,
+          payment_method_id: 'pix',
+          payer: { email: request.auth.token.email || 'cliente@brocou.system' },
+          external_reference: `${estabelecimentoId}|${vendaId}`,
+          notification_url: webhookUrl // Avisa o MP para usar esta URL
+        }
+      });
+
+      const transactionData = result?.point_of_interaction?.transaction_data;
+
+      // Salva na raiz para o Modal espiar
+      await db.collection('pagamentos_pix').doc(vendaId).set({
+        idPagamentoMP: String(result.id),
+        status: 'pending',
+        valor: Number(valor),
+        vendaId,
+        estabelecimentoId,
+        criadoEm: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      return {
+        sucesso: true,
+        qrCodeBase64: transactionData.qr_code_base64,
+        copiaECola: transactionData.qr_code,
+        idPagamento: String(result.id)
+      };
+    } catch (error) {
+      logger.error('❌ Erro gerarPix:', error);
+      throw new HttpsError('internal', error?.message || 'Erro ao gerar PIX.');
+    }
+  }
+);
+
+// ==================================================================
+// 12. WEBHOOK MERCADO PAGO (VERSÃO SEM BLOQUEIO)
+// ==================================================================
+export const webhookMercadoPago = onRequest(
+  { secrets: [mercadoPagoToken], maxInstances: 1 }, 
+  async (req, res) => {
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    try {
+        const { data } = req.body;
+        const paymentId = data?.id;
+        if (!paymentId) return res.status(200).send('OK');
+
+        const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            headers: { Authorization: `Bearer ${mercadoPagoToken.value()}` }
+        });
+        
+        const pagamentoReal = await mpResponse.json();
+        const reference = pagamentoReal.external_reference;
+
+        if (pagamentoReal.status === 'approved' && reference) {
+            const [estabId, pedidoId] = reference.split('|');
+            const batch = db.batch();
+
+            // 1. Atualiza o status global (que o Modal espia)
+            batch.set(db.collection('pagamentos_pix').doc(pedidoId), {
+                status: 'pago',
+                pagoEm: FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            // 2. 🔥 ATUALIZA O PEDIDO NO PAINEL (Cria se não existir)
+            batch.set(db.doc(`estabelecimentos/${estabId}/pedidos/${pedidoId}`), {
+                status: 'pago',
+                pago: true,
+                pagoEm: FieldValue.serverTimestamp(),
+                metodoPagamento: 'pix'
+            }, { merge: true });
+
+            await batch.commit();
+            logger.info(`✅ SUCESSO: Pedido ${pedidoId} APROVADO!`);
+        }
+        res.status(200).send('OK');
+    } catch (error) {
+        logger.error("❌ Erro Webhook:", error);
+        res.status(200).send('OK');
+    }
+});
+// No topo do arquivo, defina o novo segredo
+const mpClientSecret = defineSecret("MP_CLIENT_SECRET");
+const mpClientId = "310854362032422"; // O ID é público, pode ficar aqui ou no Secret também
+
+// ==================================================================
+// 13. VINCULAR CONTA DO LOJISTA (OAuth) - VERSÃO SEGURA
+// ==================================================================
+export const vincularMercadoPago = onCall({ 
+    secrets: [mpClientSecret] 
+}, async (request) => {
+    const { code, estabelecimentoId } = request.data;
+    
+    if (!code || !estabelecimentoId) {
+        throw new HttpsError('invalid-argument', 'Código ou ID do estabelecimento ausentes.');
+    }
+
+    try {
+        const response = await fetch('https://api.mercadopago.com/oauth/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                client_id: mpClientId,
+                client_secret: mpClientSecret.value(), // Puxa do cofre com segurança
+                code: code,
+                grant_type: 'authorization_code',
+                redirect_uri: 'https://matafome-98455.web.app/admin/configuracoes'
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.access_token) {
+            // 🔥 Vincula o Token Real do lojista ao restaurante dele
+            await db.collection('estabelecimentos').doc(estabelecimentoId).update({
+                mp_access_token: data.access_token,
+                mp_refresh_token: data.refresh_token,
+                mp_user_id: data.user_id,
+                mp_conectado: true,
+                mp_data_vinculo: FieldValue.serverTimestamp()
+            });
+
+            logger.info(`✅ Restaurante ${estabelecimentoId} conectado ao Mercado Pago.`);
+            return { sucesso: true };
+        }
+        
+        throw new Error(data.message || 'Falha ao obter access_token');
+    } catch (error) {
+        logger.error("❌ Erro OAuth:", error);
         throw new HttpsError('internal', error.message);
     }
 });

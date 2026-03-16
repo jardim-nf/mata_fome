@@ -55,9 +55,6 @@ export const caixaService = {
         return null;
     } catch (e) { return null; }
   },
-  async abrirCaixa(dados) {
-      try { const ref = await addDoc(collection(db, 'caixas'), { ...dados, dataAbertura: serverTimestamp(), status: 'aberto' }); return { success: true, id: ref.id }; } catch (e) { return { success: false, error: e.message }; }
-  },
   async fecharCaixa(id, dados) {
       try { await updateDoc(doc(db, 'caixas', id), { ...dados, status: 'fechado', dataFechamento: serverTimestamp() }); return { success: true }; } catch (e) { return { success: false, error: e.message }; }
   },

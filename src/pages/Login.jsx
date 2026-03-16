@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase'; // Certifique-se que o caminho está correto
+import { db } from '../firebase'; 
 
 export default function LoginPage() {
   const { currentUser, userData, authChecked } = useAuth();
@@ -26,7 +26,8 @@ export default function LoginPage() {
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState('Nova Friburgo'); // Padrão, mas editável
+  const [cidade, setCidade] = useState('Nova Friburgo'); 
+  const [pontoReferencia, setPontoReferencia] = useState(''); 
 
   // 1. Redirecionamento Automático se já estiver logado
   useEffect(() => {
@@ -59,10 +60,18 @@ export default function LoginPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // 1. Criar perfil na coleção USUARIOS (Permissões)
+        // 1. Criar perfil na coleção USUARIOS (Permissões e Perfil Base)
         await setDoc(doc(db, 'usuarios', user.uid), {
             email: user.email,
             nome: nome,
+            telefone: telefone,
+            endereco: {
+                rua: rua,
+                numero: numero,
+                bairro: bairro,
+                cidade: cidade,
+                referencia: pontoReferencia // <--- ADICIONADO AQUI
+            },
             isAdmin: false,
             isMasterAdmin: false,
             estabelecimentos: [], 
@@ -80,7 +89,8 @@ export default function LoginPage() {
                 rua: rua,
                 numero: numero,
                 bairro: bairro,
-                cidade: cidade
+                cidade: cidade,
+                referencia: pontoReferencia // <--- ADICIONADO AQUI
             },
             criadoEm: Timestamp.now()
         });
@@ -91,7 +101,6 @@ export default function LoginPage() {
       } else {
         // --- LÓGICA DE LOGIN ---
         await signInWithEmailAndPassword(auth, email, password);
-        // Não precisa de toast aqui, o useEffect trata
       }
 
     } catch (error) {
@@ -113,7 +122,6 @@ export default function LoginPage() {
     }
   };
 
-  // Loading State inicial
   if (authChecked && currentUser && !userData) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -176,6 +184,14 @@ export default function LoginPage() {
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Cidade</label>
                         <input type="text" required value={cidade} onChange={e => setCidade(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all" placeholder="Cidade" />
                     </div>
+                </div>
+                
+                {/* Ponto de Referência */}
+                <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        Ponto de Referência <span className="text-gray-400 text-xs font-normal">(Opcional)</span>
+                    </label>
+                    <input type="text" value={pontoReferencia} onChange={e => setPontoReferencia(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all" placeholder="Ex: Ao lado da padaria, em frente à praça..." />
                 </div>
             </div>
           )}

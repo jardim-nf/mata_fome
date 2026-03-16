@@ -1,11 +1,11 @@
 // src/components/ModalPagamento.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { db, auth } from '../firebase'; 
-import { vendaService } from '../services/vendaService'; 
-import { estoqueService } from '../services/estoqueService'; 
+import { db, auth } from '../firebase';
+import { vendaService } from '../services/vendaService';
+import { estoqueService } from '../services/estoqueService';
 
-import { 
+import {
     IoClose,
     IoChevronBack,
     IoChevronForward,
@@ -22,7 +22,7 @@ import {
     IoCheckbox,
     IoSquareOutline,
     IoTime,
-    IoReceiptOutline 
+    IoReceiptOutline
 } from 'react-icons/io5';
 import { toast } from 'react-toastify';
 
@@ -71,19 +71,19 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const agruparItensPorPessoa = useMemo(() => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         if (listaItens.length === 0) return {};
-        
+
         const agrupados = {};
         listaItens.forEach(item => {
             let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
             if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes?.length > 0) {
-                if(!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0]; 
+                if (!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0];
             }
             if (!pessoa) pessoa = 'Cliente 1';
 
             if (!agrupados[pessoa]) {
                 agrupados[pessoa] = { itens: [], total: 0 };
             }
-            
+
             const qtd = item.quantidade || item.qtd || 1;
             agrupados[pessoa].itens.push(item);
             agrupados[pessoa].total += (item.preco * qtd);
@@ -124,11 +124,11 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
                     const taxaPessoa = incluirTaxa ? (dados.total * 0.10) : 0;
                     const valorSugerido = Math.min(dados.total + taxaPessoa, restanteMesa);
-                    
+
                     pagamentosIniciais[pessoa] = {
-                        valor: valorSugerido, 
+                        valor: valorSugerido,
                         formaPagamento: 'dinheiro',
-                        itens: dados.itens 
+                        itens: dados.itens
                     };
                     selecionadosIniciais[pessoa] = false;
                 });
@@ -166,7 +166,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         const novaPessoa = `Pagante Extra ${Object.keys(pagamentos).length + 1}`;
         setPagamentos(prev => ({
             ...prev,
-            [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] } 
+            [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] }
         }));
         setSelecionados(prev => ({ ...prev, [novaPessoa]: true }));
     };
@@ -179,7 +179,36 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         setSelecionados(novosS);
     };
 
-    const handleImprimirConferencia = () => {
+const handleImprimirConferencia = async () => {
+        if (!estabelecimentoId || !mesa?.id) {
+            toast.error("Erro: Dados da mesa ou estabelecimento não encontrados.");
+            return;
+        }
+
+        // 🔥 TRAVA CORRIGIDA: Identifica celulares reais e iPads, ignorando PCs com tela touch!
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        if (isMobileDevice) {
+            // =======================================================
+            // LÓGICA DO CELULAR (GARÇOM): Manda o aviso pro Firestore
+            // =======================================================
+            try {
+                const mesaRef = doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesa.id);
+                await updateDoc(mesaRef, {
+                    solicitarImpressaoConferencia: true,
+                    timestampImpressao: new Date().toISOString() 
+                });
+                toast.success("Conferência enviada para a impressora do caixa!");
+            } catch (erro) {
+                console.error("Erro ao solicitar impressão:", erro);
+                toast.error("Erro ao comunicar com a impressora.");
+            }
+            return; // 🛑 IMPORTANTE: O celular para aqui e não lê o HTML abaixo!
+        }
+
+        // =======================================================
+        // LÓGICA DO COMPUTADOR (CAIXA): Gera o HTML e imprime na hora
+        // =======================================================
         const totalConsumo = calcularTotalConsumo();
         const valorTaxa = calcularValorTaxa();
         const jaPago = calcularJaPago();
@@ -248,7 +277,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         win.document.close();
         setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
-
     // --- FINALIZAR E EMITIR NOTA ---
     const handleFinalizar = async (modo) => {
         setCarregando(true);
@@ -261,9 +289,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             const valorTaxa = calcularValorTaxa();
             const jaPagoAntigo = calcularJaPago();
             const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
-            
+
             const restanteFinal = (totalConsumo + valorTaxa) - totalJaPagoNovo;
-            
+
             const mesaQuitada = restanteFinal <= 0.10;
 
             const pagamentosValidos = Object.fromEntries(
@@ -279,7 +307,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 pagamentos: pagamentosValidos,
                 total: totalPagoAgora,
                 valorOriginal: totalConsumo,
-                taxaServicoCobrada: incluirTaxa ? valorTaxa : 0, 
+                taxaServicoCobrada: incluirTaxa ? valorTaxa : 0,
                 tipoPagamento: tipoPagamento,
                 status: mesaQuitada ? 'pago' : 'pago_parcial',
                 criadoEm: serverTimestamp(),
@@ -301,7 +329,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
                 const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
-                
+
                 if (resultadoNfce.sucesso) {
                     toast.success("Nota enviada para a Sefaz!");
                 } else {
@@ -335,7 +363,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
                     await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
                         status: 'ocupada',
-                        total: restanteFinal, 
+                        total: restanteFinal,
                         pagamentosParciais: arrayUnion(novoPagamentoInfo),
                         updatedAt: serverTimestamp()
                     });
@@ -375,7 +403,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         );
     };
 
-    const renderizarEtapa1 = () => (
+const renderizarEtapa1 = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="bg-[#3b82f6] rounded-3xl p-6 shadow-xl shadow-blue-200 text-center relative overflow-hidden">
                  <div className="relative z-10">
@@ -383,14 +411,19 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         <IoWallet className="text-3xl text-white" />
                     </div>
                     <h2 className="text-xl font-bold text-blue-100 mb-1">Restante a Pagar</h2>
-                    <span className="text-5xl font-black text-white">R$ {calcularRestanteMesa().toFixed(2)}</span>
+                    
+                    {/* 🔥 CORRIGIDO: Formatação para R$ 00,00 brasileiro 🔥 */}
+                    <span className="text-5xl font-black text-white">
+                        {calcularRestanteMesa().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                    
                     <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">
-                        Total Consumo: R$ {calcularTotalConsumo().toFixed(2)}
+                        Total Consumo: {calcularTotalConsumo().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
 
                     {incluirTaxa && (
                         <p className="text-white text-sm font-medium mt-1 bg-white/20 inline-block px-3 py-1 rounded-full">
-                            + 10% Garçom: R$ {calcularValorTaxa().toFixed(2)}
+                            + 10% Garçom: {calcularValorTaxa().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                     )}
                     
@@ -449,12 +482,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     <button onClick={() => setEtapa(1)} className="p-2 hover:bg-gray-100 rounded-lg"><IoChevronBack className="text-xl" /></button>
                     <h3 className="text-lg font-black text-gray-900">Quem vai pagar agora?</h3>
                 </div>
-                
+
                 {tipoPagamento === 'individual' && (
-                     <div className="bg-blue-50 text-blue-800 p-3 rounded-xl text-xs font-bold mb-4 flex gap-2 items-center border border-blue-100">
-                         <IoCheckmark className="text-lg" />
-                         Selecione quem vai pagar neste momento.
-                     </div>
+                    <div className="bg-blue-50 text-blue-800 p-3 rounded-xl text-xs font-bold mb-4 flex gap-2 items-center border border-blue-100">
+                        <IoCheckmark className="text-lg" />
+                        Selecione quem vai pagar neste momento.
+                    </div>
                 )}
 
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
@@ -472,19 +505,19 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                     <button onClick={() => removerPessoa(pessoa)} className="text-red-400 hover:text-red-600 p-2"><IoRemove /></button>
                                 )}
                             </div>
-                            
+
                             {selecionados[pessoa] && (
                                 <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                                     <div className="flex items-center gap-3 mb-3">
                                         <div className="relative flex-1">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">R$</span>
-                                            <input 
-                                                type="number" 
+                                            <input
+                                                type="number"
                                                 className="w-full bg-blue-50/50 border border-blue-200 rounded-lg pl-8 pr-3 py-3 text-lg font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 placeholder="0.00"
                                                 value={dados.valor}
                                                 onChange={(e) => editarValorPagamento(pessoa, e.target.value)}
-                                                onClick={(e) => e.target.select()} 
+                                                onClick={(e) => e.target.select()}
                                             />
                                         </div>
                                     </div>
@@ -495,7 +528,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                             </button>
                                         ))}
                                     </div>
-                                    
+
                                     {dados.itens && dados.itens.filter(i => i.preco > 0).length > 0 && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
                                             <p className="text-[10px] text-gray-400 font-bold mb-1">CONSUMO:</p>
@@ -519,13 +552,13 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         </div>
                     ))}
                 </div>
-                
+
                 {tipoPagamento === 'individual' && (
                     <button onClick={adicionarPessoa} className="mt-4 w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all">
                         <IoAdd /> Adicionar Pagante Manual
                     </button>
                 )}
-                
+
                 <button onClick={() => setEtapa(3)} className="mt-4 w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">
                     Conferir e Finalizar <IoChevronForward />
                 </button>
@@ -540,10 +573,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
             return selecionados[pessoa] ? acc + dados.valor : acc;
         }, 0);
-        
+
         const totalPagoGeral = jaPago + totalPagoAgora;
         const restanteFinal = (totalConsumo + valorTaxa) - totalPagoGeral;
-        
+
         const vaiQuitar = restanteFinal <= 0.10;
         const troco = restanteFinal < -0.10 ? Math.abs(restanteFinal) : 0;
 
@@ -553,7 +586,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     <button onClick={() => setEtapa(2)} className="absolute top-0 left-0 p-2 bg-gray-100 rounded-xl hover:bg-gray-200"><IoChevronBack /></button>
                     <h3 className="text-xl font-black text-gray-900">Confirmação</h3>
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl">
                     <div className="flex justify-between items-center mb-1 text-gray-400 font-medium text-xs">
                         <span>Total Consumo</span>
@@ -571,7 +604,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                             <span>- R$ {jaPago.toFixed(2)}</span>
                         </div>
                     )}
-                    
+
                     <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100 mt-2">
                         <span className="text-lg font-bold text-gray-900">Pagando Agora</span>
                         <span className="text-3xl font-black text-blue-600">R$ {totalPagoAgora.toFixed(2)}</span>
@@ -589,8 +622,8 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     {/* TOGGLE PARA EMITIR NFC-E */}
                     <div className="mt-4 p-4 border-2 border-dashed border-gray-200 rounded-2xl">
                         <label className="flex items-center gap-3 cursor-pointer">
-                            <input 
-                                type="checkbox" 
+                            <input
+                                type="checkbox"
                                 checked={emitirNota}
                                 onChange={(e) => setEmitirNota(e.target.checked)}
                                 className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
@@ -600,14 +633,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                 Emitir Nota Fiscal (NFC-e)
                             </div>
                         </label>
-                        
+
                         {emitirNota && (
                             <div className="mt-3 animate-in fade-in slide-in-from-top-2">
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     placeholder="CPF na Nota (Opcional)"
                                     value={cpfNota}
-                                    onChange={(e) => setCpfNota(e.target.value.replace(/\D/g, ''))} 
+                                    onChange={(e) => setCpfNota(e.target.value.replace(/\D/g, ''))}
                                     className="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                     maxLength={11}
                                 />
@@ -618,7 +651,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
                 <div className="flex flex-col gap-3">
                     {!vaiQuitar && (
-                        <button 
+                        <button
                             onClick={() => handleFinalizar('parcial')}
                             disabled={carregando}
                             className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -628,9 +661,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     )}
 
                     {vaiQuitar && (
-                        <button 
-                            onClick={() => handleFinalizar('total')} 
-                            disabled={carregando} 
+                        <button
+                            onClick={() => handleFinalizar('total')}
+                            disabled={carregando}
                             className="w-full py-4 bg-green-600 hover:bg-green-700 rounded-2xl font-bold shadow-lg shadow-green-200 text-white active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             {carregando ? 'Processando...' : (troco > 0 ? 'Encerrar com Troco' : 'Encerrar Mesa (Tudo Pago)')}
@@ -645,7 +678,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         // 🔥 A MÁGICA ESTÁ AQUI: sm:items-start e sm:pt-16 colam o Modal no topo da tela! 🔥
         <div className="fixed inset-0 z-[60] flex items-end sm:items-start sm:pt-16 justify-center">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-            
+
             <div className="relative w-full max-w-md bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-10 duration-300">
                 <div className="p-4 flex justify-between items-center border-b border-gray-100">
                     <span className="text-xs font-black text-gray-300 uppercase tracking-widest">Pagamento</span>
