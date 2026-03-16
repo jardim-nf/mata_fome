@@ -942,23 +942,25 @@ const handleRegisterModal = async (e) => {
                         
                         <div className="mt-2 mb-6 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Cupom de Desconto</label>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Possui um código?"
-                                    value={couponCodeInput}
-                                    onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
-                                    className="flex-1 p-2 border rounded-lg text-sm"
-                                    disabled={appliedCoupon}
-                                />
-                                <button
-                                    onClick={handleApplyCoupon}
-                                    disabled={couponLoading || !couponCodeInput || appliedCoupon}
-                                    className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold disabled:opacity-50"
-                                >
-                                    {couponLoading ? '...' : appliedCoupon ? 'Aplicado' : 'Aplicar'}
-                                </button>
-                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-2">
+    <input
+        type="text"
+        placeholder="Possui um código?"
+        value={couponCodeInput}
+        onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+        className="w-full sm:flex-1 p-3 sm:p-2 border rounded-lg text-sm"
+        disabled={appliedCoupon}
+    />
+    <button
+        onClick={handleApplyCoupon}
+        disabled={couponLoading || !couponCodeInput || appliedCoupon}
+        className="w-full sm:w-auto px-4 py-3 sm:py-2 bg-gray-800 text-white rounded-lg text-sm font-bold disabled:opacity-50 shrink-0"
+    >
+        {couponLoading ? '...' : appliedCoupon ? 'Aplicado' : 'Aplicar'}
+    </button>
+</div>
+                            
                             {appliedCoupon && (
                                 <div className="flex justify-between items-center mt-2">
                                     <span className="text-xs text-green-600 font-bold">✅ Cupom {appliedCoupon.codigo} ativo</span>

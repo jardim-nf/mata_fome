@@ -140,7 +140,11 @@ export default function ControleSalao() {
 
         const dataAbertura = mesa.updatedAt.toDate ? mesa.updatedAt.toDate() : new Date(mesa.updatedAt);
         const minutosDecorridos = Math.floor((currentTime - dataAbertura) / 60000);
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> bc3ec491d3dd4407136913050b6fd5fcfffda302
         return minutosDecorridos >= 10; // 10 minutos sem pedir nada = alerta
     };
 
@@ -177,6 +181,7 @@ export default function ControleSalao() {
     useEffect(() => {
         if (!estabelecimentoId) return;
 
+<<<<<<< HEAD
         // 🛑 TRAVA CORRIGIDA: Não bloqueia mais PCs com tela Touch ou janelas menores!
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         
@@ -184,6 +189,23 @@ export default function ControleSalao() {
             return; // Aparelho mobile não escuta a impressora
         }
 
+=======
+    // 🔥 NOVO: useEffect PARA ESCUTAR PEDIDOS DE IMPRESSÃO (Ouvinte Principal) 🔥
+    useEffect(() => {
+        if (!estabelecimentoId) return;
+
+        // 🛑 TRAVA DE SEGURANÇA PARA CELULARES 🛑
+        // Verifica se o aparelho é um celular/tablet. Se for, ele NÃO escuta a impressora!
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Se for celular (ou tela pequena), encerra a função aqui e o aparelho fica "surdo" para a impressora
+        if (isMobileDevice || window.innerWidth < 1024) {
+            console.log("Aparelho mobile ou tela pequena detectado: Ouvinte de impressão bloqueado na tela do garçom.");
+            return; 
+        }
+
+        // Daqui para baixo, só o Computador do Caixa vai executar
+>>>>>>> bc3ec491d3dd4407136913050b6fd5fcfffda302
         const q = query(
             collection(db, "estabelecimentos", estabelecimentoId, "mesas"),
             where("solicitarImpressaoConferencia", "==", true)
@@ -196,18 +218,34 @@ export default function ControleSalao() {
                     const mesaId = mesaDoc.id;
                     const mesaData = mesaDoc.data();
 
+<<<<<<< HEAD
                     if (mesaData.solicitarImpressaoConferencia) {
                         toast.info(`Imprimindo conferência da Mesa ${mesaData.numero}...`);
                         
                         const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${mesaId}`;
                         window.open(urlImpressao, "_blank", "width=400,height=600");
 
+=======
+                    // Verificação de segurança para não imprimir infinitamente
+                    if (mesaData.solicitarImpressaoConferencia) {
+                        toast.info(`Imprimindo conferência da Mesa ${mesaData.numero}...`);
+                        
+                        // 1. Abre a tela de impressão numa nova aba/pop-up
+                        const urlImpressao = `/impressao?origem=salao&estabId=${estabelecimentoId}&pedidoId=${mesaId}`;
+                        window.open(urlImpressao, "_blank", "width=400,height=600");
+
+                        // 2. Reseta a flag imediatamente para não causar looping
+>>>>>>> bc3ec491d3dd4407136913050b6fd5fcfffda302
                         try {
                             await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesaId), {
                                 solicitarImpressaoConferencia: false
                             });
                         } catch (err) {
+<<<<<<< HEAD
                             console.error("Erro ao limpar flag de impressão:", err);
+=======
+                            console.error("Erro ao limpar flag de impressão da mesa:", err);
+>>>>>>> bc3ec491d3dd4407136913050b6fd5fcfffda302
                         }
                     }
                 }
@@ -305,10 +343,17 @@ export default function ControleSalao() {
         runTransaction(db, async (transaction) => {
             const mesaDoc = await transaction.get(mesaRef);
             if (!mesaDoc.exists()) throw "Mesa não existe mais!";
+<<<<<<< HEAD
 
             const data = mesaDoc.data();
             if (data.status !== 'livre') throw "Esta mesa acabou de ser ocupada!";
 
+=======
+            
+            const data = mesaDoc.data();
+            if (data.status !== 'livre') throw "Esta mesa acabou de ser ocupada!";
+
+>>>>>>> bc3ec491d3dd4407136913050b6fd5fcfffda302
             if (data.bloqueadoPor && data.bloqueadoPor !== usuarioLogado.uid) {
                 const agora = new Date();
                 let tempoBloqueio = 0;
@@ -354,9 +399,15 @@ export default function ControleSalao() {
 
     const handleConfirmarAbertura = (qtd, nomeCliente) => {
         if (!mesaParaAbrir) return;
+<<<<<<< HEAD
 
         setIsModalAbrirMesaOpen(false);
 
+=======
+        
+        setIsModalAbrirMesaOpen(false);
+        
+>>>>>>> bc3ec491d3dd4407136913050b6fd5fcfffda302
         updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
             status: 'ocupada',
             pessoas: qtd,

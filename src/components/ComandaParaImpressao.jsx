@@ -15,8 +15,6 @@ const TERMOS_BOMBONIERE = [
     'bomboniere', 'doce', 'sobremesa', 'chiclete', 'bala', 'chocolate', 'halls', 'mentos', 'sorvete'
 ];
 
-// 👇 1. TRAVA GLOBAL (FORA DO COMPONENTE) 👇
-// Isto impede o loop infinito mesmo que o React recarregue a página
 let ultimoPedidoImpresso = null;
 
 const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
@@ -25,7 +23,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const [searchParams] = useSearchParams();
     const { primeiroEstabelecimento, loading: authLoading } = useAuth();
 
-    // Captura tanto "modo" quanto "setor" para manter compatibilidade com links antigos
+    // Captura tanto "modo" quanto "setor"
     const modoImpressao = searchParams.get('modo');
     const setorParam = searchParams.get('setor');
     const setor = setorParam || modoImpressao;
@@ -91,30 +89,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         buscarPedido();
     }, [idUrl, authLoading, primeiroEstabelecimento, estabIdUrl, pedidoProp]);
 
-    // --- 2. DISPARA A IMPRESSÃO ---
-    useEffect(() => {
-        if (!pedidoProp && pedido && !loading && !erro) {
-            document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
+    // --- CÁLCULOS E FILTROS MOVIDOS PARA CIMA ---
+    const isDelivery = !pedido?.mesaNumero || pedido?.mesaNumero === 0 || pedido?.mesaNumero === '0';
 
-            // 👇 2. A CHECAGEM DA TRAVA ENTRA AQUI 👇
-            // Só manda imprimir se for um ID diferente do último impresso
-            if (ultimoPedidoImpresso !== pedido.id) {
-                ultimoPedidoImpresso = pedido.id; // Salva para não imprimir de novo
-
-                const timer = setTimeout(() => {
-                    window.focus();
-                    window.onafterprint = () => {
-                        window.close();
-                    };
-                    window.print();
-                }, 1200);
-
-                return () => clearTimeout(timer);
-            }
-        }
-    }, [pedido, loading, erro, pedidoProp]);
-
-    // --- 3. CÁLCULOS FINANCEIROS COMPLETOS ---
     const totais = useMemo(() => {
         if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
 
@@ -124,11 +101,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             return item.preco > 0 ? acc + (item.preco * (item.quantidade || 1)) : acc;
         }, 0);
 
-        // 🔥 CORREÇÃO DO FRETE: Procura por várias nomenclaturas possíveis no banco de dados
         const taxa = Number(pedido.taxaEntrega || pedido.frete || pedido.valorFrete || pedido.valorEntrega || 0);
         let desconto = Number(pedido.desconto) || 0;
 
-        // Se o banco salvou um "totalFinal" com desconto, mas não salvou o campo "desconto"
         const totalNoBanco = Number(pedido.totalFinal) || 0;
         if (desconto === 0 && totalNoBanco > 0 && totalNoBanco < (consumo + taxa)) {
             desconto = (consumo + taxa) - totalNoBanco;
@@ -144,54 +119,76 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         return { consumo, taxa, desconto: Math.abs(desconto), totalGeral, jaPago, restante };
     }, [pedido]);
 
-    const isDelivery = !pedido?.mesaNumero || pedido?.mesaNumero === 0 || pedido?.mesaNumero === '0';
-
     // --- 4. AGRUPAMENTO DE ITENS E FILTRO POR SETOR ---
     const itensAgrupados = useMemo(() => {
         if (!pedido || !Array.isArray(pedido.itens)) return {};
         let itensParaProcessar = [...pedido.itens];
 
-        // 🔥 AQUI ESTÁ A CORREÇÃO:
-        // Se for Delivery, não filtra nada (imprime tudo).
-        // Se for Salão (Cozinha/Bar), aplica os filtros.
-        if (!isDelivery) {
-            if (setor === 'cozinha') {
-                // Cozinha: Remove as bebidas E bomboniere
-                itensParaProcessar = itensParaProcessar.filter(item => {
-                    const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
-                    const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
-                    const textoCompleto = `${nome} ${categoria}`;
+        // 🔥 CORREÇÃO 1: FILTRA SEMPRE! Independente de ser mesa ou delivery
+        if (setor === 'cozinha') {
+            itensParaProcessar = itensParaProcessar.filter(item => {
+                const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
+                const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+                const textoCompleto = `${nome} ${categoria}`;
 
-                    const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
-                    const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
+                const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
+                const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
 
-                    return !isBebida && !isBomboniere; // Só passa se NÃO for bebida E NÃO for bomboniere
-                });
-            } else if (setor === 'bar') {
-                // Bar: Deixa as bebidas E a bomboniere
-                itensParaProcessar = itensParaProcessar.filter(item => {
-                    const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
-                    const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
-                    const textoCompleto = `${nome} ${categoria}`;
+                return !isBebida && !isBomboniere; 
+            });
+        } else if (setor === 'bar') {
+            itensParaProcessar = itensParaProcessar.filter(item => {
+                const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
+                const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+                const textoCompleto = `${nome} ${categoria}`;
 
-                    const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
-                    const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
+                const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
+                const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
 
-                    return isBebida || isBomboniere; // Passa se for bebida OU bomboniere
-                });
-            }
+                return isBebida || isBomboniere; 
+            });
         }
 
         return itensParaProcessar.reduce((acc, item) => {
-            // Ignora itens com preço 0 apenas no ticket de produção da cozinha (para não sujar a tela com adicionais grátis)
-            if (item.preco <= 0 && setor === 'cozinha') return acc;
+            if (item.preco <= 0 && setor === 'cozinha') return acc; 
 
             const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
             if (!acc[nomePessoa]) acc[nomePessoa] = [];
             acc[nomePessoa].push(item);
             return acc;
         }, {});
-    }, [pedido, setor, isDelivery]);
+    }, [pedido, setor]);
+
+    const temItens = Object.keys(itensAgrupados).length > 0;
+
+    // --- 2. DISPARA A IMPRESSÃO ---
+    useEffect(() => {
+        if (!pedidoProp && pedido && !loading && !erro) {
+            document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
+
+            // 🔥 CORREÇÃO 2: SE NÃO TEM NADA NO SETOR (EX: SÓ BEBIDA NA COZINHA), NÃO IMPRIME
+            if (!temItens) {
+                const timer = setTimeout(() => {
+                    window.close(); // Fecha silenciosamente para não apitar a impressora à toa
+                }, 2000);
+                return () => clearTimeout(timer);
+            }
+
+            if (ultimoPedidoImpresso !== pedido.id) {
+                ultimoPedidoImpresso = pedido.id; 
+
+                const timer = setTimeout(() => {
+                    window.focus();
+                    window.onafterprint = () => {
+                        window.close();
+                    };
+                    window.print();
+                }, 1200);
+
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [pedido, loading, erro, pedidoProp, temItens]);
 
     const formatMoney = (val) => {
         return Number(val || 0).toLocaleString('pt-BR', {
@@ -201,7 +198,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     };
 
     const formatarPagamento = (p) => {
-        // Aceita a string direta ou busca do objeto
         const metodo = typeof p === 'string' ? p : (p.formaPagamento || p.metodoPagamento || p.paymentMethod || '');
         const metodoString = String(metodo).toLowerCase().trim();
 
@@ -224,12 +220,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const enderecoFinal = pedido.endereco || pedido.cliente?.endereco || null;
     const nomeClientePrincipal = pedido.clienteNome || pedido.cliente?.nome || 'Cliente';
     const telefoneCliente = pedido.telefone || pedido.cliente?.telefone || null;
-    const temItens = Object.keys(itensAgrupados).length > 0;
     
-    // Busca a referência em vários lugares possíveis do banco, priorizando o enderecoFinal.referencia
     const referenciaFinal = enderecoFinal?.referencia || pedido.pontoReferencia || pedido.referencia || null;
 
-    // Fallback robusto para a data
     let stringData = new Date().toLocaleString('pt-BR');
     if (pedido.createdAt?.toDate) stringData = pedido.createdAt.toDate().toLocaleString('pt-BR');
     else if (pedido.dataPedido?.toDate) stringData = pedido.dataPedido.toDate().toLocaleString('pt-BR');
@@ -286,7 +279,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
             <div id="area-impressao" className="bg-white text-black font-mono text-xs leading-tight w-full mx-auto" style={{ maxWidth: '80mm' }}>
 
-                {/* CABEÇALHO (COMO NA FOTO: DELIVERY COM ÍCONE) */}
+                {/* CABEÇALHO */}
                 <div className="text-center border-b-2 border-black pb-2 mb-2">
                     <h1 className="text-xl font-black uppercase flex items-center justify-center gap-1">
                         {isDelivery ? '🚀 DELIVERY' : `MESA ${pedido.mesaNumero}`}
@@ -298,7 +291,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     {setor === 'bar' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR **</div>}
                 </div>
 
-                {/* NOME DO CLIENTE E ENDEREÇO COM CAIXA AO REDOR */}
+                {/* DADOS CLIENTE */}
                 <div className="mb-3 border-b-2 border-dashed border-black pb-2">
                     <p className="font-black text-sm uppercase mb-1">{nomeClientePrincipal}</p>
                     {telefoneCliente && <p className="text-xs font-bold mb-1">Tel: {telefoneCliente}</p>}
@@ -310,7 +303,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                             <p className="text-xs uppercase">{enderecoFinal.bairro}</p>
                             {enderecoFinal.complemento && <p className="text-xs italic uppercase">({enderecoFinal.complemento})</p>}
                             
-                            {/* REF IMPRIMINDO CORRETAMENTE E QUEBRANDO TEXTO LONGO */}
                             {referenciaFinal && (
                                 <p className="text-[10px] font-bold mt-1 uppercase break-words whitespace-normal">
                                     REF: {referenciaFinal}
@@ -337,7 +329,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                         <div key={index} className="mb-2 border-b border-dotted border-gray-400 pb-1 last:border-0">
                                             <div className="flex justify-between items-start">
                                                 <span className="font-black text-[13px] flex-1 pr-2 uppercase">{item.quantidade || 1}X {item.nome || item.produto?.nome}</span>
-                                                {/* Preço escondido apenas se for ticket da cozinha */}
                                                 {(setor !== 'cozinha' || isDelivery) && <span className="font-bold whitespace-nowrap text-[13px]">{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}                                            </div>
                                             {item.variacaoSelecionada && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
                                             {adicionais.length > 0 && (
@@ -358,10 +349,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     }
                 </div>
 
-                {/* BLOCO FINANCEIRO (COM TAXA DE ENTREGA) */}
+                {/* BLOCO FINANCEIRO */}
                 {(setor !== 'cozinha' || isDelivery) && (
                     <div className="border-t-2 border-black pt-2 mt-2">
-                        {/* 1. RESUMO DOS VALORES */}
                         <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
 
                         {totais.taxa > 0 && <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
@@ -373,7 +363,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                             <span>{formatMoney(totais.totalGeral)}</span>
                         </div>
 
-                        {/* 2. HISTÓRICO SE JÁ PAGOU ALGO ANTES */}
                         {totais.jaPago > 0 && (
                             <div className="mt-2 border-t border-dotted border-gray-400 pt-1">
                                 <p className="text-[10px] font-bold uppercase underline mb-1">Valores já pagos:</p>
@@ -390,7 +379,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                             </div>
                         )}
 
-                        {/* 3. CAIXA DE AÇÃO PARA O ENTREGADOR */}
                         <div className="mt-4 border-2 border-black text-center overflow-hidden">
                             {totais.restante <= 0 ? (
                                 <div className="bg-black text-white py-3">
@@ -399,24 +387,20 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                 </div>
                             ) : (
                                 <div className="flex flex-col">
-                                    {/* Tarja preta colada nas bordas */}
                                     <div className="bg-black text-white text-[13px] font-black uppercase py-1.5 tracking-wider">
                                         COBRAR NA ENTREGA
                                     </div>
 
-                                    {/* Valor Gigante e Centralizado */}
                                     <div className="py-3">
                                         <span className="text-[24px] font-black leading-none block">{formatMoney(totais.restante)}</span>
                                     </div>
 
-                                    {/* Forma de Pagamento com linha pontilhada padronizada */}
                                     <div className="border-t-2 border-dashed border-gray-400 mx-3 py-2 mb-1">
                                         <span className="text-[13px] font-bold uppercase tracking-wide">
                                             FORMA: {formatarPagamento(pedido)}
                                         </span>
                                     </div>
 
-                                    {/* Bloco de Troco com destaque cinza (se precisar) */}
                                     {precisaTroco && (
                                         <div className="bg-gray-100 border-t-2 border-black py-2 px-2 flex flex-col items-center">
                                             <span className="text-[11px] font-bold uppercase mb-1">Troco para: {formatMoney(valorTroco)}</span>
@@ -434,7 +418,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 <div className="text-center mt-6 text-[10px] font-bold border-t border-black pt-2 uppercase">
                     *** OBRIGADO PELA PREFERÊNCIA ***
                     <br />
-                    {new Date().toLocaleTimeString('pt-PT')}
+                    {new Date().toLocaleTimeString('pt-BR')}
                 </div>
             </div>
         </>

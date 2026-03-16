@@ -179,14 +179,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         setSelecionados(novosS);
     };
 
-const handleImprimirConferencia = async () => {
+    const handleImprimirConferencia = async () => {
         if (!estabelecimentoId || !mesa?.id) {
             toast.error("Erro: Dados da mesa ou estabelecimento não encontrados.");
             return;
         }
 
-        // 🔥 TRAVA CORRIGIDA: Identifica celulares reais e iPads, ignorando PCs com tela touch!
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        // Identifica celulares reais e iPads, ignorando PCs com tela touch!
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || window.innerWidth < 1024;
 
         if (isMobileDevice) {
             // =======================================================
@@ -203,7 +203,7 @@ const handleImprimirConferencia = async () => {
                 console.error("Erro ao solicitar impressão:", erro);
                 toast.error("Erro ao comunicar com a impressora.");
             }
-            return; // 🛑 IMPORTANTE: O celular para aqui e não lê o HTML abaixo!
+            return; // 🛑 IMPORTANTE: O 'return' faz o celular parar aqui e não ler o HTML abaixo!
         }
 
         // =======================================================
@@ -277,6 +277,7 @@ const handleImprimirConferencia = async () => {
         win.document.close();
         setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
     };
+
     // --- FINALIZAR E EMITIR NOTA ---
     const handleFinalizar = async (modo) => {
         setCarregando(true);
@@ -403,7 +404,7 @@ const handleImprimirConferencia = async () => {
         );
     };
 
-const renderizarEtapa1 = () => (
+    const renderizarEtapa1 = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="bg-[#3b82f6] rounded-3xl p-6 shadow-xl shadow-blue-200 text-center relative overflow-hidden">
                  <div className="relative z-10">
