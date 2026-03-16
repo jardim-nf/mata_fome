@@ -124,7 +124,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         if (!pedido || !Array.isArray(pedido.itens)) return {};
         let itensParaProcessar = [...pedido.itens];
 
-        // 🔥 CORREÇÃO 1: FILTRA SEMPRE! Independente de ser mesa ou delivery
         if (setor === 'cozinha') {
             itensParaProcessar = itensParaProcessar.filter(item => {
                 const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
@@ -150,8 +149,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }
 
         return itensParaProcessar.reduce((acc, item) => {
-            if (item.preco <= 0 && setor === 'cozinha') return acc; 
-
             const nomePessoa = item.cliente || item.clienteNome || item.destinatario || 'Geral';
             if (!acc[nomePessoa]) acc[nomePessoa] = [];
             acc[nomePessoa].push(item);
@@ -166,10 +163,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         if (!pedidoProp && pedido && !loading && !erro) {
             document.title = `PEDIDO_${pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4)}`;
 
-            // 🔥 CORREÇÃO 2: SE NÃO TEM NADA NO SETOR (EX: SÓ BEBIDA NA COZINHA), NÃO IMPRIME
             if (!temItens) {
                 const timer = setTimeout(() => {
-                    window.close(); // Fecha silenciosamente para não apitar a impressora à toa
+                    window.close();
                 }, 2000);
                 return () => clearTimeout(timer);
             }
@@ -324,17 +320,29 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                             <div key={nomePessoa} className="mb-2">
                                 {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
                                 {itens.map((item, index) => {
-                                    const adicionais = Array.isArray(item.adicionais) ? item.adicionais : [];
+                                    
+                                    // 🔥 GARANTE QUE OS ADICIONAIS APAREÇAM INDEPENDENTE DE COMO O FIREBASE SALVOU (ARRAY OU OBJETO)
+                                    let adicionais = [];
+                                    if (Array.isArray(item.adicionais)) {
+                                        adicionais = item.adicionais;
+                                    } else if (item.adicionais && typeof item.adicionais === 'object') {
+                                        adicionais = Object.values(item.adicionais);
+                                    } else if (Array.isArray(item.produto?.adicionais)) {
+                                        adicionais = item.produto.adicionais;
+                                    }
+
                                     return (
                                         <div key={index} className="mb-2 border-b border-dotted border-gray-400 pb-1 last:border-0">
                                             <div className="flex justify-between items-start">
                                                 <span className="font-black text-[13px] flex-1 pr-2 uppercase">{item.quantidade || 1}X {item.nome || item.produto?.nome}</span>
                                                 {(setor !== 'cozinha' || isDelivery) && <span className="font-bold whitespace-nowrap text-[13px]">{formatMoney((item.precoFinal || item.preco || 0) * (item.quantidade || 1))}</span>}                                            </div>
                                             {item.variacaoSelecionada && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
+                                            
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">
                                                     {adicionais.map((adic, idx) => (
-                                                        <div key={idx} className="flex items-center text-[10px] font-bold text-gray-400 uppercase">
+                                                        // 🔥 TEXTO MUDADO PARA PRETO (text-black) PARA SAIR NA IMPRESSORA TÉRMICA
+                                                        <div key={idx} className="flex items-center text-[12px] font-bold text-black uppercase">
                                                             <span className="mr-1">+</span><span>{adic.quantidade || 1}X {adic.nome}</span>
                                                         </div>
                                                     ))}
