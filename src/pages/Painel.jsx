@@ -55,7 +55,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                 };
             }
             grupos[chave].pedidos.push(pedido);
-            grupos[chave].totalItens += (pedido.itens || []).length;
+            grupos[chave].totalItens += (pedido.itensCozinha || pedido.itens || []).length;
         });
         return Object.values(grupos);
     }, [pedidos]);
@@ -63,7 +63,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
     if (pedidosAgrupados.length === 0) return (
         <div className="flex flex-col items-center justify-center py-12 text-slate-400 opacity-60">
             <IoRestaurant className="text-5xl mb-3 text-slate-300" />
-            <p className="font-medium">Sem pedidos de cozinha</p>
+            <p className="font-medium">Sem pedidos da cozinha</p>
         </div>
     );
 
@@ -116,14 +116,15 @@ function Painel() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [userInteracted, setUserInteracted] = useState(false);
     const [newOrderIds, setNewOrderIds] = useState(new Set());
+    
     const [abaAtiva, setAbaAtiva] = useState('delivery');
+    
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
 
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
-    // ESTADO DE CONFIGURAÇÃO DE IMPRESSÃO (TUDO, COZINHA, DESLIGADO)
     const [modoImpressao, setModoImpressaoState] = useState(() => {
         const salvo = localStorage.getItem('config_modo_impressao_painel');
         return salvo || 'tudo'; 
@@ -182,11 +183,11 @@ function Painel() {
         
         const temMesa = pedidoData.mesaNumero && String(pedidoData.mesaNumero).trim() !== '' && String(pedidoData.mesaNumero) !== '0';
         
-        if (source === 'salao' || temMesa) {
+        if (source === 'salao' || temMesa || tipo === 'mesa') {
             source = 'salao';
             tipo = 'mesa';
         } else {
-            if (!source) source = 'global';
+            if (!source) source = 'delivery';
             if (!tipo) tipo = 'delivery';
         }
 
@@ -236,10 +237,6 @@ function Painel() {
             isUpdatingRef.current = true;
             setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
 
-            const allPedidos = Object.values(pedidos).flat();
-            const pedidoAlvo = allPedidos.find(p => p.id === pedidoId);
-            if (!pedidoAlvo) throw new Error("Pedido não localizado");
-
             const path = `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`;
             const updatePayload = { status: newStatus, atualizadoEm: serverTimestamp() };
 
@@ -252,7 +249,7 @@ function Painel() {
             toast.success(`Status atualizado!`);
         } catch (error) { toast.error("Erro ao mover pedido."); }
         finally { setTimeout(() => { isUpdatingRef.current = false; setBloqueioAtualizacao(prev => { const novo = new Set(prev); novo.delete(pedidoId); return novo; }); }, 500); }
-    }, [pedidos, estabelecimentoAtivo, bloqueioAtualizacao]);
+    }, [estabelecimentoAtivo, bloqueioAtualizacao]);
 
     useEffect(() => {
         if (authLoading || !estabelecimentoAtivo) return;
@@ -276,26 +273,15 @@ function Painel() {
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
-            // 🔥 CADEADO DUPLO: BLOQUEIO DE PEDIDOS ANTIGOS 🔥
             const timestamp = data.createdAt || data.dataPedido;
             if (timestamp) {
                 const dataDoPedido = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
                 const hoje = new Date();
                 
-                // Regra 1: O pedido TEM que ser exatamente da mesma data de hoje (dia, mês e ano)
-                if (
-                    dataDoPedido.getDate() !== hoje.getDate() ||
-                    dataDoPedido.getMonth() !== hoje.getMonth() ||
-                    dataDoPedido.getFullYear() !== hoje.getFullYear()
-                ) {
-                    return; // Bloqueia e cancela a impressão
-                }
+                if (dataDoPedido.getDate() !== hoje.getDate() || dataDoPedido.getMonth() !== hoje.getMonth() || dataDoPedido.getFullYear() !== hoje.getFullYear()) return;
                 
-                // Regra 2: O pedido não pode ter mais de 3 horas de "vida"
                 const diffHoras = (hoje - dataDoPedido) / (1000 * 60 * 60);
-                if (diffHoras > 3) {
-                    return; // Bloqueia e cancela a impressão
-                }
+                if (diffHoras > 3) return;
             }
 
             const configAtual = modoImpressaoRef.current;
@@ -350,6 +336,7 @@ function Painel() {
         return () => unsubscribers.forEach(u => u());
     }, [estabelecimentoAtivo, authLoading, processarDadosPedido, dataSelecionada]);
 
+    // 🔥 A LÓGICA BLINDADA DA CAMPAINHA ESTÁ AQUI 🔥
     useEffect(() => {
         const dataHojeStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
         if (dataSelecionada !== dataHojeStr) return;
@@ -358,10 +345,36 @@ function Painel() {
         if (novosRecebidos.length > prevRecebidosRef.current.length) {
             const idsAtuais = new Set(prevRecebidosRef.current.map(p => p.id));
             const realmenteNovos = novosRecebidos.filter(p => !idsAtuais.has(p.id));
+            
             if (realmenteNovos.length > 0) {
                 const novosIds = realmenteNovos.map(p => p.id);
                 setNewOrderIds(prev => new Set([...prev, ...novosIds]));
-                if (notificationsEnabled && userInteracted) audioRef.current?.play().catch(e => console.warn("Audio error", e));
+                
+                if (notificationsEnabled && userInteracted) {
+                    
+                    const deveTocarCampainha = realmenteNovos.some(p => {
+                        const isMesa = p.source === 'salao' || p.tipo === 'mesa';
+                        
+                        // Se for um pedido de mesa/salão (Garçom):
+                        if (isMesa) {
+                            // Se o botão está em "Auto: COZINHA", a campainha só toca se houver comida na comanda!
+                            if (modoImpressaoRef.current === 'cozinha') {
+                                return p.itensCozinha && p.itensCozinha.length > 0;
+                            }
+                            
+                            // (Opcional): Se você quisesse que mesa NUNCA tocasse campainha, era só colocar `return false;` aqui.
+                            // Mas deixei respeitando o "Auto: TUDO".
+                        }
+                        
+                        // Delivery sempre toca
+                        return true; 
+                    });
+
+                    if (deveTocarCampainha) {
+                        audioRef.current?.play().catch(e => console.warn("Erro no som", e));
+                    }
+                }
+                
                 setTimeout(() => setNewOrderIds(prev => { const next = new Set(prev); novosIds.forEach(id => next.delete(id)); return next; }), 15000);
             }
         }
@@ -477,12 +490,19 @@ function Painel() {
                 <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
-                        let listaPedidos = (pedidos[statusKey] || []).filter(p => 
-                            abaAtiva === 'cozinha' ? p.source === 'salao' : p.source === 'global'
-                        );
+                        
+                        let listaPedidos = (pedidos[statusKey] || []).filter(p => {
+                            if (abaAtiva === 'cozinha') {
+                                return p.source === 'salao' || p.tipo === 'mesa';
+                            } else {
+                                return p.source !== 'salao' && p.tipo !== 'mesa';
+                            }
+                        });
+
                         if (abaAtiva === 'cozinha') {
-                            listaPedidos = listaPedidos.filter(p => p.itensCozinha.length > 0);
+                            listaPedidos = listaPedidos.filter(p => p.itensCozinha && p.itensCozinha.length > 0);
                         }
+                        
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
 
                         return (

@@ -1,5 +1,5 @@
 // src/pages/AdminDashboard.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
 import { useAuth } from "../context/AuthContext";
@@ -45,20 +45,28 @@ const ActionButton = ({ title, subtitle, icon, themeColor }) => {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
-  
-  // Estado para controlar se o Resumo de Faturamento está aberto ou fechado
   const [showSummary, setShowSummary] = useState(false);
+
+  // 🔥 EXPULSA O GARÇOM DO DASHBOARD AUTOMATICAMENTE 🔥
+  useEffect(() => {
+    if (currentUser && !loading) {
+      const userRole = currentUser?.role || currentUser?.cargo;
+      if (userRole === 'garcom' || userRole === 'garçom') {
+        navigate('/controle-salao', { replace: true });
+      }
+    }
+  }, [currentUser, loading, navigate]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div></div>;
 
-  const isRealAdmin = currentUser?.isAdmin === true || currentUser?.isMasterAdmin === true;
+  const isRealAdmin = currentUser?.isAdmin === true || currentUser?.isMasterAdmin === true || currentUser?.role === 'admin';
   
   const temPermissao = (perm) => {
       if (isRealAdmin) return true;
       return currentUser?.permissoes?.includes(perm);
   };
 
-  // 🔥 BOTÕES AGRUPADOS POR CATEGORIA 🔥
+  // 🔥 TODOS OS BOTÕES SENSÍVEIS AGORA TÊM 'adminOnly: true' 🔥
   const menuGroups = [
     {
       title: "⚡ Operação Diária",
@@ -73,11 +81,11 @@ const AdminDashboard = () => {
       title: "🍔 Catálogo & Logística",
       description: "Gestão do que você vende e como entrega",
       items: [
-        { path: '/admin/gerenciar-cardapio', title: 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', perm: 'visualizar-cardapio' },
-        { path: '/admin/ordenar-categorias', title: 'Categorias', sub: 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', perm: 'visualizar-cardapio', permOuAdmin: true },
-        { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo' },
-        { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber' },
-        { path: '/admin/cupons', title: 'Cupons de Desconto', sub: 'Crie códigos promocionais', icon: <IoTicketOutline />, cor: 'yellow' },
+        { path: '/admin/gerenciar-cardapio', title: 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true },
+        { path: '/admin/ordenar-categorias', title: 'Categorias', sub: 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true },
+        { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo', adminOnly: true },
+        { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber', adminOnly: true },
+        { path: '/admin/cupons', title: 'Cupons de Desconto', sub: 'Crie códigos promocionais', icon: <IoTicketOutline />, cor: 'yellow', adminOnly: true },
       ]
     },
     {
@@ -103,7 +111,6 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 font-sans pb-20">
-      {/* 🔥 AQUI ESTAVA A TRAVA (max-w-7xl mx-auto). AGORA É w-full 🔥 */}
       <div className="w-full space-y-10">
 
         {isRealAdmin && (
@@ -137,7 +144,11 @@ const AdminDashboard = () => {
         <div className="space-y-12">
           {menuGroups.map((grupo, idx) => {
             const itensPermitidos = grupo.items.filter(item => {
-              if (item.adminOnly && !isRealAdmin) return false;
+              // Se for admin, passa tudo
+              if (isRealAdmin) return true;
+              // Se NÃO for admin e a tela exige admin, bloqueia
+              if (item.adminOnly) return false;
+              // Se tiver permissão específica, verifica
               if (item.perm && !item.permOuAdmin && !temPermissao(item.perm)) return false;
               if (item.permOuAdmin && !isRealAdmin && !temPermissao(item.perm)) return false;
               return true;

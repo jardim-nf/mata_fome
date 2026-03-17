@@ -15,7 +15,6 @@ import {
 
 import VariacoesModal from '../components/VariacoesModal';
 
-// --- HELPER PARA IDENTIFICAR SETOR (BAR OU COZINHA) ---
 const getSetorItem = (categoria) => {
     const c = (categoria || '').toLowerCase();
     const isBebida = ['bebida', 'drink', 'suco', 'refrigerante', 'agua', 'cerveja'].some(t => c.includes(t));
@@ -24,8 +23,7 @@ const getSetorItem = (categoria) => {
         : { nome: 'Cozinha', icon: '🍳', corTexto: 'text-orange-600', corBg: 'bg-orange-50', border: 'border-orange-200' };
 };
 
-// --- COMPONENTE ITEM DO CARDÁPIO (ETIQUETA ENTRE NOME E DESCRIÇÃO) ---
-const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
+const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho }) => {
     const hasOpcoes = useMemo(() => {
         return (produto.opcoes && produto.opcoes.length > 0) || 
                (produto.variacoes && produto.variacoes.length > 0) || 
@@ -38,10 +36,16 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
 
     return (
         <div
-            onClick={() => abrirModalOpcoes(produto)}
-            className="bg-white p-2 rounded-xl border border-gray-200 flex gap-2.5 active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow-md group h-full"
+            onClick={() => onClick(produto)}
+            className="bg-white p-2 rounded-xl border border-gray-200 flex gap-2.5 active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow-md group h-full relative"
         >
             <div className="relative flex-shrink-0">
+                {quantidadeNoCarrinho > 0 && (
+                    <div className="absolute -top-2 -left-2 bg-red-500 text-white text-[11px] font-black min-w-[24px] h-[24px] px-1 flex items-center justify-center rounded-full border-2 border-white shadow-md z-10 animate-in zoom-in">
+                        {quantidadeNoCarrinho}
+                    </div>
+                )}
+
                 {produto.imageUrl ? (
                     <img src={produto.imageUrl} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" alt={produto.nome} />
                 ) : (
@@ -55,17 +59,14 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
             </div>
 
             <div className="flex-1 flex flex-col justify-center min-w-0 py-0.5">
-                {/* 1. NOME DO PRODUTO LIVRE NO TOPO */}
                 <h3 className="font-bold text-gray-900 text-sm leading-tight pr-1 mb-1">{produto.nome}</h3>
                 
-                {/* 2. ETIQUETA DO SETOR BEM AQUI (ENTRE O NOME E A DESCRIÇÃO) */}
                 <div className="mb-1">
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap inline-flex items-center gap-1 w-fit ${setor.corBg} ${setor.corTexto} ${setor.border}`}>
                         {setor.icon} {setor.nome}
                     </span>
                 </div>
 
-                {/* 3. DESCRIÇÃO DO PRODUTO LOGO ABAIXO */}
                 <p className="text-[11px] text-gray-500 line-clamp-2 mb-1 leading-tight">{produto.descricao || 'Sem descrição'}</p>
                 
                 <div className="flex items-center gap-2 mt-auto pt-1">
@@ -79,9 +80,8 @@ const CardapioItem = React.memo(({ produto, abrirModalOpcoes, cores }) => {
 
 const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
-    const { estabelecimentoIdPrincipal } = useAuth();
+    const { estabelecimentoIdPrincipal, user, userData } = useAuth();
     const navigate = useNavigate();
-    const { user, userData } = useAuth(); 
     
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId;
 
@@ -152,6 +152,7 @@ const TelaPedidos = () => {
         if (!estabelecimentoId) return;
 
         const carregarConfigECardapio = async () => {
+            setLoading(true);
             try {
                 const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
                 const estabSnap = await getDoc(estabRef);
@@ -175,55 +176,38 @@ const TelaPedidos = () => {
                     }
                 });
 
-                const itensPromises = catsAtivas.map(async (cat) => {
-                    const itensRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens');
-                    const produtosRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'produtos'); 
+                const promessasItens = catsAtivas.map(cat => {
+                    const p1 = getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens')).then(s => ({snap: s, tipo: 'itens', cat}));
+                    const p2 = getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'produtos')).then(s => ({snap: s, tipo: 'produtos', cat}));
+                    return [p1, p2];
+                }).flat();
 
-                    const [itensSnap, produtosSnap] = await Promise.all([
-                        getDocs(query(itensRef)),
-                        getDocs(query(produtosRef))
-                    ]);
+                const resultadosBuscas = await Promise.all(promessasItens);
+                
+                let produtosFinaisBrutos = [];
 
-                    const processarDocs = async (docsSnapshot) => {
-                        return Promise.all(docsSnapshot.docs.map(async (docItem) => {
-                            const dados = docItem.data();
-                            if (dados.ativo === false) return null;
+                for (const res of resultadosBuscas) {
+                    for (const docItem of res.snap.docs) {
+                        const dados = docItem.data();
+                        if (dados.ativo === false) continue;
 
-                            let listaAdicionais = [];
-                            try {
-                                const adicsSnap = await getDocs(collection(docItem.ref, 'adicionais'));
-                                listaAdicionais = adicsSnap.docs.map(a => ({ id: a.id, ...a.data() }));
-                            } catch(e) {}
+                        produtosFinaisBrutos.push({
+                            ...dados,
+                            id: docItem.id,
+                            categoria: res.cat.nome,
+                            categoriaId: res.cat.id,
+                            tipoColecao: res.tipo 
+                        });
+                    }
+                }
 
-                            let listaVariacoes = [];
-                            try {
-                                const varsSnap = await getDocs(collection(docItem.ref, 'variacoes'));
-                                listaVariacoes = varsSnap.docs.map(v => ({ id: v.id, ...v.data() }));
-                            } catch(e) {}
-
-                            return {
-                                ...dados,
-                                id: docItem.id,
-                                categoria: cat.nome,
-                                categoriaId: cat.id,
-                                adicionais: (dados.adicionais && dados.adicionais.length > 0) ? dados.adicionais : listaAdicionais,
-                                variacoes: (dados.variacoes && dados.variacoes.length > 0) ? dados.variacoes : listaVariacoes,
-                            };
-                        }));
-                    };
-
-                    const itensProcessados = await processarDocs(itensSnap);
-                    const produtosProcessados = await processarDocs(produtosSnap);
-
-                    return [...itensProcessados, ...produtosProcessados].filter(i => i !== null);
-                });
-
-                const itens = (await Promise.all(itensPromises)).flat();
-                setCardapio(itens);
+                setCardapio(produtosFinaisBrutos);
                 setCategorias([...new Set(listaCats)]);
 
             } catch (error) {
                 console.error("Erro ao carregar cardápio:", error);
+            } finally {
+                setLoading(false);
             }
         };
 
@@ -232,7 +216,6 @@ const TelaPedidos = () => {
 
     useEffect(() => {
         if (!estabelecimentoId || !mesaId) return;
-        setLoading(true);
         const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
         const unsubscribe = onSnapshot(mesaRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -248,7 +231,6 @@ const TelaPedidos = () => {
             } else {
                 navigate('/controle-salao');
             }
-            setLoading(false);
         });
         return () => unsubscribe();
     }, [estabelecimentoId, mesaId, navigate]);
@@ -273,7 +255,62 @@ const TelaPedidos = () => {
         );
     }, [cardapio, termoBusca, categoriaAtiva]);
 
+    const quantidadesNoCarrinho = useMemo(() => {
+        const mapa = {};
+        resumoPedido.forEach(item => {
+            const idOrig = item.produtoIdOriginal;
+            if (idOrig) {
+                if (!mapa[idOrig]) mapa[idOrig] = 0;
+                mapa[idOrig] += item.quantidade;
+            }
+        });
+        return mapa;
+    }, [resumoPedido]);
+
+    const handleItemClick = async (prod) => {
+        let itemAtualizado = { ...prod };
+        
+        const precisaBuscarAdicionais = itemAtualizado.adicionais === undefined;
+        const precisaBuscarVariacoes = itemAtualizado.variacoes === undefined;
+
+        if (precisaBuscarAdicionais || precisaBuscarVariacoes) {
+            const toastId = toast.loading("Carregando opções...", { autoClose: false });
+            try {
+                if (precisaBuscarAdicionais) {
+                    const adicsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'adicionais'));
+                    itemAtualizado.adicionais = adicsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+                if (precisaBuscarVariacoes) {
+                    const varsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'variacoes'));
+                    itemAtualizado.variacoes = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+                
+                setCardapio(prev => prev.map(p => p.id === prod.id ? itemAtualizado : p));
+                toast.dismiss(toastId);
+            } catch (e) {
+                console.error("Erro ao buscar subcoleções:", e);
+                toast.dismiss(toastId);
+            }
+        }
+
+        const itemEnriquecido = enrichWithGlobalAdicionais(itemAtualizado);
+        const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || 
+                          (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || 
+                          (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || 
+                          (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
+        
+        if (temOpcoes) {
+            setProdutoEmSelecao(itemEnriquecido);
+        } else {
+            confirmarAdicaoAoCarrinho({ ...itemEnriquecido, precoFinal: parseFloat(itemAtualizado.preco), quantidade: 1 });
+        }
+    };
+
     const confirmarAdicaoAoCarrinho = async (itemConfig) => {
+        if (navigator.vibrate) {
+            navigator.vibrate(50);
+        }
+
         const { nome, variacaoSelecionada, observacao, precoFinal, adicionaisSelecionados, ...restoDoItem } = itemConfig;
         
         let nomeFinal = nome;
@@ -304,16 +341,34 @@ const TelaPedidos = () => {
                    mesmosAdics;
         });
 
+        const toastConfigNinja = {
+            position: "top-center", 
+            autoClose: 800,         
+            hideProgressBar: true,  
+            closeButton: false,     
+            theme: "dark",          
+            style: { 
+                borderRadius: '50px', 
+                minHeight: '40px', 
+                padding: '8px 20px', 
+                fontWeight: '900', 
+                fontSize: '13px', 
+                textAlign: 'center',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+            }
+        };
+
         if (indexExistente >= 0) {
             novaLista[indexExistente].quantidade += 1;
             novaLista[indexExistente].adicionadoPor = nomeGarcom;
-            toast.success(`+1 ${nomeFinal}`);
+            toast.success(`+1 ${nomeFinal}`, toastConfigNinja);
         } else {
             const novoItem = {
                 ...restoDoItem,
                 id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
                 produtoIdOriginal: itemConfig.id, 
                 categoriaId: itemConfig.categoriaId,
+                categoria: itemConfig.categoria || '', 
                 nome: nomeFinal, 
                 preco: precoFinal,
                 observacao: observacao || '', 
@@ -327,7 +382,7 @@ const TelaPedidos = () => {
                 variacaoSelecionada: variacaoSelecionada || null
             };
             novaLista.push(novoItem);
-            toast.success(`${nomeFinal} adicionado!`);
+            toast.success(`Adicionado: ${nomeFinal}`, toastConfigNinja);
         }
 
         setResumoPedido(novaLista);
@@ -373,107 +428,104 @@ const TelaPedidos = () => {
         setModalSenhaAberto(false);
     };
     const ajustarQuantidade = async (id, cliente, qtd) => {
+        if (navigator.vibrate) navigator.vibrate(20);
         const novaLista = resumoPedido.map(i => i.id === id ? { ...i, quantidade: qtd } : i).filter(i => i.quantidade > 0);
         setResumoPedido(novaLista);
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { itens: novaLista, total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0) });
     };
 
-    const dispararImpressao = (pedidoIdParaImpressao, setor) => {
-        const idAlvo = pedidoIdParaImpressao || mesaId;
-        let url = `/impressao-isolada?pedidoId=${idAlvo}`;
-        if (setor) url += `&setor=${setor}`;
-        window.open(url, '_blank', 'width=800,height=600');
+    const dispararImpressao = async (pedidoIdParaImpressao, setor) => {
+        const toastId = toast.loading("Enviando sinal para o Caixa...");
+        
+        try {
+            if (pedidoIdParaImpressao) {
+                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', pedidoIdParaImpressao), {
+                    solicitarImpressao: true,
+                    setorImpressao: setor || 'tudo'
+                });
+            } else {
+                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
+                    solicitarImpressaoConferencia: true,
+                    setorImpressao: setor || 'tudo'
+                });
+            }
+            
+            toast.update(toastId, { render: `Impressão enviada com sucesso! ${setor ? `(${setor})` : ''}`, type: "success", isLoading: false, autoClose: 2000 });
+            setShowOrderSummary(false); 
+            
+        } catch (error) {
+            toast.update(toastId, { render: "Erro ao comunicar com o Caixa.", type: "error", isLoading: false, autoClose: 3000 });
+        }
     };
 
+    // 🔥 O SEGREDO ESTÁ AQUI: SALVAR SIMPLIFICADO E DIRETO, IMPOSSÍVEL DE FALHAR 🔥
     const salvarAlteracoes = async () => {
         setSalvando(true);
         try {
-            const novos = resumoPedido.filter(i => !i.status || i.status === 'pendente');
-            const total = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
+            // Separa quem é novo de quem já foi enviado antes
+            const itensNovos = resumoPedido.filter(i => !i.status || i.status === 'pendente');
+            const totalMesa = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
             
             const batch = writeBatch(db);
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            
             let idPedidoGerado = null;
 
-            const promessas = novos.map(async item => {
-                if(!item.categoriaId || !item.produtoIdOriginal) return null;
-                try {
-                    let ref = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'itens', item.produtoIdOriginal);
-                    let snap = await getDoc(ref);
-                    if(!snap.exists()) {
-                        ref = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', item.categoriaId, 'produtos', item.produtoIdOriginal);
-                        snap = await getDoc(ref);
-                    }
-                    if(snap.exists()) return { item, itemRef: ref, itemSnap: snap };
-                } catch(e) {}
-                return null;
-            });
-            
-            const resultados = await Promise.all(promessas);
-            
-            resultados.forEach(res => {
-                if(!res || !res.itemSnap.exists()) return;
-                const data = res.itemSnap.data();
-                const itemV = res.item;
-                const ref = res.itemRef;
-                
-                try {
-                    if(itemV.variacaoSelecionada && data.variacoes && Array.isArray(data.variacoes)) {
-                        const novasVars = data.variacoes.map(v => {
-                            const ehEssa = (v.id && v.id === itemV.variacaoSelecionada.id) || (v.nome === itemV.variacaoSelecionada.nome);
-                            if(ehEssa) return { ...v, estoque: (Number(v.estoque)||0) - itemV.quantidade };
-                            return v;
-                        });
-                        const novoTotal = novasVars.reduce((acc, v) => acc + (Number(v.estoque)||0), 0);
-                        batch.update(ref, { variacoes: novasVars, estoque: novoTotal });
-                    } else {
-                        batch.update(ref, { estoque: increment(-itemV.quantidade) });
-                    }
-                } catch (e) {}
-            });
-
-            if(novos.length > 0) {
+            if(itensNovos.length > 0) {
+                // Cria um Pedido na coleção global de pedidos (pra Cozinha ver)
                 idPedidoGerado = `pedido_${mesaId}_${Date.now()}`;
-                
                 const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoGerado);
+                
                 batch.set(pedidoRef, {
                     id: idPedidoGerado, 
-                    mesaId, 
-                    mesaNumero: mesa?.numero, 
-                    itens: novos.map(i => ({...i, status: 'recebido'})), 
+                    mesaId: mesaId, 
+                    mesaNumero: mesa?.numero || 'Sem Número',
+                    clienteNome: `Mesa ${mesa?.numero}`, // Cozinha sabe de onde veio
+                    tipo: 'mesa',
+                    itens: itensNovos.map(i => ({...i, status: 'recebido'})), 
                     status: 'recebido', 
-                    total: novos.reduce((a,i)=>a+(i.preco*i.quantidade),0), 
+                    total: itensNovos.reduce((a,i)=>a+(i.preco*i.quantidade),0), 
                     dataPedido: serverTimestamp(), 
                     createdAt: serverTimestamp(), 
                     source: 'salao'
                 });
 
-                const itensUpd = resumoPedido.map(i => (!i.status || i.status === 'pendente') ? { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado } : i);
+                // Atualiza a Mesa mudando o status dos itens pendentes para 'enviado'
+                const todosItensAtualizados = resumoPedido.map(i => {
+                    if (!i.status || i.status === 'pendente') {
+                        return { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado };
+                    }
+                    return i;
+                });
                 
                 batch.update(mesaRef, { 
-                    itens: itensUpd, 
+                    itens: todosItensAtualizados, 
                     status: 'ocupada', 
-                    total: total, 
+                    total: totalMesa, 
                     updatedAt: serverTimestamp() 
                 });
+
             } else {
+                // Se só mexeu na pessoa ou excluiu, salva a mesa normal
                 batch.update(mesaRef, { 
                     itens: resumoPedido, 
-                    total: total, 
+                    total: totalMesa, 
                     updatedAt: serverTimestamp() 
                 });
             }
 
+            // Manda tudo pro banco de uma vez só!
             await batch.commit();
-            toast.success("Pedido enviado!");
+            
+            toast.success("Pedido confirmado com sucesso!", { position: "top-center", autoClose: 2000, theme: "colored" });
             
             if (idPedidoGerado) {
                 setPedidoRecemEnviadoId(idPedidoGerado);
             }
 
-        } catch(e) { 
-            console.error("Erro ao salvar:", e); 
-            toast.error("Erro ao enviar pedido. Tente novamente."); 
+        } catch(error) { 
+            console.error("Erro fatal ao salvar pedido:", error); 
+            toast.error("Erro na internet! Tente novamente.", { position: "top-center", theme: "colored", autoClose: 4000 }); 
         } finally { 
             setSalvando(false); 
         }
@@ -488,113 +540,92 @@ const TelaPedidos = () => {
 
     const totalGeral = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
     const totalItens = resumoPedido.reduce((acc, i) => acc + i.quantidade, 0);
-
     const temItensPendentes = resumoPedido.some(i => !i.status || i.status === 'pendente');
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div></div>;
+    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-10 w-10 border-b-4" style={{borderColor: coresEstabelecimento.destaque}}></div></div>;
 
     return (
         <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden flex flex-col w-full">
             
-{/* NOVO HEADER COM BLOCOS FANTASMAS PARA PROTEGER AS SOMBRAS */}
-<header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
-    
-    {/* TOPO: VOLTAR E CARRINHO */}
-    <div className="flex items-center justify-between w-full px-4">
-        <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/controle-salao')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><IoArrowBack className="text-xl" /></button>
-            <div>
-                <h1 className="font-black text-xl text-gray-900 leading-none">Mesa {mesa?.numero}</h1>
-                <p className="text-xs text-gray-500 font-medium truncate max-w-[150px]">
-                    Pedindo para: <span className="font-bold truncate" style={{ color: coresEstabelecimento.destaque }}>{clienteSelecionado}</span>
-                </p>
-            </div>
-        </div>
-        <button onClick={() => setShowOrderSummary(true)} className="relative p-3 rounded-2xl text-white shadow-lg active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
-            <IoCart className="text-xl" />
-            {totalItens > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-white">{totalItens}</span>}
-        </button>
-    </div>
-    
-    {/* LISTA DE OCUPANTES (SCROLL HORIZONTAL) */}
-    {/* Note o pl-4 aqui para dar o recuo esquerdo */}
-    <div className="flex items-center gap-2 overflow-x-auto py-3 pl-4 hide-scrollbar w-full">
-        {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
-            <div key={idx} className="flex-shrink-0">
-                {editandoNomeIndex === idx ? (
-                    <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => salvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && salvarEdicaoPessoa(idx)} />
-                ) : (
-                    <button onClick={() => setClienteSelecionado(nome)} className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`} style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}>
-                        <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />{nome}
-                        {clienteSelecionado === nome && (<div onClick={(e) => { e.stopPropagation(); iniciarEdicaoPessoa(idx, nome); }} className="ml-1 p-1 bg-white/20 rounded-full hover:bg-white/40 transition-colors" title="Editar nome"><IoPencil className="text-[10px] text-white" /></div>)}
+            <header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
+                <div className="flex items-center justify-between w-full px-4">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => navigate('/controle-salao')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><IoArrowBack className="text-xl" /></button>
+                        <div>
+                            <h1 className="font-black text-xl text-gray-900 leading-none">Mesa {mesa?.numero}</h1>
+                            <p className="text-xs text-gray-500 font-medium truncate max-w-[150px]">
+                                Pedindo para: <span className="font-bold truncate" style={{ color: coresEstabelecimento.destaque }}>{clienteSelecionado}</span>
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={() => setShowOrderSummary(true)} className="relative p-3 rounded-2xl text-white shadow-lg active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+                        <IoCart className="text-xl" />
+                        {totalItens > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-white">{totalItens}</span>}
                     </button>
-                )}
-            </div>
-        ))}
-        
-        <div className="flex-shrink-0">
-            {isAddingPerson ? (
-                <input 
-                    autoFocus 
-                    className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm w-36 shadow-md animate-in fade-in zoom-in duration-200" 
-                    style={{ borderColor: coresEstabelecimento.destaque }} 
-                    placeholder="Nome..." 
-                    value={novoNomeTemp} 
-                    onChange={e => setNovoNomeTemp(e.target.value)} 
-                    onBlur={confirmarNovaPessoa} 
-                    onKeyDown={e => e.key === 'Enter' && confirmarNovaPessoa()} 
-                />
-            ) : (
-                <button 
-                    onClick={iniciarAdicaoPessoa} 
-                    className="px-4 py-2 h-full min-h-[38px] rounded-xl bg-gray-50 text-gray-500 flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all active:scale-95"
-                >
-                    <IoPersonAdd className="text-lg" />
-                    <span className="text-xs font-bold uppercase tracking-wider whitespace-nowrap">
-                        Adicionar Pessoa
-                    </span>
-                </button>
-            )}
-        </div>
-        
-        {/* 🔥 O SEGREDO DEFINITIVO AQUI: Um bloco com um PONTO INVISÍVEL */}
-        <div className="flex-shrink-0 w-6 h-1 text-transparent select-none pointer-events-none">
-            .
-        </div>
-    </div>
+                </div>
+                
+                <div className="flex items-center gap-2 overflow-x-auto py-3 pl-4 hide-scrollbar w-full">
+                    {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
+                        <div key={idx} className="flex-shrink-0">
+                            {editandoNomeIndex === idx ? (
+                                <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => salvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && salvarEdicaoPessoa(idx)} />
+                            ) : (
+                                <button onClick={() => setClienteSelecionado(nome)} className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`} style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}>
+                                    <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />{nome}
+                                    {clienteSelecionado === nome && (<div onClick={(e) => { e.stopPropagation(); iniciarEdicaoPessoa(idx, nome); }} className="ml-1 p-1 bg-white/20 rounded-full hover:bg-white/40 transition-colors" title="Editar nome"><IoPencil className="text-[10px] text-white" /></div>)}
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                    
+                    <div className="flex-shrink-0">
+                        {isAddingPerson ? (
+                            <input 
+                                autoFocus 
+                                className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm w-36 shadow-md animate-in fade-in zoom-in duration-200" 
+                                style={{ borderColor: coresEstabelecimento.destaque }} 
+                                placeholder="Nome..." 
+                                value={novoNomeTemp} 
+                                onChange={e => setNovoNomeTemp(e.target.value)} 
+                                onBlur={confirmarNovaPessoa} 
+                                onKeyDown={e => e.key === 'Enter' && confirmarNovaPessoa()} 
+                            />
+                        ) : (
+                            <button 
+                                onClick={iniciarAdicaoPessoa} 
+                                className="px-4 py-2 h-full min-h-[38px] rounded-xl bg-gray-50 text-gray-500 flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all active:scale-95"
+                            >
+                                <IoPersonAdd className="text-lg" />
+                                <span className="text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+                                    Adicionar Pessoa
+                                </span>
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex-shrink-0 w-6 h-1 text-transparent select-none pointer-events-none">.</div>
+                </div>
 
-    {/* BUSCA DE PRODUTOS */}
-    <div className="relative w-full px-4">
-        <IoSearch className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-        <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
-        {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-7 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
-    </div>
+                <div className="relative w-full px-4">
+                    <IoSearch className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
+                    <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
+                    {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-7 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
+                </div>
 
-    {/* CATEGORIAS (SCROLL HORIZONTAL) */}
-    <div className="flex gap-2 overflow-x-auto hide-scrollbar py-3 pl-4 w-full">
-        {categoriasOrdenadas.map(cat => (<button key={cat} onClick={() => setCategoriaAtiva(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent shadow-md' : 'bg-white text-gray-500 border-gray-200'}`} style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria } : {}}>{cat}</button>))}
-        
-        {/* 🔥 Ponto invisível nas categorias também para garantir */}
-        <div className="flex-shrink-0 w-6 h-1 text-transparent select-none pointer-events-none">
-            .
-        </div>
-    </div>
-</header>
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar py-3 pl-4 w-full">
+                    {categoriasOrdenadas.map(cat => (<button key={cat} onClick={() => setCategoriaAtiva(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent shadow-md' : 'bg-white text-gray-500 border-gray-200'}`} style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria } : {}}>{cat}</button>))}
+                    <div className="flex-shrink-0 w-6 h-1 text-transparent select-none pointer-events-none">.</div>
+                </div>
+            </header>
 
-            {/* AQUI FOI ALTERADO PARA APROVEITAR 100% DA TELA COM ITENS MAIS APERTADOS */}
             <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:px-6 pb-28 w-full">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2 sm:gap-3 w-full">
                     {produtosFiltrados.map((prod, idx) => (
                         <CardapioItem
                             key={`${prod.id}-${idx}`}
                             produto={prod}
-                            abrirModalOpcoes={(p) => {
-                                const itemEnriquecido = enrichWithGlobalAdicionais(p);
-                                const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
-                                if (temOpcoes) setProdutoEmSelecao(itemEnriquecido);
-                                else confirmarAdicaoAoCarrinho({ ...itemEnriquecido, precoFinal: parseFloat(p.preco), quantidade: 1 });
-                            }}
+                            onClick={handleItemClick}
                             cores={coresEstabelecimento}
+                            quantidadeNoCarrinho={quantidadesNoCarrinho[prod.id] || 0}
                         />
                     ))}
                 </div>
@@ -602,7 +633,6 @@ const TelaPedidos = () => {
 
             {resumoPedido.length > 0 && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 lg:p-5 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40">
-                    {/* BARRA INFERIOR EXPANDIDA PARA ENCOSTAR NAS LATERAIS */}
                     <div className="flex justify-between items-center w-full px-2 sm:px-6 lg:px-10">
                         <div>
                             <span className="text-xs md:text-sm text-gray-400 font-bold uppercase tracking-wider">Total Parcial</span>
@@ -615,12 +645,10 @@ const TelaPedidos = () => {
                 </div>
             )}
 
-            {/* MODAL PRINCIPAL: RESUMO DO PEDIDO */}
             {showOrderSummary && (
                 <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
                     
-                    {/* AQUI ESTÁ A CORREÇÃO: Voltou para max-w-lg para não ficar gigante no meio do ecrã */}
                     <div className="relative w-full max-w-lg bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
                         
                         <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-center shrink-0">
@@ -680,7 +708,6 @@ const TelaPedidos = () => {
                             ))}
                         </div>
                         
-                        {/* RODAPÉ INTELIGENTE DO MODAL */}
                         <div className="p-4 bg-white border-t border-gray-100 shrink-0">
                             <div className="flex justify-between items-end mb-4">
                                 <span className="text-sm text-gray-500 font-bold">Total Geral</span>

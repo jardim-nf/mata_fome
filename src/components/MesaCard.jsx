@@ -9,20 +9,18 @@ const formatarDinheiro = (val) => {
     }).format(val || 0);
 };
 
-// 🔥 ADICIONADO: prop 'isOciosa' que vem do ControleSalao
 const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
     
-    // Cores do STATUS (Parte Superior)
+    // Cores do STATUS: Tons suaves no fundo, texto forte e borda dupla elegante
     const cardStyle = useMemo(() => {
-        // Se a mesa estiver ociosa, a borda e o fundo ganham tons de laranja para chamar atenção
-        if (isOciosa) return 'bg-orange-50 border-orange-400 text-orange-900 shadow-sm';
+        if (isOciosa) return 'bg-orange-50 border-orange-400 text-orange-900 shadow-md scale-[1.02] ring-2 ring-orange-400/20';
 
         switch (mesa.status) {
-            case 'livre': return 'bg-white border-gray-200 text-gray-400';
-            case 'ocupada': return 'bg-red-50 border-red-200 text-red-800';
-            case 'com_pedido': return 'bg-blue-50 border-blue-200 text-blue-800'; 
-            case 'pagamento': return 'bg-yellow-50 border-yellow-200 text-yellow-800';
-            default: return 'bg-white border-gray-200';
+            case 'livre': return 'bg-white border-gray-200 text-gray-400 hover:border-blue-300 hover:shadow-md';
+            case 'ocupada': return 'bg-red-50 border-red-300 text-red-800 shadow-sm';
+            case 'com_pedido': return 'bg-blue-50 border-blue-300 text-blue-800 shadow-sm'; 
+            case 'pagamento': return 'bg-yellow-50 border-yellow-400 text-yellow-900 shadow-sm';
+            default: return 'bg-white border-gray-200 text-gray-500';
         }
     }, [mesa.status, isOciosa]);
 
@@ -35,7 +33,7 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
         return `${diff}m`;
     }, [mesa.updatedAt, mesa.status]);
 
-    // LÓGICA DE NOME (Igual à anterior)
+    // Trata o nome do cliente para caber no layout
     const nomeCliente = useMemo(() => {
         if (mesa.nomesOcupantes && Array.isArray(mesa.nomesOcupantes)) {
             const nomesReais = mesa.nomesOcupantes.filter(n => n !== 'Mesa');
@@ -45,100 +43,85 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
                     : nomesReais[0];
             }
         }
-        return mesa.nome;
+        return mesa.nome && mesa.nome.toLowerCase() !== 'mesa' ? mesa.nome : null;
     }, [mesa.nomesOcupantes, mesa.nome]);
 
     return (
-        <div className={`relative rounded-xl border shadow-sm flex flex-col justify-between overflow-hidden transition-all hover:shadow-md min-h-[140px] ${cardStyle}`}>
+        <div className={`relative rounded-2xl border-2 flex flex-col justify-between overflow-hidden transition-all duration-200 active:scale-95 cursor-pointer min-h-[145px] ${cardStyle}`}>
             
-            {/* --- ÁREA SUPERIOR (CLIQUE PARA ABRIR/DETALHES) --- */}
-            <div 
-                onClick={onClick}
-                className="flex-1 p-3 cursor-pointer flex flex-col relative"
-            >
+            {/* --- ÁREA PRINCIPAL --- */}
+            <div onClick={onClick} className="flex-1 p-3 flex flex-col relative z-10">
+                
                 {/* Cabeçalho: Número e Tempo */}
-                <div className="flex justify-between items-start mb-2">
-                    <span className="text-3xl font-black leading-none tracking-tighter opacity-90">{mesa.numero}</span>
+                <div className="flex justify-between items-start mb-1">
+                    <span className="text-4xl font-black leading-none tracking-tighter opacity-90 drop-shadow-sm">
+                        {mesa.numero}
+                    </span>
                     
-{/* Exibe 'Sem Pedido' se for ociosa, senão exibe o tempo formatado */}
-{isOciosa ? (
-    <span className="text-[10px] font-black bg-orange-500 text-white px-2 py-1 rounded-full flex items-center gap-1 shadow-md animate-pulse uppercase tracking-wider">
-        <IoTime size={12}/> Não Pede a algum tempo
-    </span>
-) : mesa.status !== 'livre' && (
-                        <span className="text-[10px] font-bold bg-white/60 px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                            <IoTime size={10}/> {tempoDecorrido}
+                    {isOciosa ? (
+                        <span className="text-[9px] font-black bg-orange-500 text-white px-2 py-1 rounded-md flex items-center gap-1 shadow-sm animate-pulse uppercase tracking-wider">
+                            <IoTime size={12}/> Ociosa
+                        </span>
+                    ) : mesa.status !== 'livre' && (
+                        <span className="text-[10px] font-bold bg-white/70 backdrop-blur-sm border border-black/5 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
+                            <IoTime size={11}/> {tempoDecorrido}
                         </span>
                     )}
                 </div>
 
+                {/* Corpo: Livre ou Pessoas/Nome */}
                 {mesa.status === 'livre' ? (
-                    <div className="flex flex-col items-center justify-center mt-2 opacity-40">
-                        <span className="text-xs font-bold uppercase tracking-widest">LIVRE</span>
+                    <div className="flex flex-col items-center justify-center flex-1 opacity-40">
+                        <span className="text-xs font-black uppercase tracking-widest mt-2">LIVRE</span>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5 text-xs font-bold opacity-70">
-                            <IoPerson size={14}/> 
+                    <div className="flex flex-col gap-1.5 mt-auto pt-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold opacity-75">
+                            <IoPerson size={13}/> 
                             <span>{mesa.pessoas || 1} pessoas</span>
                         </div>
                         
                         {nomeCliente && (
-                            <div className="flex items-center gap-1.5 mt-1 bg-white/40 p-1 rounded-lg">
-                                <IoPersonCircle size={16} className="opacity-70"/>
-                                <span className="text-xs font-bold truncate max-w-[110px] uppercase text-gray-800" title={nomeCliente}>
+                            <div className="flex items-center gap-1.5 bg-white/50 w-fit px-1.5 py-1 rounded border border-black/5">
+                                <IoPersonCircle size={15} className="opacity-75"/>
+                                <span className="text-[11px] font-bold truncate max-w-[90px] uppercase text-gray-800" title={nomeCliente}>
                                     {nomeCliente}
                                 </span>
                             </div>
                         )}
-                        {!nomeCliente && <div className="h-6"></div>}
                     </div>
                 )}
             </div>
 
-            {/* --- RODAPÉ: PAGAR (Se Ocupada) OU EXCLUIR (Se Livre) --- */}
+            {/* --- RODAPÉ: VALOR / AÇÕES --- */}
             {mesa.status !== 'livre' ? (
-                <div className="bg-white border-t border-gray-100">
-                    
-                    {/* Linha do Valor */}
-                    <div 
-                        onClick={onClick} 
-                        className="py-1 px-2 text-center border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors"
-                    >
-                        <span className="text-base font-black text-gray-800 tracking-tight">
+                <div className="bg-white/60 backdrop-blur-md border-t border-black/5 flex flex-col">
+                    <div onClick={onClick} className="py-1.5 px-3 text-center border-b border-black/5 hover:bg-white/50 transition-colors">
+                        <span className="text-[17px] font-black text-gray-900 tracking-tight">
                             {formatarDinheiro(mesa.total)}
                         </span>
                     </div>
 
-                    {/* Botão Pagar */}
                     <div 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onPagar();
-                        }}
-                        className={`py-2 px-3 flex items-center justify-center gap-2 cursor-pointer transition-colors text-white font-bold text-xs uppercase tracking-wide
+                        onClick={(e) => { e.stopPropagation(); onPagar(); }}
+                        className={`py-2 px-2 flex items-center justify-center gap-1.5 transition-colors font-black text-[11px] uppercase tracking-wider
                             ${mesa.status === 'pagamento' 
                                 ? 'bg-yellow-400 hover:bg-yellow-500 text-yellow-900' 
-                                : 'bg-green-600 hover:bg-green-700'
+                                : 'bg-green-600 hover:bg-green-700 text-white shadow-inner'
                             }`}
                     >
-                        <IoCashOutline size={16} />
-                        <span>Pagar Conta</span>
+                        <IoCashOutline size={16} /> Pagar Conta
                     </div>
                 </div>
             ) : (
-                // 🔥 BOTÃO DE EXCLUIR (Aparece apenas quando LIVRE)
-                <div className="bg-gray-50 border-t border-gray-100 flex justify-end">
+                <div className="bg-gray-50 flex justify-end border-t border-gray-200">
                     <button 
-                        onClick={(e) => {
-                            e.stopPropagation(); // Impede de abrir a mesa ao clicar no lixo
-                            if (onExcluir) onExcluir();
-                        }}
-                        className="w-full py-2 flex items-center justify-center gap-1 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); if (onExcluir) onExcluir(); }}
+                        className="w-full py-2 flex items-center justify-center gap-1.5 text-gray-400 hover:text-white hover:bg-red-500 transition-colors"
                         title="Excluir Mesa"
                     >
                         <IoTrash size={14} />
-                        <span className="text-[10px] font-bold uppercase">Excluir</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Excluir</span>
                     </button>
                 </div>
             )}

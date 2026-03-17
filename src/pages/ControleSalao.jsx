@@ -16,7 +16,7 @@ import {
     IoArrowBack, IoAdd,
     IoGrid, IoPeople, IoWalletOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTicket, IoDocumentText, IoTimeOutline
+    IoTimeOutline
 } from "react-icons/io5";
 
 // --- HELPER DE FORMATAÇÃO ---
@@ -31,62 +31,75 @@ const formatarReal = (valor) => {
 
 // --- STAT CARD PEQUENO ---
 const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
-    <div className="bg-white p-2 sm:p-3 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[130px]">
+    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[140px] flex-1 lg:flex-none">
         <div>
-            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
-            <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight">{value}</h3>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
+            <h3 className="text-base font-black text-gray-900 leading-tight">{value}</h3>
         </div>
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg ${bgClass} ${colorClass}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${bgClass} ${colorClass}`}>
             <Icon />
         </div>
     </div>
 );
 
-// --- MODAL ABRIR MESA ---
+// --- MODAL ABRIR MESA (CORRIGIDO PARA O TECLADO DO CELULAR) ---
 const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) => {
-    const [quantidade, setQuantidade] = useState(2);
+    const [quantidade, setQuantidade] = useState(1);
     const [nome, setNome] = useState('');
 
     useEffect(() => {
-        if (isOpen) {
-            setQuantidade(2);
-            setNome('');
-        }
+        if (isOpen) { setQuantidade(1); setNome(''); }
     }, [isOpen]);
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100">
-                <h3 className="text-xl font-black text-gray-900 text-center mb-1">Mesa {mesaNumero}</h3>
-                <p className="text-center text-gray-500 mb-4 text-xs">Informe os dados para abrir</p>
+        <div className="fixed inset-0 bg-black/60 flex items-start sm:items-center justify-center p-4 pt-[10vh] sm:pt-4 z-50 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-[2rem] shadow-2xl p-6 w-full max-w-sm border border-gray-100 transform transition-all mb-auto sm:mb-0">
+                <h3 className="text-2xl font-black text-gray-900 text-center mb-1">Mesa {mesaNumero}</h3>
+                <p className="text-center text-gray-500 mb-6 text-sm font-medium">Abrir nova comanda</p>
 
-                <div className="mb-4">
-                    <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">NOME DO CLIENTE (OPCIONAL)</label>
-                    <input
-                        type="text"
-                        placeholder="Ex: João Silva"
-                        value={nome}
-                        onChange={(e) => setNome(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
-                        autoFocus
+                <div className="mb-5">
+                    <label className="block text-[10px] font-black text-gray-400 mb-2 ml-1 tracking-widest uppercase">NOME DO CLIENTE (OPCIONAL)</label>
+                    <input 
+                        type="text" 
+                        placeholder="Ex: João Silva" 
+                        value={nome} 
+                        onChange={(e) => setNome(e.target.value)} 
+                        className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3.5 text-gray-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-bold" 
+                        autoFocus 
                     />
                 </div>
 
-                <div className="mb-6">
-                    <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">QUANTAS PESSOAS?</label>
-                    <div className="flex items-center justify-between bg-gray-50 rounded-xl p-2 border border-gray-200">
-                        <button onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-10 h-10 rounded-lg bg-white shadow-sm border border-gray-200 text-xl font-bold hover:bg-gray-50 text-gray-600">-</button>
-                        <span className="text-2xl font-black text-gray-900">{quantidade}</span>
-                        <button onClick={() => setQuantidade(q => q + 1)} className="w-10 h-10 rounded-lg bg-blue-600 shadow text-white text-xl font-bold hover:bg-blue-700">+</button>
+                <div className="mb-8">
+                    <label className="block text-[10px] font-black text-gray-400 mb-2 ml-1 tracking-widest uppercase">QUANTAS PESSOAS?</label>
+                    <div className="flex items-center justify-between bg-gray-50 rounded-2xl p-2 border-2 border-gray-100">
+                        <button type="button" onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-12 h-12 rounded-xl bg-white shadow-sm border border-gray-200 text-2xl font-black active:scale-95 text-gray-600 hover:bg-gray-100 transition-all">-</button>
+                        <span className="text-3xl font-black text-gray-900">{quantidade}</span>
+                        <button type="button" onClick={() => setQuantidade(q => q + 1)} className="w-12 h-12 rounded-xl bg-blue-600 shadow-md text-white text-2xl font-black active:scale-95 hover:bg-blue-700 transition-all">+</button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={onClose} disabled={isOpening} className="py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-                    <button onClick={() => onConfirm(quantidade, nome)} disabled={isOpening} className="py-3 bg-gray-900 text-white rounded-xl font-bold shadow-lg hover:bg-black active:scale-95 transition-transform flex items-center justify-center gap-2">
-                        {isOpening ? 'Abrindo...' : 'Abrir Mesa'}
+                    {/* 🔥 CORREÇÃO DO CLIQUE NO CELULAR (onPointerDown) 🔥 */}
+                    <button 
+                        type="button"
+                        onPointerDown={(e) => { e.preventDefault(); if(!isOpening) onClose(); }}
+                        onClick={() => { if(!isOpening) onClose(); }}
+                        disabled={isOpening} 
+                        className="py-4 bg-gray-100 rounded-2xl font-bold text-gray-600 active:scale-95 disabled:opacity-50 transition-all hover:bg-gray-200"
+                    >
+                        Cancelar
+                    </button>
+                    
+                    <button 
+                        type="button"
+                        onPointerDown={(e) => { e.preventDefault(); if(!isOpening) onConfirm(quantidade, nome); }}
+                        onClick={() => { if(!isOpening) onConfirm(quantidade, nome); }}
+                        disabled={isOpening} 
+                        className="py-4 bg-green-500 text-white rounded-2xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2 hover:bg-green-600"
+                    >
+                        {isOpening ? 'Abrindo...' : 'Abrir'}
                     </button>
                 </div>
             </div>
@@ -94,9 +107,25 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) =
     );
 };
 
+// 🔥 COMPONENTE DA LEGENDA (Cores Fortes Originais) 🔥
+const LegendaCores = () => (
+    <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-2xl shadow-sm border border-gray-200 mb-4 text-xs font-bold text-gray-700 w-full">
+        <span className="text-gray-400 uppercase tracking-widest mr-2 text-[10px]">Cores:</span>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-white border-2 border-gray-300"></div> Livre</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-600 shadow-sm"></div> Ocupada</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm"></div> Com Pedido</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-yellow-400 shadow-sm"></div> Pagamento</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm animate-pulse"></div> Ociosa</div>
+    </div>
+);
+
 export default function ControleSalao() {
     const { userData, user, currentUser } = useAuth();
     const usuarioLogado = user || currentUser;
+
+    // 🔥 IDENTIFICAÇÃO E TRAVA DO GARÇOM 🔥
+    const rawRole = String(userData?.role || userData?.cargo || 'admin').toLowerCase().trim();
+    const isGarcom = rawRole.includes('garcom') || rawRole.includes('garçom') || rawRole.includes('atendente');
 
     const { setActions, clearActions } = useHeader();
     const navigate = useNavigate();
@@ -111,6 +140,8 @@ export default function ControleSalao() {
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
+    
+    // Estado para evitar cliques duplos ao abrir a mesa
     const [isOpeningTable, setIsOpeningTable] = useState(false);
 
     const [isModalTicketsOpen, setIsModalTicketsOpen] = useState(false);
@@ -119,9 +150,7 @@ export default function ControleSalao() {
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
 
-    // 🔥 FILA DE IMPRESSÃO INVISÍVEL 🔥
     const [filaImpressao, setFilaImpressao] = useState([]);
-
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
@@ -136,10 +165,8 @@ export default function ControleSalao() {
     const verificarMesaOciosa = (mesa) => {
         if (mesa.status !== 'ocupada' || (mesa.itens && mesa.itens.length > 0)) return false;
         if (!mesa.updatedAt) return false;
-
         const dataAbertura = mesa.updatedAt.toDate ? mesa.updatedAt.toDate() : new Date(mesa.updatedAt);
         const minutosDecorridos = Math.floor((currentTime - dataAbertura) / 60000);
-
         return minutosDecorridos >= 10; 
     };
 
@@ -150,11 +177,9 @@ export default function ControleSalao() {
                     const docRef = doc(db, "estabelecimentos", estabelecimentoId);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
-                        const nomeReal = docSnap.data().nome || userData?.nomeEstabelecimento || "IdeaFood";
-                        setNomeEstabelecimento(nomeReal);
+                        setNomeEstabelecimento(docSnap.data().nome || userData?.nomeEstabelecimento || "IdeaFood");
                     }
                 } catch (error) {
-                    console.error("Erro ao buscar nome:", error);
                     setNomeEstabelecimento(userData?.nomeEstabelecimento || "IdeaFood");
                 }
             }
@@ -164,95 +189,96 @@ export default function ControleSalao() {
 
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.key === 'F4') {
+            if (e.key === 'F4' && !isGarcom) {
                 e.preventDefault();
                 setIsHistoricoMesasOpen(true);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [isGarcom]);
 
-    // 🔥 SISTEMA DE IMPRESSÃO MÁGICA (Bypass Popup Blocker) 🔥
+// 🔥 OUVIDOS DE IMPRESSÃO INVISÍVEL (MESA E PEDIDOS DA COZINHA/BAR) 🔥
     useEffect(() => {
         if (!estabelecimentoId) return;
-
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         
-        if (isMobileDevice) {
-            return; // Celular não escuta a própria impressora
-        }
+        // Celular não pode imprimir sozinho, só o PC escuta!
+        if (isMobileDevice) return;
 
-        const q = query(
-            collection(db, "estabelecimentos", estabelecimentoId, "mesas"),
-            where("solicitarImpressaoConferencia", "==", true)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        // 1. Escutando fechamento de MESA 
+        const qMesas = query(collection(db, "estabelecimentos", estabelecimentoId, "mesas"), where("solicitarImpressaoConferencia", "==", true));
+        const unsubMesas = onSnapshot(qMesas, (snapshot) => {
             snapshot.docChanges().forEach(async (change) => {
                 if (change.type === "added" || change.type === "modified") {
-                    const mesaDoc = change.doc;
-                    const mesaId = mesaDoc.id;
-                    const mesaData = mesaDoc.data();
-
-                    if (mesaData.solicitarImpressaoConferencia) {
-                        toast.info(`Recebendo impressão da Mesa ${mesaData.numero}...`);
+                    const docMesa = change.doc;
+                    const dadosMesa = docMesa.data();
+                    
+                    if (dadosMesa.solicitarImpressaoConferencia) {
+                        // 🔥 AGORA O PC PEGA O SETOR DA MESA TAMBÉM 🔥
+                        const setorMesa = dadosMesa.setorImpressao || ''; 
+                        toast.info(`Recebendo impressão da Mesa ${dadosMesa.numero}...`);
                         
-                        // Adiciona carimbo de tempo para o iframe sempre carregar uma página "nova"
-                        const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${mesaId}&t=${Date.now()}`;
+                        const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
                         
-                        // 🔥 Adiciona na fila de Iframes ao invés de usar window.open!
                         setFilaImpressao(prev => [...prev, urlImpressao]);
-
-                        // 🔥 Remove da fila após 15 segundos para não pesar a tela do caixa
-                        setTimeout(() => {
-                            setFilaImpressao(prev => prev.filter(url => url !== urlImpressao));
-                        }, 15000);
-
-                        try {
-                            await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesaId), {
-                                solicitarImpressaoConferencia: false
-                            });
-                        } catch (err) {
-                            console.error("Erro ao limpar flag de impressão da mesa:", err);
-                        }
+                        setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000);
+                        
+                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) {}
                     }
                 }
             });
         });
 
-        return () => unsubscribe();
+        // 2. Escutando novos PEDIDOS (Cozinha / Bar)
+        const qPedidos = query(collection(db, "estabelecimentos", estabelecimentoId, "pedidos"), where("solicitarImpressao", "==", true));
+        const unsubPedidos = onSnapshot(qPedidos, (snapshot) => {
+            snapshot.docChanges().forEach(async (change) => {
+                if (change.type === "added" || change.type === "modified") {
+                    const docPedido = change.doc;
+                    const dadosPedido = docPedido.data();
+                    
+                    if (dadosPedido.solicitarImpressao) {
+                        const setor = dadosPedido.setorImpressao || '';
+                        toast.info(`Recebendo pedido da Mesa ${dadosPedido.mesaNumero} (${setor || 'Tudo'})...`);
+                        
+                        const urlImpressao = `/impressao-isolada?estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
+                        
+                        setFilaImpressao(prev => [...prev, urlImpressao]);
+                        setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000);
+                        
+                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "pedidos", docPedido.id), { solicitarImpressao: false, setorImpressao: null }); } catch (err) {}
+                    }
+                }
+            });
+        });
+
+        return () => {
+            unsubMesas();
+            unsubPedidos();
+        };
     }, [estabelecimentoId]);
 
-
-    // --- BOTÕES DO HEADER PRINCIPAL ---
     useEffect(() => {
-        setActions(
-            <div className="flex gap-2">
-                <button
-                    onClick={() => setIsHistoricoMesasOpen(true)}
-                    className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
-                    title="Histórico de Mesas (F4)"
-                >
-                    <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Histórico (F4)</span>
-                </button>
-                <button
-                    onClick={() => setIsModalComissaoOpen(true)}
-                    className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
-                    title="Comissões dos Garçons"
-                >
-                    <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
-                </button>
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-lg shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
-                >
-                    <IoAdd className="text-lg" /> <span className="hidden sm:inline">Criar Mesa</span>
-                </button>
-            </div>
-        );
+        if (!isGarcom) {
+            setActions(
+                <div className="flex gap-2">
+                    <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Histórico (F4)</span>
+                    </button>
+                    <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                        <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
+                    </button>
+                    <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                        <IoAdd className="text-lg" /> <span className="hidden sm:inline">Nova Mesa</span>
+                    </button>
+                </div>
+            );
+        } else {
+            setActions(<div/>);
+        }
         return () => clearActions();
-    }, [setActions, clearActions]);
+    }, [setActions, clearActions, isGarcom]);
 
     useEffect(() => {
         if (!estabelecimentoId) { if (userData) setLoading(false); return; }
@@ -293,25 +319,15 @@ export default function ControleSalao() {
     };
 
     const handleMesaClick = (mesa) => {
-        if (mesa.status !== 'livre') {
-            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`);
-            return;
-        }
+        if (mesa.status !== 'livre') { navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); return; }
+        if (!usuarioLogado || !usuarioLogado.uid) { toast.error("Erro de autenticação. Recarregue a página."); return; }
 
-        if (!usuarioLogado || !usuarioLogado.uid) {
-            toast.error("Erro de autenticação. Recarregue a página.");
-            return;
-        }
-
-        setMesaParaAbrir(mesa);
-        setIsModalAbrirMesaOpen(true);
-
+        setMesaParaAbrir(mesa); setIsModalAbrirMesaOpen(true);
         const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
 
         runTransaction(db, async (transaction) => {
             const mesaDoc = await transaction.get(mesaRef);
             if (!mesaDoc.exists()) throw "Mesa não existe mais!";
-
             const data = mesaDoc.data();
             if (data.status !== 'livre') throw "Esta mesa acabou de ser ocupada!";
 
@@ -322,74 +338,56 @@ export default function ControleSalao() {
                     const dataBloqueio = data.bloqueadoEm.toDate ? data.bloqueadoEm.toDate() : new Date(data.bloqueadoEm);
                     tempoBloqueio = (agora.getTime() - dataBloqueio.getTime()) / 1000 / 60;
                 }
-                if (tempoBloqueio < 2) {
-                    throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
-                }
+                if (tempoBloqueio < 2) throw `Mesa sendo aberta por: ${data.bloqueadoPorNome || 'Outro garçom'}`;
             }
-
-            transaction.update(mesaRef, {
-                bloqueadoPor: usuarioLogado.uid,
-                bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom",
-                bloqueadoEm: serverTimestamp()
-            });
-
+            transaction.update(mesaRef, { bloqueadoPor: usuarioLogado.uid, bloqueadoPorNome: usuarioLogado.displayName || usuarioLogado.email || "Garçom", bloqueadoEm: serverTimestamp() });
         }).catch((error) => {
-            console.error("Conflito ao abrir mesa:", error);
-            const msg = typeof error === 'string' ? error : "Erro: Mesa sendo acessada por outro usuário.";
-            toast.warning(msg);
-            setIsModalAbrirMesaOpen(false);
-            setMesaParaAbrir(null);
+            const msg = typeof error === 'string' ? error : "Erro: Mesa acessada por outro usuário.";
+            toast.warning(msg); setIsModalAbrirMesaOpen(false); setMesaParaAbrir(null);
         });
     };
 
     const handleCancelarAbertura = async () => {
         setIsModalAbrirMesaOpen(false);
         if (mesaParaAbrir) {
-            try {
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
-                    bloqueadoPor: null,
-                    bloqueadoPorNome: null,
-                    bloqueadoEm: null
-                });
-            } catch (error) {
-                console.error("Erro ao desbloquear mesa", error);
-            }
+            try { await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), { bloqueadoPor: null, bloqueadoPorNome: null, bloqueadoEm: null }); } 
+            catch (error) { console.error("Erro ao desbloquear mesa", error); }
             setMesaParaAbrir(null);
         }
     };
 
-    const handleConfirmarAbertura = (qtd, nomeCliente) => {
-        if (!mesaParaAbrir) return;
+    // 🔥 NOVA LÓGICA DE CONFIRMAÇÃO COM FEEDBACK DE "ABRINDO" 🔥
+    const handleConfirmarAbertura = async (qtd, nomeCliente) => {
+        if (!mesaParaAbrir || isOpeningTable) return;
+        setIsOpeningTable(true); // Bloqueia o botão e mostra "Abrindo..."
 
-        setIsModalAbrirMesaOpen(false);
-
-        updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
-            status: 'ocupada',
-            pessoas: qtd,
-            nome: nomeCliente || '',
-            tipo: 'mesa',
-            updatedAt: serverTimestamp(),
-            bloqueadoPor: null,
-            bloqueadoPorNome: null,
-            bloqueadoEm: null
-        }).catch((error) => {
-            console.error("Erro ao sincronizar abertura da mesa:", error);
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
+                status: 'ocupada', 
+                pessoas: qtd, 
+                nome: nomeCliente || '', 
+                tipo: 'mesa',
+                updatedAt: serverTimestamp(), 
+                bloqueadoPor: null, 
+                bloqueadoPorNome: null, 
+                bloqueadoEm: null
+            });
+            setIsModalAbrirMesaOpen(false);
+            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
+        } catch (error) {
             toast.error("Erro ao sincronizar com o servidor.");
-        });
-
-        navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
+        } finally {
+            setIsOpeningTable(false);
+        }
     };
 
     const handlePagamentoConcluido = () => { setIsModalPagamentoOpen(false); setMesaParaPagamento(null); };
 
     const mesasFiltradas = useMemo(() => {
         return mesas.filter(m => {
-            const matchStatus = filtro === 'todos' ? true :
-                filtro === 'livres' ? m.status === 'livre' :
-                    filtro === 'ocupadas' ? m.status !== 'livre' : true;
+            const matchStatus = filtro === 'todos' ? true : filtro === 'livres' ? m.status === 'livre' : m.status !== 'livre';
             const termoBusca = buscaMesa.toLowerCase();
-            const matchBusca = buscaMesa === '' ? true :
-                (String(m.numero).includes(buscaMesa) || (m.nome && m.nome.toLowerCase().includes(termoBusca)));
+            const matchBusca = buscaMesa === '' ? true : (String(m.numero).includes(buscaMesa) || (m.nome && m.nome.toLowerCase().includes(termoBusca)));
             return matchStatus && matchBusca;
         });
     }, [mesas, filtro, buscaMesa]);
@@ -398,156 +396,112 @@ export default function ControleSalao() {
         const ocupadas = mesas.filter(m => m.status !== 'livre');
         const totalVendas = ocupadas.reduce((acc, m) => acc + (m.total || 0), 0);
         return {
-            total: mesas.length,
-            ocupadas: ocupadas.length,
-            livres: mesas.length - ocupadas.length,
-            pessoas: ocupadas.reduce((acc, m) => acc + (m.pessoas || 0), 0),
-            vendas: totalVendas,
+            total: mesas.length, ocupadas: ocupadas.length, livres: mesas.length - ocupadas.length,
+            pessoas: ocupadas.reduce((acc, m) => acc + (m.pessoas || 0), 0), vendas: totalVendas,
             ocupacaoPercent: mesas.length > 0 ? Math.round((ocupadas.length / mesas.length) * 100) : 0
         };
     }, [mesas]);
 
-    if (!estabelecimentoId && !loading) return <div className="p-10 text-center"><IoAlertCircle className="mx-auto text-4xl text-red-500 mb-2" />Sem acesso ao estabelecimento.</div>;
+    if (!estabelecimentoId && !loading) return <div className="p-10 text-center"><IoAlertCircle className="mx-auto text-4xl text-red-500 mb-2" />Sem acesso.</div>;
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 w-full">
-            <div className="w-full">
+        <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 lg:p-6 w-full max-w-[1600px] mx-auto pb-24 font-sans">
+            
+            <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
+            <ModalAbrirMesa isOpen={isModalAbrirMesaOpen} onClose={handleCancelarAbertura} onConfirm={handleConfirmarAbertura} mesaNumero={mesaParaAbrir?.numero} isOpening={isOpeningTable} />
+            {isModalPagamentoOpen && mesaParaPagamento && estabelecimentoId && <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handlePagamentoConcluido} />}
+            {isModalTicketsOpen && <GeradorTickets onClose={() => setIsModalTicketsOpen(false)} estabelecimentoNome={nomeEstabelecimento} estabelecimentoId={estabelecimentoId} />}
+            {isRelatorioOpen && <RelatorioTicketsModal onClose={() => setIsRelatorioOpen(false)} estabelecimentoId={estabelecimentoId} />}
+            {isHistoricoMesasOpen && <HistoricoMesasModal isOpen={isHistoricoMesasOpen} onClose={() => setIsHistoricoMesasOpen(false)} estabelecimentoId={estabelecimentoId} />}
+            {isModalComissaoOpen && <RelatorioGarcomModal isOpen={isModalComissaoOpen} onClose={() => setIsModalComissaoOpen(false)} estabelecimentoId={estabelecimentoId} />}
 
-                <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleAdicionarMesa} mesasExistentes={mesas} />
+            {/* HEADER E FILTROS */}
+            <div className="sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-xl z-30 pb-4 pt-2 mb-2 w-full">
+                <div className="flex flex-col xl:flex-row justify-between gap-4 w-full">
 
-                <ModalAbrirMesa
-                    isOpen={isModalAbrirMesaOpen}
-                    onClose={handleCancelarAbertura}
-                    onConfirm={handleConfirmarAbertura}
-                    mesaNumero={mesaParaAbrir?.numero}
-                    isOpening={isOpeningTable}
-                />
-
-                {isModalPagamentoOpen && mesaParaPagamento && estabelecimentoId && (
-                    <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={handlePagamentoConcluido} />
-                )}
-
-                {isModalTicketsOpen && (
-                    <GeradorTickets
-                        onClose={() => setIsModalTicketsOpen(false)}
-                        estabelecimentoNome={nomeEstabelecimento}
-                        estabelecimentoId={estabelecimentoId}
-                    />
-                )}
-
-                {isRelatorioOpen && (
-                    <RelatorioTicketsModal
-                        onClose={() => setIsRelatorioOpen(false)}
-                        estabelecimentoId={estabelecimentoId}
-                    />
-                )}
-
-                {isHistoricoMesasOpen && (
-                    <HistoricoMesasModal
-                        isOpen={isHistoricoMesasOpen}
-                        onClose={() => setIsHistoricoMesasOpen(false)}
-                        estabelecimentoId={estabelecimentoId}
-                    />
-                )}
-
-                {isModalComissaoOpen && (
-                    <RelatorioGarcomModal
-                        isOpen={isModalComissaoOpen}
-                        onClose={() => setIsModalComissaoOpen(false)}
-                        estabelecimentoId={estabelecimentoId}
-                    />
-                )}
-
-                <div className="sticky top-0 bg-[#F8FAFC]/95 backdrop-blur-sm z-30 pb-4 pt-2 border-b border-gray-200/50 mb-4 px-2 w-full">
-                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 w-full">
-
-                        <div className="flex flex-col gap-1 shrink-0">
-                            <button onClick={() => navigate('/dashboard')} className="text-gray-400 hover:text-gray-600 font-bold text-xs flex items-center gap-1 w-fit">
-                                <IoArrowBack /> Voltar
+                    {/* Titulo e Voltar */}
+                    <div className="flex flex-col gap-1 shrink-0">
+                        {!isGarcom && (
+                            <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-800 font-bold text-xs flex items-center gap-1 w-fit transition-colors">
+                                <IoArrowBack /> Voltar ao Painel
                             </button>
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Salão</h1>
-                                <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
-                                    {mesasFiltradas.length} Mesas
-                                </span>
-                            </div>
+                        )}
+                        <div className="flex items-center gap-3 mt-1">
+                            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Salão</h1>
+                            <span className="bg-gray-900 text-white text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider shadow-sm">
+                                {mesasFiltradas.length} Mesas
+                            </span>
                         </div>
+                    </div>
 
-                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:flex-1 xl:justify-center">
-                            <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
-                            <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
+                    {/* Stats */}
+                    <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:justify-center">
+                        <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
+                        <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
+                        {/* ADMIN VÊ O CAIXA ABERTO, GARÇOM NÃO */}
+                        {!isGarcom && (
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
+                        )}
+                    </div>
+
+                    {/* Busca e Abas */}
+                    <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto shrink-0">
+                        <div className="relative w-full sm:w-56 md:w-72">
+                            <IoSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input type="text" className="w-full pl-11 pr-10 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={buscaMesa} onChange={(e) => setBuscaMesa(e.target.value)} />
+                            {buscaMesa && <button onClick={() => setBuscaMesa('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose size={18}/></button>}
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto shrink-0 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="relative w-full sm:w-48 md:w-64">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <IoSearch className="text-gray-400" />
-                                </div>
-                                <input
-                                    type="text"
-                                    className="block w-full pl-10 pr-8 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 placeholder-gray-400 outline-none"
-                                    placeholder="Buscar mesa ou cliente..."
-                                    value={buscaMesa}
-                                    onChange={(e) => setBuscaMesa(e.target.value)}
-                                />
-                                {buscaMesa && (
-                                    <button onClick={() => setBuscaMesa('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-red-500">
-                                        <IoClose />
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto w-full sm:w-auto">
-                                {['todos', 'livres', 'ocupadas'].map(t => (
-                                    <button
-                                        key={t}
-                                        onClick={() => setFiltro(t)}
-                                        className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold capitalize transition-all whitespace-nowrap ${filtro === t ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                                            }`}
-                                    >
-                                        {t}
-                                    </button>
-                                ))}
-                            </div>
+                        <div className="flex bg-gray-200/60 p-1.5 rounded-2xl overflow-x-auto">
+                            {['todos', 'livres', 'ocupadas'].map(t => (
+                                <button key={t} onClick={() => setFiltro(t)} className={`flex-1 sm:flex-none px-5 py-2 rounded-xl text-xs font-black capitalize transition-all whitespace-nowrap ${filtro === t ? 'bg-white text-gray-900 shadow-md' : 'text-gray-500 hover:text-gray-800'}`}>
+                                    {t}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
-
-                <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-sm min-h-[70vh] w-full">
-                    {mesasFiltradas.length > 0 ? (
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3 w-full">
-                            {mesasFiltradas.map(mesa => (
-                                <MesaCard
-                                    key={mesa.id}
-                                    mesa={mesa}
-                                    isOciosa={verificarMesaOciosa(mesa)}
-                                    currentTime={currentTime}
-                                    onClick={() => handleMesaClick(mesa)}
-                                    onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
-                                    onExcluir={() => handleExcluirMesa(mesa.id)}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-32 text-center text-gray-400 w-full">
-                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-2"><IoRestaurant className="text-2xl text-gray-300" /></div>
-                            <p className="text-sm font-medium">Nenhuma mesa encontrada.</p>
-                            {mesas.length === 0 && (
-                                <button onClick={() => setIsModalOpen(true)} className="mt-4 text-blue-600 font-bold hover:underline text-sm">+ Adicionar Mesas</button>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-{/* 🔥 LUGAR ONDE A IMPRESSÃO ACONTECE INVISÍVEL 🔥 */}
-                <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: -9999 }}>
-                    {filaImpressao.map((url, index) => (
-                        <iframe key={index} src={url} title={`print-${index}`} style={{ width: '80mm', height: '500px', border: 'none' }} />
-                    ))}
-                </div>
-
             </div>
+
+            {/* 🔥 LEGENDA AQUI EM CIMA 🔥 */}
+            <LegendaCores />
+
+            {/* FUNDO BRANCO DAS MESAS */}
+            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-gray-100 shadow-sm min-h-[70vh] w-full">
+                {mesasFiltradas.length > 0 ? (
+                    // GRID DE MESAS
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4 w-full">
+                        {mesasFiltradas.map(mesa => (
+                            <MesaCard
+                                key={mesa.id}
+                                mesa={mesa}
+                                isOciosa={verificarMesaOciosa(mesa)}
+                                currentTime={currentTime}
+                                onClick={() => handleMesaClick(mesa)}
+                                onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
+                                onExcluir={() => handleExcluirMesa(mesa.id)}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-32 text-center text-gray-400 w-full">
+                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><IoRestaurant className="text-3xl text-gray-300" /></div>
+                        <p className="text-base font-bold text-gray-500">Nenhuma mesa encontrada.</p>
+                        {mesas.length === 0 && !isGarcom && (
+                            <button onClick={() => setIsModalOpen(true)} className="mt-4 text-blue-600 font-bold hover:underline text-sm">+ Adicionar Mesas</button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+<div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '300px', height: '1000px', overflow: 'hidden' }}>
+    {filaImpressao.map((url, index) => (
+        <iframe key={index} src={url} title={`print-${index}`} style={{ width: '300px', height: '100%', border: 'none' }} />
+    ))}
+</div>
+
+isso aqui nao influencia nao 
+
         </div>
     );
 }
