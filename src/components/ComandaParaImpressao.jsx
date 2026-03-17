@@ -321,7 +321,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                 {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
                                 {itens.map((item, index) => {
                                     
-                                    // 🔥 GARANTE QUE OS ADICIONAIS APAREÇAM INDEPENDENTE DE COMO O FIREBASE SALVOU (ARRAY OU OBJETO)
+                                    // 🔥 GARANTE QUE OS ADICIONAIS APAREÇAM
                                     let adicionais = [];
                                     if (Array.isArray(item.adicionais)) {
                                         adicionais = item.adicionais;
@@ -341,7 +341,6 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">
                                                     {adicionais.map((adic, idx) => (
-                                                        // 🔥 TEXTO MUDADO PARA PRETO (text-black) PARA SAIR NA IMPRESSORA TÉRMICA
                                                         <div key={idx} className="flex items-center text-[12px] font-bold text-black uppercase">
                                                             <span className="mr-1">+</span><span>{adic.quantidade || 1}X {adic.nome}</span>
                                                         </div>
@@ -395,8 +394,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                 </div>
                             ) : (
                                 <div className="flex flex-col">
+                                    {/* 🔥 CORREÇÃO: IDENTIFICA SE É MESA OU DELIVERY AQUI */}
                                     <div className="bg-black text-white text-[13px] font-black uppercase py-1.5 tracking-wider">
-                                        COBRAR NA ENTREGA
+                                        {isDelivery ? 'COBRAR NA ENTREGA' : 'FALTA PAGAR'}
                                     </div>
 
                                     <div className="py-3">
