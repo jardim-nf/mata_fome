@@ -7,7 +7,8 @@ import {
   signOut,
   updateProfile 
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+// 🔥 Adicionado enableIndexedDbPersistence aqui 🔥
+import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAnalytics, logEvent } from 'firebase/analytics';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
@@ -28,9 +29,20 @@ const app = initializeApp(firebaseConfig);
 // Serviços do Firebase
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// 🔥 ATIVADOR DO MODO OFFLINE (MAGIA ACONTECE AQUI) 🔥
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code == 'failed-precondition') {
+      console.warn('Múltiplas abas abertas, modo offline ativado apenas na primeira.');
+  } else if (err.code == 'unimplemented') {
+      console.warn('Navegador não suporta persistência offline.');
+  }
+});
+
 export const storage = getStorage(app);
 export const analytics = getAnalytics(app);
 export const functions = getFunctions(app, 'us-central1');
+
 // Configuração para desenvolvimento (emulator)
 if (import.meta.env.DEV) {
   console.log('🔥 Firebase running in development mode');
