@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -14,7 +14,6 @@ export default function ImpressaoIsolada() {
     const [estabelecimento, setEstabelecimento] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [htmlInjetado, setHtmlInjetado] = useState(false);
 
     useEffect(() => {
         const buscarDados = async () => {
@@ -76,128 +75,61 @@ export default function ImpressaoIsolada() {
         buscarDados();
     }, [pedidoId, estabId, origem]);
 
-    // 🔥 LÓGICA DE IMPRESSÃO BRUTA E GIGANTE PARA MESAS 🔥
+    // 🔥 CÁLCULOS E AGRUPAMENTOS PARA MESA FEITOS AQUI EM CIMA 🔥
+    const mesaData = useMemo(() => {
+        if (!pedido || !pedido.isMesa) return null;
+        
+        const mesa = pedido;
+        const listaItens = mesa?.itens || mesa?.pedidos || [];
+        
+        const agrupados = {};
+        listaItens.forEach(item => {
+            let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
+            if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes?.length > 0) {
+                if(!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0]; 
+            }
+            if (!pessoa) pessoa = 'Cliente 1';
+
+            if (!agrupados[pessoa]) { agrupados[pessoa] = { itens: [], total: 0 }; }
+            
+            const qtd = item.quantidade || item.qtd || 1;
+            agrupados[pessoa].itens.push(item);
+            agrupados[pessoa].total += ((item.preco || 0) * qtd);
+        });
+
+        const totalConsumo = listaItens.reduce((acc, item) => {
+            const qtd = item.quantidade || item.qtd || 1;
+            return acc + ((item.preco || 0) * qtd);
+        }, 0);
+        
+        const jaPago = (mesa.pagamentosParciais || []).reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
+        const restante = Math.max(0, totalConsumo - jaPago);
+
+        return { agrupados, totalConsumo, jaPago, restante, numero: mesa.numero };
+    }, [pedido]);
+
+
+    // 🔥 DISPARA A IMPRESSÃO E FECHA A TELA 🔥
     useEffect(() => {
-        if (!loading && pedido && pedido.isMesa && !htmlInjetado) {
-            const mesa = pedido;
-            const listaItens = mesa?.itens || mesa?.pedidos || [];
+        if (!loading && pedido && !error) {
+            const timerPrint = setTimeout(() => {
+                window.focus();
+                window.print();
+            }, 800); // Aguarda a tela renderizar bonitinho
             
-            const agrupados = {};
-            listaItens.forEach(item => {
-                let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
-                if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes?.length > 0) {
-                    if(!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0]; 
-                }
-                if (!pessoa) pessoa = 'Cliente 1';
+            // O evento onafterprint tenta fechar a janela após a impressão ser concluída/cancelada
+            window.onafterprint = () => {
+                window.close();
+            };
 
-                if (!agrupados[pessoa]) { agrupados[pessoa] = { itens: [], total: 0 }; }
-                
-                const qtd = item.quantidade || item.qtd || 1;
-                agrupados[pessoa].itens.push(item);
-                agrupados[pessoa].total += ((item.preco || 0) * qtd);
-            });
-
-            const totalConsumo = listaItens.reduce((acc, item) => {
-                const qtd = item.quantidade || item.qtd || 1;
-                return acc + ((item.preco || 0) * qtd);
-            }, 0);
-            
-            const jaPago = (mesa.pagamentosParciais || []).reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
-            const restante = Math.max(0, totalConsumo - jaPago);
-
-            const formatarMoeda = (valor) => valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-            const conteudoMesa = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Conferência - Mesa ${mesa?.numero}</title>
-                    <style>
-                        @media print { 
-                            @page { margin: 0; size: 80mm auto; } 
-                            body { margin: 0; padding: 0; } 
-                        }
-                        body { 
-                            font-family: 'Courier New', Courier, monospace !important; 
-                            font-size: 15px !important; 
-                            width: 80mm !important; 
-                            margin: 0 !important; 
-                            padding: 5px !important; 
-                            color: #000 !important; 
-                            background: #fff !important; 
-                            font-weight: bold !important; 
-                            -webkit-print-color-adjust: exact;
-                        }
-                        .header { text-align: center; margin-bottom: 12px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
-                        .header h2 { font-size: 20px; margin: 0; text-transform: uppercase; }
-                        .header p { font-size: 16px; margin: 5px 0; } 
-                        
-                        .pagante-block { margin-bottom: 12px; }
-                        .pagante-header { display: flex; justify-content: space-between; font-weight: 900; border-bottom: 1px solid #000; margin-bottom: 4px; text-transform: uppercase; font-size: 14px; }
-                        .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 14px; margin-bottom: 4px; }
-                        
-                        .resumo-box { border-top: 1px dashed #000; margin-top: 15px; padding-top: 8px; }
-                        .linha-resumo { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
-                        .linha-total { display: flex; justify-content: space-between; font-size: 22px; font-weight: 900; margin-top: 8px; border-top: 1px solid #000; padding-top: 8px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h2>PRÉ-CONFERÊNCIA</h2>
-                        <p style="font-size: 14px; margin: 5px 0;">MESA ${mesa?.numero}</p>
-                        <p style="font-size: 10px;">${new Date().toLocaleString('pt-BR')}</p>
-                    </div>
-
-                    ${Object.entries(agrupados).map(([pessoa, dados]) => `
-                        <div class="pagante-block">
-                            <div class="pagante-header">
-                                <span>${pessoa.substring(0, 15)}</span>
-                                <span>R$ ${formatarMoeda(dados.total)}</span>
-                            </div>
-                            ${dados.itens?.filter(i => i.preco > 0).map(item => `
-                                <div class="item-row">
-                                    <span>${item.quantidade || item.qtd || 1}x ${item.nome.substring(0,20)}</span>
-                                    <span>${formatarMoeda((item.preco || 0) * (item.quantidade || item.qtd || 1))}</span>
-                                </div>
-                            `).join('') || '<div class="item-row"><i>Valor Manual</i></div>'}
-                        </div>
-                    `).join('')}
-
-                    <div class="resumo-box">
-                        <div class="linha-resumo"><span>TOTAL CONSUMO:</span><span>R$ ${formatarMoeda(totalConsumo)}</span></div>
-                        ${jaPago > 0 ? `<div class="linha-resumo"><span>(-) JÁ PAGO:</span><span>R$ ${formatarMoeda(jaPago)}</span></div>` : ''}
-                        <div class="linha-total"><span>A PAGAR:</span><span>R$ ${formatarMoeda(restante)}</span></div>
-                    </div>
-                    <br/>
-                    <div style="text-align:center; font-size:10px;">*** NÃO É DOCUMENTO FISCAL ***</div>
-                </body>
-                </html>
-            `;
-            
-            document.open();
-            document.write(conteudoMesa);
-            document.close();
-            setHtmlInjetado(true);
-
-            setTimeout(() => { window.print(); }, 500);
+            return () => {
+                clearTimeout(timerPrint);
+                window.onafterprint = null;
+            };
         }
-    }, [loading, pedido, htmlInjetado]);
+    }, [loading, pedido, error]);
 
-    // O código de Delivery continua igual
-    useEffect(() => {
-        if (!loading && pedido && !pedido.isMesa) {
-            const timer = setTimeout(() => { window.print(); }, 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [loading, pedido]);
-
-    useEffect(() => {
-        const handleAfterPrint = () => {
-            setTimeout(() => { window.close(); }, 500);
-        };
-        window.onafterprint = handleAfterPrint;
-        return () => { window.onafterprint = null; };
-    }, []);
+    const formatarMoeda = (valor) => (valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     if (loading) return <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>Carregando impressão...</div>;
     
@@ -205,15 +137,76 @@ export default function ImpressaoIsolada() {
         <div style={{ padding: '20px', textAlign: 'center', color: 'red', fontFamily: 'Arial, sans-serif' }}>
             <strong>Erro:</strong> {error}
             <br /><br />
-            <button onClick={() => window.close()} style={{ padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer' }}>Fechar Janela</button>
+            <button onClick={() => window.close()} style={{ padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: '#f44336', color: '#fff', border: 'none', borderRadius: '5px' }}>Fechar Janela</button>
         </div>
     );
 
+    // Se for Delivery, usa o componente que já existia
+    if (!pedido?.isMesa) {
+        return <ComandaParaImpressao pedido={pedido} estabelecimento={estabelecimento} />;
+    }
+
+    // Se for MESA, renderiza o cupom aqui mesmo no React!
     return (
-        <div>
-            {!pedido?.isMesa && (
-                <ComandaParaImpressao pedido={pedido} estabelecimento={estabelecimento} />
-            )}
+        <div style={{ width: '80mm', margin: '0 auto', fontFamily: 'monospace', fontSize: '14px', color: '#000', padding: '5mm', backgroundColor: '#fff' }}>
+            <style>{`
+                @media print {
+                    @page { margin: 0; size: 80mm auto; }
+                    body, html { margin: 0; padding: 0; background: white; }
+                    .no-print { display: none !important; }
+                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                }
+            `}</style>
+            
+            {/* BOTÃO DE SEGURANÇA PARA CELULARES (SÓ APARECE NA TELA, NÃO IMPRIME) */}
+            <button className="no-print" onClick={() => window.close()} style={{ width: '100%', padding: '15px', marginBottom: '15px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>
+                Fechar Tela
+            </button>
+
+            {/* CABEÇALHO DO CUPOM */}
+            <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '900', margin: '0 0 5px 0' }}>PRÉ-CONFERÊNCIA</h2>
+                <p style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0' }}>MESA {mesaData.numero}</p>
+                <p style={{ fontSize: '10px', margin: '0' }}>{new Date().toLocaleString('pt-BR')}</p>
+            </div>
+
+            {/* LISTA DE ITENS */}
+            {Object.entries(mesaData.agrupados).map(([pessoa, dados]) => (
+                <div key={pessoa} style={{ marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '900', borderBottom: '1px solid #000', marginBottom: '4px', textTransform: 'uppercase' }}>
+                        <span>{pessoa.substring(0, 15)}</span>
+                        <span>R$ {formatarMoeda(dados.total)}</span>
+                    </div>
+                    {dados.itens?.filter(i => i.preco > 0).map((item, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '5px', marginBottom: '2px' }}>
+                            <span>{item.quantidade || item.qtd || 1}x {item.nome.substring(0,20)}</span>
+                            <span>{formatarMoeda((item.preco || 0) * (item.quantidade || item.qtd || 1))}</span>
+                        </div>
+                    ))}
+                </div>
+            ))}
+
+            {/* RESUMO FINANCEIRO */}
+            <div style={{ borderTop: '1px dashed #000', marginTop: '15px', paddingTop: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span>TOTAL CONSUMO:</span>
+                    <span>R$ {formatarMoeda(mesaData.totalConsumo)}</span>
+                </div>
+                {mesaData.jaPago > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span>(-) JÁ PAGO:</span>
+                        <span>R$ {formatarMoeda(mesaData.jaPago)}</span>
+                    </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: '900', marginTop: '8px', borderTop: '1px solid #000', paddingTop: '8px' }}>
+                    <span>A PAGAR:</span>
+                    <span>R$ {formatarMoeda(mesaData.restante)}</span>
+                </div>
+            </div>
+            
+            <div style={{ textAlign: 'center', fontSize: '10px', marginTop: '15px', fontWeight: 'bold' }}>
+                *** NÃO É DOCUMENTO FISCAL ***
+            </div>
         </div>
     );
 }
