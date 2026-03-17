@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-// 🔥 ADICIONADO 'where' AQUI NA IMPORTAÇÃO 🔥
 import { collection, onSnapshot, addDoc, doc, getDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, runTransaction, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
@@ -120,11 +119,12 @@ export default function ControleSalao() {
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
 
-    // Estado que guarda o tempo atual e atualiza a cada 1 minuto
+    // 🔥 FILA DE IMPRESSÃO INVISÍVEL 🔥
+    const [filaImpressao, setFilaImpressao] = useState([]);
+
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
-        // Relógio invisível: Força o React a recalcular os tempos das mesas
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
         return () => clearInterval(timer);
     }, []);
@@ -133,7 +133,6 @@ export default function ControleSalao() {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
 
-    // Função que verifica se passaram 10 minutos
     const verificarMesaOciosa = (mesa) => {
         if (mesa.status !== 'ocupada' || (mesa.itens && mesa.itens.length > 0)) return false;
         if (!mesa.updatedAt) return false;
@@ -141,7 +140,7 @@ export default function ControleSalao() {
         const dataAbertura = mesa.updatedAt.toDate ? mesa.updatedAt.toDate() : new Date(mesa.updatedAt);
         const minutosDecorridos = Math.floor((currentTime - dataAbertura) / 60000);
 
-        return minutosDecorridos >= 10; // 10 minutos sem pedir nada = alerta
+        return minutosDecorridos >= 10; 
     };
 
     useEffect(() => {
@@ -174,15 +173,14 @@ export default function ControleSalao() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    // 🔥 NOVO: useEffect PARA ESCUTAR PEDIDOS DE IMPRESSÃO 🔥
+    // 🔥 SISTEMA DE IMPRESSÃO MÁGICA (Bypass Popup Blocker) 🔥
     useEffect(() => {
         if (!estabelecimentoId) return;
 
-        // 🛑 TRAVA CORRIGIDA: Não bloqueia mais PCs com tela Touch ou janelas menores!
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         
         if (isMobileDevice) {
-            return; // Aparelho mobile não escuta a impressora
+            return; // Celular não escuta a própria impressora
         }
 
         const q = query(
@@ -198,10 +196,18 @@ export default function ControleSalao() {
                     const mesaData = mesaDoc.data();
 
                     if (mesaData.solicitarImpressaoConferencia) {
-                        toast.info(`Imprimindo conferência da Mesa ${mesaData.numero}...`);
+                        toast.info(`Recebendo impressão da Mesa ${mesaData.numero}...`);
                         
-                        const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${mesaId}`;
-                        window.open(urlImpressao, "_blank", "width=400,height=600");
+                        // Adiciona carimbo de tempo para o iframe sempre carregar uma página "nova"
+                        const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${mesaId}&t=${Date.now()}`;
+                        
+                        // 🔥 Adiciona na fila de Iframes ao invés de usar window.open!
+                        setFilaImpressao(prev => [...prev, urlImpressao]);
+
+                        // 🔥 Remove da fila após 15 segundos para não pesar a tela do caixa
+                        setTimeout(() => {
+                            setFilaImpressao(prev => prev.filter(url => url !== urlImpressao));
+                        }, 15000);
 
                         try {
                             await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesaId), {
@@ -217,7 +223,6 @@ export default function ControleSalao() {
 
         return () => unsubscribe();
     }, [estabelecimentoId]);
-    // 🔥 FIM DO OUVINTE DE IMPRESSÃO 🔥
 
 
     // --- BOTÕES DO HEADER PRINCIPAL ---
@@ -534,6 +539,14 @@ export default function ControleSalao() {
                         </div>
                     )}
                 </div>
+
+                {/* 🔥 LUGAR ONDE A IMPRESSÃO ACONTECE INVISÍVEL 🔥 */}
+                <div style={{ display: 'none' }}>
+                    {filaImpressao.map((url, index) => (
+                        <iframe key={index} src={url} title={`print-${index}`} />
+                    ))}
+                </div>
+
             </div>
         </div>
     );
