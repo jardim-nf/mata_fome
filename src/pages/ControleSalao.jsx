@@ -540,10 +540,10 @@ export default function ControleSalao() {
                     )}
                 </div>
 
-                {/* 🔥 LUGAR ONDE A IMPRESSÃO ACONTECE INVISÍVEL 🔥 */}
-                <div style={{ display: 'none' }}>
+{/* 🔥 LUGAR ONDE A IMPRESSÃO ACONTECE INVISÍVEL 🔥 */}
+                <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: -9999 }}>
                     {filaImpressao.map((url, index) => (
-                        <iframe key={index} src={url} title={`print-${index}`} />
+                        <iframe key={index} src={url} title={`print-${index}`} style={{ width: '80mm', height: '500px', border: 'none' }} />
                     ))}
                 </div>
 
