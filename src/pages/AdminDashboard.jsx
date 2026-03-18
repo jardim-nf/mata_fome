@@ -9,11 +9,11 @@ import {
   IoStatsChart, IoShareSocial, IoColorPalette, IoSettings, IoTrashBin,
   IoStorefront, IoRestaurant, IoDesktopOutline, IoTicketOutline,
   IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
-  IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline
+  IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
+  IoCloudUploadOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt } from 'react-icons/fa'; 
 
-// Componente visual do botão
 const ActionButton = ({ title, subtitle, icon, themeColor }) => {
   const themes = {
     blue: "bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:shadow-blue-200",
@@ -26,6 +26,7 @@ const ActionButton = ({ title, subtitle, icon, themeColor }) => {
     red: "bg-rose-50 text-rose-600 group-hover:bg-rose-600 group-hover:shadow-rose-200",
     indigo: "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:shadow-indigo-200",
     slate: "bg-slate-50 text-slate-600 group-hover:bg-slate-600 group-hover:shadow-slate-200",
+    cyan: "bg-cyan-50 text-cyan-600 group-hover:bg-cyan-600 group-hover:shadow-cyan-200",
   };
 
   return (
@@ -47,7 +48,6 @@ const AdminDashboard = () => {
   const { currentUser, loading } = useAuth();
   const [showSummary, setShowSummary] = useState(false);
 
-  // 🔥 EXPULSA O GARÇOM DO DASHBOARD AUTOMATICAMENTE 🔥
   useEffect(() => {
     if (currentUser && !loading) {
       const userRole = currentUser?.role || currentUser?.cargo;
@@ -57,16 +57,19 @@ const AdminDashboard = () => {
     }
   }, [currentUser, loading, navigate]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div></div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600" />
+    </div>
+  );
 
   const isRealAdmin = currentUser?.isAdmin === true || currentUser?.isMasterAdmin === true || currentUser?.role === 'admin';
   
   const temPermissao = (perm) => {
-      if (isRealAdmin) return true;
-      return currentUser?.permissoes?.includes(perm);
+    if (isRealAdmin) return true;
+    return currentUser?.permissoes?.includes(perm);
   };
 
-  // 🔥 TODOS OS BOTÕES SENSÍVEIS AGORA TÊM 'adminOnly: true' 🔥
   const menuGroups = [
     {
       title: "⚡ Operação Diária",
@@ -83,6 +86,7 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/gerenciar-cardapio', title: 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true },
         { path: '/admin/ordenar-categorias', title: 'Categorias', sub: 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true },
+        { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e XML e atualize o estoque', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true },
         { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo', adminOnly: true },
         { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber', adminOnly: true },
         { path: '/admin/cupons', title: 'Cupons de Desconto', sub: 'Crie códigos promocionais', icon: <IoTicketOutline />, cor: 'yellow', adminOnly: true },
@@ -125,7 +129,9 @@ const AdminDashboard = () => {
                 </div>
                 <div className="text-left">
                   <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Faturamento e Resumo do Dia</h2>
-                  <p className="text-xs sm:text-sm text-slate-500 font-medium">Clique para {showSummary ? 'ocultar' : 'visualizar'} o desempenho das vendas de hoje</p>
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                    Clique para {showSummary ? 'ocultar' : 'visualizar'} o desempenho das vendas de hoje
+                  </p>
                 </div>
               </div>
               <div className={`p-2 rounded-full bg-slate-100 text-slate-500 transform transition-transform duration-300 ${showSummary ? 'rotate-180' : ''}`}>
@@ -144,11 +150,8 @@ const AdminDashboard = () => {
         <div className="space-y-12">
           {menuGroups.map((grupo, idx) => {
             const itensPermitidos = grupo.items.filter(item => {
-              // Se for admin, passa tudo
               if (isRealAdmin) return true;
-              // Se NÃO for admin e a tela exige admin, bloqueia
               if (item.adminOnly) return false;
-              // Se tiver permissão específica, verifica
               if (item.perm && !item.permOuAdmin && !temPermissao(item.perm)) return false;
               if (item.permOuAdmin && !isRealAdmin && !temPermissao(item.perm)) return false;
               return true;
@@ -162,7 +165,6 @@ const AdminDashboard = () => {
                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">{grupo.title}</h3>
                   <p className="text-sm text-slate-500 font-medium">{grupo.description}</p>
                 </div>
-                
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-fr">
                   {itensPermitidos.map((item, itemIdx) => (
                     <Link key={itemIdx} to={item.path} className="h-full">
@@ -176,7 +178,7 @@ const AdminDashboard = () => {
         </div>
 
         <div className="text-center pt-8 border-t border-slate-200 mt-12">
-            <p className="text-slate-400 font-medium text-sm">IdeaFood • Gestão Inteligente</p>
+          <p className="text-slate-400 font-medium text-sm">IdeaFood • Gestão Inteligente</p>
         </div>
       </div>
     </div>

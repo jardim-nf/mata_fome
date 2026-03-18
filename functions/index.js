@@ -20,7 +20,7 @@ const mercadoPagoToken = defineSecret("MP_ACCESS_TOKEN");
 // ==================================================================
 // 1. SEU AGENTE DE IA
 // ==================================================================
-// DEPOIS
+
 export const chatAgent = onCall({
     cors: true,
     secrets: [openAiApiKey]
