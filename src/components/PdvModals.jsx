@@ -347,9 +347,8 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     <p className="text-gray-400 text-xs font-mono mt-1">#{dados.id.slice(-6)} • {formatarData(dados.createdAt)}</p>
                 </div>
                 <div className="space-y-3 mb-6 max-h-60 overflow-y-auto custom-scrollbar print:max-h-none print:overflow-visible">
-                    {dados.itens.map(i => (
-                        <div key={i.uid} className="flex flex-col text-sm text-gray-600 border-b border-dashed border-gray-100 pb-2 last:border-0">
-                            <div className="flex justify-between">
+{dados.itens.map((i, index) => (
+    <div key={i.uid || i.id || index} className="flex flex-col text-sm text-gray-600 border-b border-dashed border-gray-100 pb-2 last:border-0"><div className="flex justify-between">
                                 <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}><b className="text-gray-800">{i.quantity}x</b> {i.name}</span>
                                 <span className={`font-mono ${isCanceladaRecibo ? 'line-through text-gray-400' : ''}`}>{formatarMoeda(i.price * i.quantity)}</span>
                             </div>
