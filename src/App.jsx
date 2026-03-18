@@ -5,10 +5,10 @@ import { AuthProvider, PrivateRoute } from './context/AuthContext';
 import { HeaderProvider } from './context/HeaderContext';
 import { AIProvider } from './context/AIContext';
 import { PaymentProvider } from './context/PaymentContext';
-import { NotificationProvider } from './context/NotificationContext'; 
+import { NotificationProvider } from './context/NotificationContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
+import EntradaEstoqueXML from "./pages/admin/EntradaEstoqueXML"; // 👈 ADICIONE ESTA LINHA
 // Layout e Páginas
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
@@ -20,7 +20,7 @@ import ClientOrderHistory from './pages/ClientOrderHistory';
 import HomeRedirector from './pages/HomeRedirector';
 import ComandaParaImpressao from "./components/ComandaParaImpressao";
 import PaginaImpressao from './pages/PaginaImpressao';
-import AdminSettings from './pages/AdminSettings'; 
+import AdminSettings from './pages/AdminSettings';
 import RelatorioCancelamentos from './pages/admin/RelatorioCancelamentos';
 import PdvScreen from './pages/admin/PdvScreen';
 import CheckoutPage from './pages/CheckoutPage';
@@ -38,13 +38,13 @@ import AdminReports from './pages/AdminReports';
 import AdminImageAssociation from './pages/admin/AdminImageAssociation';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminMultiPlatform from './pages/AdminMultiPlatform';
-import ClientManagement from './pages/ClientManagement'; 
+import ClientManagement from './pages/ClientManagement';
 import AdminOrderCategories from './pages/AdminOrderCategories';
 import GestaoFuncionarios from "./pages/admin/GestaoFuncionarios";
 import AdminEntregadores from './pages/admin/AdminEntregadores';
-import RelatorioEntregas from './pages/admin/RelatorioEntregas'; 
+import RelatorioEntregas from './pages/admin/RelatorioEntregas';
 import AdminPaymentSettings from './pages/admin/AdminPaymentSettings';
-import AdminColorSettings from './pages/AdminColorSettings'; 
+import AdminColorSettings from './pages/AdminColorSettings';
 import MasterDashboard from './pages/MasterDashboard';
 import AdminEstabelecimentoCadastro from './pages/admin/AdminEstabelecimentoCadastro';
 import ListarEstabelecimentosMaster from './pages/admin/ListarEstabelecimentosMaster';
@@ -68,7 +68,7 @@ function App() {
           <AIProvider>
             <PaymentProvider>
               <NotificationProvider>
-                
+
                 <div className="min-h-screen bg-gray-50">
                   <Routes>
                     {/* --- Rotas SEM o Layout Principal --- */}
@@ -76,31 +76,31 @@ function App() {
                     <Route path="/home" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/login-admin" element={<Login />} />
-                    
+
                     {/* 👇 ROTA PARA O IFRAME AUTOMÁTICO 👇 */}
                     <Route path="/imprimir-comanda/:pedidoId" element={<ComandaParaImpressao />} />
-                    
+
                     {/* Rotas legadas de impressão manual */}
                     <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
                     <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
                     <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
                     <Route path="/cardapio" element={<ListaEstabelecimentos />} />
                     <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
-                    
-                    <Route 
-                      path="/checkout" 
+
+                    <Route
+                      path="/checkout"
                       element={
                         <PrivateRoute>
                           <CheckoutPage />
                         </PrivateRoute>
-                      } 
+                      }
                     />
 
                     {/* --- Rotas COM o Layout Principal --- */}
                     <Route element={<Layout />}>
                       <Route path="/planos" element={<Planos />} />
                       <Route path="/painel-inicial" element={<HomeRedirector />} />
-                      
+
                       <Route
                         path="/pdv"
                         element={
@@ -118,7 +118,7 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/controle-salao"
                         element={
@@ -127,7 +127,7 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/estabelecimento/:estabelecimentoId/mesa/:id"
                         element={
@@ -136,7 +136,7 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/painel"
                         element={
@@ -147,14 +147,14 @@ function App() {
                       />
 
                       <Route
-                        path="/admin-dashboard" 
+                        path="/admin-dashboard"
                         element={
                           <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
                             <AdminDashboard />
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/admin/configuracoes"
                         element={
@@ -181,7 +181,7 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/admin/cores"
                         element={
@@ -223,7 +223,7 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/admin/payment-settings"
                         element={
@@ -232,7 +232,7 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/nossos-clientes"
                         element={
@@ -281,7 +281,7 @@ function App() {
                           </PrivateRoute>
                         }
                       />
-                      
+
                       <Route
                         path="/admin/gestao-funcionarios"
                         element={
@@ -291,7 +291,7 @@ function App() {
                         }
                       />
 
-                       <Route
+                      <Route
                         path="/admin/entregadores"
                         element={
                           <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
@@ -309,7 +309,7 @@ function App() {
                         }
                       />
 
-                       <Route
+                      <Route
                         path="/admin/relatorio-cancelamentos"
                         element={
                           <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
@@ -318,28 +318,37 @@ function App() {
                         }
                       />
 
-                      {/* Rotas Master */}
-                      <Route path="/master-dashboard" element={<PrivateRoute allowedRoles={['masterAdmin']}><MasterDashboard /></PrivateRoute>} />
-                      <Route path="/admin/cadastrar-estabelecimento" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminEstabelecimentoCadastro /></PrivateRoute>} />
-                      <Route path="/master/estabelecimentos" element={<PrivateRoute allowedRoles={['masterAdmin']}><ListarEstabelecimentosMaster /></PrivateRoute>} />
-                      <Route path="/master/financeiro" element={<PrivateRoute allowedRoles={['masterAdmin']}><FinanceiroMaster /></PrivateRoute>} />
-                      <Route path="/master/pedidos" element={<PrivateRoute allowedRoles={['masterAdmin']}><ListarPedidosMaster /></PrivateRoute>} />
-                      <Route path="/master/usuarios" element={<PrivateRoute allowedRoles={['masterAdmin']}><ListarUsuariosMaster /></PrivateRoute>} />
-                      <Route path="/master/estabelecimentos/:id/editar" element={<PrivateRoute allowedRoles={['masterAdmin']}><EditarEstabelecimentoMaster /></PrivateRoute>} />
-                      <Route path="/master/importar-cardapio" element={<PrivateRoute allowedRoles={['masterAdmin']}><ImportarCardapioMaster /></PrivateRoute>} />
-                      <Route path="/master/usuarios/:id/editar" element={<PrivateRoute allowedRoles={['masterAdmin']}><EditarUsuarioMaster /></PrivateRoute>} />
-                      <Route path="/master/plans" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminPlansManagement /></PrivateRoute>} />
-                      <Route path="/master/pedidos/:id" element={<PrivateRoute allowedRoles={['masterAdmin']}><PedidoDetalhesMaster /></PrivateRoute>} />
-                      <Route path="/master/usuarios/criar" element={<PrivateRoute allowedRoles={['masterAdmin']}><CriarUsuarioMaster /></PrivateRoute>} />
-                      <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminImageAssociation /></PrivateRoute>} />
-                      <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={['masterAdmin']}><AuditLogs /></PrivateRoute>} />
-                      <Route path="/admin/config-fiscal" element={<ConfigFiscalScreen />} />
-                      {/* Fallback */}
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Route>
+                        <Route
+                          path="/admin/entrada-estoque"
+                          element={
+                            <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
+                              <EntradaEstoqueXML />
+                            </PrivateRoute>
+                          }
+                        />
 
-                    {/* Rota para o histórico de pedidos */}
-                    <Route path="/historico-pedidos" element={<PrivateRoute><ClientOrderHistory /></PrivateRoute>} />
+                        {/* Rotas Master */}
+                        <Route path="/master-dashboard" element={<PrivateRoute allowedRoles={['masterAdmin']}><MasterDashboard /></PrivateRoute>} />
+                        <Route path="/admin/cadastrar-estabelecimento" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminEstabelecimentoCadastro /></PrivateRoute>} />
+                        <Route path="/master/estabelecimentos" element={<PrivateRoute allowedRoles={['masterAdmin']}><ListarEstabelecimentosMaster /></PrivateRoute>} />
+                        <Route path="/master/financeiro" element={<PrivateRoute allowedRoles={['masterAdmin']}><FinanceiroMaster /></PrivateRoute>} />
+                        <Route path="/master/pedidos" element={<PrivateRoute allowedRoles={['masterAdmin']}><ListarPedidosMaster /></PrivateRoute>} />
+                        <Route path="/master/usuarios" element={<PrivateRoute allowedRoles={['masterAdmin']}><ListarUsuariosMaster /></PrivateRoute>} />
+                        <Route path="/master/estabelecimentos/:id/editar" element={<PrivateRoute allowedRoles={['masterAdmin']}><EditarEstabelecimentoMaster /></PrivateRoute>} />
+                        <Route path="/master/importar-cardapio" element={<PrivateRoute allowedRoles={['masterAdmin']}><ImportarCardapioMaster /></PrivateRoute>} />
+                        <Route path="/master/usuarios/:id/editar" element={<PrivateRoute allowedRoles={['masterAdmin']}><EditarUsuarioMaster /></PrivateRoute>} />
+                        <Route path="/master/plans" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminPlansManagement /></PrivateRoute>} />
+                        <Route path="/master/pedidos/:id" element={<PrivateRoute allowedRoles={['masterAdmin']}><PedidoDetalhesMaster /></PrivateRoute>} />
+                        <Route path="/master/usuarios/criar" element={<PrivateRoute allowedRoles={['masterAdmin']}><CriarUsuarioMaster /></PrivateRoute>} />
+                        <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminImageAssociation /></PrivateRoute>} />
+                        <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={['masterAdmin']}><AuditLogs /></PrivateRoute>} />
+                        <Route path="/admin/config-fiscal" element={<ConfigFiscalScreen />} />
+                        {/* Fallback */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                      </Route>
+
+                      {/* Rota para o histórico de pedidos */}
+                      <Route path="/historico-pedidos" element={<PrivateRoute><ClientOrderHistory /></PrivateRoute>} />
                   </Routes>
 
                   <ToastContainer
