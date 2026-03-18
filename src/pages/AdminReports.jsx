@@ -143,7 +143,7 @@ const AdminReports = () => {
         };
     };
 
-const fetchData = async () => {
+    const fetchData = async () => {
         if (!estabelecimentoIdPrincipal) return;
         
         try {
@@ -215,45 +215,6 @@ const fetchData = async () => {
             setLoadingData(false);
         }
     };
-        
-        try {
-            setLoadingData(true);
-            const start = startOfDay(new Date(startDate + 'T00:00:00'));
-            const end = endOfDay(new Date(endDate + 'T23:59:59'));
-            let allData = [];
-
-            // 1. DELIVERY (Corrigido para buscar na subcoleção do estabelecimento)
-            if (deliveryTypeFilter !== 'mesa') {
-                try {
-                    let pedidosConstraints = [
-                        where('createdAt', '>=', start),
-                        where('createdAt', '<=', end),
-                        orderBy('createdAt', 'desc')
-                    ];
-                    // CORREÇÃO AQUI: 'estabelecimentos' -> ID -> 'pedidos'
-                    const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'), ...pedidosConstraints);
-                    const snapPedidos = await getDocs(qPedidos);
-                    allData = [...allData, ...snapPedidos.docs.map(d => processarDado(d, 'delivery'))];
-                } catch (error) { console.error("Erro delivery:", error); }
-            }
-
-            // 2. MESAS / PDV (Corrigido para buscar na coleção raiz 'vendas' filtrando pelo estabelecimento)
-            if (deliveryTypeFilter === 'todos' || deliveryTypeFilter === 'mesa') {
-                try {
-                    let vendasConstraints = [
-                        where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
-                        where('createdAt', '>=', start), // CORREÇÃO: vendaService usa createdAt, não dataFechamento
-                        where('createdAt', '<=', end),
-                        orderBy('createdAt', 'desc')
-                    ];
-                    // CORREÇÃO AQUI: coleção raiz 'vendas'
-                    const qVendas = query(collection(db, 'vendas'), ...vendasConstraints);
-                    const snapVendas = await getDocs(qVendas);
-                    allData = [...allData, ...snapVendas.docs.map(d => processarDado(d, 'mesa'))];
-                } catch (error) { console.error("Erro mesas:", error); }
-            }
-
-            // ... Restante do código (Extrair Motoboys, etc) continua igualzinho ...
 
     useEffect(() => {
         if (estabelecimentoIdPrincipal) fetchData();
