@@ -3,12 +3,31 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import withAuth from '../hocs/withAuth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions'; // Import do Firebase Functions
-import { useSearchParams } from 'react-router-dom'; // Captura o código da URL na volta do Mercado Pago
+import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { IoSave, IoLockClosed, IoTime, IoGameController, IoCalendarOutline, IoWalletOutline, IoCheckmarkCircle } from 'react-icons/io5'; 
-import { SiMercadopago } from 'react-icons/si'; // Ícone oficial do MP
+import { 
+  IoSave, 
+  IoLockClosed, 
+  IoTime, 
+  IoGameController, 
+  IoCalendarOutline, 
+  IoWalletOutline, 
+  IoCheckmarkCircle,
+  IoPrintOutline 
+} from 'react-icons/io5'; 
+import { SiMercadopago } from 'react-icons/si';
+
+const diasDaSemana = [
+  { key: 'segunda', label: 'Segunda-feira' },
+  { key: 'terca', label: 'Terça-feira' },
+  { key: 'quarta', label: 'Quarta-feira' },
+  { key: 'quinta', label: 'Quinta-feira' },
+  { key: 'sexta', label: 'Sexta-feira' },
+  { key: 'sabado', label: 'Sábado' },
+  { key: 'domingo', label: 'Domingo' }
+];
 
 const AdminSettings = () => {
   const { primeiroEstabelecimento } = useAuth(); 
@@ -17,23 +36,37 @@ const AdminSettings = () => {
   const [saving, setSaving] = useState(false);
   const [vinculando, setVinculando] = useState(false);
 
-  // Estados do Formulário (Os seus originais)
+  // Estados do Formulário Gerais
   const [senhaMaster, setSenhaMaster] = useState('');
   const [tempoMinimo, setTempoMinimo] = useState('');
   const [tempoMaximo, setTempoMaximo] = useState('');
-  const [valorMinimoRaspadinha, setValorMinimoRaspadinha] = useState('100');
-  const [horaAbertura, setHoraAbertura] = useState('18:00');
-  const [horaFechamento, setHoraFechamento] = useState('23:30');
+  const [valorMinimoRaspadinha, setValorMinimoRaspadinha] = useState('9999');
+  
+  // Estado para os Horários
+  const [horarios, setHorarios] = useState({
+    segunda: { ativo: true, abertura: '18:00', fechamento: '23:30' },
+    terca:   { ativo: true, abertura: '18:00', fechamento: '23:30' },
+    quarta:  { ativo: true, abertura: '18:00', fechamento: '23:30' },
+    quinta:  { ativo: true, abertura: '18:00', fechamento: '23:30' },
+    sexta:   { ativo: true, abertura: '18:00', fechamento: '23:30' },
+    sabado:  { ativo: true, abertura: '18:00', fechamento: '23:30' },
+    domingo: { ativo: true, abertura: '18:00', fechamento: '23:30' },
+  });
 
-  // Estado Novo (Mercado Pago)
+  // Novos Estados: Impressão e Categorias (QZ TRAY)
+  const [categorias, setCategorias] = useState([]);
+  const [roteamentoImpressao, setRoteamentoImpressao] = useState({});
+  const [impressoraBalcao, setImpressoraBalcao] = useState('');
+  const [impressoraCozinha, setImpressoraCozinha] = useState('');
+
+  // Estado Mercado Pago
   const [mpConectado, setMpConectado] = useState(false);
 
   // =========================================================
-  // 1. CAPTURA DO CÓDIGO OAUTH (QUANDO O CLIENTE VOLTA DO MP)
+  // 1. CAPTURA DO CÓDIGO OAUTH (MERCADO PAGO)
   // =========================================================
   useEffect(() => {
     const code = searchParams.get('code');
-    // Se a URL tiver um código e já tivermos o ID do restaurante
     if (code && primeiroEstabelecimento) {
       const finalizarVinculo = async () => {
         setVinculando(true);
@@ -45,8 +78,6 @@ const AdminSettings = () => {
           
           toast.success("Conta Mercado Pago vinculada com sucesso! 🚀");
           setMpConectado(true);
-          
-          // Limpa a URL para o código longo não ficar aparecendo lá em cima
           setSearchParams({}); 
         } catch (error) {
           console.error("Erro ao vincular:", error);
@@ -67,6 +98,7 @@ const AdminSettings = () => {
       if (!primeiroEstabelecimento) return;
 
       try {
+        // A. Carrega as Configurações da Loja
         const docRef = doc(db, 'estabelecimentos', primeiroEstabelecimento);
         const docSnap = await getDoc(docRef);
 
@@ -75,13 +107,40 @@ const AdminSettings = () => {
           setSenhaMaster(data.senhaMaster || '');
           setTempoMinimo(data.tempoMinimo || '40');
           setTempoMaximo(data.tempoMaximo || '60');
-          setValorMinimoRaspadinha(data.valorMinimoRaspadinha || '100');
-          setHoraAbertura(data.horaAbertura || '18:00');
-          setHoraFechamento(data.horaFechamento || '23:30');
-          
-          // Verifica se o restaurante já fez o vínculo
+          setValorMinimoRaspadinha(data.valorMinimoRaspadinha || '9999');
           setMpConectado(data.mp_conectado || false); 
+          
+          // Carrega os dados da impressora QZ Tray
+          setImpressoraBalcao(data.impressoraBalcao || '');
+          setImpressoraCozinha(data.impressoraCozinha || '');
+
+          if (data.roteamentoImpressao) {
+            setRoteamentoImpressao(data.roteamentoImpressao);
+          }
+
+          if (data.horariosFuncionamento) {
+            setHorarios(data.horariosFuncionamento);
+          } else if (data.horaAbertura && data.horaFechamento) {
+             const oldHorarios = {};
+             diasDaSemana.forEach(dia => {
+               oldHorarios[dia.key] = {
+                 ativo: true,
+                 abertura: data.horaAbertura,
+                 fechamento: data.horaFechamento
+               };
+             });
+             setHorarios(oldHorarios);
+          }
         }
+
+        // B. Carrega as Categorias do Cardápio (Para Mapeamento de Impressão)
+        const cardapioRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio');
+        const cardapioSnap = await getDocs(cardapioRef);
+        const nomesCategorias = cardapioSnap.docs.map(d => d.data().nome || d.id);
+        
+        // Remove duplicadas (se houver) e salva no estado
+        setCategorias([...new Set(nomesCategorias)]);
+
       } catch (error) {
         console.error("Erro ao carregar configurações:", error);
         toast.error("Erro ao carregar dados da loja.");
@@ -93,21 +152,33 @@ const AdminSettings = () => {
     fetchSettings();
   }, [primeiroEstabelecimento]);
 
-  // =========================================================
-  // 3. AÇÃO DO BOTÃO "CONECTAR MERCADO PAGO"
-  // =========================================================
   const handleConectarMP = () => {
-    const clientId = '310854362032422'; // O Client ID que você viu na imagem
+    const clientId = '310854362032422'; 
     const redirectUri = encodeURIComponent('https://matafome-98455.web.app/admin/configuracoes');
-    
     const url = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${primeiroEstabelecimento}`;
-    
-    // Redireciona o lojista
     window.location.href = url;
   };
 
+  const handleHorarioChange = (diaKey, campo, valor) => {
+    setHorarios(prev => ({
+      ...prev,
+      [diaKey]: {
+        ...prev[diaKey],
+        [campo]: valor
+      }
+    }));
+  };
+
+  // Atualiza o roteamento de uma categoria específica
+  const handleRoteamentoChange = (categoria, destino) => {
+    setRoteamentoImpressao(prev => ({
+      ...prev,
+      [categoria]: destino
+    }));
+  };
+
   // =========================================================
-  // 4. SALVAR TODAS AS CONFIGURAÇÕES MANUAIS
+  // 3. SALVAR TODAS AS CONFIGURAÇÕES MANUAIS
   // =========================================================
   const handleSave = async (e) => {
     e.preventDefault();
@@ -118,12 +189,14 @@ const AdminSettings = () => {
       const docRef = doc(db, 'estabelecimentos', primeiroEstabelecimento);
       
       await updateDoc(docRef, {
-        senhaMaster: senhaMaster,
-        tempoMinimo: tempoMinimo,
-        tempoMaximo: tempoMaximo,
-        valorMinimoRaspadinha: valorMinimoRaspadinha,
-        horaAbertura: horaAbertura,
-        horaFechamento: horaFechamento,
+        senhaMaster,
+        tempoMinimo,
+        tempoMaximo,
+        valorMinimoRaspadinha,
+        horariosFuncionamento: horarios, 
+        roteamentoImpressao: roteamentoImpressao, 
+        impressoraBalcao, // Salva o nome da impressora no BD
+        impressoraCozinha, // Salva o nome da impressora no BD
         updatedAt: new Date()
       });
 
@@ -136,9 +209,6 @@ const AdminSettings = () => {
     }
   };
 
-  // =========================================================
-  // TELAS DE CARREGAMENTO
-  // =========================================================
   if (loading || vinculando) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -148,9 +218,6 @@ const AdminSettings = () => {
     );
   }
 
-  // =========================================================
-  // INTERFACE PRINCIPAL
-  // =========================================================
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
@@ -162,7 +229,77 @@ const AdminSettings = () => {
 
         <form onSubmit={handleSave} className="space-y-6">
           
-          {/* BLOCO NOVO: Mercado Pago (OAuth) */}
+          {/* BLOCO NOVO: Roteamento e QZ Tray Impressoras */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-6 border-b pb-4">
+              <div className="p-2 bg-gray-800 text-white rounded-lg">
+                <IoPrintOutline size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">Impressão Automática (QZ Tray)</h2>
+                <p className="text-sm text-gray-500">Defina o nome das suas impressoras no Windows e o destino de cada categoria.</p>
+              </div>
+            </div>
+
+            {/* Configuração dos nomes das Impressoras */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Nome da Impressora - BALCÃO</label>
+                <input 
+                  type="text" 
+                  value={impressoraBalcao} 
+                  onChange={(e) => setImpressoraBalcao(e.target.value)} 
+                  placeholder="Ex: EPSON TM-T20" 
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-gray-800 outline-none transition-all" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Nome da Impressora - COZINHA</label>
+                <input 
+                  type="text" 
+                  value={impressoraCozinha} 
+                  onChange={(e) => setImpressoraCozinha(e.target.value)} 
+                  placeholder="Ex: POS-80C" 
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-gray-800 outline-none transition-all" 
+                />
+              </div>
+              <p className="col-span-1 md:col-span-2 text-xs text-gray-500 font-medium">
+                * Importante: Digite <b>exatamente</b> o nome de como a impressora está instalada no Painel de Controle do computador. O aplicativo QZ Tray precisa estar aberto.
+              </p>
+            </div>
+
+            <h3 className="text-md font-bold text-gray-800 mb-4 border-b pb-2">Destino por Categoria de Produto</h3>
+            {categorias.length === 0 ? (
+              <div className="bg-yellow-50 text-yellow-700 p-4 rounded-xl text-sm font-medium border border-yellow-200">
+                Nenhuma categoria de produto foi encontrada. Cadastre produtos no cardápio primeiro.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {categorias.map(cat => (
+                  <div key={cat} className="flex flex-col bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm hover:border-gray-300 transition-colors">
+                    <label className="text-sm font-bold text-gray-700 mb-2 truncate" title={cat}>
+                      {cat}
+                    </label>
+                    <select
+                      value={roteamentoImpressao[cat] || 'balcao'} // Padrão é sempre Balcão
+                      onChange={(e) => handleRoteamentoChange(cat, e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-gray-800 outline-none transition-all text-sm font-medium text-gray-700 bg-white"
+                    >
+                      <option value="balcao">🏪 Balcão / Caixa</option>
+                      <option value="cozinha">🍳 Cozinha / Produção</option>
+                      <option value="ambos">🏪 + 🍳 Ambos</option>
+                      <option value="nenhum">❌ Não Imprimir</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="mt-4 text-[11px] text-gray-400 uppercase tracking-widest font-bold">
+              * Bebidas e Sobremesas geralmente ficam no Balcão. Lanches e Pratos quentes vão direto para a Cozinha.
+            </p>
+          </div>
+
+          {/* BLOCO: Mercado Pago */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-4 border-b pb-4">
               <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
@@ -199,48 +336,69 @@ const AdminSettings = () => {
                 </button>
               )}
             </div>
-            {!mpConectado && (
-              <p className="mt-4 text-[10px] text-gray-400 uppercase tracking-widest font-bold text-center md:text-left">
-                * Você será redirecionado para o Mercado Pago para autorizar a conexão.
-              </p>
-            )}
           </div>
 
-          {/* BLOCO 1: Horário de Funcionamento Automático */}
+          {/* BLOCO: Horário de Funcionamento Automático por Dia */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-3 mb-4 border-b pb-4">
+            <div className="flex items-center gap-3 mb-6 border-b pb-4">
               <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
                 <IoCalendarOutline size={24} />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-800">Horário de Funcionamento</h2>
-                <p className="text-sm text-gray-500">Defina a hora que o cardápio digital abre e fecha automaticamente</p>
+                <p className="text-sm text-gray-500">Configure a abertura e fechamento para cada dia da semana.</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Abre às:</label>
-                <input 
-                  type="time" 
-                  value={horaAbertura} 
-                  onChange={(e) => setHoraAbertura(e.target.value)} 
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Fecha às:</label>
-                <input 
-                  type="time" 
-                  value={horaFechamento} 
-                  onChange={(e) => setHoraFechamento(e.target.value)} 
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all" 
-                />
-              </div>
+            <div className="flex flex-col gap-4">
+              {diasDaSemana.map((dia) => (
+                <div key={dia.key} className="flex flex-col md:flex-row md:items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 gap-4">
+                  
+                  {/* Toggle Ativo/Inativo e Nome do Dia */}
+                  <div className="flex items-center gap-3 min-w-[180px]">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={horarios[dia.key]?.ativo}
+                        onChange={(e) => handleHorarioChange(dia.key, 'ativo', e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                    </label>
+                    <span className={`font-medium ${horarios[dia.key]?.ativo ? 'text-gray-800' : 'text-gray-400'}`}>
+                      {dia.label}
+                    </span>
+                  </div>
+
+                  {/* Inputs de Horário */}
+                  <div className={`flex items-center gap-4 w-full md:w-auto ${!horarios[dia.key]?.ativo && 'opacity-50 pointer-events-none'}`}>
+                    <div className="flex flex-col w-full md:w-32">
+                      <span className="text-xs text-gray-500 mb-1">Abre às</span>
+                      <input 
+                        type="time" 
+                        value={horarios[dia.key]?.abertura} 
+                        onChange={(e) => handleHorarioChange(dia.key, 'abertura', e.target.value)} 
+                        className="px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all text-sm" 
+                      />
+                    </div>
+                    <span className="text-gray-400 mt-5">-</span>
+                    <div className="flex flex-col w-full md:w-32">
+                      <span className="text-xs text-gray-500 mb-1">Fecha às</span>
+                      <input 
+                        type="time" 
+                        value={horarios[dia.key]?.fechamento} 
+                        onChange={(e) => handleHorarioChange(dia.key, 'fechamento', e.target.value)} 
+                        className="px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all text-sm" 
+                      />
+                    </div>
+                  </div>
+
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* BLOCO 2: Operação (Tempos) */}
+          {/* BLOCO: Operação (Tempos) */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-4 border-b pb-4">
               <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
@@ -264,7 +422,7 @@ const AdminSettings = () => {
             </div>
           </div>
 
-          {/* BLOCO 3: Segurança */}
+          {/* BLOCO: Segurança */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-4 border-b pb-4">
               <div className="p-2 bg-red-100 text-red-600 rounded-lg">
@@ -283,7 +441,7 @@ const AdminSettings = () => {
             </div>
           </div>
 
-          {/* BLOCO 4: Gamificação (RASPADINHA) */}
+          {/* BLOCO: Gamificação (RASPADINHA) */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-4 border-b pb-4">
               <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, addDoc, doc, getDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, runTransaction, where } from "firebase/firestore";
 import { db } from "../firebase";
@@ -16,8 +16,12 @@ import {
     IoArrowBack, IoAdd,
     IoGrid, IoPeople, IoWalletOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTimeOutline
+    IoTimeOutline, IoReceiptOutline // 🔥 ÍCONE ADICIONADO PARA O BOTÃO DE NOTAS
 } from "react-icons/io5";
+
+// 🔥 IMPORTS PARA O FISCAL E HISTÓRICO 🔥
+import { vendaService } from "../services/vendaService";
+import { ModalRecibo, ModalHistorico } from "../components/PdvModals"; // 🔥 ADICIONADO ModalHistorico
 
 // --- HELPER DE FORMATAÇÃO ---
 const formatarReal = (valor) => {
@@ -42,7 +46,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
     </div>
 );
 
-// --- MODAL ABRIR MESA (CORRIGIDO PARA O TECLADO DO CELULAR) ---
+// --- MODAL ABRIR MESA ---
 const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) => {
     const [quantidade, setQuantidade] = useState(1);
     const [nome, setNome] = useState('');
@@ -81,7 +85,6 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) =
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    {/* 🔥 CORREÇÃO DO CLIQUE NO CELULAR (onPointerDown) 🔥 */}
                     <button 
                         type="button"
                         onPointerDown={(e) => { e.preventDefault(); if(!isOpening) onClose(); }}
@@ -107,7 +110,6 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) =
     );
 };
 
-// 🔥 COMPONENTE DA LEGENDA (Cores Fortes Originais) 🔥
 const LegendaCores = () => (
     <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-2xl shadow-sm border border-gray-200 mb-4 text-xs font-bold text-gray-700 w-full">
         <span className="text-gray-400 uppercase tracking-widest mr-2 text-[10px]">Cores:</span>
@@ -123,7 +125,6 @@ export default function ControleSalao() {
     const { userData, user, currentUser } = useAuth();
     const usuarioLogado = user || currentUser;
 
-    // 🔥 IDENTIFICAÇÃO E TRAVA DO GARÇOM 🔥
     const rawRole = String(userData?.role || userData?.cargo || 'admin').toLowerCase().trim();
     const isGarcom = rawRole.includes('garcom') || rawRole.includes('garçom') || rawRole.includes('atendente');
 
@@ -140,8 +141,6 @@ export default function ControleSalao() {
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
     const [mesaParaAbrir, setMesaParaAbrir] = useState(null);
-    
-    // Estado para evitar cliques duplos ao abrir a mesa
     const [isOpeningTable, setIsOpeningTable] = useState(false);
 
     const [isModalTicketsOpen, setIsModalTicketsOpen] = useState(false);
@@ -150,8 +149,19 @@ export default function ControleSalao() {
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
 
+    // 🔥 FILA DE IMPRESSÃO VIA IFRAME 🔥
     const [filaImpressao, setFilaImpressao] = useState([]);
     const [currentTime, setCurrentTime] = useState(new Date());
+
+    // 🔥 NOVOS ESTADOS PARA NFC-E E HISTÓRICO 🔥
+    const [mostrarRecibo, setMostrarRecibo] = useState(false);
+    const [dadosRecibo, setDadosRecibo] = useState(null);
+    const [nfceStatus, setNfceStatus] = useState('idle');
+    const [nfceUrl, setNfceUrl] = useState(null);
+
+    const [isHistoricoVendasOpen, setIsHistoricoVendasOpen] = useState(false);
+    const [vendasHistoricoExibicao, setVendasHistoricoExibicao] = useState([]);
+    const [carregandoHistorico, setCarregandoHistorico] = useState(false);
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -176,37 +186,136 @@ export default function ControleSalao() {
                 try {
                     const docRef = doc(db, "estabelecimentos", estabelecimentoId);
                     const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        setNomeEstabelecimento(docSnap.data().nome || userData?.nomeEstabelecimento || "IdeaFood");
-                    }
-                } catch (error) {
-                    setNomeEstabelecimento(userData?.nomeEstabelecimento || "IdeaFood");
-                }
+                    if (docSnap.exists()) setNomeEstabelecimento(docSnap.data().nome || userData?.nomeEstabelecimento || "IdeaFood");
+                } catch (error) { setNomeEstabelecimento(userData?.nomeEstabelecimento || "IdeaFood"); }
             }
         };
         fetchNomeEstabelecimento();
     }, [estabelecimentoId, userData]);
 
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.key === 'F4' && !isGarcom) {
-                e.preventDefault();
-                setIsHistoricoMesasOpen(true);
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isGarcom]);
+    // 🔥 FUNÇÃO PARA ABRIR O HISTÓRICO DE NOTAS/VENDAS 🔥
+    const abrirHistoricoVendas = useCallback(async () => {
+        setIsHistoricoVendasOpen(true);
+        setCarregandoHistorico(true);
+        try {
+            // Busca as últimas 50 vendas da coleção global
+            const vendas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoId, 50);
+            setVendasHistoricoExibicao(vendas);
+        } catch (error) {
+            toast.error("Erro ao buscar histórico.");
+        } finally {
+            setCarregandoHistorico(false);
+        }
+    }, [estabelecimentoId]);
 
-// 🔥 OUVIDOS DE IMPRESSÃO INVISÍVEL (MESA E PEDIDOS DA COZINHA/BAR) 🔥
+    const selecionarVendaHistorico = (venda) => {
+        setDadosRecibo(venda);
+        setNfceStatus(venda.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
+        setNfceUrl(venda.fiscal?.pdf || null);
+        setIsHistoricoVendasOpen(false);
+        setMostrarRecibo(true);
+    };
+
+    // 🔥 LÓGICA DE EMISSÃO NFC-E IMPORTADA DO PDV 🔥
+    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) {} };
+
+    const handleEmitirNfce = async () => {
+        if (!dadosRecibo?.id) return; setNfceStatus('loading');
+        try {
+            const res = await vendaService.emitirNfce(dadosRecibo.id, dadosRecibo.clienteCpf);
+            if (res.sucesso || res.success) {
+                setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
+                setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v));
+            } else { setNfceStatus('error'); tocarBeepErro(); alert(res.error || "Erro ao solicitar"); }
+        } catch (e) { setNfceStatus('error'); tocarBeepErro(); alert('Erro de conexão.'); }
+    };
+
+    const handleConsultarStatus = async (venda) => {
+        const st = venda.fiscal?.status;
+        if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'ERRO') {
+            if (!window.confirm("Tentar reenviar para a SEFAZ?")) return;
+            setNfceStatus('loading');
+            try {
+                const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
+                if (res.sucesso || res.success) {
+                    alert("✅ Enviada!");
+                    if (dadosRecibo?.id === venda.id) setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
+                    setVendasHistoricoExibicao(p => p.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v));
+                } else { setNfceStatus('error'); alert("❌ Erro: " + res.error); }
+            } catch (e) { setNfceStatus('error'); alert('Falha ao reenviar.'); }
+        } else {
+            if (!venda.fiscal?.idPlugNotas) return alert("Sem ID PlugNotas.");
+            setNfceStatus('loading');
+            try {
+                const res = await vendaService.consultarStatusNfce(venda.id, venda.fiscal.idPlugNotas);
+                if (res.sucesso) {
+                    if (dadosRecibo?.id === venda.id) { setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } })); setNfceStatus(res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO' ? 'success' : 'idle'); setNfceUrl(res.pdf); }
+                    setVendasHistoricoExibicao(p => p.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
+                    alert(`Status: ${res.statusAtual}`);
+                } else { setNfceStatus('error'); alert("Erro: " + res.error); }
+            } catch (e) { setNfceStatus('error'); alert("Falha ao consultar."); }
+        }
+    };
+
+    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return alert("Sem ID"); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} };
+    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return alert("Sem ID"); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) alert("Erro: " + res.error); } catch (e) {} finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
+
+    const handleEnviarWhatsApp = (venda) => {
+        if (!venda.fiscal?.pdf) return alert("⚠️ Link PDF indisponível.");
+        let tel = prompt("📱 Número WhatsApp:", venda.clienteTelefone || venda.cliente?.telefone || "");
+        if (tel === null) return; tel = tel.replace(/\D/g, '');
+        const msg = encodeURIComponent(`Olá! Agradecemos a preferência. 😃\nSua Nota Fiscal de ${formatarReal(venda.total)}:\n${venda.fiscal.pdf}`);
+        window.open(tel.length >= 10 ? `https://wa.me/${tel.startsWith('55') ? tel : `55${tel}`}?text=${msg}` : `https://api.whatsapp.com/send?text=${msg}`, '_blank');
+    };
+
+    // Observador do status da nota em tempo real
+    useEffect(() => {
+        let unsub = () => {};
+        if (mostrarRecibo && dadosRecibo?.id) {
+            unsub = onSnapshot(doc(db, 'vendas', dadosRecibo.id), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data(); setDadosRecibo(p => ({ ...p, fiscal: data.fiscal }));
+                    if (data.fiscal) {
+                        const st = data.fiscal.status?.toUpperCase();
+                        if (st === 'AUTORIZADA' || st === 'CONCLUIDO') { setNfceStatus('success'); setNfceUrl(data.fiscal.pdf); } 
+                        else if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'DENEGADO') { setNfceStatus('error'); setNfceUrl(null);  } 
+                        else if (st === 'PROCESSANDO') { setNfceStatus('loading'); }
+                        
+                        setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v));
+                    }
+                }
+            });
+        }
+        return () => unsub();
+    }, [mostrarRecibo, dadosRecibo?.id]);
+
+    useEffect(() => {
+        let intervalo;
+        if (nfceStatus === 'loading' && dadosRecibo?.fiscal?.idPlugNotas) {
+            intervalo = setInterval(async () => {
+                try {
+                    const res = await vendaService.consultarStatusNfce(dadosRecibo.id, dadosRecibo.fiscal.idPlugNotas);
+                    if (res.sucesso && res.statusAtual !== 'PROCESSANDO') {
+                        clearInterval(intervalo); const ns = (res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO') ? 'success' : 'error';
+                        setNfceStatus(ns); if (ns === 'success') setNfceUrl(res.pdf);
+                        setDadosRecibo(p => ({...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
+                        setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
+                        if (ns === 'error') tocarBeepErro();
+                    }
+                } catch (e) {}
+            }, 3000);
+        }
+        return () => clearInterval(intervalo);
+    }, [nfceStatus, dadosRecibo]);
+    // 🔥 FIM DA LÓGICA DE EMISSÃO E HISTÓRICO NFC-E 🔥
+
+    // 🔥 OUVIDOS DE IMPRESSÃO INVISÍVEL VIA IFRAME 🔥
     useEffect(() => {
         if (!estabelecimentoId) return;
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         
-        // Celular não pode imprimir sozinho, só o PC escuta!
-        if (isMobileDevice) return;
+        if (isMobileDevice) return; // Celular não imprime!
 
-        // 1. Escutando fechamento de MESA 
         const qMesas = query(collection(db, "estabelecimentos", estabelecimentoId, "mesas"), where("solicitarImpressaoConferencia", "==", true));
         const unsubMesas = onSnapshot(qMesas, (snapshot) => {
             snapshot.docChanges().forEach(async (change) => {
@@ -215,14 +324,13 @@ export default function ControleSalao() {
                     const dadosMesa = docMesa.data();
                     
                     if (dadosMesa.solicitarImpressaoConferencia) {
-                        // 🔥 AGORA O PC PEGA O SETOR DA MESA TAMBÉM 🔥
                         const setorMesa = dadosMesa.setorImpressao || ''; 
-                        toast.info(`Recebendo impressão da Mesa ${dadosMesa.numero}...`);
+                        toast.info(`🖨️ Imprimindo Mesa ${dadosMesa.numero}...`);
                         
                         const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
                         
                         setFilaImpressao(prev => [...prev, urlImpressao]);
-                        setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000);
+                        setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000); // Remove o iframe do DOM após 15s
                         
                         try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) {}
                     }
@@ -230,7 +338,6 @@ export default function ControleSalao() {
             });
         });
 
-        // 2. Escutando novos PEDIDOS (Cozinha / Bar)
         const qPedidos = query(collection(db, "estabelecimentos", estabelecimentoId, "pedidos"), where("solicitarImpressao", "==", true));
         const unsubPedidos = onSnapshot(qPedidos, (snapshot) => {
             snapshot.docChanges().forEach(async (change) => {
@@ -240,7 +347,7 @@ export default function ControleSalao() {
                     
                     if (dadosPedido.solicitarImpressao) {
                         const setor = dadosPedido.setorImpressao || '';
-                        toast.info(`Recebendo pedido da Mesa ${dadosPedido.mesaNumero} (${setor || 'Tudo'})...`);
+                        toast.info(`🖨️ Imprimindo pedido da Mesa ${dadosPedido.mesaNumero} (${setor || 'Tudo'})...`);
                         
                         const urlImpressao = `/impressao-isolada?estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
                         
@@ -253,18 +360,19 @@ export default function ControleSalao() {
             });
         });
 
-        return () => {
-            unsubMesas();
-            unsubPedidos();
-        };
+        return () => { unsubMesas(); unsubPedidos(); };
     }, [estabelecimentoId]);
 
     useEffect(() => {
         if (!isGarcom) {
             setActions(
                 <div className="flex gap-2">
+                    {/* 🔥 NOVO BOTÃO DE NOTAS FISCAIS 🔥 */}
+                    <button onClick={abrirHistoricoVendas} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                        <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
+                    </button>
                     <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Histórico (F4)</span>
+                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Mesas Antigas</span>
                     </button>
                     <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
                         <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
@@ -278,7 +386,7 @@ export default function ControleSalao() {
             setActions(<div/>);
         }
         return () => clearActions();
-    }, [setActions, clearActions, isGarcom]);
+    }, [setActions, clearActions, isGarcom, abrirHistoricoVendas]);
 
     useEffect(() => {
         if (!estabelecimentoId) { if (userData) setLoading(false); return; }
@@ -356,21 +464,14 @@ export default function ControleSalao() {
         }
     };
 
-    // 🔥 NOVA LÓGICA DE CONFIRMAÇÃO COM FEEDBACK DE "ABRINDO" 🔥
     const handleConfirmarAbertura = async (qtd, nomeCliente) => {
         if (!mesaParaAbrir || isOpeningTable) return;
-        setIsOpeningTable(true); // Bloqueia o botão e mostra "Abrindo..."
+        setIsOpeningTable(true);
 
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), {
-                status: 'ocupada', 
-                pessoas: qtd, 
-                nome: nomeCliente || '', 
-                tipo: 'mesa',
-                updatedAt: serverTimestamp(), 
-                bloqueadoPor: null, 
-                bloqueadoPorNome: null, 
-                bloqueadoEm: null
+                status: 'ocupada', pessoas: qtd, nome: nomeCliente || '', tipo: 'mesa',
+                updatedAt: serverTimestamp(), bloqueadoPor: null, bloqueadoPorNome: null, bloqueadoEm: null
             });
             setIsModalAbrirMesaOpen(false);
             navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
@@ -381,7 +482,19 @@ export default function ControleSalao() {
         }
     };
 
-    const handlePagamentoConcluido = () => { setIsModalPagamentoOpen(false); setMesaParaPagamento(null); };
+    const handlePagamentoConcluido = (vendaFinalizada) => { 
+        setIsModalPagamentoOpen(false); 
+        setMesaParaPagamento(null); 
+        
+        if (vendaFinalizada && vendaFinalizada.id) {
+            setDadosRecibo(vendaFinalizada);
+            setNfceStatus(vendaFinalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
+            setNfceUrl(vendaFinalizada.fiscal?.pdf || null);
+            setMostrarRecibo(true);
+        } else {
+            toast.success("Mesa paga e encerrada com sucesso!");
+        }
+    };
 
     const mesasFiltradas = useMemo(() => {
         return mesas.filter(m => {
@@ -414,12 +527,42 @@ export default function ControleSalao() {
             {isRelatorioOpen && <RelatorioTicketsModal onClose={() => setIsRelatorioOpen(false)} estabelecimentoId={estabelecimentoId} />}
             {isHistoricoMesasOpen && <HistoricoMesasModal isOpen={isHistoricoMesasOpen} onClose={() => setIsHistoricoMesasOpen(false)} estabelecimentoId={estabelecimentoId} />}
             {isModalComissaoOpen && <RelatorioGarcomModal isOpen={isModalComissaoOpen} onClose={() => setIsModalComissaoOpen(false)} estabelecimentoId={estabelecimentoId} />}
+            
+            {/* 🔥 TELA DE RECIBO / EMISSÃO FISCAL IMPORTADA DO PDV 🔥 */}
+            <ModalRecibo 
+                visivel={mostrarRecibo} 
+                dados={dadosRecibo} 
+                onClose={() => setMostrarRecibo(false)} 
+                onNovaVenda={() => setMostrarRecibo(false)} 
+                onEmitirNfce={handleEmitirNfce} 
+                nfceStatus={nfceStatus} 
+                nfceUrl={nfceUrl} 
+                onBaixarXml={handleBaixarXml} 
+                onConsultarStatus={handleConsultarStatus} 
+                onBaixarPdf={handleBaixarPdf} 
+                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onEnviarWhatsApp={handleEnviarWhatsApp} 
+            />
 
-            {/* HEADER E FILTROS */}
+            {/* 🔥 HISTÓRICO DE NOTAS E VENDAS 🔥 */}
+            <ModalHistorico 
+                visivel={isHistoricoVendasOpen} 
+                onClose={() => setIsHistoricoVendasOpen(false)} 
+                vendas={vendasHistoricoExibicao} 
+                titulo="Histórico de Vendas & NFC-e" 
+                onSelecionarVenda={selecionarVendaHistorico} 
+                carregando={carregandoHistorico} 
+                onConsultarStatus={handleConsultarStatus} 
+                onBaixarPdf={handleBaixarPdf} 
+                onBaixarXml={handleBaixarXml} 
+                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onEnviarWhatsApp={handleEnviarWhatsApp} 
+                onProcessarLote={async () => { toast.info("Acesse a tela principal do PDV para processar lotes."); }}
+                onCancelarNfce={async () => { toast.info("Abra o recibo da venda específica para realizar o cancelamento fiscal."); }}
+            />
+
             <div className="sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-xl z-30 pb-4 pt-2 mb-2 w-full">
                 <div className="flex flex-col xl:flex-row justify-between gap-4 w-full">
-
-                    {/* Titulo e Voltar */}
                     <div className="flex flex-col gap-1 shrink-0">
                         {!isGarcom && (
                             <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-800 font-bold text-xs flex items-center gap-1 w-fit transition-colors">
@@ -434,17 +577,14 @@ export default function ControleSalao() {
                         </div>
                     </div>
 
-                    {/* Stats */}
                     <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:justify-center">
                         <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
                         <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
-                        {/* ADMIN VÊ O CAIXA ABERTO, GARÇOM NÃO */}
                         {!isGarcom && (
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
                         )}
                     </div>
 
-                    {/* Busca e Abas */}
                     <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto shrink-0">
                         <div className="relative w-full sm:w-56 md:w-72">
                             <IoSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -463,13 +603,10 @@ export default function ControleSalao() {
                 </div>
             </div>
 
-            {/* 🔥 LEGENDA AQUI EM CIMA 🔥 */}
             <LegendaCores />
 
-            {/* FUNDO BRANCO DAS MESAS */}
             <div className="bg-white rounded-3xl p-4 sm:p-5 border border-gray-100 shadow-sm min-h-[70vh] w-full">
                 {mesasFiltradas.length > 0 ? (
-                    // GRID DE MESAS
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4 w-full">
                         {mesasFiltradas.map(mesa => (
                             <MesaCard
@@ -494,13 +631,12 @@ export default function ControleSalao() {
                 )}
             </div>
 
-<div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '300px', height: '1000px', overflow: 'hidden' }}>
-    {filaImpressao.map((url, index) => (
-        <iframe key={index} src={url} title={`print-${index}`} style={{ width: '300px', height: '100%', border: 'none' }} />
-    ))}
-</div>
-
-isso aqui nao influencia nao 
+            {/* 🔥 IFRAMES INVISÍVEIS PARA IMPRESSÃO SILENCIOSA 🔥 */}
+            <div style={{ position: 'absolute', width: '0px', height: '0px', overflow: 'hidden', left: '-9999px' }}>
+                {filaImpressao.map((url, index) => (
+                    <iframe key={url + index} src={url} title={`print-${index}`} />
+                ))}
+            </div>
 
         </div>
     );

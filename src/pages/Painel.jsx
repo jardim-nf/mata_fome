@@ -1,3 +1,4 @@
+// src/pages/Painel.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -7,6 +8,9 @@ import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint } from "react-icons/io5";
+
+// IMPORTANDO NOSSO NOVO SERVIÇO DO QZ TRAY
+import { rotearEImprimir } from '../services/printService';
 
 // --- FUNÇÃO ANTI-TRAVAMENTO PARA CORTAR BEBIDAS E BOMBONIERE ---
 const isItemCozinha = (item) => {
@@ -122,6 +126,7 @@ function Painel() {
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
 
+    // FILA DE IMPRESSÃO (Agora guarda o pedido completo, não só o ID)
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
@@ -300,7 +305,12 @@ function Painel() {
                     impressosLocal.push(pedidoId);
                     if (impressosLocal.length > 50) impressosLocal.shift();
                     localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
-                    setPrintQueue(prev => prev.includes(pedidoId) ? prev : [...prev, pedidoId]);
+
+                    // MUDANÇA AQUI: Nós guardamos o pedido COMPLETO na fila, processado
+                    const pedidoParaImprimir = processarDadosPedido({ id: pedidoId, ...data });
+                    if (pedidoParaImprimir) {
+                        setPrintQueue(prev => prev.some(p => p.id === pedidoId) ? prev : [...prev, pedidoParaImprimir]);
+                    }
                 }
             }
         };
@@ -355,18 +365,12 @@ function Painel() {
                     const deveTocarCampainha = realmenteNovos.some(p => {
                         const isMesa = p.source === 'salao' || p.tipo === 'mesa';
                         
-                        // Se for um pedido de mesa/salão (Garçom):
                         if (isMesa) {
-                            // Se o botão está em "Auto: COZINHA", a campainha só toca se houver comida na comanda!
                             if (modoImpressaoRef.current === 'cozinha') {
                                 return p.itensCozinha && p.itensCozinha.length > 0;
                             }
-                            
-                            // (Opcional): Se você quisesse que mesa NUNCA tocasse campainha, era só colocar `return false;` aqui.
-                            // Mas deixei respeitando o "Auto: TUDO".
                         }
                         
-                        // Delivery sempre toca
                         return true; 
                     });
 
@@ -381,35 +385,60 @@ function Painel() {
         prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted, dataSelecionada]);
 
+// 🔥 MUDANÇA AQUI: LÓGICA HÍBRIDA DE IMPRESSÃO (QZ TRAY + NAVEGADOR PADRÃO) 🔥
     useEffect(() => {
-        if (!isPrinting && printQueue.length > 0 && estabelecimentoAtivo) {
-            setIsPrinting(true);
-            const pedidoId = printQueue[0];
-            
-            const setorQuery = modoImpressao === 'cozinha' ? '&setor=cozinha' : '';
-            const url = `/comanda/${pedidoId}?estabId=${estabelecimentoAtivo}${setorQuery}`;
-            
-            const width = 350; const height = 600;
-            const left = (window.screen.width - width) / 2; const top = (window.screen.height - height) / 2;
-            const printWindow = window.open(url, `AutoPrint_${pedidoId}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
+        const processarFilaDeImpressao = async () => {
+            if (!isPrinting && printQueue.length > 0 && estabelecimentoInfo) {
+                setIsPrinting(true);
+                const pedidoParaImprimir = printQueue[0];
 
-            if (printWindow) {
-                const timer = setInterval(() => {
-                    if (printWindow.closed) {
-                        clearInterval(timer);
-                        setPrintQueue(prev => prev.filter(id => id !== pedidoId));
-                        setIsPrinting(false);
+                try {
+                    const roteamento = estabelecimentoInfo.roteamentoImpressao || {};
+                    const impBalcao = estabelecimentoInfo.impressoraBalcao;
+                    const impCozinha = estabelecimentoInfo.impressoraCozinha;
+
+                    // 🚀 PLANO A: Tem impressora configurada? Usa o QZ Tray automático e silencioso!
+                    if (impBalcao || impCozinha) {
+                        await rotearEImprimir(pedidoParaImprimir, roteamento, impBalcao, impCozinha);
+                    } 
+                    // 🚀 PLANO B: Não configurou nada? Usa o jeito antigo (Abre a tela do Windows/Chrome)
+                    else {
+                        const setorQuery = modoImpressao === 'cozinha' ? '&setor=cozinha' : '';
+                        const url = `/comanda/${pedidoParaImprimir.id}?estabId=${estabelecimentoAtivo}${setorQuery}`;
+                        
+                        const width = 350; const height = 600;
+                        const left = (window.screen.width - width) / 2; const top = (window.screen.height - height) / 2;
+                        const printWindow = window.open(url, `AutoPrint_${pedidoParaImprimir.id}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
+
+                        if (!printWindow) {
+                            toast.warning("⚠️ Pop-up bloqueado! Permita os pop-ups no navegador para imprimir sozinho.");
+                            // Dá um tempinho antes de tentar o próximo se falhou
+                            await new Promise(r => setTimeout(r, 2000));
+                        } else {
+                            // Ouve até a janelinha do navegador fechar para passar para a próxima impressão da fila
+                            await new Promise(resolve => {
+                                const timer = setInterval(() => {
+                                    if (printWindow.closed) {
+                                        clearInterval(timer);
+                                        resolve();
+                                    }
+                                }, 500);
+                            });
+                        }
                     }
-                }, 500);
-            } else {
-                toast.warning("⚠️ Pop-up bloqueado! Permita os pop-ups no navegador para imprimir sozinho.");
-                setTimeout(() => {
-                    setPrintQueue(prev => prev.filter(id => id !== pedidoId));
+                } catch (error) {
+                    console.error("Erro ao imprimir:", error);
+                    toast.error("Falha ao imprimir. O QZ Tray está aberto?", { autoClose: 5000 });
+                } finally {
+                    // Remove da fila e libera pra próxima impressão
+                    setPrintQueue(prev => prev.filter(p => p.id !== pedidoParaImprimir.id));
                     setIsPrinting(false);
-                }, 2000);
+                }
             }
-        }
-    }, [printQueue, isPrinting, estabelecimentoAtivo, modoImpressao]);
+        };
+
+        processarFilaDeImpressao();
+    }, [printQueue, isPrinting, estabelecimentoInfo, modoImpressao, estabelecimentoAtivo]);
 
     const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'finalizado'], [abaAtiva]);
 

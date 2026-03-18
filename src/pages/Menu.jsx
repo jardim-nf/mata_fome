@@ -80,7 +80,7 @@ function Menu() {
     const [numeroAuthModal, setNumeroAuthModal] = useState('');
     const [bairroAuthModal, setBairroAuthModal] = useState('');
     const [cidadeAuthModal, setCidadeAuthModal] = useState('');
-const [referenciaAuthModal, setReferenciaAuthModal] = useState('');
+    const [referenciaAuthModal, setReferenciaAuthModal] = useState('');
     const auth = getAuth();
 
     const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -146,33 +146,79 @@ const [referenciaAuthModal, setReferenciaAuthModal] = useState('');
         }
     }, [carrinho, triggerCheckout]);
 
+    // ==========================================
+    // NOVA LÓGICA DE HORÁRIO DE FUNCIONAMENTO
+    // ==========================================
     const isLojaAberta = useMemo(() => {
         if (!estabelecimentoInfo) return false;
-        if (!estabelecimentoInfo.horaAbertura || !estabelecimentoInfo.horaFechamento) return true;
 
-        try {
-            const horaAtual = currentTime.getHours();
-            const minAtual = currentTime.getMinutes();
-            const tempoAtual = (horaAtual * 60) + minAtual;
+        const diasSemanaMap = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+        const diaAtualIndex = currentTime.getDay(); // 0 = Domingo, 1 = Segunda, etc...
+        const diaAtualKey = diasSemanaMap[diaAtualIndex];
 
-            const [hAbre, mAbre] = estabelecimentoInfo.horaAbertura.split(':').map(Number);
-            const tempoAbre = (hAbre * 60) + (mAbre || 0);
+        // Se tiver a nova estrutura 'horariosFuncionamento'
+        if (estabelecimentoInfo.horariosFuncionamento) {
+            const configDiaHoje = estabelecimentoInfo.horariosFuncionamento[diaAtualKey];
 
-            const [hFecha, mFecha] = estabelecimentoInfo.horaFechamento.split(':').map(Number);
-            const tempoFecha = (hFecha * 60) + (mFecha || 0);
+            // Se o dia estiver desativado na configuração, a loja está fechada
+            if (!configDiaHoje || !configDiaHoje.ativo) return false;
 
-            if (tempoAbre === tempoFecha) return true;
+            try {
+                const horaAtual = currentTime.getHours();
+                const minAtual = currentTime.getMinutes();
+                const tempoAtual = (horaAtual * 60) + minAtual;
 
-            if (tempoAbre < tempoFecha) {
-                return tempoAtual >= tempoAbre && tempoAtual <= tempoFecha;
-            } else {
-                return tempoAtual >= tempoAbre || tempoAtual <= tempoFecha;
+                const [hAbre, mAbre] = configDiaHoje.abertura.split(':').map(Number);
+                const tempoAbre = (hAbre * 60) + (mAbre || 0);
+
+                const [hFecha, mFecha] = configDiaHoje.fechamento.split(':').map(Number);
+                const tempoFecha = (hFecha * 60) + (mFecha || 0);
+
+                if (tempoAbre === tempoFecha) return true;
+
+                if (tempoAbre < tempoFecha) {
+                    return tempoAtual >= tempoAbre && tempoAtual <= tempoFecha;
+                } else {
+                    return tempoAtual >= tempoAbre || tempoAtual <= tempoFecha;
+                }
+            } catch (error) {
+                console.error("Erro ao calcular horário (novo):", error);
+                return true;
             }
-        } catch (error) {
-            console.error("Erro ao calcular horário:", error);
-            return true; 
+        } 
+        
+        // Se ainda estiver usando a estrutura antiga (horaAbertura e horaFechamento soltos)
+        if (estabelecimentoInfo.horaAbertura && estabelecimentoInfo.horaFechamento) {
+             try {
+                const horaAtual = currentTime.getHours();
+                const minAtual = currentTime.getMinutes();
+                const tempoAtual = (horaAtual * 60) + minAtual;
+
+                const [hAbre, mAbre] = estabelecimentoInfo.horaAbertura.split(':').map(Number);
+                const tempoAbre = (hAbre * 60) + (mAbre || 0);
+
+                const [hFecha, mFecha] = estabelecimentoInfo.horaFechamento.split(':').map(Number);
+                const tempoFecha = (hFecha * 60) + (mFecha || 0);
+
+                if (tempoAbre === tempoFecha) return true;
+
+                if (tempoAbre < tempoFecha) {
+                    return tempoAtual >= tempoAbre && tempoAtual <= tempoFecha;
+                } else {
+                    return tempoAtual >= tempoAbre || tempoAtual <= tempoFecha;
+                }
+            } catch (error) {
+                console.error("Erro ao calcular horário (antigo):", error);
+                return true; 
+            }
         }
+
+        // Se não tiver nenhuma configuração, assume aberto
+        return true;
+
     }, [estabelecimentoInfo, currentTime]);
+    // ==========================================
+
 
     const scrollToResumo = useCallback(() => {
         const elementoResumo = document.getElementById('resumo-carrinho');
@@ -849,12 +895,24 @@ const handleRegisterModal = async (e) => {
                             <div className="text-sm text-white/90 font-medium">
                                 <p className="flex items-center gap-2"><IoLocationSharp className="text-white" /> {estabelecimentoInfo.endereco?.rua}</p>
                                 
-                                <p className="flex items-center gap-2">
-                                    <IoTime className="text-white" /> 
-                                    {estabelecimentoInfo.horaAbertura && estabelecimentoInfo.horaFechamento 
-                                        ? `Aberto das ${estabelecimentoInfo.horaAbertura} às ${estabelecimentoInfo.horaFechamento}`
-                                        : "Horário não informado"
-                                    }
+                                <p className="flex items-center gap-2 mt-1 text-xs sm:text-sm">
+                                    <IoTime className="text-white shrink-0" /> 
+                                    {(() => {
+                                        if (estabelecimentoInfo.horariosFuncionamento) {
+                                            const diasSemanaMap = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+                                            const diaHoje = diasSemanaMap[currentTime.getDay()];
+                                            const configDia = estabelecimentoInfo.horariosFuncionamento[diaHoje];
+                                            
+                                            if (configDia && configDia.ativo) {
+                                                return `Aberto das ${configDia.abertura} às ${configDia.fechamento}`;
+                                            } else {
+                                                return "Fechado Hoje";
+                                            }
+                                        } else if (estabelecimentoInfo.horaAbertura && estabelecimentoInfo.horaFechamento) {
+                                            return `Aberto das ${estabelecimentoInfo.horaAbertura} às ${estabelecimentoInfo.horaFechamento}`;
+                                        }
+                                        return "Horário não informado";
+                                    })()}
                                 </p>
                             </div>
                         </div>

@@ -185,13 +185,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             return;
         }
 
-        // Identifica celulares reais e iPads, ignorando PCs com tela touch!
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || window.innerWidth < 1024;
 
         if (isMobileDevice) {
-            // =======================================================
-            // LÓGICA DO CELULAR (GARÇOM): Manda o aviso pro Firestore
-            // =======================================================
             try {
                 const mesaRef = doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesa.id);
                 await updateDoc(mesaRef, {
@@ -203,12 +199,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 console.error("Erro ao solicitar impressão:", erro);
                 toast.error("Erro ao comunicar com a impressora.");
             }
-            return; // 🛑 IMPORTANTE: O 'return' faz o celular parar aqui e não ler o HTML abaixo!
+            return; 
         }
 
-        // =======================================================
-        // LÓGICA DO COMPUTADOR (CAIXA): Gera o HTML e imprime na hora
-        // =======================================================
         const totalConsumo = calcularTotalConsumo();
         const valorTaxa = calcularValorTaxa();
         const jaPago = calcularJaPago();
@@ -292,14 +285,13 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
 
             const restanteFinal = (totalConsumo + valorTaxa) - totalJaPagoNovo;
-
             const mesaQuitada = restanteFinal <= 0.10;
 
             const pagamentosValidos = Object.fromEntries(
                 Object.entries(pagamentos).filter(([k]) => selecionados[k] && pagamentos[k].valor > 0)
             );
 
-            // 1. Registrar Venda no Firestore
+            // 1. Registrar Venda no Firestore (AGORA SALVANDO NA COLEÇÃO RAIZ 'vendas')
             const dadosVenda = {
                 mesaId: mesa.id,
                 mesaNumero: mesa.numero,
@@ -312,13 +304,15 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 tipoPagamento: tipoPagamento,
                 status: mesaQuitada ? 'pago' : 'pago_parcial',
                 criadoEm: serverTimestamp(),
+                createdAt: serverTimestamp(), // 🔥 IMPORTANTE: O PDV USA ESSE CAMPO PARA HISTÓRICOS
                 criadoPor: auth.currentUser?.uid,
                 funcionario: auth.currentUser?.displayName || 'Garçom'
             };
 
-            const docRef = await addDoc(collection(db, `estabelecimentos/${estabelecimentoId}/vendas`), dadosVenda);
+            // 🔥 CORREÇÃO PRINCIPAL: Salvamos na pasta global de 'vendas' onde a Função do Firebase procura a nota!
+            const docRef = await addDoc(collection(db, 'vendas'), dadosVenda);
 
-            // 🔥 2. BAIXA DE ESTOQUE
+            // 2. BAIXA DE ESTOQUE
             if (modo === 'total' || mesaQuitada) {
                 const todosItensDaMesa = mesa?.itens || mesa?.pedidos || [];
                 if (todosItensDaMesa.length > 0) {
@@ -329,6 +323,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             // 3. Disparar Emissão de NFC-e
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
+                // Agora funciona pois a venda foi salva na pasta certa!
                 const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
 
                 if (resultadoNfce.sucesso) {
@@ -372,7 +367,13 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 }
             }
 
-            if (onSucesso) onSucesso({ vendaId: docRef.id, parcial: !mesaQuitada });
+            if (onSucesso) {
+                onSucesso({ 
+                    id: docRef.id, 
+                    ...dadosVenda, 
+                    parcial: !mesaQuitada 
+                });
+            }
             onClose();
 
         } catch (error) {
@@ -413,7 +414,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     </div>
                     <h2 className="text-xl font-bold text-blue-100 mb-1">Restante a Pagar</h2>
                     
-                    {/* 🔥 CORRIGIDO: Formatação para R$ 00,00 brasileiro 🔥 */}
                     <span className="text-5xl font-black text-white">
                         {calcularRestanteMesa().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </span>
@@ -676,7 +676,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     };
 
     return (
-        // 🔥 A MÁGICA ESTÁ AQUI: sm:items-start e sm:pt-16 colam o Modal no topo da tela! 🔥
         <div className="fixed inset-0 z-[60] flex items-end sm:items-start sm:pt-16 justify-center">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
