@@ -1,5 +1,4 @@
-// src/App.jsx
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, PrivateRoute } from './context/AuthContext';
 import { HeaderProvider } from './context/HeaderContext';
@@ -8,58 +7,62 @@ import { PaymentProvider } from './context/PaymentContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import EntradaEstoqueXML from "./pages/admin/EntradaEstoqueXML"; // 👈 ADICIONE ESTA LINHA
-// Layout e Páginas
 import Layout from "./components/Layout";
+
+// Carregamento imediato (tela inicial e login — usuário vê primeiro)
 import Home from "./pages/Home";
 import Login from "./pages/Login";
-import Menu from "./pages/Menu";
-import ListaEstabelecimentos from "./pages/ListaEstabelecimentos";
-import Planos from "./pages/Planos";
-import ClientOrderHistory from './pages/ClientOrderHistory';
-import HomeRedirector from './pages/HomeRedirector';
 import ComandaParaImpressao from "./components/ComandaParaImpressao";
-import PaginaImpressao from './pages/PaginaImpressao';
-import AdminSettings from './pages/AdminSettings';
-import RelatorioCancelamentos from './pages/admin/RelatorioCancelamentos';
-import PdvScreen from './pages/admin/PdvScreen';
-import CheckoutPage from './pages/CheckoutPage';
-import ControleSalao from "./pages/ControleSalao";
-import Painel from "./pages/Painel";
-import AdminDashboard from "./pages/AdminDashboard";
-import AdminMenuManagement from "./pages/AdminMenuManagement";
-import TaxasDeEntrega from "./pages/TaxasDeEntrega";
-import AdminEstablishmentManagement from "./pages/AdminEstablishmentManagement";
-import NossosClientes from './pages/NossosClientes';
-import ClientDetails from "./pages/ClientDetails";
-import TelaPedidos from './pages/TelaPedidos';
-import AdminCouponManagement from './pages/AdminCouponManagement';
-import AdminReports from './pages/AdminReports';
-import AdminImageAssociation from './pages/admin/AdminImageAssociation';
-import AdminAnalytics from './pages/AdminAnalytics';
-import AdminMultiPlatform from './pages/AdminMultiPlatform';
-import ClientManagement from './pages/ClientManagement';
-import AdminOrderCategories from './pages/AdminOrderCategories';
-import GestaoFuncionarios from "./pages/admin/GestaoFuncionarios";
-import AdminEntregadores from './pages/admin/AdminEntregadores';
-import RelatorioEntregas from './pages/admin/RelatorioEntregas';
-import AdminPaymentSettings from './pages/admin/AdminPaymentSettings';
-import AdminColorSettings from './pages/AdminColorSettings';
-import MasterDashboard from './pages/MasterDashboard';
-import AdminEstabelecimentoCadastro from './pages/admin/AdminEstabelecimentoCadastro';
-import ListarEstabelecimentosMaster from './pages/admin/ListarEstabelecimentosMaster';
-import ListarPedidosMaster from './pages/admin/ListarPedidosMaster';
-import ListarUsuariosMaster from './pages/admin/ListarUsuariosMaster';
-import EditarEstabelecimentoMaster from './pages/admin/EditarEstabelecimentoMaster';
-import ImportarCardapioMaster from './pages/admin/ImportarCardapioMaster';
-import PedidoDetalhesMaster from './pages/admin/PedidoDetalhesMaster';
-import CriarUsuarioMaster from './pages/admin/CriarUsuarioMaster';
-import EditarUsuarioMaster from "./pages/admin/EditarUsuarioMaster";
-import AuditLogs from './pages/admin/AuditLogs';
-import AdminPlansManagement from './pages/admin/AdminPlansManagement';
-import FinanceiroMaster from './pages/admin/FinanceiroMaster';
-import ConfigFiscalScreen from './pages/admin/ConfigFiscalScreen';
-import ImpressaoIsolada from "./pages/ImpressaoIsolada";
+
+// Lazy: só carrega quando o usuário navegar até a rota
+const Menu = lazy(() => import("./pages/Menu"));
+const ListaEstabelecimentos = lazy(() => import("./pages/ListaEstabelecimentos"));
+const Planos = lazy(() => import("./pages/Planos"));
+const ClientOrderHistory = lazy(() => import('./pages/ClientOrderHistory'));
+const HomeRedirector = lazy(() => import('./pages/HomeRedirector'));
+const PaginaImpressao = lazy(() => import('./pages/PaginaImpressao'));
+const AdminSettings = lazy(() => import('./pages/AdminSettings'));
+const RelatorioCancelamentos = lazy(() => import('./pages/admin/RelatorioCancelamentos'));
+const PdvScreen = lazy(() => import('./pages/admin/PdvScreen'));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'));
+const ControleSalao = lazy(() => import("./pages/ControleSalao"));
+const Painel = lazy(() => import("./pages/Painel"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminMenuManagement = lazy(() => import("./pages/AdminMenuManagement"));
+const TaxasDeEntrega = lazy(() => import("./pages/TaxasDeEntrega"));
+const AdminEstablishmentManagement = lazy(() => import("./pages/AdminEstablishmentManagement"));
+const NossosClientes = lazy(() => import('./pages/NossosClientes'));
+const ClientDetails = lazy(() => import("./pages/ClientDetails"));
+const TelaPedidos = lazy(() => import('./pages/TelaPedidos'));
+const AdminCouponManagement = lazy(() => import('./pages/AdminCouponManagement'));
+const AdminReports = lazy(() => import('./pages/AdminReports'));
+const AdminImageAssociation = lazy(() => import('./pages/admin/AdminImageAssociation'));
+const AdminAnalytics = lazy(() => import('./pages/AdminAnalytics'));
+const AdminMultiPlatform = lazy(() => import('./pages/AdminMultiPlatform'));
+const ClientManagement = lazy(() => import('./pages/ClientManagement'));
+const AdminOrderCategories = lazy(() => import('./pages/AdminOrderCategories'));
+const GestaoFuncionarios = lazy(() => import("./pages/admin/GestaoFuncionarios"));
+const AdminEntregadores = lazy(() => import('./pages/admin/AdminEntregadores'));
+const RelatorioEntregas = lazy(() => import('./pages/admin/RelatorioEntregas'));
+const AdminPaymentSettings = lazy(() => import('./pages/admin/AdminPaymentSettings'));
+const AdminColorSettings = lazy(() => import('./pages/AdminColorSettings'));
+const MasterDashboard = lazy(() => import('./pages/MasterDashboard'));
+const AdminEstabelecimentoCadastro = lazy(() => import('./pages/admin/AdminEstabelecimentoCadastro'));
+const ListarEstabelecimentosMaster = lazy(() => import('./pages/admin/ListarEstabelecimentosMaster'));
+const ListarPedidosMaster = lazy(() => import('./pages/admin/ListarPedidosMaster'));
+const ListarUsuariosMaster = lazy(() => import('./pages/admin/ListarUsuariosMaster'));
+const EditarEstabelecimentoMaster = lazy(() => import('./pages/admin/EditarEstabelecimentoMaster'));
+const ImportarCardapioMaster = lazy(() => import('./pages/admin/ImportarCardapioMaster'));
+const PedidoDetalhesMaster = lazy(() => import('./pages/admin/PedidoDetalhesMaster'));
+const CriarUsuarioMaster = lazy(() => import('./pages/admin/CriarUsuarioMaster'));
+const EditarUsuarioMaster = lazy(() => import("./pages/admin/EditarUsuarioMaster"));
+const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
+const AdminPlansManagement = lazy(() => import('./pages/admin/AdminPlansManagement'));
+const FinanceiroMaster = lazy(() => import('./pages/admin/FinanceiroMaster'));
+const ConfigFiscalScreen = lazy(() => import('./pages/admin/ConfigFiscalScreen'));
+const ImpressaoIsolada = lazy(() => import("./pages/ImpressaoIsolada"));
+const EntradaEstoqueXML = lazy(() => import("./pages/admin/EntradaEstoqueXML"));
+
 function App() {
   return (
     <Router>
@@ -68,264 +71,50 @@ function App() {
           <AIProvider>
             <PaymentProvider>
               <NotificationProvider>
-
                 <div className="min-h-screen bg-gray-50">
-                  <Routes>
-                    {/* --- Rotas SEM o Layout Principal --- */}
-                    <Route path="/" element={<Home />} />
-                    <Route path="/home" element={<Home />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/login-admin" element={<Login />} />
+                  <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" /></div>}>
+                    <Routes>
+                      <Route path="/" element={<Home />} />
+                      <Route path="/home" element={<Home />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/login-admin" element={<Login />} />
+                      <Route path="/imprimir-comanda/:pedidoId" element={<ComandaParaImpressao />} />
+                      <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
+                      <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
+                      <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
+                      <Route path="/cardapio" element={<ListaEstabelecimentos />} />
+                      <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
+                      <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
 
-                    {/* 👇 ROTA PARA O IFRAME AUTOMÁTICO 👇 */}
-                    <Route path="/imprimir-comanda/:pedidoId" element={<ComandaParaImpressao />} />
-
-                    {/* Rotas legadas de impressão manual */}
-                    <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
-                    <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
-                    <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
-                    <Route path="/cardapio" element={<ListaEstabelecimentos />} />
-                    <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
-
-                    <Route
-                      path="/checkout"
-                      element={
-                        <PrivateRoute>
-                          <CheckoutPage />
-                        </PrivateRoute>
-                      }
-                    />
-
-                    {/* --- Rotas COM o Layout Principal --- */}
-                    <Route element={<Layout />}>
-                      <Route path="/planos" element={<Planos />} />
-                      <Route path="/painel-inicial" element={<HomeRedirector />} />
-
-                      <Route
-                        path="/pdv"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <PdvScreen />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/clientes-estabelecimento"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <ClientManagement />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/controle-salao"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}>
-                            <ControleSalao />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/estabelecimento/:estabelecimentoId/mesa/:id"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}>
-                            <TelaPedidos />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/painel"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}>
-                            <Painel />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin-dashboard"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminDashboard />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/configuracoes"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminSettings />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/dashboard"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}>
-                            <AdminDashboard />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/gerenciar-cardapio"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminMenuManagement />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/cores"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminColorSettings />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/ordenar-categorias"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminOrderCategories />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/taxas-de-entrega"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <TaxasDeEntrega />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/gerenciar-estabelecimentos"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminEstablishmentManagement />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/cupons"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminCouponManagement />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/payment-settings"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminPaymentSettings />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/nossos-clientes"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <NossosClientes />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/clientes/:clientId"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <ClientDetails />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/reports"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminReports />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/multi-platform"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminMultiPlatform />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/associar-imagens"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminImageAssociation />
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/analytics"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminAnalytics />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/gestao-funcionarios"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <GestaoFuncionarios />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/entregadores"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <AdminEntregadores />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/relatorio-entregas"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <RelatorioEntregas />
-                          </PrivateRoute>
-                        }
-                      />
-
-                      <Route
-                        path="/admin/relatorio-cancelamentos"
-                        element={
-                          <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                            <RelatorioCancelamentos />
-                          </PrivateRoute>
-                        }
-                      />
-
-                        <Route
-                          path="/admin/entrada-estoque"
-                          element={
-                            <PrivateRoute allowedRoles={['admin', 'masterAdmin']}>
-                              <EntradaEstoqueXML />
-                            </PrivateRoute>
-                          }
-                        />
+                      <Route element={<Layout />}>
+                        <Route path="/planos" element={<Planos />} />
+                        <Route path="/painel-inicial" element={<HomeRedirector />} />
+                        <Route path="/pdv" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><PdvScreen /></PrivateRoute>} />
+                        <Route path="/admin/clientes-estabelecimento" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ClientManagement /></PrivateRoute>} />
+                        <Route path="/controle-salao" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}><ControleSalao /></PrivateRoute>} />
+                        <Route path="/estabelecimento/:estabelecimentoId/mesa/:id" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}><TelaPedidos /></PrivateRoute>} />
+                        <Route path="/painel" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}><Painel /></PrivateRoute>} />
+                        <Route path="/admin-dashboard" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminDashboard /></PrivateRoute>} />
+                        <Route path="/admin/configuracoes" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminSettings /></PrivateRoute>} />
+                        <Route path="/dashboard" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}><AdminDashboard /></PrivateRoute>} />
+                        <Route path="/admin/gerenciar-cardapio" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminMenuManagement /></PrivateRoute>} />
+                        <Route path="/admin/cores" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminColorSettings /></PrivateRoute>} />
+                        <Route path="/admin/ordenar-categorias" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminOrderCategories /></PrivateRoute>} />
+                        <Route path="/admin/taxas-de-entrega" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><TaxasDeEntrega /></PrivateRoute>} />
+                        <Route path="/admin/gerenciar-estabelecimentos" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminEstablishmentManagement /></PrivateRoute>} />
+                        <Route path="/admin/cupons" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminCouponManagement /></PrivateRoute>} />
+                        <Route path="/admin/payment-settings" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminPaymentSettings /></PrivateRoute>} />
+                        <Route path="/nossos-clientes" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><NossosClientes /></PrivateRoute>} />
+                        <Route path="/admin/clientes/:clientId" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ClientDetails /></PrivateRoute>} />
+                        <Route path="/admin/reports" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminReports /></PrivateRoute>} />
+                        <Route path="/admin/multi-platform" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminMultiPlatform /></PrivateRoute>} />
+                        <Route path="/admin/associar-imagens" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminImageAssociation /></PrivateRoute>} />
+                        <Route path="/admin/analytics" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminAnalytics /></PrivateRoute>} />
+                        <Route path="/admin/gestao-funcionarios" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><GestaoFuncionarios /></PrivateRoute>} />
+                        <Route path="/admin/entregadores" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminEntregadores /></PrivateRoute>} />
+                        <Route path="/admin/relatorio-entregas" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioEntregas /></PrivateRoute>} />
+                        <Route path="/admin/relatorio-cancelamentos" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioCancelamentos /></PrivateRoute>} />
+                        <Route path="/admin/entrada-estoque" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><EntradaEstoqueXML /></PrivateRoute>} />
 
                         {/* Rotas Master */}
                         <Route path="/master-dashboard" element={<PrivateRoute allowedRoles={['masterAdmin']}><MasterDashboard /></PrivateRoute>} />
@@ -343,28 +132,15 @@ function App() {
                         <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminImageAssociation /></PrivateRoute>} />
                         <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={['masterAdmin']}><AuditLogs /></PrivateRoute>} />
                         <Route path="/admin/config-fiscal" element={<ConfigFiscalScreen />} />
-                        {/* Fallback */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Route>
 
-                      {/* Rota para o histórico de pedidos */}
                       <Route path="/historico-pedidos" element={<PrivateRoute><ClientOrderHistory /></PrivateRoute>} />
-                  </Routes>
+                    </Routes>
+                  </Suspense>
 
-                  <ToastContainer
-                    position="bottom-right"
-                    autoClose={5000}
-                    hideProgressBar={false}
-                    newestOnTop={false}
-                    closeOnClick
-                    rtl={false}
-                    pauseOnFocusLoss
-                    draggable
-                    pauseOnHover
-                    theme="colored"
-                  />
+                  <ToastContainer position="bottom-right" autoClose={5000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
                 </div>
-
               </NotificationProvider>
             </PaymentProvider>
           </AIProvider>

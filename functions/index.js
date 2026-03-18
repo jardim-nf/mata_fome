@@ -20,10 +20,15 @@ const mercadoPagoToken = defineSecret("MP_ACCESS_TOKEN");
 // ==================================================================
 // 1. SEU AGENTE DE IA
 // ==================================================================
+// DEPOIS
 export const chatAgent = onCall({
     cors: true,
     secrets: [openAiApiKey]
 }, async (request) => {
+
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Você precisa estar logado para usar o assistente.');
+    }
 
     const openai = new OpenAI({ apiKey: openAiApiKey.value() });
     const data = request.data || {};
