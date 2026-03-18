@@ -389,8 +389,7 @@ const PdvScreen = () => {
 
     return (
         // 🔥 Container ajustado para fixed inset-0 (sem w-full nem h-dvh explícitos)
-        <div id="main-app-wrapper" className="fixed inset-0 flex flex-col bg-slate-100 font-sans text-slate-800 overflow-hidden z-[9999]">
-            
+<div id="main-app-wrapper" className="relative w-full h-[calc(100vh-70px)] flex flex-col bg-slate-100 font-sans text-slate-800 overflow-hidden">            
             {/* Notificações Topo */}
             {barcodeAviso && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-[9999] font-bold text-xs flex items-center gap-2">
