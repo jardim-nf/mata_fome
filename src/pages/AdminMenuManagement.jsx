@@ -657,7 +657,7 @@ function AdminMenuManagement() {
                         </div>
                         <div>
                             <label className="block text-sm font-semibold mb-2 text-gray-700">Descrição</label>
-                            <textarea name="description" value={formData.descricao} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all min-h-[100px] resize-none" placeholder="Ingredientes e detalhes..."/>
+                            <textarea name="descricao" value={formData.descricao} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all min-h-[100px] resize-none" placeholder="Ingredientes e detalhes..."/>
                         </div>
                     </div>
 

@@ -365,8 +365,8 @@ const handleVerXmlCancelamento = async () => {
                 <button onClick={() => window.print()} className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-50 shadow-sm flex items-center gap-2 font-bold text-sm">
                     <FaPrint /> Imprimir
                 </button>
-                <div className="bg-black text-white px-5 py-2 rounded-xl shadow-lg flex flex-col items-end">
-                    <span className="text-[10px] text-gray-400 uppercase font-bold">Total</span>
+                <div className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white px-5 py-2 rounded-xl shadow-lg flex flex-col items-end">
+                    <span className="text-[10px] text-yellow-100 uppercase font-bold">Total</span>
                     <span className="text-lg font-bold">R$ {totalExibicao.toFixed(2).replace('.', ',')}</span>
                 </div>
             </div>

@@ -66,3 +66,35 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 });
+
+// 🔔 Push Notification — avisar cliente sobre status do pedido
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : {};
+  const title = data.title || '🍔 MataFome';
+  const options = {
+    body: data.body || 'Atualização do seu pedido!',
+    icon: data.icon || '/food.png',
+    badge: '/food.png',
+    vibrate: [200, 100, 200],
+    tag: data.tag || 'pedido-update',
+    data: { url: data.url || '/' },
+    actions: [
+      { action: 'open', title: 'Ver Pedido' }
+    ]
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Clique na notificação
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes(url) && 'focus' in client) return client.focus();
+      }
+      return clients.openWindow(url);
+    })
+  );
+});

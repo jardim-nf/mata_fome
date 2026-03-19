@@ -8,25 +8,12 @@ import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
-  FaStore, 
-  FaUser, 
-  FaSearch, 
-  FaFilter, 
-  FaBoxOpen, 
-  FaMotorcycle, 
-  FaCheckCircle, 
-  FaTimesCircle, 
-  FaClock, 
-  FaSignOutAlt,
-  FaExclamationTriangle,
-  FaRedoAlt,
-  FaChevronDown,
-  FaChevronUp,
-  FaArrowLeft,
-  FaReceipt,
-  FaSync,
-  FaMapMarkerAlt
+  FaStore, FaUser, FaSearch, FaFilter, FaBoxOpen, FaMotorcycle, FaCheckCircle, 
+  FaTimesCircle, FaClock, FaSignOutAlt, FaExclamationTriangle, FaRedoAlt,
+  FaChevronDown, FaChevronUp, FaArrowLeft, FaReceipt, FaSync, FaMapMarkerAlt,
+  FaBolt, FaCrown
 } from 'react-icons/fa';
+import { IoSearchOutline } from 'react-icons/io5';
 
 const LIMIT = 50;
 const DEBOUNCE_DELAY = 300;
@@ -256,37 +243,24 @@ const usePedidosMaster = (filterEstabelecimento, estabMap) => {
 
 // --- COMPONENTES VISUAIS PREMIUM ---
 
-const DashboardHeader = ({ navigate, logout }) => (
-  <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100/50 shadow-sm h-16 transition-all duration-300">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
-      <div className="flex justify-between items-center h-full">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-          <div className="flex items-center gap-2">
-              <div className="bg-gradient-to-br from-yellow-400 to-yellow-500 text-white font-bold p-1.5 rounded-lg shadow-md transform -skew-x-6 group-hover:rotate-3 transition-transform">
-                  <FaStore />
-              </div>
-              <span className="text-gray-900 font-black text-xl tracking-tighter">
-                  Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-yellow-600">Food</span>
-              </span>
-          </div>
+const IdeaFoodNavbar = ({ navigate, logout, userName }) => (
+  <nav className="sticky top-0 z-50 h-16 border-b border-slate-100 bg-white/80 backdrop-blur-xl shadow-sm">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
+      <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25 group-hover:scale-105 transition-transform">
+          <FaBolt className="text-white text-xs" />
         </div>
-        <div className="flex items-center gap-5">
-          <div className="hidden md:flex flex-col items-end">
-            <span className="text-sm font-bold text-gray-800 tracking-tight">Admin Master</span>
-            <span className="text-[9px] uppercase tracking-widest text-yellow-600 font-bold bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-100 mt-0.5">Acesso Total</span>
-          </div>
-          <div className="h-8 w-px bg-gray-200 mx-2 hidden md:block"></div>
-          <button 
-              onClick={logout} 
-              className="text-gray-400 hover:text-red-500 transition-all duration-300 p-2 rounded-xl hover:bg-red-50/80 active:scale-95"
-              title="Encerrar Sessão"
-          >
-            <FaSignOutAlt size={18} />
-          </button>
+        <span className="text-slate-900 font-black text-lg tracking-tight">Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-amber-500">Food</span></span>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-center"><FaCrown className="text-yellow-600 text-[10px]" /></div>
+          <span className="text-sm font-bold text-slate-700">{userName || 'Admin'}</span>
         </div>
+        <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all"><FaSignOutAlt size={14} /></button>
       </div>
     </div>
-  </header>
+  </nav>
 );
 
 const StatusBadge = ({ statusRaw, statusLabel }) => {
@@ -315,9 +289,9 @@ const OrderCard = ({ item, onViewDetails }) => {
   const formattedValue = useMemo(() => formatCurrency(item.valorFinal), [item.valorFinal]);
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/50 hover:-translate-y-1 transition-all duration-500 group flex flex-col relative overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-100 hover:-translate-y-0.5 transition-all duration-300 group flex flex-col relative overflow-hidden">
       {/* Top Banner indicating type */}
-      <div className={`h-2 w-full ${item.tipoExibicao === 'SALÃO' ? 'bg-blue-400' : 'bg-orange-400'}`} />
+      <div className={`h-1.5 w-full ${item.tipoExibicao === 'SALÃO' ? 'bg-gradient-to-r from-blue-400 to-indigo-400' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`} />
 
       <div className="p-6 flex flex-col h-full">
           <div className="flex justify-between items-start mb-5">
@@ -368,7 +342,7 @@ const OrderCard = ({ item, onViewDetails }) => {
             </div>
             <button 
               onClick={() => onViewDetails(item.id)} 
-              className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg hover:shadow-gray-900/20 transition-all active:scale-95"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-yellow-400/30 transition-all active:scale-95"
             >
               <FaReceipt /> Detalhes
             </button>
@@ -382,52 +356,40 @@ const FilterBar = ({
   searchTerm, onSearchChange, filterEstabelecimento, onEstabelecimentoChange, estabelecimentosList, filterStatus, onStatusChange, totalItems, displayedItems
 }) => {
   return (
-    <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/30 border border-gray-100 p-4 mb-8 flex flex-col xl:flex-row gap-4 relative z-10">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6 flex flex-col xl:flex-row gap-3 relative z-10">
       <div className="flex-1 relative">
-        <FaSearch className="absolute left-5 top-4 text-gray-400" />
+        <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input 
           type="text" 
           placeholder="Buscar Pedido (ID, Cliente ou Loja)..." 
-          className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border-2 border-transparent hover:border-gray-100 rounded-2xl focus:outline-none focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/10 focus:bg-white transition-all font-semibold text-gray-700 text-sm"
+          className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all font-semibold text-slate-700 text-sm"
           value={searchTerm} 
           onChange={e => onSearchChange(e.target.value)}
         />
       </div>
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative min-w-[220px] group">
-          <FaStore className="absolute left-5 top-4 text-gray-400 z-10" />
-          <select 
-            className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border-2 border-transparent hover:border-gray-100 rounded-2xl focus:outline-none focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/10 focus:bg-white transition-all font-semibold text-gray-700 text-sm appearance-none cursor-pointer relative z-0" 
-            value={filterEstabelecimento} 
-            onChange={e => onEstabelecimentoChange(e.target.value)}
-          >
-            <option value="todos">Rede: Todas as Lojas</option>
-            {estabelecimentosList.map(e => (
-              <option key={e.id} value={e.id}>{e.nome}</option>
-            ))}
-          </select>
-          <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-400 group-hover:text-yellow-500 transition-colors">
-              <FaChevronDown className="text-xs" />
-          </div>
-        </div>
-        <div className="relative min-w-[200px] group">
-          <FaFilter className="absolute left-5 top-4 text-gray-400 z-10" />
-          <select 
-            className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border-2 border-transparent hover:border-gray-100 rounded-2xl focus:outline-none focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/10 focus:bg-white transition-all font-semibold text-gray-700 text-sm appearance-none cursor-pointer relative z-0" 
-            value={filterStatus} 
-            onChange={e => onStatusChange(e.target.value)}
-          >
-            {STATUS_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-400 group-hover:text-yellow-500 transition-colors">
-              <FaChevronDown className="text-xs" />
-          </div>
-        </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <select 
+          className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] font-bold text-slate-600 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 appearance-none cursor-pointer min-w-[180px]" 
+          value={filterEstabelecimento} 
+          onChange={e => onEstabelecimentoChange(e.target.value)}
+        >
+          <option value="todos">Todas as Lojas</option>
+          {estabelecimentosList.map(e => (
+            <option key={e.id} value={e.id}>{e.nome}</option>
+          ))}
+        </select>
+        <select 
+          className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] font-bold text-slate-600 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 appearance-none cursor-pointer min-w-[160px]" 
+          value={filterStatus} 
+          onChange={e => onStatusChange(e.target.value)}
+        >
+          {STATUS_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
       </div>
-      <div className="flex items-center px-5 py-3 bg-gray-50 rounded-2xl text-xs font-bold text-gray-500 border border-gray-100 shadow-inner">
-        <span>Exibindo {displayedItems} de {totalItems}</span>
+      <div className="flex items-center px-3 py-2 bg-slate-50 rounded-xl text-[11px] font-bold text-slate-400 border border-slate-100">
+        <span>{displayedItems} de {totalItems}</span>
       </div>
     </div>
   );
@@ -538,22 +500,21 @@ function ListarPedidosMaster() {
   }, []);
 
   // Auth loading
+  const masterUserName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Admin';
+
   if (authLoading) {
-    return <div className="flex h-screen items-center justify-center bg-[#f8fafc]"><div className="w-12 h-12 border-4 border-gray-200 border-t-yellow-400 rounded-full animate-spin shadow-lg"></div></div>;
+    return <div className="flex h-screen items-center justify-center bg-slate-50"><div className="w-12 h-12 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin"></div></div>;
   }
 
   // Auth check
   if (!currentUser || !isMasterAdmin) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-xl p-10 max-w-md text-center border border-gray-100">
-          <FaExclamationTriangle className="mx-auto text-5xl text-rose-500 mb-5 animate-pulse" />
-          <h2 className="text-2xl font-black text-gray-900 mb-2">Acesso Negado</h2>
-          <p className="text-gray-500 mb-8 font-medium">Você não tem os privilégios necessários (Master) para visualizar a rede.</p>
-          <button
-            onClick={() => navigate('/')}
-            className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-lg active:scale-95"
-          >
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50/20 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-sm p-10 max-w-md text-center border border-slate-100">
+          <FaExclamationTriangle className="mx-auto text-4xl text-red-400 mb-5 animate-pulse" />
+          <h2 className="text-xl font-black text-slate-900 mb-2">Acesso Negado</h2>
+          <p className="text-slate-500 mb-8 font-medium text-sm">Você não tem os privilégios necessários.</p>
+          <button onClick={() => navigate('/')} className="w-full py-3.5 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl font-black hover:shadow-lg hover:shadow-yellow-400/30 transition-all active:scale-95">
             Voltar ao Início
           </button>
         </div>
@@ -566,30 +527,30 @@ function ListarPedidosMaster() {
   return (
     <div 
       ref={containerRef}
-      className="bg-[#f8fafc] min-h-screen pt-24 pb-12 px-4 sm:px-6 font-sans overflow-auto selection:bg-yellow-200 selection:text-black"
+      className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 min-h-screen font-sans overflow-auto"
     >
-      <DashboardHeader navigate={navigate} logout={logout} />
+      <IdeaFoodNavbar navigate={navigate} logout={async () => { await logout(); navigate('/'); }} userName={masterUserName} />
 
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
         
         {/* HEADER DA PÁGINA */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 pt-8">
           <div>
             <button 
               onClick={() => navigate('/master-dashboard')} 
-              className="text-gray-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group"
+              className="text-slate-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group"
             >
-              <span className="bg-white p-1.5 rounded-lg shadow-sm border border-gray-100 group-hover:border-yellow-200 transition-colors">
+              <span className="bg-white p-1.5 rounded-lg shadow-sm border border-slate-100 group-hover:border-yellow-200 transition-colors">
                 <FaArrowLeft />
               </span> 
-              Voltar ao Painel Master
+              Voltar ao Dashboard
             </button>
             <div className="flex items-center gap-3 mb-2">
-                <span className="bg-gray-900 text-yellow-400 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Central de Despacho</span>
-                {ordersLoading && <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest"><FaSync className="animate-spin" /> Live</span>}
+                <span className="bg-yellow-50 text-yellow-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-yellow-200">Central de Despacho</span>
+                {ordersLoading && <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase tracking-widest"><FaSync className="animate-spin" /> Live</span>}
             </div>
-            <h1 className="text-4xl font-black text-gray-900 tracking-tight">Monitor de Pedidos</h1>
-            <p className="text-gray-500 text-sm mt-2 font-medium">Acompanhamento centralizado de todas as lojas (Delivery e Salão).</p>
+            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Monitor de Pedidos</h1>
+            <p className="text-slate-500 text-sm mt-1 font-medium">Acompanhamento centralizado — Delivery e Salão.</p>
           </div>
         </div>
         
@@ -608,8 +569,9 @@ function ListarPedidosMaster() {
 
         {/* ERROR STATE */}
         {error && (
-          <div className="mb-6">
-            <ErrorAlert message={error} onRetry={() => window.location.reload()} />
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-sm font-bold flex items-center gap-2">
+            <FaExclamationTriangle /> {error}
+            <button onClick={() => window.location.reload()} className="ml-auto text-red-500 hover:text-red-700 font-bold text-xs underline">Recarregar</button>
           </div>
         )}
 
@@ -650,7 +612,7 @@ function ListarPedidosMaster() {
         {showScrollTop && (
           <button
             onClick={scrollToTop}
-            className="fixed bottom-8 right-8 bg-gray-900 text-yellow-400 p-4 rounded-full shadow-xl shadow-gray-900/30 hover:bg-black hover:scale-110 transition-all focus:outline-none z-50 group"
+            className="fixed bottom-8 right-8 bg-gradient-to-r from-yellow-400 to-amber-500 text-white p-4 rounded-full shadow-xl shadow-yellow-400/30 hover:scale-110 transition-all focus:outline-none z-50 group"
             aria-label="Voltar ao topo"
           >
             <FaChevronUp className="group-hover:-translate-y-1 transition-transform" />

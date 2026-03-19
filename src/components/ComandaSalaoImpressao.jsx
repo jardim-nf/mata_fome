@@ -109,12 +109,22 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
                     <div className="obs">** {item.observacao}</div>
                   )}
                   
-                  {/* Adicionais */}
-                  {item.adicionais && item.adicionais.length > 0 && (
-                    <div className="obs">
-                      + {item.adicionais.map(a => a.nome).join(', ')}
-                    </div>
-                  )}
+                  {/* Adicionais — checa ambas as chaves possíveis */}
+                  {(() => {
+                    const listaAdicionais = item.adicionaisSelecionados || item.adicionais || [];
+                    if (!listaAdicionais || listaAdicionais.length === 0) return null;
+                    return (
+                      <div className="obs">
+                        {listaAdicionais.map((a, ai) => {
+                          const precoAdc = a.preco || a.valor || 0;
+                          const nomeAdc = a.nome || 'Adicional';
+                          return (
+                            <div key={ai}>+ {nomeAdc}{precoAdc > 0 ? ` (R$ ${Number(precoAdc).toFixed(2)})` : ''}</div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

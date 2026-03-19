@@ -68,6 +68,7 @@ const PrevisaoDemanda = lazy(() => import("./pages/admin/PrevisaoDemanda"));
 const MarketingConfig = lazy(() => import("./pages/admin/MarketingConfig"));
 const ResponderAvaliacoes = lazy(() => import("./pages/admin/ResponderAvaliacoes"));
 const RelatorioLucro = lazy(() => import("./pages/admin/RelatorioLucro"));
+import Divulgacao from './pages/Divulgacao';
 
 function App() {
   return (
@@ -90,6 +91,7 @@ function App() {
                       <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
                       <Route path="/cardapio" element={<ListaEstabelecimentos />} />
                       <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
+                      <Route path="/divulgacao" element={<Divulgacao />} />
                       <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
 
                       <Route element={<Layout />}>

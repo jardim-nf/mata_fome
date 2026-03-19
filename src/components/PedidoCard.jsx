@@ -253,6 +253,10 @@ const PedidoCard = ({
             if (item.tipo !== 'salao' && item.tipo !== 'mesa') {
                 enviarWhatsApp(nextStatus);
             }
+            // 🔔 Push notification para o cliente
+            import('../utils/notifications.js').then(({ notificarStatusPedido }) => {
+                notificarStatusPedido(nextStatus, item.id);
+            }).catch(() => {});
         } catch (error) { console.error(error); alert("Erro ao atualizar!"); } 
         finally { setIsUpdating(false); }
     }, [item, selectedMotoboyId, motoboysDisponiveis, onAtribuirMotoboy, onUpdateStatus, isUpdating]);

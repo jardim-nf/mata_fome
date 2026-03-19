@@ -495,6 +495,8 @@ export default function Menu() {
       limparCarrinho();
       setShowPaymentModal(false);
       toast.success('Pedido enviado com sucesso!');
+      // Pedir permissão para notificações push
+      import('../utils/notifications.js').then(({ pedirPermissaoNotificacao }) => pedirPermissaoNotificacao());
     } catch (e) {
       console.error('Erro ao salvar pedido:', e);
       toast.error('Erro ao finalizar pedido. Tente novamente.');

@@ -338,7 +338,7 @@ function ImportarCardapioMaster() {
                     <button
                         type="submit"
                         disabled={!selectedEstabelecimentoId || !file || importing}
-                        className="w-full py-4 bg-black text-white rounded-xl font-bold text-lg hover:bg-gray-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                        className="w-full py-4 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-yellow-400/30 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                     >
                         {importing ? (
                             <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</>

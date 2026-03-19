@@ -1,5 +1,6 @@
 import React from 'react';
 import { IoCart, IoAdd, IoRemove, IoTrash } from 'react-icons/io5';
+import SplitPayment from './SplitPayment';
 
 const formatarMoeda = (val) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
@@ -113,6 +114,9 @@ export default function CartSection({
               <span>{formatarMoeda(finalOrderTotal)}</span>
             </div>
           </div>
+
+          {/* Dividir conta */}
+          <SplitPayment total={finalOrderTotal} />
 
           {!isLojaAberta ? (
             <button disabled className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-gray-500 bg-gray-200 cursor-not-allowed border-2 border-gray-300">

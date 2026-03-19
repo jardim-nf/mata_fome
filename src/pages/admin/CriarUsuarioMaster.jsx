@@ -1,5 +1,5 @@
-// src/pages/admin/CriarUsuarioMaster.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+// src/pages/admin/CriarUsuarioMaster.jsx — Premium Light
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -7,77 +7,18 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { auditLogger } from '../../utils/auditLogger';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-
-// --- Componente de Header Master Dashboard ---
-function DashboardHeader({ currentUser, logout, navigate }) {
-  const userEmailPrefix = currentUser.email ? currentUser.email.split('@')[0] : 'Usuário';
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      toast.success('Você foi desconectado com sucesso!');
-      navigate('/');
-    } catch (error) {
-      console.error("Erro ao fazer logout:", error);
-      toast.error('Ocorreu um erro ao tentar desconectar.');
-    }
-  };
-
-  return (
-    <header className="fixed top-0 left-0 right-0 z-20 p-6 flex justify-between items-center bg-black shadow-md border-b border-gray-800">
-      <div className="font-extrabold text-2xl text-white cursor-pointer hover:text-gray-200 transition-colors duration-300" onClick={() => navigate('/')}>
-        DEU FOME <span className="text-yellow-500">.</span>
-      </div>
-      <div className="flex items-center space-x-4">
-        <span className="text-white text-md font-medium">Olá, {userEmailPrefix}!</span>
-        <Link to="/master-dashboard" className="px-4 py-2 rounded-full text-black bg-yellow-500 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-yellow-600 hover:shadow-md">
-            Dashboard
-        </Link>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 rounded-full text-white border border-gray-600 font-semibold text-sm transition-all duration-300 ease-in-out hover:bg-gray-800 hover:border-gray-500"
-        >
-          Sair
-        </button>
-      </div>
-    </header>
-  );
-}
-
-// --- Componente para Inputs ---
-function FormInput({ label, name, value, onChange, type = 'text', helpText = '', required = false, ...props }) {
-    return (
-        <div>
-            <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
-                {label}
-                {required && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <input
-                id={name}
-                name={name}
-                value={value || ''}
-                onChange={onChange}
-                type={type}
-                required={required}
-                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 transition-colors duration-300"
-                {...props}
-            />
-            {helpText && <p className="mt-1 text-xs text-gray-500">{helpText}</p>}
-        </div>
-    );
-}
+import { 
+  FaArrowLeft, FaUserPlus, FaSignOutAlt, FaStore, FaBolt, FaCrown,
+  FaEnvelope, FaLock, FaUser, FaUserShield, FaToggleOn, FaToggleOff
+} from 'react-icons/fa';
 
 function CriarUsuarioMaster() {
     const navigate = useNavigate();
     const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
 
     const [formData, setFormData] = useState({
-        nome: '',
-        email: '',
-        senha: '',
-        isAdmin: false,
-        isMasterAdmin: false,
-        ativo: true,
+        nome: '', email: '', senha: '',
+        isAdmin: false, isMasterAdmin: false, ativo: true,
         estabelecimentosGerenciados: [],
     });
     const [loadingForm, setLoadingForm] = useState(false);
@@ -85,87 +26,45 @@ function CriarUsuarioMaster() {
     const [estabelecimentosList, setEstabelecimentosList] = useState([]);
     const [loadingEstabelecimentos, setLoadingEstabelecimentos] = useState(true);
 
-    // Controle de acesso
     useEffect(() => {
-        if (!authLoading) {
-            if (!currentUser || !isMasterAdmin) {
-                toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
-                navigate('/master-dashboard');
-                return;
-            }
+        if (!authLoading && (!currentUser || !isMasterAdmin)) {
+            toast.error('Acesso negado.');
+            navigate('/master-dashboard');
         }
     }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
-    // Carregar lista de estabelecimentos
     useEffect(() => {
         if (!isMasterAdmin || !currentUser) return;
-
-        const fetchEstabelecimentos = async () => {
+        const fetch = async () => {
             try {
                 const q = query(collection(db, 'estabelecimentos'), orderBy('nome', 'asc'));
-                const querySnapshot = await getDocs(q);
-                const list = querySnapshot.docs.map(doc => ({ 
-                    id: doc.id, 
-                    nome: doc.data().nome 
-                }));
-                setEstabelecimentosList(list);
-            } catch (err) {
-                console.error("Erro ao carregar lista de estabelecimentos:", err);
-                toast.error("Erro ao carregar lista de estabelecimentos.");
-            } finally {
-                setLoadingEstabelecimentos(false);
-            }
+                const snap = await getDocs(q);
+                setEstabelecimentosList(snap.docs.map(d => ({ id: d.id, nome: d.data().nome })));
+            } catch (err) { toast.error("Erro ao carregar estabelecimentos."); }
+            finally { setLoadingEstabelecimentos(false); }
         };
-        fetchEstabelecimentos();
+        fetch();
     }, [isMasterAdmin, currentUser]);
 
-    // Handlers
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value
-        }));
+        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
     const handleEstabelecimentoChange = (e) => {
-        const { options } = e.target;
-        const selectedValues = [];
-        for (let i = 0, l = options.length; i < l; i++) {
-            if (options[i].selected) {
-                selectedValues.push(options[i].value);
-            }
-        }
-        setFormData(prev => ({
-            ...prev,
-            estabelecimentosGerenciados: selectedValues
-        }));
+        const selected = [...e.target.options].filter(o => o.selected).map(o => o.value);
+        setFormData(prev => ({ ...prev, estabelecimentosGerenciados: selected }));
     };
-
-// FUNÇÃO MELHORADA PARA CRIAR USUÁRIO
-
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoadingForm(true);
         setFormError('');
 
-        // Validações básicas
-        if (formData.senha.length < 6) {
-            setFormError('A senha deve ter pelo menos 6 caracteres');
-            setLoadingForm(false);
-            return;
-        }
-
-        if (formData.isAdmin && formData.estabelecimentosGerenciados.length === 0) {
-            setFormError('Selecione pelo menos um estabelecimento para administradores');
-            setLoadingForm(false);
-            return;
-        }
+        if (formData.senha.length < 6) { setFormError('A senha deve ter pelo menos 6 caracteres'); setLoadingForm(false); return; }
+        if (formData.isAdmin && formData.estabelecimentosGerenciados.length === 0) { setFormError('Selecione pelo menos um estabelecimento'); setLoadingForm(false); return; }
 
         try {
-            // Ajustamos os nomes (displayName e password) para casar EXATAMENTE 
-            // com o que o seu backend (functions/index.js) está esperando ler.
             const userDataForCF = {
                 displayName: formData.nome.trim(),
                 email: formData.email.trim().toLowerCase(),
@@ -174,231 +73,167 @@ function CriarUsuarioMaster() {
                 isAdmin: formData.isAdmin,
                 isMasterAdmin: formData.isMasterAdmin,
                 ativo: formData.ativo,
-                // Passamos o 'role' que o backend também espera
                 role: formData.isMasterAdmin ? 'master' : (formData.isAdmin ? 'admin' : 'usuario')
             };
 
-            console.log('📤 Enviando dados para Cloud Function:', userDataForCF);
-
-            // 🌐 USANDO HTTPSCALLABLE (Padrão Oficial do Firebase)
             const functions = getFunctions();
             const criarUsuario = httpsCallable(functions, 'createUserByMasterAdminHttp');
-            
-            // O Firebase cuida do JSON.stringify e do Envio do Token de Autenticação automaticamente!
             const response = await criarUsuario(userDataForCF);
-            
-            // O retorno real da função fica dentro de .data
             const result = response.data; 
 
-            console.log('✅ Usuário criado via CF:', result);
-
-            // Log de auditoria
-            await auditLogger(
-                currentUser.uid,
-                'CREATE_USER',
-                `Usuário criado: ${userDataForCF.email}`,
-                { 
-                    userId: result.uid,
-                    email: userDataForCF.email,
-                    roles: {
-                        isAdmin: userDataForCF.isAdmin,
-                        isMasterAdmin: userDataForCF.isMasterAdmin
-                    }
-                }
-            );
+            await auditLogger(currentUser.uid, 'CREATE_USER', `Usuário criado: ${userDataForCF.email}`, {
+                userId: result.uid, email: userDataForCF.email,
+                roles: { isAdmin: userDataForCF.isAdmin, isMasterAdmin: userDataForCF.isMasterAdmin }
+            });
 
             toast.success(result.mensagem || 'Usuário criado com sucesso!');
             navigate('/master/usuarios');
-
         } catch (error) {
-            console.error('❌ Erro ao criar usuário via CF:', error);
-            
-            let errorMessage = 'Erro ao criar usuário.';
-            
-            // Extraindo a mensagem real de erro enviada pelo backend
-            if (error.message) {
-                errorMessage = error.message; 
-            }
-
-            toast.error(errorMessage);
-            setFormError(errorMessage);
-        } finally {
-            setLoadingForm(false);
-        }
+            const msg = error.message || 'Erro ao criar usuário.';
+            toast.error(msg);
+            setFormError(msg);
+        } finally { setLoadingForm(false); }
     };
-    // Loading state
-    if (authLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mb-4"></div>
-                <p className="text-xl text-black">Carregando...</p>
-            </div>
-        );
-    }
 
+    if (authLoading) return (
+        <div className="flex h-screen items-center justify-center bg-slate-50">
+            <div className="w-12 h-12 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin"></div>
+        </div>
+    );
     if (!isMasterAdmin) return null;
 
     return (
-        <div className="bg-gray-50 min-h-screen pt-24 pb-8 px-4 font-sans">
-            <DashboardHeader currentUser={currentUser} logout={logout} navigate={navigate} />
+        <div className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 min-h-screen font-sans">
+            {/* NAVBAR */}
+            <nav className="sticky top-0 z-50 h-16 border-b border-slate-100 bg-white/80 backdrop-blur-xl shadow-sm">
+                <div className="max-w-3xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
+                    <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25 group-hover:scale-105 transition-transform">
+                            <FaBolt className="text-white text-xs" />
+                        </div>
+                        <span className="text-slate-900 font-black text-lg tracking-tight">Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-amber-500">Food</span></span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-center">
+                            <FaCrown className="text-yellow-600 text-[10px]" />
+                        </div>
+                        <button onClick={async () => { await logout(); navigate('/'); }} className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all" title="Sair">
+                            <FaSignOutAlt size={14} />
+                        </button>
+                    </div>
+                </div>
+            </nav>
 
-            <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8 border border-gray-100">
-                {/* Título da Página e Botão Voltar */}
-                <div className="flex w-full justify-between items-start sm:items-center mb-8 gap-4">
-                    <h1 className="text-3xl font-extrabold text-black text-center sm:text-left">
-                        Criar Novo Usuário
-                        <div className="w-24 h-1 bg-yellow-500 mx-auto sm:mx-0 mt-2 rounded-full"></div>
-                    </h1>
-                    <Link
-                        to="/master/usuarios"
-                        className="bg-gray-200 text-gray-700 font-semibold px-5 py-2 rounded-lg hover:bg-gray-300 transition-colors duration-300 flex items-center gap-2 shadow-md"
-                    >
-                        <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"></path>
-                        </svg>
-                        Voltar para Gerenciar Usuários
-                    </Link>
+            {/* CONTENT */}
+            <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 pb-16">
+                {/* HEADER */}
+                <div className="mb-8">
+                    <button onClick={() => navigate('/master/usuarios')} className="text-slate-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group">
+                        <span className="bg-white p-1.5 rounded-lg shadow-sm border border-slate-100 group-hover:border-yellow-200 transition-colors"><FaArrowLeft /></span>
+                        Voltar para Usuários
+                    </button>
+                    <div className="flex items-center gap-3 mb-2">
+                        <span className="bg-yellow-50 text-yellow-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-yellow-200">Novo Cadastro</span>
+                    </div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Criar Usuário</h1>
+                    <p className="text-slate-500 text-sm mt-1 font-medium">Cadastre um novo acesso ao sistema IdeaFood.</p>
                 </div>
 
-                {formError && (
-                    <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md" role="alert">
-                        <p className="font-bold">Erro:</p>
-                        <p>{formError}</p>
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <FormInput
-                        label="Nome Completo"
-                        name="nome"
-                        value={formData.nome}
-                        onChange={handleInputChange}
-                        required={true}
-                        placeholder="Digite o nome completo"
-                    />
-                    
-                    <FormInput
-                        label="E-mail"
-                        name="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        required={true}
-                        placeholder="exemplo@email.com"
-                    />
-                    
-                    <FormInput
-                        label="Senha Inicial"
-                        name="senha"
-                        type="password"
-                        value={formData.senha}
-                        onChange={handleInputChange}
-                        required={true}
-                        minLength="6"
-                        placeholder="Mínimo 6 caracteres"
-                        autoComplete="new-password"
-                        helpText="Mínimo de 6 caracteres. O usuário deve alterá-la após o primeiro login."
-                    />
-
-                    {/* Checkboxes para Papéis */}
-                    <div className="flex w-full items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-8 mt-5">
-                        <label className="flex items-center cursor-pointer group">
-                            <input
-                                type="checkbox"
-                                name="isAdmin"
-                                checked={formData.isAdmin}
-                                onChange={handleInputChange}
-                                className="h-5 w-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500 transition-colors duration-200"
-                            />
-                            <span className="ml-2 text-sm font-medium text-gray-700 group-hover:text-black transition-colors duration-200">
-                                Administrador de Estabelecimento
-                            </span>
-                        </label>
-                        <label className="flex items-center cursor-pointer group">
-                            <input
-                                type="checkbox"
-                                name="isMasterAdmin"
-                                checked={formData.isMasterAdmin}
-                                onChange={handleInputChange}
-                                className="h-5 w-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500 transition-colors duration-200"
-                            />
-                            <span className="ml-2 text-sm font-medium text-gray-700 group-hover:text-black transition-colors duration-200">
-                                Master Administrador
-                            </span>
-                        </label>
-                    </div>
-
-                    {/* Seleção de Estabelecimentos Gerenciados */}
-                    {formData.isAdmin && (
-                        <div>
-                            <label htmlFor="estabelecimentos" className="block text-sm font-medium text-gray-700 mb-2">
-                                Estabelecimentos Gerenciados:
-                                <span className="text-red-500 ml-1">*</span>
-                            </label>
-                            <select
-                                id="estabelecimentos"
-                                name="estabelecimentosGerenciados"
-                                multiple
-                                value={formData.estabelecimentosGerenciados}
-                                onChange={handleEstabelecimentoChange}
-                                required={formData.isAdmin}
-                                className="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-2.5 bg-white text-gray-800 focus:border-yellow-500 focus:ring-yellow-500 h-48 transition-colors duration-300"
-                            >
-                                {loadingEstabelecimentos ? (
-                                    <option disabled>Carregando estabelecimentos...</option>
-                                ) : estabelecimentosList.length === 0 ? (
-                                    <option disabled>Nenhum estabelecimento disponível</option>
-                                ) : (
-                                    estabelecimentosList.map(estab => (
-                                        <option key={estab.id} value={estab.id}>
-                                            {estab.nome}
-                                        </option>
-                                    ))
-                                )}
-                            </select>
-                            <p className="mt-1 text-xs text-gray-500">
-                                Mantenha 'Ctrl' (Windows) ou 'Cmd' (Mac) para selecionar múltiplos.
-                            </p>
+                {/* FORM CARD */}
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sm:p-8">
+                    {formError && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 p-4 mb-6 rounded-xl text-sm font-bold flex items-center gap-3">
+                            ⚠️ {formError}
                         </div>
                     )}
 
-                    {/* Toggle de Usuário Ativo */}
-                    <div className="flex items-center mt-5">
-                        <label htmlFor="user-active-toggle" className="flex items-center cursor-pointer">
-                            <div className="relative">
-                                <input
-                                    type="checkbox"
-                                    id="user-active-toggle"
-                                    name="ativo"
-                                    className="sr-only"
-                                    checked={formData.ativo}
-                                    onChange={handleInputChange}
-                                />
-                                <div className={`block w-14 h-8 rounded-full ${formData.ativo ? 'bg-yellow-500' : 'bg-gray-300'} transition-colors duration-300`}></div>
-                                <div className={`dot absolute left-1 top-1 w-6 h-6 rounded-full transition-transform duration-300 ${formData.ativo ? 'transform translate-x-6 bg-black' : 'bg-white border border-gray-300'}`}></div>
-                            </div>
-                            <span className="ml-3 text-base font-semibold text-gray-800">
-                                {formData.ativo ? 'Usuário Ativo' : 'Usuário Inativo'}
-                            </span>
-                        </label>
-                    </div>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Nome */}
+                        <div>
+                            <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                                <FaUser className="inline mr-1.5 text-slate-300" /> Nome Completo *
+                            </label>
+                            <input name="nome" value={formData.nome} onChange={handleInputChange} required placeholder="Ex: João Silva"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-semibold text-slate-700 placeholder-slate-400 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all" />
+                        </div>
 
-                    <button
-                        type="submit"
-                        disabled={loadingForm}
-                        className="w-full px-6 py-3 bg-black text-white text-lg font-bold rounded-lg shadow-md hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300 mt-8 flex items-center justify-center"
-                    >
-                        {loadingForm ? (
-                            <>
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                                Criando Usuário...
-                            </>
-                        ) : (
-                            'Criar Usuário'
+                        {/* Email */}
+                        <div>
+                            <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                                <FaEnvelope className="inline mr-1.5 text-slate-300" /> E-mail *
+                            </label>
+                            <input name="email" type="email" value={formData.email} onChange={handleInputChange} required placeholder="email@exemplo.com"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-semibold text-slate-700 placeholder-slate-400 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all" />
+                        </div>
+
+                        {/* Senha */}
+                        <div>
+                            <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                                <FaLock className="inline mr-1.5 text-slate-300" /> Senha Inicial *
+                            </label>
+                            <input name="senha" type="password" value={formData.senha} onChange={handleInputChange} required minLength="6" placeholder="Mínimo 6 caracteres" autoComplete="new-password"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-semibold text-slate-700 placeholder-slate-400 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all" />
+                            <p className="text-[11px] text-slate-400 mt-1.5 ml-1">O usuário deve alterá-la após o primeiro login.</p>
+                        </div>
+
+                        {/* Permissões */}
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-3"><FaUserShield className="inline mr-1.5 text-slate-300" /> Permissões</p>
+                            <div className="flex flex-wrap gap-4">
+                                <label className="flex items-center gap-2.5 cursor-pointer group">
+                                    <input type="checkbox" name="isAdmin" checked={formData.isAdmin} onChange={handleInputChange}
+                                        className="h-4 w-4 rounded border-slate-300 text-yellow-500 focus:ring-yellow-500" />
+                                    <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">Admin de Loja</span>
+                                </label>
+                                <label className="flex items-center gap-2.5 cursor-pointer group">
+                                    <input type="checkbox" name="isMasterAdmin" checked={formData.isMasterAdmin} onChange={handleInputChange}
+                                        className="h-4 w-4 rounded border-slate-300 text-yellow-500 focus:ring-yellow-500" />
+                                    <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">Master Admin</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Estabelecimentos */}
+                        {formData.isAdmin && (
+                            <div>
+                                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                                    <FaStore className="inline mr-1.5 text-slate-300" /> Lojas Gerenciadas *
+                                </label>
+                                <select name="estabelecimentosGerenciados" multiple value={formData.estabelecimentosGerenciados} onChange={handleEstabelecimentoChange} required
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 h-40 transition-all">
+                                    {loadingEstabelecimentos ? <option disabled>Carregando...</option> :
+                                     estabelecimentosList.length === 0 ? <option disabled>Nenhum disponível</option> :
+                                     estabelecimentosList.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                                </select>
+                                <p className="text-[11px] text-slate-400 mt-1.5 ml-1">Ctrl+click para selecionar múltiplos.</p>
+                            </div>
                         )}
-                    </button>
-                </form>
-            </div>
+
+                        {/* Status Ativo */}
+                        <div className="flex items-center justify-between bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <div>
+                                <p className="text-sm font-bold text-slate-800">{formData.ativo ? 'Usuário Ativo' : 'Usuário Inativo'}</p>
+                                <p className="text-[11px] text-slate-400">O usuário poderá acessar o sistema imediatamente.</p>
+                            </div>
+                            <label className="relative cursor-pointer">
+                                <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
+                                <div className={`block w-12 h-7 rounded-full transition-colors ${formData.ativo ? 'bg-emerald-400' : 'bg-slate-300'}`}></div>
+                                <div className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full shadow transition-transform ${formData.ativo ? 'translate-x-5' : ''}`}></div>
+                            </label>
+                        </div>
+
+                        {/* Submit */}
+                        <button type="submit" disabled={loadingForm}
+                            className="w-full py-4 bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-black rounded-xl shadow-lg shadow-yellow-400/25 hover:shadow-xl hover:shadow-yellow-400/40 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm">
+                            {loadingForm ? (
+                                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div> Criando...</>
+                            ) : (
+                                <><FaUserPlus /> Criar Usuário</>
+                            )}
+                        </button>
+                    </form>
+                </div>
+            </main>
         </div>
     );
 }
