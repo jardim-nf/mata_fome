@@ -18,6 +18,37 @@ import { ModalRecibo, ModalHistorico } from '../components/PdvModals';
 
 // --- FUNÇÃO ANTI-TRAVAMENTO PARA CORTAR BEBIDAS E BOMBONIERE ---
 const isItemCozinha = (item) => {
+    try {
+        if (!item || typeof item !== 'object') return false;
+        
+        const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
+        const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+        const textoCompleto = `${nome} ${categoria}`;
+        
+        // 🔥 LÓGICA ATUALIZADA: Regra de exceção para COMBOS 🔥
+        // Se a categoria for combo ou o nome tiver combo, VAI PRA COZINHA SEMPRE!
+        if (categoria.includes('combo') || nome.includes('combo')) {
+            return true;
+        }
+        
+        const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];
+        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => categoria.includes(cat));
+        if (temCategoriaBloqueada) return false;
+
+        const palavrasBloqueadas = [
+            'refrigerante', 'suco', 'cerveja', 'long neck', 'drink', 'vinho', 
+            'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral',
+            'sorvete', 'bala ', 'chiclete', 'chocolate', 'pirulito', 'halls', 'mentos'
+        ];
+        
+        const temNomeBloqueado = palavrasBloqueadas.some(palavra => textoCompleto.includes(palavra));
+        if (temNomeBloqueado) return false;
+        
+        return true; 
+    } catch (error) {
+        return true; 
+    }
+};
 
 // --- GRUPO DE PEDIDOS DA MESA ---
 const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo, onEmitirNfce }) => {
@@ -515,7 +546,6 @@ function Painel() {
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
-            // 🔥 CORREÇÃO NA DATA: Agora lê também os padrões das mesas do salão
             const timestamp = data.createdAt || data.dataPedido || data.criadoEm || data.updatedAt;
             if (timestamp) {
                 const dataDoPedido = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
@@ -530,7 +560,12 @@ function Painel() {
             const configAtual = modoImpressaoRef.current;
             if (configAtual === 'desligado') return;
 
-            if (configAtual === 'cozinha') {
+            // 🔥 NOVA LÓGICA: Descobre se é delivery
+            const isDelivery = data.source !== 'salao' && data.tipo !== 'mesa' && !data.mesaNumero;
+
+            // Se for 'cozinha' E for pedido de MESA, corta as bebidas.
+            // Se for DELIVERY, ele pula esse if e manda imprimir TUDO!
+            if (configAtual === 'cozinha' && !isDelivery) {
                 const rawItens = Array.isArray(data.itens) ? data.itens : [];
                 const itensCozinha = rawItens.filter(isItemCozinha);
                 if (itensCozinha.length === 0) return; 
@@ -637,7 +672,10 @@ function Painel() {
                         await rotearEImprimir(pedidoParaImprimir, roteamento, impBalcao, impCozinha);
                     } 
                     else {
-                        const setorQuery = modoImpressao === 'cozinha' ? '&setor=cozinha' : '';
+                        // 🔥 LÓGICA ATUALIZADA: Se for delivery, deixa o setor vazio para imprimir TUDO 🔥
+                        const isDelivery = pedidoParaImprimir.source !== 'salao' && pedidoParaImprimir.tipo !== 'mesa';
+                        const setorQuery = (modoImpressao === 'cozinha' && !isDelivery) ? '&setor=cozinha' : '';
+                        
                         const url = `/comanda/${pedidoParaImprimir.id}?estabId=${estabelecimentoAtivo}${setorQuery}`;
                         
                         const width = 350; const height = 600;
