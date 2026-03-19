@@ -7,10 +7,9 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
-// 🔥 Adicionado enableIndexedDbPersistence aqui 🔥
-import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, doc, setDoc, getDoc } from 'firebase/firestore';
 import { getAnalytics, logEvent } from 'firebase/analytics';
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -28,15 +27,9 @@ const app = initializeApp(firebaseConfig);
 
 // Serviços do Firebase
 export const auth = getAuth(app);
-export const db = getFirestore(app);
-
-// 🔥 ATIVADOR DO MODO OFFLINE (MAGIA ACONTECE AQUI) 🔥
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code == 'failed-precondition') {
-    console.warn('Múltiplas abas abertas, modo offline ativado apenas na primeira.');
-  } else if (err.code == 'unimplemented') {
-    console.warn('Navegador não suporta persistência offline.');
-  }
+// Modo offline habilitado com a API moderna (substitui enableIndexedDbPersistence depreciado)
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
 });
 
 export const storage = getStorage(app);
@@ -157,8 +150,8 @@ export const initializeUserPlatforms = async (userId, userEmail) => {
         userEmail: userEmail,
         connected: true,
         syncStatus: 'connected',
-        orders: 125,
-        revenue: 12500,
+        orders: 0,
+        revenue: 0,
         config: {
           url: '',
           integrationType: 'manual'

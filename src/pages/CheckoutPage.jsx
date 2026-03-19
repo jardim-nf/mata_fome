@@ -10,7 +10,13 @@ import { estoqueService } from '../services/estoqueService';
 // 🔥 IMPORTS DO FIREBASE
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore'; 
+import { collection, addDoc, Timestamp, doc, getDoc, getDocs } from 'firebase/firestore'; 
+
+// Normaliza texto para comparação de bairros (igual ao Menu.jsx)
+function normalizarTexto(texto) {
+  if (!texto) return '';
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -21,46 +27,71 @@ const CheckoutPage = () => {
   const [showRaspadinha, setShowRaspadinha] = useState(false);
   const [premioAplicado, setPremioAplicado] = useState(null);
   const [jaJogou, setJaJogou] = useState(false);
-  const [taxaEntrega, setTaxaEntrega] = useState(8.00); 
+  // FIX #7: Taxa de entrega dinâmica (não mais hardcoded)
+  const [taxaEntrega, setTaxaEntrega] = useState(0);
+  const [taxaLoading, setTaxaLoading] = useState(false);
   const [descontoValor, setDescontoValor] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   // 🔥 Estado para armazenar o valor mínimo vindo do banco
   const [valorGatilhoRaspadinha, setValorGatilhoRaspadinha] = useState(9999); // Começa alto para não abrir sem querer
 
-  // 1. useEffect para buscar a configuração da loja
+  // FIX #7: Busca a taxa de entrega dinamicamente pelo bairro do cliente
+  useEffect(() => {
+    const buscarTaxaEntrega = async () => {
+      const estabId = carrinho[0]?.estabelecimentoId;
+      const bairroCliente = currentClientData?.endereco?.bairro;
+      if (!estabId || !bairroCliente) {
+        setTaxaEntrega(0);
+        return;
+      }
+      setTaxaLoading(true);
+      try {
+        const taxasSnap = await getDocs(collection(db, 'estabelecimentos', estabId, 'taxasDeEntrega'));
+        const bairroNorm = normalizarTexto(bairroCliente);
+        let taxa = 0;
+        taxasSnap.forEach(docSnap => {
+          if (normalizarTexto(docSnap.data().nomeBairro || '').includes(bairroNorm))
+            taxa = Number(docSnap.data().valorTaxa);
+        });
+        setTaxaEntrega(taxa);
+        if (taxa === 0 && bairroNorm) {
+          toast.info(`Taxa de entrega para "${bairroCliente}" não encontrada. Confirme com a loja.`, { autoClose: 5000 });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar taxa de entrega:', error);
+        setTaxaEntrega(0);
+      } finally {
+        setTaxaLoading(false);
+      }
+    };
+    if (carrinho.length > 0) buscarTaxaEntrega();
+  }, [carrinho, currentClientData]);
+
+  // Busca a config da raspadinha separadamente
   useEffect(() => {
     const fetchConfigRaspadinha = async () => {
-        const estabId = carrinho[0]?.estabelecimentoId;
-        if (!estabId) return;
-
-        try {
-            const docRef = doc(db, 'estabelecimentos', estabId);
-            const docSnap = await getDoc(docRef);
-            
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                // Pega o valor ou define 100 como padrão se não tiver configurado
-                const valorMinimo = data.valorMinimoRaspadinha ? parseFloat(data.valorMinimoRaspadinha) : 100;
-                setValorGatilhoRaspadinha(valorMinimo);
-            }
-        } catch (error) {
-            console.error("Erro ao buscar config da raspadinha:", error);
+      const estabId = carrinho[0]?.estabelecimentoId;
+      if (!estabId) return;
+      try {
+        const docSnap = await getDoc(doc(db, 'estabelecimentos', estabId));
+        if (docSnap.exists()) {
+          const valorMinimo = docSnap.data().valorMinimoRaspadinha
+            ? parseFloat(docSnap.data().valorMinimoRaspadinha)
+            : 100;
+          setValorGatilhoRaspadinha(valorMinimo);
         }
+      } catch (error) {
+        console.error('Erro ao buscar config da raspadinha:', error);
+      }
     };
-
-    if (carrinho.length > 0) {
-        fetchConfigRaspadinha();
-    }
+    if (carrinho.length > 0) fetchConfigRaspadinha();
   }, [carrinho]);
 
-  // 2. useEffect do Gatilho (Agora usa a variável dinâmica)
+  // Gatilho da raspadinha
   useEffect(() => {
-    // 🔥 Agora compara com 'valorGatilhoRaspadinha' em vez de 100 fixo
     if (subtotal >= valorGatilhoRaspadinha && !jaJogou && !premioAplicado) {
-        setTimeout(() => {
-            setShowRaspadinha(true);
-        }, 1000);
+      setTimeout(() => setShowRaspadinha(true), 1000);
     }
   }, [subtotal, jaJogou, premioAplicado, valorGatilhoRaspadinha]);
 
@@ -88,6 +119,7 @@ const CheckoutPage = () => {
         toast.success(`🎉 Ganhou ${premio.produto.nome}!`);
     }
   };
+
 
   const totalFinal = subtotal + taxaEntrega - descontoValor;
 

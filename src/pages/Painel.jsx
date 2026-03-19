@@ -227,8 +227,9 @@ function Painel() {
         } catch (error) { toast.error("Falha na atribuição"); }
     }, [estabelecimentoAtivo]);
 
+    // FIX #10: Cancelamento sem window.confirm() — o PedidoCard agora usa toast com ação
+    // Esta função é chamada APÓS o usuário já confirmar no toast do PedidoCard
     const handleExcluirPedido = useCallback(async (pedidoId) => {
-        if (!window.confirm("Tem certeza que deseja cancelar este pedido?")) return;
         try {
             const path = `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`;
             await deleteDoc(doc(db, path));

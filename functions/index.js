@@ -17,6 +17,9 @@ const db = getFirestore();
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
 const plugNotasApiKey = defineSecret("PLUGNOTAS_API_KEY");
 const mercadoPagoToken = defineSecret("MP_ACCESS_TOKEN");
+const plugNotasWebhookToken = defineSecret("PLUGNOTAS_WEBHOOK_TOKEN"); // Token secreto configurado no painel PlugNotas
+const mpClientSecret = defineSecret("MP_CLIENT_SECRET");
+const mpClientIdSecret = defineSecret("MP_CLIENT_ID"); // Movido de hardcoded para secret
 // ==================================================================
 // 1. SEU AGENTE DE IA
 // ==================================================================
@@ -95,9 +98,23 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
                 if (variacaoEncontrada) precoUnitarioReal = Number(variacaoEncontrada.preco);
             }
 
+            // Validação server-side dos adicionais: busca o preço real no banco
             let totalAdicionais = 0;
-            if (Array.isArray(item.adicionais)) {
-                totalAdicionais = item.adicionais.reduce((acc, ad) => acc + (Number(ad.preco) || 0), 0);
+            if (Array.isArray(item.adicionais) && item.adicionais.length > 0) {
+                const adicionaisValidados = await Promise.all(
+                    item.adicionais.map(async (ad) => {
+                        if (!ad.id) return 0;
+                        try {
+                            const adRef = db.doc(`estabelecimentos/${estabelecimentoId}/adicionais/${ad.id}`);
+                            const adSnap = await adRef.get();
+                            if (!adSnap.exists) return 0;
+                            return Number(adSnap.data().preco) || 0;
+                        } catch {
+                            return 0;
+                        }
+                    })
+                );
+                totalAdicionais = adicionaisValidados.reduce((acc, v) => acc + v, 0);
             }
 
             const precoFinalItem = precoUnitarioReal + totalAdicionais;
@@ -319,9 +336,18 @@ export const emitirNfcePlugNotas = onCall({
 // ==================================================================
 // 4. WEBHOOK PLUGNOTAS (RETORNO ASSÍNCRONO DA SEFAZ)
 // ==================================================================
-export const webhookPlugNotas = onRequest(async (req, res) => {
+export const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, async (req, res) => {
     if (req.method !== 'POST') {
         res.status(405).send('Method Not Allowed');
+        return;
+    }
+
+    // Verificação de autenticidade: o header deve conter o token secreto configurado no PlugNotas
+    const receivedToken = req.headers['x-plugnotas-token'] || req.headers['authorization'];
+    const expectedToken = plugNotasWebhookToken.value();
+    if (!receivedToken || receivedToken !== expectedToken) {
+        logger.warn('🚫 Webhook do PlugNotas recusado: token inválido ou ausente.');
+        res.status(401).send('Unauthorized');
         return;
     }
 
@@ -734,15 +760,13 @@ export const webhookMercadoPago = onRequest(
         res.status(200).send('OK');
     }
 });
-// No topo do arquivo, defina o novo segredo
-const mpClientSecret = defineSecret("MP_CLIENT_SECRET");
-const mpClientId = "310854362032422"; // O ID é público, pode ficar aqui ou no Secret também
+// mpClientSecret e mpClientIdSecret já foram definidos no topo do arquivo
 
 // ==================================================================
 // 13. VINCULAR CONTA DO LOJISTA (OAuth) - VERSÃO SEGURA
 // ==================================================================
 export const vincularMercadoPago = onCall({ 
-    secrets: [mpClientSecret] 
+    secrets: [mpClientSecret, mpClientIdSecret] 
 }, async (request) => {
     const { code, estabelecimentoId } = request.data;
     
@@ -755,8 +779,8 @@ export const vincularMercadoPago = onCall({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                client_id: mpClientId,
-                client_secret: mpClientSecret.value(), // Puxa do cofre com segurança
+                client_id: mpClientIdSecret.value(), // Lido do cofre de secrets
+                client_secret: mpClientSecret.value(),
                 code: code,
                 grant_type: 'authorization_code',
                 redirect_uri: 'https://matafome-98455.web.app/admin/configuracoes'
