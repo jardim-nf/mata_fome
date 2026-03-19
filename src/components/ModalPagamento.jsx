@@ -45,6 +45,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const calcularTotalConsumo = () => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         return listaItens.reduce((acc, item) => {
+            // 🔥 CORREÇÃO: Não calcula itens cancelados 🔥
+            if (item.status === 'cancelado') return acc;
+            
             const qtd = item.quantidade || item.qtd || 1;
             return acc + (item.preco * qtd);
         }, 0);
@@ -74,6 +77,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
         const agrupados = {};
         listaItens.forEach(item => {
+            // 🔥 CORREÇÃO: Ignora itens cancelados na divisão e na conferência 🔥
+            if (item.status === 'cancelado') return;
+
             let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
             if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes?.length > 0) {
                 if (!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0];
@@ -103,7 +109,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 [key]: {
                     valor: restanteMesa,
                     formaPagamento: 'dinheiro',
-                    itens: listaItens
+                    itens: listaItens.filter(i => i.status !== 'cancelado') // Filtra da via de banco de dados
                 }
             });
             setSelecionados({ [key]: true });
@@ -117,7 +123,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 pagamentosIniciais[key] = {
                     valor: restanteMesa,
                     formaPagamento: 'dinheiro',
-                    itens: listaItens
+                    itens: listaItens.filter(i => i.status !== 'cancelado')
                 };
                 selecionadosIniciais[key] = false;
             } else {
@@ -291,49 +297,48 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 Object.entries(pagamentos).filter(([k]) => selecionados[k] && pagamentos[k].valor > 0)
             );
 
-            // 1. Registrar Venda no Firestore (AGORA SALVANDO NA COLEÇÃO RAIZ 'vendas')
-           // 🔥 CORREÇÃO: Pega a principal forma de pagamento escolhida (ex: 'credito', 'debito', 'pix')
-            // Se tiver várias pessoas pagando, pega a forma do primeiro pagante válido.
+            // 🔥 CORREÇÃO: Traz os itens cancelados de volta só para fins de histórico/Relatório
+            const todosItensMesa = mesa?.itens || mesa?.pedidos || [];
+            const itensValidos = Object.values(pagamentosValidos).flatMap(p => p.itens || []);
+            const itensCancelados = todosItensMesa.filter(i => i.status === 'cancelado');
+            
+            // Une os itens que foram pagos com os que foram cancelados pra ficar tudo registrado
+            const itensParaSalvar = [...itensValidos, ...itensCancelados];
+
             const primeiraPessoaValida = Object.values(pagamentosValidos)[0];
             const formaPagamentoPredominante = primeiraPessoaValida ? primeiraPessoaValida.formaPagamento : 'dinheiro';
 
-            // 1. Registrar Venda no Firestore (AGORA SALVANDO NA COLEÇÃO RAIZ 'vendas')
+            // 1. Registrar Venda no Firestore
             const dadosVenda = {
                 mesaId: mesa.id,
                 mesaNumero: mesa.numero,
                 estabelecimentoId: estabelecimentoId,
-                itens: Object.values(pagamentosValidos).flatMap(p => p.itens || []),
+                itens: itensParaSalvar, // <--- Aqui enviamos os válidos e os cancelados
                 pagamentos: pagamentosValidos,
-                total: totalPagoAgora,
+                total: totalPagoAgora, // <--- Total é apenas o valor real cobrado
                 valorOriginal: totalConsumo,
                 taxaServicoCobrada: incluirTaxa ? valorTaxa : 0,
-                
-                // 🔥 Agora enviamos a forma real (credito, debito, pix, etc) para a Sefaz entender
                 tipoPagamento: formaPagamentoPredominante,
-                metodoPagamento: formaPagamentoPredominante, // Enviando duplicado caso a Sefaz procure por esse nome
-                
+                metodoPagamento: formaPagamentoPredominante, 
                 status: mesaQuitada ? 'pago' : 'pago_parcial',
                 criadoEm: serverTimestamp(),
-                createdAt: serverTimestamp(), // 🔥 IMPORTANTE: O PDV USA ESSE CAMPO PARA HISTÓRICOS
+                createdAt: serverTimestamp(),
                 criadoPor: auth.currentUser?.uid,
                 funcionario: auth.currentUser?.displayName || 'Garçom'
             };
 
-            // 🔥 CORREÇÃO PRINCIPAL: Salvamos na pasta global de 'vendas' onde a Função do Firebase procura a nota!
             const docRef = await addDoc(collection(db, 'vendas'), dadosVenda);
 
-            // 2. BAIXA DE ESTOQUE
+            // 2. BAIXA DE ESTOQUE (só dá baixa nos itens que não foram cancelados)
             if (modo === 'total' || mesaQuitada) {
-                const todosItensDaMesa = mesa?.itens || mesa?.pedidos || [];
-                if (todosItensDaMesa.length > 0) {
-                    await estoqueService.darBaixaEstoque(estabelecimentoId, todosItensDaMesa);
+                if (itensValidos.length > 0) {
+                    await estoqueService.darBaixaEstoque(estabelecimentoId, itensValidos);
                 }
             }
 
             // 3. Disparar Emissão de NFC-e
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
-                // Agora funciona pois a venda foi salva na pasta certa!
                 const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
 
                 if (resultadoNfce.sucesso) {
