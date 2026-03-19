@@ -1,264 +1,271 @@
-// src/firebase.js
-import { initializeApp } from 'firebase/app';
+// src/services/vendaService.js
 import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut,
-  updateProfile 
-} from 'firebase/auth';
-// 🔥 Adicionado enableIndexedDbPersistence aqui 🔥
-import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore';
-import { getAnalytics, logEvent } from 'firebase/analytics';
-import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { getStorage } from 'firebase/storage';
+  collection, 
+  query, 
+  where, 
+  orderBy, 
+  getDocs, 
+  doc, 
+  getDoc,
+  addDoc,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from '../firebase'; 
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { estoqueService } from './estoqueService';
 
-const firebaseConfig = {
-    apiKey: import.meta.env.VITE_API_KEY,
-    authDomain: import.meta.env.VITE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_APP_ID,
-    measurementId: import.meta.env.VITE_MEASUREMENT_ID
-};
-
-// Inicialização do Firebase
-const app = initializeApp(firebaseConfig);
-
-// Serviços do Firebase
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-
-// 🔥 ATIVADOR DO MODO OFFLINE (MAGIA ACONTECE AQUI) 🔥
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code == 'failed-precondition') {
-      console.warn('Múltiplas abas abertas, modo offline ativado apenas na primeira.');
-  } else if (err.code == 'unimplemented') {
-      console.warn('Navegador não suporta persistência offline.');
-  }
-});
-
-export const storage = getStorage(app);
-export const analytics = getAnalytics(app);
-export const functions = getFunctions(app, 'us-central1');
-
-// Configuração para desenvolvimento (emulator)
-if (import.meta.env.DEV) {
-  console.log('🔥 Firebase running in development mode');
-  // Descomente se estiver usando emuladores
-  // connectFunctionsEmulator(functions, 'localhost', 5001);
-  // connectFirestoreEmulator(db, 'localhost', 8080);
-  // connectAuthEmulator(auth, 'http://localhost:9099');
-}
-
-// Funções de autenticação
-export const doCreateUserWithEmailAndPassword = async (email, password, displayName = '') => {
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+export const vendaService = {
   
-  // Atualizar perfil com displayName se fornecido
-  if (displayName) {
-    await updateProfile(userCredential.user, {
-      displayName: displayName
-    });
-  }
-  
-  return userCredential;
-};
+  // 1. Salvar venda DIRETO no Firestore
+  async salvarVenda(vendaData) {
+    try {
+      console.log('💾 Salvando venda no banco de dados...', vendaData);
 
-export const doSignInWithEmailAndPassword = (email, password) => {
-  return signInWithEmailAndPassword(auth, email, password);
-};
-
-export const doSignOut = () => {
-  return signOut(auth);
-};
-
-// Função para obter dados do usuário do Firestore
-export const getUserData = async (userId) => {
-  try {
-    const userDoc = await getDoc(doc(db, 'usuarios', userId));
-    return userDoc.exists() ? userDoc.data() : null;
-  } catch (error) {
-    console.error('Erro ao buscar dados do usuário:', error);
-    return null;
-  }
-};
-
-// Função para inicializar plataformas para um usuário (melhorada)
-export const initializeUserPlatforms = async (userId, userEmail) => {
-  try {
-    const platforms = [
-      {
-        id: `ifood_${userId}`,
-        name: 'iFood',
-        type: 'ifood',
-        userId: userId,
-        userEmail: userEmail,
-        connected: false,
-        syncStatus: 'disconnected',
-        orders: 0,
-        revenue: 0,
-        config: {},
-        credentials: {},
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: `whatsapp_${userId}`,
-        name: 'WhatsApp Business', 
-        type: 'whatsapp',
-        userId: userId,
-        userEmail: userEmail,
-        connected: false,
-        syncStatus: 'disconnected',
-        orders: 0,
-        revenue: 0,
-        config: {},
-        credentials: {},
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: `rappi_${userId}`,
-        name: 'Rappi',
-        type: 'rappi',
-        userId: userId,
-        userEmail: userEmail,
-        connected: false,
-        syncStatus: 'disconnected',
-        orders: 0,
-        revenue: 0,
-        config: {},
-        credentials: {},
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: `uberEats_${userId}`,
-        name: 'Uber Eats',
-        type: 'uberEats',
-        userId: userId,
-        userEmail: userEmail,
-        connected: false,
-        syncStatus: 'disconnected',
-        orders: 0,
-        revenue: 0,
-        config: {},
-        credentials: {},
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: `website_${userId}`,
-        name: 'Site Próprio',
-        type: 'website',
-        userId: userId,
-        userEmail: userEmail,
-        connected: true,
-        syncStatus: 'connected',
-        orders: 125,
-        revenue: 12500,
-        config: {
-          url: '',
-          integrationType: 'manual'
-        },
-        credentials: {},
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ];
-
-    const creationPromises = platforms.map(async (platform) => {
-      try {
-        const platformRef = doc(db, 'platforms', platform.id);
-        await setDoc(platformRef, platform);
-        console.log(`✅ Plataforma ${platform.name} inicializada para usuário ${userId}`);
-        return { success: true, platform: platform.name };
-      } catch (error) {
-        console.error(`❌ Erro ao criar plataforma ${platform.name}:`, error);
-        return { success: false, platform: platform.name, error };
-      }
-    });
-
-    const results = await Promise.all(creationPromises);
-    const successful = results.filter(result => result.success).length;
-    
-    console.log(`📊 Plataformas inicializadas: ${successful}/${platforms.length} para usuário ${userId}`);
-    
-    return {
-      success: successful === platforms.length,
-      total: platforms.length,
-      created: successful,
-      details: results
-    };
-
-  } catch (error) {
-    console.error('❌ Erro crítico ao inicializar plataformas:', error);
-    
-    // Log do erro no Analytics
-    logEvent(analytics, 'platform_initialization_error', {
-      userId: userId,
-      error: error.message
-    });
-    
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-// Função para inicializar dados do usuário no Firestore
-export const initializeUserData = async (userId, userData) => {
-  try {
-    const userRef = doc(db, 'usuarios', userId);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) {
-      const defaultUserData = {
-        email: userData.email,
-        displayName: userData.displayName || '',
-        isAdmin: userData.isAdmin || false,
-        isMasterAdmin: userData.isMasterAdmin || false,
-        estabelecimentosGerenciados: userData.estabelecimentosGerenciados || [],
-        ativo: true,
-        dataCriacao: new Date().toISOString(),
-        dataAtualizacao: new Date().toISOString(),
-        preferences: {
-          notifications: true,
-          emailUpdates: true,
-          theme: 'light'
-        },
-        stats: {
-          totalOrders: 0,
-          totalRevenue: 0,
-          activePlatforms: 1 // Site próprio vem ativo por padrão
-        }
+      const dadosLimpos = {
+        ...vendaData,
+        usuarioId: vendaData.usuarioId || null,
+        clienteCpf: vendaData.clienteCpf || null,
+        status: vendaData.status || 'finalizada',
+        createdAt: serverTimestamp(), 
+        origem: 'pdv_web'
       };
+
+      const payloadFinal = JSON.parse(JSON.stringify(dadosLimpos));
+      payloadFinal.createdAt = serverTimestamp();
+
+      const vendasRef = collection(db, 'vendas');
+      const docRef = await addDoc(vendasRef, payloadFinal);
+
+      console.log('✅ Venda salva com sucesso! ID:', docRef.id);
       
-      await setDoc(userRef, defaultUserData);
-      console.log('✅ Dados do usuário inicializados no Firestore');
-      
-      // Inicializar plataformas
-      await initializeUserPlatforms(userId, userData.email);
-      
-      return defaultUserData;
+      // 🔥 NOVA LINHA: CHAMA A BAIXA DE ESTOQUE APÓS SALVAR A VENDA
+      await estoqueService.darBaixaEstoque(vendaData.estabelecimentoId, vendaData.itens);
+
+      return {
+        success: true,
+        vendaId: docRef.id,
+        total: vendaData.total
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar venda:', error);
+      return {
+        success: false,
+        error: error.message || 'Erro ao salvar no banco de dados.'
+      };
     }
-    
-    return userDoc.data();
-  } catch (error) {
-    console.error('❌ Erro ao inicializar dados do usuário:', error);
-    throw error;
+  },
+
+  // 2. Chamar a Cloud Function da PlugNotas (NFC-e)
+  async emitirNfce(vendaId, cpfCliente) {
+    console.log(`🧾 Solicitando NFC-e via PlugNotas para a venda ${vendaId}...`);
+    try {
+      const functions = getFunctions();
+      const emitirNfcePlugNotas = httpsCallable(functions, 'emitirNfcePlugNotas'); 
+      
+      const response = await emitirNfcePlugNotas({ 
+        vendaId: vendaId, 
+        cpf: cpfCliente 
+      });
+
+      console.log('✅ Retorno da PlugNotas:', response.data);
+      return response.data;
+
+    } catch (error) {
+      console.error('❌ Erro ao chamar a emissão de NFC-e:', error);
+      return {
+        success: false,
+        error: error.message || 'Erro de comunicação com o servidor fiscal.'
+      };
+    }
+  },
+
+  // 3. Buscar vendas por estabelecimento (Geral)
+  async buscarVendasPorEstabelecimento(estabelecimentoId, limite = 50) {
+    try {
+      if (!estabelecimentoId) return [];
+      const q = query(
+        collection(db, 'vendas'),
+        where('estabelecimentoId', '==', estabelecimentoId),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      const vendas = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        vendas.push({ id: doc.id, ...data, createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date() });
+      });
+      return vendas;
+    } catch (error) {
+      console.error('Erro ao buscar vendas:', error);
+      return [];
+    }
+  },
+
+  // 4. Buscar venda por ID
+  async buscarVendaPorId(vendaId) {
+    try {
+      const docRef = doc(db, 'vendas', vendaId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return { id: docSnap.id, ...data, createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null };
+      }
+      return null;
+    } catch (error) {
+      console.error('Erro ao buscar venda:', error);
+      return null;
+    }
+  },
+
+  // 5. Buscar vendas de um período específico
+  async buscarVendasPorIntervalo(usuarioId, estabelecimentoId, dataInicio, dataFim) {
+    try {
+      const fim = dataFim || new Date(); 
+      const q = query(
+        collection(db, 'vendas'),
+        where('estabelecimentoId', '==', estabelecimentoId),
+        where('usuarioId', '==', usuarioId),
+        where('createdAt', '>=', dataInicio),
+        where('createdAt', '<=', fim),
+        orderBy('createdAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return { id: doc.id, ...data, createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt) };
+      });
+    } catch (error) {
+      console.error("Erro ao buscar vendas do turno:", error);
+      return [];
+    }
+  },
+
+  // 6. Baixar XML da NFC-e (DIRETO DA API PLUGNOTAS)
+  async baixarXmlNfce(idPlugNotas, numeroNota) {
+    try {
+      const functions = getFunctions();
+      const baixarXmlFn = httpsCallable(functions, 'baixarXmlNfcePlugNotas');
+      const result = await baixarXmlFn({ idPlugNotas });
+      
+      if (result.data.sucesso) {
+        const blob = new Blob([result.data.xml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `NFCe_${numeroNota || idPlugNotas}.xml`;
+        document.body.appendChild(link);
+        link.click();
+        
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        return { success: true };
+      }
+      return { success: false, error: 'Resposta inválida do servidor.' };
+    } catch (error) {
+      console.error("Erro ao baixar XML:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 7. Consultar Resumo da NFC-e (ATUALIZAÇÃO MANUAL VIA PLUGNOTAS)
+  async consultarStatusNfce(vendaId, idPlugNotas) {
+    try {
+      const functions = getFunctions();
+      const consultarFn = httpsCallable(functions, 'consultarResumoNfce');
+      const response = await consultarFn({ vendaId, idPlugNotas });
+      return response.data;
+    } catch (error) {
+      console.error("Erro ao consultar status da NFC-e:", error);
+      return { sucesso: false, error: error.message };
+    }
+  },
+
+  // 8. Baixar PDF de forma segura (Base64) e abrir no navegador
+  async baixarPdfNfce(idPlugNotas, linkPdfDireto = null) {
+    try {
+      if (linkPdfDireto && typeof linkPdfDireto === 'string' && linkPdfDireto.includes('sefaz')) {
+        window.open(linkPdfDireto, '_blank');
+        return { success: true };
+      }
+
+      if (!idPlugNotas) {
+        return { success: false, error: 'ID da nota não encontrado.' };
+      }
+
+      const functions = getFunctions();
+      const baixarPdfFn = httpsCallable(functions, 'baixarPdfNfcePlugNotas');
+      const result = await baixarPdfFn({ idPlugNotas });
+      
+      if (result.data.sucesso && result.data.pdfBase64) {
+        const byteCharacters = atob(result.data.pdfBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        return { success: true };
+      }
+      return { success: false, error: 'Resposta inválida do servidor.' };
+    } catch (error) {
+      console.error("Erro ao exibir PDF:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 9. Cancelar NFC-e na Sefaz
+  async cancelarNfce(vendaId, justificativa) {
+    try {
+      const functions = getFunctions();
+      const cancelarFn = httpsCallable(functions, 'cancelarNfcePlugNotas');
+      
+      const response = await cancelarFn({ vendaId, justificativa });
+      
+      if (response.data && response.data.sucesso) {
+        return { success: true };
+      }
+      
+      return { success: false, error: 'Resposta inválida do servidor ao tentar cancelar.' };
+    } catch (error) {
+      console.error("Erro ao cancelar NFC-e:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 10. Baixar XML de CANCELAMENTO (NFC-e)
+  async baixarXmlCancelamentoNfce(idPlugNotas, numeroNota) {
+    try {
+      const functions = getFunctions();
+      const baixarXmlFn = httpsCallable(functions, 'baixarXmlCancelamentoNfcePlugNotas');
+      const result = await baixarXmlFn({ idPlugNotas });
+      
+      if (result.data.sucesso) {
+        const blob = new Blob([result.data.xml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Cancelamento_NFCe_${numeroNota || idPlugNotas}.xml`;
+        document.body.appendChild(link);
+        link.click();
+        
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        return { success: true };
+      }
+      return { success: false, error: 'Resposta inválida do servidor.' };
+    } catch (error) {
+      console.error("Erro ao baixar XML de cancelamento:", error);
+      return { success: false, error: error.message };
+    }
   }
 };
-
-// Função utilitária para logging de eventos
-export const logAnalyticsEvent = (eventName, eventParams = {}) => {
-  if (typeof window !== 'undefined') {
-    logEvent(analytics, eventName, eventParams);
-  }
-};
-
-// Exportação padrão
-export default app;
