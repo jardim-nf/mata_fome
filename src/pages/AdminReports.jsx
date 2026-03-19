@@ -1,13 +1,12 @@
 // src/pages/AdminReports.jsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 // Bibliotecas para PDF e Gráficos
 import jsPDF from 'jspdf';
@@ -18,11 +17,9 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 // Ícones
 import { 
-    IoArrowBack, IoDocumentTextOutline, IoSearch, IoCalendarOutline, IoFilterOutline,
-    IoDownloadOutline, IoRefreshOutline, IoStatsChartOutline, IoPieChartOutline,
-    IoTrendingUpOutline, IoRestaurantOutline, IoCashOutline, IoReceiptOutline,
-    IoPrintOutline, IoPeopleOutline, IoTimeOutline,
-    IoAnalyticsOutline, IoListOutline, IoMapOutline, IoAlertCircleOutline
+    IoArrowBack, IoFilterOutline, IoDownloadOutline, IoRefreshOutline, 
+    IoStatsChartOutline, IoCashOutline, IoReceiptOutline, IoPrintOutline, 
+    IoPeopleOutline, IoAnalyticsOutline, IoListOutline, IoMapOutline, IoAlertCircleOutline
 } from 'react-icons/io5';
 import { FaMotorcycle } from "react-icons/fa";
 
@@ -68,6 +65,18 @@ const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
     );
 };
 
+// 🔥 FUNÇÃO GLOBAL PARA IDENTIFICAR CANCELADOS 🔥
+const isPedidoCancelado = (p) => {
+    if (!p) return false;
+    const s1 = String(p.status || '').toLowerCase().trim();
+    const s2 = String(p.fiscal?.status || '').toLowerCase().trim();
+    const s3 = String(p.statusVenda || '').toLowerCase().trim();
+    
+    // Se conter qualquer um desses termos, ele classifica como cancelado
+    const termos = ['cancelad', 'recusad', 'excluid', 'estornad', 'devolvid', 'rejeitad', 'erro'];
+    return termos.some(t => s1.includes(t) || s2.includes(t) || s3.includes(t));
+};
+
 const AdminReports = () => {
     const { estabelecimentoIdPrincipal } = useAuth();
     const reportContentRef = useRef();
@@ -79,11 +88,10 @@ const AdminReports = () => {
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     
     // Filtros
-    const [statusFilter, setStatusFilter] = useState('todos');
+    const [statusFilter, setStatusFilter] = useState('valido'); // Padrão: mostra só o que é válido
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [deliveryTypeFilter, setDeliveryTypeFilter] = useState('todos');
     const [motoboyFilter, setMotoboyFilter] = useState('todos');
-    
     const [availableMotoboys, setAvailableMotoboys] = useState([]);
 
     // Filtros Avançados
@@ -95,7 +103,6 @@ const AdminReports = () => {
     // --- TRADUTOR DE PAGAMENTO ---
     const traduzirPagamento = (metodo) => {
         if (!metodo || metodo === 'N/A') return 'Não Informado';
-        
         const mapa = {
             'credit_card': 'Cartão de Crédito',
             'debit_card': 'Cartão de Débito',
@@ -106,7 +113,6 @@ const AdminReports = () => {
             'card': 'Cartão',
             'online': 'Online'
         };
-        
         return mapa[metodo.toLowerCase()] || mapa[metodo] || metodo;
     };
 
@@ -114,14 +120,12 @@ const AdminReports = () => {
     const processarDado = (doc, origem) => {
         const data = doc.data();
         
-        let dataRegistro = null;
-        if (origem === 'mesa') {
-            dataRegistro = data.criadoEm?.toDate?.() || data.dataFechamento?.toDate?.() || data.createdAt?.toDate?.() || data.updatedAt?.toDate?.() || new Date();
-        } else {
-            dataRegistro = data.createdAt?.toDate?.() || new Date();
-        }
+        let dataRegistro = data.createdAt?.toDate?.() || 
+                           data.criadoEm?.toDate?.() || 
+                           data.dataFechamento?.toDate?.() || 
+                           data.updatedAt?.toDate?.() || 
+                           new Date();
 
-        // Parse seguro do total
         const parseVal = (v) => {
             if (typeof v === 'number') return v;
             if (typeof v === 'string') return parseFloat(v.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
@@ -129,23 +133,25 @@ const AdminReports = () => {
         };
         
         let total = parseVal(data.totalFinal) || parseVal(data.total) || parseVal(data.valorTotal) || 0;
-        
         const itens = data.itens || data.produtos || [];
         const bairro = data.endereco?.bairro || data.bairro || data.address?.district || null;
+
+        // Blinda a identificação de mesas
+        const isMesa = origem === 'mesa' || data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero;
 
         return {
             id: doc.id,
             ...data,
             data: dataRegistro,
             totalFinal: total || 0,
-            tipo: origem === 'mesa' ? 'mesa' : (data.tipo || 'delivery'),
-            origem: origem,
-            status: data.status || (origem === 'mesa' ? 'finalizada' : 'recebido'),
+            tipo: isMesa ? 'mesa' : 'delivery',
+            origem: isMesa ? 'mesa' : 'delivery',
+            status: data.status || (isMesa ? 'finalizada' : 'recebido'),
             formaPagamento: data.formaPagamento || 'N/A',
             mesaNumero: data.mesaNumero || data.numeroMesa || null,
             loteHorario: data.loteHorario || '',
             itens: itens,
-            clienteNome: data.clienteNome || data.cliente?.nome || (origem === 'mesa' ? 'Mesa' : 'Cliente'),
+            clienteNome: data.clienteNome || data.cliente?.nome || (isMesa ? 'Mesa' : 'Cliente'),
             motoboyId: data.motoboyId || null,
             motoboyNome: data.motoboyNome || null,
             taxaEntrega: Number(data.taxaEntrega) || Number(data.deliveryFee) || 0,
@@ -160,68 +166,55 @@ const AdminReports = () => {
             setLoadingData(true);
             const start = startOfDay(new Date(startDate + 'T00:00:00'));
             const end = endOfDay(new Date(endDate + 'T23:59:59'));
-            let allData = [];
+            
+            // Usamos um Map para evitar dados duplicados entre as coleções
+            let allDataMap = new Map(); 
 
-            // 1. DELIVERY (busca nas DUAS coleções possíveis)
+            // Função para filtrar a data NO NAVEGADOR (Burlar erro de Indice Composto)
+            const addData = (doc, origem) => {
+                const item = processarDado(doc, origem);
+                if (item.data >= start && item.data <= end) {
+                    allDataMap.set(item.id, item);
+                }
+            };
+
+            // 1. BUSCA DELIVERY
             if (deliveryTypeFilter !== 'mesa') {
                 try {
-                    const qPedidosSub = query(
-                        collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'),
-                        where('createdAt', '>=', start),
-                        where('createdAt', '<=', end),
-                        orderBy('createdAt', 'desc')
-                    );
-                    const snapSub = await getDocs(qPedidosSub);
-                    allData = [...allData, ...snapSub.docs.map(d => processarDado(d, 'delivery'))];
-                } catch (e1) { console.warn("Delivery sub:", e1.message); }
-
+                    const qSub = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'));
+                    const snapSub = await getDocs(qSub);
+                    snapSub.docs.forEach(d => addData(d, 'delivery'));
+                } catch(e) {}
+                
                 try {
-                    const qPedidosGlobal = query(
-                        collection(db, 'pedidos'),
-                        where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
-                        where('createdAt', '>=', start),
-                        where('createdAt', '<=', end),
-                        orderBy('createdAt', 'desc')
-                    );
-                    const snapGlobal = await getDocs(qPedidosGlobal);
-                    const idsExistentes = new Set(allData.map(d => d.id));
-                    const novos = snapGlobal.docs
-                        .filter(d => !idsExistentes.has(d.id))
-                        .map(d => processarDado(d, 'delivery'));
-                    allData = [...allData, ...novos];
-                } catch (e2) { console.warn("Delivery global:", e2.message); }
+                    const qGlob = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
+                    const snapGlob = await getDocs(qGlob);
+                    snapGlob.docs.forEach(d => addData(d, 'delivery'));
+                } catch(e) {}
             }
 
-            // 2. MESAS / PDV (coleção 'estabelecimentos/{id}/vendas' e global 'vendas')
+            // 2. BUSCA MESAS / PDV / VENDAS
             if (deliveryTypeFilter === 'todos' || deliveryTypeFilter === 'mesa') {
                 try {
-                    const qVendasSub = query(
-                        collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
-                        where('criadoEm', '>=', start),
-                        where('criadoEm', '<=', end),
-                        orderBy('criadoEm', 'desc')
-                    );
-                    const snapVendasSub = await getDocs(qVendasSub);
-                    allData = [...allData, ...snapVendasSub.docs.map(d => processarDado(d, 'mesa'))];
-                } catch (e1) {
-                    console.warn("Fallback: tentando coleção global vendas", e1);
-                }
+                    const qSubVendas = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'));
+                    const snapSubVendas = await getDocs(qSubVendas);
+                    snapSubVendas.docs.forEach(d => addData(d, 'mesa'));
+                } catch(e) {}
+
                 try {
-                    const qVendasGlobal = query(
-                        collection(db, 'vendas'),
-                        where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
-                        where('createdAt', '>=', start),
-                        where('createdAt', '<=', end),
-                        orderBy('createdAt', 'desc')
-                    );
-                    const snapVendasGlobal = await getDocs(qVendasGlobal);
-                    const idsExistentes = new Set(allData.map(d => d.id));
-                    const novasVendas = snapVendasGlobal.docs
-                        .filter(d => !idsExistentes.has(d.id))
-                        .map(d => processarDado(d, 'mesa'));
-                    allData = [...allData, ...novasVendas];
-                } catch (e2) { console.error("Erro vendas global:", e2); }
+                    const qGlobVendas = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
+                    const snapGlobVendas = await getDocs(qGlobVendas);
+                    snapGlobVendas.docs.forEach(d => addData(d, 'mesa'));
+                } catch(e) {}
+
+                try {
+                    const qHist = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'historico_mesas'));
+                    const snapHist = await getDocs(qHist);
+                    snapHist.docs.forEach(d => addData(d, 'mesa'));
+                } catch(e) {}
             }
+
+            let allData = Array.from(allDataMap.values());
 
             // Extrair Motoboys
             const uniqueMotoboys = [];
@@ -234,21 +227,14 @@ const AdminReports = () => {
             });
             setAvailableMotoboys(uniqueMotoboys);
 
-            // Filtragem Inicial
-            let filtered = allData;
-            if (statusFilter !== 'todos') {
-                filtered = filtered.filter(item => {
-                    if (statusFilter === 'finalizado') return ['finalizado', 'finalizada', 'entregue'].includes(item.status);
-                    return item.status === statusFilter;
-                });
-            }
-            if (paymentMethodFilter !== 'todos') filtered = filtered.filter(item => item.formaPagamento === paymentMethodFilter);
-            if (deliveryTypeFilter !== 'todos') filtered = filtered.filter(item => item.origem === (deliveryTypeFilter === 'delivery' ? 'delivery' : 'mesa'));
-            if (motoboyFilter !== 'todos') filtered = filtered.filter(item => item.motoboyId === motoboyFilter);
+            // Filtragem Rápida
+            if (paymentMethodFilter !== 'todos') allData = allData.filter(i => i.formaPagamento === paymentMethodFilter);
+            if (deliveryTypeFilter !== 'todos') allData = allData.filter(i => i.tipo === deliveryTypeFilter);
+            if (motoboyFilter !== 'todos') allData = allData.filter(i => i.motoboyId === motoboyFilter);
 
-            setPedidos(filtered);
-            if (filtered.length === 0) toast.info("Nenhum dado encontrado.");
-            else toast.success(`${filtered.length} registros carregados.`);
+            setPedidos(allData);
+            if (allData.length === 0) toast.info("Nenhum dado encontrado para essas datas.");
+            else toast.success(`${allData.length} registros carregados.`);
 
         } catch (err) {
             console.error(err);
@@ -262,9 +248,14 @@ const AdminReports = () => {
         if (estabelecimentoIdPrincipal) fetchData();
     }, [estabelecimentoIdPrincipal]);
 
-    // Filtragem Dinâmica
+    // Filtragem Dinâmica de Tela (Busca, Status e Valores)
     const filteredPedidos = useMemo(() => {
         return pedidos.filter(p => {
+            // 🔥 FILTRO DE STATUS DE CANCELAMENTO 🔥
+            const cancelado = isPedidoCancelado(p);
+            if (statusFilter === 'valido' && cancelado) return false;
+            if (statusFilter === 'cancelado' && !cancelado) return false;
+
             const term = searchTerm.toLowerCase();
             const matchesSearch = searchTerm === '' || 
                 p.id?.toLowerCase().includes(term) ||
@@ -276,30 +267,13 @@ const AdminReports = () => {
             const matchesMax = maxValue === '' || p.totalFinal <= parseFloat(maxValue);
             
             return matchesSearch && matchesMin && matchesMax;
-        });
-    }, [pedidos, searchTerm, minValue, maxValue]);
+        }).sort((a,b) => b.data - a.data); // Ordena do mais recente para o mais antigo
+    }, [pedidos, searchTerm, minValue, maxValue, statusFilter]);
 
-  // --- CÁLCULO DE MÉTRICAS ---
+    // --- CÁLCULO DE MÉTRICAS ---
     const metrics = useMemo(() => {
-        
-        // 🔥 BLOQUEIO ABSOLUTO E AGRESSIVO DE CANCELADOS 🔥
-        const isCancelado = (p) => {
-            // Pega os status de todos os cantos possíveis e arranca espaços em branco
-            const s1 = String(p.status || '').toLowerCase().trim();
-            const s2 = String(p.fiscal?.status || '').toLowerCase().trim();
-            const s3 = String(p.statusVenda || '').toLowerCase().trim();
-
-            // Busca qualquer pedaço de palavra que indique problema
-            const termosBloqueados = ['cancelad', 'recusad', 'excluid', 'estornad', 'devolvid', 'rejeitad', 'erro'];
-            
-            // Se achar qualquer um desses termos em qualquer lugar, retorna TRUE (Está cancelado)
-            return termosBloqueados.some(termo => 
-                s1.includes(termo) || s2.includes(termo) || s3.includes(termo)
-            );
-        };
-
-        const pedidosValidos = filteredPedidos.filter(p => !isCancelado(p));
-        const cancelados = filteredPedidos.filter(p => isCancelado(p));
+        const pedidosValidos = filteredPedidos.filter(p => !isPedidoCancelado(p));
+        const cancelados = filteredPedidos.filter(p => isPedidoCancelado(p));
 
         const totalVendas = pedidosValidos.reduce((acc, p) => acc + p.totalFinal, 0);
         const totalTaxas = pedidosValidos.reduce((acc, p) => acc + (p.taxaEntrega || 0), 0);
@@ -310,7 +284,7 @@ const AdminReports = () => {
         const mesaVendas = filteredPedidos.filter(p => p.tipo === 'mesa');
 
         filteredPedidos.forEach(p => {
-            if (isCancelado(p)) return; // Se for cancelado, pula e não entra em NENHUM gráfico
+            if (isPedidoCancelado(p)) return; // IGNORA CANCELADOS NOS GRÁFICOS
 
             const dayKey = format(p.data, 'dd/MM');
             byDay[dayKey] = (byDay[dayKey] || 0) + p.totalFinal;
@@ -368,16 +342,14 @@ const AdminReports = () => {
             topBairros,
             topClients, 
             mesaMetrics: {
-                total: mesaVendas.filter(m => !isCancelado(m)).reduce((acc, m) => acc + m.totalFinal, 0),
-                count: mesaVendas.filter(m => !isCancelado(m)).length
+                total: mesaVendas.filter(m => !isPedidoCancelado(m)).reduce((acc, m) => acc + m.totalFinal, 0),
+                count: mesaVendas.filter(m => !isPedidoCancelado(m)).length
             },
             cancelamentos: {
                 qtd: cancelados.length,
                 valor: cancelados.reduce((acc, p) => acc + p.totalFinal, 0),
                 taxa: filteredPedidos.length > 0 ? ((cancelados.length / filteredPedidos.length) * 100).toFixed(1) : 0
-            },
-            // Exporta a função para a tabela conseguir pintar de vermelho
-            isCancelado
+            }
         };
     }, [filteredPedidos]);
 
@@ -388,7 +360,7 @@ const AdminReports = () => {
         const rows = filteredPedidos.map(p => [
             format(p.data, 'dd/MM/yyyy'), format(p.data, 'HH:mm'),
             p.id, p.tipo, p.mesaNumero || '-', p.clienteNome, p.motoboyNome || '-', p.bairro || '-',
-            p.status, traduzirPagamento(p.formaPagamento), p.totalFinal.toFixed(2).replace('.', ',')
+            isPedidoCancelado(p) ? 'Cancelado' : p.status, traduzirPagamento(p.formaPagamento), p.totalFinal.toFixed(2).replace('.', ',')
         ]);
         const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
         const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -430,7 +402,9 @@ const AdminReports = () => {
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPedidos.map(p => (
+                    {filteredPedidos.map(p => {
+                        const cancelado = isPedidoCancelado(p);
+                        return (
                         <tr key={p.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{format(p.data, 'dd/MM HH:mm')}</td>
                             <td className="px-4 py-3 text-sm">
@@ -451,16 +425,16 @@ const AdminReports = () => {
                             <td className="px-4 py-3 text-sm text-gray-900">
                                 {traduzirPagamento(p.formaPagamento)}
                             </td>
-                            <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                            <td className={`px-4 py-3 text-sm font-bold ${cancelado ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                                 {p.totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-4 py-3 text-sm">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'cancelado' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                                    {p.status}
+                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${cancelado ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                                    {cancelado ? 'CANCELADO' : p.status}
                                 </span>
                             </td>
                         </tr>
-                    ))}
+                    )})}
                 </tbody>
             </table>
         </div>
@@ -495,28 +469,35 @@ const AdminReports = () => {
             <div className="max-w-7xl mx-auto" ref={reportContentRef}>
                 {/* FILTROS */}
                 <Card title={<><IoFilterOutline className="text-blue-600"/> Filtros</>} className="mb-6">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm col-span-2 sm:col-span-1">
                             <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">De</span>
                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none w-full" />
                         </div>
-                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm col-span-2 sm:col-span-1">
                             <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">Até</span>
                             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none w-full" />
                         </div>
-                        <select value={deliveryTypeFilter} onChange={e => setDeliveryTypeFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm">
+                        <select value={deliveryTypeFilter} onChange={e => setDeliveryTypeFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm col-span-2 sm:col-span-1">
                             <option value="todos">Todos Tipos</option>
                             <option value="delivery">Delivery</option>
                             <option value="mesa">Mesas</option>
                         </select>
-                        <select value={motoboyFilter} onChange={e => setMotoboyFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm">
+                        <select value={motoboyFilter} onChange={e => setMotoboyFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm col-span-2 sm:col-span-1">
                             <option value="todos">Todos Motoboys</option>
                             {availableMotoboys.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                         </select>
-                        <button onClick={fetchData} disabled={loadingData} className="bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex justify-center items-center gap-2 text-xs font-bold transition-all shadow-sm no-print">
+                        {/* 🔥 NOVO FILTRO DE STATUS (Aparecer Cancelados) 🔥 */}
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm col-span-2 sm:col-span-1">
+                            <option value="valido">Apenas Válidos</option>
+                            <option value="cancelado">Apenas Cancelados</option>
+                            <option value="todos">Mostrar Tudo</option>
+                        </select>
+                        <button onClick={fetchData} disabled={loadingData} className="bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex justify-center items-center gap-2 text-xs font-bold transition-all shadow-sm no-print col-span-2 sm:col-span-1">
                             {loadingData ? '...' : <><IoRefreshOutline/> Filtrar</>}
                         </button>
                     </div>
+
                     {/* Quick date buttons + search + view toggle */}
                     <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
                         <button onClick={() => { const h = format(new Date(), 'yyyy-MM-dd'); setStartDate(h); setEndDate(h); }} className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-200 transition-all">Hoje</button>
