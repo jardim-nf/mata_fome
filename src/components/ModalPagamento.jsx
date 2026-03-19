@@ -37,17 +37,17 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const [emitirNota, setEmitirNota] = useState(false);
     const [cpfNota, setCpfNota] = useState('');
 
-    // Estado para a Taxa de Serviço (10%)
+    // Estado para Taxas e Descontos
     const [incluirTaxa, setIncluirTaxa] = useState(false);
+    const [tipoDesconto, setTipoDesconto] = useState('reais'); // 'reais' ou 'porcentagem'
+    const [valorDescontoInput, setValorDescontoInput] = useState('');
 
     // --- CÁLCULOS FINANCEIROS ---
 
     const calcularTotalConsumo = () => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         return listaItens.reduce((acc, item) => {
-            // 🔥 CORREÇÃO: Não calcula itens cancelados 🔥
             if (item.status === 'cancelado') return acc;
-            
             const qtd = item.quantidade || item.qtd || 1;
             return acc + (item.preco * qtd);
         }, 0);
@@ -58,6 +58,18 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         return calcularTotalConsumo() * 0.10;
     };
 
+    // 🔥 NOVO: Cálculo do Desconto
+    const calcularValorDesconto = () => {
+        const consumo = calcularTotalConsumo();
+        const numDesconto = parseFloat(valorDescontoInput) || 0;
+        if (numDesconto <= 0) return 0;
+
+        if (tipoDesconto === 'porcentagem') {
+            return consumo * (numDesconto / 100);
+        }
+        return numDesconto;
+    };
+
     const calcularJaPago = () => {
         const historico = mesa?.pagamentosParciais || [];
         return historico.reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
@@ -66,8 +78,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const calcularRestanteMesa = () => {
         const consumo = calcularTotalConsumo();
         const taxa = calcularValorTaxa();
+        const desconto = calcularValorDesconto();
         const jaPago = calcularJaPago();
-        return Math.max(0, (consumo + taxa) - jaPago);
+        return Math.max(0, (consumo + taxa - desconto) - jaPago);
     };
 
     // --- AGRUPAMENTO DE ITENS (Para visualização) ---
@@ -77,7 +90,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
         const agrupados = {};
         listaItens.forEach(item => {
-            // 🔥 CORREÇÃO: Ignora itens cancelados na divisão e na conferência 🔥
             if (item.status === 'cancelado') return;
 
             let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
@@ -109,7 +121,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 [key]: {
                     valor: restanteMesa,
                     formaPagamento: 'dinheiro',
-                    itens: listaItens.filter(i => i.status !== 'cancelado') // Filtra da via de banco de dados
+                    itens: listaItens.filter(i => i.status !== 'cancelado')
                 }
             });
             setSelecionados({ [key]: true });
@@ -127,12 +139,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 };
                 selecionadosIniciais[key] = false;
             } else {
+                // Cálculo rateado para desconto também (simplificado: não passa do limite restante)
                 Object.entries(grupos).forEach(([pessoa, dados]) => {
                     const taxaPessoa = incluirTaxa ? (dados.total * 0.10) : 0;
-                    const valorSugerido = Math.min(dados.total + taxaPessoa, restanteMesa);
+                    const descontoPessoa = calcularValorDesconto() > 0 ? (calcularValorDesconto() * (dados.total / calcularTotalConsumo())) : 0;
+                    const valorSugerido = Math.min(dados.total + taxaPessoa - descontoPessoa, restanteMesa);
 
                     pagamentosIniciais[pessoa] = {
-                        valor: valorSugerido,
+                        valor: valorSugerido > 0 ? valorSugerido : 0,
                         formaPagamento: 'dinheiro',
                         itens: dados.itens
                     };
@@ -142,7 +156,8 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             setPagamentos(pagamentosIniciais);
             setSelecionados(selecionadosIniciais);
         }
-    }, [tipoPagamento, agruparItensPorPessoa, mesa, incluirTaxa]);
+    // Adicionamos as dependências do desconto para atualizar em tempo real
+    }, [tipoPagamento, agruparItensPorPessoa, mesa, incluirTaxa, tipoDesconto, valorDescontoInput]);
 
     // --- AÇÕES UI ---
     const toggleSelecao = (pessoa) => {
@@ -210,6 +225,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
         const totalConsumo = calcularTotalConsumo();
         const valorTaxa = calcularValorTaxa();
+        const valorDesconto = calcularValorDesconto();
         const jaPago = calcularJaPago();
         const restante = calcularRestanteMesa();
         
@@ -262,6 +278,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 <div class="resumo-box">
                     <div class="linha-resumo"><span>TOTAL CONSUMO:</span><span>R$ ${totalConsumo.toFixed(2)}</span></div>
                     ${incluirTaxa ? `<div class="linha-resumo"><span>TAXA SERVIÇO (10%):</span><span>R$ ${valorTaxa.toFixed(2)}</span></div>` : ''}
+                    ${valorDesconto > 0 ? `<div class="linha-resumo"><span>(-) DESCONTO:</span><span>R$ ${valorDesconto.toFixed(2)}</span></div>` : ''}
                     ${jaPago > 0 ? `<div class="linha-resumo"><span>(-) JÁ PAGO:</span><span>R$ ${jaPago.toFixed(2)}</span></div>` : ''}
                     <div class="linha-total"><span>A PAGAR:</span><span>R$ ${restante.toFixed(2)}</span></div>
                 </div>
@@ -287,22 +304,20 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const totalConsumo = calcularTotalConsumo();
             const valorTaxa = calcularValorTaxa();
+            const valorDesconto = calcularValorDesconto();
             const jaPagoAntigo = calcularJaPago();
             const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
 
-            const restanteFinal = (totalConsumo + valorTaxa) - totalJaPagoNovo;
+            const restanteFinal = (totalConsumo + valorTaxa - valorDesconto) - totalJaPagoNovo;
             const mesaQuitada = restanteFinal <= 0.10;
 
             const pagamentosValidos = Object.fromEntries(
                 Object.entries(pagamentos).filter(([k]) => selecionados[k] && pagamentos[k].valor > 0)
             );
 
-            // 🔥 CORREÇÃO: Traz os itens cancelados de volta só para fins de histórico/Relatório
             const todosItensMesa = mesa?.itens || mesa?.pedidos || [];
             const itensValidos = Object.values(pagamentosValidos).flatMap(p => p.itens || []);
             const itensCancelados = todosItensMesa.filter(i => i.status === 'cancelado');
-            
-            // Une os itens que foram pagos com os que foram cancelados pra ficar tudo registrado
             const itensParaSalvar = [...itensValidos, ...itensCancelados];
 
             const primeiraPessoaValida = Object.values(pagamentosValidos)[0];
@@ -313,11 +328,15 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 mesaId: mesa.id,
                 mesaNumero: mesa.numero,
                 estabelecimentoId: estabelecimentoId,
-                itens: itensParaSalvar, // <--- Aqui enviamos os válidos e os cancelados
+                itens: itensParaSalvar,
                 pagamentos: pagamentosValidos,
-                total: totalPagoAgora, // <--- Total é apenas o valor real cobrado
+                total: totalPagoAgora, 
                 valorOriginal: totalConsumo,
                 taxaServicoCobrada: incluirTaxa ? valorTaxa : 0,
+                // 🔥 Informações de Desconto
+                valorDesconto: valorDesconto,
+                tipoDesconto: tipoDesconto,
+                valorDescontoInput: parseFloat(valorDescontoInput) || 0,
                 tipoPagamento: formaPagamentoPredominante,
                 metodoPagamento: formaPagamentoPredominante, 
                 status: mesaQuitada ? 'pago' : 'pago_parcial',
@@ -329,7 +348,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
 
             const docRef = await addDoc(collection(db, 'vendas'), dadosVenda);
 
-            // 2. BAIXA DE ESTOQUE (só dá baixa nos itens que não foram cancelados)
+            // 2. BAIXA DE ESTOQUE
             if (modo === 'total' || mesaQuitada) {
                 if (itensValidos.length > 0) {
                     await estoqueService.darBaixaEstoque(estabelecimentoId, itensValidos);
@@ -421,7 +440,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     };
 
     const renderizarEtapa1 = () => (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="bg-[#3b82f6] rounded-3xl p-6 shadow-xl shadow-blue-200 text-center relative overflow-hidden">
                  <div className="relative z-10">
                     <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3">
@@ -442,6 +461,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                             + 10% Garçom: {calcularValorTaxa().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                     )}
+
+                    {calcularValorDesconto() > 0 && (
+                        <p className="text-white text-sm font-medium mt-1 bg-white/20 inline-block px-3 py-1 rounded-full ml-1">
+                            - Desconto: {calcularValorDesconto().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                    )}
                     
                     <button onClick={handleImprimirConferencia} className="mt-4 w-full py-2 bg-white/20 text-white hover:bg-white/30 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
                         <IoPrint className="text-lg" /> Imprimir Conferência
@@ -453,7 +478,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-between">
                 <div>
                     <h4 className="font-bold text-gray-900">Taxa de Serviço (10%)</h4>
-                    <p className="text-xs text-gray-500">Adicionar 10% do garçom na conta</p>
+                    <p className="text-xs text-gray-500">Adicionar 10% na conta</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                     <input 
@@ -467,9 +492,33 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 </label>
             </div>
 
+            {/* 🔥 NOVO: CAMPO DE DESCONTO 🔥 */}
+            <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="font-bold text-gray-900">Desconto</h4>
+                        <p className="text-xs text-gray-500">Aplicar desconto no total</p>
+                    </div>
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button onClick={() => setTipoDesconto('reais')} className={`px-3 py-1 text-xs font-bold rounded-md ${tipoDesconto === 'reais' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}>R$</button>
+                        <button onClick={() => setTipoDesconto('porcentagem')} className={`px-3 py-1 text-xs font-bold rounded-md ${tipoDesconto === 'porcentagem' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}>%</button>
+                    </div>
+                </div>
+                <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{tipoDesconto === 'reais' ? 'R$' : '%'}</span>
+                    <input 
+                        type="number" 
+                        value={valorDescontoInput} 
+                        onChange={(e) => setValorDescontoInput(e.target.value)} 
+                        placeholder="0.00" 
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500" 
+                    />
+                </div>
+            </div>
+
             {renderHistoricoPagamentos()}
 
-            <div className="space-y-3">
+            <div className="space-y-3 mt-2">
                 <button onClick={() => { setTipoPagamento('unico'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50/30 flex items-center gap-4 text-left transition-all">
                     <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600"><IoPerson size={24} /></div>
                     <div className="flex-1"><h4 className="font-bold text-gray-900">Quitar Restante</h4><p className="text-xs text-gray-500">Pagar todo o valor pendente</p></div>
@@ -585,13 +634,14 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const renderizarEtapa3 = () => {
         const totalConsumo = calcularTotalConsumo();
         const valorTaxa = calcularValorTaxa();
+        const valorDesconto = calcularValorDesconto();
         const jaPago = calcularJaPago();
         const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
             return selecionados[pessoa] ? acc + dados.valor : acc;
         }, 0);
 
         const totalPagoGeral = jaPago + totalPagoAgora;
-        const restanteFinal = (totalConsumo + valorTaxa) - totalPagoGeral;
+        const restanteFinal = (totalConsumo + valorTaxa - valorDesconto) - totalPagoGeral;
 
         const vaiQuitar = restanteFinal <= 0.10;
         const troco = restanteFinal < -0.10 ? Math.abs(restanteFinal) : 0;
@@ -612,6 +662,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         <div className="flex justify-between items-center mb-1 text-blue-600 font-bold text-xs">
                             <span>Taxa de Serviço (10%)</span>
                             <span>+ R$ {valorTaxa.toFixed(2)}</span>
+                        </div>
+                    )}
+                    {valorDesconto > 0 && (
+                        <div className="flex justify-between items-center mb-1 text-red-500 font-bold text-xs">
+                            <span>Desconto Aplicado</span>
+                            <span>- R$ {valorDesconto.toFixed(2)}</span>
                         </div>
                     )}
                     {jaPago > 0 && (
