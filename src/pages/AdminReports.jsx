@@ -1,3 +1,4 @@
+// src/pages/AdminReports.jsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
@@ -120,7 +121,7 @@ const AdminReports = () => {
             dataRegistro = data.createdAt?.toDate?.() || new Date();
         }
 
-        // Parse seguro do total (pode vir como string "R$ 62,86" ou número)
+        // Parse seguro do total
         const parseVal = (v) => {
             if (typeof v === 'number') return v;
             if (typeof v === 'string') return parseFloat(v.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
@@ -163,7 +164,6 @@ const AdminReports = () => {
 
             // 1. DELIVERY (busca nas DUAS coleções possíveis)
             if (deliveryTypeFilter !== 'mesa') {
-                // 1a. Subcoleção estabelecimentos/{id}/pedidos
                 try {
                     const qPedidosSub = query(
                         collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'),
@@ -175,7 +175,6 @@ const AdminReports = () => {
                     allData = [...allData, ...snapSub.docs.map(d => processarDado(d, 'delivery'))];
                 } catch (e1) { console.warn("Delivery sub:", e1.message); }
 
-                // 1b. Coleção global 'pedidos'
                 try {
                     const qPedidosGlobal = query(
                         collection(db, 'pedidos'),
@@ -185,7 +184,6 @@ const AdminReports = () => {
                         orderBy('createdAt', 'desc')
                     );
                     const snapGlobal = await getDocs(qPedidosGlobal);
-                    // Evitar duplicatas
                     const idsExistentes = new Set(allData.map(d => d.id));
                     const novos = snapGlobal.docs
                         .filter(d => !idsExistentes.has(d.id))
@@ -197,7 +195,6 @@ const AdminReports = () => {
             // 2. MESAS / PDV (coleção 'estabelecimentos/{id}/vendas' e global 'vendas')
             if (deliveryTypeFilter === 'todos' || deliveryTypeFilter === 'mesa') {
                 try {
-                    // Tenta pela subcoleção vendas do estabelecimento (campo criadoEm)
                     const qVendasSub = query(
                         collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
                         where('criadoEm', '>=', start),
@@ -210,7 +207,6 @@ const AdminReports = () => {
                     console.warn("Fallback: tentando coleção global vendas", e1);
                 }
                 try {
-                    // Também tenta pela coleção global vendas (campo createdAt)
                     const qVendasGlobal = query(
                         collection(db, 'vendas'),
                         where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
@@ -219,7 +215,6 @@ const AdminReports = () => {
                         orderBy('createdAt', 'desc')
                     );
                     const snapVendasGlobal = await getDocs(qVendasGlobal);
-                    // Evitar duplicatas
                     const idsExistentes = new Set(allData.map(d => d.id));
                     const novasVendas = snapVendasGlobal.docs
                         .filter(d => !idsExistentes.has(d.id))
@@ -286,7 +281,14 @@ const AdminReports = () => {
 
     // --- CÁLCULO DE MÉTRICAS ---
     const metrics = useMemo(() => {
-        const pedidosValidos = filteredPedidos.filter(p => p.status !== 'cancelado');
+        // 🔥 CORREÇÃO NA VALIDAÇÃO DE STATUS: Cobre cancelados de todas as origens 🔥
+        const isCancelado = (p) => {
+            const status = String(p.status || '').toLowerCase();
+            const fiscalStatus = String(p.fiscal?.status || '').toLowerCase();
+            return ['cancelado', 'cancelada', 'recusado', 'excluido'].includes(status) || fiscalStatus === 'cancelado';
+        };
+
+        const pedidosValidos = filteredPedidos.filter(p => !isCancelado(p));
         const totalVendas = pedidosValidos.reduce((acc, p) => acc + p.totalFinal, 0);
         const totalTaxas = pedidosValidos.reduce((acc, p) => acc + (p.taxaEntrega || 0), 0);
         
@@ -294,10 +296,10 @@ const AdminReports = () => {
         const clientsStats = {}; // Novo objeto para clientes
 
         const mesaVendas = filteredPedidos.filter(p => p.tipo === 'mesa');
-        const cancelados = filteredPedidos.filter(p => p.status === 'cancelado');
+        const cancelados = filteredPedidos.filter(p => isCancelado(p));
 
         filteredPedidos.forEach(p => {
-            if (p.status === 'cancelado') return;
+            if (isCancelado(p)) return; // Ignora cancelados na soma
 
             const dayKey = format(p.data, 'dd/MM');
             byDay[dayKey] = (byDay[dayKey] || 0) + p.totalFinal;
@@ -341,7 +343,7 @@ const AdminReports = () => {
         const topItems = Object.entries(itemsCount).sort(([,a], [,b]) => b - a).slice(0, 5);
         const topMotoboys = Object.values(motoboyStats).sort((a, b) => b.count - a.count);
         const topBairros = Object.entries(bairrosStats).sort(([,a], [,b]) => b - a).slice(0, 5);
-        const topClients = Object.values(clientsStats).sort((a, b) => b.total - a.total).slice(0, 5); // Top 5 Clientes
+        const topClients = Object.values(clientsStats).sort((a, b) => b.total - a.total).slice(0, 5);
 
         return {
             totalVendas,
@@ -354,7 +356,7 @@ const AdminReports = () => {
             topItems,
             topMotoboys,
             topBairros,
-            topClients, // Adicionado ao retorno
+            topClients,
             mesaMetrics: {
                 total: mesaVendas.reduce((acc, m) => acc + m.totalFinal, 0),
                 count: mesaVendas.length
