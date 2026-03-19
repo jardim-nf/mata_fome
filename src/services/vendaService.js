@@ -229,11 +229,15 @@ export const vendaService = {
       
       const response = await cancelarFn({ vendaId, justificativa });
       
-      if (response.data && response.data.sucesso) {
+if (response.data && response.data.sucesso) {
         return { success: true };
       }
       
-      return { success: false, error: 'Resposta inválida do servidor ao tentar cancelar.' };
+      // 🔥 Correção: Agora ele pega a mensagem real (motivo) da SEFAZ ou PlugNotas
+      return { 
+        success: false, 
+        error: response.data?.error || response.data?.mensagem || 'Resposta inválida do servidor ao tentar cancelar.' 
+      };
     } catch (error) {
       console.error("Erro ao cancelar NFC-e:", error);
       return { success: false, error: error.message };

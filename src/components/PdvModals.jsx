@@ -346,16 +346,31 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     <h2 className="font-black text-2xl text-gray-800 uppercase tracking-wide">RECIBO</h2>
                     <p className="text-gray-400 text-xs font-mono mt-1">#{dados.id.slice(-6)} • {formatarData(dados.createdAt)}</p>
                 </div>
+                
+                {/* 🔥 PARTE CORRIGIDA AQUI: Lê as chaves tanto em inglês quanto em português 🔥 */}
                 <div className="space-y-3 mb-6 max-h-60 overflow-y-auto custom-scrollbar print:max-h-none print:overflow-visible">
-{dados.itens.map((i, index) => (
-    <div key={i.uid || i.id || index} className="flex flex-col text-sm text-gray-600 border-b border-dashed border-gray-100 pb-2 last:border-0"><div className="flex justify-between">
-                                <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}><b className="text-gray-800">{i.quantity}x</b> {i.name}</span>
-                                <span className={`font-mono ${isCanceladaRecibo ? 'line-through text-gray-400' : ''}`}>{formatarMoeda(i.price * i.quantity)}</span>
+                    {dados.itens.map((i, index) => {
+                        const qtdReal = i.quantidade || i.quantity || i.qtd || 1;
+                        const precoReal = Number(i.precoFinal || i.precoUnitario || i.preco || i.valor || i.price || 0);
+                        const nomeReal = i.nome || i.name || 'Item';
+
+                        return (
+                            <div key={i.uid || i.id || index} className="flex flex-col text-sm text-gray-600 border-b border-dashed border-gray-100 pb-2 last:border-0">
+                                <div className="flex justify-between">
+                                    <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}>
+                                        <b className="text-gray-800">{qtdReal}x</b> {nomeReal}
+                                    </span>
+                                    <span className={`font-mono ${isCanceladaRecibo ? 'line-through text-gray-400' : ''}`}>
+                                        {formatarMoeda(precoReal * qtdReal)}
+                                    </span>
+                                </div>
+                                {i.observacao && <span className="text-xs text-gray-400 italic mt-0.5">Obs: {i.observacao}</span>}
                             </div>
-                            {i.observacao && <span className="text-xs text-gray-400 italic mt-0.5">Obs: {i.observacao}</span>}
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
+                {/* 🔥 FIM DA PARTE CORRIGIDA 🔥 */}
+
                 <div className="flex justify-between text-xl font-black text-gray-800 mb-8 pt-4 border-t border-dashed border-gray-200">
                     <span>TOTAL</span>
                     <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}>{formatarMoeda(dados.total)}</span>
@@ -416,8 +431,20 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     )}
 
                     <div className="flex gap-3">
-                        <button onClick={() => window.print()} className="flex-1 border-2 border-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all">Imprimir</button>
-                        <button onClick={onClose} className="flex-1 bg-emerald-600 text-white p-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">Próximo</button>
+                        {/* 🔥 AGORA ELE ABRE O POPUP ISOLADO AO INVÉS DE TENTAR IMPRIMIR O SALÃO INTEIRO 🔥 */}
+                        <button 
+                            onClick={() => {
+                                const estabId = dados.estabelecimentoId || '';
+                                window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=salao`, '_blank', 'width=380,height=600');
+                            }} 
+                            className="flex-1 border-2 border-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                        >
+                            Imprimir
+                        </button>
+                        
+                        <button onClick={onClose} className="flex-1 bg-emerald-600 text-white p-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">
+                            Próximo
+                        </button>
                     </div>
                     <p className="text-center text-xs text-gray-400 mt-2">Pressione <b className="font-bold border border-gray-300 rounded px-1">ESC</b> para sair</p>
                 </div>
@@ -755,7 +782,7 @@ export const ModalListaTurnos = ({ visivel, onClose, turnos, carregando, onVerVe
                                                     className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-2.5 rounded-lg text-xs font-black flex justify-center items-center gap-1.5 transition-all shadow-sm leading-normal"
                                                     title="Imprimir Relatório do Turno"
                                                 >
-                                                    🖨️ RECIBO
+                                                    🖨️ RECIBO 
                                                 </button>
 
                                                 <button 
@@ -883,7 +910,14 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
 
                 {/* BOTÕES (Ocultos na impressão) */}
                 <div className="grid gap-2 p-4 bg-white border-t border-slate-200 no-print rounded-b-lg">
-                    <button onClick={() => window.print()} className="w-full border border-slate-300 text-slate-700 bg-slate-50 p-3 rounded-xl font-bold hover:bg-slate-100 transition-all flex justify-center items-center gap-2">
+                    <button 
+                        onClick={() => {
+                            // 🔥 CORREÇÃO: Chama a tela isolada de turno em vez de imprimir o PDV todo
+                            const estabId = turno.estabelecimentoId || turno.lojaId || ''; // O ID do estabelecimento costuma estar no turno
+                            window.open(`/impressao-isolada?turnoId=${turno.id}&estabId=${estabId}&origem=turno`, '_blank', 'width=380,height=600');
+                        }} 
+                        className="w-full border border-slate-300 text-slate-700 bg-slate-50 p-3 rounded-xl font-bold hover:bg-slate-100 transition-all flex justify-center items-center gap-2"
+                    >
                         🖨️ IMPRIMIR RECIBO
                     </button>
                     <button onClick={onClose} className="w-full bg-slate-800 text-white p-3 rounded-xl font-bold hover:bg-black shadow-lg transition-all">

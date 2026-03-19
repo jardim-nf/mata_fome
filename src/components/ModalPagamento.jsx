@@ -292,6 +292,12 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
             );
 
             // 1. Registrar Venda no Firestore (AGORA SALVANDO NA COLEÇÃO RAIZ 'vendas')
+           // 🔥 CORREÇÃO: Pega a principal forma de pagamento escolhida (ex: 'credito', 'debito', 'pix')
+            // Se tiver várias pessoas pagando, pega a forma do primeiro pagante válido.
+            const primeiraPessoaValida = Object.values(pagamentosValidos)[0];
+            const formaPagamentoPredominante = primeiraPessoaValida ? primeiraPessoaValida.formaPagamento : 'dinheiro';
+
+            // 1. Registrar Venda no Firestore (AGORA SALVANDO NA COLEÇÃO RAIZ 'vendas')
             const dadosVenda = {
                 mesaId: mesa.id,
                 mesaNumero: mesa.numero,
@@ -301,7 +307,11 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 total: totalPagoAgora,
                 valorOriginal: totalConsumo,
                 taxaServicoCobrada: incluirTaxa ? valorTaxa : 0,
-                tipoPagamento: tipoPagamento,
+                
+                // 🔥 Agora enviamos a forma real (credito, debito, pix, etc) para a Sefaz entender
+                tipoPagamento: formaPagamentoPredominante,
+                metodoPagamento: formaPagamentoPredominante, // Enviando duplicado caso a Sefaz procure por esse nome
+                
                 status: mesaQuitada ? 'pago' : 'pago_parcial',
                 criadoEm: serverTimestamp(),
                 createdAt: serverTimestamp(), // 🔥 IMPORTANTE: O PDV USA ESSE CAMPO PARA HISTÓRICOS

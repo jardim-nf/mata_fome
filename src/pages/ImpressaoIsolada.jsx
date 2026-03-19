@@ -1,16 +1,46 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import qz from 'qz-tray';
-// 🔥 O CÉREBRO DO FILTRO 🔥
-const getSetorItemRefinado = (item) => {
-    const categoria = (item.categoria || '').toLowerCase();
-    const nome = (item.nome || '').toLowerCase();
-    
+
+// 🔥 O PENTE FINO DE DADOS 🔥 (Garante que o nome do produto nunca venha em branco)
+const extrairDadosDoItem = (rawItem) => {
+    if (!rawItem) return null;
+
+    let nome = rawItem.nome || rawItem.name || rawItem.descricao || rawItem.title || rawItem.titulo || rawItem.produtoNome;
+    let preco = rawItem.precoFinal || rawItem.precoUnitario || rawItem.preco || rawItem.valor || rawItem.price;
+    let categoria = rawItem.categoria;
+
+    if (rawItem.produto && typeof rawItem.produto === 'object') {
+        nome = rawItem.produto.nome || rawItem.produto.name || rawItem.produto.descricao || nome;
+        preco = rawItem.produto.precoFinal || rawItem.produto.preco || rawItem.produto.valor || rawItem.produto.price || preco;
+        categoria = rawItem.produto.categoria || categoria;
+    } else if (rawItem.item && typeof rawItem.item === 'object') {
+        nome = rawItem.item.nome || rawItem.item.name || rawItem.item.descricao || nome;
+        preco = rawItem.item.precoFinal || rawItem.item.preco || rawItem.item.valor || rawItem.item.price || preco;
+        categoria = rawItem.item.categoria || categoria;
+    }
+
+    if (!nome) nome = "PRODUTO SEM NOME IDENTIFICADO";
+
+    const qtd = Number(rawItem.quantidade || rawItem.quantity || rawItem.qtd || rawItem.produto?.quantidade || 1);
+    const obs = rawItem.observacao || rawItem.obs || '';
+
+    return {
+        ...rawItem,
+        nomeCalculado: String(nome),
+        precoCalculado: Number(preco) || 0,
+        qtdCalculada: qtd || 1,
+        obsCalculada: String(obs),
+        categoriaCalculada: String(categoria || '').toLowerCase()
+    };
+};
+
+const getSetorItemRefinado = (itemFormatado) => {
+    const textoBusca = `${itemFormatado.nomeCalculado} ${itemFormatado.categoriaCalculada}`.toLowerCase();
     const termosBar = ['bebida', 'drink', 'suco', 'refriga', 'refrigerante', 'agua', 'água', 'cerveja', 'chopp', 'vinho', 'dose', 'caipirinha', 'coca', 'guarana', 'fanta', 'sprite'];
-    
-    const ehBar = termosBar.some(t => categoria.includes(t) || nome.includes(t));
+    const ehBar = termosBar.some(t => textoBusca.includes(t));
     return ehBar ? 'bar' : 'cozinha';
 };
 
@@ -35,25 +65,30 @@ export default function ImpressaoIsolada() {
             try {
                 let dadosPedido = null;
 
-                if (origem === 'salao') {
+                // 1. Tenta buscar na coleção global de Vendas (Recibos do PDV e Salão finalizados)
+                const vendaRef = doc(db, 'vendas', pedidoId);
+                const vendaSnap = await getDoc(vendaRef);
+                if (vendaSnap.exists()) {
+                    // 🔥 AVISO ADICIONADO: isVendaFinalizada: true
+                    dadosPedido = { id: vendaSnap.id, ...vendaSnap.data(), isMesa: !!vendaSnap.data().mesaNumero, isVendaFinalizada: true };
+                }
+
+                // 2. Se não achar, tenta buscar nas Mesas (Para impressão de Conferência antes de pagar)
+                if (!dadosPedido) {
                     const mesaRef = doc(db, 'estabelecimentos', estabId, 'mesas', pedidoId);
                     const mesaSnap = await getDoc(mesaRef);
-                    if (mesaSnap.exists()) {
-                        dadosPedido = { id: mesaSnap.id, ...mesaSnap.data(), isMesa: true };
-                    }
-                } 
-                else {
+                    if (mesaSnap.exists()) dadosPedido = { id: mesaSnap.id, ...mesaSnap.data(), isMesa: true };
+                }
+
+                // 3. Se não achar, tenta buscar nos Pedidos (Delivery / Balcão em andamento)
+                if (!dadosPedido) {
                     const pedidoRef = doc(db, 'estabelecimentos', estabId, 'pedidos', pedidoId);
                     let pedidoSnap = await getDoc(pedidoRef);
-                    
-                    if (pedidoSnap.exists()) {
-                        dadosPedido = { id: pedidoSnap.id, ...pedidoSnap.data(), isMesa: false };
-                    }
+                    if (pedidoSnap.exists()) dadosPedido = { id: pedidoSnap.id, ...pedidoSnap.data(), isMesa: false };
                 }
 
                 if (!dadosPedido) throw new Error("Registro não encontrado no banco de dados.");
                 setPedido(dadosPedido);
-
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -66,70 +101,70 @@ export default function ImpressaoIsolada() {
     const printData = useMemo(() => {
         if (!pedido) return null;
         
-        let listaItens = pedido.itens || pedido.pedidos || [];
-
-        // 🔥 O FILTRO DE SETOR ACONTECE AQUI 🔥
-        if (setorAlvo && setorAlvo !== 'tudo' && setorAlvo !== 'null' && setorAlvo !== '') {
-            listaItens = listaItens.filter(item => {
-                const setorDoItem = getSetorItemRefinado(item);
-                return setorDoItem === setorAlvo;
+        let itensBrutos = [];
+        
+        if (Array.isArray(pedido.itens)) itensBrutos.push(...pedido.itens);
+        if (Array.isArray(pedido.carrinho)) itensBrutos.push(...pedido.carrinho);
+        if (Array.isArray(pedido.produtos)) itensBrutos.push(...pedido.produtos);
+        
+        if (Array.isArray(pedido.pedidos)) {
+            pedido.pedidos.forEach(sub => {
+                if (Array.isArray(sub.itens)) itensBrutos.push(...sub.itens);
+                else if (Array.isArray(sub.carrinho)) itensBrutos.push(...sub.carrinho);
+                else if (Array.isArray(sub.produtos)) itensBrutos.push(...sub.produtos);
+                else if (sub.nome || sub.produto || sub.descricao) itensBrutos.push(sub);
             });
         }
 
-        if (listaItens.length === 0) return null; 
+        let listaFormatada = itensBrutos.map(extrairDadosDoItem).filter(Boolean);
+
+        if (setorAlvo && setorAlvo !== 'tudo' && setorAlvo !== 'null' && setorAlvo !== '') {
+            listaFormatada = listaFormatada.filter(item => getSetorItemRefinado(item) === setorAlvo);
+        }
+
+        if (listaFormatada.length === 0) return { vazio: true }; 
 
         const agrupados = {};
-        listaItens.forEach(item => {
-            const pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
+        let totalConsumoCalculado = 0;
+
+        listaFormatada.forEach(item => {
+            const pessoa = item.clienteNome || item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
             if (!agrupados[pessoa]) agrupados[pessoa] = { itens: [], total: 0 };
             
-            const qtd = item.quantidade || item.qtd || 1;
             agrupados[pessoa].itens.push(item);
-            agrupados[pessoa].total += ((item.preco || 0) * qtd);
+            
+            const subtotalDoItem = item.precoCalculado * item.qtdCalculada;
+            agrupados[pessoa].total += subtotalDoItem;
+            totalConsumoCalculado += subtotalDoItem;
         });
 
-        const totalConsumo = listaItens.reduce((acc, item) => {
-            const qtd = item.quantidade || item.qtd || 1;
-            return acc + ((item.preco || 0) * qtd);
-        }, 0);
+        const jaPago = Array.isArray(pedido.pagamentosParciais) ? pedido.pagamentosParciais.reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0) : 0;
         
-        const jaPago = (pedido.pagamentosParciais || []).reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
-        const restante = Math.max(0, totalConsumo - jaPago);
+        const valorFinalDoPedido = Number(pedido.totalFinal || pedido.total || totalConsumoCalculado);
+        const restante = Math.max(0, valorFinalDoPedido - jaPago);
 
         return { 
             agrupados, 
-            totalConsumo, 
+            totalConsumo: valorFinalDoPedido > 0 ? valorFinalDoPedido : totalConsumoCalculado, 
             jaPago, 
             restante, 
             numero: pedido.numero || pedido.mesaNumero || 'Balcão',
-            isMesa: pedido.isMesa 
+            isMesa: pedido.isMesa,
+            isVendaFinalizada: pedido.isVendaFinalizada, // Repassa a Flag!
+            vazio: false
         };
     }, [pedido, setorAlvo]);
 
-useEffect(() => {
-        if (!loading && printData && !error) {
+    useEffect(() => {
+        if (!loading && printData && !error && !printData.vazio) {
             const realizarImpressao = async () => {
-                // 1. Define qual impressora usar baseado no setor
-                // (O ideal no futuro é puxar isso do banco de dados do estabelecimento)
-                const nomeImpressora = setorAlvo === 'cozinha' || setorAlvo === 'bar' 
-                    ? 'COZINHA' 
-                    : 'ELGIN i7(USB)';
+                const nomeImpressora = setorAlvo === 'cozinha' || setorAlvo === 'bar' ? 'COZINHA' : 'ELGIN i7(USB)';
 
                 try {
-                    // 2. Tenta conectar no QZ Tray
-                    if (!qz.websocket.isActive()) {
-                        await qz.websocket.connect();
-                    }
-
-                    // 3. Pega todo o visual do seu recibo que já está pronto no HTML
+                    if (!qz.websocket.isActive()) await qz.websocket.connect();
                     const htmlContent = document.getElementById('printable-receipt').outerHTML;
-
-                    // 4. Configura a impressora no QZ
-                    const config = qz.configs.create(nomeImpressora, {
-                        margins: { top: 0, bottom: 0, left: 0, right: 0 }
-                    });
-
-                    // 5. Monta o pacote de dados avisando que é um HTML
+                    const config = qz.configs.create(nomeImpressora, { margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+                    
                     const data = [{
                         type: 'pixel',
                         format: 'html',
@@ -137,56 +172,74 @@ useEffect(() => {
                         data: `<html><body style="margin:0;padding:0;font-family:monospace;">${htmlContent}</body></html>`
                     }];
 
-                    // 6. Manda imprimir silenciosamente!
                     await qz.print(config, data);
-
-                    // 7. Fecha a aba fantasma invisível
                     setTimeout(() => window.close(), 1000);
-
                 } catch (err) {
-                    console.log("QZ Tray não encontrado ou erro. Caindo pro Plano B (Chrome):", err);
-                    
-                    // PLANO B: Cliente não tem QZ Tray instalado, usa a tela do Chrome
+                    console.log("QZ Tray não encontrado ou erro:", err);
                     window.focus();
                     setTimeout(() => window.print(), 500);
                     window.onafterprint = () => window.close();
                 }
             };
-
-            // Dá 1 segundo pro React desenhar o HTML na tela antes de capturar
             setTimeout(realizarImpressao, 1000); 
         }
     }, [loading, printData, error, setorAlvo]);
+
     const formatarMoeda = (valor) => (valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     if (loading) return <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'monospace' }}>Carregando impressão...</div>;
     
-    if (error || !printData) return (
+    if (error || !printData || printData.vazio) return (
         <div style={{ padding: '20px', textAlign: 'center', color: '#000', fontFamily: 'monospace', fontWeight: 'bold' }}>
-            <p>Não há itens para o setor: {setorAlvo?.toUpperCase() || ''}</p>
-            <button className="no-print" onClick={() => window.close()} style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '5px' }}>Fechar Janela</button>
+            <p>{error || `Nenhum item listado ou encontrado para o setor: ${setorAlvo?.toUpperCase() || ''}`}</p>
+            <button className="no-print" onClick={() => window.close()} style={{ padding: '10px 20px', backgroundColor: '#ef4444', color: '#fff', borderRadius: '5px' }}>Fechar Janela</button>
         </div>
     );
 
-    // 🔥 TITULO INTELIGENTE 🔥
+    // 🔥 MUDA O TÍTULO SE FOR RECIBO PAGO 🔥
     let tituloImpressao = 'PRÉ-CONFERÊNCIA';
-    if (!printData.isMesa) {
+    if (printData.isVendaFinalizada) {
+        tituloImpressao = 'RECIBO DE VENDA';
+    } else if (!printData.isMesa) {
         tituloImpressao = setorAlvo && setorAlvo !== 'tudo' ? `PEDIDO: ${setorAlvo.toUpperCase()}` : 'NOVO PEDIDO';
     } else if (setorAlvo && setorAlvo !== 'tudo') {
-        tituloImpressao = `PEDIDO: ${setorAlvo.toUpperCase()}`; // Mesmo sendo a mesa, avisa que é pra Cozinha/Bar
+        tituloImpressao = `PEDIDO: ${setorAlvo.toUpperCase()}`; 
     }
 
     return (
         <div id="printable-receipt" style={{ width: '100%', maxWidth: '300px', margin: '0 auto', backgroundColor: '#ffffff', fontFamily: "'Courier New', Courier, monospace", color: '#000000', padding: '5px' }}>
+            
             <style>{`
                 html, body { margin: 0 !important; padding: 0 !important; background: white !important; -webkit-text-size-adjust: 100% !important; }
                 table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
                 td { padding: 2px 0 !important; vertical-align: top !important; word-wrap: break-word !important; }
+                
                 @media print {
-                    html, body { height: auto !important; overflow: visible !important; width: 100% !important; }
-                    #printable-receipt { position: relative !important; height: auto !important; overflow: visible !important; max-width: 100% !important; width: 100% !important; }
-                    @page { margin: 0; }
+                    html, body, #root { 
+                        height: auto !important; 
+                        min-height: auto !important;
+                        width: 100% !important;
+                        overflow: visible !important; 
+                        position: static !important;
+                        background: white !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        display: block !important;
+                    }
+                    #printable-receipt { 
+                        position: relative !important; 
+                        height: auto !important; 
+                        overflow: visible !important; 
+                        max-width: 100% !important; 
+                        width: 100% !important; 
+                    }
+                    @page { margin: 0; size: 80mm auto; }
                     .no-print { display: none !important; }
+                    * { 
+                        color: black !important; 
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                 }
             `}</style>
             
@@ -200,30 +253,55 @@ useEffect(() => {
 
             {Object.entries(printData.agrupados).map(([pessoa, dados]) => (
                 <div key={pessoa} style={{ marginBottom: '15px' }}>
-                    <div style={{ borderBottom: '1px solid #000', marginBottom: '5px', paddingBottom: '2px' }}>
-                        <table style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                            <tbody>
-                                <tr>
-                                    <td style={{ width: '65%', textAlign: 'left' }}>{pessoa}</td>
-                                    <td style={{ width: '35%', textAlign: 'right' }}>R$ {formatarMoeda(dados.total)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    {pessoa !== 'Mesa' && (
+                        <div style={{ borderBottom: '1px solid #000', marginBottom: '5px', paddingBottom: '2px' }}>
+                            <table style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                <tbody>
+                                    <tr>
+                                        <td style={{ width: '65%', textAlign: 'left' }}>👤 {pessoa}</td>
+                                        <td style={{ width: '35%', textAlign: 'right' }}>R$ {formatarMoeda(dados.total)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                     
                     <table style={{ fontSize: '12px' }}>
                         <tbody>
-                            {dados.itens.map((item, idx) => (
-                                <tr key={idx}>
-                                    <td style={{ width: '75%', textAlign: 'left', paddingRight: '5px' }}>
-                                        <span style={{fontWeight: 'bold', fontSize: '13px'}}>{item.quantidade || item.qtd || 1}x</span> {item.nome}
-                                        {item.observacao && <div style={{ fontSize: '11px', marginTop: '2px', fontWeight: 'bold' }}>* OBS: {item.observacao}</div>}
-                                    </td>
-                                    <td style={{ width: '25%', textAlign: 'right' }}>
-                                        {formatarMoeda((item.preco || 0) * (item.quantidade || item.qtd || 1))}
-                                    </td>
-                                </tr>
-                            ))}
+                            {dados.itens.map((item, idx) => {
+                                let adicionais = [];
+                                if (Array.isArray(item.adicionaisSelecionados)) adicionais = item.adicionaisSelecionados;
+                                else if (Array.isArray(item.adicionais)) adicionais = item.adicionais;
+                                else if (Array.isArray(item.produto?.adicionais)) adicionais = item.produto.adicionais;
+                                else if (Array.isArray(item.item?.adicionais)) adicionais = item.item.adicionais;
+
+                                return (
+                                    <tr key={idx}>
+                                        <td style={{ width: '75%', textAlign: 'left', paddingRight: '5px' }}>
+                                            <span style={{fontWeight: 'bold', fontSize: '13px'}}>{item.qtdCalculada}x</span> <span style={{fontWeight: 'bold'}}>{item.nomeCalculado}</span>
+                                            
+                                            {(item.variacaoSelecionada || item.variacao) && (
+                                                <div style={{ fontSize: '11px', marginTop: '2px', fontStyle: 'italic' }}>
+                                                    - {item.variacaoSelecionada?.nome || item.variacao?.nome}
+                                                </div>
+                                            )}
+
+                                            {adicionais.length > 0 && (
+                                                <div style={{ fontSize: '11px', marginTop: '2px' }}>
+                                                    {adicionais.map((adc, i) => (
+                                                        <div key={i}>+ {adc.nome}</div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {item.obsCalculada && <div style={{ fontSize: '11px', marginTop: '2px', fontWeight: 'bold' }}>* OBS: {item.obsCalculada}</div>}
+                                        </td>
+                                        <td style={{ width: '25%', textAlign: 'right', fontWeight: 'bold' }}>
+                                            {formatarMoeda(item.precoCalculado * item.qtdCalculada)}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -233,13 +311,14 @@ useEffect(() => {
                 <table style={{ fontSize: '13px' }}>
                     <tbody>
                         <tr>
-                            <td style={{ width: '60%', textAlign: 'left' }}>TOTAL:</td>
-                            <td style={{ width: '40%', textAlign: 'right' }}>R$ {formatarMoeda(printData.totalConsumo)}</td>
+                            <td style={{ width: '60%', textAlign: 'left', fontWeight: 'bold' }}>TOTAL:</td>
+                            <td style={{ width: '40%', textAlign: 'right', fontWeight: 'bold' }}>R$ {formatarMoeda(printData.totalConsumo)}</td>
                         </tr>
                     </tbody>
                 </table>
                 
-                {printData.isMesa && (!setorAlvo || setorAlvo === 'tudo') && (
+                {/* 🔥 ESCONDE O "A PAGAR" SE A VENDA JÁ FOI FINALIZADA 🔥 */}
+                {printData.isMesa && (!setorAlvo || setorAlvo === 'tudo') && !printData.isVendaFinalizada && (
                     <table style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '5px', borderTop: '1px solid #000', paddingTop: '5px' }}>
                         <tbody>
                             <tr>
@@ -252,7 +331,7 @@ useEffect(() => {
             </div>
             
             <div style={{ textAlign: 'center', fontSize: '11px', marginTop: '15px', fontWeight: 'bold' }}>
-                *** {(!printData.isMesa || (setorAlvo && setorAlvo !== 'tudo')) ? 'VIA DE PRODUÇÃO' : 'NÃO É DOCUMENTO FISCAL'} ***
+                *** {printData.isVendaFinalizada ? 'NÃO É DOCUMENTO FISCAL' : (!printData.isMesa || (setorAlvo && setorAlvo !== 'tudo')) ? 'VIA DE PRODUÇÃO' : 'NÃO É DOCUMENTO FISCAL'} ***
             </div>
         </div>
     );

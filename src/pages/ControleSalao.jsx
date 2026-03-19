@@ -171,7 +171,38 @@ export default function ControleSalao() {
     const estabelecimentoId = useMemo(() => {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
+// 🔥 NOVA FUNÇÃO: Lógica para Cancelar a Nota pedindo o Motivo
+    const handleCancelarNfce = async (venda) => {
+        if (!venda || !venda.id) return;
 
+        const justificativa = prompt("Motivo do cancelamento (mínimo 15 caracteres):");
+        
+        if (!justificativa || justificativa.trim().length < 15) {
+            alert("⚠️ O motivo deve ter pelo menos 15 caracteres para ser aceito pela SEFAZ.");
+            return;
+        }
+
+        setNfceStatus('loading');
+        try {
+            const res = await vendaService.cancelarNfce(venda.id, justificativa.trim());
+            
+            if (res.success || res.sucesso) {
+                alert("✅ Nota Fiscal cancelada com sucesso!");
+                setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'CANCELADO' } }));
+                setVendasHistoricoExibicao(p => p.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'CANCELADO' } } : v));
+                setNfceStatus('idle'); 
+            } else {
+                setNfceStatus('error');
+                tocarBeepErro();
+                // Aqui o erro real aparecerá na tela do usuário!
+                alert("❌ Erro ao cancelar: " + res.error); 
+            }
+        } catch (e) {
+            setNfceStatus('error');
+            tocarBeepErro();
+            alert("Falha de conexão ao tentar cancelar a nota.");
+        }
+    };
     const verificarMesaOciosa = (mesa) => {
         if (mesa.status !== 'ocupada' || (mesa.itens && mesa.itens.length > 0)) return false;
         if (!mesa.updatedAt) return false;
@@ -208,10 +239,30 @@ export default function ControleSalao() {
         }
     }, [estabelecimentoId]);
 
-    const selecionarVendaHistorico = (venda) => {
-        setDadosRecibo(venda);
-        setNfceStatus(venda.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
-        setNfceUrl(venda.fiscal?.pdf || null);
+const selecionarVendaHistorico = (venda) => {
+        // 🔥 CORREÇÃO: Padronizando os itens para as notas antigas também abrirem certinho
+        const vendaNormalizada = {
+            ...venda,
+            itens: venda.itens?.map(item => {
+                const precoReal = item.precoUnitario || item.preco || item.valor || item.price || 0;
+                const qtdReal = item.quantidade || item.quantity || item.qtd || 1;
+                
+                return { 
+                    ...item, 
+                    preco: precoReal, 
+                    precoUnitario: precoReal, 
+                    valor: precoReal, 
+                    price: precoReal, 
+                    quantidade: qtdReal, 
+                    quantity: qtdReal, 
+                    nome: item.nome || item.name || 'Item' 
+                };
+            })
+        };
+
+        setDadosRecibo(vendaNormalizada);
+        setNfceStatus(vendaNormalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
+        setNfceUrl(vendaNormalizada.fiscal?.pdf || null);
         setIsHistoricoVendasOpen(false);
         setMostrarRecibo(true);
     };
@@ -482,20 +533,40 @@ export default function ControleSalao() {
         }
     };
 
-    const handlePagamentoConcluido = (vendaFinalizada) => { 
+const handlePagamentoConcluido = (vendaFinalizada) => { 
         setIsModalPagamentoOpen(false); 
         setMesaParaPagamento(null); 
         
         if (vendaFinalizada && vendaFinalizada.id) {
-            setDadosRecibo(vendaFinalizada);
-            setNfceStatus(vendaFinalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
-            setNfceUrl(vendaFinalizada.fiscal?.pdf || null);
+            // 🔥 CORREÇÃO: Padronizando os itens para o Recibo não se perder nos nomes das variáveis
+            const vendaNormalizada = {
+                ...vendaFinalizada,
+                itens: vendaFinalizada.itens?.map(item => {
+                    // Pega o preço e a quantidade não importa com qual nome foram salvos na mesa
+                    const precoReal = item.precoUnitario || item.preco || item.valor || item.price || 0;
+                    const qtdReal = item.quantidade || item.quantity || item.qtd || 1;
+                    
+                    return { 
+                        ...item, 
+                        preco: precoReal, 
+                        precoUnitario: precoReal, 
+                        valor: precoReal, 
+                        price: precoReal, 
+                        quantidade: qtdReal, 
+                        quantity: qtdReal, 
+                        nome: item.nome || item.name || 'Item' 
+                    };
+                })
+            };
+
+            setDadosRecibo(vendaNormalizada);
+            setNfceStatus(vendaNormalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
+            setNfceUrl(vendaNormalizada.fiscal?.pdf || null);
             setMostrarRecibo(true);
         } else {
             toast.success("Mesa paga e encerrada com sucesso!");
         }
     };
-
     const mesasFiltradas = useMemo(() => {
         return mesas.filter(m => {
             const matchStatus = filtro === 'todos' ? true : filtro === 'livres' ? m.status === 'livre' : m.status !== 'livre';
@@ -542,9 +613,9 @@ export default function ControleSalao() {
                 onBaixarPdf={handleBaixarPdf} 
                 onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
                 onEnviarWhatsApp={handleEnviarWhatsApp} 
+                onCancelarNfce={handleCancelarNfce} 
             />
 
-            {/* 🔥 HISTÓRICO DE NOTAS E VENDAS 🔥 */}
             <ModalHistorico 
                 visivel={isHistoricoVendasOpen} 
                 onClose={() => setIsHistoricoVendasOpen(false)} 
@@ -555,10 +626,12 @@ export default function ControleSalao() {
                 onConsultarStatus={handleConsultarStatus} 
                 onBaixarPdf={handleBaixarPdf} 
                 onBaixarXml={handleBaixarXml} 
-                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onBaixarXmlCancelamento={async (venda) => { /* ... */ }} 
                 onEnviarWhatsApp={handleEnviarWhatsApp} 
                 onProcessarLote={async () => { toast.info("Acesse a tela principal do PDV para processar lotes."); }}
-                onCancelarNfce={async () => { toast.info("Abra o recibo da venda específica para realizar o cancelamento fiscal."); }}
+                
+                /* 🔥 CORREÇÃO: Agora ele chama a função real que abre o prompt! */
+                onCancelarNfce={handleCancelarNfce}
             />
 
             <div className="sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-xl z-30 pb-4 pt-2 mb-2 w-full">

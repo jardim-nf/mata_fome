@@ -5,18 +5,21 @@ import { ptBR } from 'date-fns/locale';
 const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref) => {
   if (!pedido) return <div ref={ref}>Carregando...</div>;
 
-  // 1. Agrupar itens por cliente (igual fizemos na tela de pedidos)
+  // 1. Agrupar itens por cliente (com fallback para garantir que acha a lista)
   const itensPorPessoa = useMemo(() => {
-    if (!pedido.itens) return {};
+    // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos' para evitar que venha vazio
+    const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
     
-    return pedido.itens.reduce((acc, item) => {
+    if (listaItens.length === 0) return {};
+    
+    return listaItens.reduce((acc, item) => {
       // Tenta pegar o nome do cliente, ou usa "Mesa"
       const nome = item.clienteNome || item.destinatario || 'Mesa';
       if (!acc[nome]) acc[nome] = [];
       acc[nome].push(item);
       return acc;
     }, {});
-  }, [pedido.itens]);
+  }, [pedido]);
 
   const dataPedido = pedido.createdAt?.toDate ? pedido.createdAt.toDate() : new Date();
 
@@ -50,7 +53,7 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
           padding: 2px 0; 
           margin-top: 8px; 
           margin-bottom: 4px;
-          border-bottom: 1px solid ;
+          border-bottom: 1px solid black; /* 💡 SOLUÇÃO: Adicionado 'black' que estava faltando */
           text-transform: uppercase;
         }
         .obs { font-size: 10px; font-style: italic; margin-left: 10px; }
@@ -64,7 +67,7 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
         {/* NÚMERO DA MESA GIGANTE */}
         <p className="text-lg font-bold">MESA</p>
         <p className="text-xl font-bold border-2 border-black inline-block px-4 py-1 rounded">
-            {pedido.mesaNumero}
+            {pedido.mesaNumero || pedido.numero || 'N/A'}
         </p>
         
         <p className="mt-2">Pedido #{pedido.id?.slice(0,6).toUpperCase()}</p>
@@ -75,6 +78,11 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
 
       {/* LISTA DE ITENS (AGRUPADOS POR PESSOA) */}
       <div>
+        {/* 💡 SOLUÇÃO: Aviso caso a comanda realmente chegue sem itens visíveis */}
+        {Object.keys(itensPorPessoa).length === 0 && (
+            <div className="text-center font-bold">Nenhum item lançado nesta mesa.</div>
+        )}
+
         {Object.entries(itensPorPessoa).map(([nomeCliente, itens]) => (
           <div key={nomeCliente}>
             {/* Nome do Cliente Destacado */}
@@ -83,25 +91,33 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
             </div>
 
             {/* Itens desse Cliente */}
-            {itens.map((item, idx) => (
-              <div key={idx} style={{ marginBottom: '4px' }}>
-                <div className="item-row">
-                  <span className="font-bold">{item.quantidade}x {item.nome}</span>
-                </div>
-                
-                {/* Observações */}
-                {item.observacao && (
-                  <div className="obs">** {item.observacao}</div>
-                )}
-                
-                {/* Adicionais */}
-                {item.adicionais && item.adicionais.length > 0 && (
-                  <div className="obs">
-                    + {item.adicionais.map(a => a.nome).join(', ')}
+            {itens.map((item, idx) => {
+              // 💡 SOLUÇÃO: Previne itens em branco caso o objeto venha com chaves diferentes
+              const nomeProduto = item.nome || item.produto?.nome || 'Item sem nome';
+              const qtdProduto = item.quantidade || item.qtd || 1;
+              const valor = item.preco || item.produto?.preco || 0;
+
+              return (
+                <div key={idx} style={{ marginBottom: '4px' }}>
+                  <div className="item-row">
+                    <span className="font-bold">{qtdProduto}x {nomeProduto}</span>
+                    <span>R$ {(valor * qtdProduto).toFixed(2)}</span>
                   </div>
-                )}
-              </div>
-            ))}
+                  
+                  {/* Observações */}
+                  {item.observacao && (
+                    <div className="obs">** {item.observacao}</div>
+                  )}
+                  
+                  {/* Adicionais */}
+                  {item.adicionais && item.adicionais.length > 0 && (
+                    <div className="obs">
+                      + {item.adicionais.map(a => a.nome).join(', ')}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -111,7 +127,7 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
       {/* RODAPÉ */}
       <div className="text-center">
         <p className="font-bold text-lg">
-            TOTAL: R$ {pedido.total?.toFixed(2)}
+            TOTAL: R$ {(pedido.total || 0).toFixed(2)}
         </p>
         <p className="divider"></p>
         <p className="font-bold">*** FIM DO PEDIDO ***</p>

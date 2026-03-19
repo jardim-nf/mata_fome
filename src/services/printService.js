@@ -44,20 +44,31 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
     data.push(TEXT_DOUBLE + BOLD_ON);
     data.push(`*** ${tipoComanda.toUpperCase()} ***\n`);
     data.push(TEXT_NORMAL + BOLD_OFF);
-    data.push(`Pedido: #${pedido.vendaId.substring(pedido.vendaId.length - 6)}\n`);
+    
+    // 💡 SOLUÇÃO: Fallback seguro para ID do pedido
+    const orderId = pedido.vendaId || pedido.id || '000000';
+    const shortId = typeof orderId === 'string' ? orderId.slice(-6).toUpperCase() : '000000';
+    data.push(`Pedido: #${shortId}\n`);
     data.push(`Data: ${formatarData(pedido.createdAt)}\n`);
     data.push("--------------------------------\n");
 
-    // Cliente (Na cozinha normalmente só vai o nome)
+    // Cliente
     data.push(LEFT);
-    data.push(BOLD_ON + `Cliente: ${pedido.cliente?.nome || 'N/A'}\n` + BOLD_OFF);
+    // 💡 SOLUÇÃO: Verifica cliente, se não tiver assume que é MESA
+    const nomeCliente = pedido.cliente?.nome || pedido.nome || 'Mesa ' + (pedido.mesaNumero || pedido.numero || '');
+    data.push(BOLD_ON + `Cliente: ${nomeCliente}\n` + BOLD_OFF);
+    
     if (tipoComanda === 'balcao') {
-        data.push(`Telefone: ${pedido.cliente?.telefone || 'N/A'}\n`);
+        const fone = pedido.cliente?.telefone || pedido.telefone;
+        if (fone) data.push(`Telefone: ${fone}\n`);
+        
         if (pedido.cliente?.endereco) {
-            data.push(`End: ${pedido.cliente.endereco.rua}, ${pedido.cliente.endereco.numero}\n`);
-            data.push(`Bairro: ${pedido.cliente.endereco.bairro}\n`);
+            data.push(`End: ${pedido.cliente.endereco.rua || ''}, ${pedido.cliente.endereco.numero || ''}\n`);
+            if (pedido.cliente.endereco.bairro) data.push(`Bairro: ${pedido.cliente.endereco.bairro}\n`);
+        } else if (pedido.tipo) {
+            data.push(`Tipo: ${String(pedido.tipo).toUpperCase()}\n`);
         } else {
-            data.push(`Tipo: RETIRADA/MESA\n`);
+            data.push(`Tipo: BALCAO / MESA\n`);
         }
     }
     data.push("--------------------------------\n");
@@ -66,15 +77,20 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
     data.push(CENTER + BOLD_ON + "ITENS DO PEDIDO\n" + BOLD_OFF + LEFT);
     
     itensDaComanda.forEach(item => {
-        data.push(BOLD_ON + TEXT_DOUBLE + `${item.quantidade}x ${item.nome}\n` + TEXT_NORMAL + BOLD_OFF);
+        // 💡 SOLUÇÃO: Caça o nome e quantidade em todas as propriedades possíveis
+        const nomeProduto = item.nome || item.produto?.nome || item.name || 'Produto sem nome';
+        const qtd = Number(item.quantidade || item.qtd || 1) || 1;
+        const preco = Number(item.preco || item.produto?.preco || 0) || 0;
+
+        data.push(BOLD_ON + TEXT_DOUBLE + `${qtd}x ${nomeProduto}\n` + TEXT_NORMAL + BOLD_OFF);
         
         // Adicionais e Variações
         if (item.variacao?.nome) {
             data.push(`  => ${item.variacao.nome}\n`);
         }
-        if (item.adicionais && item.adicionais.length > 0) {
+        if (item.adicionais && Array.isArray(item.adicionais)) {
             item.adicionais.forEach(add => {
-                data.push(`  + ${add.nome}\n`);
+                data.push(`  + ${add.nome || 'Adicional'}\n`);
             });
         }
         if (item.observacao) {
@@ -83,7 +99,7 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
         
         // No balcão mostra o preço
         if (tipoComanda === 'balcao') {
-            data.push(`  Valor: R$ ${(item.preco * item.quantidade).toFixed(2)}\n`);
+            data.push(`  Valor: R$ ${(preco * qtd).toFixed(2)}\n`);
         }
         data.push("\n"); // Pula linha entre itens
     });
@@ -92,13 +108,27 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
 
     // Resumo financeiro (Só no Balcão)
     if (tipoComanda === 'balcao') {
+        // 💡 SOLUÇÃO: Previne o erro "NaN" (Not a Number)
+        const total = Number(pedido.totalFinal || pedido.total || 0) || 0;
+        const taxa = Number(pedido.taxaEntrega || 0) || 0;
+        const subtotal = total - taxa;
+
         data.push(LEFT);
-        data.push(`Subtotal: R$ ${(pedido.totalFinal - (pedido.taxaEntrega || 0)).toFixed(2)}\n`);
-        data.push(`Taxa Entrega: R$ ${(pedido.taxaEntrega || 0).toFixed(2)}\n`);
-        data.push(BOLD_ON + TEXT_DOUBLE + `TOTAL: R$ ${pedido.totalFinal.toFixed(2)}\n` + TEXT_NORMAL + BOLD_OFF);
-        data.push(`Pagamento: ${pedido.formaPagamento}\n`);
-        if (pedido.trocoPara > 0) {
-            data.push(`Troco para: R$ ${pedido.trocoPara.toFixed(2)}\n`);
+        data.push(`Subtotal: R$ ${subtotal.toFixed(2)}\n`);
+        
+        if (taxa > 0) {
+            data.push(`Taxa Entrega: R$ ${taxa.toFixed(2)}\n`);
+        }
+        data.push(BOLD_ON + TEXT_DOUBLE + `TOTAL: R$ ${total.toFixed(2)}\n` + TEXT_NORMAL + BOLD_OFF);
+        
+        const formaPgt = pedido.formaPagamento || pedido.metodoPagamento;
+        if (formaPgt) {
+            data.push(`Pagamento: ${formaPgt}\n`);
+        }
+        
+        const troco = Number(pedido.trocoPara || 0);
+        if (troco > 0) {
+            data.push(`Troco para: R$ ${troco.toFixed(2)}\n`);
         }
         data.push("--------------------------------\n");
     }
@@ -117,13 +147,17 @@ export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBa
     try {
         await conectarQZ();
 
-        // 1. Separa os itens usando a configuração de roteamento que salvamos no banco
         let itensCozinha = [];
         let itensBalcao = [];
 
-        pedido.itens.forEach(item => {
+        // 💡 SOLUÇÃO: Busca itens até no carrinho se precisar
+        const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
+        const configRoteamento = roteamentoConfig || {};
+
+        listaItens.forEach(item => {
+            const categoriaId = item.categoriaId || item.produto?.categoriaId || 'default';
             // O fallback (se não configurou) é sempre balcão
-            const destino = roteamentoConfig[item.categoriaId] || 'balcao'; 
+            const destino = configRoteamento[categoriaId] || 'balcao'; 
 
             if (destino === 'cozinha') {
                 itensCozinha.push(item);
@@ -133,23 +167,25 @@ export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBa
                 itensCozinha.push(item);
                 itensBalcao.push(item);
             }
-            // se for 'nenhum', a gente só ignora o item
         });
 
-        // 2. Manda para a impressora da Cozinha (Se tiver itens e tiver impressora configurada)
+        // 💡 SOLUÇÃO: Se existir item, mas as regras de roteamento falharem, joga tudo pro balcão pra não perder a impressão.
+        if (listaItens.length > 0 && itensCozinha.length === 0 && itensBalcao.length === 0) {
+            itensBalcao = [...listaItens];
+        }
+
+        // Manda para a impressora da Cozinha
         if (itensCozinha.length > 0 && nomeImpressoraCozinha) {
             console.log("Enviando para cozinha...");
             const layoutCozinha = gerarLayoutComanda(pedido, itensCozinha, 'cozinha');
-            const printerCozinha = { name: nomeImpressoraCozinha };
-            await qz.print(qz.configs.create(printerCozinha), layoutCozinha);
+            await qz.print(qz.configs.create({ name: nomeImpressoraCozinha }), layoutCozinha);
         }
 
-        // 3. Manda para a impressora do Balcão (Se tiver itens e tiver impressora configurada)
+        // Manda para a impressora do Balcão
         if (itensBalcao.length > 0 && nomeImpressoraBalcao) {
             console.log("Enviando para balcão...");
             const layoutBalcao = gerarLayoutComanda(pedido, itensBalcao, 'balcao');
-            const printerBalcao = { name: nomeImpressoraBalcao };
-            await qz.print(qz.configs.create(printerBalcao), layoutBalcao);
+            await qz.print(qz.configs.create({ name: nomeImpressoraBalcao }), layoutBalcao);
         }
 
         return true;

@@ -266,7 +266,22 @@ export const emitirNfcePlugNotas = onCall({
         else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('cartao')) meioPagamento = "03";
         else if (metodoLower.includes('débito') || metodoLower.includes('debito')) meioPagamento = "04";
 
-        // 4. Montar o Payload Principal
+// 4. Montar os dados de Pagamento com a regra do Cartão
+        const dadosPagamento = {
+            aVista: true,
+            meio: meioPagamento,
+            valor: somaDosItens
+        };
+
+        // 🔥 CORREÇÃO: Se for Crédito (03) ou Débito (04), a Sefaz exige que você diga 
+        // se a maquininha é integrada (TEF=1) ou não integrada (POS=2).
+        if (meioPagamento === "03" || meioPagamento === "04") {
+            dadosPagamento.cartao = {
+                tipoIntegracao: 2 // 2 = Pagamento não integrado (Maquininha de cartão avulsa)
+            };
+        }
+
+        // 5. Montar o Payload Principal
         const payload = [{
             idIntegracao: vendaId,
             presencial: true,
@@ -278,11 +293,7 @@ export const emitirNfcePlugNotas = onCall({
             },
             destinatario: cpf ? { cpf: String(cpf).replace(/\D/g, '') } : undefined,
             itens: itensNfce,
-            pagamentos: [{
-                aVista: true,
-                meio: meioPagamento,
-                valor: somaDosItens
-            }]
+            pagamentos: [dadosPagamento]
         }];
 
         logger.info("📦 [DEBUG PLUGNOTAS] Payload enviado:", JSON.stringify(payload, null, 2));

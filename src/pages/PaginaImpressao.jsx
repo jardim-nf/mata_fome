@@ -9,16 +9,28 @@ import { ptBR } from 'date-fns/locale';
 
 // --- LAYOUT SALÃO (Mesa) ---
 const LayoutSalao = ({ pedido, estabelecimento }) => {
+    // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos'
+    const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
+
     // Agrupa itens por pessoa
     const itensPorPessoa = useMemo(() => {
-        if (!pedido.itens) return {};
-        return pedido.itens.reduce((acc, item) => {
+        if (listaItens.length === 0) return {};
+        return listaItens.reduce((acc, item) => {
             const nome = item.clienteNome || item.cliente || 'Mesa';
             if (!acc[nome]) acc[nome] = [];
             acc[nome].push(item);
             return acc;
         }, {});
-    }, [pedido.itens]);
+    }, [pedido, listaItens]);
+
+    // 🔥 CÁLCULO DE SEGURANÇA: Soma os itens na hora caso o total do banco venha zerado
+    const totalCalculado = useMemo(() => {
+        return listaItens.reduce((acc, item) => {
+            const qtd = item.quantidade || item.quantity || item.qtd || 1;
+            const preco = Number(item.precoFinal || item.precoUnitario || item.preco || item.valor || item.price || item.produto?.preco || 0);
+            return acc + (preco * qtd);
+        }, 0);
+    }, [listaItens]);
 
     const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
 
@@ -29,9 +41,9 @@ const LayoutSalao = ({ pedido, estabelecimento }) => {
             <div className="text-center border-b border-black pb-2 mb-2">
                 <h1 className="font-bold text-sm uppercase">{estabelecimento?.nome || 'RESTAURANTE'}</h1>
                 
-                {/* MESA EM DESTAQUE (SEM FUNDO PRETO) */}
+                {/* MESA EM DESTAQUE */}
                 <div className="text-xl font-black mt-1 border-2 border-black inline-block px-3 rounded">
-                    MESA {pedido.mesaNumero || pedido.mesa}
+                    MESA {pedido.mesaNumero || pedido.mesa || pedido.numero}
                 </div>
                 
                 <p className="text-[10px] mt-1">
@@ -42,41 +54,52 @@ const LayoutSalao = ({ pedido, estabelecimento }) => {
                 <p className="text-[10px]">Senha: {pedido.senha || pedido.id?.slice(0,4)}</p>
             </div>
 
+            {/* Aviso se vazio */}
+            {listaItens.length === 0 && (
+                <div className="text-center font-bold py-2 border-b border-black">Nenhum item lançado.</div>
+            )}
+
             {/* Lista Agrupada */}
             <div>
                 {Object.entries(itensPorPessoa).map(([nomeCliente, itens]) => (
                     <div key={nomeCliente} className="mb-2">
-                        {/* 🔥 NOME SEM TARJA (Apenas Negrito) 🔥 */}
                         {nomeCliente !== 'Mesa' && (
                             <div className="font-black text-sm border-b border-dotted border-black mb-1 mt-2 pb-1 uppercase">
                                 👤 {nomeCliente}
                             </div>
                         )}
 
-                        {itens.map((item, idx) => (
-                            <div key={idx} className="mb-2 border-b border-gray-200 pb-1">
-                                <div className="flex justify-between items-start font-bold text-sm">
-                                    <span>{item.quantidade}x {item.nome}</span>
-                                    <span>{formatMoney((item.precoFinal || item.preco) * item.quantidade)}</span>
+                        {itens.map((item, idx) => {
+                            // 🔥 CORREÇÃO: Lê inglês e português para nunca mais dar erro
+                            const nomeProduto = item.nome || item.name || item.produto?.nome || 'Item sem nome';
+                            const qtdProduto = item.quantidade || item.quantity || item.qtd || 1;
+                            const valor = Number(item.precoFinal || item.precoUnitario || item.preco || item.valor || item.price || item.produto?.preco || 0);
+
+                            return (
+                                <div key={idx} className="mb-2 border-b border-gray-200 pb-1">
+                                    <div className="flex justify-between items-start font-bold text-sm">
+                                        <span>{qtdProduto}x {nomeProduto}</span>
+                                        <span>{formatMoney(valor * qtdProduto)}</span>
+                                    </div>
+
+                                    {/* Detalhes */}
+                                    <div className="pl-2 text-[11px] font-normal">
+                                        {(item.variacaoSelecionada || item.variacao) && (
+                                            <div className="italic">- {item.variacaoSelecionada?.nome || item.variacao?.nome}</div>
+                                        )}
+
+                                        {/* Adicionais Selecionados */}
+                                        {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
+                                            <div key={i}>+ {adc.nome}</div>
+                                        ))}
+
+                                        {item.observacao && (
+                                            <div className="font-bold mt-0.5 uppercase">** {item.observacao}</div>
+                                        )}
+                                    </div>
                                 </div>
-
-                                {/* Detalhes */}
-                                <div className="pl-2 text-[11px] font-normal">
-                                    {item.variacaoSelecionada && (
-                                        <div className="italic">- {item.variacaoSelecionada.nome}</div>
-                                    )}
-
-                                    {/* Adicionais Selecionados */}
-                                    {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
-                                        <div key={i}>+ {adc.nome}</div>
-                                    ))}
-
-                                    {item.observacao && (
-                                        <div className="font-bold mt-0.5 uppercase">** {item.observacao}</div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 ))}
             </div>
@@ -85,7 +108,8 @@ const LayoutSalao = ({ pedido, estabelecimento }) => {
             <div className="border-t border-black pt-2 mt-2 text-right">
                 <div className="flex justify-between text-lg font-bold">
                     <span>TOTAL:</span>
-                    <span>{formatMoney(pedido.total || pedido.totalFinal)}</span>
+                    {/* 🔥 CORREÇÃO: Se pedido.total for 0 ou falhar, usa o totalCalculado */}
+                    <span>{formatMoney(pedido.total || pedido.totalFinal || totalCalculado)}</span>
                 </div>
             </div>
             
@@ -97,7 +121,18 @@ const LayoutSalao = ({ pedido, estabelecimento }) => {
 // --- LAYOUT DELIVERY ---
 const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao }) => {
     const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
+    // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos'
+    const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
     
+    // 🔥 CÁLCULO DE SEGURANÇA: Soma os itens na hora caso o total do banco venha zerado
+    const totalCalculado = useMemo(() => {
+        return listaItens.reduce((acc, item) => {
+            const qtd = item.quantidade || item.quantity || item.qtd || 1;
+            const preco = Number(item.precoFinal || item.precoUnitario || item.preco || item.valor || item.price || item.produto?.preco || 0);
+            return acc + (preco * qtd);
+        }, 0);
+    }, [listaItens]);
+
     return (
         <div className="font-mono text-xs text-black w-full max-w-[80mm] mx-auto p-2 bg-white">
             <div className="text-center border-b border-black pb-2 mb-2">
@@ -105,7 +140,6 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao }) => {
                 <p className="font-bold mt-1">PEDIDO #{pedido.numeroPedido || pedido.id?.slice(0,5)}</p>
                 <p className="text-[10px]">{new Date().toLocaleString()}</p>
                 
-                {/* 🔥 TARJA DE COZINHA REMOVIDA (Agora é borda) 🔥 */}
                 {modoImpressao === 'cozinha' && (
                     <div className="mt-1 border-2 border-black font-black uppercase text-sm py-1">
                         ** COZINHA **
@@ -115,8 +149,8 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao }) => {
 
             {/* Cliente */}
             <div className="mb-3 border-b border-black pb-2">
-                <div className="font-bold text-sm uppercase">{pedido.cliente?.nome || "Cliente"}</div>
-                {pedido.cliente?.telefone && <div>Tel: {pedido.cliente.telefone}</div>}
+                <div className="font-bold text-sm uppercase">{pedido.cliente?.nome || pedido.nome || "Cliente"}</div>
+                {(pedido.cliente?.telefone || pedido.telefone) && <div>Tel: {pedido.cliente?.telefone || pedido.telefone}</div>}
                 
                 {pedido.endereco || pedido.cliente?.endereco ? (
                     <div className="mt-1 border border-black p-1 rounded font-bold bg-white">
@@ -131,39 +165,52 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao }) => {
 
             {/* Itens */}
             <div className="mb-2">
-                {pedido.itens?.map((item, idx) => (
-                    <div key={idx} className="mb-2 border-b border-dashed border-gray-300 pb-1">
-                        <div className="flex justify-between items-start font-bold">
-                            <span>{item.quantidade}x {item.nome}</span>
-                            <span>{formatMoney((item.preco || 0) * item.quantidade)}</span>
-                        </div>
-                        <div className="pl-2 text-[10px] font-normal">
-                            {(item.variacao || item.variacaoSelecionada) && (
-                                <div className="italic">- {item.variacao?.nome || item.variacaoSelecionada?.nome}</div>
-                            )}
-                            
-                            {/* Adicionais Selecionados */}
-                            {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
-                                <div key={i}>+ {adc.nome}</div>
-                            ))}
+                {listaItens.length === 0 && <div className="text-center font-bold">Nenhum item listado.</div>}
+                
+                {listaItens.map((item, idx) => {
+                    // 🔥 CORREÇÃO: Lê inglês e português para nunca mais dar erro
+                    const nomeProduto = item.nome || item.name || item.produto?.nome || 'Item sem nome';
+                    const qtdProduto = item.quantidade || item.quantity || item.qtd || 1;
+                    const valor = Number(item.precoFinal || item.precoUnitario || item.preco || item.valor || item.price || item.produto?.preco || 0);
 
-                            {item.observacao && <div className="font-bold uppercase">** {item.observacao}</div>}
+                    return (
+                        <div key={idx} className="mb-2 border-b border-dashed border-gray-300 pb-1">
+                            <div className="flex justify-between items-start font-bold">
+                                <span>{qtdProduto}x {nomeProduto}</span>
+                                <span>{formatMoney(valor * qtdProduto)}</span>
+                            </div>
+                            <div className="pl-2 text-[10px] font-normal">
+                                {(item.variacao || item.variacaoSelecionada) && (
+                                    <div className="italic">- {item.variacao?.nome || item.variacaoSelecionada?.nome}</div>
+                                )}
+                                
+                                {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
+                                    <div key={i}>+ {adc.nome}</div>
+                                ))}
+
+                                {item.observacao && <div className="font-bold uppercase">** {item.observacao}</div>}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Totais */}
             <div className="border-t border-black pt-2 space-y-1 text-right">
-                <div className="flex justify-between"><span>Subtotal:</span><span>{formatMoney(pedido.totalItens || pedido.subtotal)}</span></div>
+                <div className="flex justify-between"><span>Subtotal:</span><span>{formatMoney(pedido.totalItens || pedido.subtotal || totalCalculado)}</span></div>
                 {Number(pedido.taxaEntrega) > 0 && <div className="flex justify-between"><span>Taxa:</span><span>{formatMoney(pedido.taxaEntrega)}</span></div>}
                 {Number(pedido.desconto) > 0 && <div className="flex justify-between"><span>Desconto:</span><span>- {formatMoney(pedido.desconto)}</span></div>}
-                <div className="flex justify-between text-lg font-bold border-t border-dotted border-black pt-1 mt-1"><span>TOTAL:</span><span>{formatMoney(pedido.totalFinal || pedido.total)}</span></div>
+                
+                {/* 🔥 CORREÇÃO: Total Blindado */}
+                <div className="flex justify-between text-lg font-bold border-t border-dotted border-black pt-1 mt-1">
+                    <span>TOTAL:</span>
+                    <span>{formatMoney(pedido.totalFinal || pedido.total || (totalCalculado + Number(pedido.taxaEntrega || 0) - Number(pedido.desconto || 0)))}</span>
+                </div>
             </div>
 
             {/* Pagamento */}
             <div className="mt-2 border border-black p-1 text-center font-bold">
-                {pedido.metodoPagamento || "A Combinar"}
+                {pedido.metodoPagamento || pedido.formaPagamento || "A Combinar"}
                 {pedido.trocoPara && <div>Troco para: {formatMoney(pedido.trocoPara)}</div>}
             </div>
         </div>
@@ -187,7 +234,6 @@ const PaginaImpressao = () => {
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState('');
 
-    // 🔥 REF PARA BLOQUEAR A DUPLA IMPRESSÃO
     const jaImprimiu = useRef(false);
 
     useEffect(() => {
@@ -208,7 +254,6 @@ const PaginaImpressao = () => {
                     if (!qs.empty) {
                         pedidoData = { id: qs.docs[0].id, ...qs.docs[0].data() };
                     } else {
-                        // Tenta buscar Mesa Ativa
                         const estabId = estabIdUrl || primeiroEstabelecimento;
                         if (estabId) {
                              const mesaSnap = await getDoc(doc(db, 'estabelecimentos', estabId, 'mesas', idUrl));
@@ -229,7 +274,6 @@ const PaginaImpressao = () => {
                     if (estabSnap.exists()) setEstabelecimento(estabSnap.data());
                 }
 
-                // 🔥 Auto-Print COM BLOQUEIO DE DUPLICAÇÃO 🔥
                 if (!jaImprimiu.current) {
                     jaImprimiu.current = true;
                     setTimeout(() => window.print(), 800);
@@ -254,28 +298,46 @@ const PaginaImpressao = () => {
         <div className="bg-white min-h-screen">
 <style>{`
                 @media print {
-                    @page { margin: 0; size: auto; }
-                    body { margin: 0; padding: 0; background: white; }
-                    .no-print { display: none !important; }
+                    /* 🔥 DESTRÓI QUALQUER BLOQUEIO DE ALTURA OU OVERFLOW DO TAILWIND 🔥 */
+                    html, body, #root { 
+                        height: auto !important; 
+                        min-height: auto !important;
+                        width: 100% !important;
+                        overflow: visible !important; 
+                        position: static !important;
+                        background: white !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        display: block !important;
+                    }
                     
-                    /* Garante texto e bordas 100% pretos */
+                    /* Força o papel da bobina térmica (80mm) */
+                    @page { 
+                        margin: 0; 
+                        size: 80mm auto; 
+                    }
+                    
+                    /* Esconde os botões */
+                    .no-print { 
+                        display: none !important; 
+                    }
+                    
+                    /* Força tudo a ficar preto no branco para a impressora não falhar */
                     * { 
                         color: black !important; 
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                     }
                     
-                    .border-gray-200, .border-gray-300 {
-                        border-color: black !important;
+                    .border-gray-200, .border-gray-300 { 
+                        border-color: black !important; 
                     }
                 }
             `}</style>
-
             <button onClick={() => window.print()} className="no-print fixed top-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50">
                 <IoPrint size={24} />
             </button>
 
-            {/* SELETOR DE LAYOUT */}
             {(origem === 'salao' || pedido.mesaNumero || pedido.isMesa) ? (
                 <LayoutSalao pedido={pedido} estabelecimento={estabelecimento} />
             ) : (
