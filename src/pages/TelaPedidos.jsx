@@ -1,3 +1,4 @@
+// src/pages/TelaPedidos.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -258,6 +259,9 @@ const TelaPedidos = () => {
     const quantidadesNoCarrinho = useMemo(() => {
         const mapa = {};
         resumoPedido.forEach(item => {
+            // Ignora os itens cancelados na contagem do badge vermelho
+            if (item.status === 'cancelado') return;
+
             const idOrig = item.produtoIdOriginal;
             if (idOrig) {
                 if (!mapa[idOrig]) mapa[idOrig] = 0;
@@ -338,6 +342,7 @@ const TelaPedidos = () => {
                    i.observacao === (observacao || '') &&
                    i.cliente === clienteSelecionado &&
                    (!i.status || i.status === 'pendente') &&
+                   i.status !== 'cancelado' && // Não agrupa com itens cancelados
                    mesmosAdics;
         });
 
@@ -389,9 +394,12 @@ const TelaPedidos = () => {
         setProdutoEmSelecao(null);
 
         try {
+            // Recalcula o total ignorando os cancelados
+            const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+            
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
                 itens: novaLista,
-                total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0),
+                total: novoTotal,
                 updatedAt: serverTimestamp()
             });
         } catch(e) { console.error(e); }
@@ -420,33 +428,38 @@ const TelaPedidos = () => {
         setResumoPedido(novosItens);
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { nomesOcupantes: novosOcupantes, itens: novosItens });
     };
-   const confirmarExclusao = async () => {
-    if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) return toast.error("Senha errada");
-    
-    // ✅ CORRETO: Em vez de apagar, mudamos o status do item para 'cancelado'
-    const novaLista = resumoPedido.map(i => 
-        i.id === itemParaExcluir.id ? { ...i, status: 'cancelado' } : i
-    );
-    
-    // Recalcula o total ignorando os itens cancelados
-    const novoTotal = novaLista.reduce((acc, i) => {
-        if (i.status === 'cancelado') return acc;
-        return acc + (i.preco * i.quantidade);
-    }, 0);
 
-    await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-        itens: novaLista, 
-        total: novoTotal 
-    });
-    
-    setModalSenhaAberto(false);
-    toast.info("Item cancelado com sucesso!");
-};
+    // 🔥 CORREÇÃO DE EXCLUSÃO (SOFT DELETE) 🔥
+    const confirmarExclusao = async () => {
+        if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) return toast.error("Senha errada");
+        
+        // Em vez de filtrar (apagar da existência), nós mapeamos e mudamos o status para 'cancelado'
+        const novaLista = resumoPedido.map(i => 
+            i.id === itemParaExcluir.id ? { ...i, status: 'cancelado' } : i
+        );
+        
+        const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+        
+        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+            itens: novaLista, 
+            total: novoTotal 
+        });
+        
+        setModalSenhaAberto(false);
+        toast.info("Item cancelado com sucesso!");
+    };
+
     const ajustarQuantidade = async (id, cliente, qtd) => {
         if (navigator.vibrate) navigator.vibrate(20);
+        // Só permite ajustar quantidade se o item for pendente e não for cancelado
         const novaLista = resumoPedido.map(i => i.id === id ? { ...i, quantidade: qtd } : i).filter(i => i.quantidade > 0);
         setResumoPedido(novaLista);
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { itens: novaLista, total: novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0) });
+        
+        const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+            itens: novaLista, 
+            total: novoTotal 
+        });
     };
 
     const dispararImpressao = async (pedidoIdParaImpressao, setor) => {
@@ -473,13 +486,12 @@ const TelaPedidos = () => {
         }
     };
 
-    // 🔥 O SEGREDO ESTÁ AQUI: SALVAR SIMPLIFICADO E DIRETO, IMPOSSÍVEL DE FALHAR 🔥
     const salvarAlteracoes = async () => {
         setSalvando(true);
         try {
-            // Separa quem é novo de quem já foi enviado antes
-            const itensNovos = resumoPedido.filter(i => !i.status || i.status === 'pendente');
-            const totalMesa = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
+            // 🔥 Filtra quem é novo, mas IGNORA os itens cancelados
+            const itensNovos = resumoPedido.filter(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
+            const totalMesa = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
             
             const batch = writeBatch(db);
             const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
@@ -487,7 +499,6 @@ const TelaPedidos = () => {
             let idPedidoGerado = null;
 
             if(itensNovos.length > 0) {
-                // Cria um Pedido na coleção global de pedidos (pra Cozinha ver)
                 idPedidoGerado = `pedido_${mesaId}_${Date.now()}`;
                 const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoGerado);
                 
@@ -495,7 +506,7 @@ const TelaPedidos = () => {
                     id: idPedidoGerado, 
                     mesaId: mesaId, 
                     mesaNumero: mesa?.numero || 'Sem Número',
-                    clienteNome: `Mesa ${mesa?.numero}`, // Cozinha sabe de onde veio
+                    clienteNome: `Mesa ${mesa?.numero}`,
                     tipo: 'mesa',
                     itens: itensNovos.map(i => ({...i, status: 'recebido'})), 
                     status: 'recebido', 
@@ -505,9 +516,8 @@ const TelaPedidos = () => {
                     source: 'salao'
                 });
 
-                // Atualiza a Mesa mudando o status dos itens pendentes para 'enviado'
                 const todosItensAtualizados = resumoPedido.map(i => {
-                    if (!i.status || i.status === 'pendente') {
+                    if ((!i.status || i.status === 'pendente') && i.status !== 'cancelado') {
                         return { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado };
                     }
                     return i;
@@ -521,7 +531,6 @@ const TelaPedidos = () => {
                 });
 
             } else {
-                // Se só mexeu na pessoa ou excluiu, salva a mesa normal
                 batch.update(mesaRef, { 
                     itens: resumoPedido, 
                     total: totalMesa, 
@@ -529,7 +538,6 @@ const TelaPedidos = () => {
                 });
             }
 
-            // Manda tudo pro banco de uma vez só!
             await batch.commit();
             
             toast.success("Pedido confirmado com sucesso!", { position: "top-center", autoClose: 2000, theme: "colored" });
@@ -553,9 +561,10 @@ const TelaPedidos = () => {
         }, {});
     }, [resumoPedido]);
 
+    // 🔥 Totais recalculados ignorando os cancelados 🔥
     const totalGeral = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-const totalItens = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + i.quantidade, 0);
-const temItensPendentes = resumoPedido.some(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
+    const totalItens = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + i.quantidade, 0);
+    const temItensPendentes = resumoPedido.some(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-10 w-10 border-b-4" style={{borderColor: coresEstabelecimento.destaque}}></div></div>;
 
@@ -672,29 +681,43 @@ const temItensPendentes = resumoPedido.some(i => (!i.status || i.status === 'pen
                         </div>
                         
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                            {Object.entries(itensAgrupados).map(([pessoa, itens]) => (
+                            {Object.entries(itensAgrupados).map(([pessoa, itens]) => {
+                                // O total por pessoa também não pode contar os cancelados
+                                const totalPessoa = itens.reduce((a, i) => i.status === 'cancelado' ? a : a + (i.preco * i.quantidade), 0);
+
+                                return (
                                 <div key={pessoa} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center">
                                         <div className="flex items-center gap-2 font-bold text-gray-700"><IoPerson className="text-gray-400" /> {pessoa}</div>
-                                        <span className="text-sm font-bold text-gray-900">R$ {itens.reduce((a, i) => a + (i.preco * i.quantidade), 0).toFixed(2)}</span>
+                                        <span className="text-sm font-bold text-gray-900">R$ {totalPessoa.toFixed(2)}</span>
                                     </div>
                                     <div className="divide-y divide-gray-100">
                                         {itens.map((item, idx) => {
                                             const setorItem = getSetorItem(item.categoria);
+                                            const isCancelado = item.status === 'cancelado';
+
                                             return (
-                                            <div key={idx} className="p-4 flex gap-3">
+                                            <div key={idx} className={`p-4 flex gap-3 ${isCancelado ? 'opacity-50 grayscale' : ''}`}>
                                                 <div className="flex-1">
                                                     <div className="flex justify-between items-start">
-                                                        <h4 className="font-bold text-gray-900 pr-2">{item.quantidade > 1 && <span className="text-red-500 mr-1">{item.quantidade}x</span>}{item.nome}</h4>
-                                                        <span className="font-bold text-gray-900 text-sm">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                                                        <h4 className={`font-bold pr-2 ${isCancelado ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                                                            {item.quantidade > 1 && <span className="text-red-500 mr-1">{item.quantidade}x</span>}
+                                                            {item.nome}
+                                                        </h4>
+                                                        <span className={`font-bold text-sm ${isCancelado ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                                                            R$ {(item.preco * item.quantidade).toFixed(2)}
+                                                        </span>
                                                     </div>
 
                                                     <div className="flex items-center gap-2 mt-1 mb-1">
                                                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${setorItem.corBg} ${setorItem.corTexto} ${setorItem.border}`}>
                                                             {setorItem.icon} {setorItem.nome}
                                                         </span>
-                                                        <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${item.status && item.status !== 'pendente' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-600 border-orange-200'}`}>
-                                                            {item.status && item.status !== 'pendente' ? 'Enviado' : 'Pendente'}
+                                                        <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border 
+                                                            ${isCancelado ? 'bg-red-50 text-red-600 border-red-200' :
+                                                              item.status && item.status !== 'pendente' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                                              'bg-orange-50 text-orange-600 border-orange-200'}`}>
+                                                            {isCancelado ? 'Cancelado' : item.status && item.status !== 'pendente' ? 'Enviado' : 'Pendente'}
                                                         </span>
                                                     </div>
 
@@ -705,7 +728,10 @@ const temItensPendentes = resumoPedido.some(i => (!i.status || i.status === 'pen
                                                     
                                                     <div className="mt-3 flex items-center justify-between">
                                                         {item.adicionadoPor ? (<div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium"><IoPersonAdd className="text-gray-300" size={10} /> <span>{item.adicionadoPor}</span></div>) : <div></div>}
-                                                        {item.status && item.status !== 'pendente' ? (
+                                                        
+                                                        {/* Se está cancelado, não mostra mais botões */}
+                                                        {isCancelado ? null : 
+                                                         item.status && item.status !== 'pendente' ? (
                                                             <button onClick={() => { setItemParaExcluir(item); setSenhaDigitada(''); setModalSenhaAberto(true); }} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 px-2 py-1 rounded border border-red-100 hover:bg-red-50"><IoTrash /> Excluir</button>
                                                         ) : (
                                                             <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
@@ -720,7 +746,7 @@ const temItensPendentes = resumoPedido.some(i => (!i.status || i.status === 'pen
                                         )})}
                                     </div>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                         
                         <div className="p-4 bg-white border-t border-gray-100 shrink-0">
