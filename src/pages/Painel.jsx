@@ -131,7 +131,7 @@ function Painel() {
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
 
-    // FILA DE IMPRESSÃO (Agora guarda o pedido completo, não só o ID)
+    // FILA DE IMPRESSÃO
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
@@ -241,8 +241,6 @@ function Painel() {
         } catch (error) { toast.error("Falha na atribuição"); }
     }, [estabelecimentoAtivo]);
 
-    // FIX #10: Cancelamento sem window.confirm() — o PedidoCard agora usa toast com ação
-    // Esta função é chamada APÓS o usuário já confirmar no toast do PedidoCard
     const handleExcluirPedido = useCallback(async (pedidoId) => {
         try {
             const path = `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`;
@@ -278,7 +276,6 @@ function Painel() {
 
     const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) {} };
 
-    // 🔔 CAMPAINHA WEB AUDIO API — som de sino ascendente (E5→G5→C6) sem arquivo externo
     const tocarCampainha = useCallback(() => {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -296,7 +293,6 @@ function Painel() {
                 osc.start(ctx.currentTime + i * 0.15);
                 osc.stop(ctx.currentTime + i * 0.15 + 0.4);
             });
-            // Segundo toque após 0.6s para chamar mais atenção
             setTimeout(() => {
                 try {
                     const ctx2 = new (window.AudioContext || window.webkitAudioContext)();
@@ -318,7 +314,6 @@ function Painel() {
         } catch (e) { console.warn('Web Audio API não suportada'); }
     }, []);
 
-    // Busca histórico de vendas/notas do estabelecimento
     const abrirHistoricoVendas = useCallback(async () => {
         setIsHistoricoVendasOpen(true);
         setCarregandoHistorico(true);
@@ -348,7 +343,6 @@ function Painel() {
         setMostrarRecibo(true);
     };
 
-    // Emissão da NFC-e
     const handleEmitirNfce = async () => {
         if (!dadosRecibo?.id) return; setNfceStatus('loading');
         try {
@@ -360,7 +354,6 @@ function Painel() {
         } catch (e) { setNfceStatus('error'); tocarBeepErro(); alert('Erro de conexão.'); }
     };
 
-    // Consultar status / reenviar nota rejeitada
     const handleConsultarStatus = async (venda) => {
         const st = venda.fiscal?.status;
         if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'ERRO') {
@@ -388,7 +381,6 @@ function Painel() {
         }
     };
 
-    // Cancelar NFC-e
     const handleCancelarNfce = async (venda) => {
         if (!venda || !venda.id) return;
         const justificativa = prompt("Motivo do cancelamento (mínimo 15 caracteres):");
@@ -416,17 +408,14 @@ function Painel() {
         window.open(tel.length >= 10 ? `https://wa.me/${tel.startsWith('55') ? tel : `55${tel}`}?text=${msg}` : `https://api.whatsapp.com/send?text=${msg}`, '_blank');
     };
 
-    // 🔥 CONVERTE UM PEDIDO DO PAINEL EM FORMATO DE VENDA E ABRE O RECIBO 🔥
     const handleNfceDoPedido = useCallback(async (pedido) => {
         if (!pedido || !pedido.id) return;
 
-        // Primeiro tenta encontrar uma venda já existente para esse pedido
         try {
             const vendas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 100);
             const vendaExistente = vendas.find(v => v.pedidoId === pedido.id || v.id === pedido.vendaId);
 
             if (vendaExistente) {
-                // Normaliza os itens
                 const vendaNormalizada = {
                     ...vendaExistente,
                     itens: vendaExistente.itens?.map(item => {
@@ -445,7 +434,6 @@ function Painel() {
             console.warn('Não encontrou venda existente, criando a partir do pedido...', e);
         }
 
-        // Se não encontrou uma venda, monta o recibo a partir dos dados do pedido
         const totalPedido = pedido.totalFinal || pedido.total || pedido.itens?.reduce((acc, it) => {
             const preco = Number(it.preco) || 0;
             const qtd = Number(it.quantidade) || 1;
@@ -453,7 +441,6 @@ function Painel() {
             return acc + ((preco + adicionais) * qtd);
         }, 0) || 0;
 
-        // Salva como venda para poder emitir a NFC-e
         const vendaData = {
             estabelecimentoId: estabelecimentoAtivo,
             pedidoId: pedido.id,
@@ -493,7 +480,6 @@ function Painel() {
         }
     }, [estabelecimentoAtivo]);
 
-    // Observador do status da nota em tempo real
     useEffect(() => {
         let unsub = () => {};
         if (mostrarRecibo && dadosRecibo?.id) {
@@ -513,7 +499,6 @@ function Painel() {
         return () => unsub();
     }, [mostrarRecibo, dadosRecibo?.id]);
 
-    // Polling de consulta quando processando
     useEffect(() => {
         let intervalo;
         if (nfceStatus === 'loading' && dadosRecibo?.fiscal?.idPlugNotas) {
@@ -532,7 +517,6 @@ function Painel() {
         }
         return () => clearInterval(intervalo);
     }, [nfceStatus, dadosRecibo]);
-    // 🔥 FIM DA LÓGICA FISCAL 🔥
 
     useEffect(() => {
         if (authLoading || !estabelecimentoAtivo) return;
@@ -556,7 +540,8 @@ function Painel() {
             const status = data.status || 'recebido';
             const pedidoId = change.doc.id;
 
-            const timestamp = data.createdAt || data.dataPedido;
+            // 🔥 CORREÇÃO NA DATA: Agora lê também os padrões das mesas do salão
+            const timestamp = data.createdAt || data.dataPedido || data.criadoEm || data.updatedAt;
             if (timestamp) {
                 const dataDoPedido = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
                 const hoje = new Date();
@@ -584,7 +569,6 @@ function Painel() {
                     if (impressosLocal.length > 50) impressosLocal.shift();
                     localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
 
-                    // MUDANÇA AQUI: Nós guardamos o pedido COMPLETO na fila, processado
                     const pedidoParaImprimir = processarDadosPedido({ id: pedidoId, ...data });
                     if (pedidoParaImprimir) {
                         setPrintQueue(prev => prev.some(p => p.id === pedidoId) ? prev : [...prev, pedidoParaImprimir]);
@@ -602,9 +586,10 @@ function Painel() {
         unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
             if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
 
+            // 🔥 CORREÇÃO NO FILTRO GERAL: Considerando também datas com "criadoEm" e "updatedAt"
             const listaTodos = snapshot.docs
                 .map(d => processarDadosPedido({ id: d.id, ...d.data() }))
-                .filter(p => p !== null && isSelectedDate(p.dataPedido || p.createdAt));
+                .filter(p => p !== null && isSelectedDate(p.dataPedido || p.createdAt || p.criadoEm || p.updatedAt));
 
             listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento'].includes(p.status)) p.status = 'recebido'; });
 
@@ -624,7 +609,6 @@ function Painel() {
         return () => unsubscribers.forEach(u => u());
     }, [estabelecimentoAtivo, authLoading, processarDadosPedido, dataSelecionada]);
 
-    // 🔥 A LÓGICA BLINDADA DA CAMPAINHA ESTÁ AQUI 🔥
     useEffect(() => {
         const dataHojeStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
         if (dataSelecionada !== dataHojeStr) return;
@@ -663,7 +647,6 @@ function Painel() {
         prevRecebidosRef.current = novosRecebidos;
     }, [pedidos.recebido, notificationsEnabled, userInteracted, dataSelecionada]);
 
-// 🔥 MUDANÇA AQUI: LÓGICA HÍBRIDA DE IMPRESSÃO (QZ TRAY + NAVEGADOR PADRÃO) 🔥
     useEffect(() => {
         const processarFilaDeImpressao = async () => {
             if (!isPrinting && printQueue.length > 0 && estabelecimentoInfo) {
@@ -675,11 +658,9 @@ function Painel() {
                     const impBalcao = estabelecimentoInfo.impressoraBalcao;
                     const impCozinha = estabelecimentoInfo.impressoraCozinha;
 
-                    // 🚀 PLANO A: Tem impressora configurada? Usa o QZ Tray automático e silencioso!
                     if (impBalcao || impCozinha) {
                         await rotearEImprimir(pedidoParaImprimir, roteamento, impBalcao, impCozinha);
                     } 
-                    // 🚀 PLANO B: Não configurou nada? Usa o jeito antigo (Abre a tela do Windows/Chrome)
                     else {
                         const setorQuery = modoImpressao === 'cozinha' ? '&setor=cozinha' : '';
                         const url = `/comanda/${pedidoParaImprimir.id}?estabId=${estabelecimentoAtivo}${setorQuery}`;
@@ -690,10 +671,8 @@ function Painel() {
 
                         if (!printWindow) {
                             toast.warning("⚠️ Pop-up bloqueado! Permita os pop-ups no navegador para imprimir sozinho.");
-                            // Dá um tempinho antes de tentar o próximo se falhou
                             await new Promise(r => setTimeout(r, 2000));
                         } else {
-                            // Ouve até a janelinha do navegador fechar para passar para a próxima impressão da fila
                             await new Promise(resolve => {
                                 const timer = setInterval(() => {
                                     if (printWindow.closed) {
@@ -708,7 +687,6 @@ function Painel() {
                     console.error("Erro ao imprimir:", error);
                     toast.error("Falha ao imprimir. O QZ Tray está aberto?", { autoClose: 5000 });
                 } finally {
-                    // Remove da fila e libera pra próxima impressão
                     setPrintQueue(prev => prev.filter(p => p.id !== pedidoParaImprimir.id));
                     setIsPrinting(false);
                 }
@@ -728,7 +706,6 @@ function Painel() {
         finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700', emptyTitle: 'Sem concluídos', emptyMsg: 'Os pedidos finalizados aparecerão aqui' }
     };
 
-    // 🔥 MINI DASHBOARD — Total de pedidos e faturamento do dia 🔥
     const statsDoDia = useMemo(() => {
         const todosPedidos = [...(pedidos.recebido || []), ...(pedidos.preparo || []), ...(pedidos.em_entrega || []), ...(pedidos.pronto_para_servir || []), ...(pedidos.finalizado || [])];
         const pedidosFiltrados = todosPedidos.filter(p => {
