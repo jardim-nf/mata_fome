@@ -298,7 +298,9 @@ const AdminReports = () => {
             const typeKey = p.tipo === 'mesa' ? 'Mesa' : 'Delivery';
             byType[typeKey] = (byType[typeKey] || 0) + 1;
 
-            p.itens?.forEach(it => {
+           p.itens?.forEach(it => {
+                if (it.status === 'cancelado') return; // 🔥 ADICIONE ESTA LINHA AQUI!
+                
                 const cleanName = it.nome?.replace(/\s*\(.*\)/g, '').trim() || 'Item';
                 itemsCount[cleanName] = (itemsCount[cleanName] || 0) + (Number(it.quantidade) || 1);
             });
