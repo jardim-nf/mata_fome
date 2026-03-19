@@ -115,7 +115,7 @@ export function AuthProvider({ children }) {
                     _claims: claims
                 };
 
-                setCurrentUser(Object.assign(user, combinedData)); 
+                setCurrentUser({ ...user, ...combinedData });
                 setUserData(combinedData);
                 
                 try {
@@ -156,17 +156,18 @@ export function AuthProvider({ children }) {
         signup: async (email, password, additionalData = {}) => {
             const uc = await createUserWithEmailAndPassword(auth, email, password);
             if (additionalData.nome) await updateProfile(uc.user, { displayName: additionalData.nome });
-            
+             // Sanitizar: remover campos de permissão do input do frontend
+           const { isAdmin, isMasterAdmin, _claims, ...dadosSeguros } = additionalData;
             const userDataToSave = {
                 uid: uc.user.uid,
                 email: email,
                 nome: additionalData.nome,
-                isAdmin: additionalData.isAdmin || false,
-                isMasterAdmin: additionalData.isMasterAdmin || false,
+                isAdmin: false,       
+                isMasterAdmin: false,
                 estabelecimentosGerenciados: Array.isArray(additionalData.estabelecimentosGerenciados) ? additionalData.estabelecimentosGerenciados : [],
                 ativo: true,
                 dataCriacao: new Date(),
-                ...additionalData
+                ...dadosSeguros 
             };
             await setDoc(doc(db, 'usuarios', uc.user.uid), userDataToSave);
             return uc;

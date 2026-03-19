@@ -131,7 +131,7 @@ function App() {
                         <Route path="/master/usuarios/criar" element={<PrivateRoute allowedRoles={['masterAdmin']}><CriarUsuarioMaster /></PrivateRoute>} />
                         <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={['masterAdmin']}><AdminImageAssociation /></PrivateRoute>} />
                         <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={['masterAdmin']}><AuditLogs /></PrivateRoute>} />
-                        <Route path="/admin/config-fiscal" element={<ConfigFiscalScreen />} />
+                         <Route path="/admin/config-fiscal" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ConfigFiscalScreen /></PrivateRoute>} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Route>
 

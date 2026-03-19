@@ -1,11 +1,11 @@
 // src/firebase.js
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signOut,
-  updateProfile 
+  updateProfile
 } from 'firebase/auth';
 // 🔥 Adicionado enableIndexedDbPersistence aqui 🔥
 import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from 'firebase/firestore';
@@ -14,13 +14,13 @@ import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-    apiKey: import.meta.env.VITE_API_KEY,
-    authDomain: import.meta.env.VITE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_APP_ID,
-    measurementId: import.meta.env.VITE_MEASUREMENT_ID
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID,
+  measurementId: import.meta.env.VITE_MEASUREMENT_ID
 };
 
 // Inicialização do Firebase
@@ -33,9 +33,9 @@ export const db = getFirestore(app);
 // 🔥 ATIVADOR DO MODO OFFLINE (MAGIA ACONTECE AQUI) 🔥
 enableIndexedDbPersistence(db).catch((err) => {
   if (err.code == 'failed-precondition') {
-      console.warn('Múltiplas abas abertas, modo offline ativado apenas na primeira.');
+    console.warn('Múltiplas abas abertas, modo offline ativado apenas na primeira.');
   } else if (err.code == 'unimplemented') {
-      console.warn('Navegador não suporta persistência offline.');
+    console.warn('Navegador não suporta persistência offline.');
   }
 });
 
@@ -55,14 +55,14 @@ if (import.meta.env.DEV) {
 // Funções de autenticação
 export const doCreateUserWithEmailAndPassword = async (email, password, displayName = '') => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  
+
   // Atualizar perfil com displayName se fornecido
   if (displayName) {
     await updateProfile(userCredential.user, {
       displayName: displayName
     });
   }
-  
+
   return userCredential;
 };
 
@@ -106,7 +106,7 @@ export const initializeUserPlatforms = async (userId, userEmail) => {
       },
       {
         id: `whatsapp_${userId}`,
-        name: 'WhatsApp Business', 
+        name: 'WhatsApp Business',
         type: 'whatsapp',
         userId: userId,
         userEmail: userEmail,
@@ -183,9 +183,9 @@ export const initializeUserPlatforms = async (userId, userEmail) => {
 
     const results = await Promise.all(creationPromises);
     const successful = results.filter(result => result.success).length;
-    
+
     console.log(`📊 Plataformas inicializadas: ${successful}/${platforms.length} para usuário ${userId}`);
-    
+
     return {
       success: successful === platforms.length,
       total: platforms.length,
@@ -195,13 +195,13 @@ export const initializeUserPlatforms = async (userId, userEmail) => {
 
   } catch (error) {
     console.error('❌ Erro crítico ao inicializar plataformas:', error);
-    
+
     // Log do erro no Analytics
     logEvent(analytics, 'platform_initialization_error', {
       userId: userId,
       error: error.message
     });
-    
+
     return {
       success: false,
       error: error.message
@@ -214,13 +214,13 @@ export const initializeUserData = async (userId, userData) => {
   try {
     const userRef = doc(db, 'usuarios', userId);
     const userDoc = await getDoc(userRef);
-    
+
     if (!userDoc.exists()) {
       const defaultUserData = {
         email: userData.email,
         displayName: userData.displayName || '',
-        isAdmin: userData.isAdmin || false,
-        isMasterAdmin: userData.isMasterAdmin || false,
+        isAdmin: false,
+        isMasterAdmin: false,
         estabelecimentosGerenciados: userData.estabelecimentosGerenciados || [],
         ativo: true,
         dataCriacao: new Date().toISOString(),
@@ -236,16 +236,16 @@ export const initializeUserData = async (userId, userData) => {
           activePlatforms: 1 // Site próprio vem ativo por padrão
         }
       };
-      
+
       await setDoc(userRef, defaultUserData);
       console.log('✅ Dados do usuário inicializados no Firestore');
-      
+
       // Inicializar plataformas
       await initializeUserPlatforms(userId, userData.email);
-      
+
       return defaultUserData;
     }
-    
+
     return userDoc.data();
   } catch (error) {
     console.error('❌ Erro ao inicializar dados do usuário:', error);
