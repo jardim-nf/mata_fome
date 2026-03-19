@@ -279,27 +279,38 @@ const AdminReports = () => {
         });
     }, [pedidos, searchTerm, minValue, maxValue]);
 
-    // --- CÁLCULO DE MÉTRICAS ---
+  // --- CÁLCULO DE MÉTRICAS ---
     const metrics = useMemo(() => {
-        // 🔥 CORREÇÃO NA VALIDAÇÃO DE STATUS: Cobre cancelados de todas as origens 🔥
+        
+        // 🔥 BLOQUEIO ABSOLUTO E AGRESSIVO DE CANCELADOS 🔥
         const isCancelado = (p) => {
-            const status = String(p.status || '').toLowerCase();
-            const fiscalStatus = String(p.fiscal?.status || '').toLowerCase();
-            return ['cancelado', 'cancelada', 'recusado', 'excluido'].includes(status) || fiscalStatus === 'cancelado';
+            // Pega os status de todos os cantos possíveis e arranca espaços em branco
+            const s1 = String(p.status || '').toLowerCase().trim();
+            const s2 = String(p.fiscal?.status || '').toLowerCase().trim();
+            const s3 = String(p.statusVenda || '').toLowerCase().trim();
+
+            // Busca qualquer pedaço de palavra que indique problema
+            const termosBloqueados = ['cancelad', 'recusad', 'excluid', 'estornad', 'devolvid', 'rejeitad', 'erro'];
+            
+            // Se achar qualquer um desses termos em qualquer lugar, retorna TRUE (Está cancelado)
+            return termosBloqueados.some(termo => 
+                s1.includes(termo) || s2.includes(termo) || s3.includes(termo)
+            );
         };
 
         const pedidosValidos = filteredPedidos.filter(p => !isCancelado(p));
+        const cancelados = filteredPedidos.filter(p => isCancelado(p));
+
         const totalVendas = pedidosValidos.reduce((acc, p) => acc + p.totalFinal, 0);
         const totalTaxas = pedidosValidos.reduce((acc, p) => acc + (p.taxaEntrega || 0), 0);
         
         const byDay = {}, byPayment = {}, byType = {}, byHour = {}, itemsCount = {}, motoboyStats = {}, bairrosStats = {};
-        const clientsStats = {}; // Novo objeto para clientes
+        const clientsStats = {}; 
 
         const mesaVendas = filteredPedidos.filter(p => p.tipo === 'mesa');
-        const cancelados = filteredPedidos.filter(p => isCancelado(p));
 
         filteredPedidos.forEach(p => {
-            if (isCancelado(p)) return; // Ignora cancelados na soma
+            if (isCancelado(p)) return; // Se for cancelado, pula e não entra em NENHUM gráfico
 
             const dayKey = format(p.data, 'dd/MM');
             byDay[dayKey] = (byDay[dayKey] || 0) + p.totalFinal;
@@ -328,7 +339,6 @@ const AdminReports = () => {
                 bairrosStats[p.bairro] = (bairrosStats[p.bairro] || 0) + 1;
             }
 
-            // Lógica Top Clientes (Delivery)
             if (p.tipo !== 'mesa') {
                 const cNome = p.clienteNome && p.clienteNome !== 'Cliente' ? p.clienteNome : 'Não Identificado';
                 if (!clientsStats[cNome]) {
@@ -343,29 +353,31 @@ const AdminReports = () => {
         const topItems = Object.entries(itemsCount).sort(([,a], [,b]) => b - a).slice(0, 5);
         const topMotoboys = Object.values(motoboyStats).sort((a, b) => b.count - a.count);
         const topBairros = Object.entries(bairrosStats).sort(([,a], [,b]) => b - a).slice(0, 5);
-        const topClients = Object.values(clientsStats).sort((a, b) => b.total - a.total).slice(0, 5);
+        const topClients = Object.values(clientsStats).sort((a, b) => b.total - a.total).slice(0, 5); 
 
         return {
             totalVendas,
             totalTaxas,
-            count: filteredPedidos.length - cancelados.length,
-            ticketMedio: (filteredPedidos.length - cancelados.length) ? totalVendas / (filteredPedidos.length - cancelados.length) : 0,
+            count: pedidosValidos.length,
+            ticketMedio: pedidosValidos.length ? totalVendas / pedidosValidos.length : 0,
             byDay: { labels: sortedDays, data: sortedDays.map(d => byDay[d]) },
             byHour: { labels: Object.keys(byHour).sort(), data: Object.keys(byHour).sort().map(h => byHour[h]) },
             byPayment: { labels: Object.keys(byPayment), data: Object.values(byPayment) },
             topItems,
             topMotoboys,
             topBairros,
-            topClients,
+            topClients, 
             mesaMetrics: {
-                total: mesaVendas.reduce((acc, m) => acc + m.totalFinal, 0),
-                count: mesaVendas.length
+                total: mesaVendas.filter(m => !isCancelado(m)).reduce((acc, m) => acc + m.totalFinal, 0),
+                count: mesaVendas.filter(m => !isCancelado(m)).length
             },
             cancelamentos: {
                 qtd: cancelados.length,
                 valor: cancelados.reduce((acc, p) => acc + p.totalFinal, 0),
                 taxa: filteredPedidos.length > 0 ? ((cancelados.length / filteredPedidos.length) * 100).toFixed(1) : 0
-            }
+            },
+            // Exporta a função para a tabela conseguir pintar de vermelho
+            isCancelado
         };
     }, [filteredPedidos]);
 
