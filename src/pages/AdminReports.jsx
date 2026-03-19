@@ -65,14 +65,13 @@ const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
     );
 };
 
-// 🔥 FUNÇÃO GLOBAL PARA IDENTIFICAR CANCELADOS 🔥
+// 🔥 FUNÇÃO GLOBAL PARA IDENTIFICAR PEDIDOS INTEIROS CANCELADOS 🔥
 const isPedidoCancelado = (p) => {
     if (!p) return false;
     const s1 = String(p.status || '').toLowerCase().trim();
     const s2 = String(p.fiscal?.status || '').toLowerCase().trim();
     const s3 = String(p.statusVenda || '').toLowerCase().trim();
     
-    // Se conter qualquer um desses termos, ele classifica como cancelado
     const termos = ['cancelad', 'recusad', 'excluid', 'estornad', 'devolvid', 'rejeitad', 'erro'];
     return termos.some(t => s1.includes(t) || s2.includes(t) || s3.includes(t));
 };
@@ -88,7 +87,7 @@ const AdminReports = () => {
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     
     // Filtros
-    const [statusFilter, setStatusFilter] = useState('valido'); // Padrão: mostra só o que é válido
+    const [statusFilter, setStatusFilter] = useState('valido'); 
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
     const [deliveryTypeFilter, setDeliveryTypeFilter] = useState('todos');
     const [motoboyFilter, setMotoboyFilter] = useState('todos');
@@ -136,7 +135,6 @@ const AdminReports = () => {
         const itens = data.itens || data.produtos || [];
         const bairro = data.endereco?.bairro || data.bairro || data.address?.district || null;
 
-        // Blinda a identificação de mesas
         const isMesa = origem === 'mesa' || data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero;
 
         return {
@@ -167,10 +165,8 @@ const AdminReports = () => {
             const start = startOfDay(new Date(startDate + 'T00:00:00'));
             const end = endOfDay(new Date(endDate + 'T23:59:59'));
             
-            // Usamos um Map para evitar dados duplicados entre as coleções
             let allDataMap = new Map(); 
 
-            // Função para filtrar a data NO NAVEGADOR (Burlar erro de Indice Composto)
             const addData = (doc, origem) => {
                 const item = processarDado(doc, origem);
                 if (item.data >= start && item.data <= end) {
@@ -251,9 +247,12 @@ const AdminReports = () => {
     // Filtragem Dinâmica de Tela (Busca, Status e Valores)
     const filteredPedidos = useMemo(() => {
         return pedidos.filter(p => {
-            // 🔥 FILTRO DE STATUS DE CANCELAMENTO 🔥
             const cancelado = isPedidoCancelado(p);
+            
+            // 🔥 Lógica de Filtro na Tabela Principal 🔥
+            // Quando filtramos por "valido", ainda queremos ver as Mesas que foram pagas, mesmo que tenham 1 item cancelado dentro.
             if (statusFilter === 'valido' && cancelado) return false;
+            // Se pedir "cancelado", só mostra pedidos inteiros cancelados
             if (statusFilter === 'cancelado' && !cancelado) return false;
 
             const term = searchTerm.toLowerCase();
@@ -267,25 +266,60 @@ const AdminReports = () => {
             const matchesMax = maxValue === '' || p.totalFinal <= parseFloat(maxValue);
             
             return matchesSearch && matchesMin && matchesMax;
-        }).sort((a,b) => b.data - a.data); // Ordena do mais recente para o mais antigo
+        }).sort((a,b) => b.data - a.data); 
     }, [pedidos, searchTerm, minValue, maxValue, statusFilter]);
 
-    // --- CÁLCULO DE MÉTRICAS ---
+    // --- 🔥 CÁLCULO DE MÉTRICAS (A MÁGICA ESTÁ AQUI) 🔥 ---
     const metrics = useMemo(() => {
-        const pedidosValidos = filteredPedidos.filter(p => !isPedidoCancelado(p));
-        const cancelados = filteredPedidos.filter(p => isPedidoCancelado(p));
-
-        const totalVendas = pedidosValidos.reduce((acc, p) => acc + p.totalFinal, 0);
-        const totalTaxas = pedidosValidos.reduce((acc, p) => acc + (p.taxaEntrega || 0), 0);
+        let totalVendas = 0;
+        let totalTaxas = 0;
         
-        const byDay = {}, byPayment = {}, byType = {}, byHour = {}, itemsCount = {}, motoboyStats = {}, bairrosStats = {};
-        const clientsStats = {}; 
+        let valorTotalCancelado = 0;
+        let qtdPedidosInteirosCancelados = 0;
+        let qtdItensAvulsosCancelados = 0;
+        
+        let qtdPedidosValidos = 0;
+        let totalMesaValida = 0;
+        let countMesaValida = 0;
 
-        const mesaVendas = filteredPedidos.filter(p => p.tipo === 'mesa');
+        const byDay = {}, byPayment = {}, byType = {}, byHour = {}, itemsCount = {}, motoboyStats = {}, bairrosStats = {}, clientsStats = {}; 
 
         filteredPedidos.forEach(p => {
-            if (isPedidoCancelado(p)) return; // IGNORA CANCELADOS NOS GRÁFICOS
+            const pedidoInteiroCancelado = isPedidoCancelado(p);
 
+            // 1. SE O PEDIDO INTEIRO FOI CANCELADO
+            if (pedidoInteiroCancelado) {
+                qtdPedidosInteirosCancelados++;
+                valorTotalCancelado += p.totalFinal;
+                return; // Pula o resto dos cálculos, não entra em vendas
+            }
+
+            // 2. SE O PEDIDO FOI PAGO (VÁLIDO)
+            qtdPedidosValidos++;
+            totalVendas += p.totalFinal;
+            totalTaxas += (p.taxaEntrega || 0);
+
+            if (p.tipo === 'mesa') {
+                totalMesaValida += p.totalFinal;
+                countMesaValida++;
+            }
+
+            // 3. AGORA NÓS "ABRIMOS A SACOLA" PARA CAÇAR ITENS CANCELADOS
+            p.itens?.forEach(it => {
+                const statusItem = String(it.status || '').toLowerCase().trim();
+                if (statusItem === 'cancelado') {
+                    // Achamos um item cancelado! Soma o prejuízo dele
+                    valorTotalCancelado += (parseFloat(it.preco) || 0) * (parseInt(it.quantidade) || 1);
+                    qtdItensAvulsosCancelados++;
+                    return; // Impede que o item cancelado vá pro Top 5 Produtos
+                }
+
+                // Item válido, vai pro Top 5
+                const cleanName = it.nome?.replace(/\s*\(.*\)/g, '').trim() || 'Item';
+                itemsCount[cleanName] = (itemsCount[cleanName] || 0) + (Number(it.quantidade) || 1);
+            });
+
+            // --- Cálculos dos Gráficos (Apenas Valores Válidos) ---
             const dayKey = format(p.data, 'dd/MM');
             byDay[dayKey] = (byDay[dayKey] || 0) + p.totalFinal;
 
@@ -297,13 +331,6 @@ const AdminReports = () => {
 
             const typeKey = p.tipo === 'mesa' ? 'Mesa' : 'Delivery';
             byType[typeKey] = (byType[typeKey] || 0) + 1;
-
-           p.itens?.forEach(it => {
-                if (it.status === 'cancelado') return; // 🔥 ADICIONE ESTA LINHA AQUI!
-                
-                const cleanName = it.nome?.replace(/\s*\(.*\)/g, '').trim() || 'Item';
-                itemsCount[cleanName] = (itemsCount[cleanName] || 0) + (Number(it.quantidade) || 1);
-            });
 
             if (p.motoboyId && p.motoboyNome) {
                 if (!motoboyStats[p.motoboyId]) motoboyStats[p.motoboyId] = { id: p.motoboyId, nome: p.motoboyNome, count: 0, totalTaxas: 0 };
@@ -330,12 +357,14 @@ const AdminReports = () => {
         const topMotoboys = Object.values(motoboyStats).sort((a, b) => b.count - a.count);
         const topBairros = Object.entries(bairrosStats).sort(([,a], [,b]) => b - a).slice(0, 5);
         const topClients = Object.values(clientsStats).sort((a, b) => b.total - a.total).slice(0, 5); 
+        
+        const taxaRejeicao = filteredPedidos.length > 0 ? ((qtdPedidosInteirosCancelados / filteredPedidos.length) * 100).toFixed(1) : 0;
 
         return {
             totalVendas,
             totalTaxas,
-            count: pedidosValidos.length,
-            ticketMedio: pedidosValidos.length ? totalVendas / pedidosValidos.length : 0,
+            count: qtdPedidosValidos,
+            ticketMedio: qtdPedidosValidos ? totalVendas / qtdPedidosValidos : 0,
             byDay: { labels: sortedDays, data: sortedDays.map(d => byDay[d]) },
             byHour: { labels: Object.keys(byHour).sort(), data: Object.keys(byHour).sort().map(h => byHour[h]) },
             byPayment: { labels: Object.keys(byPayment), data: Object.values(byPayment) },
@@ -344,13 +373,14 @@ const AdminReports = () => {
             topBairros,
             topClients, 
             mesaMetrics: {
-                total: mesaVendas.filter(m => !isPedidoCancelado(m)).reduce((acc, m) => acc + m.totalFinal, 0),
-                count: mesaVendas.filter(m => !isPedidoCancelado(m)).length
+                total: totalMesaValida,
+                count: countMesaValida
             },
             cancelamentos: {
-                qtd: cancelados.length,
-                valor: cancelados.reduce((acc, p) => acc + p.totalFinal, 0),
-                taxa: filteredPedidos.length > 0 ? ((cancelados.length / filteredPedidos.length) * 100).toFixed(1) : 0
+                qtd: qtdPedidosInteirosCancelados + qtdItensAvulsosCancelados,
+                valor: valorTotalCancelado,
+                taxa: taxaRejeicao,
+                textoQtd: `${qtdPedidosInteirosCancelados} Pedidos e ${qtdItensAvulsosCancelados} Itens`
             }
         };
     }, [filteredPedidos]);
@@ -399,13 +429,16 @@ const AdminReports = () => {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente/Mesa</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entregador</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pagamento</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor Líquido</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                     {filteredPedidos.map(p => {
-                        const cancelado = isPedidoCancelado(p);
+                        const pedidoCancelado = isPedidoCancelado(p);
+                        // Verifica se teve itens cancelados por dentro da mesa pra mostrar um aviso
+                        const teveItemCancelado = p.itens?.some(it => String(it.status).toLowerCase() === 'cancelado');
+
                         return (
                         <tr key={p.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{format(p.data, 'dd/MM HH:mm')}</td>
@@ -427,13 +460,16 @@ const AdminReports = () => {
                             <td className="px-4 py-3 text-sm text-gray-900">
                                 {traduzirPagamento(p.formaPagamento)}
                             </td>
-                            <td className={`px-4 py-3 text-sm font-bold ${cancelado ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                            <td className={`px-4 py-3 text-sm font-bold ${pedidoCancelado ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                                 {p.totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-4 py-3 text-sm">
-                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${cancelado ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                                    {cancelado ? 'CANCELADO' : p.status}
+                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${pedidoCancelado ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                                    {pedidoCancelado ? 'CANCELADO' : p.status}
                                 </span>
+                                {teveItemCancelado && !pedidoCancelado && (
+                                    <p className="text-[10px] text-red-500 font-bold mt-1">Teve item cancelado</p>
+                                )}
                             </td>
                         </tr>
                     )})}
@@ -489,7 +525,6 @@ const AdminReports = () => {
                             <option value="todos">Todos Motoboys</option>
                             {availableMotoboys.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                         </select>
-                        {/* 🔥 NOVO FILTRO DE STATUS (Aparecer Cancelados) 🔥 */}
                         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm col-span-2 sm:col-span-1">
                             <option value="valido">Apenas Válidos</option>
                             <option value="cancelado">Apenas Cancelados</option>
@@ -500,7 +535,6 @@ const AdminReports = () => {
                         </button>
                     </div>
 
-                    {/* Quick date buttons + search + view toggle */}
                     <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
                         <button onClick={() => { const h = format(new Date(), 'yyyy-MM-dd'); setStartDate(h); setEndDate(h); }} className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-200 transition-all">Hoje</button>
                         <button onClick={() => { setStartDate(format(subDays(new Date(), 7), 'yyyy-MM-dd')); setEndDate(format(new Date(), 'yyyy-MM-dd')); }} className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-200 transition-all">7 dias</button>
@@ -530,13 +564,13 @@ const AdminReports = () => {
                             <Card title={<><IoAlertCircleOutline className="text-red-600"/> Saúde da Operação</>}>
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <p className="text-gray-500 text-sm">Cancelamentos</p>
+                                        <p className="text-gray-500 text-sm">Cancelamentos Totais</p>
                                         <p className="text-2xl font-bold text-red-600">{metrics.cancelamentos.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                        <p className="text-xs text-gray-400 mt-1">{metrics.cancelamentos.qtd} pedidos</p>
+                                        <p className="text-xs text-gray-400 mt-1">{metrics.cancelamentos.textoQtd}</p>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xl font-bold text-red-600">{metrics.cancelamentos.taxa}%</div>
-                                        <p className="text-xs text-gray-400">Taxa de Rejeição</p>
+                                        <p className="text-xs text-gray-400">Taxa de Rejeição Geral</p>
                                     </div>
                                 </div>
                                 <div className="mt-4 bg-gray-200 rounded-full h-2"><div className="bg-red-600 h-2 rounded-full" style={{width: `${Math.min(metrics.cancelamentos.taxa, 100)}%`}}></div></div>
@@ -616,7 +650,7 @@ const AdminReports = () => {
                                     <div className="h-64"><Line data={{ labels: metrics.byDay.labels, datasets: [{ label: 'R$', data: metrics.byDay.data, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true }] }} options={chartOptions} /></div>
                                 </Card>
                             </div>
-                            <Card title="Top 5 Produtos">
+                            <Card title="Top 5 Produtos Válidos">
                                 {metrics.topItems.map(([n, q], i) => (
                                     <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded mb-2"><span className="text-sm truncate max-w-[180px] font-medium">{n}</span><span className="text-xs bg-blue-100 text-blue-800 px-2 rounded">{q}</span></div>
                                 ))}
