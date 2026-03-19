@@ -7,10 +7,14 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint } from "react-icons/io5";
+import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint, IoReceiptOutline, IoWalletOutline, IoCartOutline } from "react-icons/io5";
 
 // IMPORTANDO NOSSO NOVO SERVIÇO DO QZ TRAY
 import { rotearEImprimir } from '../services/printService';
+
+// 🔥 IMPORTS PARA O FISCAL (NFC-e) 🔥
+import { vendaService } from '../services/vendaService';
+import { ModalRecibo, ModalHistorico } from '../components/PdvModals';
 
 // --- FUNÇÃO ANTI-TRAVAMENTO PARA CORTAR BEBIDAS E BOMBONIERE ---
 const isItemCozinha = (item) => {
@@ -41,7 +45,7 @@ const isItemCozinha = (item) => {
 };
 
 // --- GRUPO DE PEDIDOS DA MESA ---
-const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo }) => {
+const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo, onEmitirNfce }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
         pedidos.forEach(pedido => {
@@ -95,7 +99,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                     </div>
                     <div className="p-3 space-y-3 bg-white">
                         {grupo.pedidos.map(pedido => (
-                            <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={onUpdateStatus} onExcluir={onExcluir} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} showMesaInfo={false} isAgrupado={true} motoboysDisponiveis={[]} onAtribuirMotoboy={null} />
+                            <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={onUpdateStatus} onExcluir={onExcluir} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} showMesaInfo={false} isAgrupado={true} motoboysDisponiveis={[]} onAtribuirMotoboy={null} onEmitirNfce={onEmitirNfce} />
                         ))}
                     </div>
                 </div>
@@ -122,6 +126,7 @@ function Painel() {
     const [newOrderIds, setNewOrderIds] = useState(new Set());
     
     const [abaAtiva, setAbaAtiva] = useState('delivery');
+    const [colunaMobile, setColunaMobile] = useState('recebido');
     
     const [motoboys, setMotoboys] = useState([]);
     const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
@@ -129,6 +134,15 @@ function Painel() {
     // FILA DE IMPRESSÃO (Agora guarda o pedido completo, não só o ID)
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
+
+    // 🔥 ESTADOS PARA NFC-e / FISCAL 🔥
+    const [mostrarRecibo, setMostrarRecibo] = useState(false);
+    const [dadosRecibo, setDadosRecibo] = useState(null);
+    const [nfceStatus, setNfceStatus] = useState('idle');
+    const [nfceUrl, setNfceUrl] = useState(null);
+    const [isHistoricoVendasOpen, setIsHistoricoVendasOpen] = useState(false);
+    const [vendasHistoricoExibicao, setVendasHistoricoExibicao] = useState([]);
+    const [carregandoHistorico, setCarregandoHistorico] = useState(false);
 
     const [modoImpressao, setModoImpressaoState] = useState(() => {
         const salvo = localStorage.getItem('config_modo_impressao_painel');
@@ -256,6 +270,229 @@ function Painel() {
         } catch (error) { toast.error("Erro ao mover pedido."); }
         finally { setTimeout(() => { isUpdatingRef.current = false; setBloqueioAtualizacao(prev => { const novo = new Set(prev); novo.delete(pedidoId); return novo; }); }, 500); }
     }, [estabelecimentoAtivo, bloqueioAtualizacao]);
+
+    // =============================================
+    // 🔥 LÓGICA FISCAL NFC-e (MESMO PADRÃO DO CONTROLE DE SALÃO) 🔥
+    // =============================================
+    const formatarReal = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
+
+    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) {} };
+
+    // Busca histórico de vendas/notas do estabelecimento
+    const abrirHistoricoVendas = useCallback(async () => {
+        setIsHistoricoVendasOpen(true);
+        setCarregandoHistorico(true);
+        try {
+            const vendas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50);
+            setVendasHistoricoExibicao(vendas);
+        } catch (error) {
+            toast.error("Erro ao buscar histórico.");
+        } finally {
+            setCarregandoHistorico(false);
+        }
+    }, [estabelecimentoAtivo]);
+
+    const selecionarVendaHistorico = (venda) => {
+        const vendaNormalizada = {
+            ...venda,
+            itens: venda.itens?.map(item => {
+                const precoReal = item.precoUnitario || item.preco || item.valor || item.price || 0;
+                const qtdReal = item.quantidade || item.quantity || item.qtd || 1;
+                return { ...item, preco: precoReal, precoUnitario: precoReal, valor: precoReal, price: precoReal, quantidade: qtdReal, quantity: qtdReal, nome: item.nome || item.name || 'Item' };
+            })
+        };
+        setDadosRecibo(vendaNormalizada);
+        setNfceStatus(vendaNormalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
+        setNfceUrl(vendaNormalizada.fiscal?.pdf || null);
+        setIsHistoricoVendasOpen(false);
+        setMostrarRecibo(true);
+    };
+
+    // Emissão da NFC-e
+    const handleEmitirNfce = async () => {
+        if (!dadosRecibo?.id) return; setNfceStatus('loading');
+        try {
+            const res = await vendaService.emitirNfce(dadosRecibo.id, dadosRecibo.clienteCpf);
+            if (res.sucesso || res.success) {
+                setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
+                setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v));
+            } else { setNfceStatus('error'); tocarBeepErro(); alert(res.error || "Erro ao solicitar"); }
+        } catch (e) { setNfceStatus('error'); tocarBeepErro(); alert('Erro de conexão.'); }
+    };
+
+    // Consultar status / reenviar nota rejeitada
+    const handleConsultarStatus = async (venda) => {
+        const st = venda.fiscal?.status;
+        if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'ERRO') {
+            if (!window.confirm("Tentar reenviar para a SEFAZ?")) return;
+            setNfceStatus('loading');
+            try {
+                const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
+                if (res.sucesso || res.success) {
+                    alert("✅ Enviada!");
+                    if (dadosRecibo?.id === venda.id) setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
+                    setVendasHistoricoExibicao(p => p.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v));
+                } else { setNfceStatus('error'); alert("❌ Erro: " + res.error); }
+            } catch (e) { setNfceStatus('error'); alert('Falha ao reenviar.'); }
+        } else {
+            if (!venda.fiscal?.idPlugNotas) return alert("Sem ID PlugNotas.");
+            setNfceStatus('loading');
+            try {
+                const res = await vendaService.consultarStatusNfce(venda.id, venda.fiscal.idPlugNotas);
+                if (res.sucesso) {
+                    if (dadosRecibo?.id === venda.id) { setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } })); setNfceStatus(res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO' ? 'success' : 'idle'); setNfceUrl(res.pdf); }
+                    setVendasHistoricoExibicao(p => p.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
+                    alert(`Status: ${res.statusAtual}`);
+                } else { setNfceStatus('error'); alert("Erro: " + res.error); }
+            } catch (e) { setNfceStatus('error'); alert("Falha ao consultar."); }
+        }
+    };
+
+    // Cancelar NFC-e
+    const handleCancelarNfce = async (venda) => {
+        if (!venda || !venda.id) return;
+        const justificativa = prompt("Motivo do cancelamento (mínimo 15 caracteres):");
+        if (!justificativa || justificativa.trim().length < 15) { alert("⚠️ O motivo deve ter pelo menos 15 caracteres para ser aceito pela SEFAZ."); return; }
+        setNfceStatus('loading');
+        try {
+            const res = await vendaService.cancelarNfce(venda.id, justificativa.trim());
+            if (res.success || res.sucesso) {
+                alert("✅ Nota Fiscal cancelada com sucesso!");
+                setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'CANCELADO' } }));
+                setVendasHistoricoExibicao(p => p.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'CANCELADO' } } : v));
+                setNfceStatus('idle');
+            } else { setNfceStatus('error'); tocarBeepErro(); alert("❌ Erro ao cancelar: " + res.error); }
+        } catch (e) { setNfceStatus('error'); tocarBeepErro(); alert("Falha de conexão ao tentar cancelar a nota."); }
+    };
+
+    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return alert("Sem ID"); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} };
+    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return alert("Sem ID"); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) alert("Erro: " + res.error); } catch (e) {} finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
+
+    const handleEnviarWhatsApp = (venda) => {
+        if (!venda.fiscal?.pdf) return alert("⚠️ Link PDF indisponível.");
+        let tel = prompt("📱 Número WhatsApp:", venda.clienteTelefone || venda.cliente?.telefone || "");
+        if (tel === null) return; tel = tel.replace(/\D/g, '');
+        const msg = encodeURIComponent(`Olá! Agradecemos a preferência. 😃\nSua Nota Fiscal de ${formatarReal(venda.total)}:\n${venda.fiscal.pdf}`);
+        window.open(tel.length >= 10 ? `https://wa.me/${tel.startsWith('55') ? tel : `55${tel}`}?text=${msg}` : `https://api.whatsapp.com/send?text=${msg}`, '_blank');
+    };
+
+    // 🔥 CONVERTE UM PEDIDO DO PAINEL EM FORMATO DE VENDA E ABRE O RECIBO 🔥
+    const handleNfceDoPedido = useCallback(async (pedido) => {
+        if (!pedido || !pedido.id) return;
+
+        // Primeiro tenta encontrar uma venda já existente para esse pedido
+        try {
+            const vendas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 100);
+            const vendaExistente = vendas.find(v => v.pedidoId === pedido.id || v.id === pedido.vendaId);
+
+            if (vendaExistente) {
+                // Normaliza os itens
+                const vendaNormalizada = {
+                    ...vendaExistente,
+                    itens: vendaExistente.itens?.map(item => {
+                        const precoReal = item.precoUnitario || item.preco || item.valor || item.price || 0;
+                        const qtdReal = item.quantidade || item.quantity || item.qtd || 1;
+                        return { ...item, preco: precoReal, precoUnitario: precoReal, valor: precoReal, price: precoReal, quantidade: qtdReal, quantity: qtdReal, nome: item.nome || item.name || 'Item' };
+                    })
+                };
+                setDadosRecibo(vendaNormalizada);
+                setNfceStatus(vendaNormalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
+                setNfceUrl(vendaNormalizada.fiscal?.pdf || null);
+                setMostrarRecibo(true);
+                return;
+            }
+        } catch (e) {
+            console.warn('Não encontrou venda existente, criando a partir do pedido...', e);
+        }
+
+        // Se não encontrou uma venda, monta o recibo a partir dos dados do pedido
+        const totalPedido = pedido.totalFinal || pedido.total || pedido.itens?.reduce((acc, it) => {
+            const preco = Number(it.preco) || 0;
+            const qtd = Number(it.quantidade) || 1;
+            const adicionais = it.adicionais ? it.adicionais.reduce((adAcc, ad) => adAcc + (Number(ad.preco) || 0), 0) : 0;
+            return acc + ((preco + adicionais) * qtd);
+        }, 0) || 0;
+
+        // Salva como venda para poder emitir a NFC-e
+        const vendaData = {
+            estabelecimentoId: estabelecimentoAtivo,
+            pedidoId: pedido.id,
+            itens: pedido.itens?.map(item => ({
+                nome: item.nome || item.name || 'Item',
+                preco: Number(item.preco) || 0,
+                precoUnitario: Number(item.preco) || 0,
+                quantidade: Number(item.quantidade) || 1,
+                adicionais: item.adicionais || [],
+                categoria: item.categoria || ''
+            })) || [],
+            total: totalPedido,
+            formaPagamento: pedido.formaPagamento || 'outros',
+            clienteNome: pedido.cliente?.nome || 'Cliente',
+            clienteTelefone: pedido.cliente?.telefone || '',
+            clienteCpf: pedido.clienteCpf || null,
+            origem: pedido.source === 'salao' ? 'salao' : 'delivery',
+            status: 'finalizada',
+            mesaNumero: pedido.mesaNumero || null
+        };
+
+        const resultado = await vendaService.salvarVenda(vendaData);
+
+        if (resultado.success) {
+            const vendaFinal = {
+                ...vendaData,
+                id: resultado.vendaId,
+                createdAt: new Date()
+            };
+            setDadosRecibo(vendaFinal);
+            setNfceStatus('idle');
+            setNfceUrl(null);
+            setMostrarRecibo(true);
+            toast.success('🧾 Venda registrada! Agora pode emitir a NFC-e.');
+        } else {
+            toast.error('Erro ao registrar venda: ' + resultado.error);
+        }
+    }, [estabelecimentoAtivo]);
+
+    // Observador do status da nota em tempo real
+    useEffect(() => {
+        let unsub = () => {};
+        if (mostrarRecibo && dadosRecibo?.id) {
+            unsub = onSnapshot(doc(db, 'vendas', dadosRecibo.id), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data(); setDadosRecibo(p => ({ ...p, fiscal: data.fiscal }));
+                    if (data.fiscal) {
+                        const st = data.fiscal.status?.toUpperCase();
+                        if (st === 'AUTORIZADA' || st === 'CONCLUIDO') { setNfceStatus('success'); setNfceUrl(data.fiscal.pdf); }
+                        else if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'DENEGADO') { setNfceStatus('error'); setNfceUrl(null); }
+                        else if (st === 'PROCESSANDO') { setNfceStatus('loading'); }
+                        setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v));
+                    }
+                }
+            });
+        }
+        return () => unsub();
+    }, [mostrarRecibo, dadosRecibo?.id]);
+
+    // Polling de consulta quando processando
+    useEffect(() => {
+        let intervalo;
+        if (nfceStatus === 'loading' && dadosRecibo?.fiscal?.idPlugNotas) {
+            intervalo = setInterval(async () => {
+                try {
+                    const res = await vendaService.consultarStatusNfce(dadosRecibo.id, dadosRecibo.fiscal.idPlugNotas);
+                    if (res.sucesso && res.statusAtual !== 'PROCESSANDO') {
+                        clearInterval(intervalo); const ns = (res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO') ? 'success' : 'error';
+                        setNfceStatus(ns); if (ns === 'success') setNfceUrl(res.pdf);
+                        setDadosRecibo(p => ({...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
+                        setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
+                        if (ns === 'error') tocarBeepErro();
+                    }
+                } catch (e) {}
+            }, 3000);
+        }
+        return () => clearInterval(intervalo);
+    }, [nfceStatus, dadosRecibo]);
+    // 🔥 FIM DA LÓGICA FISCAL 🔥
 
     useEffect(() => {
         if (authLoading || !estabelecimentoAtivo) return;
@@ -444,11 +681,27 @@ function Painel() {
     const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'finalizado'], [abaAtiva]);
 
     const STATUS_UI = {
-        recebido: { title: 'Novos', icon: '📥', dot: 'bg-rose-500', bgBadge: 'bg-rose-100', textBadge: 'text-rose-700' },
-        preparo: { title: 'Em Preparo', icon: '🔥', dot: 'bg-amber-500', bgBadge: 'bg-amber-100', textBadge: 'text-amber-700' },
-        em_entrega: { title: 'Em Entrega', icon: '🛵', dot: 'bg-blue-500', bgBadge: 'bg-blue-100', textBadge: 'text-blue-700' },
-        pronto_para_servir: { title: 'Pronto (Mesa)', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700' },
-        finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700' }
+        recebido: { title: 'Novos', icon: '📥', dot: 'bg-rose-500', bgBadge: 'bg-rose-100', textBadge: 'text-rose-700', emptyTitle: 'Tudo certo!', emptyMsg: 'Nenhum pedido novo aguardando' },
+        preparo: { title: 'Em Preparo', icon: '🔥', dot: 'bg-amber-500', bgBadge: 'bg-amber-100', textBadge: 'text-amber-700', emptyTitle: 'Cozinha livre', emptyMsg: 'Nenhum pedido em preparo' },
+        em_entrega: { title: 'Em Entrega', icon: '🛵', dot: 'bg-blue-500', bgBadge: 'bg-blue-100', textBadge: 'text-blue-700', emptyTitle: 'Sem entregas', emptyMsg: 'Nenhum pedido na rua' },
+        pronto_para_servir: { title: 'Pronto (Mesa)', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700', emptyTitle: 'Nada pronto', emptyMsg: 'Os pedidos aparecerão aqui quando ficarem prontos' },
+        finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700', emptyTitle: 'Sem concluídos', emptyMsg: 'Os pedidos finalizados aparecerão aqui' }
+    };
+
+    // 🔥 MINI DASHBOARD — Total de pedidos e faturamento do dia 🔥
+    const statsDoDia = useMemo(() => {
+        const todosPedidos = [...(pedidos.recebido || []), ...(pedidos.preparo || []), ...(pedidos.em_entrega || []), ...(pedidos.pronto_para_servir || []), ...(pedidos.finalizado || [])];
+        const pedidosFiltrados = todosPedidos.filter(p => {
+            if (abaAtiva === 'cozinha') return p.source === 'salao' || p.tipo === 'mesa';
+            return p.source !== 'salao' && p.tipo !== 'mesa';
+        });
+        const total = pedidosFiltrados.reduce((acc, p) => acc + (p.totalFinal || p.total || 0), 0);
+        return { quantidade: pedidosFiltrados.length, faturamento: total };
+    }, [pedidos, abaAtiva]);
+
+    const formatarMoedaCurta = (valor) => {
+        if (valor >= 1000) return `R$ ${(valor / 1000).toFixed(1).replace('.', ',')}k`;
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
     };
 
     if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
@@ -458,66 +711,151 @@ function Painel() {
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
             <audio ref={audioRef} src="/campainha.mp3" preload="auto" />
 
-            <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 sticky top-0 z-30 px-4 py-3 md:py-4">
-                <div className="w-full px-2 mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="flex items-center gap-4 w-full md:w-auto">
-                        <button onClick={() => navigate('/admin-dashboard')} className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors">
-                            <IoArrowBack size={20} />
-                        </button>
-                        <div>
-                            <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Monitor de Pedidos</h1>
-                            <p className="text-xs font-medium text-slate-500">Acompanhamento em tempo real</p>
+            {/* 🔥 MODAIS FISCAIS NFC-e 🔥 */}
+            <ModalRecibo 
+                visivel={mostrarRecibo} 
+                dados={dadosRecibo} 
+                onClose={() => setMostrarRecibo(false)} 
+                onNovaVenda={() => setMostrarRecibo(false)} 
+                onEmitirNfce={handleEmitirNfce} 
+                nfceStatus={nfceStatus} 
+                nfceUrl={nfceUrl} 
+                onBaixarXml={handleBaixarXml} 
+                onConsultarStatus={handleConsultarStatus} 
+                onBaixarPdf={handleBaixarPdf} 
+                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onEnviarWhatsApp={handleEnviarWhatsApp} 
+                onCancelarNfce={handleCancelarNfce} 
+            />
+
+            <ModalHistorico 
+                visivel={isHistoricoVendasOpen} 
+                onClose={() => setIsHistoricoVendasOpen(false)} 
+                vendas={vendasHistoricoExibicao} 
+                titulo="Histórico de Vendas & NFC-e" 
+                onSelecionarVenda={selecionarVendaHistorico} 
+                carregando={carregandoHistorico} 
+                onConsultarStatus={handleConsultarStatus} 
+                onBaixarPdf={handleBaixarPdf} 
+                onBaixarXml={handleBaixarXml} 
+                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onEnviarWhatsApp={handleEnviarWhatsApp} 
+                onProcessarLote={async () => { toast.info("Acesse a tela principal do PDV para processar lotes."); }}
+                onCancelarNfce={handleCancelarNfce}
+            />
+
+            <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 sticky top-0 z-30 px-3 md:px-4 py-3 md:py-4">
+                <div className="w-full mx-auto flex flex-col gap-3">
+                    {/* LINHA 1: Voltar + Título + Stats rápidos */}
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <button onClick={() => navigate('/admin-dashboard')} className="p-2 md:p-2.5 rounded-xl hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors shrink-0">
+                                <IoArrowBack size={18} />
+                            </button>
+                            <div className="min-w-0">
+                                <h1 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight truncate">Pedidos</h1>
+                                <p className="text-[10px] md:text-xs font-medium text-slate-500">Fila de produção em tempo real</p>
+                            </div>
+                        </div>
+
+                        {/* 🔥 MINI DASHBOARD — visível sempre 🔥 */}
+                        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                            <div className="flex items-center gap-1.5 bg-blue-50 px-2.5 md:px-3 py-1.5 md:py-2 rounded-xl border border-blue-100">
+                                <IoCartOutline className="text-blue-500 text-sm md:text-base" />
+                                <span className="text-xs md:text-sm font-black text-blue-700">{statsDoDia.quantidade}</span>
+                                <span className="hidden sm:inline text-[10px] text-blue-500 font-medium">pedidos</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 bg-emerald-50 px-2.5 md:px-3 py-1.5 md:py-2 rounded-xl border border-emerald-100">
+                                <IoWalletOutline className="text-emerald-500 text-sm md:text-base" />
+                                <span className="text-xs md:text-sm font-black text-emerald-700">{formatarMoedaCurta(statsDoDia.faturamento)}</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
-                        
+                    {/* LINHA 2: Controles — scroll horizontal no mobile */}
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                        <button
+                            onClick={abrirHistoricoVendas}
+                            className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl border font-bold text-xs transition-all shadow-sm bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 active:scale-95 shrink-0"
+                            title="Ver histórico de notas fiscais"
+                        >
+                            <IoReceiptOutline size={16} className="text-purple-500" />
+                            <span className="hidden sm:inline">NFCe</span>
+                        </button>
+
                         <button
                             onClick={alternarModoImpressao}
-                            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border font-bold text-xs transition-all shadow-sm
+                            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border font-bold text-xs transition-all shadow-sm shrink-0
                                 ${modoImpressao === 'tudo' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
                                   modoImpressao === 'cozinha' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
                                   'bg-gray-100 text-gray-500 border-gray-300 opacity-80'}`}
                             title="Clique para mudar o que imprime automaticamente"
                         >
-                            {modoImpressao === 'tudo' && <><IoPrint size={18} className="text-blue-500" /><span className="hidden sm:inline">Auto: TUDO</span></>}
-                            {modoImpressao === 'cozinha' && <><IoPrint size={18} className="text-orange-500" /><span className="hidden sm:inline">Auto: COZINHA</span></>}
-                            {modoImpressao === 'desligado' && <><IoPrint size={18} className="text-gray-400" /><span className="hidden sm:inline">Auto: DESLIGADO</span></>}
+                            <IoPrint size={16} />
+                            <span className="hidden sm:inline">{modoImpressao === 'tudo' ? 'Tudo' : modoImpressao === 'cozinha' ? 'Cozinha' : 'Off'}</span>
                         </button>
 
-                        <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200/50">
-                            <button onClick={() => setAbaAtiva('delivery')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}>
-                                <IoBicycle className="text-lg" /> Delivery
+                        <div className="flex bg-slate-100 p-0.5 rounded-lg shadow-inner border border-slate-200/50 shrink-0">
+                            <button onClick={() => setAbaAtiva('delivery')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-300 ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
+                                <IoBicycle className="text-sm" /> Delivery
                             </button>
-                            <button onClick={() => setAbaAtiva('cozinha')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${abaAtiva === 'cozinha' ? 'bg-white text-emerald-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}>
-                                <IoRestaurant className="text-lg" /> Salão/Mesa
+                            <button onClick={() => setAbaAtiva('cozinha')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-300 ${abaAtiva === 'cozinha' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}>
+                                <IoRestaurant className="text-sm" /> Salão
                             </button>
                         </div>
 
-                        <div className="relative group">
-                            <IoCalendarOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-hover:text-blue-500 transition-colors pointer-events-none" />
+                        <div className="relative group shrink-0">
+                            <IoCalendarOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-sm" />
                             <input
                                 type="date"
                                 value={dataSelecionada}
                                 onChange={(e) => setDataSelecionada(e.target.value)}
-                                className="pl-9 pr-4 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-xl outline-none focus:ring-2 focus:ring-blue-500/50 hover:border-slate-300 cursor-pointer shadow-sm transition-all"
-                                title="Filtrar por data"
+                                className="pl-8 pr-3 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl outline-none focus:ring-2 focus:ring-blue-500/50 shadow-sm transition-all w-[150px]"
                             />
                         </div>
 
                         <button
                             onClick={() => { setNotificationsEnabled(!notificationsEnabled); setUserInteracted(true); toast.info(notificationsEnabled ? "Som desativado" : "Som ativado"); }}
-                            className={`p-2.5 rounded-xl border transition-all ${notificationsEnabled ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}
+                            className={`p-2 rounded-xl border transition-all shrink-0 ${notificationsEnabled ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-slate-400 border-slate-200'}`}
                             title="Ativar/Desativar Som"
                         >
-                            {notificationsEnabled ? <IoNotificationsOutline size={20} /> : <IoNotificationsOffOutline size={20} />}
+                            {notificationsEnabled ? <IoNotificationsOutline size={16} /> : <IoNotificationsOffOutline size={16} />}
                         </button>
                     </div>
                 </div>
             </header>
 
-            <main className="flex-1 p-4 md:p-6 overflow-x-auto bg-slate-50">
-                <div className="flex gap-4 md:gap-5 h-full min-w-full w-max pb-4">
+            {/* 🔥 ABAS DE COLUNAS MOBILE — troca entre colunas no celular 🔥 */}
+            <div className="md:hidden flex bg-white border-b border-slate-200 overflow-x-auto no-scrollbar">
+                {colunasAtivas.map(statusKey => {
+                    const config = STATUS_UI[statusKey];
+                    const count = (pedidos[statusKey] || []).filter(p => {
+                        if (abaAtiva === 'cozinha') return p.source === 'salao' || p.tipo === 'mesa';
+                        return p.source !== 'salao' && p.tipo !== 'mesa';
+                    }).length;
+                    return (
+                        <button
+                            key={statusKey}
+                            onClick={() => setColunaMobile(statusKey)}
+                            className={`flex-1 min-w-0 flex flex-col items-center gap-0.5 py-2.5 px-2 text-center border-b-2 transition-all
+                                ${colunaMobile === statusKey 
+                                    ? 'border-slate-800 bg-slate-50' 
+                                    : 'border-transparent text-slate-400 hover:bg-slate-50'}`}
+                        >
+                            <div className="flex items-center gap-1">
+                                <span className="text-xs">{config.icon}</span>
+                                <span className={`text-[10px] font-bold ${colunaMobile === statusKey ? 'text-slate-800' : 'text-slate-400'}`}>{config.title}</span>
+                            </div>
+                            {count > 0 && (
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${config.bgBadge} ${config.textBadge}`}>{count}</span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <main className="flex-1 p-3 md:p-6 overflow-x-auto bg-slate-50">
+                <div className="flex gap-4 md:gap-5 h-full md:min-w-full md:w-max pb-4">
                     {colunasAtivas.map(statusKey => {
                         const config = STATUS_UI[statusKey];
                         
@@ -535,10 +873,14 @@ function Painel() {
                         
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
 
+                        // MOBILE: só mostra a coluna selecionada
+                        const isMobileVisible = colunaMobile === statusKey;
+
                         return (
-                            <div key={statusKey} className="flex-1 shrink-0 min-w-[320px] flex flex-col bg-slate-100/50 rounded-2xl md:rounded-3xl border border-slate-200/80 min-h-[500px] md:h-[calc(100vh-140px)] overflow-hidden shadow-sm">
+                            <div key={statusKey} className={`flex-1 shrink-0 md:min-w-[300px] flex flex-col bg-slate-100/50 rounded-2xl md:rounded-3xl border border-slate-200/80 min-h-[calc(100vh-240px)] md:h-[calc(100vh-180px)] overflow-hidden shadow-sm ${isMobileVisible ? 'flex' : 'hidden md:flex'}`}>
                                 
-                                <div className="px-5 py-4 border-b border-slate-200/80 flex justify-between items-center bg-white/40 backdrop-blur-sm">
+                                {/* Header da coluna — escondido no mobile (já tem a tab bar) */}
+                                <div className="hidden md:flex px-5 py-4 border-b border-slate-200/80 justify-between items-center bg-white/40 backdrop-blur-sm">
                                     <div className="flex items-center gap-2.5">
                                         <div className={`w-2.5 h-2.5 rounded-full ${config.dot}`}></div>
                                         <h3 className="font-bold text-slate-800 tracking-tight text-[15px]">{config.title}</h3>
@@ -550,17 +892,20 @@ function Painel() {
 
                                 <div className="flex-1 p-3 overflow-y-auto custom-scrollbar">
                                     {listaPedidos.length === 0 ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60">
-                                            <div className="text-4xl mb-2 grayscale opacity-50">{config.icon}</div>
-                                            <span className="text-sm font-medium">Nenhum pedido</span>
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                                                <span className="text-3xl">{config.icon}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-slate-500">{config.emptyTitle}</span>
+                                            <span className="text-xs text-slate-400 mt-1 text-center px-4">{config.emptyMsg}</span>
                                         </div>
                                     ) : (
                                         abaAtiva === 'cozinha' ? (
-                                            <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} />
+                                            <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} onEmitirNfce={handleNfceDoPedido} />
                                         ) : (
                                             <div className="space-y-3">
                                                 {listaPedidos.map(pedido => (
-                                                    <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} motoboysDisponiveis={motoboys} onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} />
+                                                    <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} motoboysDisponiveis={motoboys} onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} onEmitirNfce={handleNfceDoPedido} />
                                                 ))}
                                             </div>
                                         )

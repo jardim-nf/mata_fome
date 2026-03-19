@@ -1,683 +1,493 @@
-// src/pages/AdminAnalytics.jsx - PÁGINA DE PRODUTIVIDADE COMPLETA CORRIGIDA
+// src/pages/AdminAnalytics.jsx — BI AVANÇADO COM DADOS REAIS
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, onSnapshot, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { 
-    IoArrowBack, 
-    IoTrendingUp, 
-    IoAlertCircle,
-    IoRefresh,
-    IoCash,
-    IoTime,
-    IoStatsChart,
-    IoFlash,
-    IoNotifications,
-    IoBulb,
-    IoDownload,
-    IoPricetag,
-    IoRestaurant,
-    IoCart,
-    IoEye
+import {
+    IoArrowBack, IoTrendingUp, IoTrendingDown, IoAlertCircle,
+    IoCash, IoStatsChart, IoCart, IoRestaurant,
+    IoCalendarOutline, IoTimeOutline, IoCardOutline,
+    IoPodiumOutline, IoBicycle, IoStorefront
 } from 'react-icons/io5';
 
+// ── HELPERS ──
+const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+const pct = (v) => `${(v || 0).toFixed(1)}%`;
+const hojeStr = () => { const h = new Date(); return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + String(h.getDate()).padStart(2, '0'); };
+const semanaAtrasStr = () => { const d = new Date(); d.setDate(d.getDate() - 7); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+// ── KPI CARD ──
+const KpiCard = ({ titulo, valor, sub, icon: Icon, cor, variacao, loading }) => {
+    const cores = {
+        green: 'bg-emerald-50 text-emerald-600', blue: 'bg-blue-50 text-blue-600',
+        purple: 'bg-purple-50 text-purple-600', orange: 'bg-orange-50 text-orange-600'
+    };
+    return (
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+            <div className={`absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10 ${cores[cor]?.split(' ')[0]}`} />
+            <div className="flex justify-between items-start mb-2 relative z-10">
+                <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{titulo}</p>
+                    {loading ? <div className="h-8 w-24 bg-gray-100 rounded-lg animate-pulse" /> :
+                        <h3 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">{valor}</h3>}
+                </div>
+                <div className={`p-2.5 rounded-2xl shrink-0 ${cores[cor]}`}><Icon size={22} /></div>
+            </div>
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50 relative z-10">
+                {variacao !== undefined && !loading && (
+                    <span className={`flex items-center gap-0.5 text-xs font-bold ${variacao >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {variacao >= 0 ? <IoTrendingUp size={14} /> : <IoTrendingDown size={14} />}
+                        {variacao >= 0 ? '+' : ''}{variacao.toFixed(1)}%
+                    </span>
+                )}
+                <span className="text-[10px] text-gray-500 font-medium">{sub}</span>
+            </div>
+        </div>
+    );
+};
+
+// ── MINI BAR CHART (CSS PURO) ──
+const MiniBarChart = ({ dados, labelKey, valueKey, cor = 'bg-blue-500', maxAlt = 120 }) => {
+    const maxVal = Math.max(...dados.map(d => d[valueKey]), 1);
+    return (
+        <div className="flex items-end gap-1.5 sm:gap-2 w-full" style={{ height: maxAlt }}>
+            {dados.map((d, i) => {
+                const h = Math.max((d[valueKey] / maxVal) * maxAlt, 4);
+                return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                        {/* Tooltip */}
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] font-bold px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                            {fmt(d[valueKey])}
+                        </div>
+                        <div className={`w-full rounded-t-md ${cor} transition-all duration-300 group-hover:opacity-80`} style={{ height: h }} />
+                        <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 leading-none">{d[labelKey]}</span>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+// ── HORIZONTAL BAR ──
+const HBar = ({ label, valor, maxValor, formatado, cor = 'bg-blue-500', sub }) => {
+    const w = maxValor > 0 ? (valor / maxValor) * 100 : 0;
+    return (
+        <div className="flex items-center gap-3 py-2">
+            <span className="text-xs font-bold text-gray-600 w-20 sm:w-28 shrink-0 text-right">{label}</span>
+            <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${cor} transition-all duration-500`} style={{ width: `${w}%` }} />
+            </div>
+            <div className="text-right shrink-0 min-w-[70px]">
+                <span className="text-xs font-black text-gray-800">{formatado}</span>
+                {sub && <p className="text-[9px] text-gray-400">{sub}</p>}
+            </div>
+        </div>
+    );
+};
+
+// ══════════════ COMPONENTE PRINCIPAL ══════════════
 function AdminAnalytics() {
     const { userData } = useAuth();
-    
-    console.log("🔍 Debug Auth no AdminAnalytics:", {
-        userData,
-        userDataKeys: userData ? Object.keys(userData) : 'no userData',
-        estabelecimentos: userData?.estabelecimentos,
-        estabelecimentosGerenciados: userData?.estabelecimentosGerenciados
-    });
-
     const [loading, setLoading] = useState(true);
-    const [menuItems, setMenuItems] = useState([]);
-    const [orders, setOrders] = useState([]);
-    const [establishmentName, setEstablishmentName] = useState('');
 
-    // 🔧 CORREÇÃO: Busca o estabelecimento com o nome CORRETO baseado na sua estrutura
-    const primeiroEstabelecimento = useMemo(() => {
-        // Tenta na ordem: estabelecimentosCerenciados, depois estabelecimentos, depois estabelecimentosGerenciados
-        const estabelecimento =  // ✅ NOME CORRETO baseado no seu Firebase
-                               userData?.estabelecimentos?.[0] ||
-                               userData?.estabelecimentosGerenciados?.[0] ||
-                               null;
-        
-        console.log("🏪 Estabelecimento encontrado no Analytics:", estabelecimento);
-        return estabelecimento;
-    }, [userData]);
+    const [dataInicio, setDataInicio] = useState(semanaAtrasStr());
+    const [dataFim, setDataFim] = useState(hojeStr());
+    const [nomeEstab, setNomeEstab] = useState('');
 
-    // Dados de exemplo para demonstração (substituir por dados reais)
-    const [analyticsData, setAnalyticsData] = useState({
-        ticketMedio: 0,
-        itensAtivos: 0,
-        taxaConversao: 0,
-        lucratividade: 0,
-        visualizacoesTotais: 0,
-        pedidosHoje: 0
-    });
+    const [pedidosDelivery, setPedidosDelivery] = useState([]);
+    const [vendasSalao, setVendasSalao] = useState([]);
 
-    // Buscar dados do estabelecimento e itens
+    const estabId = useMemo(() =>
+        userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentos?.[0] || userData?.estabelecimentoId || null
+    , [userData]);
+
+    // ── BUSCAR NOME ──
     useEffect(() => {
-        if (!primeiroEstabelecimento) {
-            console.log("❌ Nenhum estabelecimento disponível para carregar analytics");
+        if (!estabId) return;
+        getDoc(doc(db, 'estabelecimentos', estabId)).then(snap => {
+            if (snap.exists()) setNomeEstab(snap.data().nome || '');
+        }).catch(() => {});
+    }, [estabId]);
+
+    // ── QUERIES FIREBASE ──
+    useEffect(() => {
+        if (!estabId || !dataInicio || !dataFim) return;
+        setLoading(true);
+
+        const start = new Date(`${dataInicio}T00:00:00`);
+        const end = new Date(`${dataFim}T23:59:59.999`);
+
+        const qDel = query(collection(db, 'pedidos'),
+            where('estabelecimentoId', '==', estabId),
+            where('createdAt', '>=', start), where('createdAt', '<=', end)
+        );
+        const unDel = onSnapshot(qDel, snap => setPedidosDelivery(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+        const qSal = query(collection(db, 'estabelecimentos', estabId, 'vendas'),
+            where('criadoEm', '>=', start), where('criadoEm', '<=', end)
+        );
+        const unSal = onSnapshot(qSal, snap => {
+            setVendasSalao(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             setLoading(false);
-            return;
-        }
+        });
 
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                // Buscar nome do estabelecimento
-                const estabDoc = await getDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento));
-                if (estabDoc.exists()) {
-                    setEstablishmentName(estabDoc.data().nome);
-                    console.log("🏪 Nome do estabelecimento:", estabDoc.data().nome);
-                }
+        return () => { unDel(); unSal(); };
+    }, [estabId, dataInicio, dataFim]);
 
-                // Buscar itens do cardápio
-                const categoriasRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio');
-                const categoriasSnapshot = await getDocs(categoriasRef);
-                
-                let allItems = [];
-                for (const catDoc of categoriasSnapshot.docs) {
-                    const itensRef = collection(
-                        db, 
-                        'estabelecimentos', 
-                        primeiroEstabelecimento, 
-                        'cardapio', 
-                        catDoc.id, 
-                        'itens'
-                    );
-                    const itensSnapshot = await getDocs(itensRef);
-                    const itemsDaCategoria = itensSnapshot.docs.map(itemDoc => ({
-                        ...itemDoc.data(),
-                        id: itemDoc.id,
-                        categoriaId: catDoc.id,
-                        categoria: catDoc.data().nome,
-                        // 📦 Garantir campos de estoque
-                        estoque: itemDoc.data().estoque || 0,
-                        estoqueMinimo: itemDoc.data().estoqueMinimo || 0,
-                        custo: itemDoc.data().custo || 0
-                    }));
-                    allItems = [...allItems, ...itemsDaCategoria];
-                }
+    // ── PARSE VALOR SEGURO ──
+    const parse = (v) => parseFloat(String(v || 0).replace(/[R$\s]/g, '').replace(',', '.')) || 0;
 
-                setMenuItems(allItems);
-                
-                // Calcular métricas (usando dados mockados por enquanto)
-                calcularMetricas(allItems);
+    // ── PERÍODO ANTERIOR (p/ comparativo) ──
+    const diasPeriodo = useMemo(() => {
+        const d1 = new Date(dataInicio), d2 = new Date(dataFim);
+        return Math.max(Math.round((d2 - d1) / 86400000) + 1, 1);
+    }, [dataInicio, dataFim]);
 
-            } catch (error) {
-                console.error("❌ Erro ao carregar dados:", error);
-            } finally {
-                setLoading(false);
-            }
+    // ── STATS CALCULADOS ──
+    const stats = useMemo(() => {
+        const delOk = pedidosDelivery.filter(p => p.status !== 'cancelado');
+        const salOk = vendasSalao.filter(v => v.status !== 'cancelado');
+
+        let fatDel = 0, fatSal = 0;
+        delOk.forEach(p => fatDel += parse(p.totalFinal || p.total || p.valorTotal));
+        salOk.forEach(v => fatSal += parse(v.totalFinal || v.total || v.valorTotal));
+
+        const totalPedidos = delOk.length + salOk.length;
+        const fatTotal = fatDel + fatSal;
+        const ticketMedio = totalPedidos > 0 ? fatTotal / totalPedidos : 0;
+
+        // Formas de pagamento
+        const formas = {};
+        [...delOk, ...salOk].forEach(p => {
+            let fp = p.formaPagamento || p.forma_pagamento || p.paymentMethod || 'outro';
+            fp = fp.toLowerCase().replace(/[áàã]/g, 'a').replace(/[éèê]/g, 'e').replace(/[íì]/g, 'i');
+            if (fp.includes('pix')) fp = 'PIX';
+            else if (fp.includes('cred') || fp === 'credit_card') fp = 'Crédito';
+            else if (fp.includes('deb') || fp === 'debit_card') fp = 'Débito';
+            else if (fp.includes('dinh') || fp === 'cash') fp = 'Dinheiro';
+            else fp = fp.charAt(0).toUpperCase() + fp.slice(1);
+
+            if (!formas[fp]) formas[fp] = { qtd: 0, valor: 0 };
+            formas[fp].qtd++;
+            formas[fp].valor += parse(p.totalFinal || p.total || p.valorTotal);
+        });
+
+        // Horário de pico
+        const horas = Array.from({ length: 24 }, (_, i) => ({ hora: i, qtd: 0 }));
+        [...delOk, ...salOk].forEach(p => {
+            const ts = p.createdAt || p.criadoEm;
+            if (!ts) return;
+            const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
+            horas[d.getHours()].qtd++;
+        });
+
+        // Faturamento por dia
+        const porDia = {};
+        const processaDia = (lista, campoData) => {
+            lista.forEach(p => {
+                const ts = p[campoData];
+                if (!ts) return;
+                const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
+                const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                if (!porDia[key]) porDia[key] = 0;
+                porDia[key] += parse(p.totalFinal || p.total || p.valorTotal);
+            });
         };
+        processaDia(delOk, 'createdAt');
+        processaDia(salOk, 'criadoEm');
 
-        fetchData();
-    }, [primeiroEstabelecimento]);
-
-    // Função para calcular métricas (mock data para demonstração)
-    const calcularMetricas = (items) => {
-        const totalItems = items.length;
-        const itensAtivos = items.filter(item => item.ativo).length;
-        const itensComEstoqueCritico = items.filter(item => item.estoque <= (item.estoqueMinimo || 0)).length;
-        
-        // Dados mockados para demonstração
-        setAnalyticsData({
-            ticketMedio: 45.90,
-            itensAtivos: Math.round((itensAtivos / totalItems) * 100),
-            taxaConversao: 12.5,
-            lucratividade: 68.2,
-            visualizacoesTotais: 1247,
-            pedidosHoje: 23,
-            itensEstoqueCritico: itensComEstoqueCritico
-        });
-    };
-
-    // Itens mais rentáveis
-    const itensMaisRentaveis = useMemo(() => {
-        return [...menuItems]
-            .filter(item => item.ativo && item.preco)
+        // Ordenar por data
+        const diasChart = Object.entries(porDia)
+            .map(([dia, valor]) => ({ dia, valor }))
             .sort((a, b) => {
-                const margemA = a.preco - (a.custo || 0);
-                const margemB = b.preco - (b.custo || 0);
-                return margemB - margemA;
-            })
-            .slice(0, 5);
-    }, [menuItems]);
-
-    // Itens com estoque crítico
-    const itensEstoqueCritico = useMemo(() => {
-        return menuItems.filter(item => item.estoque <= (item.estoqueMinimo || 0)).slice(0, 3);
-    }, [menuItems]);
-
-    // Alertas inteligentes
-    const alertas = useMemo(() => {
-        const alerts = [];
-        
-        // Estoque crítico
-        if (itensEstoqueCritico.length > 0) {
-            alerts.push({
-                tipo: 'estoque',
-                titulo: 'Estoque crítico',
-                descricao: `${itensEstoqueCritico.length} itens com estoque abaixo do mínimo`,
-                prioridade: 'alta',
-                acao: 'Reabastecer',
-                quantidade: itensEstoqueCritico.length
+                const [dA, mA] = a.dia.split('/').map(Number);
+                const [dB, mB] = b.dia.split('/').map(Number);
+                return mA !== mB ? mA - mB : dA - dB;
             });
-        }
 
-        // Itens inativos
-        const itensInativos = menuItems.filter(item => !item.ativo);
-        if (itensInativos.length > 3) {
-            alerts.push({
-                tipo: 'performance',
-                titulo: 'Itens inativos',
-                descricao: `${itensInativos.length} itens desativados no cardápio`,
-                prioridade: 'media',
-                acao: 'Revisar',
-                quantidade: itensInativos.length
+        // Top produtos
+        const produtos = {};
+        const extrairItens = (lista) => {
+            lista.forEach(p => {
+                (p.itens || p.items || []).forEach(item => {
+                    const nome = item.nome || item.name || 'Sem nome';
+                    const qtd = item.quantidade || item.quantity || item.qtd || 1;
+                    const val = parse(item.precoUnitario || item.preco || item.valor || item.price) * qtd;
+                    if (!produtos[nome]) produtos[nome] = { nome, qtd: 0, valor: 0 };
+                    produtos[nome].qtd += qtd;
+                    produtos[nome].valor += val;
+                });
             });
-        }
+        };
+        extrairItens(delOk);
+        extrairItens(salOk);
 
-        // Itens sem custo definido
-        const itensSemCusto = menuItems.filter(item => !item.custo || item.custo === 0);
-        if (itensSemCusto.length > 2) {
-            alerts.push({
-                tipo: 'preco',
-                titulo: 'Custos indefinidos',
-                descricao: `${itensSemCusto.length} itens sem custo definido`,
-                prioridade: 'media',
-                acao: 'Definir custos',
-                quantidade: itensSemCusto.length
-            });
-        }
+        const topProdutos = Object.values(produtos).sort((a, b) => b.qtd - a.qtd).slice(0, 10);
 
-        // Itens com baixa margem
-        const itensBaixaMargem = menuItems.filter(item => {
-            if (!item.preco || !item.custo || item.custo === 0) return false;
-            const margem = ((item.preco - item.custo) / item.preco) * 100;
-            return margem < 30;
-        });
-        
-        if (itensBaixaMargem.length > 2) {
-            alerts.push({
-                tipo: 'lucratividade',
-                titulo: 'Margens baixas',
-                descricao: `${itensBaixaMargem.length} itens com margem abaixo de 30%`,
-                prioridade: 'baixa',
-                acao: 'Revisar preços',
-                quantidade: itensBaixaMargem.length
-            });
-        }
+        return {
+            fatTotal, fatDel, fatSal, totalPedidos,
+            qtdDel: delOk.length, qtdSal: salOk.length,
+            ticketMedio, formas, horas, diasChart, topProdutos,
+            ticketDel: delOk.length > 0 ? fatDel / delOk.length : 0,
+            ticketSal: salOk.length > 0 ? fatSal / salOk.length : 0,
+        };
+    }, [pedidosDelivery, vendasSalao]);
 
-        return alerts;
-    }, [menuItems, itensEstoqueCritico]);
+    // ── FORMAS DE PAGAMENTO ORDENADAS ──
+    const formasOrdenadas = useMemo(() =>
+        Object.entries(stats.formas).map(([nome, d]) => ({ nome, ...d })).sort((a, b) => b.valor - a.valor)
+    , [stats.formas]);
 
-    // Insights automáticos
-    const insights = useMemo(() => {
-        const insightsList = [];
-        
-        // Insight baseado em itens mais rentáveis
-        if (itensMaisRentaveis.length > 0) {
-            const itemTop = itensMaisRentaveis[0];
-            insightsList.push({
-                tipo: 'rentabilidade',
-                titulo: 'Item mais rentável',
-                descricao: `${itemTop.nome} tem a maior margem de lucro do cardápio`,
-                icone: '💰'
-            });
-        }
+    const maxFormaValor = formasOrdenadas.length > 0 ? formasOrdenadas[0].valor : 1;
 
-        // Insight baseado em estoque
-        if (itensEstoqueCritico.length > 0) {
-            insightsList.push({
-                tipo: 'estoque',
-                titulo: 'Atenção ao estoque',
-                descricao: `${itensEstoqueCritico.length} itens precisam de reabastecimento urgente`,
-                icone: '⚠️'
-            });
-        }
+    // ── HORÁRIO DE PICO (top 3) ──
+    const horasComDados = useMemo(() => {
+        const comDados = stats.horas.filter(h => h.qtd > 0);
+        const sorted = [...comDados].sort((a, b) => b.qtd - a.qtd);
+        const top3 = new Set(sorted.slice(0, 3).map(h => h.hora));
+        return { horas: comDados.length > 0 ? stats.horas : [], top3, maxQtd: sorted[0]?.qtd || 1 };
+    }, [stats.horas]);
 
-        // Insight baseado em categorias
-        const categoriasCount = {};
-        menuItems.forEach(item => {
-            if (item.categoria) {
-                categoriasCount[item.categoria] = (categoriasCount[item.categoria] || 0) + 1;
-            }
-        });
-        
-        const categoriaMaisItens = Object.keys(categoriasCount).reduce((a, b) => 
-            categoriasCount[a] > categoriasCount[b] ? a : b, ''
-        );
-        
-        if (categoriaMaisItens) {
-            insightsList.push({
-                tipo: 'categoria',
-                titulo: 'Categoria principal',
-                descricao: `${categoriaMaisItens} é sua categoria com mais itens (${categoriasCount[categoriaMaisItens]})`,
-                icone: '📊'
-            });
-        }
-
-        return insightsList;
-    }, [menuItems, itensMaisRentaveis, itensEstoqueCritico]);
-
-    // Quick actions
-    const quickActions = [
-        {
-            icone: <IoRefresh className="text-blue-600" />,
-            titulo: 'Reabastecer Estoques',
-            descricao: 'Repor itens com estoque baixo',
-            acao: () => console.log('Reabastecer estoques'),
-            cor: 'blue',
-            rota: '/admin/gerenciar-cardapio'
-        },
-        {
-            icone: <IoPricetag className="text-green-600" />,
-            titulo: 'Otimizar Preços',
-            descricao: 'Ajustar preços baseado na performance',
-            acao: () => console.log('Otimizar preços'),
-            cor: 'green',
-            rota: '/admin/gerenciar-cardapio'
-        },
-        {
-            icone: <IoFlash className="text-yellow-600" />,
-            titulo: 'Promover Itens',
-            descricao: 'Destacar produtos com baixa performance',
-            acao: () => console.log('Promover itens'),
-            cor: 'yellow',
-            rota: '/admin/gerenciar-cardapio'
-        },
-        {
-            icone: <IoDownload className="text-purple-600" />,
-            titulo: 'Gerar Relatório',
-            descricao: 'Exportar relatório completo',
-            acao: () => console.log('Gerar relatório'),
-            cor: 'purple',
-            rota: '#'
-        }
-    ];
-
-    // 🔧 CORREÇÃO: Se não há estabelecimento, mostra mensagem
-    if (!primeiroEstabelecimento) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <IoAlertCircle className="text-red-600 text-2xl" />
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">
-                        Estabelecimento Não Configurado
-                    </h2>
-                    <p className="text-gray-600 mb-6">
-                        Este usuário não tem um estabelecimento vinculado. 
-                        Entre em contato com o administrador do sistema.
-                    </p>
-                    <div className="space-y-3">
-                        <Link 
-                            to="/dashboard" 
-                            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors w-full"
-                        >
-                            <IoArrowBack />
-                            <span>Voltar ao Dashboard</span>
-                        </Link>
-                    </div>
-                </div>
+    // ── LOADING / SEM ESTAB ──
+    if (!estabId) return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-sm border p-8 max-w-md text-center">
+                <IoAlertCircle className="text-red-500 text-4xl mx-auto mb-3" />
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Sem Estabelecimento</h2>
+                <p className="text-gray-600 mb-4">Nenhum estabelecimento vinculado.</p>
+                <Link to="/admin-dashboard" className="inline-flex items-center gap-2 bg-blue-600 text-white font-bold py-3 px-6 rounded-xl"><IoArrowBack /> Voltar</Link>
             </div>
-        );
-    }
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Carregando analytics...</p>
-                </div>
-            </div>
-        );
-    }
+        </div>
+    );
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
-                    <div className="mb-4 lg:mb-0">
-                        <div className="flex items-center space-x-3 mb-2">
-                            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                                <IoStatsChart className="text-white text-lg" />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-bold text-gray-900">
-                                    Painel de Produtividade
-                                </h1>
-                                <p className="text-gray-600">
-                                    {establishmentName} • Insights e otimizações
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                    Estabelecimento ID: {primeiroEstabelecimento}
-                                </p>
-                            </div>
+        <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-6 font-sans pb-20">
+            <div className="max-w-[1400px] mx-auto space-y-6">
+
+                {/* ═══ HEADER ═══ */}
+                <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Link to="/admin-dashboard" className="p-2.5 rounded-xl hover:bg-white text-gray-600 border border-gray-200 transition-colors bg-white shadow-sm">
+                            <IoArrowBack size={18} />
+                        </Link>
+                        <div>
+                            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Relatórios & BI</h1>
+                            <p className="text-xs text-gray-500 font-medium">{nomeEstab || 'Carregando...'} • Dados em tempo real</p>
                         </div>
                     </div>
-                    
-                    <div className="flex w-full gap-3">
-                        <Link 
-                            to="/admin/gerenciar-cardapio" 
-                            className="inline-flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
-                        >
-                            <IoArrowBack />
-                            <span>Voltar ao Cardápio</span>
-                        </Link>
-                        <button className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors">
-                            <IoDownload size={18} />
-                            <span>Exportar Relatório</span>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                            <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">De</span>
+                            <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none" />
+                        </div>
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                            <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">Até</span>
+                            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none" />
+                        </div>
+                        <button onClick={() => { setDataInicio(hojeStr()); setDataFim(hojeStr()); }}
+                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 shadow-sm transition-all">
+                            Hoje
+                        </button>
+                        <button onClick={() => { setDataInicio(semanaAtrasStr()); setDataFim(hojeStr()); }}
+                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 shadow-sm transition-all">
+                            7 dias
+                        </button>
+                        <button onClick={() => { const d = new Date(); d.setDate(d.getDate() - 30); setDataInicio(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')); setDataFim(hojeStr()); }}
+                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 shadow-sm transition-all">
+                            30 dias
                         </button>
                     </div>
                 </header>
 
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Ticket Médio</p>
-                                <p className="text-2xl font-bold text-gray-900">R$ {analyticsData.ticketMedio.toFixed(2)}</p>
-                                <div className="flex items-center mt-1">
-                                    <IoTrendingUp className="text-green-500 mr-1" />
-                                    <span className="text-sm text-green-600">+5.2%</span>
-                                </div>
-                            </div>
-                            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                                <IoCash className="text-green-600 text-xl" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Itens Ativos</p>
-                                <p className="text-2xl font-bold text-gray-900">{analyticsData.itensAtivos}%</p>
-                                <div className="flex items-center mt-1">
-                                    <IoTrendingUp className="text-blue-500 mr-1" />
-                                    <span className="text-sm text-blue-600">+2.1%</span>
-                                </div>
-                            </div>
-                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                <IoRestaurant className="text-blue-600 text-xl" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Taxa de Conversão</p>
-                                <p className="text-2xl font-bold text-gray-900">{analyticsData.taxaConversao}%</p>
-                                <div className="flex items-center mt-1">
-                                    <IoTrendingUp className="text-purple-500 mr-1" />
-                                    <span className="text-sm text-purple-600">+1.8%</span>
-                                </div>
-                            </div>
-                            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                                <IoCart className="text-purple-600 text-xl" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Lucratividade</p>
-                                <p className="text-2xl font-bold text-gray-900">{analyticsData.lucratividade}%</p>
-                                <div className="flex items-center mt-1">
-                                    <IoTrendingUp className="text-orange-500 mr-1" />
-                                    <span className="text-sm text-orange-600">+3.4%</span>
-                                </div>
-                            </div>
-                            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                                <IoStatsChart className="text-orange-600 text-xl" />
-                            </div>
-                        </div>
-                    </div>
+                {/* ═══ KPIs ═══ */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+                    <KpiCard titulo="Faturamento" valor={fmt(stats.fatTotal)} sub={`${stats.totalPedidos} pedidos`} icon={IoCash} cor="green" loading={loading} />
+                    <KpiCard titulo="Ticket Médio" valor={fmt(stats.ticketMedio)} sub="por pedido" icon={IoStatsChart} cor="purple" loading={loading} />
+                    <KpiCard titulo="Delivery" valor={fmt(stats.fatDel)} sub={`${stats.qtdDel} pedidos`} icon={IoCart} cor="blue" loading={loading} />
+                    <KpiCard titulo="Salão" valor={fmt(stats.fatSal)} sub={`${stats.qtdSal} vendas`} icon={IoRestaurant} cor="orange" loading={loading} />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                    {/* Quick Actions */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                                <IoFlash className="mr-2 text-yellow-500" />
-                                Ações Rápidas
+                {/* ═══ GRÁFICO FATURAMENTO POR DIA ═══ */}
+                {!loading && stats.diasChart.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2">
+                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><IoStatsChart size={18} /></div>
+                                Faturamento por Dia
                             </h2>
-                            <div className="space-y-3">
-                                {quickActions.map((action, index) => (
-                                    <Link
-                                        key={index}
-                                        to={action.rota}
-                                        className={`w-full flex items-center space-x-3 p-4 rounded-xl border transition-all hover:shadow-md ${
-                                            action.cor === 'blue' ? 'border-blue-200 hover:border-blue-300' :
-                                            action.cor === 'green' ? 'border-green-200 hover:border-green-300' :
-                                            action.cor === 'yellow' ? 'border-yellow-200 hover:border-yellow-300' :
-                                            'border-purple-200 hover:border-purple-300'
-                                        }`}
-                                    >
-                                        <div className="flex-shrink-0">
-                                            {action.icone}
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="font-semibold text-gray-900">{action.titulo}</p>
-                                            <p className="text-sm text-gray-600">{action.descricao}</p>
-                                        </div>
-                                    </Link>
-                                ))}
-                            </div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">{stats.diasChart.length} dias</span>
                         </div>
+                        <MiniBarChart dados={stats.diasChart} labelKey="dia" valueKey="valor" cor="bg-blue-500" maxAlt={130} />
                     </div>
+                )}
 
-                    {/* Alertas Inteligentes */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                                <IoNotifications className="mr-2 text-red-500" />
-                                Alertas Inteligentes
+                {/* ═══ GRID: HORÁRIO DE PICO + FORMAS DE PAGAMENTO ═══ */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                    {/* HORÁRIO DE PICO */}
+                    {!loading && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2 mb-5">
+                                <div className="p-2 bg-orange-50 text-orange-600 rounded-xl"><IoTimeOutline size={18} /></div>
+                                Horário de Pico
                             </h2>
-                            <div className="space-y-4">
-                                {alertas.length > 0 ? (
-                                    alertas.map((alerta, index) => (
-                                        <div key={index} className={`flex items-start space-x-3 p-4 rounded-xl border ${
-                                            alerta.prioridade === 'alta' ? 'border-red-200 bg-red-50' :
-                                            alerta.prioridade === 'media' ? 'border-yellow-200 bg-yellow-50' :
-                                            'border-blue-200 bg-blue-50'
-                                        }`}>
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                                alerta.prioridade === 'alta' ? 'bg-red-100' :
-                                                alerta.prioridade === 'media' ? 'bg-yellow-100' :
-                                                'bg-blue-100'
-                                            }`}>
-                                                <IoAlertCircle className={
-                                                    alerta.prioridade === 'alta' ? 'text-red-600' :
-                                                    alerta.prioridade === 'media' ? 'text-yellow-600' :
-                                                    'text-blue-600'
-                                                } />
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="flex items-center justify-between">
-                                                    <h3 className="font-semibold text-gray-900">{alerta.titulo}</h3>
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                        alerta.prioridade === 'alta' ? 'bg-red-100 text-red-800' :
-                                                        alerta.prioridade === 'media' ? 'bg-yellow-100 text-yellow-800' :
-                                                        'bg-blue-100 text-blue-800'
-                                                    }`}>
-                                                        {alerta.prioridade === 'alta' ? 'Alta' : 
-                                                         alerta.prioridade === 'media' ? 'Média' : 'Baixa'}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-gray-600 mt-1">{alerta.descricao}</p>
-                                                <Link 
-                                                    to="/admin/gerenciar-cardapio" 
-                                                    className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700 inline-block"
-                                                >
-                                                    {alerta.acao} →
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-8">
-                                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <IoCheckmarkCircle className="text-green-600 text-2xl" />
-                                        </div>
-                                        <p className="text-gray-600">Todos os sistemas operando normalmente</p>
-                                        <p className="text-sm text-gray-500 mt-1">Sem alertas críticos no momento</p>
-                                    </div>
+                            <div className="space-y-1">
+                                {stats.horas.filter(h => h.qtd > 0).sort((a, b) => b.qtd - a.qtd).slice(0, 8).map(h => (
+                                    <HBar
+                                        key={h.hora}
+                                        label={`${String(h.hora).padStart(2, '0')}:00`}
+                                        valor={h.qtd}
+                                        maxValor={horasComDados.maxQtd}
+                                        formatado={`${h.qtd} pedidos`}
+                                        cor={horasComDados.top3.has(h.hora) ? 'bg-orange-500' : 'bg-orange-200'}
+                                    />
+                                ))}
+                                {stats.horas.every(h => h.qtd === 0) && (
+                                    <p className="text-center text-gray-400 text-sm py-8">Sem dados de horário</p>
                                 )}
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* FORMAS DE PAGAMENTO */}
+                    {!loading && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2 mb-5">
+                                <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><IoCardOutline size={18} /></div>
+                                Formas de Pagamento
+                            </h2>
+                            <div className="space-y-1">
+                                {formasOrdenadas.map(f => (
+                                    <HBar
+                                        key={f.nome}
+                                        label={f.nome}
+                                        valor={f.valor}
+                                        maxValor={maxFormaValor}
+                                        formatado={fmt(f.valor)}
+                                        sub={`${f.qtd} pedidos`}
+                                        cor={f.nome === 'PIX' ? 'bg-emerald-500' : f.nome === 'Crédito' ? 'bg-blue-500' : f.nome === 'Débito' ? 'bg-purple-500' : f.nome === 'Dinheiro' ? 'bg-amber-500' : 'bg-gray-400'}
+                                    />
+                                ))}
+                                {formasOrdenadas.length === 0 && (
+                                    <p className="text-center text-gray-400 text-sm py-8">Sem dados de pagamento</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Itens Mais Rentáveis */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                            <IoTrendingUp className="mr-2 text-green-500" />
-                            Itens Mais Rentáveis
-                        </h2>
-                        <div className="space-y-3">
-                            {itensMaisRentaveis.length > 0 ? (
-                                itensMaisRentaveis.map((item, index) => {
-                                    const margem = item.custo ? ((item.preco - item.custo) / item.preco) * 100 : 0;
-                                    const lucroPorUnidade = item.preco - (item.custo || 0);
-                                    
+                {/* ═══ GRID: TOP PRODUTOS + DELIVERY vs SALÃO ═══ */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                    {/* TOP 10 PRODUTOS */}
+                    {!loading && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2 mb-5">
+                                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><IoPodiumOutline size={18} /></div>
+                                Top 10 Mais Vendidos
+                            </h2>
+                            <div className="space-y-2.5">
+                                {stats.topProdutos.length > 0 ? stats.topProdutos.map((prod, i) => {
+                                    const maxQtd = stats.topProdutos[0].qtd;
+                                    const w = (prod.qtd / maxQtd) * 100;
                                     return (
-                                        <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                                                    <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                                        <div key={prod.nome} className="flex items-center gap-3">
+                                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${i < 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                {i + 1}
+                                            </span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <span className="text-xs font-bold text-gray-800 truncate">{prod.nome}</span>
+                                                    <span className="text-[10px] font-black text-gray-500 shrink-0 ml-2">{prod.qtd}x</span>
                                                 </div>
-                                                <div>
-                                                    <p className="font-medium text-gray-900">{item.nome}</p>
-                                                    <p className="text-sm text-gray-600">{item.categoria}</p>
+                                                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${w}%` }} />
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="font-bold text-gray-900">R$ {item.preco?.toFixed(2)}</p>
-                                                <p className="text-sm text-green-600">
-                                                    {margem > 0 ? `+${margem.toFixed(1)}%` : 'Margem indefinida'}
-                                                </p>
-                                                {lucroPorUnidade > 0 && (
-                                                    <p className="text-xs text-gray-500">
-                                                        Lucro: R$ {lucroPorUnidade.toFixed(2)}
-                                                    </p>
-                                                )}
-                                            </div>
+                                            <span className="text-[10px] font-black text-gray-600 shrink-0 w-16 text-right">{fmt(prod.valor)}</span>
                                         </div>
                                     );
-                                })
-                            ) : (
-                                <div className="text-center py-8">
-                                    <p className="text-gray-600">Nenhum item rentável encontrado</p>
-                                    <p className="text-sm text-gray-500 mt-1">Adicione custos aos itens para calcular margens</p>
-                                </div>
-                            )}
+                                }) : (
+                                    <p className="text-center text-gray-400 text-sm py-8">Sem dados de produtos</p>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
-                    {/* Insights Automáticos */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                            <IoBulb className="mr-2 text-yellow-500" />
-                            Insights Automáticos
-                        </h2>
-                        <div className="space-y-4">
-                            {insights.length > 0 ? (
-                                insights.map((insight, index) => (
-                                    <div key={index} className="flex items-start space-x-3 p-4 rounded-xl border border-gray-200 hover:border-blue-200 transition-colors">
-                                        <div className="text-2xl">{insight.icone}</div>
+                    {/* DELIVERY vs SALÃO */}
+                    {!loading && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2 mb-5">
+                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><IoStorefront size={18} /></div>
+                                Delivery vs Salão
+                            </h2>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                {/* DELIVERY */}
+                                <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="p-2 bg-blue-100 text-blue-600 rounded-xl"><IoBicycle size={16} /></div>
+                                        <span className="text-xs font-black text-blue-800">Delivery</span>
+                                    </div>
+                                    <div className="space-y-3">
                                         <div>
-                                            <h3 className="font-semibold text-gray-900">{insight.titulo}</h3>
-                                            <p className="text-sm text-gray-600 mt-1">{insight.descricao}</p>
-                                            <Link 
-                                                to="/admin/gerenciar-cardapio" 
-                                                className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700 inline-block"
-                                            >
-                                                Ver detalhes →
-                                            </Link>
+                                            <p className="text-[9px] font-bold text-blue-400 uppercase">Faturamento</p>
+                                            <p className="text-lg font-black text-blue-900">{fmt(stats.fatDel)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-bold text-blue-400 uppercase">Pedidos</p>
+                                            <p className="text-lg font-black text-blue-900">{stats.qtdDel}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-bold text-blue-400 uppercase">Ticket Médio</p>
+                                            <p className="text-lg font-black text-blue-900">{fmt(stats.ticketDel)}</p>
                                         </div>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="text-center py-8">
-                                    <p className="text-gray-600">Gerando insights...</p>
-                                    <p className="text-sm text-gray-500 mt-1">Analisando dados do cardápio</p>
+                                </div>
+
+                                {/* SALÃO */}
+                                <div className="bg-orange-50/50 rounded-2xl p-4 border border-orange-100">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="p-2 bg-orange-100 text-orange-600 rounded-xl"><IoRestaurant size={16} /></div>
+                                        <span className="text-xs font-black text-orange-800">Salão</span>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <p className="text-[9px] font-bold text-orange-400 uppercase">Faturamento</p>
+                                            <p className="text-lg font-black text-orange-900">{fmt(stats.fatSal)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-bold text-orange-400 uppercase">Vendas</p>
+                                            <p className="text-lg font-black text-orange-900">{stats.qtdSal}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-bold text-orange-400 uppercase">Ticket Médio</p>
+                                            <p className="text-lg font-black text-orange-900">{fmt(stats.ticketSal)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* BARRA COMPARATIVA */}
+                            {stats.totalPedidos > 0 && (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase mb-2">Proporção do faturamento</p>
+                                    <div className="flex h-3 rounded-full overflow-hidden">
+                                        <div className="bg-blue-500 transition-all duration-500" style={{ width: `${stats.fatTotal > 0 ? (stats.fatDel / stats.fatTotal * 100) : 50}%` }} />
+                                        <div className="bg-orange-500 transition-all duration-500" style={{ width: `${stats.fatTotal > 0 ? (stats.fatSal / stats.fatTotal * 100) : 50}%` }} />
+                                    </div>
+                                    <div className="flex justify-between mt-1">
+                                        <span className="text-[10px] font-bold text-blue-600">{stats.fatTotal > 0 ? pct(stats.fatDel / stats.fatTotal * 100) : '0%'} Delivery</span>
+                                        <span className="text-[10px] font-bold text-orange-600">{stats.fatTotal > 0 ? pct(stats.fatSal / stats.fatTotal * 100) : '0%'} Salão</span>
+                                    </div>
                                 </div>
                             )}
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Métricas Adicionais */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Performance Geral</h3>
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Total de itens</span>
-                                <span className="font-bold text-gray-900">{menuItems.length}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Itens ativos</span>
-                                <span className="font-bold text-green-600">
-                                    {menuItems.filter(item => item.ativo).length}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Estoque crítico</span>
-                                <span className="font-bold text-red-600">
-                                    {itensEstoqueCritico.length}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Pedidos hoje</span>
-                                <span className="font-bold text-gray-900">{analyticsData.pedidosHoje}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Próximos Passos</h3>
-                        <div className="space-y-3">
-                            {itensEstoqueCritico.length > 0 && (
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                    <span className="text-gray-700">Reabastecer {itensEstoqueCritico.length} itens com estoque crítico</span>
-                                </div>
-                            )}
-                            <div className="flex items-center space-x-3">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span className="text-gray-700">Revisar preços dos {Math.min(5, itensMaisRentaveis.length)} itens mais rentáveis</span>
-                            </div>
-                            <div className="flex items-center space-x-3">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-gray-700">Ativar itens inativos para aumentar variedade</span>
-                            </div>
-                            {menuItems.filter(item => !item.custo || item.custo === 0).length > 0 && (
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                                    <span className="text-gray-700">Definir custos para {menuItems.filter(item => !item.custo || item.custo === 0).length} itens</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     );

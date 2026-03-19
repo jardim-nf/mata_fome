@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { 
     IoPerson, IoTrash, IoArrowForward, IoCheckmarkCircle, IoPrint,
-    IoLogoWhatsapp, IoBicycle, IoAlertCircle, IoTime, IoRestaurant, IoFlag
+    IoLogoWhatsapp, IoBicycle, IoAlertCircle, IoTime, IoRestaurant, IoFlag,
+    IoReceiptOutline
 } from "react-icons/io5";
 import { useAuth } from '../context/AuthContext'; 
 
@@ -15,7 +16,8 @@ const PedidoCard = ({
     isAgrupado = false,
     estabelecimentoInfo = null,
     motoboysDisponiveis = [], 
-    onAtribuirMotoboy         
+    onAtribuirMotoboy,
+    onEmitirNfce
 }) => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -243,8 +245,14 @@ const PedidoCard = ({
     const showMotoboySelect = item.status === 'preparo' && item.tipo !== 'salao' && item.tipo !== 'mesa';
 
     return (
-        <div className={`relative bg-white rounded-xl transition-all duration-200 w-full border shadow-sm ${isNew ? 'ring-2 ring-red-400 border-red-200 animate-pulse' : 'border-gray-200'} ${item.status === 'finalizado' ? 'opacity-75' : ''}`}>
+        <div className={`relative bg-white rounded-xl transition-all duration-200 w-full border shadow-sm ${isNew ? 'ring-2 ring-red-500 border-red-300 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-[pulse_1.5s_ease-in-out_infinite]' : 'border-gray-200'} ${item.status === 'finalizado' ? 'opacity-75' : ''}`}>
             
+            {/* BADGE NOVO */}
+            {isNew && (
+                <div className="absolute -top-2 -right-2 z-10 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg animate-bounce">
+                    NOVO
+                </div>
+            )}
             {/* HEADER */}
             <div className={`px-4 py-3 ${showMesaInfo && !isAgrupado ? 'bg-gray-50' : 'bg-white'} border-b border-gray-100 rounded-t-xl`}>
                 <div className="flex justify-between items-start">
@@ -295,10 +303,10 @@ const PedidoCard = ({
                     </span>
                 </div>
 
-                {/* 🔥 EXIBIÇÃO DE TEMPOS DE ETAPA */}
-                {temposEtapa.length > 0 && (
+                {/* 🔥 EXIBIÇÃO DE TEMPOS DE ETAPA (só mostra > 0) */}
+                {temposEtapa.filter(t => t.val > 0).length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                        {temposEtapa.map((tempo, i) => (
+                        {temposEtapa.filter(t => t.val > 0).map((tempo, i) => (
                             <div key={i} className={`flex items-center gap-1 text-[10px] font-medium ${tempo.color} bg-white px-2 py-1 rounded border border-gray-200 shadow-sm`}>
                                 {tempo.icon}
                                 <span>{tempo.label}: {tempo.val}min</span>
@@ -424,9 +432,21 @@ const PedidoCard = ({
                             )}
                         </button>
                     ) : (
-                        <div className="flex-1 min-h-[40px] flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-bold text-sm rounded-lg border">
-                            <IoCheckmarkCircle className="text-green-500"/> Concluído
-                        </div>
+                        <>
+                            <div className="flex-1 min-h-[40px] flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-bold text-sm rounded-lg border">
+                                <IoCheckmarkCircle className="text-green-500"/> Concluído
+                            </div>
+                            {/* 🧾 BOTÃO NFC-e — INLINE AO LADO DO CONCLUÍDO */}
+                            {onEmitirNfce && ['credit_card', 'debit_card', 'pix', 'credito', 'débito', 'debito', 'crédito'].includes(item.formaPagamento?.toLowerCase()) && (
+                                <button
+                                    onClick={() => onEmitirNfce(item)}
+                                    className="flex-1 min-h-[40px] flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-lg shadow-sm transition-all active:scale-95"
+                                    title="Emitir NFC-e para este pedido"
+                                >
+                                    <IoReceiptOutline className="text-lg" /> NFCe
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
                 

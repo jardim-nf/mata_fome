@@ -16,7 +16,7 @@ import {
     IoArrowBack, IoAdd,
     IoGrid, IoPeople, IoWalletOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTimeOutline, IoReceiptOutline // 🔥 ÍCONE ADICIONADO PARA O BOTÃO DE NOTAS
+    IoTimeOutline, IoReceiptOutline, IoChevronDown, IoChevronUp, IoTrendingUp
 } from "react-icons/io5";
 
 // 🔥 IMPORTS PARA O FISCAL E HISTÓRICO 🔥
@@ -34,13 +34,13 @@ const formatarReal = (valor) => {
 };
 
 // --- STAT CARD PEQUENO ---
-const StatCard = ({ icon: Icon, label, value, colorClass, bgClass }) => (
-    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[140px] flex-1 lg:flex-none">
-        <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
-            <h3 className="text-base font-black text-gray-900 leading-tight">{value}</h3>
+const StatCard = ({ icon: Icon, label, value, colorClass, bgClass, children }) => (
+    <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[120px] sm:min-w-[140px] flex-1 lg:flex-none gap-2">
+        <div className="min-w-0">
+            <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
+            {children || <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight truncate">{value}</h3>}
         </div>
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${bgClass} ${colorClass}`}>
+        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-lg sm:text-xl shrink-0 ${bgClass} ${colorClass}`}>
             <Icon />
         </div>
     </div>
@@ -110,16 +110,30 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) =
     );
 };
 
-const LegendaCores = () => (
-    <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-2xl shadow-sm border border-gray-200 mb-4 text-xs font-bold text-gray-700 w-full">
-        <span className="text-gray-400 uppercase tracking-widest mr-2 text-[10px]">Cores:</span>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-white border-2 border-gray-300"></div> Livre</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-600 shadow-sm"></div> Ocupada</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm"></div> Com Pedido</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-yellow-400 shadow-sm"></div> Pagamento</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm animate-pulse"></div> Ociosa</div>
-    </div>
-);
+// --- LEGENDA DE CORES COLAPSÁVEL ---
+const LegendaCores = () => {
+    const [aberta, setAberta] = React.useState(false);
+    return (
+        <div className="mb-3">
+            <button 
+                onClick={() => setAberta(!aberta)}
+                className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors px-1 py-1"
+            >
+                {aberta ? <IoChevronUp size={14} /> : <IoChevronDown size={14} />}
+                Legenda de cores
+            </button>
+            {aberta && (
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4 bg-white p-2.5 sm:p-3 rounded-2xl shadow-sm border border-gray-200 mt-1.5 text-xs font-bold text-gray-700 animate-[fadeIn_0.2s_ease-out]">
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-white border-2 border-gray-300"></div> Livre</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-600 shadow-sm"></div> Ocupada</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm"></div> Com Pedido</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-yellow-400 shadow-sm"></div> Pagamento</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm animate-pulse"></div> Ociosa</div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 export default function ControleSalao() {
     const { userData, user, currentUser } = useAuth();
@@ -650,24 +664,38 @@ const handlePagamentoConcluido = (vendaFinalizada) => {
                         </div>
                     </div>
 
-                    <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:justify-center">
-                        <StatCard icon={IoGrid} label="Ocupação" value={`${stats.ocupacaoPercent}%`} bgClass="bg-blue-50" colorClass="text-blue-600" />
+                    <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:justify-center">
+                        {/* BARRA DE OCUPAÇÃO VISUAL */}
+                        <StatCard icon={IoGrid} label="Ocupação" colorClass="text-blue-600" bgClass="bg-blue-50">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden min-w-[50px] sm:min-w-[60px]">
+                                    <div 
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                            stats.ocupacaoPercent >= 80 ? 'bg-red-500' : 
+                                            stats.ocupacaoPercent >= 50 ? 'bg-amber-400' : 'bg-emerald-500'
+                                        }`}
+                                        style={{ width: `${stats.ocupacaoPercent}%` }}
+                                    />
+                                </div>
+                                <span className="text-xs sm:text-sm font-black text-gray-900">{stats.ocupacaoPercent}%</span>
+                            </div>
+                        </StatCard>
                         <StatCard icon={IoPeople} label="Pessoas" value={stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
                         {!isGarcom && (
                             <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
                         )}
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto shrink-0">
-                        <div className="relative w-full sm:w-56 md:w-72">
-                            <IoSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input type="text" className="w-full pl-11 pr-10 py-3.5 bg-white border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={buscaMesa} onChange={(e) => setBuscaMesa(e.target.value)} />
-                            {buscaMesa && <button onClick={() => setBuscaMesa('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose size={18}/></button>}
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full xl:w-auto shrink-0">
+                        <div className="relative w-full sm:w-48 md:w-64">
+                            <IoSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input type="text" className="w-full pl-10 pr-9 py-3 bg-white border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={buscaMesa} onChange={(e) => setBuscaMesa(e.target.value)} />
+                            {buscaMesa && <button onClick={() => setBuscaMesa('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose size={18}/></button>}
                         </div>
 
-                        <div className="flex bg-gray-200/60 p-1.5 rounded-2xl overflow-x-auto">
+                        <div className="flex bg-gray-200/60 p-1 rounded-2xl overflow-x-auto">
                             {['todos', 'livres', 'ocupadas'].map(t => (
-                                <button key={t} onClick={() => setFiltro(t)} className={`flex-1 sm:flex-none px-5 py-2 rounded-xl text-xs font-black capitalize transition-all whitespace-nowrap ${filtro === t ? 'bg-white text-gray-900 shadow-md' : 'text-gray-500 hover:text-gray-800'}`}>
+                                <button key={t} onClick={() => setFiltro(t)} className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black capitalize transition-all whitespace-nowrap ${filtro === t ? 'bg-white text-gray-900 shadow-md' : 'text-gray-500 hover:text-gray-800'}`}>
                                     {t}
                                 </button>
                             ))}

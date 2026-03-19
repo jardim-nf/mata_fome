@@ -110,15 +110,19 @@ const AdminReports = () => {
         
         let dataRegistro = null;
         if (origem === 'mesa') {
-            dataRegistro = data.dataFechamento?.toDate() || data.updatedAt?.toDate() || new Date();
+            dataRegistro = data.criadoEm?.toDate?.() || data.dataFechamento?.toDate?.() || data.createdAt?.toDate?.() || data.updatedAt?.toDate?.() || new Date();
         } else {
-            dataRegistro = data.createdAt?.toDate() || new Date();
+            dataRegistro = data.createdAt?.toDate?.() || new Date();
         }
 
-        let total = 0;
-        if (data.totalFinal !== undefined) total = Number(data.totalFinal);
-        else if (data.total !== undefined) total = Number(data.total);
-        else if (data.valorTotal !== undefined) total = Number(data.valorTotal);
+        // Parse seguro do total (pode vir como string "R$ 62,86" ou número)
+        const parseVal = (v) => {
+            if (typeof v === 'number') return v;
+            if (typeof v === 'string') return parseFloat(v.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+            return 0;
+        };
+        
+        let total = parseVal(data.totalFinal) || parseVal(data.total) || parseVal(data.valorTotal) || 0;
         
         const itens = data.itens || data.produtos || [];
         const bairro = data.endereco?.bairro || data.bairro || data.address?.district || null;
@@ -152,33 +156,71 @@ const AdminReports = () => {
             const end = endOfDay(new Date(endDate + 'T23:59:59'));
             let allData = [];
 
-            // 1. DELIVERY
+            // 1. DELIVERY (busca nas DUAS coleções possíveis)
             if (deliveryTypeFilter !== 'mesa') {
+                // 1a. Subcoleção estabelecimentos/{id}/pedidos
                 try {
-                    let pedidosConstraints = [
+                    const qPedidosSub = query(
+                        collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'),
                         where('createdAt', '>=', start),
                         where('createdAt', '<=', end),
                         orderBy('createdAt', 'desc')
-                    ];
-                    const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'), ...pedidosConstraints);
-                    const snapPedidos = await getDocs(qPedidos);
-                    allData = [...allData, ...snapPedidos.docs.map(d => processarDado(d, 'delivery'))];
-                } catch (error) { console.error("Erro delivery:", error); }
-            }
+                    );
+                    const snapSub = await getDocs(qPedidosSub);
+                    allData = [...allData, ...snapSub.docs.map(d => processarDado(d, 'delivery'))];
+                } catch (e1) { console.warn("Delivery sub:", e1.message); }
 
-            // 2. MESAS / PDV
-            if (deliveryTypeFilter === 'todos' || deliveryTypeFilter === 'mesa') {
+                // 1b. Coleção global 'pedidos'
                 try {
-                    let vendasConstraints = [
+                    const qPedidosGlobal = query(
+                        collection(db, 'pedidos'),
                         where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
                         where('createdAt', '>=', start),
                         where('createdAt', '<=', end),
                         orderBy('createdAt', 'desc')
-                    ];
-                    const qVendas = query(collection(db, 'vendas'), ...vendasConstraints);
-                    const snapVendas = await getDocs(qVendas);
-                    allData = [...allData, ...snapVendas.docs.map(d => processarDado(d, 'mesa'))];
-                } catch (error) { console.error("Erro mesas:", error); }
+                    );
+                    const snapGlobal = await getDocs(qPedidosGlobal);
+                    // Evitar duplicatas
+                    const idsExistentes = new Set(allData.map(d => d.id));
+                    const novos = snapGlobal.docs
+                        .filter(d => !idsExistentes.has(d.id))
+                        .map(d => processarDado(d, 'delivery'));
+                    allData = [...allData, ...novos];
+                } catch (e2) { console.warn("Delivery global:", e2.message); }
+            }
+
+            // 2. MESAS / PDV (coleção 'estabelecimentos/{id}/vendas' e global 'vendas')
+            if (deliveryTypeFilter === 'todos' || deliveryTypeFilter === 'mesa') {
+                try {
+                    // Tenta pela subcoleção vendas do estabelecimento (campo criadoEm)
+                    const qVendasSub = query(
+                        collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'),
+                        where('criadoEm', '>=', start),
+                        where('criadoEm', '<=', end),
+                        orderBy('criadoEm', 'desc')
+                    );
+                    const snapVendasSub = await getDocs(qVendasSub);
+                    allData = [...allData, ...snapVendasSub.docs.map(d => processarDado(d, 'mesa'))];
+                } catch (e1) {
+                    console.warn("Fallback: tentando coleção global vendas", e1);
+                }
+                try {
+                    // Também tenta pela coleção global vendas (campo createdAt)
+                    const qVendasGlobal = query(
+                        collection(db, 'vendas'),
+                        where('estabelecimentoId', '==', estabelecimentoIdPrincipal),
+                        where('createdAt', '>=', start),
+                        where('createdAt', '<=', end),
+                        orderBy('createdAt', 'desc')
+                    );
+                    const snapVendasGlobal = await getDocs(qVendasGlobal);
+                    // Evitar duplicatas
+                    const idsExistentes = new Set(allData.map(d => d.id));
+                    const novasVendas = snapVendasGlobal.docs
+                        .filter(d => !idsExistentes.has(d.id))
+                        .map(d => processarDado(d, 'mesa'));
+                    allData = [...allData, ...novasVendas];
+                } catch (e2) { console.error("Erro vendas global:", e2); }
             }
 
             // Extrair Motoboys
@@ -201,7 +243,7 @@ const AdminReports = () => {
                 });
             }
             if (paymentMethodFilter !== 'todos') filtered = filtered.filter(item => item.formaPagamento === paymentMethodFilter);
-            if (deliveryTypeFilter !== 'todos') filtered = filtered.filter(item => item.tipo === deliveryTypeFilter);
+            if (deliveryTypeFilter !== 'todos') filtered = filtered.filter(item => item.origem === (deliveryTypeFilter === 'delivery' ? 'delivery' : 'mesa'));
             if (motoboyFilter !== 'todos') filtered = filtered.filter(item => item.motoboyId === motoboyFilter);
 
             setPedidos(filtered);
@@ -239,8 +281,9 @@ const AdminReports = () => {
 
     // --- CÁLCULO DE MÉTRICAS ---
     const metrics = useMemo(() => {
-        const totalVendas = filteredPedidos.reduce((acc, p) => acc + p.totalFinal, 0);
-        const totalTaxas = filteredPedidos.reduce((acc, p) => acc + (p.taxaEntrega || 0), 0);
+        const pedidosValidos = filteredPedidos.filter(p => p.status !== 'cancelado');
+        const totalVendas = pedidosValidos.reduce((acc, p) => acc + p.totalFinal, 0);
+        const totalTaxas = pedidosValidos.reduce((acc, p) => acc + (p.taxaEntrega || 0), 0);
         
         const byDay = {}, byPayment = {}, byType = {}, byHour = {}, itemsCount = {}, motoboyStats = {}, bairrosStats = {};
         const clientsStats = {}; // Novo objeto para clientes

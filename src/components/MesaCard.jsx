@@ -62,11 +62,19 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
                         <span className="text-[9px] font-black bg-orange-500 text-white px-2 py-1 rounded-md flex items-center gap-1 shadow-sm animate-pulse uppercase tracking-wider">
                             <IoTime size={12}/> Ociosa
                         </span>
-                    ) : mesa.status !== 'livre' && (
-                        <span className="text-[10px] font-bold bg-white/70 backdrop-blur-sm border border-black/5 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
-                            <IoTime size={11}/> {tempoDecorrido}
-                        </span>
-                    )}
+                    ) : mesa.status !== 'livre' && (() => {
+                        // Cor dinâmica baseada no tempo
+                        const data = mesa.updatedAt?.toDate ? mesa.updatedAt.toDate() : (mesa.updatedAt ? new Date(mesa.updatedAt) : null);
+                        const mins = data ? Math.floor((new Date() - data) / 60000) : 0;
+                        const timeColor = mins >= 30 ? 'bg-red-100 text-red-700 border-red-200' 
+                            : mins >= 15 ? 'bg-amber-100 text-amber-700 border-amber-200' 
+                            : 'bg-white/70 text-gray-600 border-black/5';
+                        return (
+                            <span className={`text-[10px] font-bold backdrop-blur-sm border px-2 py-1 rounded-md flex items-center gap-1 shadow-sm ${timeColor}`}>
+                                <IoTime size={11}/> {tempoDecorrido}
+                            </span>
+                        );
+                    })()}
                 </div>
 
                 {/* Corpo: Livre ou Pessoas/Nome */}
