@@ -420,13 +420,28 @@ const TelaPedidos = () => {
         setResumoPedido(novosItens);
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { nomesOcupantes: novosOcupantes, itens: novosItens });
     };
-    const confirmarExclusao = async () => {
-        if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) return toast.error("Senha errada");
-        const novaLista = resumoPedido.filter(i => i !== itemParaExcluir);
-        const novoTotal = novaLista.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { itens: novaLista, total: novoTotal });
-        setModalSenhaAberto(false);
-    };
+   const confirmarExclusao = async () => {
+    if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) return toast.error("Senha errada");
+    
+    // ✅ CORRETO: Em vez de apagar, mudamos o status do item para 'cancelado'
+    const novaLista = resumoPedido.map(i => 
+        i.id === itemParaExcluir.id ? { ...i, status: 'cancelado' } : i
+    );
+    
+    // Recalcula o total ignorando os itens cancelados
+    const novoTotal = novaLista.reduce((acc, i) => {
+        if (i.status === 'cancelado') return acc;
+        return acc + (i.preco * i.quantidade);
+    }, 0);
+
+    await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+        itens: novaLista, 
+        total: novoTotal 
+    });
+    
+    setModalSenhaAberto(false);
+    toast.info("Item cancelado com sucesso!");
+};
     const ajustarQuantidade = async (id, cliente, qtd) => {
         if (navigator.vibrate) navigator.vibrate(20);
         const novaLista = resumoPedido.map(i => i.id === id ? { ...i, quantidade: qtd } : i).filter(i => i.quantidade > 0);
@@ -538,9 +553,9 @@ const TelaPedidos = () => {
         }, {});
     }, [resumoPedido]);
 
-    const totalGeral = resumoPedido.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
-    const totalItens = resumoPedido.reduce((acc, i) => acc + i.quantidade, 0);
-    const temItensPendentes = resumoPedido.some(i => !i.status || i.status === 'pendente');
+    const totalGeral = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+const totalItens = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + i.quantidade, 0);
+const temItensPendentes = resumoPedido.some(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-10 w-10 border-b-4" style={{borderColor: coresEstabelecimento.destaque}}></div></div>;
 
