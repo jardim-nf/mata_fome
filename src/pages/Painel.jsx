@@ -18,31 +18,6 @@ import { ModalRecibo, ModalHistorico } from '../components/PdvModals';
 
 // --- FUNÇÃO ANTI-TRAVAMENTO PARA CORTAR BEBIDAS E BOMBONIERE ---
 const isItemCozinha = (item) => {
-    try {
-        if (!item || typeof item !== 'object') return false;
-        
-        const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
-        const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
-        const textoCompleto = `${nome} ${categoria}`;
-        
-        const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];
-        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => categoria.includes(cat));
-        if (temCategoriaBloqueada) return false;
-
-        const palavrasBloqueadas = [
-            'refrigerante', 'suco', 'cerveja', 'long neck', 'drink', 'vinho', 
-            'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral',
-            'sorvete', 'bala ', 'chiclete', 'chocolate', 'pirulito', ' Halls', 'Mentos'
-        ];
-        
-        const temNomeBloqueado = palavrasBloqueadas.some(palavra => textoCompleto.includes(palavra));
-        if (temNomeBloqueado) return false;
-        
-        return true; 
-    } catch (error) {
-        return true; 
-    }
-};
 
 // --- GRUPO DE PEDIDOS DA MESA ---
 const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo, onEmitirNfce }) => {
