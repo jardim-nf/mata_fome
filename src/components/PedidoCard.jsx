@@ -28,6 +28,28 @@ const PedidoCard = ({
 
     const isNew = newOrderIds && newOrderIds.has ? newOrderIds.has(item.id) : false;
 
+    // Tempo decorrido desde o pedido
+    const [tempoDecorrido, setTempoDecorrido] = useState('');
+    const [corTempo, setCorTempo] = useState('text-gray-500');
+    
+    React.useEffect(() => {
+        if (item.status === 'finalizado') return;
+        const ts = item.createdAt || item.dataPedido;
+        if (!ts) return;
+        const calcular = () => {
+            const d = ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
+            const diff = Math.floor((Date.now() - d.getTime()) / 60000);
+            if (diff < 1) { setTempoDecorrido('agora'); setCorTempo('text-emerald-600 bg-emerald-50'); }
+            else if (diff < 15) { setTempoDecorrido(`${diff}min`); setCorTempo('text-emerald-600 bg-emerald-50'); }
+            else if (diff < 30) { setTempoDecorrido(`${diff}min`); setCorTempo('text-amber-600 bg-amber-50'); }
+            else if (diff < 60) { setTempoDecorrido(`${diff}min`); setCorTempo('text-red-600 bg-red-50'); }
+            else { setTempoDecorrido(`${Math.floor(diff/60)}h${diff%60}m`); setCorTempo('text-red-700 bg-red-100'); }
+        };
+        calcular();
+        const interval = setInterval(calcular, 30000);
+        return () => clearInterval(interval);
+    }, [item.createdAt, item.dataPedido, item.status]);
+
     // --- CONFIGURAÇÃO DE STATUS ---
     const getStatusConfig = (status) => {
         switch (status) {
@@ -277,6 +299,19 @@ const PedidoCard = ({
                         {(item.createdAt || item.dataPedido) && (
                             <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                                 <IoTime className="w-3 h-3" /> {formatarDataHora(item.createdAt || item.dataPedido)}
+                                {tempoDecorrido && item.status !== 'finalizado' && (
+                                    <span className={`ml-1 text-[10px] font-black px-1.5 py-0.5 rounded-full border ${corTempo}`}>
+                                        ⏱ {tempoDecorrido}
+                                    </span>
+                                )}
+                            </span>
+                        )}
+
+                        {/* Endereço resumido (só delivery) */}
+                        {(item.tipo !== 'salao' && item.tipo !== 'mesa') && item.endereco && (
+                            <span className="text-[10px] text-gray-400 mt-1 truncate max-w-[200px] block" title={`${item.endereco.rua || item.endereco.logradouro || ''}, ${item.endereco.numero || ''} - ${item.endereco.bairro || ''}`}>
+                                📍 {item.endereco.bairro || item.endereco.rua || item.endereco.logradouro || ''}
+                                {item.endereco.numero ? `, ${item.endereco.numero}` : ''}
                             </span>
                         )}
                     </div>
@@ -301,6 +336,11 @@ const PedidoCard = ({
                     <span className="text-xs text-gray-500 font-semibold border border-gray-200 px-2 py-1 rounded bg-gray-50">
                        {traduzirFormaPagamento(item.formaPagamento)}
                     </span>
+                    {item.itens?.length > 0 && (
+                        <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                            {item.itens.reduce((a, it) => a + (it.quantidade || 1), 0)} itens
+                        </span>
+                    )}
                 </div>
 
                 {/* 🔥 EXIBIÇÃO DE TEMPOS DE ETAPA (só mostra > 0) */}

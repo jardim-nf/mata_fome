@@ -445,6 +445,26 @@ function ClientOrderHistory() {
                       <IoEye className="text-lg" />
                       <span>Ver Comanda</span>
                     </button>
+                    {order.status !== 'cancelado' && order.estabelecimentoId && (
+                      <button
+                        onClick={() => {
+                          const itensParaRepetir = (order.itens || []).map(item => ({
+                            nome: item.nome,
+                            preco: item.preco,
+                            quantidade: item.quantidade || item.qtd || 1,
+                            observacoes: item.observacoes || ''
+                          }));
+                          localStorage.setItem('ideafood_repetir_pedido', JSON.stringify(itensParaRepetir));
+                          const slug = estabelecimentos[order.estabelecimentoId]?.slug || order.estabelecimentoId;
+                          toast.info('🔁 Adicionando itens ao carrinho...');
+                          navigate(`/cardapio/${slug}`);
+                        }}
+                        className="flex items-center justify-center space-x-2 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-medium transition flex-1 lg:flex-none"
+                      >
+                        <IoRefresh className="text-lg" />
+                        <span>Pedir de Novo</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

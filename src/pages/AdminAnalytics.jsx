@@ -231,6 +231,26 @@ function AdminAnalytics() {
             ticketMedio, formas, horas, diasChart, topProdutos,
             ticketDel: delOk.length > 0 ? fatDel / delOk.length : 0,
             ticketSal: salOk.length > 0 ? fatSal / salOk.length : 0,
+            // Cancelamentos
+            cancelados: pedidosDelivery.filter(p => p.status === 'cancelado').length + vendasSalao.filter(v => v.status === 'cancelado').length,
+            taxaCancelamento: (pedidosDelivery.length + vendasSalao.length) > 0
+                ? ((pedidosDelivery.filter(p => p.status === 'cancelado').length + vendasSalao.filter(v => v.status === 'cancelado').length) / (pedidosDelivery.length + vendasSalao.length)) * 100 : 0,
+            // Média por dia da semana
+            porDiaSemana: (() => {
+                const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                const acum = Array.from({ length: 7 }, () => ({ total: 0, qtd: 0 }));
+                const processaDiaSemana = (lista, campoData) => {
+                    lista.forEach(p => {
+                        const ts = p[campoData]; if (!ts) return;
+                        const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
+                        acum[d.getDay()].total += parse(p.totalFinal || p.total || p.valorTotal);
+                        acum[d.getDay()].qtd++;
+                    });
+                };
+                processaDiaSemana(delOk, 'createdAt');
+                processaDiaSemana(salOk, 'criadoEm');
+                return acum.map((d, i) => ({ dia: diasSemana[i], total: d.total, qtd: d.qtd, media: d.qtd > 0 ? d.total / d.qtd : 0 }));
+            })(),
         };
     }, [pedidosDelivery, vendasSalao]);
 
@@ -487,6 +507,116 @@ function AdminAnalytics() {
                         </div>
                     )}
                 </div>
+
+                {/* ═══ INSIGHTS INTELIGENTES + DIA DA SEMANA + CANCELAMENTOS ═══ */}
+                {!loading && stats.totalPedidos > 0 && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                        {/* INSIGHTS */}
+                        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 shadow-sm p-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2 mb-4">
+                                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl">💡</div>
+                                Insights Inteligentes
+                            </h2>
+                            <div className="space-y-3">
+                                {/* Melhor dia */}
+                                {stats.diasChart.length > 0 && (() => {
+                                    const melhor = [...stats.diasChart].sort((a, b) => b.valor - a.valor)[0];
+                                    return (
+                                        <div className="bg-white/70 rounded-xl p-3 border border-white">
+                                            <p className="text-[10px] font-bold text-indigo-500 uppercase">📈 Melhor dia</p>
+                                            <p className="text-sm font-black text-gray-900">{melhor.dia} — {fmt(melhor.valor)}</p>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Melhor hora */}
+                                {(() => {
+                                    const melhorHora = [...stats.horas].sort((a, b) => b.qtd - a.qtd)[0];
+                                    return melhorHora?.qtd > 0 ? (
+                                        <div className="bg-white/70 rounded-xl p-3 border border-white">
+                                            <p className="text-[10px] font-bold text-orange-500 uppercase">⏰ Horário de pico</p>
+                                            <p className="text-sm font-black text-gray-900">{String(melhorHora.hora).padStart(2, '0')}:00h — {melhorHora.qtd} pedidos</p>
+                                        </div>
+                                    ) : null;
+                                })()}
+
+                                {/* Forma de pagamento dominante */}
+                                {formasOrdenadas.length > 0 && (
+                                    <div className="bg-white/70 rounded-xl p-3 border border-white">
+                                        <p className="text-[10px] font-bold text-emerald-500 uppercase">💳 Pagamento preferido</p>
+                                        <p className="text-sm font-black text-gray-900">{formasOrdenadas[0].nome} — {pct((formasOrdenadas[0].qtd / stats.totalPedidos) * 100)} dos pedidos</p>
+                                    </div>
+                                )}
+
+                                {/* Média diária */}
+                                {stats.diasChart.length > 0 && (
+                                    <div className="bg-white/70 rounded-xl p-3 border border-white">
+                                        <p className="text-[10px] font-bold text-blue-500 uppercase">📊 Média diária</p>
+                                        <p className="text-sm font-black text-gray-900">{fmt(stats.fatTotal / stats.diasChart.length)}/dia</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* MÉDIA POR DIA DA SEMANA */}
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2 mb-4">
+                                <div className="p-2 bg-cyan-50 text-cyan-600 rounded-xl"><IoCalendarOutline size={18} /></div>
+                                Faturamento por Dia da Semana
+                            </h2>
+                            <div className="space-y-1">
+                                {(() => {
+                                    const maxTotal = Math.max(...stats.porDiaSemana.map(d => d.total), 1);
+                                    const melhorDia = [...stats.porDiaSemana].sort((a, b) => b.total - a.total)[0]?.dia;
+                                    return stats.porDiaSemana.map(d => (
+                                        <HBar
+                                            key={d.dia}
+                                            label={d.dia}
+                                            valor={d.total}
+                                            maxValor={maxTotal}
+                                            formatado={fmt(d.total)}
+                                            sub={`${d.qtd} ped.`}
+                                            cor={d.dia === melhorDia && d.total > 0 ? 'bg-cyan-500' : 'bg-cyan-200'}
+                                        />
+                                    ));
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* CANCELAMENTOS */}
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <h2 className="text-sm font-black text-gray-800 flex items-center gap-2 mb-4">
+                                <div className="p-2 bg-red-50 text-red-600 rounded-xl"><IoAlertCircle size={18} /></div>
+                                Saúde da Operação
+                            </h2>
+                            <div className="space-y-4">
+                                <div className="bg-red-50/50 rounded-xl p-4 border border-red-100">
+                                    <p className="text-[10px] font-bold text-red-400 uppercase mb-1">Taxa de Cancelamento</p>
+                                    <div className="flex items-end justify-between">
+                                        <p className="text-3xl font-black text-red-600">{pct(stats.taxaCancelamento)}</p>
+                                        <p className="text-xs font-bold text-red-400">{stats.cancelados} cancelados</p>
+                                    </div>
+                                    <div className="mt-3 h-2 bg-red-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-500 ${stats.taxaCancelamento > 10 ? 'bg-red-500' : stats.taxaCancelamento > 5 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                            style={{ width: `${Math.min(stats.taxaCancelamento, 100)}%` }} />
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 mt-2">
+                                        {stats.taxaCancelamento <= 3 ? '✅ Excelente — abaixo de 3%!' :
+                                         stats.taxaCancelamento <= 7 ? '⚠️ Atenção — acima de 3%' :
+                                         '🚨 Crítico — investigue as causas'}
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Pedidos Válidos</p>
+                                    <p className="text-2xl font-black text-gray-900">{stats.totalPedidos}</p>
+                                    <p className="text-[10px] text-gray-400">de {stats.totalPedidos + stats.cancelados} total</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                )}
 
             </div>
         </div>

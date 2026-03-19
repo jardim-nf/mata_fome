@@ -38,23 +38,28 @@ const Card = ({ title, children, className = "" }) => (
 
 const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
     const colorClasses = {
-        blue: 'bg-blue-100 text-blue-600',
-        green: 'bg-green-100 text-green-600',
-        amber: 'bg-amber-100 text-amber-600',
-        purple: 'bg-purple-100 text-purple-600',
-        red: 'bg-red-100 text-red-600',
-        indigo: 'bg-indigo-100 text-indigo-600'
+        blue: 'bg-blue-50 text-blue-600 border-blue-100',
+        green: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+        amber: 'bg-amber-50 text-amber-600 border-amber-100',
+        purple: 'bg-purple-50 text-purple-600 border-purple-100',
+        red: 'bg-red-50 text-red-600 border-red-100',
+        indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100'
+    };
+    const bgCircle = {
+        blue: 'bg-blue-100', green: 'bg-emerald-100', amber: 'bg-amber-100',
+        purple: 'bg-purple-100', red: 'bg-red-100', indigo: 'bg-indigo-100'
     };
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
+        <div className={`bg-white rounded-2xl border shadow-sm p-5 hover:shadow-md transition-all relative overflow-hidden group ${colorClasses[color]?.split(' ')[2] ? `border-${color}-100` : 'border-gray-100'}`}>
+            <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 ${bgCircle[color]} group-hover:scale-110 transition-transform`}></div>
+            <div className="flex items-center justify-between relative z-10">
                 <div>
-                    <p className="text-sm font-medium text-gray-600">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-                    {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title}</p>
+                    <p className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">{value}</p>
+                    {subtitle && <p className="text-[10px] text-gray-500 font-medium mt-1">{subtitle}</p>}
                 </div>
-                <div className={`w-12 h-12 ${colorClasses[color]} rounded-lg flex items-center justify-center text-xl`}>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shrink-0 ${colorClasses[color]}`}>
                     {icon}
                 </div>
             </div>
@@ -450,44 +455,66 @@ const AdminReports = () => {
     const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-            <div className="max-w-7xl mx-auto mb-6 flex w-full justify-between items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">📊 Relatórios de Gestão</h1>
-                    <p className="text-gray-600">Financeiro, Operacional e Logística</p>
-                </div>
-                <div className="flex gap-2">
-                    <button onClick={handleExportCSV} disabled={!filteredPedidos.length} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 disabled:opacity-50 no-print"><IoDownloadOutline /> CSV</button>
-                    <button onClick={handleExportPDF} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50 no-print"><IoPrintOutline /> PDF</button>
-                    <Link to="/dashboard" className="bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-700 no-print"><IoArrowBack /> Voltar</Link>
+        <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-6 font-sans">
+            <div className="max-w-7xl mx-auto mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Link to="/dashboard" className="p-2.5 rounded-xl hover:bg-white text-gray-600 border border-gray-200 transition-colors bg-white shadow-sm">
+                            <IoArrowBack size={18} />
+                        </Link>
+                        <div>
+                            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Relatórios de Gestão</h1>
+                            <p className="text-xs text-gray-500 font-medium">Financeiro, Operacional e Logística</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 no-print">
+                        <button onClick={handleExportCSV} disabled={!filteredPedidos.length} className="bg-emerald-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm">
+                            <IoDownloadOutline size={16}/> CSV
+                        </button>
+                        <button onClick={handleExportPDF} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm">
+                            <IoPrintOutline size={16}/> PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div className="max-w-7xl mx-auto" ref={reportContentRef}>
                 {/* FILTROS */}
                 <Card title={<><IoFilterOutline className="text-blue-600"/> Filtros</>} className="mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded" />
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded" />
-                        <select value={deliveryTypeFilter} onChange={e => setDeliveryTypeFilter(e.target.value)} className="p-2 border rounded">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                            <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">De</span>
+                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none w-full" />
+                        </div>
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+                            <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">Até</span>
+                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none w-full" />
+                        </div>
+                        <select value={deliveryTypeFilter} onChange={e => setDeliveryTypeFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm">
                             <option value="todos">Todos Tipos</option>
                             <option value="delivery">Delivery</option>
                             <option value="mesa">Mesas</option>
                         </select>
-                        <select value={motoboyFilter} onChange={e => setMotoboyFilter(e.target.value)} className="p-2 border rounded">
+                        <select value={motoboyFilter} onChange={e => setMotoboyFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm">
                             <option value="todos">Todos Motoboys</option>
                             {availableMotoboys.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                         </select>
-                        <button onClick={fetchData} disabled={loadingData} className="bg-blue-600 text-white rounded hover:bg-blue-700 flex justify-center items-center gap-2 no-print">
+                        <button onClick={fetchData} disabled={loadingData} className="bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex justify-center items-center gap-2 text-xs font-bold transition-all shadow-sm no-print">
                             {loadingData ? '...' : <><IoRefreshOutline/> Filtrar</>}
                         </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t">
-                         <input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="p-2 border rounded w-full"/>
-                         <div className="flex gap-2 items-center bg-gray-100 p-1 rounded">
-                             <button onClick={() => setViewMode('charts')} className={`flex-1 p-1 rounded ${viewMode === 'charts' ? 'bg-white shadow' : ''}`}><IoAnalyticsOutline className="mx-auto"/> Gráficos</button>
-                             <button onClick={() => setViewMode('table')} className={`flex-1 p-1 rounded ${viewMode === 'table' ? 'bg-white shadow' : ''}`}><IoListOutline className="mx-auto"/> Lista</button>
-                         </div>
+                    {/* Quick date buttons + search + view toggle */}
+                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
+                        <button onClick={() => { const h = format(new Date(), 'yyyy-MM-dd'); setStartDate(h); setEndDate(h); }} className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-200 transition-all">Hoje</button>
+                        <button onClick={() => { setStartDate(format(subDays(new Date(), 7), 'yyyy-MM-dd')); setEndDate(format(new Date(), 'yyyy-MM-dd')); }} className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-200 transition-all">7 dias</button>
+                        <button onClick={() => { setStartDate(format(subDays(new Date(), 30), 'yyyy-MM-dd')); setEndDate(format(new Date(), 'yyyy-MM-dd')); }} className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-200 transition-all">30 dias</button>
+                        <div className="flex-1 min-w-[150px]">
+                            <input type="text" placeholder="🔍 Buscar cliente, bairro..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-2 border border-gray-200 rounded-xl text-xs font-medium bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500/50"/>
+                        </div>
+                        <div className="flex bg-gray-100 p-0.5 rounded-lg shadow-inner border border-gray-200">
+                            <button onClick={() => setViewMode('charts')} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'charts' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}><IoAnalyticsOutline/> Gráficos</button>
+                            <button onClick={() => setViewMode('table')} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}><IoListOutline/> Lista</button>
+                        </div>
                     </div>
                 </Card>
 

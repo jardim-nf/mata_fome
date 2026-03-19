@@ -820,3 +820,355 @@ export const vincularMercadoPago = onCall({
         throw new HttpsError('internal', error.message);
     }
 });
+
+// ==================================================================
+// 14. WHATSAPP BUSINESS API — WEBHOOK (Recebe mensagens dos clientes)
+// ==================================================================
+const whatsappVerifyToken = defineSecret("WHATSAPP_VERIFY_TOKEN");
+const whatsappApiToken = defineSecret("WHATSAPP_API_TOKEN");
+
+// Cache de conversas em memória (reseta quando a function recicla)
+const conversas = {};
+
+export const webhookWhatsApp = onRequest(
+  { secrets: [whatsappVerifyToken, whatsappApiToken], maxInstances: 5 },
+  async (req, res) => {
+
+    // ─── VERIFICAÇÃO DO WEBHOOK (Meta envia GET na configuração) ───
+    if (req.method === 'GET') {
+      const mode = req.query['hub.mode'];
+      const token = req.query['hub.verify_token'];
+      const challenge = req.query['hub.challenge'];
+
+      if (mode === 'subscribe' && token === whatsappVerifyToken.value()) {
+        logger.info('✅ WhatsApp webhook verificado');
+        return res.status(200).send(challenge);
+      }
+      return res.status(403).send('Token inválido');
+    }
+
+    // ─── PROCESSAR MENSAGEM (POST) ───
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    try {
+      const body = req.body;
+      const entry = body?.entry?.[0];
+      const changes = entry?.changes?.[0];
+      const value = changes?.value;
+
+      if (!value?.messages?.[0]) {
+        return res.status(200).send('OK'); // Notification de status, ignorar
+      }
+
+      const msg = value.messages[0];
+      const from = msg.from; // Número do cliente (5511999999999)
+      const phoneNumberId = value.metadata?.phone_number_id; // ID do número que recebeu
+      const messageText = msg.text?.body?.trim() || '';
+
+      if (!from || !messageText) return res.status(200).send('OK');
+
+      logger.info(`📱 WhatsApp de ${from}: "${messageText}"`);
+
+      // ─── ENCONTRAR O ESTABELECIMENTO PELO NÚMERO ───
+      const estabQuery = await db.collection('estabelecimentos')
+        .where('whatsapp.phoneNumberId', '==', phoneNumberId)
+        .limit(1)
+        .get();
+
+      if (estabQuery.empty) {
+        logger.warn(`⚠️ Nenhum estabelecimento com phoneNumberId: ${phoneNumberId}`);
+        return res.status(200).send('OK');
+      }
+
+      const estabDoc = estabQuery.docs[0];
+      const estabId = estabDoc.id;
+      const estab = estabDoc.data();
+      const accessToken = estab.whatsapp?.accessToken || whatsappApiToken.value();
+
+      // ─── CARREGAR CARDÁPIO ───
+      const cardapioSnap = await db.collection(`estabelecimentos/${estabId}/cardapio`).where('ativo', '==', true).get();
+      const produtos = cardapioSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // ─── ESTADO DA CONVERSA ───
+      const chatKey = `${estabId}_${from}`;
+      if (!conversas[chatKey]) {
+        conversas[chatKey] = { etapa: 'inicio', itens: [], nome: '' };
+      }
+      const chat = conversas[chatKey];
+
+      let resposta = '';
+      const msgLower = messageText.toLowerCase();
+
+      // ─── LÓGICA DO BOT ───
+      if (chat.etapa === 'inicio' || msgLower === 'oi' || msgLower === 'olá' || msgLower === 'menu' || msgLower === 'cardápio' || msgLower === 'cardapio') {
+        // SAUDAÇÃO + CARDÁPIO
+        const categorias = {};
+        produtos.forEach(p => {
+          const cat = p.categoria || 'Outros';
+          if (!categorias[cat]) categorias[cat] = [];
+          categorias[cat].push(p);
+        });
+
+        let cardapioTexto = `🍔 *${estab.nome || 'Nosso Cardápio'}*\n\n`;
+        Object.entries(categorias).forEach(([cat, items]) => {
+          cardapioTexto += `*📌 ${cat}*\n`;
+          items.forEach((p, i) => {
+            const preco = Number(p.preco || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            cardapioTexto += `${i + 1}. ${p.nome} — R$ ${preco}\n`;
+          });
+          cardapioTexto += '\n';
+        });
+
+        cardapioTexto += `_Para pedir, digite o nome do item e a quantidade._\nEx: *2 X-Bacon*\n\nDigite *"finalizar"* para fechar o pedido.`;
+
+        resposta = cardapioTexto;
+        chat.etapa = 'pedindo';
+        chat.itens = [];
+
+      } else if (chat.etapa === 'pedindo' && msgLower === 'finalizar') {
+        if (chat.itens.length === 0) {
+          resposta = '⚠️ Seu pedido está vazio! Diga o que deseja pedir primeiro.';
+        } else {
+          chat.etapa = 'nome';
+          let resumo = '📋 *Resumo do Pedido:*\n\n';
+          let total = 0;
+          chat.itens.forEach(item => {
+            const subtotal = item.preco * item.qtd;
+            total += subtotal;
+            resumo += `• ${item.qtd}x ${item.nome} — R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+          });
+          resumo += `\n💰 *Total: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
+          resumo += 'Para confirmar, *digite seu nome:*';
+          resposta = resumo;
+        }
+
+      } else if (chat.etapa === 'nome') {
+        chat.nome = messageText;
+        chat.etapa = 'confirmado';
+
+        // ─── CRIAR PEDIDO NO FIREBASE ───
+        let total = 0;
+        const itensFormatados = chat.itens.map(item => {
+          total += item.preco * item.qtd;
+          return { nome: item.nome, quantidade: item.qtd, preco: item.preco, id: item.id };
+        });
+
+        const novoPedido = {
+          itens: itensFormatados,
+          cliente: { nome: chat.nome, telefone: from },
+          status: 'recebido',
+          totalFinal: total,
+          source: 'whatsapp',
+          tipo: 'delivery',
+          createdAt: FieldValue.serverTimestamp(),
+          observacao: `Pedido via WhatsApp de ${from}`
+        };
+
+        const pedidoRef = await db.collection(`estabelecimentos/${estabId}/pedidos`).add(novoPedido);
+
+        resposta = `✅ *Pedido confirmed!*\n\n🧑 ${chat.nome}\n📱 ${from}\n🆔 #${pedidoRef.id.slice(-6).toUpperCase()}\n\nSeu pedido foi recebido e está sendo preparado! 🎉\n\nDigite *"oi"* para fazer novo pedido.`;
+
+        // Reset conversa
+        delete conversas[chatKey];
+
+      } else if (chat.etapa === 'pedindo') {
+        // ─── INTERPRETAR ITEM ───
+        // Tenta parsear "2 X-Bacon" ou "X-Bacon 2" ou "X-Bacon"
+        const match = messageText.match(/^(\d+)\s*[xX]?\s*(.+)$/) || messageText.match(/^(.+?)\s+(\d+)$/);
+        let qtd = 1;
+        let nomeProduto = messageText;
+
+        if (match) {
+          if (/^\d+$/.test(match[1])) {
+            qtd = parseInt(match[1]);
+            nomeProduto = match[2].trim();
+          } else {
+            nomeProduto = match[1].trim();
+            qtd = parseInt(match[2]);
+          }
+        }
+
+        // Busca fuzzy no cardápio
+        const produtoEncontrado = produtos.find(p =>
+          p.nome.toLowerCase().includes(nomeProduto.toLowerCase()) ||
+          nomeProduto.toLowerCase().includes(p.nome.toLowerCase())
+        );
+
+        if (produtoEncontrado) {
+          chat.itens.push({ nome: produtoEncontrado.nome, preco: Number(produtoEncontrado.preco), qtd, id: produtoEncontrado.id });
+          const subtotal = Number(produtoEncontrado.preco) * qtd;
+          resposta = `✅ *${qtd}x ${produtoEncontrado.nome}* adicionado! (R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})\n\nContinue adicionando ou digite *"finalizar"*.`;
+        } else {
+          resposta = `❌ Não encontrei "${nomeProduto}" no cardápio.\n\nDigite *"menu"* para ver os itens disponíveis.`;
+        }
+
+      } else {
+        resposta = 'Olá! 👋 Digite *"oi"* ou *"menu"* para começar seu pedido!';
+      }
+
+      // ─── ENVIAR RESPOSTA VIA WHATSAPP API ───
+      await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: from,
+          type: 'text',
+          text: { body: resposta }
+        })
+      });
+
+      res.status(200).send('OK');
+
+    } catch (error) {
+      logger.error('❌ Erro WhatsApp Webhook:', error);
+      res.status(200).send('OK'); // Sempre 200 pro Meta não reenviar
+    }
+  }
+);
+
+// ==================================================================
+// 15. ENVIAR MENSAGEM WHATSAPP (Do admin para o cliente)
+// ==================================================================
+export const enviarMensagemWhatsApp = onCall(
+  { secrets: [whatsappApiToken] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { telefone, mensagem, estabelecimentoId } = request.data;
+    if (!telefone || !mensagem || !estabelecimentoId) {
+      throw new HttpsError('invalid-argument', 'Telefone, mensagem e estabelecimentoId são obrigatórios.');
+    }
+
+    try {
+      const estabDoc = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
+      const estab = estabDoc.data();
+      const phoneNumberId = estab?.whatsapp?.phoneNumberId;
+      const accessToken = estab?.whatsapp?.accessToken || whatsappApiToken.value();
+
+      if (!phoneNumberId) throw new HttpsError('failed-precondition', 'WhatsApp não configurado.');
+
+      // Formata telefone
+      const tel = telefone.replace(/\D/g, '');
+      const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
+
+      await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: telFinal,
+          type: 'text',
+          text: { body: mensagem }
+        })
+      });
+
+      return { sucesso: true };
+    } catch (error) {
+      logger.error('❌ Erro enviar WhatsApp:', error);
+      throw new HttpsError('internal', error.message);
+    }
+  }
+);
+
+// ==================================================================
+// 16. MARKETING AUTOMÁTICO — SCHEDULER (Roda 1x por dia)
+// ==================================================================
+import { onSchedule } from "firebase-functions/v2/scheduler";
+
+export const marketingAutomatico = onSchedule(
+  { schedule: "every day 10:00", timeZone: "America/Sao_Paulo", secrets: [whatsappApiToken] },
+  async () => {
+    try {
+      const estabsSnap = await db.collection('estabelecimentos').get();
+
+      for (const estabDoc of estabsSnap.docs) {
+        const estab = estabDoc.data();
+        const config = estab.marketing || {};
+
+        if (!config.ativo) continue;
+
+        const diasInativo = config.diasInativo || 7;
+        const mensagem = config.mensagem || `Faz tempo que você não pede no ${estab.nome || 'nosso restaurante'}! 🍔 Que tal pedir hoje?`;
+        const limitePorDia = config.limiteDiario || 20;
+
+        // Buscar pedidos dos últimos 90 dias para encontrar clientes
+        const agora = new Date();
+        const limite = new Date(agora.getTime() - (90 * 24 * 60 * 60 * 1000));
+
+        const pedidosSnap = await db.collection(`estabelecimentos/${estabDoc.id}/pedidos`)
+          .where('createdAt', '>=', limite)
+          .get();
+
+        // Mapa: cliente → último pedido
+        const clientes = {};
+        pedidosSnap.docs.forEach(d => {
+          const p = d.data();
+          const tel = p.cliente?.telefone || p.telefone;
+          const nome = p.cliente?.nome || p.nomeCliente || 'Cliente';
+          if (!tel) return;
+
+          const dt = p.createdAt?.toDate?.() || new Date(p.createdAt?.seconds * 1000);
+          if (!clientes[tel] || dt > clientes[tel].ultimoPedido) {
+            clientes[tel] = { nome, telefone: tel, ultimoPedido: dt };
+          }
+        });
+
+        // Filtrar: clientes que não pedem há X dias
+        const inativos = Object.values(clientes).filter(c => {
+          const diasSemPedir = (agora - c.ultimoPedido) / (1000 * 60 * 60 * 24);
+          return diasSemPedir >= diasInativo;
+        }).slice(0, limitePorDia);
+
+        logger.info(`📧 Marketing ${estab.nome}: ${inativos.length} clientes inativos (>${diasInativo} dias)`);
+
+        // Registrar campanha
+        for (const cliente of inativos) {
+          await db.collection(`estabelecimentos/${estabDoc.id}/campanhas`).add({
+            tipo: 'reengajamento',
+            clienteNome: cliente.nome,
+            clienteTelefone: cliente.telefone,
+            mensagem,
+            enviadoEm: FieldValue.serverTimestamp(),
+            diasInativo: Math.floor((agora - cliente.ultimoPedido) / (1000 * 60 * 60 * 24)),
+            status: 'registrado'
+          });
+        }
+
+        logger.info(`✅ Campanha registrada: ${inativos.length} clientes para ${estab.nome}`);
+      }
+    } catch (error) {
+      logger.error('❌ Erro Marketing Automático:', error);
+    }
+  }
+);
+
+// ==================================================================
+// 17. CONFIGURAR MARKETING (Callable — admin)
+// ==================================================================
+export const configurarMarketing = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, config } = request.data;
+  if (!estabelecimentoId || !config) throw new HttpsError('invalid-argument', 'Dados incompletos.');
+
+  try {
+    await db.collection('estabelecimentos').doc(estabelecimentoId).update({
+      marketing: {
+        ativo: config.ativo || false,
+        diasInativo: config.diasInativo || 7,
+        mensagem: config.mensagem || '',
+        limiteDiario: config.limiteDiario || 20
+      }
+    });
+    return { sucesso: true };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});

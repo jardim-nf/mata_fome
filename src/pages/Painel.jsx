@@ -278,6 +278,46 @@ function Painel() {
 
     const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) {} };
 
+    // 🔔 CAMPAINHA WEB AUDIO API — som de sino ascendente (E5→G5→C6) sem arquivo externo
+    const tocarCampainha = useCallback(() => {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const notas = [659.25, 783.99, 1046.50]; // E5, G5, C6
+            notas.forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.15);
+                gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.15);
+                gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + i * 0.15 + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.4);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(ctx.currentTime + i * 0.15);
+                osc.stop(ctx.currentTime + i * 0.15 + 0.4);
+            });
+            // Segundo toque após 0.6s para chamar mais atenção
+            setTimeout(() => {
+                try {
+                    const ctx2 = new (window.AudioContext || window.webkitAudioContext)();
+                    notas.forEach((freq, i) => {
+                        const osc = ctx2.createOscillator();
+                        const gain = ctx2.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, ctx2.currentTime + i * 0.12);
+                        gain.gain.setValueAtTime(0, ctx2.currentTime + i * 0.12);
+                        gain.gain.linearRampToValueAtTime(0.25, ctx2.currentTime + i * 0.12 + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.001, ctx2.currentTime + i * 0.12 + 0.35);
+                        osc.connect(gain);
+                        gain.connect(ctx2.destination);
+                        osc.start(ctx2.currentTime + i * 0.12);
+                        osc.stop(ctx2.currentTime + i * 0.12 + 0.35);
+                    });
+                } catch (e) {}
+            }, 600);
+        } catch (e) { console.warn('Web Audio API não suportada'); }
+    }, []);
+
     // Busca histórico de vendas/notas do estabelecimento
     const abrirHistoricoVendas = useCallback(async () => {
         setIsHistoricoVendasOpen(true);

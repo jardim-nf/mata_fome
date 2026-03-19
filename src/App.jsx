@@ -62,6 +62,12 @@ const FinanceiroMaster = lazy(() => import('./pages/admin/FinanceiroMaster'));
 const ConfigFiscalScreen = lazy(() => import('./pages/admin/ConfigFiscalScreen'));
 const ImpressaoIsolada = lazy(() => import("./pages/ImpressaoIsolada"));
 const EntradaEstoqueXML = lazy(() => import("./pages/admin/EntradaEstoqueXML"));
+const RankingFuncionarios = lazy(() => import("./pages/admin/RankingFuncionarios"));
+const WhatsAppConfig = lazy(() => import("./pages/admin/WhatsAppConfig"));
+const PrevisaoDemanda = lazy(() => import("./pages/admin/PrevisaoDemanda"));
+const MarketingConfig = lazy(() => import("./pages/admin/MarketingConfig"));
+const ResponderAvaliacoes = lazy(() => import("./pages/admin/ResponderAvaliacoes"));
+const RelatorioLucro = lazy(() => import("./pages/admin/RelatorioLucro"));
 
 function App() {
   return (
@@ -113,6 +119,12 @@ function App() {
                         <Route path="/admin/gestao-funcionarios" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><GestaoFuncionarios /></PrivateRoute>} />
                         <Route path="/admin/entregadores" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminEntregadores /></PrivateRoute>} />
                         <Route path="/admin/relatorio-entregas" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioEntregas /></PrivateRoute>} />
+                        <Route path="/admin/ranking" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RankingFuncionarios /></PrivateRoute>} />
+                        <Route path="/admin/whatsapp" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><WhatsAppConfig /></PrivateRoute>} />
+                        <Route path="/admin/previsao" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><PrevisaoDemanda /></PrivateRoute>} />
+                        <Route path="/admin/marketing" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><MarketingConfig /></PrivateRoute>} />
+                        <Route path="/admin/avaliacoes" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ResponderAvaliacoes /></PrivateRoute>} />
+                        <Route path="/admin/lucro" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioLucro /></PrivateRoute>} />
                         <Route path="/admin/relatorio-cancelamentos" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioCancelamentos /></PrivateRoute>} />
                         <Route path="/admin/entrada-estoque" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><EntradaEstoqueXML /></PrivateRoute>} />
 

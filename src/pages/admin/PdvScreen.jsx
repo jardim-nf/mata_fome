@@ -415,9 +415,31 @@ const PdvScreen = () => {
                                         <IoArrowBack size={18} />
                                     </button>
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${caixaAberto ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                                        <div className={`w-2 h-2 rounded-full ${caixaAberto ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                                         <h1 className="text-sm font-black text-slate-800 uppercase truncate max-w-[150px]">{nomeLoja}</h1>
+                                        {estabelecimentos.length > 1 && (
+                                            <select
+                                                value={estabelecimentoAtivo || ''}
+                                                onChange={e => trocarLoja(e.target.value)}
+                                                className="ml-1 text-[10px] bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-slate-600 font-bold"
+                                            >
+                                                {estabelecimentos.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                                            </select>
+                                        )}
                                     </div>
+                                    {/* Mini stats do turno */}
+                                    {caixaAberto && (
+                                        <div className="hidden sm:flex items-center gap-3 ml-4">
+                                            <div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                                <span className="text-[10px] text-emerald-600 font-medium">Vendas:</span>
+                                                <span className="text-xs font-black text-emerald-700">{vendasTurnoAtual.length}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
+                                                <span className="text-[10px] text-blue-600 font-medium">Total:</span>
+                                                <span className="text-xs font-black text-blue-700">{formatarMoeda(vendasTurnoAtual.reduce((a, v) => a + (v.total || 0), 0))}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex items-center flex-1 max-w-sm ml-4">
                                     <div className="relative w-full">
@@ -540,43 +562,43 @@ const PdvScreen = () => {
                         {mostrarCarrinhoMobile && <div className="absolute inset-0 bg-black/50 z-[105] md:hidden" onClick={() => setMostrarCarrinhoMobile(false)}></div>}
                     </div>
 
-{/* 🔥 BARRA DE ATALHOS INFERIOR - 100% RESPONSIVA 🔥 */}
-                    <div className="w-full shrink-0 border-t border-slate-900 p-2 sm:p-3 flex justify-center shadow-[0_-10px_20px_rgba(0,0,0,0.15)] z-[120] relative no-print">
+{/* 🔥 BARRA DE ATALHOS INFERIOR - DARK THEME PROFISSIONAL 🔥 */}
+                    <div className="w-full shrink-0 bg-slate-800 border-t border-slate-700 p-2 sm:p-3 flex justify-center shadow-[0_-10px_20px_rgba(0,0,0,0.15)] z-[120] relative no-print">
                         <div className="flex flex-wrap justify-center items-center gap-2 w-full max-w-7xl">
                             
-                            <button onClick={() => inputBuscaRef.current?.focus()} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                            <button onClick={() => inputBuscaRef.current?.focus()} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F1</kbd> BUSCAR
                             </button>
                             
-                            <button onClick={iniciarVendaBalcao} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                            <button onClick={iniciarVendaBalcao} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F2</kbd> NOVA
                             </button>
                             
-                            <button onClick={abrirHistoricoAtual} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                            <button onClick={abrirHistoricoAtual} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F3</kbd> HISTÓRICO
                             </button>
                             
-                            <button onClick={suspenderVenda} className={`hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm ${!vendaAtual?.itens?.length ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            <button onClick={suspenderVenda} className={`text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm ${!vendaAtual?.itens?.length ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-orange-400 font-mono leading-normal">F4</kbd> PAUSAR
                             </button>
                             
-                            <button onClick={() => setMostrarSuspensas(true)} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm relative">
+                            <button onClick={() => setMostrarSuspensas(true)} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm relative">
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-blue-400 font-mono leading-normal">F5</kbd> ESPERA
                                 {vendasSuspensas.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] min-w-[18px] px-1 py-0.5 flex items-center justify-center rounded-full leading-none shadow-md">{vendasSuspensas.length}</span>}
                             </button>
 
-                            {/* Separador oculto em telas pequenas */}
+                            {/* Separador */}
                             <div className="w-px h-6 bg-slate-600 mx-1 hidden sm:block"></div>
 
-                            <button onClick={abrirMovimentacao} className="hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                            <button onClick={abrirMovimentacao} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-amber-400 font-mono leading-normal">F8</kbd> CAIXA
                             </button>
                             
-                            <button onClick={prepararFechamento} className="bg-rose-900/40 hover:bg-rose-800 border border-rose-700/50 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                            <button onClick={prepararFechamento} className="bg-rose-900/60 hover:bg-rose-800 text-white border border-rose-700/50 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
                                 <kbd className="bg-rose-700 px-1.5 py-0.5 rounded border border-rose-900 text-white font-mono leading-normal">F9</kbd> FECHAR TURNO
                             </button>
 
-                            <button onClick={carregarListaTurnos} className=" hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                            <button onClick={carregarListaTurnos} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F11</kbd> TURNOS
                             </button>
 
@@ -595,10 +617,7 @@ const PdvScreen = () => {
                         </span>
                     </button>
 
-                    {/* Carrinho flutuante mobile */}
-                    <button onClick={() => setMostrarCarrinhoMobile(true)} className={`md:hidden absolute bottom-20 right-4 bg-emerald-600 text-white p-4 rounded-full shadow-2xl z-[90] flex items-center gap-2 transition-transform ${vendaAtual?.itens?.length > 0 ? 'scale-100' : 'scale-0'}`}>
-                        <IoCart size={24} /><span className="absolute -top-1 -right-1 bg-white text-emerald-600 font-black text-[10px] min-w-[20px] h-5 flex items-center justify-center rounded-full shadow-sm">{vendaAtual?.itens?.length || 0}</span>
-                    </button>
+
 
                     {/* Modais Componentes */}
                     <ModalSelecaoVariacao produto={produtoParaSelecao} onClose={() => setProdutoParaSelecao(null)} onConfirm={adicionarItem} />

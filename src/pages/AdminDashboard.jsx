@@ -10,7 +10,7 @@ import {
   IoStorefront, IoRestaurant, IoDesktopOutline, IoTicketOutline,
   IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
-  IoCloudUploadOutline
+  IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt } from 'react-icons/fa'; 
 
@@ -27,6 +27,8 @@ const ActionButton = ({ title, subtitle, icon, themeColor }) => {
     indigo: "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:shadow-indigo-200",
     slate: "bg-slate-50 text-slate-600 group-hover:bg-slate-600 group-hover:shadow-slate-200",
     cyan: "bg-cyan-50 text-cyan-600 group-hover:bg-cyan-600 group-hover:shadow-cyan-200",
+    emerald: "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:shadow-emerald-200",
+    amber: "bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:shadow-amber-200",
   };
 
   return (
@@ -70,6 +72,10 @@ const AdminDashboard = () => {
     return currentUser?.permissoes?.includes(perm);
   };
 
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const nomeUsuario = currentUser?.displayName || currentUser?.nome || currentUser?.email?.split('@')[0] || 'Admin';
+
   const menuGroups = [
     {
       title: "⚡ Operação Diária",
@@ -100,6 +106,10 @@ const AdminDashboard = () => {
         { path: '/admin/reports', title: 'Relatórios Fiscais', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', adminOnly: true },
         { path: '/admin/relatorio-cancelamentos', title: 'Cancelamentos', sub: 'Auditoria de exclusões master', icon: <IoTrashBin />, cor: 'red', adminOnly: true },
         { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: 'Gerencie garçons e permissões', icon: <FaUsers />, cor: 'indigo', adminOnly: true },
+        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: 'Performance de garçons e motoboys', icon: <IoStatsChart />, cor: 'amber', adminOnly: true },
+        { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/avaliacoes', title: 'Avaliações', sub: 'Responder reviews dos clientes', icon: <IoStatsChart />, cor: 'yellow', adminOnly: true },
+        { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', adminOnly: true },
       ]
     },
     {
@@ -107,6 +117,8 @@ const AdminDashboard = () => {
       description: "Ajustes técnicos e integrações",
       items: [
         { path: '/admin/multi-platform', title: 'Integrações', sub: 'iFood, WhatsApp e impressoras', icon: <IoShareSocial />, cor: 'teal', adminOnly: true },
+        { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: 'Pedido automático via WhatsApp', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
+        { path: '/admin/marketing', title: 'Marketing Automático', sub: 'Reengaje clientes inativos', icon: <IoMegaphoneOutline />, cor: 'purple', adminOnly: true },
         { path: '/admin/cores', title: 'Identidade Visual', sub: 'Cores e tema da loja', icon: <IoColorPalette />, cor: 'pink', adminOnly: true },
         { path: '/admin/configuracoes', title: 'Configurações Gerais', sub: 'Senha Master e segurança', icon: <IoSettings />, cor: 'slate', adminOnly: true },
         { path: '/admin/config-fiscal', title: 'Fiscal & Certificado', sub: 'Configurar NFC-e e PlugNotas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
@@ -116,8 +128,25 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 font-sans pb-20">
-      <div className="w-full space-y-10">
+      <div className="w-full space-y-8">
 
+        {/* TOP BAR — compacto */}
+        <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-black text-slate-800 tracking-tight">{saudacao}, {nomeUsuario} 👋</h1>
+            <p className="text-xs text-slate-400 font-medium">
+              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          </div>
+          <button 
+            onClick={() => { localStorage.clear(); window.location.href = '/login'; }}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-all"
+          >
+            <IoLogOutOutline size={16} /> Sair
+          </button>
+        </div>
+
+        {/* FATURAMENTO */}
         {isRealAdmin && (
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-all duration-300">
             <button 
@@ -148,6 +177,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {/* MENU GROUPS — cards grandes originais */}
         <div className="space-y-12">
           {menuGroups.map((grupo, idx) => {
             const itensPermitidos = grupo.items.filter(item => {

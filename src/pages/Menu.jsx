@@ -26,6 +26,7 @@ const PaymentModal = lazy(() => import('../components/PaymentModal'));
 const RaspadinhaModal = lazy(() => import('../components/RaspadinhaModal'));
 const AIChatAssistant = lazy(() => import('../components/ai/AIChatAssistant'));
 const AIWidgetButton = lazy(() => import('../components/AIWidgetButton'));
+const ReviewModal = lazy(() => import('../components/ReviewModal'));
 
 const auth = getAuth();
 
@@ -63,7 +64,7 @@ export default function Menu() {
   const { loading, allProdutos, estabelecimentoInfo, actualEstabelecimentoId, ordemCategorias, bairrosDisponiveis, coresEstabelecimento } = useEstablishment(estabelecimentoSlug);
 
   // Carrinho
-  const { carrinho, setCarrinho, subtotalCalculado, adicionarItem, alterarQuantidade, removerItem, limparCarrinho, adicionarBrinde } = useCart();
+  const { carrinho, setCarrinho, subtotalCalculado, adicionarItem, alterarQuantidade, removerItem, limparCarrinho, adicionarBrinde, carrinhoRecuperado, descartarRecuperacao } = useCart();
 
   // Tempo
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -71,6 +72,30 @@ export default function Menu() {
     const interval = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // 🔁 Pedir de Novo — pegar itens salvos do histórico
+  useEffect(() => {
+    if (loading || allProdutos.length === 0) return;
+    const repetir = localStorage.getItem('ideafood_repetir_pedido');
+    if (!repetir) return;
+    localStorage.removeItem('ideafood_repetir_pedido');
+    try {
+      const itens = JSON.parse(repetir);
+      let adicionados = 0;
+      itens.forEach(item => {
+        const produtoEncontrado = allProdutos.find(p => p.nome === item.nome);
+        if (produtoEncontrado) {
+          for (let i = 0; i < (item.quantidade || 1); i++) {
+            adicionarItem({ ...produtoEncontrado, observacao: item.observacoes || '' });
+          }
+          adicionados++;
+        }
+      });
+      if (adicionados > 0) {
+        toast.success(`🔁 ${adicionados} ${adicionados === 1 ? 'item adicionado' : 'itens adicionados'} ao carrinho!`);
+      }
+    } catch {}
+  }, [loading, allProdutos]);
 
   // Dados do cliente
   const [nomeCliente, setNomeCliente] = useState('');
@@ -118,6 +143,8 @@ export default function Menu() {
   const [pedidoParaPagamento, setPedidoParaPagamento] = useState(null);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
   const [showOrderConfirmationModal, setShowOrderConfirmationModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [ultimoPedidoId, setUltimoPedidoId] = useState(null);
 
   // Raspadinha
   const [showRaspadinha, setShowRaspadinha] = useState(false);
@@ -464,6 +491,7 @@ export default function Menu() {
       catch (e) { console.warn('Erro estoque:', e); }
 
       setShowOrderConfirmationModal(true);
+      setUltimoPedidoId(idPedido);
       limparCarrinho();
       setShowPaymentModal(false);
       toast.success('Pedido enviado com sucesso!');
@@ -527,6 +555,75 @@ export default function Menu() {
           coresEstabelecimento={coresEstabelecimento}
         />
 
+        {/* Sugestões Inteligentes */}
+        {carrinho.length > 0 && (() => {
+          const categoriasNoCarrinho = new Set(carrinho.map(c => (c.categoria || '').toLowerCase()));
+          const idsNoCarrinho = new Set(carrinho.map(c => c.id));
+          
+          // Regras de sugestão por categoria
+          const sugestaoMap = {
+            'lanches': ['bebidas', 'refrigerante', 'sucos', 'sobremesas', 'porcoes'],
+            'hamburgueres': ['bebidas', 'refrigerante', 'acompanhamentos', 'porcoes'],
+            'hambúrgueres': ['bebidas', 'refrigerante', 'acompanhamentos', 'porcoes'],
+            'pizzas': ['bebidas', 'refrigerante', 'sobremesas'],
+            'hot dog': ['bebidas', 'refrigerante', 'porcoes'],
+            'esfihas': ['bebidas', 'refrigerante', 'sobremesas'],
+            'acai': ['complementos', 'adicionais'],
+            'bebidas': ['lanches', 'hamburgueres', 'pizzas', 'porcoes'],
+            'porcoes': ['bebidas', 'refrigerante', 'sucos'],
+          };
+          
+          const catsSugeridas = new Set();
+          categoriasNoCarrinho.forEach(cat => {
+            const norms = Object.entries(sugestaoMap);
+            norms.forEach(([key, vals]) => {
+              if (cat.includes(key)) vals.forEach(v => catsSugeridas.add(v));
+            });
+          });
+          
+          // Se não achou sugestões por regra, sugere as mais populares
+          if (catsSugeridas.size === 0) {
+            catsSugeridas.add('bebidas');
+            catsSugeridas.add('sobremesas');
+          }
+          
+          const sugestoes = allProdutos.filter(p => {
+            if (idsNoCarrinho.has(p.id)) return false;
+            if (p.ativo === false) return false;
+            const catNorm = (p.categoria || '').toLowerCase();
+            return [...catsSugeridas].some(s => catNorm.includes(s));
+          }).slice(0, 4);
+          
+          if (sugestoes.length === 0) return null;
+          
+          return (
+            <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-100">
+              <h3 className="text-base font-black text-gray-800 mb-3 flex items-center gap-2">
+                💡 Vai bem com o que você pediu
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {sugestoes.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleAbrirModalProduto(item)}
+                    className="bg-white rounded-xl p-3 border border-amber-100 flex items-center gap-3 hover:shadow-md hover:border-amber-200 transition-all text-left active:scale-[0.98]"
+                  >
+                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden shrink-0">
+                      {item.imageUrl && <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-gray-800 truncate">{item.nome}</p>
+                      <p className="text-[10px] font-bold text-emerald-600">
+                        R$ {(Number(item.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Produtos */}
         {categoriasOrdenadas.map(cat => {
           const items = menuAgrupado[cat];
@@ -580,6 +677,27 @@ export default function Menu() {
           />
         </div>
       </div>
+      {/* Banner de Recuperação de Carrinho */}
+      {carrinhoRecuperado && carrinho.length > 0 && (
+        <div className="fixed bottom-20 left-0 right-0 z-[200] px-4 animate-slide-up">
+          <div className="max-w-lg mx-auto bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-2xl shadow-orange-300/50">
+            <div className="flex items-center justify-between">
+              <div className="text-white">
+                <p className="font-black text-sm">🛒 Ei, você esqueceu algo!</p>
+                <p className="text-[11px] opacity-90">{carrinho.length} {carrinho.length === 1 ? 'item' : 'itens'} no carrinho — R$ {subtotalCalculado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={descartarRecuperacao} className="px-3 py-2 bg-white/20 text-white rounded-xl text-xs font-bold hover:bg-white/30 transition-all">
+                  Descartar
+                </button>
+                <button onClick={() => { setCarrinhoRecuperado?.(false); scrollToResumo(); }} className="px-3 py-2 bg-white text-orange-600 rounded-xl text-xs font-black hover:bg-orange-50 transition-all">
+                  Ver Pedido
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Barra fixa */}
       <CartBar
@@ -610,9 +728,17 @@ export default function Menu() {
       {/* Modal de confirmação */}
       {showOrderConfirmationModal && (
         <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900">
-          <div className="bg-white p-8 rounded-2xl text-center shadow-2xl">
-            <h2 className="text-3xl font-bold mb-4">🎉 Sucesso!</h2>
-            <button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Fechar</button>
+          <div className="bg-white p-8 rounded-2xl text-center shadow-2xl max-w-sm w-full">
+            <h2 className="text-3xl font-bold mb-2">🎉 Sucesso!</h2>
+            <p className="text-gray-500 text-sm mb-6">Seu pedido foi enviado e está sendo preparado</p>
+            <div className="space-y-3">
+              <button onClick={() => { setShowOrderConfirmationModal(false); setTimeout(() => setShowReviewModal(true), 500); }} className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-amber-600 transition-all">
+                ⭐ Avaliar Pedido
+              </button>
+              <button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all">
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -643,6 +769,18 @@ export default function Menu() {
         @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slide-up 0.3s ease-out; }
       `}</style>
+
+      {/* Review Modal */}
+      <Suspense fallback={null}>
+        <ReviewModal
+          isOpen={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          pedidoId={ultimoPedidoId}
+          estabelecimentoId={actualEstabelecimentoId}
+          clienteNome={nomeCliente}
+          clienteId={currentUser?.uid}
+        />
+      </Suspense>
     </div>
   );
 }
