@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, Timestamp, updateDoc, arrayUnion, increment } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { toast } from 'react-toastify';
 import { v4 as uuidv4 } from 'uuid';
@@ -411,10 +411,23 @@ export default function Menu() {
       const snap = await getDocs(q);
       if (snap.empty) { toast.error('Cupom inválido ou expirado.'); return; }
 
-      const cupom = snap.docs[0].data();
+      const cupomDoc = snap.docs[0];
+      const cupom = cupomDoc.data();
+      const cupomId = cupomDoc.id;
+
       if (cupom.validadeFim.toDate() < new Date()) { toast.error('Este cupom já expirou.'); return; }
       if (cupom.minimoPedido && subtotalCalculado < cupom.minimoPedido) {
         toast.warn(`Valor mínimo: R$ ${cupom.minimoPedido.toFixed(2)}`); return;
+      }
+
+      // Verificar se o usuário já usou este cupom
+      if (currentUser && Array.isArray(cupom.usuariosQueUsaram) && cupom.usuariosQueUsaram.includes(currentUser.uid)) {
+        toast.error('Você já utilizou este cupom anteriormente.'); return;
+      }
+
+      // Verificar se atingiu o limite de usos
+      if (cupom.usosMaximos && (cupom.usosAtuais || 0) >= cupom.usosMaximos) {
+        toast.error('Este cupom atingiu o limite máximo de usos.'); return;
       }
 
       let valorDesc = 0;
@@ -422,7 +435,8 @@ export default function Menu() {
       else if (cupom.tipoDesconto === 'valorFixo') valorDesc = cupom.valorDesconto;
       else if (cupom.tipoDesconto === 'freteGratis') valorDesc = taxaAplicada;
 
-      setAppliedCoupon(cupom);
+      // Salva o cupom com o ID do doc para dar baixa depois
+      setAppliedCoupon({ ...cupom, _docId: cupomId });
       setDiscountAmount(valorDesc);
       toast.success('Cupom aplicado com sucesso!');
     } catch { toast.error('Erro ao validar cupom.'); }
@@ -489,6 +503,23 @@ export default function Menu() {
 
       try { await estoqueService.darBaixaEstoque(actualEstabelecimentoId, carrinho); }
       catch (e) { console.warn('Erro estoque:', e); }
+
+      // Dar baixa no cupom: incrementar uso e registrar cliente
+      if (appliedCoupon?._docId && currentUser) {
+        try {
+          const cupomRef = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons', appliedCoupon._docId);
+          const novoTotal = (appliedCoupon.usosAtuais || 0) + 1;
+          const updateCupom = {
+            usosAtuais: increment(1),
+            usuariosQueUsaram: arrayUnion(currentUser.uid)
+          };
+          // Desativa automaticamente se atingiu o limite
+          if (appliedCoupon.usosMaximos && novoTotal >= appliedCoupon.usosMaximos) {
+            updateCupom.ativo = false;
+          }
+          await updateDoc(cupomRef, updateCupom);
+        } catch (e) { console.warn('Erro ao dar baixa no cupom:', e); }
+      }
 
       setShowOrderConfirmationModal(true);
       setUltimoPedidoId(idPedido);
