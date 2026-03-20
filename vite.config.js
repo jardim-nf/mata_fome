@@ -9,10 +9,14 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'es2015',
       cssMinify: true,
+      sourcemap: false,
+      chunkSizeWarningLimit: 500,
+      minify: 'esbuild',
       rollupOptions: {
         output: {
           manualChunks: {
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/analytics', 'firebase/functions', 'firebase/storage'],
             'vendor-ui': ['framer-motion', 'lucide-react', 'react-icons', 'aos'],
             'vendor-charts': ['chart.js', 'react-chartjs-2', 'chartjs-plugin-datalabels'],
             'vendor-pdf': ['jspdf', 'html2canvas', 'react-to-print'],

@@ -1,22 +1,21 @@
-// Service Worker — IdeaFood PWA
-const CACHE_NAME = 'ideafood-v1';
-const STATIC_ASSETS = [
+// Service Worker — IdeaFood PWA (v2 - Otimizado)
+const CACHE_NAME = 'ideafood-v2';
+
+// Recursos críticos cacheados na instalação
+const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/food.png',
-  '/campainha.mp3',
+  '/manifest.json',
 ];
 
-// Instalação: cacheia recursos estáticos
+// Instalação: cacheia recursos essenciais
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch(() => {
-        // Ignora erros de cache individuais
-        return Promise.allSettled(
-          STATIC_ASSETS.map(url => cache.add(url).catch(() => null))
-        );
-      });
+      return Promise.allSettled(
+        PRECACHE_ASSETS.map(url => cache.add(url).catch(() => null))
+      );
     })
   );
   self.skipWaiting();
@@ -32,35 +31,102 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: estratégia inteligente
+// Fetch: estratégia inteligente por tipo de recurso
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Ignora chamadas Firebase/API
-  if (url.hostname.includes('firebase') || url.hostname.includes('googleapis') || url.hostname.includes('mercadopago')) {
+  // Ignora chamadas de API/Firebase (nunca cachear dados dinâmicos)
+  if (
+    url.hostname.includes('firebase') || 
+    url.hostname.includes('googleapis') && !url.hostname.includes('fonts') ||
+    url.hostname.includes('mercadopago') ||
+    url.hostname.includes('firebaseio') ||
+    url.hostname.includes('cloudfunctions')
+  ) {
     return;
   }
 
-  // Navegação: network-first (SPA)
+  // Ignora requests não-GET
+  if (event.request.method !== 'GET') return;
+
+  // Navegação (SPA): network-first, fallback para cache
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
+        .then((response) => {
+          // Atualiza cache do index.html
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
         .catch(() => caches.match('/index.html'))
     );
     return;
   }
 
-  // Assets estáticos: cache-first
-  if (event.request.destination === 'script' || event.request.destination === 'style' || event.request.destination === 'image') {
+  // JS/CSS com hash no nome (assets/xxx-HASH.js): cache-first (imutáveis)
+  if (url.pathname.startsWith('/assets/') && /\.[a-f0-9]{8,}\.(js|css)$/i.test(url.pathname)) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
-        return cached || fetch(event.request).then((response) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
           if (response && response.ok) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Google Fonts: cache-first (raramente mudam)
+  if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Imagens/áudio: stale-while-revalidate
+  if (['image', 'audio'].includes(event.request.destination)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        const fetchPromise = fetch(event.request).then((response) => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
           }
           return response;
         }).catch(() => cached);
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // Demais assets (CSS não-hashed, scripts): stale-while-revalidate
+  if (['script', 'style'].includes(event.request.destination)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        const fetchPromise = fetch(event.request).then((response) => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        }).catch(() => cached);
+        return cached || fetchPromise;
       })
     );
     return;

@@ -1,7 +1,6 @@
 // src/pages/Divulgacao.jsx — Material de Vendas PDF (Download Direto)
 import React, { useEffect, useState } from 'react';
 import { IoLogoWhatsapp, IoDownloadOutline } from 'react-icons/io5';
-import html2pdf from 'html2pdf.js';
 
 const TELEFONE = '(22) 99810-2575';
 
@@ -57,6 +56,10 @@ function Divulgacao() {
       // Hide the download button during generation
       const btnEl = document.getElementById('btn-print-divulgacao');
       if (btnEl) btnEl.style.display = 'none';
+
+      // Carrega html2pdf sob demanda (evita carregar 900KB+ na primeira visita)
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default;
 
       const opt = {
         margin: [0, 0, 0, 0],

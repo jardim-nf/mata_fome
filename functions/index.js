@@ -1,5 +1,6 @@
 // functions/index.js
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
 import OpenAI from "openai";
@@ -1172,3 +1173,97 @@ export const configurarMarketing = onCall({ cors: true }, async (request) => {
     throw new HttpsError('internal', error.message);
   }
 });
+
+// ==================================================================
+// 18. NOTIFICAÇÃO AUTOMÁTICA WHATSAPP (Trigger de status do pedido)
+// ==================================================================
+const MENSAGENS_STATUS = {
+  preparo: (nome, nomeEstab) => `🔥 *${nomeEstab}*\n\nOlá, ${nome}! Seu pedido já está sendo preparado! 👨‍🍳`,
+  em_entrega: (nome, nomeEstab, motoboyNome) => `🛵 *${nomeEstab}*\n\nÓtima notícia, ${nome}! Seu pedido saiu para entrega!${motoboyNome ? `\n🏍️ Entregador: *${motoboyNome}*` : ''}`,
+  pronto_para_servir: (nome, nomeEstab) => `✅ *${nomeEstab}*\n\n${nome}, seu pedido está *pronto*! Pode retirar. 🎉`,
+  finalizado: (nome, nomeEstab) => `✅ *${nomeEstab}*\n\nPedido entregue! Obrigado pela preferência, ${nome}! 😊\n\nVolte sempre! 💛`
+};
+
+export const notificarClienteWhatsApp = onDocumentUpdated(
+  {
+    document: 'estabelecimentos/{estabId}/pedidos/{pedidoId}',
+    secrets: [whatsappApiToken],
+    maxInstances: 5
+  },
+  async (event) => {
+    try {
+      const antes = event.data?.before?.data();
+      const depois = event.data?.after?.data();
+
+      if (!antes || !depois) return;
+
+      // Só dispara se o status realmente mudou
+      const statusAntes = antes.status;
+      const statusDepois = depois.status;
+      if (statusAntes === statusDepois) return;
+
+      // Só notifica para status relevantes
+      const gerarMensagem = MENSAGENS_STATUS[statusDepois];
+      if (!gerarMensagem) return;
+
+      // Pega o telefone do cliente
+      const telefoneCliente = depois.cliente?.telefone || depois.clienteTelefone || '';
+      if (!telefoneCliente) {
+        logger.info(`📱 Pedido ${event.params.pedidoId}: Sem telefone, pulando WhatsApp.`);
+        return;
+      }
+
+      // Busca config WhatsApp do estabelecimento
+      const estabId = event.params.estabId;
+      const estabSnap = await db.collection('estabelecimentos').doc(estabId).get();
+      if (!estabSnap.exists) return;
+
+      const estab = estabSnap.data();
+      const whatsappConfig = estab.whatsapp;
+
+      // Só envia se o WhatsApp está ativo e configurado
+      if (!whatsappConfig?.ativo || !whatsappConfig?.phoneNumberId) {
+        return;
+      }
+
+      const accessToken = whatsappConfig.accessToken || whatsappApiToken.value();
+      const phoneNumberId = whatsappConfig.phoneNumberId;
+      const nomeEstab = estab.nome || 'Restaurante';
+      const nomeCliente = depois.cliente?.nome || depois.clienteNome || 'Cliente';
+      const motoboyNome = depois.motoboyNome || '';
+
+      // Gera a mensagem personalizada
+      const mensagem = gerarMensagem(nomeCliente, nomeEstab, motoboyNome);
+
+      // Formata o telefone
+      const tel = telefoneCliente.replace(/\D/g, '');
+      const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
+
+      // Envia pelo WhatsApp Business API
+      const response = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: telFinal,
+          type: 'text',
+          text: { body: mensagem }
+        })
+      });
+
+      if (response.ok) {
+        logger.info(`📱 WhatsApp enviado para ${telFinal} | Status: ${statusDepois} | Estab: ${nomeEstab}`);
+      } else {
+        const erro = await response.json().catch(() => ({}));
+        logger.warn(`⚠️ Falha ao enviar WhatsApp para ${telFinal}:`, erro);
+      }
+
+    } catch (error) {
+      // Nunca deixa o trigger falhar — apenas loga
+      logger.error('❌ Erro no trigger de notificação WhatsApp:', error);
+    }
+  }
+);

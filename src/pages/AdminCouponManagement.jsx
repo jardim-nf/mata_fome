@@ -208,9 +208,15 @@ function AdminCouponManagement() {
         setTipoDesconto(coupon.tipoDesconto);
         setValorDesconto(coupon.valorDesconto?.toString() || '');
         setMinimoPedido(coupon.minimoPedido?.toString() || '');
-        // NOTA: Converte o Timestamp do Firebase para a string de formato 'datetime-local'
-        setValidadeInicio(coupon.validadeInicio ? coupon.validadeInicio.toDate().toISOString().slice(0, 16) : '');
-        setValidadeFim(coupon.validadeFim ? coupon.validadeFim.toDate().toISOString().slice(0, 16) : '');
+        // Converte o Timestamp do Firebase para a string de formato 'datetime-local' em hora LOCAL (sem converter para UTC)
+        const toLocalDatetimeString = (timestamp) => {
+            if (!timestamp) return '';
+            const d = timestamp.toDate();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+        setValidadeInicio(toLocalDatetimeString(coupon.validadeInicio));
+        setValidadeFim(toLocalDatetimeString(coupon.validadeFim));
         setUsosMaximos(coupon.usosMaximos?.toString() || '');
         setAtivo(coupon.ativo);
         window.scrollTo({ top: 0, behavior: 'smooth' });
