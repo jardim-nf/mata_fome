@@ -21,7 +21,7 @@ export default function ReviewModal({ isOpen, onClose, pedidoId, estabelecimento
       const reviewId = `${pedidoId}_${clienteId || 'anon'}`;
       // Salva na subcoleção de pedidos (mesmo path que já tem permissão)
       await setDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', pedidoId), {
-        avaliacao: { rating, comentario: comentario.trim(), clienteNome: clienteNome || 'Anônimo', clienteId: clienteId || null, criadoEm: new Date() }
+        avaliacao: { estrelas: rating, comentario: comentario.trim(), clienteNome: clienteNome || 'Anônimo', clienteId: clienteId || null, criadoEm: new Date() }
       }, { merge: true });
       setEnviado(true);
       toast.success('Obrigado pela avaliação! ⭐');
