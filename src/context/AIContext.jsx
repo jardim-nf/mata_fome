@@ -4,7 +4,16 @@ import React, { createContext, useState, useContext } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { v4 as uuidv4 } from 'uuid';
 
-const AIContext = createContext();
+// Valor padrão garante que useAI() nunca retorna undefined (ex: Menu fora do AIProvider)
+const AIContext = createContext({
+  isWidgetOpen: false,
+  toggleWidget: () => {},
+  closeWidget: () => {},
+  openWidget: () => {},
+  conversation: [],
+  sendMessage: async () => {},
+  aiThinking: false
+});
 
 export const useAI = () => useContext(AIContext);
 
