@@ -45,30 +45,35 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
     data.push(`*** ${tipoComanda.toUpperCase()} ***\n`);
     data.push(TEXT_NORMAL + BOLD_OFF);
     
-    // 💡 SOLUÇÃO: Fallback seguro para ID do pedido
+    // Fallback seguro para ID do pedido
     const orderId = pedido.vendaId || pedido.id || '000000';
     const shortId = typeof orderId === 'string' ? orderId.slice(-6).toUpperCase() : '000000';
     data.push(`Pedido: #${shortId}\n`);
-    data.push(`Data: ${formatarData(pedido.createdAt)}\n`);
+    data.push(`Data: ${formatarData(pedido.createdAt || pedido.dataPedido || pedido.criadoEm || pedido.updatedAt)}\n`);
     data.push("--------------------------------\n");
 
     // Cliente
     data.push(LEFT);
-    // 💡 SOLUÇÃO: Verifica cliente, se não tiver assume que é MESA
+    const isDelivery = pedido.source !== 'salao' && pedido.tipo !== 'mesa' && !pedido.mesaNumero;
     const nomeCliente = pedido.cliente?.nome || pedido.nome || 'Mesa ' + (pedido.mesaNumero || pedido.numero || '');
+    
+    if (isDelivery) {
+        data.push(TEXT_DOUBLE + BOLD_ON + `DELIVERY\n` + TEXT_NORMAL + BOLD_OFF);
+    }
+    
     data.push(BOLD_ON + `Cliente: ${nomeCliente}\n` + BOLD_OFF);
     
-    if (tipoComanda === 'balcao') {
+    if (tipoComanda === 'balcao' || isDelivery) {
         const fone = pedido.cliente?.telefone || pedido.telefone;
         if (fone) data.push(`Telefone: ${fone}\n`);
         
         if (pedido.cliente?.endereco) {
             data.push(`End: ${pedido.cliente.endereco.rua || ''}, ${pedido.cliente.endereco.numero || ''}\n`);
             if (pedido.cliente.endereco.bairro) data.push(`Bairro: ${pedido.cliente.endereco.bairro}\n`);
-        } else if (pedido.tipo) {
+            if (pedido.cliente.endereco.complemento) data.push(`Comp: ${pedido.cliente.endereco.complemento}\n`);
+            if (pedido.cliente.endereco.referencia) data.push(`Ref: ${pedido.cliente.endereco.referencia}\n`);
+        } else if (pedido.tipo && !isDelivery) {
             data.push(`Tipo: ${String(pedido.tipo).toUpperCase()}\n`);
-        } else {
-            data.push(`Tipo: BALCAO / MESA\n`);
         }
     }
     data.push("--------------------------------\n");
@@ -77,28 +82,35 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
     data.push(CENTER + BOLD_ON + "ITENS DO PEDIDO\n" + BOLD_OFF + LEFT);
     
     itensDaComanda.forEach(item => {
-        // 💡 SOLUÇÃO: Caça o nome e quantidade em todas as propriedades possíveis
+        // Ignora itens cancelados
+        if (item.status === 'cancelado') return;
+
         const nomeProduto = item.nome || item.produto?.nome || item.name || 'Produto sem nome';
         const qtd = Number(item.quantidade || item.qtd || 1) || 1;
         const preco = Number(item.preco || item.produto?.preco || 0) || 0;
 
         data.push(BOLD_ON + TEXT_DOUBLE + `${qtd}x ${nomeProduto}\n` + TEXT_NORMAL + BOLD_OFF);
         
-        // Adicionais e Variações
-        if (item.variacao?.nome) {
-            data.push(`  => ${item.variacao.nome}\n`);
+        // Variações
+        if (item.variacaoSelecionada?.nome || item.variacao?.nome) {
+            const varNome = item.variacaoSelecionada?.nome || item.variacao?.nome;
+            data.push(`  => ${varNome}\n`);
         }
-        if (item.adicionais && Array.isArray(item.adicionais)) {
-            item.adicionais.forEach(add => {
-                data.push(`  + ${add.nome || 'Adicional'}\n`);
+        
+        // 🔥 CORREÇÃO: Lê a variável correta dos complementos (adicionaisSelecionados) 🔥
+        const complementos = item.adicionaisSelecionados || item.adicionais || [];
+        if (Array.isArray(complementos) && complementos.length > 0) {
+            complementos.forEach(add => {
+                data.push(BOLD_ON + `  + ${add.nome || 'Adicional'}\n` + BOLD_OFF);
             });
         }
+
         if (item.observacao) {
             data.push(BOLD_ON + `  OBS: ${item.observacao}\n` + BOLD_OFF);
         }
         
         // No balcão mostra o preço
-        if (tipoComanda === 'balcao') {
+        if (tipoComanda === 'balcao' || isDelivery) {
             data.push(`  Valor: R$ ${(preco * qtd).toFixed(2)}\n`);
         }
         data.push("\n"); // Pula linha entre itens
@@ -106,12 +118,15 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
 
     data.push("--------------------------------\n");
 
-    // Resumo financeiro (Só no Balcão)
-    if (tipoComanda === 'balcao') {
-        // 💡 SOLUÇÃO: Previne o erro "NaN" (Not a Number)
+    // Resumo financeiro (Balcão e Delivery)
+    if (tipoComanda === 'balcao' || isDelivery) {
         const total = Number(pedido.totalFinal || pedido.total || 0) || 0;
         const taxa = Number(pedido.taxaEntrega || 0) || 0;
-        const subtotal = total - taxa;
+        const desconto = Number(pedido.valorDesconto || 0) || 0;
+        
+        let subtotal = total - taxa + desconto;
+        // Previne valores negativos se o cálculo base estiver estranho
+        if (subtotal < 0) subtotal = total; 
 
         data.push(LEFT);
         data.push(`Subtotal: R$ ${subtotal.toFixed(2)}\n`);
@@ -119,22 +134,27 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
         if (taxa > 0) {
             data.push(`Taxa Entrega: R$ ${taxa.toFixed(2)}\n`);
         }
+        if (desconto > 0) {
+            data.push(`Desconto: - R$ ${desconto.toFixed(2)}\n`);
+        }
+
         data.push(BOLD_ON + TEXT_DOUBLE + `TOTAL: R$ ${total.toFixed(2)}\n` + TEXT_NORMAL + BOLD_OFF);
         
-        const formaPgt = pedido.formaPagamento || pedido.metodoPagamento;
+        const formaPgt = pedido.formaPagamento || pedido.metodoPagamento || pedido.tipoPagamento;
         if (formaPgt) {
-            data.push(`Pagamento: ${formaPgt}\n`);
+            data.push(`Pagamento: ${formaPgt.toUpperCase()}\n`);
         }
         
         const troco = Number(pedido.trocoPara || 0);
         if (troco > 0) {
             data.push(`Troco para: R$ ${troco.toFixed(2)}\n`);
+            data.push(BOLD_ON + `Levar Troco: R$ ${(troco - total).toFixed(2)}\n` + BOLD_OFF);
         }
         data.push("--------------------------------\n");
     }
 
     data.push(CENTER);
-    data.push("MataFome PDV - idea.food\n");
+    data.push("IdeaFood PDV\n");
     data.push("\n\n\n\n"); // Espaço em branco pra a guilhotina não cortar o texto
     data.push(CUT);
     data.push(BEEP); // Apita no final
@@ -150,13 +170,17 @@ export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBa
         let itensCozinha = [];
         let itensBalcao = [];
 
-        // 💡 SOLUÇÃO: Busca itens até no carrinho se precisar
         const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
         const configRoteamento = roteamentoConfig || {};
 
+        // Identifica se é delivery para imprimir tudo na impressora principal
+        const isDelivery = pedido.source !== 'salao' && pedido.tipo !== 'mesa' && !pedido.mesaNumero;
+
         listaItens.forEach(item => {
+            // Ignora itens cancelados do roteamento
+            if (item.status === 'cancelado') return;
+
             const categoriaId = item.categoriaId || item.produto?.categoriaId || 'default';
-            // O fallback (se não configurou) é sempre balcão
             const destino = configRoteamento[categoriaId] || 'balcao'; 
 
             if (destino === 'cozinha') {
@@ -169,9 +193,11 @@ export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBa
             }
         });
 
-        // 💡 SOLUÇÃO: Se existir item, mas as regras de roteamento falharem, joga tudo pro balcão pra não perder a impressão.
-        if (listaItens.length > 0 && itensCozinha.length === 0 && itensBalcao.length === 0) {
-            itensBalcao = [...listaItens];
+        // Se for delivery, joga TUDO pro balcão de qualquer jeito (pra sair a via completa do motoboy)
+        if (isDelivery && listaItens.length > 0) {
+            itensBalcao = listaItens.filter(i => i.status !== 'cancelado');
+        } else if (listaItens.length > 0 && itensCozinha.length === 0 && itensBalcao.length === 0) {
+            itensBalcao = listaItens.filter(i => i.status !== 'cancelado');
         }
 
         // Manda para a impressora da Cozinha
