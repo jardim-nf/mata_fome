@@ -511,9 +511,9 @@ export default function Menu() {
           const novoTotal = (appliedCoupon.usosAtuais || 0) + 1;
           const updateCupom = {
             usosAtuais: increment(1),
+            totalDescontoGerado: increment(discountAmount),
             usuariosQueUsaram: arrayUnion(currentUser.uid)
           };
-          // Desativa automaticamente se atingiu o limite
           if (appliedCoupon.usosMaximos && novoTotal >= appliedCoupon.usosMaximos) {
             updateCupom.ativo = false;
           }

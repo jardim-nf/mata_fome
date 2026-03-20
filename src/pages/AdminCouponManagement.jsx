@@ -576,6 +576,11 @@ function AdminCouponManagement() {
                                                             <span>Mín: R$ {cupom.minimoPedido.toFixed(2).replace('.', ',')}</span>
                                                         )}
                                                         <span>Validade: {cupom.validadeFim?.toDate().toLocaleDateString('pt-BR')}</span>
+                                                        {cupom.totalDescontoGerado > 0 && (
+                                                            <span className="text-green-700 font-semibold">
+                                                                💸 R$ {Number(cupom.totalDescontoGerado).toFixed(2).replace('.', ',')} em descontos
+                                                            </span>
+                                                        )}
                                                         <span className="flex items-center space-x-1">
                                                             {cupom.usosMaximos ? (
                                                                 <>
@@ -601,10 +606,14 @@ function AdminCouponManagement() {
                                                     <IoPencil />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteCoupon(cupom.id, cupom.codigo)}
-                                                    className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                    onClick={() => (cupom.usosAtuais || 0) >= 1 ? toast.warn('❌ Cupom com usos registrados não pode ser excluído.') : handleDeleteCoupon(cupom.id, cupom.codigo)}
+                                                    className={`p-2 rounded-lg transition-colors ${
+                                                        (cupom.usosAtuais || 0) >= 1
+                                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                            : 'bg-red-100 text-red-600 hover:bg-red-200'
+                                                    }`}
                                                     aria-label="Excluir"
-                                                    title="Excluir cupom"
+                                                    title={(cupom.usosAtuais || 0) >= 1 ? 'Não é possível excluir cupons já utilizados' : 'Excluir cupom'}
                                                 >
                                                     <IoTrash />
                                                 </button>
