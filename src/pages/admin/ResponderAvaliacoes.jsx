@@ -9,21 +9,29 @@ import { toast } from 'react-toastify';
 import { IoArrowBack, IoStarOutline, IoStar, IoChatbubbleEllipsesOutline, IoSendOutline, IoCheckmarkCircle } from 'react-icons/io5';
 
 function ResponderAvaliacoes() {
-  const { userData } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const { userData, estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal;
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [respostas, setRespostas] = useState({});
   const [filtro, setFiltro] = useState('todos'); // todos, sem_resposta, respondidos
 
   useEffect(() => {
-    if (!estabId) return;
+    if (!estabId) { console.warn('⚠️ estabId não encontrado:', { userData, estabelecimentoIdPrincipal }); return; }
     const load = async () => {
+      console.log('📋 Carregando avaliações para estabId:', estabId);
       const snap = await getDocs(query(collection(db, 'estabelecimentos', estabId, 'pedidos'), orderBy('createdAt', 'desc')));
+      console.log('📦 Total de pedidos encontrados:', snap.docs.length);
       const comAvaliacao = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(p => p.avaliacao && p.avaliacao.estrelas);
-      setPedidos(comAvaliacao);
+        .filter(p => p.avaliacao && (p.avaliacao.estrelas || p.avaliacao.rating));
+      console.log('⭐ Pedidos com avaliação:', comAvaliacao.length);
+      // Normaliza: garante que sempre usa `estrelas`
+      const normalizados = comAvaliacao.map(p => ({
+        ...p,
+        avaliacao: { ...p.avaliacao, estrelas: p.avaliacao.estrelas || p.avaliacao.rating }
+      }));
+      setPedidos(normalizados);
       setLoading(false);
     };
     load();
