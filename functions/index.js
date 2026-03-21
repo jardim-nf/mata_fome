@@ -261,11 +261,35 @@ export const emitirNfcePlugNotas = onCall({
 
         // Mapear o tipo de pagamento do seu PDV para o PlugNotas
         let meioPagamento = "01"; // Padrão: Dinheiro
-        const metodoLower = String(venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "").toLowerCase();
+        const metodoRaw = venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "";
+        const metodoLower = String(metodoRaw).toLowerCase().trim();
 
-        if (metodoLower.includes('pix')) meioPagamento = "17";
-        else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('cartao')) meioPagamento = "03";
-        else if (metodoLower.includes('débito') || metodoLower.includes('debito')) meioPagamento = "04";
+        // Detectar PIX em todas as variações: 'pix', 'pix_manual', 'PIX', 'Pix', etc.
+        if (metodoLower.includes('pix')) {
+            meioPagamento = "17"; // PIX
+        } else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('credit')) {
+            meioPagamento = "03"; // Cartão de Crédito
+        } else if (metodoLower.includes('débito') || metodoLower.includes('debito') || metodoLower.includes('debit')) {
+            meioPagamento = "04"; // Cartão de Débito
+        } else if (metodoLower.includes('cartao') || metodoLower.includes('cartão') || metodoLower.includes('card')) {
+            meioPagamento = "03"; // Cartão genérico → Crédito como padrão
+        } else if (metodoLower.includes('dinheiro') || metodoLower.includes('cash')) {
+            meioPagamento = "01"; // Dinheiro
+        }
+
+        // Verificação adicional: se há registro de pagamento via PIX no Firestore, forçar código 17
+        try {
+            const pixDocRef = db.collection('pagamentos_pix').doc(vendaId);
+            const pixDocSnap = await pixDocRef.get();
+            if (pixDocSnap.exists && pixDocSnap.data()?.status === 'pago') {
+                logger.info(`💡 Pagamento PIX confirmado no Firestore para venda ${vendaId}. Forçando código 17.`);
+                meioPagamento = "17";
+            }
+        } catch (pixCheckError) {
+            logger.warn(`⚠️ Não foi possível verificar pagamentos_pix: ${pixCheckError.message}`);
+        }
+
+        logger.info(`💳 Forma de pagamento: "${metodoRaw}" → Código PlugNotas: "${meioPagamento}"`);
 
 // 4. Montar os dados de Pagamento com a regra do Cartão
         const dadosPagamento = {

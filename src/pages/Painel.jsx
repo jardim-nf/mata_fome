@@ -447,6 +447,10 @@ function Painel() {
             return acc + ((preco + adicionais) * qtd);
         }, 0) || 0;
 
+        // Normalizar forma de pagamento: pix_manual → pix, para garantir código correto na NFC-e
+        const rawFormaPag = pedido.formaPagamento || pedido.metodoPagamento || 'outros';
+        const normFormaPag = String(rawFormaPag).toLowerCase().includes('pix') ? 'pix' : rawFormaPag;
+
         const vendaData = {
             estabelecimentoId: estabelecimentoAtivo,
             pedidoId: pedido.id,
@@ -459,7 +463,7 @@ function Painel() {
                 categoria: item.categoria || ''
             })) || [],
             total: totalPedido,
-            formaPagamento: pedido.formaPagamento || 'outros',
+            formaPagamento: normFormaPag,
             clienteNome: pedido.cliente?.nome || 'Cliente',
             clienteTelefone: pedido.cliente?.telefone || '',
             clienteCpf: pedido.clienteCpf || null,
