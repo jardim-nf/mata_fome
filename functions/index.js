@@ -404,13 +404,38 @@ export const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, 
             return;
         }
 
-        const vendaRef = db.collection('vendas').doc(idIntegracao);
-        const vendaSnap = await vendaRef.get();
+        // Tentar encontrar a venda: primeiro pelo idIntegracao direto, 
+        // depois sem o sufixo de reenvio (ex: "vendaId_m1a2b3c" → "vendaId")
+        let vendaRef = db.collection('vendas').doc(idIntegracao);
+        let vendaSnap = await vendaRef.get();
 
         if (!vendaSnap.exists) {
-            logger.warn(`Venda não encontrada para o ID Integração: ${idIntegracao}`);
-            res.status(200).send('OK');
-            return;
+            // Tentar sem o sufixo de timestamp (gerado nos reenvios)
+            const vendaIdOriginal = idIntegracao.includes('_') 
+                ? idIntegracao.split('_').slice(0, -1).join('_')
+                : idIntegracao;
+            
+            logger.info(`🔍 Buscando venda pelo ID original: ${vendaIdOriginal}`);
+            vendaRef = db.collection('vendas').doc(vendaIdOriginal);
+            vendaSnap = await vendaRef.get();
+        }
+
+        if (!vendaSnap.exists) {
+            // Última tentativa: buscar por idIntegracao no campo fiscal
+            const querySnap = await db.collection('vendas')
+                .where('fiscal.idIntegracao', '==', idIntegracao)
+                .limit(1)
+                .get();
+            
+            if (!querySnap.empty) {
+                vendaRef = querySnap.docs[0].ref;
+                vendaSnap = querySnap.docs[0];
+                logger.info(`✅ Venda encontrada por query fiscal.idIntegracao: ${vendaRef.id}`);
+            } else {
+                logger.warn(`Venda não encontrada para o ID Integração: ${idIntegracao}`);
+                res.status(200).send('OK');
+                return;
+            }
         }
 
         const updateData = {
