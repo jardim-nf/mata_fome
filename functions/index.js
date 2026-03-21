@@ -307,12 +307,8 @@ export const emitirNfcePlugNotas = onCall({
         }
 
         // 5. Montar o Payload Principal
-        // Gerar idIntegracao ÚNICO para cada tentativa (evita cache do PlugNotas)
-        const sufixoUnico = `_${Date.now().toString(36)}`;
-        const idIntegracaoFinal = vendaId.length > 20 ? vendaId.slice(0, 20) + sufixoUnico : vendaId + sufixoUnico;
-
         const payload = [{
-            idIntegracao: idIntegracaoFinal,
+            idIntegracao: vendaId,
             presencial: true,
             consumidorFinal: true,
             natureza: "VENDA",
@@ -325,7 +321,7 @@ export const emitirNfcePlugNotas = onCall({
             pagamentos: [dadosPagamento]
         }];
 
-        logger.info("🚀 [V2 DEPLOY CONFIRMADO] Forma pagamento detectada:", metodoRaw, "→ Código:", meioPagamento);
+        logger.info("🚀 [V3] Forma pagamento:", metodoRaw, "→ Código:", meioPagamento);
         logger.info("📦 [DEBUG PLUGNOTAS] Payload enviado:", JSON.stringify(payload, null, 2));
 
         // 5. Disparar para a API do PlugNotas
@@ -338,7 +334,15 @@ export const emitirNfcePlugNotas = onCall({
             body: JSON.stringify(payload)
         });
 
-        const result = await response.json();
+        // Tratar resposta de forma segura (pode vir HTML em vez de JSON)
+        const responseText = await response.text();
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            logger.error("❌ PlugNotas retornou resposta inválida (não JSON):", responseText.slice(0, 500));
+            throw new HttpsError('internal', `Erro de comunicação com PlugNotas. Tente novamente em alguns minutos.`);
+        }
 
         // Se a API retornar erro de validação
         if (!response.ok) {
