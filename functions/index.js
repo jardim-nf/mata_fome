@@ -307,8 +307,12 @@ export const emitirNfcePlugNotas = onCall({
         }
 
         // 5. Montar o Payload Principal
+        // Gerar idIntegracao ÚNICO para cada tentativa (evita cache do PlugNotas)
+        const sufixoUnico = `_${Date.now().toString(36)}`;
+        const idIntegracaoFinal = vendaId.length > 20 ? vendaId.slice(0, 20) + sufixoUnico : vendaId + sufixoUnico;
+
         const payload = [{
-            idIntegracao: vendaId,
+            idIntegracao: idIntegracaoFinal,
             presencial: true,
             consumidorFinal: true,
             natureza: "VENDA",
@@ -321,6 +325,7 @@ export const emitirNfcePlugNotas = onCall({
             pagamentos: [dadosPagamento]
         }];
 
+        logger.info("🚀 [V2 DEPLOY CONFIRMADO] Forma pagamento detectada:", metodoRaw, "→ Código:", meioPagamento);
         logger.info("📦 [DEBUG PLUGNOTAS] Payload enviado:", JSON.stringify(payload, null, 2));
 
         // 5. Disparar para a API do PlugNotas
