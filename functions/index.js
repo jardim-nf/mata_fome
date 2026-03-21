@@ -264,9 +264,11 @@ export const emitirNfcePlugNotas = onCall({
         const metodoRaw = venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "";
         const metodoLower = String(metodoRaw).toLowerCase().trim();
 
-        // Detectar PIX em todas as variações: 'pix', 'pix_manual', 'PIX', 'Pix', etc.
+        // Desde Jul/2024 (IT 2024.002): PIX Dinâmico = 17, PIX Estático = 20
+        // PIX Estático (chave fixa, copia-e-cola) = código 20
+        // PIX Dinâmico (QR code único por transação, ex: Mercado Pago) = código 17
         if (metodoLower.includes('pix')) {
-            meioPagamento = "17"; // PIX
+            meioPagamento = "20"; // PIX Estático (padrão seguro)
         } else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('credit')) {
             meioPagamento = "03"; // Cartão de Crédito
         } else if (metodoLower.includes('débito') || metodoLower.includes('debito') || metodoLower.includes('debit')) {
@@ -277,19 +279,19 @@ export const emitirNfcePlugNotas = onCall({
             meioPagamento = "01"; // Dinheiro
         }
 
-        // Verificação adicional: se há registro de pagamento via PIX no Firestore, forçar código 17
+        // Se foi PIX via Mercado Pago (dinâmico), usar código 17
         try {
             const pixDocRef = db.collection('pagamentos_pix').doc(vendaId);
             const pixDocSnap = await pixDocRef.get();
             if (pixDocSnap.exists && pixDocSnap.data()?.status === 'pago') {
-                logger.info(`💡 Pagamento PIX confirmado no Firestore para venda ${vendaId}. Forçando código 17.`);
+                logger.info(`💡 PIX Dinâmico (Mercado Pago) confirmado para venda ${vendaId}. Usando código 17.`);
                 meioPagamento = "17";
             }
         } catch (pixCheckError) {
             logger.warn(`⚠️ Não foi possível verificar pagamentos_pix: ${pixCheckError.message}`);
         }
 
-        logger.info(`💳 Forma de pagamento: "${metodoRaw}" → Código PlugNotas: "${meioPagamento}"`);
+        logger.info(`💳 [V4] Forma de pagamento: "${metodoRaw}" → Código PlugNotas: "${meioPagamento}"`);
 
 // 4. Montar os dados de Pagamento com a regra do Cartão
         const dadosPagamento = {
