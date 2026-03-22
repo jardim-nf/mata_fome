@@ -33,9 +33,10 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
                 const inicioData = new Date(anoI, mesI - 1, diaI, 0, 0, 0);
                 const fimData = new Date(anoF, mesF - 1, diaF, 23, 59, 59);
 
-                // Busca na coleção de vendas baseada no período selecionado
+                // Busca na coleção raiz de vendas, filtrando pelo estabelecimento e período
                 const q = query(
-                    collection(db, `estabelecimentos/${estabelecimentoId}/vendas`),
+                    collection(db, 'vendas'),
+                    where('estabelecimentoId', '==', estabelecimentoId),
                     where('criadoEm', '>=', Timestamp.fromDate(inicioData)),
                     where('criadoEm', '<=', Timestamp.fromDate(fimData))
                 );
@@ -49,8 +50,8 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
                 snapshot.docs.forEach(doc => {
                     const venda = doc.data();
                     
-                    // Considera apenas se veio de uma mesa
-                    if (!venda.mesaNumero) return;
+                    // Todas as vendas na collection raiz "vendas" são de mesa (salvas pelo ModalPagamento)
+                    // Não filtrar por mesaNumero para não perder vendas com número ausente
 
                     const valorTaxaMesa = Number(venda.taxaServicoCobrada || 0);
                     const cobrou10 = valorTaxaMesa > 0;
@@ -75,7 +76,8 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
                         }
                     });
 
-                    totalVendasGeral += Number(venda.valorOriginal || venda.total || 0);
+                    // Usa venda.total (valor efetivamente pago) — mesma lógica do Dashboard
+                    totalVendasGeral += Number(venda.total || venda.valorOriginal || 0);
                     totalTaxaGeral += valorTaxaMesa;
                 });
 

@@ -1,7 +1,7 @@
 // src/pages/Painel.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp, where } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -594,15 +594,20 @@ function Painel() {
         const unsubscribers = [];
         getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo)).then(snap => { if (snap.exists()) setEstabelecimentoInfo(snap.data()); });
 
+        // 🔥 MERGE DE DUAS FONTES: subcollection "pedidos" + collection raiz "vendas"
+        // Garante que NENHUM dado seja perdido independente de onde foi salvo
         let isFirstRun = true;
-        const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), orderBy('createdAt', 'asc'));
+        let dadosSubcollection = []; // estabelecimentos/{id}/pedidos
+        let dadosVendasRaiz = [];    // vendas (raiz)
 
-        unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
-            if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
+        const mergeAndSetPedidos = () => {
+            // Deduplica por ID — subcollection tem prioridade (é onde o kanban faz update)
+            const mergedMap = new Map();
+            dadosSubcollection.forEach(d => mergedMap.set(d.id, d));
+            dadosVendasRaiz.forEach(d => { if (!mergedMap.has(d.id)) mergedMap.set(d.id, d); });
 
-            // 🔥 CORREÇÃO NO FILTRO GERAL: Considerando também datas com "criadoEm" e "updatedAt"
-            const listaTodos = snapshot.docs
-                .map(d => processarDadosPedido({ id: d.id, ...d.data() }))
+            const listaTodos = Array.from(mergedMap.values())
+                .map(d => processarDadosPedido(d))
                 .filter(p => p !== null && isSelectedDate(p.dataPedido || p.createdAt || p.criadoEm || p.updatedAt));
 
             listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento'].includes(p.status)) p.status = 'recebido'; });
@@ -617,7 +622,22 @@ function Painel() {
             }));
 
             setLoading(false);
+        };
+
+        // Listener 1: Subcollection (pedidos do delivery/kanban)
+        const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), orderBy('createdAt', 'asc'));
+        unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
+            if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
+            dadosSubcollection = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            mergeAndSetPedidos();
             isFirstRun = false;
+        }));
+
+        // Listener 2: Collection raiz "vendas" (PDV/salão via vendaService)
+        const qVendasRaiz = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoAtivo));
+        unsubscribers.push(onSnapshot(qVendasRaiz, (snapshot) => {
+            dadosVendasRaiz = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            mergeAndSetPedidos();
         }));
 
         return () => unsubscribers.forEach(u => u());

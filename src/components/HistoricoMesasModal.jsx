@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { IoClose, IoPrint, IoRestaurant, IoSearch, IoCalendarOutline } from 'react-icons/io5';
 
@@ -22,9 +22,10 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
         if (!isOpen || !estabelecimentoId) return;
 
         setLoading(true);
-        // 🔥 AGORA BUSCA NA PASTA "VENDAS", ONDE O PAGAMENTO REALMENTE FOI SALVO
+        // 🔥 BUSCA NA COLEÇÃO RAIZ "vendas" (onde ModalPagamento salva), filtrando pelo estabelecimento
         const q = query(
-            collection(db, `estabelecimentos/${estabelecimentoId}/vendas`),
+            collection(db, 'vendas'),
+            where('estabelecimentoId', '==', estabelecimentoId),
             orderBy('criadoEm', 'desc')
         );
 

@@ -1,8 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { IoStatsChart, IoCart, IoRestaurant, IoCash, IoBicycle, IoCalendarOutline, IoTicket } from 'react-icons/io5';
+import { IoStatsChart, IoCart, IoRestaurant, IoCash, IoBicycle, IoCalendarOutline, IoTicket, IoDesktopOutline } from 'react-icons/io5';
+
+// 🔥 FUNÇÃO ROBUSTA para detectar pedidos/vendas cancelados (mesma lógica do AdminReports)
+const isPedidoCancelado = (p) => {
+  if (!p) return false;
+  const s1 = String(p.status || '').toLowerCase().trim();
+  const s2 = String(p.fiscal?.status || '').toLowerCase().trim();
+  const s3 = String(p.statusVenda || '').toLowerCase().trim();
+  const termos = ['cancelad', 'recusad', 'excluid', 'estornad', 'devolvid', 'rejeitad', 'erro'];
+  return termos.some(t => s1.includes(t) || s2.includes(t) || s3.includes(t));
+};
+
+// Helper: detecta se um doc da subcollection "pedidos" é de mesa/salão
+// Estes são "rounds" individuais e NÃO devem ser contados — a venda final
+// já está na collection raiz "vendas"
+const isMesaDoc = (data) => {
+  return data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
+};
 
 // --- CARD VISUAL ULTRA COMPACTO ---
 const StatCard = ({ title, value, sub, icon: Icon, theme, loading }) => {
@@ -11,6 +28,7 @@ const StatCard = ({ title, value, sub, icon: Icon, theme, loading }) => {
     blue: 'bg-blue-500 text-blue-600 bg-blue-50',
     orange: 'bg-orange-500 text-orange-600 bg-orange-50',
     purple: 'bg-purple-500 text-purple-600 bg-purple-50',
+    indigo: 'bg-indigo-500 text-indigo-600 bg-indigo-50',
   }[theme].split(' ');
 
   return (
@@ -40,41 +58,104 @@ const DashBoardSummary = ({ onVerRelatorio }) => {
 
   const [pedidosDelivery, setPedidosDelivery] = useState([]);
   const [pedidosSalao, setPedidosSalao] = useState([]);
+  const [pedidosPdv, setPedidosPdv] = useState([]);
 
   // 1. BUSCA NO FIREBASE COM FILTRO DE DATAS
+  // ⚠️ LÓGICA ALINHADA COM AdminReports.jsx:
+  //   - Subcollection "pedidos": pega APENAS delivery (pula rounds de mesa)
+  //   - Collection raiz "vendas": pega vendas de mesa/salão (venda final fechada pelo ModalPagamento)
+  //   Isso evita contagem dupla de vendas de mesa.
   useEffect(() => {
     if (!primeiroEstabelecimento || !dataInicio || !dataFim) return;
     setLoading(true);
 
-    // Ajusta os horários para pegar do início do primeiro dia até o final do último dia
-    const start = new Date(`${dataInicio}T00:00:00`);
-    const end = new Date(`${dataFim}T23:59:59.999`);
+    const start = Timestamp.fromDate(new Date(`${dataInicio}T00:00:00`));
+    const end = Timestamp.fromDate(new Date(`${dataFim}T23:59:59.999`));
 
-    const qDel = query(collection(db, 'pedidos'),
-      where('estabelecimentoId', '==', primeiroEstabelecimento),
+    let dadosDelivery = [];    // delivery da subcollection (sem rounds de mesa)
+    let dadosVendasRaiz = [];  // vendas finais de mesa da collection raiz
+    let dadosPdv = [];         // vendas do PDV (Frente de Caixa) — usam createdAt
+    let gotSub = false, gotRaiz = false, gotPdv = false;
+
+    const mergeAndClassify = () => {
+      if (!gotSub || !gotRaiz || !gotPdv) return; // espera todos carregarem
+
+      // Deduplica por ID
+      const mergedMap = new Map();
+      dadosDelivery.forEach(d => mergedMap.set(d.id, { ...d, _tipo: 'delivery' }));
+      dadosVendasRaiz.forEach(d => {
+        if (!mergedMap.has(d.id)) mergedMap.set(d.id, { ...d, _tipo: 'mesa' });
+      });
+      dadosPdv.forEach(d => {
+        if (!mergedMap.has(d.id)) mergedMap.set(d.id, { ...d, _tipo: 'pdv' });
+      });
+
+      const todos = Array.from(mergedMap.values());
+      
+      // Filtra cancelados usando a função robusta
+      const validos = todos.filter(p => !isPedidoCancelado(p));
+
+      const salao = validos.filter(p => p._tipo === 'mesa');
+      const delivery = validos.filter(p => p._tipo === 'delivery');
+      const pdv = validos.filter(p => p._tipo === 'pdv');
+
+      setPedidosSalao(salao);
+      setPedidosDelivery(delivery);
+      setPedidosPdv(pdv);
+      setLoading(false);
+    };
+
+    // Fonte 1: Subcollection pedidos — APENAS DELIVERY (pula rounds de mesa)
+    // ⚠️ Mesa rounds são pedidos parciais dentro de uma sessão de mesa.
+    //    A venda total já está no root "vendas", contá-los aqui causaria duplicação.
+    const qPedidos = query(
+      collection(db, 'estabelecimentos', primeiroEstabelecimento, 'pedidos'),
       where('createdAt', '>=', start), where('createdAt', '<=', end)
     );
-    const unsubDel = onSnapshot(qDel, snap => setPedidosDelivery(snap.docs.map(d => d.data())));
-
-    const qSalao = query(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'vendas'),
-      where('criadoEm', '>=', start), where('criadoEm', '<=', end)
-    );
-    const unsubSalao = onSnapshot(qSalao, snap => {
-      setPedidosSalao(snap.docs.map(d => d.data()));
-      setLoading(false);
+    const unsubPedidos = onSnapshot(qPedidos, snap => {
+      dadosDelivery = snap.docs
+        .filter(d => !isMesaDoc(d.data())) // 🔥 PULA docs de mesa/salão
+        .map(d => ({ id: d.id, ...d.data() }));
+      gotSub = true;
+      mergeAndClassify();
     });
 
-    return () => { unsubDel(); unsubSalao(); };
+    // Fonte 2: Collection raiz "vendas" — vendas fechadas de mesa/salão (via ModalPagamento, usam criadoEm)
+    const qVendas = query(
+      collection(db, 'vendas'),
+      where('estabelecimentoId', '==', primeiroEstabelecimento),
+      where('criadoEm', '>=', start), where('criadoEm', '<=', end)
+    );
+    const unsubVendas = onSnapshot(qVendas, snap => {
+      dadosVendasRaiz = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      gotRaiz = true;
+      mergeAndClassify();
+    });
+
+    // Fonte 3: Collection raiz "vendas" — vendas do PDV (usam createdAt, não criadoEm)
+    const qPdv = query(
+      collection(db, 'vendas'),
+      where('estabelecimentoId', '==', primeiroEstabelecimento),
+      where('origem', '==', 'pdv_web'),
+      where('createdAt', '>=', start), where('createdAt', '<=', end)
+    );
+    const unsubPdv = onSnapshot(qPdv, snap => {
+      dadosPdv = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      gotPdv = true;
+      mergeAndClassify();
+    });
+
+    return () => { unsubPedidos(); unsubVendas(); unsubPdv(); };
   }, [primeiroEstabelecimento, dataInicio, dataFim]);
 
   // 2. MATEMÁTICA ENXUTA
   const stats = useMemo(() => {
-    let fatSalao = 0, fatDel = 0, totalTaxas = 0, frota = {};
+    let fatSalao = 0, fatDel = 0, fatPdv = 0, totalTaxas = 0, frota = {};
     const parse = val => parseFloat(String(val || 0).replace(/[R$\s]/g, '').replace(',', '.')) || 0;
 
-    pedidosSalao.forEach(p => p.status !== 'cancelado' && (fatSalao += parse(p.totalFinal || p.total || p.valorTotal)));
+    pedidosSalao.forEach(p => fatSalao += parse(p.totalFinal || p.total || p.valorTotal));
+    pedidosPdv.forEach(p => fatPdv += parse(p.totalFinal || p.total || p.valorTotal));
     pedidosDelivery.forEach(p => {
-      if (p.status === 'cancelado') return;
       fatDel += parse(p.totalFinal || p.total || p.valorTotal);
       
       if (p.motoboyNome || p.motoboyId) {
@@ -86,14 +167,14 @@ const DashBoardSummary = ({ onVerRelatorio }) => {
       }
     });
 
-    const totPeds = pedidosSalao.length + pedidosDelivery.length;
+    const totPeds = pedidosSalao.length + pedidosDelivery.length + pedidosPdv.length;
     return {
-      fatTotal: fatSalao + fatDel, totPeds, fatSalao, fatDel, totalTaxas,
-      qtdSalao: pedidosSalao.length, qtdDel: pedidosDelivery.length,
-      ticket: totPeds ? (fatSalao + fatDel) / totPeds : 0,
+      fatTotal: fatSalao + fatDel + fatPdv, totPeds, fatSalao, fatDel, fatPdv, totalTaxas,
+      qtdSalao: pedidosSalao.length, qtdDel: pedidosDelivery.length, qtdPdv: pedidosPdv.length,
+      ticket: totPeds ? (fatSalao + fatDel + fatPdv) / totPeds : 0,
       entregadores: Object.values(frota).sort((a, b) => b.qtd - a.qtd)
     };
-  }, [pedidosDelivery, pedidosSalao]);
+  }, [pedidosDelivery, pedidosSalao, pedidosPdv]);
 
   const formata = val => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -130,10 +211,11 @@ const DashBoardSummary = ({ onVerRelatorio }) => {
       </div>
 
       {/* CARDS PRINCIPAIS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-5">
         <StatCard title="Faturamento Total" value={formata(stats.fatTotal)} sub={`${stats.totPeds} pedidos no período`} icon={IoCash} theme="green" loading={loading} />
         <StatCard title="Delivery" value={formata(stats.fatDel)} sub={`${stats.qtdDel} pedidos recebidos`} icon={IoCart} theme="blue" loading={loading} />
-        <StatCard title="Salão / Balcão" value={formata(stats.fatSalao)} sub={`${stats.qtdSalao} atendimentos`} icon={IoRestaurant} theme="orange" loading={loading} />
+        <StatCard title="Salão / Mesas" value={formata(stats.fatSalao)} sub={`${stats.qtdSalao} mesas fechadas`} icon={IoRestaurant} theme="orange" loading={loading} />
+        <StatCard title="PDV / Balcão" value={formata(stats.fatPdv)} sub={`${stats.qtdPdv} vendas no caixa`} icon={IoDesktopOutline} theme="indigo" loading={loading} />
         <StatCard title="Ticket Médio" value={formata(stats.ticket)} sub="Valor médio por pedido" icon={IoStatsChart} theme="purple" loading={loading} />
       </div>
 

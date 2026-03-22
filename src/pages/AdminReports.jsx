@@ -27,8 +27,8 @@ import { FaMotorcycle } from "react-icons/fa";
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
 
 // --- COMPONENTES UI ---
-const Card = ({ title, children, className = "" }) => (
-    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 ${className}`}>
+const Card = ({ title, children, className = "", ...rest }) => (
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 ${className}`} {...rest}>
         {title && <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">{title}</h3>}
         {children}
     </div>
@@ -99,6 +99,29 @@ const AdminReports = () => {
     const [maxValue, setMaxValue] = useState('');
     const [viewMode, setViewMode] = useState('charts'); 
 
+    // --- OPÇÕES DE GRÁFICOS ---
+    const fmtBRL = (v) => `R$ ${Number(v).toFixed(2).replace('.', ',')}`;
+    const pieChartOptions = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, font: { size: 12 } } },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtBRL(ctx.parsed)}` } },
+            datalabels: { display: false }
+        }
+    };
+    const lineChartOptions = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => fmtBRL(ctx.parsed.y) } }
+        },
+        scales: { y: { ticks: { callback: (v) => fmtBRL(v) } } }
+    };
+    const barChartOptions = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+    };
+
     // --- TRADUTOR DE PAGAMENTO ---
     const traduzirPagamento = (metodo) => {
         if (!metodo || metodo === 'N/A') return 'Não Informado';
@@ -145,7 +168,7 @@ const AdminReports = () => {
             tipo: isMesa ? 'mesa' : 'delivery',
             origem: isMesa ? 'mesa' : 'delivery',
             status: data.status || (isMesa ? 'finalizada' : 'recebido'),
-            formaPagamento: data.formaPagamento || 'N/A',
+            formaPagamento: data.formaPagamento || data.metodoPagamento || data.tipoPagamento || 'N/A',
             mesaNumero: data.mesaNumero || data.numeroMesa || null,
             loteHorario: data.loteHorario || '',
             itens: itens,
@@ -166,49 +189,73 @@ const AdminReports = () => {
             const end = endOfDay(new Date(endDate + 'T23:59:59'));
             
             let allDataMap = new Map(); 
+            const businessKeySet = new Set(); // 🔥 FIX: dedup por chave de negócio
+
+            // Gera chave de negócio para detectar mesma venda em collections diferentes
+            // Usa data do DIA (não timestamp exato) porque vendas e historico_mesas têm timestamps diferentes
+            const gerarBusinessKey = (item) => {
+                const mesa = item.mesaNumero || item.mesaId || '';
+                const total = (item.totalFinal || 0).toFixed(2);
+                // Usa apenas o dia (YYYY-MM-DD) para evitar diferença de timestamps entre collections
+                const dia = item.data ? `${item.data.getFullYear()}-${String(item.data.getMonth()+1).padStart(2,'0')}-${String(item.data.getDate()).padStart(2,'0')}` : '';
+                return mesa ? `mesa_${mesa}_${total}_${dia}` : null;
+            };
 
             const addData = (doc, origem) => {
                 const item = processarDado(doc, origem);
                 if (item.data >= start && item.data <= end) {
+                    // 1. Dedup por doc.id (mesmo doc)
+                    if (allDataMap.has(item.id)) return;
+                    
+                    // 2. Dedup por chave de negócio (mesma venda em collections diferentes)
+                    const bk = gerarBusinessKey(item);
+                    if (bk && businessKeySet.has(bk)) {
+                        console.log('🔥 DEDUP: Ignorando duplicata:', item.id, 'key:', bk);
+                        return;
+                    }
+                    
                     allDataMap.set(item.id, item);
+                    if (bk) businessKeySet.add(bk);
                 }
             };
 
-            // 1. BUSCA DELIVERY
-            if (deliveryTypeFilter !== 'mesa') {
-                try {
-                    const qSub = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'));
-                    const snapSub = await getDocs(qSub);
-                    snapSub.docs.forEach(d => addData(d, 'delivery'));
-                } catch(e) {}
-                
-                try {
-                    const qGlob = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
-                    const snapGlob = await getDocs(qGlob);
-                    snapGlob.docs.forEach(d => addData(d, 'delivery'));
-                } catch(e) {}
-            }
+            // 1. BUSCA DELIVERY (sempre busca tudo, filtro é aplicado depois)
+            // ⚠️ Pula pedidos de mesa (tipo='mesa' ou com mesaNumero) porque esses são "rounds"
+            // individuais dentro de uma sessão de mesa. A venda fechada já está no root "vendas".
+            const isMesaDoc = (d) => {
+                const data = d.data();
+                return data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
+            };
+
+            try {
+                const qSub = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'));
+                const snapSub = await getDocs(qSub);
+                snapSub.docs.forEach(d => {
+                    if (!isMesaDoc(d)) addData(d, 'delivery');
+                });
+            } catch(e) {}
+            
+            try {
+                const qGlob = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
+                const snapGlob = await getDocs(qGlob);
+                snapGlob.docs.forEach(d => {
+                    if (!isMesaDoc(d)) addData(d, 'delivery');
+                });
+            } catch(e) {}
 
             // 2. BUSCA MESAS / PDV / VENDAS
-            if (deliveryTypeFilter === 'todos' || deliveryTypeFilter === 'mesa') {
-                try {
-                    const qSubVendas = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'vendas'));
-                    const snapSubVendas = await getDocs(qSubVendas);
-                    snapSubVendas.docs.forEach(d => addData(d, 'mesa'));
-                } catch(e) {}
-
-                try {
-                    const qGlobVendas = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
-                    const snapGlobVendas = await getDocs(qGlobVendas);
-                    snapGlobVendas.docs.forEach(d => addData(d, 'mesa'));
-                } catch(e) {}
-
-                try {
-                    const qHist = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'historico_mesas'));
-                    const snapHist = await getDocs(qHist);
-                    snapHist.docs.forEach(d => addData(d, 'mesa'));
-                } catch(e) {}
-            }
+            // ⚠️ Busca APENAS da raiz "vendas" — ModalPagamento.jsx já salva tudo lá.
+            // Subcollection "vendas" e "historico_mesas" tinham os mesmos dados com IDs diferentes,
+            // causando contagem duplicada (17 vendas apareciam como 35).
+            try {
+                const qGlobVendas = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
+                const snapGlobVendas = await getDocs(qGlobVendas);
+                snapGlobVendas.docs.forEach(d => {
+                    const data = d.data();
+                    const tipo = data.origem === 'pdv_web' ? 'pdv' : 'mesa';
+                    addData(d, tipo);
+                });
+            } catch(e) {}
 
             let allData = Array.from(allDataMap.values());
 
@@ -321,13 +368,13 @@ const AdminReports = () => {
 
             // --- Cálculos dos Gráficos (Apenas Valores Válidos) ---
             const dayKey = format(p.data, 'dd/MM');
-            byDay[dayKey] = (byDay[dayKey] || 0) + p.totalFinal;
+            byDay[dayKey] = Math.round(((byDay[dayKey] || 0) + p.totalFinal) * 100) / 100;
 
             const hourKey = format(p.data, 'HH:00');
             byHour[hourKey] = (byHour[hourKey] || 0) + 1;
 
             const payKey = traduzirPagamento(p.formaPagamento);
-            byPayment[payKey] = (byPayment[payKey] || 0) + p.totalFinal;
+            byPayment[payKey] = Math.round(((byPayment[payKey] || 0) + p.totalFinal) * 100) / 100;
 
             const typeKey = p.tipo === 'mesa' ? 'Mesa' : 'Delivery';
             byType[typeKey] = (byType[typeKey] || 0) + 1;
@@ -407,16 +454,183 @@ const AdminReports = () => {
         if (!input) return;
         const btns = document.querySelectorAll('.no-print');
         btns.forEach(b => b.style.display = 'none');
+
+        // Forçar largura desktop para grids renderizarem lado a lado
+        const originalStyle = input.style.cssText;
+        input.style.width = '1200px';
+        input.style.maxWidth = '1200px';
+        input.style.minWidth = '1200px';
+        input.style.overflow = 'visible';
+
+        // Forçar grids responsivos a renderizar em multi-coluna (media queries não funcionam com html2canvas)
+        const gridOverrides = [];
+        input.querySelectorAll('.grid').forEach(grid => {
+            const origStyle = grid.style.cssText;
+            const cls = grid.className;
+            if (cls.includes('lg:grid-cols-3')) {
+                grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            } else if (cls.includes('md:grid-cols-3')) {
+                grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            } else if (cls.includes('lg:grid-cols-2') || cls.includes('md:grid-cols-2')) {
+                grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+            } else if (cls.includes('md:grid-cols-6')) {
+                grid.style.gridTemplateColumns = 'repeat(6, 1fr)';
+            } else if (cls.includes('md:grid-cols-4') || cls.includes('sm:grid-cols-4')) {
+                grid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+            }
+            gridOverrides.push({ el: grid, origStyle });
+        });
+
+        // Aguardar re-render
+        await new Promise(r => setTimeout(r, 600));
+
         try {
-            const canvas = await html2canvas(input, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
             const pdf = new jsPDF('p', 'mm', 'a4');
-            const w = pdf.internal.pageSize.getWidth();
-            const h = (canvas.height * w) / canvas.width;
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, h);
-            pdf.save(`relatorio.pdf`);
-            toast.success("PDF Gerado!");
-        } catch (e) { toast.error("Erro PDF"); } 
-        finally { btns.forEach(b => b.style.display = 'flex'); }
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const margin = 8;
+            const usableWidth = pageWidth - margin * 2;
+            const headerH = 18;
+            const footerH = 8;
+            const gapBetweenSections = 4; // mm entre seções
+
+            // Coletar seções marcadas com data-pdf-section
+            const sections = input.querySelectorAll('[data-pdf-section]');
+            // Se não houver seções marcadas, pegar filhos diretos visíveis
+            const elements = sections.length > 0 
+                ? Array.from(sections) 
+                : Array.from(input.children).filter(c => c.offsetHeight > 0);
+
+            // Capturar cada seção individualmente como canvas
+            const sectionCanvases = [];
+            for (const el of elements) {
+                const canvas = await html2canvas(el, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    allowTaint: true,
+                    windowWidth: 1200,
+                });
+                sectionCanvases.push(canvas);
+            }
+
+            // Desenhar cabeçalho
+            const drawHeader = () => {
+                pdf.setFillColor(37, 99, 235);
+                pdf.rect(0, 0, pageWidth, 14, 'F');
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(13);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text('Relatório de Desempenho', margin, 9);
+                pdf.setFontSize(9);
+                pdf.setFont('helvetica', 'normal');
+                const dateText = `Período: ${startDate || '—'} a ${endDate || '—'}`;
+                pdf.text(dateText, pageWidth - margin - pdf.getTextWidth(dateText), 9);
+                pdf.setTextColor(0, 0, 0);
+            };
+
+            // Desenhar rodapé (número de página adicionado depois)
+            const drawFooter = (pageNum, totalPgs) => {
+                pdf.setFontSize(8);
+                pdf.setTextColor(150, 150, 150);
+                pdf.setFont('helvetica', 'normal');
+                const footerText = `Página ${pageNum} de ${totalPgs}`;
+                const dateGen = `Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+                pdf.text(dateGen, margin, pageHeight - 3);
+                pdf.text(footerText, pageWidth - margin - pdf.getTextWidth(footerText), pageHeight - 3);
+                pdf.setTextColor(0, 0, 0);
+            };
+
+            // Posicionar seções nas páginas sem cortar nenhuma
+            let currentPage = 1;
+            let cursorY = headerH; // começa após o cabeçalho na primeira página
+            drawHeader();
+
+            for (let i = 0; i < sectionCanvases.length; i++) {
+                const canvas = sectionCanvases[i];
+                const sectionMmWidth = usableWidth;
+                const sectionMmHeight = (canvas.height / canvas.width) * sectionMmWidth;
+                const maxUsableH = pageHeight - footerH - margin;
+
+                // Se a seção é maior que uma página inteira, fazer fallback com fatias
+                if (sectionMmHeight > (maxUsableH - margin)) {
+                    // Se não estamos no topo da página, criar nova página
+                    if (cursorY > headerH + 2) {
+                        pdf.addPage();
+                        currentPage++;
+                        cursorY = margin;
+                    }
+                    // Fatiar esta seção grande
+                    const ratio = sectionMmWidth / canvas.width;
+                    let sliceOffset = 0;
+                    while (sliceOffset < canvas.height) {
+                        const availableH = maxUsableH - cursorY;
+                        const sliceHeightPx = Math.min(
+                            Math.floor(availableH / ratio),
+                            canvas.height - sliceOffset
+                        );
+                        if (sliceHeightPx <= 0) {
+                            pdf.addPage();
+                            currentPage++;
+                            cursorY = margin;
+                            continue;
+                        }
+                        const sliceCanvas = document.createElement('canvas');
+                        sliceCanvas.width = canvas.width;
+                        sliceCanvas.height = sliceHeightPx;
+                        const ctx = sliceCanvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                        ctx.drawImage(canvas, 0, sliceOffset, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+                        const imgData = sliceCanvas.toDataURL('image/png');
+                        const imgH = sliceHeightPx * ratio;
+                        pdf.addImage(imgData, 'PNG', margin, cursorY, sectionMmWidth, imgH);
+                        cursorY += imgH;
+                        sliceOffset += sliceHeightPx;
+                        if (sliceOffset < canvas.height) {
+                            pdf.addPage();
+                            currentPage++;
+                            cursorY = margin;
+                        }
+                    }
+                    cursorY += gapBetweenSections;
+                    continue;
+                }
+
+                // Verificar se cabe na página atual
+                const spaceLeft = maxUsableH - cursorY;
+                if (sectionMmHeight > spaceLeft) {
+                    // Não cabe: nova página
+                    pdf.addPage();
+                    currentPage++;
+                    cursorY = margin;
+                }
+
+                // Desenhar seção inteira (sem cortar)
+                const imgData = canvas.toDataURL('image/png');
+                pdf.addImage(imgData, 'PNG', margin, cursorY, sectionMmWidth, sectionMmHeight);
+                cursorY += sectionMmHeight + gapBetweenSections;
+            }
+
+            // Adicionar rodapés em todas as páginas
+            const totalPages = pdf.internal.getNumberOfPages();
+            for (let p = 1; p <= totalPages; p++) {
+                pdf.setPage(p);
+                drawFooter(p, totalPages);
+            }
+
+            pdf.save(`relatorio_${startDate}_${endDate}.pdf`);
+            toast.success("PDF exportado com sucesso!");
+        } catch (e) {
+            console.error('Erro ao gerar PDF:', e);
+            toast.error("Erro ao gerar PDF");
+        } finally {
+            // Restaurar estilos originais dos grids
+            gridOverrides.forEach(({ el, origStyle }) => { el.style.cssText = origStyle; });
+            input.style.cssText = originalStyle;
+            btns.forEach(b => b.style.display = '');
+        }
     };
 
     const DetailedTable = () => (
@@ -506,7 +720,7 @@ const AdminReports = () => {
 
             <div className="max-w-7xl mx-auto" ref={reportContentRef}>
                 {/* FILTROS */}
-                <Card title={<><IoFilterOutline className="text-blue-600"/> Filtros</>} className="mb-6">
+                <Card title={<><IoFilterOutline className="text-blue-600"/> Filtros</>} className="mb-6" data-pdf-section="filtros">
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                         <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm col-span-2 sm:col-span-1">
                             <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">De</span>
@@ -552,7 +766,7 @@ const AdminReports = () => {
                 {/* GRÁFICOS E CARDS */}
                 {viewMode === 'charts' && (
                     <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6" data-pdf-section="stats">
                             <StatCard title="Faturamento Líquido" value={metrics.totalVendas.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} icon={<IoCashOutline/>} color="green" />
                             <StatCard title="Taxas de Entrega" value={metrics.totalTaxas.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} icon={<FaMotorcycle/>} color="indigo" />
                             <StatCard title="Ticket Médio" value={metrics.ticketMedio.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} icon={<IoStatsChartOutline/>} color="purple" />
@@ -560,7 +774,7 @@ const AdminReports = () => {
                         </div>
 
                         {/* ANALISE DE PERDA, BAIRROS E CLIENTES */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6" data-pdf-section="health">
                             <Card title={<><IoAlertCircleOutline className="text-red-600"/> Saúde da Operação</>}>
                                 <div className="flex justify-between items-center">
                                     <div>
@@ -626,7 +840,7 @@ const AdminReports = () => {
 
                         {/* DESEMPENHO DA FROTA */}
                         {metrics.topMotoboys.length > 0 && (
-                            <div className="mb-6">
+                            <div className="mb-6" data-pdf-section="frota">
                                 <Card title={<><FaMotorcycle className="text-indigo-600"/> Performance da Frota</>}>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {metrics.topMotoboys.map((moto, index) => (
@@ -644,10 +858,10 @@ const AdminReports = () => {
                         )}
 
                         {/* GRÁFICOS */}
-                        <div className="grid lg:grid-cols-3 gap-6 mb-6">
+                        <div className="grid lg:grid-cols-3 gap-6 mb-6" data-pdf-section="charts1">
                             <div className="lg:col-span-2">
                                 <Card title="Evolução Diária">
-                                    <div className="h-64"><Line data={{ labels: metrics.byDay.labels, datasets: [{ label: 'R$', data: metrics.byDay.data, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true }] }} options={chartOptions} /></div>
+                                    <div className="h-64"><Line data={{ labels: metrics.byDay.labels, datasets: [{ label: 'R$', data: metrics.byDay.data, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true }] }} options={lineChartOptions} /></div>
                                 </Card>
                             </div>
                             <Card title="Top 5 Produtos Válidos">
@@ -656,10 +870,44 @@ const AdminReports = () => {
                                 ))}
                             </Card>
                         </div>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <Card title="Meios de Pagamento (Traduzido)"><div className="h-64"><Pie data={{ labels: metrics.byPayment.labels, datasets: [{ data: metrics.byPayment.data, backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'] }] }} options={chartOptions} /></div></Card>
-                            <Card title="Vendas por Hora"><div className="h-64"><Bar data={{ labels: metrics.byHour.labels, datasets: [{ label: 'Vendas', data: metrics.byHour.data, backgroundColor: '#3b82f6' }] }} options={chartOptions} /></div></Card>
+                        <div className="grid md:grid-cols-2 gap-6" data-pdf-section="charts2">
+                            <Card title="Meios de Pagamento"><div className="h-64"><Pie data={{ labels: metrics.byPayment.labels, datasets: [{ data: metrics.byPayment.data, backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'] }] }} options={pieChartOptions} /></div></Card>
+                            <Card title="Vendas por Hora"><div className="h-64"><Bar data={{ labels: metrics.byHour.labels, datasets: [{ label: 'Vendas', data: metrics.byHour.data, backgroundColor: '#3b82f6' }] }} options={barChartOptions} /></div></Card>
                         </div>
+                        {/* RESUMO POR PAGAMENTO */}
+                        {metrics.byPayment.labels.length > 0 && (() => {
+                            const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+                            const totalGeral = metrics.byPayment.data.reduce((a, b) => a + b, 0);
+                            const sorted = metrics.byPayment.labels
+                                .map((label, i) => ({ label, valor: metrics.byPayment.data[i], cor: colors[i % colors.length] }))
+                                .sort((a, b) => b.valor - a.valor);
+                            return (
+                                <Card title="Resumo por Forma de Pagamento" data-pdf-section="pagamento">
+                                    <div className="space-y-3">
+                                        {sorted.map((item, i) => {
+                                            const pct = totalGeral > 0 ? ((item.valor / totalGeral) * 100).toFixed(1) : '0.0';
+                                            return (
+                                                <div key={i} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
+                                                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.cor }}></span>
+                                                        <span className="font-semibold text-gray-700 capitalize">{item.label}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="text-sm font-bold text-gray-900">{fmtBRL(item.valor)}</span>
+                                                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-medium">{pct}%</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        <div className="flex items-center justify-between border-t-2 border-gray-200 pt-3 mt-2 px-4">
+                                            <span className="font-bold text-gray-800">Total</span>
+                                            <span className="font-bold text-green-600 text-lg">{fmtBRL(totalGeral)}</span>
+                                        </div>
+                                    </div>
+                                </Card>
+                            );
+                        })()}
                     </>
                 )}
 

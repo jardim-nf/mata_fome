@@ -51,6 +51,22 @@ function MasterDashboard() {
     extrairData(item.adicionadoEm) || extrairData(item.updatedAt) || extrairData(item.criadoEm);
   const getTotal = (item) => Number(item.totalFinal) || Number(item.total) || Number(item.valorFinal) || 0;
 
+  // 🔥 Detecta pedidos/vendas cancelados (mesma lógica do AdminReports)
+  const isPedidoCancelado = (p) => {
+    if (!p) return false;
+    const s1 = String(p.status || '').toLowerCase().trim();
+    const s2 = String(p.fiscal?.status || '').toLowerCase().trim();
+    const s3 = String(p.statusVenda || '').toLowerCase().trim();
+    const termos = ['cancelad', 'recusad', 'excluid', 'estornad', 'devolvid', 'rejeitad', 'erro'];
+    return termos.some(t => s1.includes(t) || s2.includes(t) || s3.includes(t));
+  };
+
+  // Detecta se um doc da subcollection "pedidos" é de mesa/salão
+  // Rounds individuais NÃO devem ser contados — a venda final está em "vendas"
+  const isMesaDoc = (data) => {
+    return data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
+  };
+
   // ── Fetch estabelecimentos + users (light) ──────────────────────
   const fetchHistoricalData = async () => {
     setLoadingDashboard(true);
@@ -118,6 +134,7 @@ function MasterDashboard() {
   }, [currentUser, isMasterAdmin]);
 
   // ── Historical totals (background, one-time) ──────────────────────
+  // ⚠️ FIX: Pula rounds de mesa em "pedidos" e filtra cancelados
   useEffect(() => {
     if (!currentUser || !isMasterAdmin || historicosCarregados.current) return;
     historicosCarregados.current = true;
@@ -128,10 +145,17 @@ function MasterDashboard() {
           getDocs(query(collectionGroup(db, 'pedidos'))),
           getDocs(query(collectionGroup(db, 'vendas')))
         ]);
-        const allDocs = [
-          ...pedSnap.docs.map(d => d.data()),
-          ...venSnap.docs.map(d => d.data())
-        ];
+        // Pedidos: apenas delivery (pula rounds de mesa para não duplicar)
+        const pedidosDelivery = pedSnap.docs
+          .map(d => d.data())
+          .filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
+        
+        // Vendas: finais fechadas (inclui mesa/salão)
+        const vendasFinais = venSnap.docs
+          .map(d => d.data())
+          .filter(d => !isPedidoCancelado(d));
+        
+        const allDocs = [...pedidosDelivery, ...vendasFinais];
         const totalHist = allDocs.reduce((acc, item) => acc + getTotal(item), 0);
         const qtdTotal = allDocs.length;
         setFinanceiro(prev => ({ ...prev, totalHistorico: totalHist, qtdPedidosTotal: qtdTotal }));
@@ -144,10 +168,19 @@ function MasterDashboard() {
   }, [currentUser, isMasterAdmin]);
 
   // ── Calculate only today+yesterday from recent data ──────────────────────
+  // ⚠️ FIX: Para "pedidos" pula docs de mesa; filtra cancelados em ambos
   const calcularTotaisRecentes = (novosDados, tipo) => {
     setDadosBrutos(prev => {
       const atualizado = { ...prev, [tipo]: novosDados };
-      const tudo = [...atualizado.pedidos, ...atualizado.vendas];
+      
+      // Pedidos: pula rounds de mesa (já estão em vendas como venda final)
+      const pedidosFiltrados = atualizado.pedidos
+        .filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
+      // Vendas: filtra apenas cancelados
+      const vendasFiltradas = atualizado.vendas
+        .filter(d => !isPedidoCancelado(d));
+      
+      const tudo = [...pedidosFiltrados, ...vendasFiltradas];
       const hoje = startOfDay(new Date());
       const ontem = startOfDay(subDays(new Date(), 1));
 
