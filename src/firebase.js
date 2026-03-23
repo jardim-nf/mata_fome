@@ -7,7 +7,8 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, doc, setDoc, getDoc } from 'firebase/firestore';
+// CORREÇÃO AQUI: Importando memoryLocalCache ao invés de persistentLocalCache
+import { initializeFirestore, memoryLocalCache, doc, setDoc, getDoc } from 'firebase/firestore';
 import { getAnalytics, logEvent } from 'firebase/analytics';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
@@ -27,9 +28,10 @@ const app = initializeApp(firebaseConfig);
 
 // Serviços do Firebase
 export const auth = getAuth(app);
-// Modo offline habilitado com a API moderna (substitui enableIndexedDbPersistence depreciado)
+
+// CORREÇÃO AQUI: Usando cache em memória para evitar o erro de corrupção do IndexedDB
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache()
+  localCache: memoryLocalCache()
 });
 
 export const storage = getStorage(app);
