@@ -19,7 +19,8 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { 
     IoArrowBack, IoFilterOutline, IoDownloadOutline, IoRefreshOutline, 
     IoStatsChartOutline, IoCashOutline, IoReceiptOutline, IoPrintOutline, 
-    IoPeopleOutline, IoAnalyticsOutline, IoListOutline, IoMapOutline, IoAlertCircleOutline
+    IoPeopleOutline, IoAnalyticsOutline, IoListOutline, IoMapOutline, IoAlertCircleOutline,
+    IoFastFoodOutline, IoSearchOutline
 } from 'react-icons/io5';
 import { FaMotorcycle } from "react-icons/fa";
 
@@ -98,6 +99,7 @@ const AdminReports = () => {
     const [minValue, setMinValue] = useState('');
     const [maxValue, setMaxValue] = useState('');
     const [viewMode, setViewMode] = useState('charts'); 
+    const [itemSearchTerm, setItemSearchTerm] = useState('');
 
     // --- OPÇÕES DE GRÁFICOS ---
     const fmtBRL = (v) => `R$ ${Number(v).toFixed(2).replace('.', ',')}`;
@@ -329,7 +331,8 @@ const AdminReports = () => {
         let totalMesaValida = 0;
         let countMesaValida = 0;
 
-        const byDay = {}, byPayment = {}, byType = {}, byHour = {}, itemsCount = {}, motoboyStats = {}, bairrosStats = {}, clientsStats = {}; 
+        const byDay = {}, byPayment = {}, byType = {}, byHour = {}, itemsCount = {}, itemsRevenue = {}, itemsPrice = {}, motoboyStats = {}, bairrosStats = {}, clientsStats = {}; 
+        let totalItensVendidos = 0;
 
         filteredPedidos.forEach(p => {
             const pedidoInteiroCancelado = isPedidoCancelado(p);
@@ -361,9 +364,15 @@ const AdminReports = () => {
                     return; // Impede que o item cancelado vá pro Top 5 Produtos
                 }
 
-                // Item válido, vai pro Top 5
+                // Item válido — rastreia quantidade, receita e preço
                 const cleanName = it.nome?.replace(/\s*\(.*\)/g, '').trim() || 'Item';
-                itemsCount[cleanName] = (itemsCount[cleanName] || 0) + (Number(it.quantidade) || 1);
+                const qtd = Number(it.quantidade) || 1;
+                const preco = parseFloat(it.preco) || 0;
+                const subtotal = preco * qtd;
+                itemsCount[cleanName] = (itemsCount[cleanName] || 0) + qtd;
+                itemsRevenue[cleanName] = (itemsRevenue[cleanName] || 0) + subtotal;
+                if (!itemsPrice[cleanName]) itemsPrice[cleanName] = preco;
+                totalItensVendidos += qtd;
             });
 
             // --- Cálculos dos Gráficos (Apenas Valores Válidos) ---
@@ -401,6 +410,15 @@ const AdminReports = () => {
 
         const sortedDays = Object.keys(byDay).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
         const topItems = Object.entries(itemsCount).sort(([,a], [,b]) => b - a).slice(0, 5);
+        const allItems = Object.entries(itemsCount)
+            .map(([nome, qtd]) => ({
+                nome,
+                qtd,
+                receita: itemsRevenue[nome] || 0,
+                precoUnit: itemsPrice[nome] || 0,
+                pctQtd: totalItensVendidos > 0 ? ((qtd / totalItensVendidos) * 100).toFixed(1) : '0.0'
+            }))
+            .sort((a, b) => b.qtd - a.qtd);
         const topMotoboys = Object.values(motoboyStats).sort((a, b) => b.count - a.count);
         const topBairros = Object.entries(bairrosStats).sort(([,a], [,b]) => b - a).slice(0, 5);
         const topClients = Object.values(clientsStats).sort((a, b) => b.total - a.total).slice(0, 5); 
@@ -416,6 +434,8 @@ const AdminReports = () => {
             byHour: { labels: Object.keys(byHour).sort(), data: Object.keys(byHour).sort().map(h => byHour[h]) },
             byPayment: { labels: Object.keys(byPayment), data: Object.values(byPayment) },
             topItems,
+            allItems,
+            totalItensVendidos,
             topMotoboys,
             topBairros,
             topClients, 
@@ -696,25 +716,14 @@ const AdminReports = () => {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-6 font-sans">
-            <div className="max-w-7xl mx-auto mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <Link to="/dashboard" className="p-2.5 rounded-xl hover:bg-white text-gray-600 border border-gray-200 transition-colors bg-white shadow-sm">
-                            <IoArrowBack size={18} />
-                        </Link>
-                        <div>
-                            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Relatórios de Gestão</h1>
-                            <p className="text-xs text-gray-500 font-medium">Financeiro, Operacional e Logística</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-2 no-print">
-                        <button onClick={handleExportCSV} disabled={!filteredPedidos.length} className="bg-emerald-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm">
-                            <IoDownloadOutline size={16}/> CSV
-                        </button>
-                        <button onClick={handleExportPDF} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm">
-                            <IoPrintOutline size={16}/> PDF
-                        </button>
-                    </div>
+            <div className="max-w-7xl mx-auto mb-4">
+                <div className="flex justify-end gap-2 no-print">
+                    <button onClick={handleExportCSV} disabled={!filteredPedidos.length} className="bg-emerald-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm">
+                        <IoDownloadOutline size={16}/> CSV
+                    </button>
+                    <button onClick={handleExportPDF} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm">
+                        <IoPrintOutline size={16}/> PDF
+                    </button>
                 </div>
             </div>
 
@@ -908,10 +917,97 @@ const AdminReports = () => {
                                 </Card>
                             );
                         })()}
+
                     </>
                 )}
 
                 {viewMode === 'table' && <Card title={`Detalhamento (${filteredPedidos.length})`}><DetailedTable /></Card>}
+
+                {/* 🔥 SEÇÃO: ITENS VENDIDOS — visível em AMBOS os modos 🔥 */}
+                {metrics.allItems.length > 0 && (() => {
+                    const filteredItems = metrics.allItems.filter(it => 
+                        itemSearchTerm === '' || it.nome.toLowerCase().includes(itemSearchTerm.toLowerCase())
+                    );
+                    const totalReceita = metrics.allItems.reduce((sum, it) => sum + it.receita, 0);
+                    return (
+                        <div className="mt-6" data-pdf-section="itens-vendidos">
+                            <Card title={<><IoFastFoodOutline className="text-orange-600"/> Itens Vendidos ({metrics.totalItensVendidos} un.)</>}>
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                                    <div className="flex items-center gap-4 text-sm">
+                                        <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+                                            <span className="text-orange-600 font-bold">{metrics.allItems.length}</span>
+                                            <span className="text-gray-500 ml-1">produtos diferentes</span>
+                                        </div>
+                                        <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                                            <span className="text-green-600 font-bold">{fmtBRL(totalReceita)}</span>
+                                            <span className="text-gray-500 ml-1">em itens</span>
+                                        </div>
+                                    </div>
+                                    <div className="relative w-full sm:w-64">
+                                        <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Buscar produto..." 
+                                            value={itemSearchTerm} 
+                                            onChange={e => setItemSearchTerm(e.target.value)} 
+                                            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs font-medium bg-white shadow-sm outline-none focus:ring-2 focus:ring-orange-500/50"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">#</th>
+                                                <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Produto</th>
+                                                <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">Qtd</th>
+                                                <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Preço Unit.</th>
+                                                <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Receita</th>
+                                                <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">% Vendas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-100">
+                                            {filteredItems.map((item, idx) => {
+                                                const rankColors = [
+                                                    'bg-yellow-100 text-yellow-700',
+                                                    'bg-gray-200 text-gray-700',
+                                                    'bg-orange-100 text-orange-700'
+                                                ];
+                                                const globalIdx = metrics.allItems.indexOf(item);
+                                                return (
+                                                    <tr key={item.nome} className="hover:bg-orange-50/50 transition-colors">
+                                                        <td className="px-4 py-2.5 whitespace-nowrap">
+                                                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${rankColors[globalIdx] || 'bg-gray-50 text-gray-500'}`}>
+                                                                {globalIdx + 1}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-sm font-semibold text-gray-800 max-w-[200px] truncate" title={item.nome}>{item.nome}</td>
+                                                        <td className="px-4 py-2.5 text-center">
+                                                            <span className="bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full text-xs font-bold">{item.qtd}</span>
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-right text-sm text-gray-600">{fmtBRL(item.precoUnit)}</td>
+                                                        <td className="px-4 py-2.5 text-right text-sm font-bold text-green-600">{fmtBRL(item.receita)}</td>
+                                                        <td className="px-4 py-2.5 text-center">
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                                                    <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min(parseFloat(item.pctQtd), 100)}%` }}></div>
+                                                                </div>
+                                                                <span className="text-[10px] font-mono font-bold text-gray-500">{item.pctQtd}%</span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {filteredItems.length === 0 && (
+                                    <p className="text-center text-gray-400 text-sm py-6">Nenhum produto encontrado para "{itemSearchTerm}"</p>
+                                )}
+                            </Card>
+                        </div>
+                    );
+                })()}
             </div>
         </div>
     );

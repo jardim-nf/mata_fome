@@ -691,15 +691,19 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       // ─── RESPONDER (UAZAPI OU META) ───
       if (wConfig.serverUrl && wConfig.apiKey && wConfig.instanceName) {
          const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
-         await fetch(`${urlFormatada}/message/sendText/${wConfig.instanceName}`, {
+         
+         const numeroLimpo = from.replace(/\D/g, '');
+         const telFinal = numeroLimpo.startsWith('55') ? numeroLimpo : `55${numeroLimpo}`;
+         
+         const payloadEnvio = {
+            number: telFinal,
+            text: resposta
+         };
+
+         await fetch(`${urlFormatada}/send/text`, {
             method: 'POST',
-            headers: { 'apikey': wConfig.apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               number: from,
-               text: resposta, // PAYLOAD UAZAPI V2
-               textMessage: { text: resposta }, // PAYLOAD EVOLUTION V1
-               options: { delay: 1200, presence: "composing" }
-            })
+            headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadEnvio)
          });
       } else if (wConfig.phoneNumberId) {
          await fetch(`https://graph.facebook.com/v18.0/${wConfig.phoneNumberId}/messages`, {
@@ -734,15 +738,15 @@ export const enviarMensagemWhatsApp = onCall(async (request) => {
       const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
       const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
 
-      await fetch(`${urlFormatada}/message/sendText/${wConfig.instanceName}`, {
+      const payloadEnvio = {
+        number: telFinal,
+        text: mensagem
+      };
+
+      await fetch(`${urlFormatada}/send/text`, {
         method: 'POST',
-        headers: { 'apikey': wConfig.apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          number: telFinal,
-          text: mensagem, // Uazapi v2
-          textMessage: { text: mensagem }, // Evolution v1
-          options: { delay: 1200, presence: "composing" }
-        })
+        headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadEnvio)
       });
       return { sucesso: true };
     } catch (error) {
@@ -754,25 +758,258 @@ export const enviarMensagemWhatsApp = onCall(async (request) => {
 // 16. MARKETING AUTOMÁTICO
 // ==================================================================
 import { onSchedule } from "firebase-functions/v2/scheduler";
+
+// Helper: envia texto via UAZAPI (mesmo padrão da notificarClienteWhatsApp)
+async function enviarWhatsAppUAZAPI(wConfig, telefone, texto) {
+  const tel = telefone.replace(/\D/g, '');
+  const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
+  const urlBase = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
+  const fullUrl = `${urlBase}/send/text`;
+
+  const res = await fetch(fullUrl, {
+    method: 'POST',
+    headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number: telFinal, text: texto })
+  });
+  const body = await res.text();
+  return { ok: res.ok, status: res.status, body, telefone: telFinal };
+}
+
 export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", timeZone: "America/Sao_Paulo" }, async () => {
-    // Código mantido igual ao original
+  logger.info('🚀 Marketing automático iniciado');
+
+  try {
+    // 1. Buscar todos os estabelecimentos
+    const estabsSnap = await db.collection('estabelecimentos').get();
+    
+    for (const estabDoc of estabsSnap.docs) {
+      const estab = estabDoc.data();
+      const mktConfig = estab.marketing || {};
+      const wConfig = estab.whatsapp || {};
+      const nomeEstab = estab.nome || 'Restaurante';
+
+      // Pula se marketing desativado ou WhatsApp não configurado
+      if (!mktConfig.ativo) continue;
+      if (!wConfig.ativo || !wConfig.instanceName || !wConfig.serverUrl || !wConfig.apiKey) {
+        logger.warn(`⚠️ ${nomeEstab} (${estabDoc.id}): marketing ativo mas WhatsApp não configurado`);
+        continue;
+      }
+
+      const diasInativo = mktConfig.diasInativo || 7;
+      const limiteDiario = mktConfig.limiteDiario || 20;
+      const mensagemBase = mktConfig.mensagem || 'Ei! Faz tempo que você não pede! 🍔 Que tal pedir hoje?';
+
+      logger.info(`📊 Processando ${nomeEstab} (${estabDoc.id}) | diasInativo=${diasInativo} | limite=${limiteDiario}`);
+
+      // 2. Buscar todos os pedidos para mapear clientes
+      const pedidosSnap = await db.collection('estabelecimentos').doc(estabDoc.id)
+        .collection('pedidos').get();
+
+      if (pedidosSnap.empty) {
+        logger.info(`📭 ${nomeEstab}: nenhum pedido encontrado`);
+        continue;
+      }
+
+      // 3. Montar mapa de clientes com último pedido
+      const clientesMap = new Map(); // telefone -> { nome, ultimoPedido, dataNascimento }
+      const agora = new Date();
+      const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+
+      pedidosSnap.forEach(pedidoDoc => {
+        const p = pedidoDoc.data();
+        const tel = p.cliente?.telefone || p.clienteTelefone || '';
+        if (!tel || tel.replace(/\D/g, '').length < 10) return;
+
+        const telLimpo = tel.replace(/\D/g, '');
+        const nome = p.cliente?.nome || p.clienteNome || 'Cliente';
+        
+        // Data do pedido (Firestore Timestamp ou Date)
+        let dataPedido = null;
+        if (p.criadoEm?.toDate) dataPedido = p.criadoEm.toDate();
+        else if (p.criadoEm) dataPedido = new Date(p.criadoEm);
+        else if (p.data?.toDate) dataPedido = p.data.toDate();
+        else if (p.data) dataPedido = new Date(p.data);
+
+        const existente = clientesMap.get(telLimpo);
+        if (!existente || (dataPedido && (!existente.ultimoPedido || dataPedido > existente.ultimoPedido))) {
+          clientesMap.set(telLimpo, {
+            nome,
+            telefone: telLimpo,
+            ultimoPedido: dataPedido,
+            dataNascimento: p.cliente?.dataNascimento || existente?.dataNascimento || null
+          });
+        }
+      });
+
+      logger.info(`👥 ${nomeEstab}: ${clientesMap.size} clientes mapeados`);
+
+      // 4. Filtrar clientes inativos
+      const limiteData = new Date(hoje);
+      limiteData.setDate(limiteData.getDate() - diasInativo);
+
+      const clientesInativos = [];
+      const aniversariantes = [];
+
+      for (const [tel, cliente] of clientesMap) {
+        // Cliente inativo = último pedido antes do limite
+        if (cliente.ultimoPedido && cliente.ultimoPedido < limiteData) {
+          clientesInativos.push(cliente);
+        }
+
+        // Aniversário hoje
+        if (mktConfig.aniversario && cliente.dataNascimento) {
+          let nascimento = null;
+          if (cliente.dataNascimento?.toDate) nascimento = cliente.dataNascimento.toDate();
+          else if (typeof cliente.dataNascimento === 'string') nascimento = new Date(cliente.dataNascimento);
+          
+          if (nascimento && nascimento.getDate() === hoje.getDate() && nascimento.getMonth() === hoje.getMonth()) {
+            aniversariantes.push(cliente);
+          }
+        }
+      }
+
+      logger.info(`📤 ${nomeEstab}: ${clientesInativos.length} inativos | ${aniversariantes.length} aniversariantes`);
+
+      // 5. Enviar mensagens para inativos (até o limite diário)
+      let enviadosHoje = 0;
+
+      for (const cliente of clientesInativos) {
+        if (enviadosHoje >= limiteDiario) {
+          logger.info(`⏸️ ${nomeEstab}: limite diário atingido (${limiteDiario})`);
+          break;
+        }
+
+        try {
+          // Personalizar mensagem com nome do cliente e do estabelecimento
+          const mensagemFinal = `*${nomeEstab}*\n\nOlá, ${cliente.nome}! ${mensagemBase}`;
+          
+          const result = await enviarWhatsAppUAZAPI(wConfig, cliente.telefone, mensagemFinal);
+          
+          if (result.ok) {
+            enviadosHoje++;
+            logger.info(`✅ Marketing enviado para ${result.telefone} (${cliente.nome})`);
+          } else {
+            logger.warn(`❌ Falha marketing para ${result.telefone}: HTTP ${result.status} | ${result.body}`);
+          }
+
+          // Registrar campanha no Firestore
+          await db.collection('estabelecimentos').doc(estabDoc.id)
+            .collection('campanhas').add({
+              tipo: 'reengajamento',
+              clienteNome: cliente.nome,
+              clienteTelefone: cliente.telefone,
+              mensagem: mensagemFinal,
+              sucesso: result.ok,
+              erro: result.ok ? null : `HTTP ${result.status}`,
+              enviadoEm: FieldValue.serverTimestamp(),
+              diasInativo
+            });
+
+          // Delay entre envios para não sobrecarregar a API
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+        } catch (err) {
+          logger.error(`❌ Erro ao enviar para ${cliente.telefone}:`, err);
+        }
+      }
+
+      // 6. Enviar mensagens de aniversário (não conta no limite diário)
+      if (mktConfig.aniversario) {
+        const descontoAniv = mktConfig.aniversarioDesconto || 15;
+        const msgAnivBase = mktConfig.aniversarioMsg || '🎂 Feliz aniversário! Toma um desconto especial pra comemorar!';
+
+        for (const cliente of aniversariantes) {
+          try {
+            const msgAniv = `*${nomeEstab}*\n\n${cliente.nome}, ${msgAnivBase}\n\n🎁 Use o cupom *ANIVER${descontoAniv}* e ganhe *${descontoAniv}% OFF* no seu pedido de hoje!`;
+
+            const result = await enviarWhatsAppUAZAPI(wConfig, cliente.telefone, msgAniv);
+
+            if (result.ok) {
+              logger.info(`🎂 Aniversário enviado para ${result.telefone} (${cliente.nome})`);
+            } else {
+              logger.warn(`❌ Falha aniversário para ${result.telefone}: HTTP ${result.status}`);
+            }
+
+            await db.collection('estabelecimentos').doc(estabDoc.id)
+              .collection('campanhas').add({
+                tipo: 'aniversario',
+                clienteNome: cliente.nome,
+                clienteTelefone: cliente.telefone,
+                mensagem: msgAniv,
+                sucesso: result.ok,
+                erro: result.ok ? null : `HTTP ${result.status}`,
+                enviadoEm: FieldValue.serverTimestamp(),
+                desconto: descontoAniv
+              });
+
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+          } catch (err) {
+            logger.error(`❌ Erro aniversário para ${cliente.telefone}:`, err);
+          }
+        }
+      }
+
+      logger.info(`✅ ${nomeEstab}: marketing concluído | ${enviadosHoje} reengajamentos enviados`);
+    }
+
+    logger.info('🏁 Marketing automático finalizado');
+
+  } catch (error) {
+    logger.error('❌ Erro fatal no marketing automático:', error);
+  }
 });
 
 // ==================================================================
 // 17. CONFIGURAR MARKETING
 // ==================================================================
 export const configurarMarketing = onCall({ cors: true }, async (request) => {
-    // Código mantido igual ao original
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado');
+
+  const { estabelecimentoId, config } = request.data || {};
+  if (!estabelecimentoId || !config) throw new HttpsError('invalid-argument', 'Dados incompletos');
+
+  try {
+    // Validar campos
+    const configLimpa = {
+      ativo: !!config.ativo,
+      diasInativo: Math.max(1, Math.min(90, Number(config.diasInativo) || 7)),
+      mensagem: (config.mensagem || '').substring(0, 500),
+      limiteDiario: Math.max(1, Math.min(100, Number(config.limiteDiario) || 20)),
+      aniversario: !!config.aniversario,
+      aniversarioDesconto: Math.max(5, Math.min(50, Number(config.aniversarioDesconto) || 15)),
+      aniversarioMsg: (config.aniversarioMsg || '').substring(0, 500),
+      atualizadoEm: FieldValue.serverTimestamp(),
+      atualizadoPor: uid
+    };
+
+    await db.collection('estabelecimentos').doc(estabelecimentoId).update({
+      marketing: configLimpa
+    });
+
+    logger.info(`✅ Marketing configurado para ${estabelecimentoId} por ${uid}`);
+    return { sucesso: true, config: configLimpa };
+
+  } catch (error) {
+    logger.error('❌ Erro ao configurar marketing:', error);
+    throw new HttpsError('internal', error.message);
+  }
 });
 
 // ==================================================================
 // 18. NOTIFICAÇÃO AUTOMÁTICA WHATSAPP (Trigger de status UAZAPI)
 // ==================================================================
+function formatarValor(valor) {
+  if (!valor && valor !== 0) return 'R$ 0,00';
+  return `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
+}
+
 const MENSAGENS_STATUS = {
-  preparo: (nome, nomeEstab) => `🔥 *${nomeEstab}*\n\nOlá, ${nome}! Seu pedido já está sendo preparado! 👨‍🍳`,
-  em_entrega: (nome, nomeEstab, motoboyNome) => `🛵 *${nomeEstab}*\n\nÓtima notícia, ${nome}! Seu pedido saiu para entrega!${motoboyNome ? `\n🏍️ Entregador: *${motoboyNome}*` : ''}`,
-  pronto_para_servir: (nome, nomeEstab) => `✅ *${nomeEstab}*\n\n${nome}, seu pedido está *pronto*! Pode retirar. 🎉`,
-  finalizado: (nome, nomeEstab) => `✅ *${nomeEstab}*\n\nPedido entregue! Obrigado pela preferência, ${nome}! 😊\n\nVolte sempre! 💛`
+  preparo: (p) => `🔥 *${p.nomeEstab}*\n\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* já está sendo preparado! 👨‍🍳${p.pixManual ? `\n\n💳 *Pagamento via PIX* — Por favor, envie o comprovante de pagamento.` : ''}`,
+  em_entrega: (p) => `🛵 *${p.nomeEstab}*\n\nÓtima notícia, ${p.nome}! Seu pedido no valor de *${p.valor}* saiu para entrega!${p.motoboy ? `\n🏍️ Entregador: *${p.motoboy}*` : ''}`,
+  pronto_para_servir: (p) => `✅ *${p.nomeEstab}*\n\n${p.nome}, seu pedido no valor de *${p.valor}* está *pronto*! Pode retirar. 🎉`,
+  finalizado: (p) => `✅ *${p.nomeEstab}*\n\nPedido entregue! Obrigado pela preferência, ${p.nome}! 😊\nValor: *${p.valor}*\n\nVolte sempre! 💛`
 };
 
 export const notificarClienteWhatsApp = onDocumentUpdated(
@@ -800,29 +1037,42 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
 
       const nomeEstab = estab.nome || 'Restaurante';
       const nomeCliente = depois.cliente?.nome || depois.clienteNome || 'Cliente';
-      const mensagem = gerarMensagem(nomeCliente, nomeEstab, depois.motoboyNome || '');
+      const totalPedido = depois.total || depois.valorTotal || 0;
+      const formaPagamento = depois.formaPagamento || depois.pagamento || '';
+      const isPixManual = formaPagamento === 'PIX_MANUAL' || formaPagamento === 'pix_manual';
+
+      const mensagem = gerarMensagem({
+        nome: nomeCliente,
+        nomeEstab,
+        valor: formatarValor(totalPedido),
+        motoboy: depois.motoboyNome || '',
+        pixManual: isPixManual
+      });
       
       const tel = telefoneCliente.replace(/\D/g, '');
       const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
       const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
 
-      // 🔥 PAYLOAD DEFINITIVO UAZAPI
-      const response = await fetch(`${urlFormatada}/message/sendText/${wConfig.instanceName}`, {
+      // 🔥 PAYLOAD UAZAPI — endpoint /send/text com token da instância
+      const payloadEnvio = {
+        number: telFinal,
+        text: mensagem
+      };
+
+      const fullUrl = `${urlFormatada}/send/text`;
+      logger.info(`🔍 DEBUG UAZAPI | URL: ${fullUrl} | serverUrl: ${wConfig.serverUrl} | instanceName: ${wConfig.instanceName} | tokenLength: ${(wConfig.apiKey || '').length} | payload: ${JSON.stringify(payloadEnvio)}`);
+
+      const response = await fetch(fullUrl, {
         method: 'POST',
-        headers: { 'apikey': wConfig.apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          number: telFinal,
-          text: mensagem, // Formato exigido pela Uazapi v2
-          textMessage: { text: mensagem }, // Formato exigido pela Evolution v1
-          options: { delay: 1200, presence: "composing" }
-        })
+        headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadEnvio)
       });
 
+      const responseBody = await response.text();
       if (response.ok) {
-        logger.info(`📱 ✅ UAZAPI enviou para ${telFinal} | Status: ${depois.status}`);
+        logger.info(`📱 ✅ UAZAPI enviou para ${telFinal} | Status: ${depois.status} | Response: ${responseBody}`);
       } else {
-        const erro = await response.text();
-        logger.warn(`⚠️ ❌ Falha UAZAPI para ${telFinal}:`, erro);
+        logger.warn(`⚠️ ❌ Falha UAZAPI para ${telFinal} | HTTP ${response.status} | URL: ${fullUrl} | Response: ${responseBody}`);
       }
     } catch (error) {
       logger.error('❌ Erro no trigger de notificação WhatsApp:', error);
