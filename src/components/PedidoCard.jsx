@@ -215,6 +215,7 @@ const PedidoCard = ({
     }, [item, estabelecimentoInfo, estabelecimentoIdPrincipal]);
 
     // --- AÇÕES DE STATUS ---
+// --- AÇÕES DE STATUS ---
     const handleAction = useCallback(async () => {
         if (isUpdating) return;
         
@@ -237,7 +238,7 @@ const PedidoCard = ({
                     setIsUpdating(true);
                     try {
                         await onAtribuirMotoboy(item.id, motoboy.id, motoboy.nome);
-                        enviarWhatsApp(nextStatus);
+                        // 👇 REMOVIDO: enviarWhatsApp(nextStatus); para não abrir pop-up!
                     } catch (error) { console.error(error); alert("Erro ao atribuir!"); } 
                     finally { setIsUpdating(false); }
                     return;
@@ -250,17 +251,16 @@ const PedidoCard = ({
         setIsUpdating(true);
         try {
             await onUpdateStatus(item.id, nextStatus);
-            if (item.tipo !== 'salao' && item.tipo !== 'mesa') {
-                enviarWhatsApp(nextStatus);
-            }
-            // 🔔 Push notification para o cliente
+            
+            // 👇 REMOVIDO: enviarWhatsApp(nextStatus); para o bot fazer o trabalho sozinho!
+            
+            // 🔔 Push notification para o cliente (mantemos isto para o site)
             import('../utils/notifications.js').then(({ notificarStatusPedido }) => {
                 notificarStatusPedido(nextStatus, item.id);
             }).catch(() => {});
         } catch (error) { console.error(error); alert("Erro ao atualizar!"); } 
         finally { setIsUpdating(false); }
     }, [item, selectedMotoboyId, motoboysDisponiveis, onAtribuirMotoboy, onUpdateStatus, isUpdating]);
-
     const getBtnText = () => {
         if (item.status === 'aguardando_pagamento') return 'Aprovar Pagamento';
         if (item.status === 'recebido') return 'Mandar p/ Cozinha';
