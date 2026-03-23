@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { collection, query, onSnapshot, getDocs, collectionGroup, where, Timestamp } from 'firebase/firestore'; 
 import { db } from '../firebase'; 
@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { startOfDay, subDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import DateRangeFilter from '../components/DateRangeFilter';
 
 import {
   FaStore, FaUsers, FaClipboardList, FaFileUpload, FaTags, FaShieldAlt, FaImages,
@@ -39,6 +40,16 @@ function MasterDashboard() {
   const [estabelecimentosMap, setEstabelecimentosMap] = useState({});
   const [dadosBrutos, setDadosBrutos] = useState({ pedidos: [], vendas: [] });
   const historicosCarregados = useRef(false);
+
+  // Date range filter state
+  const [datePreset, setDatePreset] = useState(null);
+  const [dateRange, setDateRange] = useState({ start: null, end: null });
+  const handleDatePresetChange = useCallback((key) => setDatePreset(key), []);
+  const handleDateRangeChange = useCallback((range) => setDateRange(range), []);
+  const handleDateClear = useCallback(() => {
+    setDatePreset(null);
+    setDateRange({ start: null, end: null });
+  }, []);
 
   // ── Helpers ──────────────────────
   const extrairData = (c) => {
@@ -210,6 +221,35 @@ function MasterDashboard() {
     });
   };
 
+  // ── Date-filtered financials (when date filter is active) ──────────────────
+  const financeiroFiltrado = useMemo(() => {
+    if (!dateRange.start || !dateRange.end) return null; // null = use default financeiro
+    const pedidosFiltrados = dadosBrutos.pedidos.filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
+    const vendasFiltradas = dadosBrutos.vendas.filter(d => !isPedidoCancelado(d));
+    const tudo = [...pedidosFiltrados, ...vendasFiltradas];
+    const doPeriodo = tudo.filter(item => {
+      const d = getDate(item);
+      return d && d >= dateRange.start && d <= dateRange.end;
+    });
+    const totalPeriodo = doPeriodo.reduce((acc, item) => acc + getTotal(item), 0);
+    const qtdPeriodo = doPeriodo.length;
+    // Ranking for the period
+    const rankingMap = {};
+    doPeriodo.forEach(item => {
+      let estabId = item.estabelecimentoId;
+      if (!estabId && item._path) { const parts = item._path.split('/'); const idx = parts.indexOf('estabelecimentos'); if (idx >= 0 && parts.length > idx + 1) estabId = parts[idx + 1]; }
+      if (!estabId) estabId = 'desconhecido';
+      if (!rankingMap[estabId]) rankingMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0 };
+      rankingMap[estabId].total += getTotal(item);
+      rankingMap[estabId].pedidos += 1;
+    });
+    const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 5);
+    return { faturamento: totalPeriodo, qtd: qtdPeriodo, topLojas, ticketMedio: qtdPeriodo > 0 ? totalPeriodo / qtdPeriodo : 0 };
+  }, [dadosBrutos, dateRange]);
+
+  // Resolved financial data: filtered period or default
+  const fin = financeiroFiltrado || financeiro;
+
   useEffect(() => {
     if (!authLoading && currentUser && isMasterAdmin) fetchHistoricalData();
   }, [authLoading, currentUser, isMasterAdmin]);
@@ -331,7 +371,7 @@ function MasterDashboard() {
       <main className="pt-8 pb-16 px-4 sm:px-6 max-w-[1500px] mx-auto">
 
         {/* ─── HERO SECTION ─── */}
-        <div className="relative mb-8 rounded-3xl bg-gradient-to-r from-yellow-50 via-amber-50/50 to-orange-50/30 border border-yellow-100/50 overflow-hidden">
+        <div className="relative mb-8 rounded-3xl bg-gradient-to-r from-yellow-50 via-amber-50/50 to-orange-50/30 border border-yellow-100/50">
           <div className="absolute right-0 top-0 w-64 h-64 bg-gradient-to-bl from-yellow-200/20 to-transparent rounded-full blur-3xl" />
           <div className="relative p-6 sm:p-8">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -347,19 +387,30 @@ function MasterDashboard() {
                 <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-1">
                   {saudacao}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-amber-600">{userName}</span> 🔥
                 </h1>
-                <p className="text-slate-500 text-sm font-medium">Visão executiva da rede IdeaFood — dados em tempo real</p>
+                <p className="text-slate-500 text-sm font-medium">
+                  {financeiroFiltrado ? 'Dados filtrados por período personalizado' : 'Visão executiva da rede IdeaFood — dados em tempo real'}
+                </p>
               </div>
-              <button onClick={fetchHistoricalData}
-                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:border-yellow-400 hover:text-yellow-700 hover:bg-yellow-50 transition-all text-sm font-bold shadow-sm active:scale-95">
-                <FaSync className={loadingDashboard ? 'animate-spin text-yellow-500' : ''} size={12} /> Sincronizar
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <DateRangeFilter
+                  activePreset={datePreset}
+                  dateRange={dateRange}
+                  onPresetChange={handleDatePresetChange}
+                  onRangeChange={handleDateRangeChange}
+                  onClear={handleDateClear}
+                />
+                <button onClick={fetchHistoricalData}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:border-yellow-400 hover:text-yellow-700 hover:bg-yellow-50 transition-all text-sm font-bold shadow-sm active:scale-95">
+                  <FaSync className={loadingDashboard ? 'animate-spin text-yellow-500' : ''} size={12} /> Sincronizar
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* ─── STAT CARDS ─── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Faturamento Hoje */}
+          {/* Faturamento Hoje / Período */}
           <div className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-6 shadow-sm hover:shadow-xl hover:shadow-yellow-100/50 hover:border-yellow-200 transition-all duration-300">
             <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-yellow-50 group-hover:scale-150 transition-transform duration-500" />
             <div className="relative">
@@ -367,14 +418,19 @@ function MasterDashboard() {
                 <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25">
                   <FaBolt className="text-white text-sm" />
                 </div>
-                <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black ${crescimento >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
-                  {crescimento >= 0 ? <IoArrowUpOutline size={10} /> : <IoArrowDownOutline size={10} />}
-                  {Math.abs(crescimento).toFixed(0)}%
-                </div>
+                {!financeiroFiltrado && (
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black ${crescimento >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                    {crescimento >= 0 ? <IoArrowUpOutline size={10} /> : <IoArrowDownOutline size={10} />}
+                    {Math.abs(crescimento).toFixed(0)}%
+                  </div>
+                )}
+                {financeiroFiltrado && (
+                  <span className="text-[10px] text-amber-600 font-black bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">FILTRADO</span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Faturamento Hoje</p>
-              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{fmt(financeiro.faturamentoHoje)}</p>
-              <p className="text-[10px] text-slate-400 mt-1">vs ontem: {fmt(financeiro.faturamentoOntem)}</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">{financeiroFiltrado ? 'Faturamento do Período' : 'Faturamento Hoje'}</p>
+              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{fmt(financeiroFiltrado ? financeiroFiltrado.faturamento : financeiro.faturamentoHoje)}</p>
+              <p className="text-[10px] text-slate-400 mt-1">{financeiroFiltrado ? `${financeiroFiltrado.qtd} pedidos no período` : `vs ontem: ${fmt(financeiro.faturamentoOntem)}`}</p>
             </div>
           </div>
 
@@ -388,9 +444,9 @@ function MasterDashboard() {
                 </div>
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">VOLUME</span>
               </div>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Pedidos Hoje</p>
-              <p className="text-2xl sm:text-3xl font-black text-slate-900">{financeiro.qtdHoje}</p>
-              <p className="text-[10px] text-slate-400 mt-1">ontem: {financeiro.qtdOntem} pedidos</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">{financeiroFiltrado ? 'Pedidos do Período' : 'Pedidos Hoje'}</p>
+              <p className="text-2xl sm:text-3xl font-black text-slate-900">{financeiroFiltrado ? financeiroFiltrado.qtd : financeiro.qtdHoje}</p>
+              <p className="text-[10px] text-slate-400 mt-1">{financeiroFiltrado ? `ticket médio: ${fmt(financeiroFiltrado.ticketMedio)}` : `ontem: ${financeiro.qtdOntem} pedidos`}</p>
             </div>
           </div>
 
@@ -405,7 +461,7 @@ function MasterDashboard() {
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">MÉDIA</span>
               </div>
               <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Ticket Médio</p>
-              <p className="text-2xl sm:text-3xl font-black text-slate-900">{fmt(ticketMedio)}</p>
+              <p className="text-2xl sm:text-3xl font-black text-slate-900">{fmt(financeiroFiltrado ? financeiroFiltrado.ticketMedio : ticketMedio)}</p>
               <p className="text-[10px] text-slate-400 mt-1">{financeiro.qtdPedidosTotal.toLocaleString()} pedidos total</p>
             </div>
           </div>
@@ -438,8 +494,8 @@ function MasterDashboard() {
                   <FaTrophy className="text-yellow-600 text-sm" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-800 text-sm">Top Lojas — Hoje</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">Ranking por faturamento do dia</p>
+                  <h3 className="font-black text-slate-800 text-sm">Top Lojas — {financeiroFiltrado ? 'Período' : 'Hoje'}</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">{financeiroFiltrado ? 'Ranking por faturamento filtrado' : 'Ranking por faturamento do dia'}</p>
                 </div>
               </div>
               <Link to="/master/estabelecimentos" className="text-[11px] text-slate-400 hover:text-yellow-600 font-bold flex items-center gap-1 transition-colors">
@@ -447,17 +503,17 @@ function MasterDashboard() {
               </Link>
             </div>
             
-            {financeiro.topLojas.length === 0 ? (
+            {((financeiroFiltrado?.topLojas || financeiro.topLojas).length === 0) ? (
               <div className="text-center py-12">
                 <FaStore className="text-slate-200 text-4xl mx-auto mb-3" />
-                <p className="text-slate-400 text-sm font-medium">Nenhuma venda hoje na rede</p>
+                <p className="text-slate-400 text-sm font-medium">{financeiroFiltrado ? 'Nenhuma venda no período' : 'Nenhuma venda hoje na rede'}</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {financeiro.topLojas.map((loja, i) => {
+                {(financeiroFiltrado?.topLojas || financeiro.topLojas).map((loja, i) => {
                   const nome = estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || `Filial #${loja.id.slice(0,4).toUpperCase()}`;
                   const medals = ['🥇', '🥈', '🥉'];
-                  const maxTotal = financeiro.topLojas[0]?.total || 1;
+                  const maxTotal = (financeiroFiltrado?.topLojas || financeiro.topLojas)[0]?.total || 1;
                   const barWidth = (loja.total / maxTotal * 100);
                   const barColors = ['bg-yellow-100', 'bg-slate-100', 'bg-orange-50', 'bg-slate-50', 'bg-slate-50'];
                   

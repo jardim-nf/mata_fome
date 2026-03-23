@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import DateRangeFilter, { getPresetRange } from '../../components/DateRangeFilter';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   collection, query, onSnapshot, doc, getDoc, limit, orderBy, collectionGroup, where
@@ -427,6 +428,10 @@ function ListarPedidosMaster() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstabelecimento, setFilterEstabelecimento] = useState('todos');
   const [filterStatus, setFilterStatus] = useState('todos');
+  const [dateInicio, setDateInicio] = useState(null);
+  const [dateFim, setDateFim] = useState(null);
+  const [datePreset, setDatePreset] = useState(null);
+  const [dateRange, setDateRange] = useState({ start: null, end: null });
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS);
   const [showScrollTop, setShowScrollTop] = useState(false);
   
@@ -456,9 +461,21 @@ function ListarPedidosMaster() {
       if (filterStatus === 'todos') matchStatus = true;
       else matchStatus = STATUS_MATCH[filterStatus]?.some(st => s.includes(st)) || false;
 
-      return matchText && matchEstab && matchStatus;
+      // Date range filter
+      let matchDate = true;
+      if (dateInicio || dateFim) {
+        const orderDate = getOrderDate(item);
+        if (!orderDate) {
+          matchDate = false;
+        } else {
+          if (dateInicio && orderDate < dateInicio) matchDate = false;
+          if (dateFim && orderDate > dateFim) matchDate = false;
+        }
+      }
+
+      return matchText && matchEstab && matchStatus && matchDate;
     });
-  }, [listaFinal, debouncedSearch, filterEstabelecimento, filterStatus]);
+  }, [listaFinal, debouncedSearch, filterEstabelecimento, filterStatus, dateInicio, dateFim]);
 
   const displayedPaginated = useMemo(() => {
     return displayed.slice(0, visibleCount);
@@ -473,7 +490,37 @@ function ListarPedidosMaster() {
     setSearchTerm('');
     setFilterStatus('todos');
     setFilterEstabelecimento('todos');
+    setDateInicio(null);
+    setDateFim(null);
+    setDatePreset(null);
+    setDateRange({ start: null, end: null });
     setVisibleCount(INITIAL_VISIBLE_ITEMS);
+  }, []);
+
+  // DateRangeFilter handlers
+  const handleDatePresetChange = useCallback((preset) => {
+    setDatePreset(preset);
+    if (preset !== 'custom') {
+      const range = getPresetRange(preset);
+      if (range) {
+        setDateRange(range);
+        setDateInicio(range.start);
+        setDateFim(range.end);
+      }
+    }
+  }, []);
+
+  const handleDateRangeChange = useCallback((range) => {
+    setDateRange(range);
+    setDateInicio(range.start);
+    setDateFim(range.end);
+  }, []);
+
+  const handleDateClear = useCallback(() => {
+    setDatePreset(null);
+    setDateRange({ start: null, end: null });
+    setDateInicio(null);
+    setDateFim(null);
   }, []);
 
   const handleLoadMore = useCallback(() => {
@@ -552,6 +599,13 @@ function ListarPedidosMaster() {
             <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Monitor de Pedidos</h1>
             <p className="text-slate-500 text-sm mt-1 font-medium">Acompanhamento centralizado — Delivery e Salão.</p>
           </div>
+          <DateRangeFilter
+            activePreset={datePreset}
+            dateRange={dateRange}
+            onPresetChange={handleDatePresetChange}
+            onRangeChange={handleDateRangeChange}
+            onClear={handleDateClear}
+          />
         </div>
         
         {/* BARRA DE FILTROS */}

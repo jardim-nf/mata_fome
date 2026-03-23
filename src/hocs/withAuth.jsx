@@ -7,7 +7,7 @@ const withAuth = (WrappedComponent, options = {}) => {
   const { requireAdmin = false, requireMaster = false } = options;
 
   return (props) => {
-    const { currentUser, isAdmin, isMaster, authLoading, userData } = useAuth();
+    const { currentUser, isAdmin, isMasterAdmin: isMaster, loading: authLoading, userData } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [shouldRedirect, setShouldRedirect] = useState(false);

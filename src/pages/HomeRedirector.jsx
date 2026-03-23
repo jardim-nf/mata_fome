@@ -7,17 +7,19 @@ import { FaSpinner } from 'react-icons/fa';
 function HomeRedirector() {
   const navigate = useNavigate();
   const location = useLocation();
-  // 👇 Tente pegar 'isWaiter' ou 'isGarcom' se seu AuthContext exportar.
-  // Se não, vamos usar o currentUser.role (veja abaixo)
   const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
 
   useEffect(() => {
     if (authLoading) return;
 
-    // 👇 DEBUG: Vamos ver o que a Aline é de verdade no console
-    console.log('🔍 Analisando usuário:', {
+    // Normaliza o cargo removendo acentos e convertendo para minúsculas
+    const cargoRaw = currentUser?.cargo || '';
+    const cargoNorm = cargoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+    console.log('🔍 HomeRedirector - Analisando usuário:', {
       email: currentUser?.email,
-      role: currentUser?.role, // Verifica se o campo role existe
+      cargo: cargoRaw,
+      cargoNorm,
       isAdmin,
       isMasterAdmin
     });
@@ -25,23 +27,44 @@ function HomeRedirector() {
     let targetPath = '/';
 
     if (!currentUser) {
-      targetPath = '/'; 
-    } 
+      targetPath = '/';
+    }
     else if (isMasterAdmin) {
       targetPath = '/master-dashboard';
-    } 
+    }
     else if (isAdmin) {
       targetPath = '/painel';
-    } 
-    // 👇 AQUI ESTÁ A CORREÇÃO PARA A ALINE
-    // Verifique se o role é 'garcom', 'waiter' ou como estiver no seu banco de dados
-    else if (currentUser?.role === 'garcom' || currentUser?.role === 'waiter') {
-      console.log('💁‍♀️ É Garçom -> /painel-garcom'); // Ajuste para a rota correta do garçom
-      targetPath = '/painel-garcom'; 
-    } 
+    }
+    // Funcionários com cargo - redireciona para a rota adequada
+    else if (['gerente'].includes(cargoNorm)) {
+      // Gerente tem acesso similar ao admin
+      targetPath = '/painel';
+    }
+    else if (['garcom', 'garçom'].includes(cargoNorm) || cargoRaw.toLowerCase() === 'garçom') {
+      targetPath = '/controle-salao';
+    }
+    else if (['cozinheiro', 'cozinha'].includes(cargoNorm)) {
+      targetPath = '/painel';
+    }
+    else if (['caixa'].includes(cargoNorm)) {
+      targetPath = '/painel';
+    }
+    else if (['atendente'].includes(cargoNorm)) {
+      targetPath = '/painel';
+    }
+    else if (['entregador'].includes(cargoNorm)) {
+      targetPath = '/painel';
+    }
+    else if (['auxiliar'].includes(cargoNorm)) {
+      targetPath = '/painel';
+    }
+    // Se tem qualquer cargo (é funcionário), manda pro painel
+    else if (cargoNorm) {
+      targetPath = '/painel';
+    }
     else {
-      // Cliente normal
-      targetPath = '/'; 
+      // Cliente normal (sem cargo)
+      targetPath = '/';
     }
 
     // Só navega se o destino for diferente de onde já estamos

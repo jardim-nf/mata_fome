@@ -27,7 +27,9 @@ async function carregarProdutosRapido(estabId) {
       .filter(cat => cat.ativo !== false);
 
     const processarDocs = async (docsSnapshot, catNome, catId) => {
-      return Promise.all(docsSnapshot.docs.map(async (docItem) => {
+      // Filter client-side: treat items without the `ativo` field as active
+      const activeDocs = docsSnapshot.docs.filter(d => d.data().ativo !== false);
+      return Promise.all(activeDocs.map(async (docItem) => {
         const dados = docItem.data();
 
         let listaAdicionais = [];
@@ -54,9 +56,11 @@ async function carregarProdutosRapido(estabId) {
     };
 
     const resultados = await Promise.all(categoriasAtivas.map(async (cat) => {
+      // Fetch all items/products without Firestore ativo filter — 
+      // items missing the `ativo` field are treated as active (filtered client-side above)
       const [itensSnap, produtosSnap] = await Promise.all([
-        getDocs(query(collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'itens'), where('ativo', '==', true))),
-        getDocs(query(collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'produtos'), where('ativo', '==', true))),
+        getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'itens')),
+        getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'produtos')),
       ]);
       const itens = await processarDocs(itensSnap, cat.nome, cat.id);
       const produtos = await processarDocs(produtosSnap, cat.nome, cat.id);

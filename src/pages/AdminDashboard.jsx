@@ -65,8 +65,9 @@ const AdminDashboard = () => {
     </div>
   );
 
-  const isRealAdmin = currentUser?.isAdmin === true || currentUser?.isMasterAdmin === true || currentUser?.role === 'admin';
-  
+  const isRealAdmin = currentUser?.isAdmin === true || currentUser?.isMasterAdmin === true;
+
+  // Permissão vem direto do Firestore — sem listas hardcoded
   const temPermissao = (perm) => {
     if (isRealAdmin) return true;
     return currentUser?.permissoes?.includes(perm);
@@ -83,7 +84,7 @@ const AdminDashboard = () => {
       items: [
         { path: '/painel', title: 'Monitor de Pedidos', sub: 'Delivery e Salão em tempo real', icon: <IoStorefront />, cor: 'blue', perm: 'painel' },
         { path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' },
-        { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', adminOnly: true },
+        { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', perm: 'pdv' },
       ]
     },
     {
@@ -102,14 +103,14 @@ const AdminDashboard = () => {
       title: "📊 Gestão & Relatórios",
       description: "Análise financeira e controle da equipe",
       items: [
-        { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', adminOnly: true },
-        { path: '/admin/reports', title: 'Relatórios Fiscais', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', adminOnly: true },
+        { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
+        { path: '/admin/reports', title: 'Relatórios Fiscais', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
         { path: '/admin/relatorio-cancelamentos', title: 'Cancelamentos', sub: 'Auditoria de exclusões master', icon: <IoTrashBin />, cor: 'red', adminOnly: true },
         { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: 'Gerencie garçons e permissões', icon: <FaUsers />, cor: 'indigo', adminOnly: true },
-        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: 'Performance de garçons e motoboys', icon: <IoStatsChart />, cor: 'amber', adminOnly: true },
+        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: 'Performance de garçons e motoboys', icon: <IoStatsChart />, cor: 'amber', perm: 'relatorios' },
         { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
         { path: '/admin/avaliacoes', title: 'Avaliações', sub: 'Responder reviews dos clientes', icon: <IoStatsChart />, cor: 'yellow', adminOnly: true },
-        { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', adminOnly: true },
+        { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
       ]
     },
     {
@@ -147,7 +148,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* FATURAMENTO */}
-        {isRealAdmin && (
+        {(isRealAdmin || temPermissao('financeiro')) && (
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-all duration-300">
             <button 
               onClick={() => setShowSummary(!showSummary)}
@@ -182,9 +183,10 @@ const AdminDashboard = () => {
           {menuGroups.map((grupo, idx) => {
             const itensPermitidos = grupo.items.filter(item => {
               if (isRealAdmin) return true;
+              // Items adminOnly são exclusivos para admin/masterAdmin
               if (item.adminOnly) return false;
-              if (item.perm && !item.permOuAdmin && !temPermissao(item.perm)) return false;
-              if (item.permOuAdmin && !isRealAdmin && !temPermissao(item.perm)) return false;
+              // Items com perm definida: só aparece se o user tem essa permissão
+              if (item.perm && !temPermissao(item.perm)) return false;
               return true;
             });
 

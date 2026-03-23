@@ -113,14 +113,14 @@ function App() {
                 <Route element={<AuthenticatedProviders><Layout /></AuthenticatedProviders>}>
                   <Route path="/planos" element={<Planos />} />
                   <Route path="/painel-inicial" element={<HomeRedirector />} />
-                  <Route path="/pdv" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><PdvScreen /></PrivateRoute>} />
+                  <Route path="/pdv" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente', 'caixa']}><PdvScreen /></PrivateRoute>} />
                   <Route path="/admin/clientes-estabelecimento" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ClientManagement /></PrivateRoute>} />
-                  <Route path="/controle-salao" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}><ControleSalao /></PrivateRoute>} />
-                  <Route path="/estabelecimento/:estabelecimentoId/mesa/:id" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom']}><TelaPedidos /></PrivateRoute>} />
-                  <Route path="/painel" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}><Painel /></PrivateRoute>} />
+                  <Route path="/controle-salao" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente', 'garcom', 'atendente']}><ControleSalao /></PrivateRoute>} />
+                  <Route path="/estabelecimento/:estabelecimentoId/mesa/:id" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente', 'garcom', 'atendente']}><TelaPedidos /></PrivateRoute>} />
+                  <Route path="/painel" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente', 'garcom', 'cozinheiro', 'caixa', 'atendente', 'entregador', 'auxiliar']}><Painel /></PrivateRoute>} />
                   <Route path="/admin-dashboard" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminDashboard /></PrivateRoute>} />
                   <Route path="/admin/configuracoes" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminSettings /></PrivateRoute>} />
-                  <Route path="/dashboard" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'garcom', 'garçom', 'cozinha']}><AdminDashboard /></PrivateRoute>} />
+                  <Route path="/dashboard" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente', 'garcom', 'cozinheiro', 'caixa', 'atendente', 'entregador', 'auxiliar']}><AdminDashboard /></PrivateRoute>} />
                   <Route path="/admin/gerenciar-cardapio" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminMenuManagement /></PrivateRoute>} />
                   <Route path="/admin/cores" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminColorSettings /></PrivateRoute>} />
                   <Route path="/admin/ordenar-categorias" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminOrderCategories /></PrivateRoute>} />
@@ -130,19 +130,19 @@ function App() {
                   <Route path="/admin/payment-settings" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminPaymentSettings /></PrivateRoute>} />
                   <Route path="/nossos-clientes" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><NossosClientes /></PrivateRoute>} />
                   <Route path="/admin/clientes/:clientId" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ClientDetails /></PrivateRoute>} />
-                  <Route path="/admin/reports" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminReports /></PrivateRoute>} />
+                  <Route path="/admin/reports" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente']}><AdminReports /></PrivateRoute>} />
                   <Route path="/admin/multi-platform" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminMultiPlatform /></PrivateRoute>} />
                   <Route path="/admin/associar-imagens" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminImageAssociation /></PrivateRoute>} />
-                  <Route path="/admin/analytics" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminAnalytics /></PrivateRoute>} />
+                  <Route path="/admin/analytics" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente']}><AdminAnalytics /></PrivateRoute>} />
                   <Route path="/admin/gestao-funcionarios" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><GestaoFuncionarios /></PrivateRoute>} />
                   <Route path="/admin/entregadores" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><AdminEntregadores /></PrivateRoute>} />
                   <Route path="/admin/relatorio-entregas" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioEntregas /></PrivateRoute>} />
-                  <Route path="/admin/ranking" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RankingFuncionarios /></PrivateRoute>} />
+                  <Route path="/admin/ranking" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente']}><RankingFuncionarios /></PrivateRoute>} />
                   <Route path="/admin/whatsapp" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><WhatsAppConfig /></PrivateRoute>} />
                   <Route path="/admin/previsao" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><PrevisaoDemanda /></PrivateRoute>} />
                   <Route path="/admin/marketing" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><MarketingConfig /></PrivateRoute>} />
                   <Route path="/admin/avaliacoes" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ResponderAvaliacoes /></PrivateRoute>} />
-                  <Route path="/admin/lucro" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioLucro /></PrivateRoute>} />
+                  <Route path="/admin/lucro" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente']}><RelatorioLucro /></PrivateRoute>} />
                   <Route path="/admin/relatorio-cancelamentos" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioCancelamentos /></PrivateRoute>} />
                   <Route path="/admin/entrada-estoque" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><EntradaEstoqueXML /></PrivateRoute>} />
 

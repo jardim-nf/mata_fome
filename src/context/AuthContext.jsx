@@ -1,5 +1,5 @@
 // src/context/AuthContext.jsx - CORRIGIDO (Exportando ID do Estabelecimento)
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -51,6 +51,7 @@ export function AuthProvider({ children }) {
     const [currentClientData, setCurrentClientData] = useState(null); 
     const [loading, setLoading] = useState(true);
     const [authChecked, setAuthChecked] = useState(false);
+    const isProcessingAuth = useRef(false); // Guard contra loop infinito
 
     const logout = async () => {
         try {
@@ -67,13 +68,21 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            // Guard: previne re-entrada concorrente (loop causado por token refresh)
+            if (isProcessingAuth.current) {
+                console.log("⏭️ onAuthStateChanged: já processando, ignorando re-entrada");
+                return;
+            }
+            isProcessingAuth.current = true;
             setLoading(true);
             
             if (user) {
                 let tokenResult;
                 let claims = {};
                 try {
-                    tokenResult = await user.getIdTokenResult(true); 
+                    // CORRIGIDO: false em vez de true para NÃO forçar refresh do token
+                    // (evita re-disparar onAuthStateChanged em loop)
+                    tokenResult = await user.getIdTokenResult(false); 
                     claims = tokenResult.claims || {};
                 } catch (e) { 
                     console.error("❌ Falha token:", e); 
@@ -132,6 +141,7 @@ export function AuthProvider({ children }) {
             
             setLoading(false);
             setAuthChecked(true);
+            isProcessingAuth.current = false; // Libera guard
         });
 
         return unsubscribe;
@@ -231,7 +241,8 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
         return <Navigate to="/" replace />;
     }
 
-    if (!canAccess(allowedRoles)) {
+    const accessGranted = canAccess(allowedRoles);
+    if (!accessGranted) {
         return <Navigate to="/dashboard" replace />;
     }
     
