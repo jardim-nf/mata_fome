@@ -1094,9 +1094,7 @@ export const webhookWhatsApp = onRequest(
 // ==================================================================
 // 15. ENVIAR MENSAGEM WHATSAPP (Do admin para o cliente)
 // ==================================================================
-export const enviarMensagemWhatsApp = onCall(
-  { secrets: [whatsappApiToken] },
-  async (request) => {
+export const enviarMensagemWhatsApp = onCall(async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
     const { telefone, mensagem, estabelecimentoId } = request.data;
@@ -1107,36 +1105,40 @@ export const enviarMensagemWhatsApp = onCall(
     try {
       const estabDoc = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
       const estab = estabDoc.data();
-      const phoneNumberId = estab?.whatsapp?.phoneNumberId;
-      const accessToken = estab?.whatsapp?.accessToken || whatsappApiToken.value();
+      const whatsappConfig = estab?.whatsapp || {};
 
-      if (!phoneNumberId) throw new HttpsError('failed-precondition', 'WhatsApp não configurado.');
+      const instanceName = whatsappConfig.instanceName;
+      const apiKey = whatsappConfig.apiKey;
+      const serverUrl = whatsappConfig.serverUrl;
 
-      // Formata telefone
+      if (!instanceName || !apiKey || !serverUrl) {
+          throw new HttpsError('failed-precondition', 'WhatsApp Uazapi não configurado no painel.');
+      }
+
+      // Formata telefone (Uazapi exige o 55)
       const tel = telefone.replace(/\D/g, '');
       const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
 
-      await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+      // Envia via Uazapi (Evolution API format)
+      await fetch(`${serverUrl}/message/sendText/${instanceName}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          'apikey': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: telFinal,
-          type: 'text',
-          text: { body: mensagem }
+          number: telFinal,
+          options: { delay: 1200, presence: "composing" }, // Simula digitando
+          textMessage: { text: mensagem }
         })
       });
 
       return { sucesso: true };
     } catch (error) {
-      logger.error('❌ Erro enviar WhatsApp:', error);
+      logger.error('❌ Erro enviar WhatsApp Uazapi:', error);
       throw new HttpsError('internal', error.message);
     }
-  }
-);
+});
 
 // ==================================================================
 // 16. MARKETING AUTOMÁTICO — SCHEDULER (Roda 1x por dia)
@@ -1235,7 +1237,7 @@ export const configurarMarketing = onCall({ cors: true }, async (request) => {
 });
 
 // ==================================================================
-// 18. NOTIFICAÇÃO AUTOMÁTICA WHATSAPP (Trigger de status do pedido)
+// 18. NOTIFICAÇÃO AUTOMÁTICA WHATSAPP (Trigger de status) - UAZAPI
 // ==================================================================
 const MENSAGENS_STATUS = {
   preparo: (nome, nomeEstab) => `🔥 *${nomeEstab}*\n\nOlá, ${nome}! Seu pedido já está sendo preparado! 👨‍🍳`,
@@ -1245,84 +1247,59 @@ const MENSAGENS_STATUS = {
 };
 
 export const notificarClienteWhatsApp = onDocumentUpdated(
-  {
-    document: 'estabelecimentos/{estabId}/pedidos/{pedidoId}',
-    secrets: [whatsappApiToken],
-    maxInstances: 5
-  },
+  { document: 'estabelecimentos/{estabId}/pedidos/{pedidoId}' },
   async (event) => {
     try {
       const antes = event.data?.before?.data();
       const depois = event.data?.after?.data();
 
       if (!antes || !depois) return;
+      if (antes.status === depois.status) return; // Só dispara se o status mudou
 
-      // Só dispara se o status realmente mudou
-      const statusAntes = antes.status;
-      const statusDepois = depois.status;
-      if (statusAntes === statusDepois) return;
-
-      // Só notifica para status relevantes
-      const gerarMensagem = MENSAGENS_STATUS[statusDepois];
+      const gerarMensagem = MENSAGENS_STATUS[depois.status];
       if (!gerarMensagem) return;
 
-      // Pega o telefone do cliente
       const telefoneCliente = depois.cliente?.telefone || depois.clienteTelefone || '';
-      if (!telefoneCliente) {
-        logger.info(`📱 Pedido ${event.params.pedidoId}: Sem telefone, pulando WhatsApp.`);
-        return;
-      }
+      if (!telefoneCliente) return;
 
-      // Busca config WhatsApp do estabelecimento
       const estabId = event.params.estabId;
       const estabSnap = await db.collection('estabelecimentos').doc(estabId).get();
       if (!estabSnap.exists) return;
 
       const estab = estabSnap.data();
-      const whatsappConfig = estab.whatsapp;
+      const whatsappConfig = estab.whatsapp || {};
 
-      // Só envia se o WhatsApp está ativo e configurado
-      if (!whatsappConfig?.ativo || !whatsappConfig?.phoneNumberId) {
-        return;
-      }
+      if (!whatsappConfig.ativo || !whatsappConfig.instanceName) return;
 
-      const accessToken = whatsappConfig.accessToken || whatsappApiToken.value();
-      const phoneNumberId = whatsappConfig.phoneNumberId;
+      const { instanceName, apiKey, serverUrl } = whatsappConfig;
       const nomeEstab = estab.nome || 'Restaurante';
       const nomeCliente = depois.cliente?.nome || depois.clienteNome || 'Cliente';
       const motoboyNome = depois.motoboyNome || '';
 
-      // Gera a mensagem personalizada
       const mensagem = gerarMensagem(nomeCliente, nomeEstab, motoboyNome);
-
-      // Formata o telefone
       const tel = telefoneCliente.replace(/\D/g, '');
       const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
 
-      // Envia pelo WhatsApp Business API
-      const response = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+      const response = await fetch(`${serverUrl}/message/sendText/${instanceName}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          'apikey': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: telFinal,
-          type: 'text',
-          text: { body: mensagem }
+          number: telFinal,
+          options: { delay: 1200, presence: "composing" },
+          textMessage: { text: mensagem }
         })
       });
 
       if (response.ok) {
-        logger.info(`📱 WhatsApp enviado para ${telFinal} | Status: ${statusDepois} | Estab: ${nomeEstab}`);
+        logger.info(`📱 WhatsApp enviado para ${telFinal} | Status: ${depois.status} | Estab: ${nomeEstab}`);
       } else {
-        const erro = await response.json().catch(() => ({}));
-        logger.warn(`⚠️ Falha ao enviar WhatsApp para ${telFinal}:`, erro);
+        logger.warn(`⚠️ Falha ao enviar WhatsApp para ${telFinal}`);
       }
 
     } catch (error) {
-      // Nunca deixa o trigger falhar — apenas loga
       logger.error('❌ Erro no trigger de notificação WhatsApp:', error);
     }
   }
