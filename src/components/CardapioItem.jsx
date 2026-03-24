@@ -83,7 +83,18 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
         <div className="flex-shrink-0 relative">
           <div className="w-28 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center relative shadow-sm">
              {safeItem.promo && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 z-10">OFERTA</div>}
-            {imageLoading ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div> : <img src={displayImageUrl} alt={safeItem.nome} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" onError={() => setImageError(true)} onLoad={() => setImageLoading(false)} />}
+            {imageLoading ? (
+              <div className="w-full h-full skeleton-shimmer" />
+            ) : (
+              <img
+                src={displayImageUrl}
+                alt={safeItem.nome}
+                loading="lazy"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                onError={() => setImageError(true)}
+                onLoad={() => setImageLoading(false)}
+              />
+            )}
           </div>
           
           {isAvailable && (

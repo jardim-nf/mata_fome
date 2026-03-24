@@ -1,5 +1,5 @@
-// Service Worker — IdeaFood PWA (v2 - Otimizado)
-const CACHE_NAME = 'ideafood-v2';
+// Service Worker — IdeaFood PWA (v3 - Refactor cleanup)
+const CACHE_NAME = 'ideafood-v3';
 
 // Recursos críticos cacheados na instalação
 const PRECACHE_ASSETS = [
@@ -35,6 +35,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // Em dev (localhost), não interceptar — evita MIME errors com Vite HMR
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    return;
+  }
   // Ignora chamadas de API/Firebase (nunca cachear dados dinâmicos)
   if (
     url.hostname.includes('firebase') || 

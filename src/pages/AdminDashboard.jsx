@@ -47,7 +47,7 @@ const ActionButton = ({ title, subtitle, icon, themeColor }) => {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading, logout } = useAuth();
   const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
@@ -139,12 +139,6 @@ const AdminDashboard = () => {
               {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
-          <button 
-            onClick={() => { localStorage.clear(); window.location.href = '/login'; }}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-all"
-          >
-            <IoLogOutOutline size={16} /> Sair
-          </button>
         </div>
 
         {/* FATURAMENTO */}

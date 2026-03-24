@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useHeader } from '../context/HeaderContext.jsx';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 import { toast } from 'react-toastify';
 import { 
     Menu, 
@@ -69,13 +71,17 @@ function Header() {
     };
 
     const handleLogout = async () => {
-        if(window.confirm("Deseja realmente sair do sistema?")) {
-            try {
-                await logout();
-                toast.info('Você foi desconectado.');
-            } catch (error) {
-                toast.error('Erro ao sair.');
-            }
+        try {
+            await signOut(auth);
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.href = '/';
+        } catch (error) {
+            console.error('Erro logout:', error);
+            // Força redirecionamento mesmo com erro
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.href = '/';
         }
     };
 

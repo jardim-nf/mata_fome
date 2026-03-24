@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, Timestamp, updateDoc, arrayUnion, increment } from 'firebase/firestore';
@@ -18,6 +18,7 @@ import CustomerForm from '../components/menu/CustomerForm';
 import CartSection from '../components/menu/CartSection';
 import CartBar from '../components/menu/CartBar';
 import AuthModal from '../components/menu/AuthModal';
+import MenuSkeleton from '../components/menu/MenuSkeleton';
 
 import { estoqueService } from '../services/estoqueService';
 
@@ -53,6 +54,22 @@ function cleanData(obj) {
     }
     return acc;
   }, {});
+}
+
+// Sentinel que carrega mais itens automaticamente ao rolar (infinite scroll)
+function LoadMoreSentinel({ category, onLoadMore }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) onLoadMore(category); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [category, onLoadMore]);
+  return <div ref={ref} className="h-1" />;
 }
 
 export default function Menu() {
@@ -135,6 +152,9 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [visibleItemsCount, setVisibleItemsCount] = useState({});
+  const handleLoadMore = useCallback((cat) => {
+    setVisibleItemsCount(prev => ({ ...prev, [cat]: (prev[cat] || 4) + 4 }));
+  }, []);
   const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
   const [triggerCheckout, setTriggerCheckout] = useState(false);
 
@@ -554,7 +574,7 @@ export default function Menu() {
 
   // Guards
   if (loading || authLoading) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" /></div>;
+    return <MenuSkeleton />;
   }
 
   if (currentUser && (isAdmin || isMasterAdmin)) {
@@ -671,10 +691,11 @@ export default function Menu() {
                   </div>
                 ))}
               </div>
-              {items.length > 4 && (
-                <button onClick={() => setVisibleItemsCount(p => ({ ...p, [cat]: visible >= items.length ? 4 : (p[cat] || 4) + 4 }))} className="w-full mt-4 py-2 bg-gray-100 rounded-lg text-gray-500 font-bold">
-                  {visible >= items.length ? 'Ver menos' : 'Ver mais'}
-                </button>
+              {visible < items.length && (
+                <LoadMoreSentinel
+                  category={cat}
+                  onLoadMore={handleLoadMore}
+                />
               )}
             </div>
           );
