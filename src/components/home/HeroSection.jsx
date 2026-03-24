@@ -42,13 +42,13 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
       <div className="absolute top-20 left-10 w-72 h-72 bg-yellow-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-orange-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '2s' }} />
 
-      <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between py-12 md:py-20 px-4 relative z-10">
+      <div className="container mx-auto flex flex-col lg:flex-row items-center justify-between py-12 md:py-20 px-4 relative z-10 overflow-hidden">
         {/* Left content */}
         <motion.div
           initial={{ opacity: 0, x: -50 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8, ease: 'easeOut' }}
-          className="w-full lg:w-1/2 text-center lg:text-left mb-10 lg:mb-0"
+          className="w-full lg:w-[48%] text-center lg:text-left mb-10 lg:mb-0 relative z-20 shrink-0"
         >
           <div className="inline-flex items-center bg-yellow-100 text-yellow-700 px-4 py-2 rounded-full text-sm font-semibold mb-6">
             <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse" />
@@ -117,22 +117,23 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
 
         {/* Right image */}
         <motion.div
-          initial={{ opacity: 0, x: 50, rotate: 5 }}
-          animate={{ opacity: 1, x: 0, rotate: 3 }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 }}
-          className="relative w-full lg:w-1/2 flex justify-center items-center lg:h-[500px]"
+          className="relative w-full lg:w-[48%] overflow-hidden rounded-3xl"
+          style={{ height: '480px' }}
         >
-          <div className="absolute inset-y-0 right-0 w-full lg:w-[120%] bg-gradient-to-r from-yellow-400 to-orange-400 rounded-bl-[100px] lg:rounded-bl-[150px] transform lg:translate-x-1/4 opacity-90" />
+          <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-400 opacity-90" />
 
           <img
             src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/pizza.png?alt=media&token=aac1a9a6-5381-41df-b728-c394fba7b762"
             alt="Pizza Deliciosa IdeaFood"
-            className="relative z-10 w-full max-w-md md:max-w-lg lg:max-w-none lg:w-auto h-auto rounded-2xl shadow-2xl shadow-yellow-500/20 transform translate-y-8 lg:translate-y-0 rotate-3 hover:rotate-0 transition-transform duration-500"
+            className="absolute inset-0 w-full h-full object-cover z-10 hover:scale-105 transition-transform duration-500"
           />
 
           {/* Decorative elements */}
-          <div className="absolute -bottom-4 -left-4 w-24 h-24 bg-gradient-to-br from-yellow-300 to-orange-300 rounded-full opacity-40 animate-pulse" />
-          <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-orange-300 to-red-300 rounded-full opacity-30 animate-bounce" style={{ animationDuration: '3s' }} />
+          <div className="absolute bottom-4 left-4 w-24 h-24 bg-gradient-to-br from-yellow-300 to-orange-300 rounded-full opacity-40 animate-pulse z-20" />
+          <div className="absolute top-4 right-4 w-16 h-16 bg-gradient-to-br from-orange-300 to-red-300 rounded-full opacity-30 animate-bounce z-20" style={{ animationDuration: '3s' }} />
         </motion.div>
       </div>
 
