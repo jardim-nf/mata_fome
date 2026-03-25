@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { IoAdd, IoOptions, IoCart } from 'react-icons/io5';
+import ModelViewer3D from './ModelViewer3D';
 
 function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
   const cores = coresEstabelecimento || { primaria: '#EA1D2C', destaque: '#059669', background: '#FFFFFF' };
@@ -16,6 +17,7 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
     descricao: item.descricao || '',
     preco: typeof item.preco === 'number' ? item.preco : 0,
     imageUrl: item.imageUrl || null,
+    modelo3dUrl: item.modelo3dUrl || null,
     categoria: item.categoria || '',
     ativo: item.ativo !== false,
     disponivel: item.disponivel !== false,
@@ -83,7 +85,17 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
         <div className="flex-shrink-0 relative">
           <div className="w-28 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center relative shadow-sm">
              {safeItem.promo && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 z-10">OFERTA</div>}
-            {imageLoading ? (
+            {safeItem.modelo3dUrl ? (
+              <div className="w-full h-full" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                <ModelViewer3D
+                  src={safeItem.modelo3dUrl}
+                  poster={displayImageUrl}
+                  alt={safeItem.nome}
+                  compact={true}
+                  coresEstabelecimento={cores}
+                />
+              </div>
+            ) : imageLoading ? (
               <div className="w-full h-full skeleton-shimmer" />
             ) : (
               <img

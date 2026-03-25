@@ -6,6 +6,16 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    server: {
+      proxy: {
+        // Proxy para Firebase Storage — resolve CORS em dev
+        '/firebase-storage': {
+          target: 'https://firebasestorage.googleapis.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/firebase-storage/, ''),
+        },
+      },
+    },
     build: {
       target: 'es2015',
       cssMinify: true,
@@ -34,4 +44,4 @@ export default defineConfig(({ mode }) => {
       )
     }
   };
-});
+});

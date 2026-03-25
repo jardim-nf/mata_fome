@@ -55,9 +55,12 @@ const ProductGridCard = ({
   onEdit, 
   onDelete, 
   onToggleStatus, 
+  onUpload3D,
+  uploading3D,
   stockStatus, 
   profitMargin 
 }) => {
+  const fileInput3DRef = useRef(null);
   const stockConfig = {
     normal: { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: IoCheckmarkCircle, label: 'OK' },
     baixo: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: IoAlertCircle, label: 'Baixo' },
@@ -177,6 +180,32 @@ const ProductGridCard = ({
             </div>
 
             <div className="grid grid-cols-2 gap-2">
+                {/* Botão Upload 3D */}
+                <input
+                  ref={fileInput3DRef}
+                  type="file"
+                  accept=".glb,.gltf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onUpload3D(produto, file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={produto.modelo3dUrl ? undefined : () => fileInput3DRef.current?.click()}
+                  disabled={!!produto.modelo3dUrl || uploading3D}
+                  className={`col-span-2 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${
+                    produto.modelo3dUrl
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default'
+                      : uploading3D
+                        ? 'bg-violet-50 text-violet-400 border border-violet-200 cursor-wait'
+                        : 'bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200'
+                  }`}
+                >
+                  <IoCube size={14} />
+                  {produto.modelo3dUrl ? '✓ 3D Pronto' : uploading3D ? 'Enviando...' : 'Enviar Modelo 3D (.glb)'}
+                </button>
                 <button
                     onClick={onToggleStatus}
                     className={`py-2 rounded-xl text-xs font-bold transition-colors ${
@@ -450,6 +479,37 @@ function AdminMenuManagement() {
     await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id), { ativo: item.ativo === false });
   };
 
+  // 🧊 UPLOAD MANUAL DE MODELO 3D (.glb)
+  const [uploading3DItemId, setUploading3DItemId] = useState(null);
+  const handleUpload3D = async (item, file) => {
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['glb', 'gltf'].includes(ext)) {
+      toast.error('Formato inválido. Envie um arquivo .glb ou .gltf');
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 50MB.');
+      return;
+    }
+    try {
+      setUploading3DItemId(item.id);
+      toast.info('🧊 Enviando modelo 3D...', { autoClose: 3000 });
+      const storagePath = `modelos3d/${primeiroEstabelecimento}/${item.id}.${ext}`;
+      const url = await uploadFile(file, storagePath);
+      await updateDoc(
+        doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id),
+        { modelo3dUrl: url }
+      );
+      toast.success('✅ Modelo 3D enviado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao enviar modelo 3D:', error);
+      toast.error('Erro ao enviar modelo 3D. Tente novamente.');
+    } finally {
+      setUploading3DItemId(null);
+    }
+  };
+
   // NCM SEARCH (BrasilAPI)
   const buscarNcm = async (termo) => {
     setTermoNcm(termo);
@@ -579,6 +639,8 @@ function AdminMenuManagement() {
                                 onEdit={() => openItemForm(item)}
                                 onDelete={() => handleDeleteItem(item)}
                                 onToggleStatus={() => toggleItemStatus(item)}
+                                onUpload3D={handleUpload3D}
+                                uploading3D={uploading3DItemId === item.id}
                                 stockStatus={item.estoque <= 0 ? 'esgotado' : (item.estoque <= item.estoqueMinimo ? 'critico' : 'normal')}
                                 profitMargin={((item.preco - item.custo) / item.preco) * 100}
                             />

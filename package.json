@@ -7,6 +7,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/model-viewer": "^4.2.0",
     "aos": "^2.3.4",
     "axios": "^1.13.5",
     "canvas-confetti": "^1.9.4",
