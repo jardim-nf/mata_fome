@@ -1,0 +1,108 @@
+/* src/components/ui/DialogStyles.css */
+
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    animation: dialogFadeIn 0.2s ease;
+}
+
+.dialog-box {
+    background: #1e1e2e;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px 28px;
+    min-width: 320px;
+    max-width: 440px;
+    width: 90vw;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: dialogSlideIn 0.25s ease;
+}
+
+.dialog-title {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.dialog-message {
+    margin: 0 0 20px;
+    font-size: 0.95rem;
+    color: #aaa;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.dialog-input {
+    width: 100%;
+    padding: 12px 14px;
+    background: #12121a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    outline: none;
+    margin-bottom: 16px;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.dialog-input:focus {
+    border-color: #ff6b00;
+}
+
+.dialog-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.dialog-btn {
+    padding: 10px 22px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dialog-btn-cancel {
+    background: rgba(255, 255, 255, 0.06);
+    color: #888;
+}
+
+.dialog-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #bbb;
+}
+
+.dialog-btn-confirm {
+    background: linear-gradient(135deg, #ff6b00, #ff8c33);
+    color: #fff;
+}
+
+.dialog-btn-confirm:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.dialog-warning .dialog-btn-confirm {
+    background: linear-gradient(135deg, #e74c3c, #ff6b6b);
+}
+
+@keyframes dialogFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes dialogSlideIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}

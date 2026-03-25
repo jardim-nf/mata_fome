@@ -1,7 +1,7 @@
 // src/pages/AdminSettings.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import withAuth from '../hocs/withAuth';
+
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -482,4 +482,4 @@ const AdminSettings = () => {
   );
 };
 
-export default withAuth(AdminSettings, { requireAdmin: true });
+export default AdminSettings;

@@ -4,7 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, orderBy, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from "../context/AuthContext";
-import withAuth from '../hocs/withAuth';
+
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'react-toastify';
@@ -367,10 +367,4 @@ function ClientDetails() {
   );
 }
 
-// ✅ Aplica o HOC de autenticação
-// - Requer autenticação E permissão de admin OU master
-// - Esta página pode ser acessada por ambos (master e admin)
-export default withAuth(ClientDetails, { 
-  requireAdmin: true,
-  message: 'Acesso aos detalhes do cliente restrito' 
-});
+export default ClientDetails;

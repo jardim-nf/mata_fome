@@ -67,7 +67,7 @@ const EntradaEstoqueXML = lazy(() => import("./pages/admin/EntradaEstoqueXML"));
 const RankingFuncionarios = lazy(() => import("./pages/admin/RankingFuncionarios"));
 const WhatsAppConfig = lazy(() => import("./pages/admin/WhatsAppConfig"));
 const PrevisaoDemanda = lazy(() => import("./pages/admin/PrevisaoDemanda"));
-const MarketingConfig = lazy(() => import("./pages/admin/MarketingConfig"));
+
 const ResponderAvaliacoes = lazy(() => import("./pages/admin/ResponderAvaliacoes"));
 const RelatorioLucro = lazy(() => import("./pages/admin/RelatorioLucro"));
 const Divulgacao = lazy(() => import('./pages/Divulgacao'));
@@ -140,7 +140,7 @@ function App() {
                   <Route path="/admin/ranking" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente']}><RankingFuncionarios /></PrivateRoute>} />
                   <Route path="/admin/whatsapp" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><WhatsAppConfig /></PrivateRoute>} />
                   <Route path="/admin/previsao" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><PrevisaoDemanda /></PrivateRoute>} />
-                  <Route path="/admin/marketing" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><MarketingConfig /></PrivateRoute>} />
+
                   <Route path="/admin/avaliacoes" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><ResponderAvaliacoes /></PrivateRoute>} />
                   <Route path="/admin/lucro" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin', 'gerente']}><RelatorioLucro /></PrivateRoute>} />
                   <Route path="/admin/relatorio-cancelamentos" element={<PrivateRoute allowedRoles={['admin', 'masterAdmin']}><RelatorioCancelamentos /></PrivateRoute>} />

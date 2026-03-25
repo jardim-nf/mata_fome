@@ -49,7 +49,7 @@ const withEstablishmentAuth = (WrappedComponent) => {
       );
     }
 
-    return <WrappedComponent {...props} />;
+    return <WrappedComponent {...props} estabelecimentoPrincipal={estabelecimentoPrincipal} />;
   };
 };
 

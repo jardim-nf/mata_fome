@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePayment } from '../context/PaymentContext';
-import useCarrinho from '../hooks/useCarrinho';
+import { useCart } from '../hooks/useCart';
 import PaymentSelector from '../components/PaymentSelector';
 import RaspadinhaModal from '../components/RaspadinhaModal';
 import { toast } from 'react-toastify';
@@ -22,7 +22,7 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
   const { processPayment, selectedPayment } = usePayment();
   const { currentUser, currentClientData } = useAuth();
-  const { carrinho, subtotal, adicionarAoCarrinho, limparCarrinho } = useCarrinho();
+  const { carrinho, subtotalCalculado: subtotal, adicionarBrinde, limparCarrinho } = useCart();
   
   const [showRaspadinha, setShowRaspadinha] = useState(false);
   const [premioAplicado, setPremioAplicado] = useState(null);
@@ -110,11 +110,8 @@ const CheckoutPage = () => {
         toast.success('🎉 Ganhou Frete Grátis!');
     } 
     else if (premio.type === 'brinde') {
-        adicionarAoCarrinho(
-            { ...premio.produto, id: 'brinde-raspadinha', preco: 0, nome: `${premio.produto.nome} (Brinde)` },
-            1,
-            [],
-            'Ganho na raspadinha'
+        adicionarBrinde(
+            { ...premio.produto, id: 'brinde-raspadinha' }
         );
         toast.success(`🎉 Ganhou ${premio.produto.nome}!`);
     }
@@ -220,14 +217,14 @@ const CheckoutPage = () => {
 
               <div className="space-y-3">
                 {carrinho.map((item, index) => (
-                  <div key={item._cartId || index} className="flex justify-between items-center py-2 border-b">
+                  <div key={item.cartItemId || index} className="flex justify-between items-center py-2 border-b">
                     <div>
                       <span className="font-medium">{item.nome || item.name}</span>
                       {item.preco === 0 && <span className="text-xs text-[#FF6B35] ml-2 font-bold">PRESENTE</span>}
-                      <span className="text-gray-500 ml-2">x{item.quantidade}</span>
+                      <span className="text-gray-500 ml-2">x{item.qtd}</span>
                     </div>
                     <span className="font-medium">
-                        {item.preco === 0 ? 'Grátis' : `R$ ${(item.precoFinal * item.quantidade).toFixed(2)}`}
+                        {item.preco === 0 ? 'Grátis' : `R$ ${(item.precoFinal * item.qtd).toFixed(2)}`}
                     </span>
                   </div>
                 ))}

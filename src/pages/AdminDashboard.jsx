@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
 import { useAuth } from "../context/AuthContext";
-import withAuth from "../hocs/withAuth";
+
 
 import { 
   IoStatsChart, IoShareSocial, IoColorPalette, IoSettings, IoTrashBin,
@@ -119,7 +119,8 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/multi-platform', title: 'Integrações', sub: 'iFood, WhatsApp e impressoras', icon: <IoShareSocial />, cor: 'teal', adminOnly: true },
         { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: 'Pedido automático via WhatsApp', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
-        { path: '/admin/marketing', title: 'Marketing Automático', sub: 'Reengaje clientes inativos', icon: <IoMegaphoneOutline />, cor: 'purple', adminOnly: true },
+
+        { path: '/nossos-clientes', title: 'Nossos Clientes', sub: 'Envio manual de WhatsApp em massa', icon: <IoPersonOutline />, cor: 'cyan', adminOnly: true },
         { path: '/admin/cores', title: 'Identidade Visual', sub: 'Cores e tema da loja', icon: <IoColorPalette />, cor: 'pink', adminOnly: true },
         { path: '/admin/configuracoes', title: 'Configurações Gerais', sub: 'Senha Master e segurança', icon: <IoSettings />, cor: 'slate', adminOnly: true },
         { path: '/admin/config-fiscal', title: 'Fiscal & Certificado', sub: 'Configurar NFC-e e PlugNotas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
@@ -212,4 +213,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default withAuth(AdminDashboard, { requireAdmin: false, message: 'Acesso restrito' });
+export default AdminDashboard;

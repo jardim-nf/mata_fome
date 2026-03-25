@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 // Importe suas funções de autenticação do Firebase (login, cadastro, logout)
-import { doSignInWithEmailAndPassword, doCreateUserWithEmailAndPassword, doSignOut } from '../firebase';
+import { doSignInWithEmailAndPassword, doCreateUserWithEmailAndPassword, doSignOut } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 // Importe Firestore se você armazena dados de usuário lá
 import { doc, setDoc, getDoc } from 'firebase/firestore';

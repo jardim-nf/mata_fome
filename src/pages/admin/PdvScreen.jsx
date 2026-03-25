@@ -16,6 +16,10 @@ import {
     ModalPesoBalanca
 } from '../../components/PdvModals';
 import { IoArrowBack, IoSearch, IoCart, IoSettingsOutline, IoStorefrontOutline, IoPauseCircleOutline, IoTrashOutline, IoTimeOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
+import { toast, ToastContainer } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import PromptDialog from '../../components/ui/PromptDialog';
+import './PdvScreen.css';
 
 const PdvScreen = () => {
     const { userData, currentUser } = useAuth();
@@ -56,6 +60,18 @@ const PdvScreen = () => {
 
     const [vendasSuspensas, setVendasSuspensas] = useState([]);
     const [mostrarSuspensas, setMostrarSuspensas] = useState(false);
+
+    // Dialogs (substitui alert/confirm/prompt nativos)
+    const [confirmDialog, setConfirmDialog] = useState(null);
+    const [promptDialog, setPromptDialog] = useState(null);
+
+    const showConfirm = useCallback((message, onConfirm, opts = {}) => {
+        setConfirmDialog({ message, onConfirmCb: onConfirm, title: opts.title || '', variant: opts.variant || 'default', confirmText: opts.confirmText || 'Confirmar', cancelText: opts.cancelText || 'Cancelar' });
+    }, []);
+
+    const showPrompt = useCallback((message, onSubmit, opts = {}) => {
+        setPromptDialog({ message, onSubmitCb: onSubmit, title: opts.title || '', placeholder: opts.placeholder || '', defaultValue: opts.defaultValue || '', confirmText: opts.submitText || opts.confirmText || 'OK', cancelText: opts.cancelText || 'Cancelar' });
+    }, []);
 
     // Pagamento
     const [dadosRecibo, setDadosRecibo] = useState(null);
@@ -116,40 +132,43 @@ const PdvScreen = () => {
     }, [caixaAberto]);
 
     const suspenderVenda = useCallback(() => {
-        if (!vendaAtual || vendaAtual.itens.length === 0) return alert("O carrinho está vazio!");
-        const nomeCliente = prompt("Nome identificador (Opcional):") || `Cliente ${vendasSuspensas.length + 1}`;
-        if (nomeCliente === null) return; 
-        setVendasSuspensas(prev => [...prev, { ...vendaAtual, nomeReferencia: nomeCliente, dataSuspensao: new Date(), descontoGuardado: descontoValor, acrescimoGuardado: acrescimoValor, pagamentosGuardados: pagamentosAdicionados }]);
-        iniciarVendaBalcao(); 
-    }, [vendaAtual, vendasSuspensas, iniciarVendaBalcao, descontoValor, acrescimoValor, pagamentosAdicionados]);
+        if (!vendaAtual || vendaAtual.itens.length === 0) return toast.warning("O carrinho está vazio!");
+        showPrompt("Nome identificador (Opcional):", (nomeCliente) => {
+            const nome = nomeCliente || `Cliente ${vendasSuspensas.length + 1}`;
+            setVendasSuspensas(prev => [...prev, { ...vendaAtual, nomeReferencia: nome, dataSuspensao: new Date(), descontoGuardado: descontoValor, acrescimoGuardado: acrescimoValor, pagamentosGuardados: pagamentosAdicionados }]);
+            iniciarVendaBalcao();
+        }, { title: 'Suspender Venda', placeholder: 'Ex: Mesa 5, João...', submitText: 'Suspender' });
+    }, [vendaAtual, vendasSuspensas, iniciarVendaBalcao, descontoValor, acrescimoValor, pagamentosAdicionados, showPrompt]);
 
     const restaurarVendaSuspensa = (vs) => {
-        if (vendaAtual && vendaAtual.itens.length > 0 && !window.confirm("Atenção: O seu carrinho atual tem produtos. Substituir pela venda em espera?")) return;
-        setVendaAtual({ id: vs.id, itens: vs.itens, total: vs.total }); setDescontoValor(vs.descontoGuardado || ''); setAcrescimoValor(vs.acrescimoGuardado || ''); setPagamentosAdicionados(vs.pagamentosGuardados || []);
-        setVendasSuspensas(prev => prev.filter(v => v.id !== vs.id)); setMostrarSuspensas(false); setTimeout(() => inputBuscaRef.current?.focus(), 100);
+        const doRestore = () => {
+            setVendaAtual({ id: vs.id, itens: vs.itens, total: vs.total }); setDescontoValor(vs.descontoGuardado || ''); setAcrescimoValor(vs.acrescimoGuardado || ''); setPagamentosAdicionados(vs.pagamentosGuardados || []);
+            setVendasSuspensas(prev => prev.filter(v => v.id !== vs.id)); setMostrarSuspensas(false); setTimeout(() => inputBuscaRef.current?.focus(), 100);
+        };
+        if (vendaAtual && vendaAtual.itens.length > 0) { showConfirm("O seu carrinho atual tem produtos. Substituir pela venda em espera?", doRestore, { title: 'Atenção', variant: 'warning' }); } else { doRestore(); }
     };
 
-    const excluirVendaSuspensa = (id) => { if(window.confirm("Excluir este pedido em espera?")) setVendasSuspensas(prev => prev.filter(v => v.id !== id)); };
+    const excluirVendaSuspensa = (id) => { showConfirm("Excluir este pedido em espera?", () => setVendasSuspensas(prev => prev.filter(v => v.id !== id)), { variant: 'danger' }); };
     const abrirHistoricoAtual = useCallback(() => { setTituloHistorico("Vendas Turno Atual"); setVendasHistoricoExibicao(vendasTurnoAtual); setMostrarHistorico(prev => !prev); }, [vendasTurnoAtual]);
     const carregarListaTurnos = useCallback(async () => { if (!estabelecimentoAtivo) return; setCarregandoHistorico(true); setMostrarListaTurnos(true); setListaTurnos(await caixaService.listarTurnos(currentUser.uid, estabelecimentoAtivo)); setCarregandoHistorico(false); }, [currentUser, estabelecimentoAtivo]);
     const visualizarVendasTurno = useCallback(async (turno) => { setCarregandoHistorico(true); setTituloHistorico(`Vendas ${turno.dataAbertura ? formatarData(turno.dataAbertura) : ''}`); setVendasHistoricoExibicao(await vendaService.buscarVendasPorIntervalo(currentUser.uid, estabelecimentoAtivo, turno.dataAbertura, turno.dataFechamento)); setCarregandoHistorico(false); setMostrarListaTurnos(false); setMostrarHistorico(true); }, [currentUser, estabelecimentoAtivo]);
     const prepararFechamento = useCallback(async () => { if (!caixaAberto) return; setMovimentacoesDoTurno(await caixaService.buscarMovimentacoes(caixaAberto.id)); setMostrarFechamentoCaixa(true); }, [caixaAberto]);
-    const abrirMovimentacao = useCallback(() => { if (!caixaAberto) return alert("Caixa Fechado!"); setMostrarMovimentacao(true); }, [caixaAberto]);
-    const handleSalvarMovimentacao = async (dados) => { const res = await caixaService.adicionarMovimentacao(caixaAberto.id, { ...dados, usuarioId: currentUser.uid }); if (res.success) { alert(`Sucesso!`); setMostrarMovimentacao(false); } else alert('Erro: ' + res.error); };
+    const abrirMovimentacao = useCallback(() => { if (!caixaAberto) return toast.warning("Caixa Fechado!"); setMostrarMovimentacao(true); }, [caixaAberto]);
+    const handleSalvarMovimentacao = async (dados) => { const res = await caixaService.adicionarMovimentacao(caixaAberto.id, { ...dados, usuarioId: currentUser.uid }); if (res.success) { toast.success('Movimentação registrada!'); setMostrarMovimentacao(false); } else toast.error('Erro: ' + res.error); };
 
     const handleConfirmarFechamento = async (dados) => { 
         const res = await caixaService.fecharCaixa(caixaAberto.id, dados); 
         if (res.success) { 
-            alert('🔒 Turno encerrado!'); setCaixaAberto(null); setVendasBase([]); setVendasSuspensas([]); setMostrarFechamentoCaixa(false); setVendaAtual(null); 
+            toast.success('🔒 Turno encerrado!'); setCaixaAberto(null); setVendasBase([]); setVendasSuspensas([]); setMostrarFechamentoCaixa(false); setVendaAtual(null); 
             setTurnoSelecionadoResumo({ ...caixaAberto, resumoVendas: dados.resumoVendas, saldoFinalInformado: dados.saldoFinalInformado, diferenca: dados.diferenca, dataFechamento: new Date(), status: 'fechado' }); setMostrarResumoTurno(true);
-        } else alert('Erro ao fechar caixa: ' + res.error);
+        } else toast.error('Erro ao fechar caixa: ' + res.error);
     };
 
     const handleAbrirCaixa = async (saldoInicial) => {
         const checkAtivo = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo);
-        if (checkAtivo) { alert('Atenção: Você já possui um turno em andamento!'); setCaixaAberto(checkAtivo); setMostrarAberturaCaixa(false); return; }
+        if (checkAtivo) { toast.warning('Você já possui um turno em andamento!'); setCaixaAberto(checkAtivo); setMostrarAberturaCaixa(false); return; }
         const res = await caixaService.abrirCaixa({ usuarioId: currentUser.uid, estabelecimentoId: estabelecimentoAtivo, saldoInicial });
-        if (res.success) { setCaixaAberto(await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo) || res); setVendasBase([]); setVendasSuspensas([]); setMostrarAberturaCaixa(false); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else alert('Erro: ' + res.error);
+        if (res.success) { setCaixaAberto(await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo) || res); setVendasBase([]); setVendasSuspensas([]); setMostrarAberturaCaixa(false); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else toast.error('Erro: ' + res.error);
     };
 
     const selecionarVendaHistorico = (v) => { setDadosRecibo(v); setNfceStatus(v.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle'); setNfceUrl(v.fiscal?.pdf || null); setMostrarHistorico(false); setMostrarRecibo(true); };
@@ -209,19 +228,20 @@ const PdvScreen = () => {
     const handleConsultarStatus = async (venda) => {
         const st = venda.fiscal?.status;
         if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'ERRO') {
-            if (!window.confirm("Tentar reenviar para a SEFAZ?")) return;
-            setNfceStatus('loading');
-            try {
-                const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
-                if (res.sucesso || res.success) {
-                    alert("✅ Enviada!");
-                    const atualiza = (l) => l.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
-                    setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza);
-                    if (dadosRecibo?.id === venda.id) setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
-                } else { setNfceStatus('error'); alert("❌ Erro: " + res.error); }
-            } catch (e) { setNfceStatus('error'); alert('Falha ao reenviar.'); }
+            showConfirm("Tentar reenviar para a SEFAZ?", async () => {
+                setNfceStatus('loading');
+                try {
+                    const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
+                    if (res.sucesso || res.success) {
+                        toast.success('Enviada com sucesso!');
+                        const atualiza = (l) => l.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
+                        setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza);
+                        if (dadosRecibo?.id === venda.id) setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
+                    } else { setNfceStatus('error'); toast.error('Erro: ' + res.error); }
+                } catch (e) { setNfceStatus('error'); toast.error('Falha ao reenviar.'); }
+            }, { title: 'Reenviar NFC-e', confirmText: 'Reenviar' });
         } else {
-            if (!venda.fiscal?.idPlugNotas) return alert("Sem ID PlugNotas.");
+            if (!venda.fiscal?.idPlugNotas) return toast.warning('Sem ID PlugNotas.');
             setNfceStatus('loading');
             try {
                 const res = await vendaService.consultarStatusNfce(venda.id, venda.fiscal.idPlugNotas);
@@ -229,18 +249,19 @@ const PdvScreen = () => {
                     const atualiza = (l) => l.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf || v.fiscal?.pdf, xml: res.xml || v.fiscal?.xml, motivoRejeicao: res.mensagem || v.fiscal?.motivoRejeicao } } : v );
                     setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza);
                     if (dadosRecibo?.id === venda.id) { setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } })); setNfceStatus(res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO' ? 'success' : 'idle'); setNfceUrl(res.pdf); }
-                    alert(`Status: ${res.statusAtual}`);
-                } else { setNfceStatus('error'); alert("Erro: " + res.error); }
-            } catch (e) { setNfceStatus('error'); alert("Falha ao consultar."); }
+                    toast.info(`Status: ${res.statusAtual}`);
+                } else { setNfceStatus('error'); toast.error('Erro: ' + res.error); }
+            } catch (e) { setNfceStatus('error'); toast.error('Falha ao consultar.'); }
         }
     };
 
     const handleEnviarWhatsApp = (venda) => {
-        if (!venda.fiscal?.pdf) return alert("⚠️ Link PDF indisponível.");
-        let tel = prompt("📱 Número WhatsApp:", venda.clienteTelefone || venda.cliente?.telefone || "");
-        if (tel === null) return; tel = tel.replace(/\D/g, '');
-        const msg = encodeURIComponent(`Olá! Agradecemos a preferência. 😃\nSua Nota Fiscal de ${formatarMoeda(venda.total)}:\n${venda.fiscal.pdf}`);
-        window.open(tel.length >= 10 ? `https://wa.me/${tel.startsWith('55') ? tel : `55${tel}`}?text=${msg}` : `https://api.whatsapp.com/send?text=${msg}`, '_blank');
+        if (!venda.fiscal?.pdf) return toast.warning('Link PDF indisponível.');
+        showPrompt('Número WhatsApp:', (tel) => {
+            tel = tel.replace(/\D/g, '');
+            const msg = encodeURIComponent(`Olá! Agradecemos a preferência. 😃\nSua Nota Fiscal de ${formatarMoeda(venda.total)}:\n${venda.fiscal.pdf}`);
+            window.open(tel.length >= 10 ? `https://wa.me/${tel.startsWith('55') ? tel : `55${tel}`}?text=${msg}` : `https://api.whatsapp.com/send?text=${msg}`, '_blank');
+        }, { title: '📱 Enviar WhatsApp', defaultValue: venda.clienteTelefone || venda.cliente?.telefone || '', placeholder: '(XX) XXXXX-XXXX', submitText: 'Enviar' });
     };
 
     const removerItem = (uid) => setVendaAtual(prev => ({ ...prev, itens: prev.itens.filter(i => i.uid !== uid), total: prev.itens.filter(i => i.uid !== uid).reduce((s, i) => s + (i.price * i.quantity), 0) }));
@@ -286,8 +307,8 @@ const PdvScreen = () => {
             if (res.sucesso || res.success) {
                 const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
                 setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
-            } else { setNfceStatus('error'); tocarBeepErro(); alert(res.error || "Erro ao solicitar"); }
-        } catch (e) { setNfceStatus('error'); tocarBeepErro(); alert('Erro de conexão.'); }
+            } else { setNfceStatus('error'); tocarBeepErro(); toast.error(res.error || 'Erro ao solicitar'); }
+        } catch (e) { setNfceStatus('error'); tocarBeepErro(); toast.error('Erro de conexão.'); }
     };
 
     useEffect(() => {
@@ -328,46 +349,110 @@ const PdvScreen = () => {
     }, [nfceStatus, dadosRecibo]);
 
     const handleProcessarLoteNfce = async (vendasParaProcessar) => {
-        if (!vendasParaProcessar || vendasParaProcessar.length === 0 || !window.confirm(`Reprocessar ${vendasParaProcessar.length} notas?`)) return;
-        let sucesso = 0; let canceladas = 0; let falhas = 0; let listaAtualizada = [...vendasHistoricoExibicao];
-        for (let i = 0; i < vendasParaProcessar.length; i++) {
-            const venda = vendasParaProcessar[i]; const idPlugNotas = venda.fiscal?.idPlugNotas;
-            try {
-                let statusAtual = 'REJEITADO'; let pdfAtual = null;
-                if (idPlugNotas) {
-                    const res = await vendaService.consultarStatusNfce(venda.id, idPlugNotas);
-                    if (res.sucesso) {
-                        statusAtual = res.statusAtual?.toUpperCase(); pdfAtual = res.pdf || venda.fiscal?.pdf;
-                        if (statusAtual === 'CONCLUIDO' || statusAtual === 'AUTORIZADA') { sucesso++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'AUTORIZADA', pdf: pdfAtual } } : v ); continue; }
-                        if (statusAtual === 'CANCELADO' || statusAtual === 'CANCELADA') { canceladas++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'CANCELADO' } } : v ); continue; }
+        if (!vendasParaProcessar || vendasParaProcessar.length === 0) return;
+        showConfirm(`Reprocessar ${vendasParaProcessar.length} notas?`, async () => {
+            let sucesso = 0; let canceladas = 0; let falhas = 0; let listaAtualizada = [...vendasHistoricoExibicao];
+            for (let i = 0; i < vendasParaProcessar.length; i++) {
+                const venda = vendasParaProcessar[i]; const idPlugNotas = venda.fiscal?.idPlugNotas;
+                try {
+                    let statusAtual = 'REJEITADO'; let pdfAtual = null;
+                    if (idPlugNotas) {
+                        const res = await vendaService.consultarStatusNfce(venda.id, idPlugNotas);
+                        if (res.sucesso) {
+                            statusAtual = res.statusAtual?.toUpperCase(); pdfAtual = res.pdf || venda.fiscal?.pdf;
+                            if (statusAtual === 'CONCLUIDO' || statusAtual === 'AUTORIZADA') { sucesso++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'AUTORIZADA', pdf: pdfAtual } } : v ); continue; }
+                            if (statusAtual === 'CANCELADO' || statusAtual === 'CANCELADA') { canceladas++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'CANCELADO' } } : v ); continue; }
+                        }
                     }
-                }
-                if (statusAtual === 'REJEITADO' || statusAtual === 'ERRO' || !idPlugNotas) {
-                    const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
-                    if (res.sucesso || res.success) { sucesso++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v ); } else { falhas++; }
-                }
-            } catch (e) { falhas++; }
-        }
-        setVendasHistoricoExibicao(listaAtualizada); setVendasBase(prev => prev.map(v => listaAtualizada.find(lu => lu.id === v.id) || v));
-        if (falhas > 0) tocarBeepErro(); alert(`Concluído!\n✅ Sucessos: ${sucesso}\n🚫 Canceladas: ${canceladas}\n❌ Falhas: ${falhas}`);
+                    if (statusAtual === 'REJEITADO' || statusAtual === 'ERRO' || !idPlugNotas) {
+                        const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
+                        if (res.sucesso || res.success) { sucesso++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v ); } else { falhas++; }
+                    }
+                } catch (e) { falhas++; }
+            }
+            setVendasHistoricoExibicao(listaAtualizada); setVendasBase(prev => prev.map(v => listaAtualizada.find(lu => lu.id === v.id) || v));
+            if (falhas > 0) { tocarBeepErro(); toast.error(`Concluído com ${falhas} falha(s). ✅ ${sucesso} | 🚫 ${canceladas}`); } else { toast.success(`Concluído! ✅ ${sucesso} sucesso(s), 🚫 ${canceladas} cancelada(s)`); }
+        }, { title: 'Reprocessar Lote NFC-e', confirmText: 'Reprocessar' });
     };
 
     const handleCancelarNfce = async () => {
-        if (!dadosRecibo?.id) return; const j = window.prompt("Motivo (MIN 15 chars):");
-        if (!j) return; if (j.trim().length < 15) return alert("Mínimo 15 caracteres.");
-        setNfceStatus('loading');
-        try {
-            const res = await vendaService.cancelarNfce(dadosRecibo.id, j.trim());
-            if (res.success) { alert("Enviado!"); setDadosRecibo(p => ({ ...p, status: 'cancelada', fiscal: { ...p.fiscal, status: 'PROCESSANDO' } })); const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'PROCESSANDO' } } : v ); setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); } else { alert("Erro: " + res.error); }
-        } catch (e) { alert('Falha de comunicação.'); } finally { setNfceStatus('idle'); }
+        if (!dadosRecibo?.id) return;
+        showPrompt('Motivo do cancelamento (mínimo 15 caracteres):', async (motivo) => {
+            if (motivo.trim().length < 15) return toast.warning('Mínimo 15 caracteres.');
+            setNfceStatus('loading');
+            try {
+                const res = await vendaService.cancelarNfce(dadosRecibo.id, motivo.trim());
+                if (res.success) { toast.success('Cancelamento enviado!'); setDadosRecibo(p => ({ ...p, status: 'cancelada', fiscal: { ...p.fiscal, status: 'PROCESSANDO' } })); const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'PROCESSANDO' } } : v ); setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); } else { toast.error('Erro: ' + res.error); }
+            } catch (e) { toast.error('Falha de comunicação.'); } finally { setNfceStatus('idle'); }
+        }, { title: 'Cancelar NFC-e', placeholder: 'Descreva o motivo...', submitText: 'Cancelar NFC-e' });
     };
 
-    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return alert("Sem ID"); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} };
-    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return alert("Sem ID"); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) alert("Erro: " + res.error); } catch (e) {} finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
+    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return toast.warning('Sem ID'); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} };
+    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return toast.warning('Sem ID'); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
 
     useEffect(() => { if (!estabelecimentoAtivo || !currentUser) return; const i = async () => { setVerificandoCaixa(true); const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo); if (c) { setCaixaAberto(c); setVendasBase(await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50)); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else { setMostrarAberturaCaixa(true); } setVerificandoCaixa(false); }; i(); }, [currentUser, estabelecimentoAtivo]);
     
-    useEffect(() => { if (!estabelecimentoAtivo) return; setCarregandoProdutos(true); setProdutos([]); setCategorias([]); const u = onSnapshot(query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc')), (s) => { const c = s.docs.map(d => ({ id: d.id, ...d.data() })); setCategorias([{ id: 'todos', name: 'Todos' }, ...c.map(x => ({ id: x.nome || x.id, name: x.nome || x.id }))]); let all = new Map(); let cp = 0; if (c.length === 0) { setProdutos([]); setCarregandoProdutos(false); return; } c.forEach(k => { onSnapshot(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'), (is) => { const it = is.docs.map(i => { const d = i.data(); const vs = d.variacoes?.filter(v => v.ativo) || []; return { ...d, id: i.id, name: d.nome || "S/ Nome", categoria: k.nome || "Geral", categoriaId: k.id, price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0), temVariacoes: vs.length > 0, variacoes: vs }; }); all.set(k.id, it); setProdutos(Array.from(all.values()).flat()); cp++; if (cp >= c.length) setCarregandoProdutos(false); }); }); }); return () => u(); }, [estabelecimentoAtivo]);
+    useEffect(() => {
+        if (!estabelecimentoAtivo) return;
+        setCarregandoProdutos(true);
+        setProdutos([]);
+        setCategorias([]);
+
+        // Track ALL nested unsub functions so we can clean them up
+        const innerUnsubs = [];
+
+        const outerUnsub = onSnapshot(
+            query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc')),
+            (s) => {
+                const c = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                setCategorias([{ id: 'todos', name: 'Todos' }, ...c.map(x => ({ id: x.nome || x.id, name: x.nome || x.id }))]);
+
+                const all = new Map();
+                let cp = 0;
+
+                if (c.length === 0) {
+                    setProdutos([]);
+                    setCarregandoProdutos(false);
+                    return;
+                }
+
+                // Kill previous inner listeners before creating new ones
+                innerUnsubs.forEach(fn => fn());
+                innerUnsubs.length = 0;
+
+                c.forEach(k => {
+                    const unsub = onSnapshot(
+                        collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'),
+                        (is) => {
+                            const it = is.docs.map(i => {
+                                const d = i.data();
+                                const vs = d.variacoes?.filter(v => v.ativo) || [];
+                                return {
+                                    ...d, id: i.id,
+                                    name: d.nome || "S/ Nome",
+                                    categoria: k.nome || "Geral",
+                                    categoriaId: k.id,
+                                    price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0),
+                                    temVariacoes: vs.length > 0,
+                                    variacoes: vs,
+                                };
+                            });
+                            all.set(k.id, it);
+                            setProdutos(Array.from(all.values()).flat());
+                            cp++;
+                            if (cp >= c.length) setCarregandoProdutos(false);
+                        }
+                    );
+                    innerUnsubs.push(unsub);
+                });
+            }
+        );
+
+        return () => {
+            outerUnsub();
+            innerUnsubs.forEach(fn => fn());
+        };
+    }, [estabelecimentoAtivo]);
 
     useEffect(() => { const handler = (e) => { setTurnoSelecionadoResumo(e.detail); setMostrarListaTurnos(false); setMostrarResumoTurno(true); }; document.addEventListener('abrirRelatorioTurno', handler); return () => document.removeEventListener('abrirRelatorioTurno', handler); }, []);
 
@@ -389,7 +474,7 @@ const PdvScreen = () => {
 
     return (
         // 🔥 Container ajustado para fixed inset-0 (sem w-full nem h-dvh explícitos)
-<div id="main-app-wrapper" className="relative w-full h-[calc(100vh-70px)] flex flex-col bg-slate-100 font-sans text-slate-800 overflow-hidden">            
+<div id="pdv-root" className="flex flex-col bg-slate-100 font-sans text-slate-800">
             {/* Notificações Topo */}
             {barcodeAviso && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-[9999] font-bold text-xs flex items-center gap-2">
@@ -627,50 +712,22 @@ const PdvScreen = () => {
                     <ModalMovimentacao visivel={mostrarMovimentacao} onClose={() => setMostrarMovimentacao(false)} onConfirmar={handleSalvarMovimentacao} />
                     <ModalFinalizacao visivel={mostrarFinalizacao} venda={vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pagamentosAdicionados} setPagamentos={setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={descontoValor} setDesconto={setDescontoValor} acrescimo={acrescimoValor} setAcrescimo={setAcrescimoValor} />
                     
-                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} onEnviarWhatsApp={handleEnviarWhatsApp} />
-                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} onEnviarWhatsApp={handleEnviarWhatsApp} />
+                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} }} onEnviarWhatsApp={handleEnviarWhatsApp} />
+                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} }} onEnviarWhatsApp={handleEnviarWhatsApp} />
 
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
                     <ModalResumoTurno visivel={mostrarResumoTurno} turno={turnoSelecionadoResumo} onClose={() => { setMostrarResumoTurno(false); if (!caixaAberto) setMostrarAberturaCaixa(true); }} />
                     <ModalVendasSuspensas visivel={mostrarSuspensas} onClose={() => setMostrarSuspensas(false)} vendas={vendasSuspensas} onRestaurar={restaurarVendaSuspensa} onExcluir={excluirVendaSuspensa} />              
                     <ModalPesoBalanca visivel={produtoParaPeso !== null} produto={produtoParaPeso} onClose={() => setProdutoParaPeso(null)} onConfirm={adicionarItemPeso} />
+
+                    {/* Toast & Dialogs (substitui alert/confirm/prompt nativos) */}
+                    <ToastContainer />
+                    {confirmDialog && <ConfirmDialog open={true} title={confirmDialog.title} message={confirmDialog.message} variant={confirmDialog.variant} confirmText={confirmDialog.confirmText} cancelText={confirmDialog.cancelText} onConfirm={() => { setConfirmDialog(null); confirmDialog.onConfirmCb?.(); }} onCancel={() => setConfirmDialog(null)} />}
+                    {promptDialog && <PromptDialog open={true} title={promptDialog.title} message={promptDialog.message} defaultValue={promptDialog.defaultValue} placeholder={promptDialog.placeholder} confirmText={promptDialog.confirmText} cancelText={promptDialog.cancelText} onConfirm={(val) => { setPromptDialog(null); promptDialog.onSubmitCb?.(val); }} onCancel={() => setPromptDialog(null)} />}
                 </>
             )}
             
-            <style>{`
-                /* BLOQUEIO NUCLEAR DE ROLAGEM GLOBAL */
-                html, body {
-                    margin: 0;
-                    padding: 0;
-                    height: 100%;
-                    width: 100%;
-                    overflow: hidden !important;
-                    overscroll-behavior: none !important;
-                    touch-action: none !important; /* Trava o pull-to-refresh no celular */
-                }
-
-                .pdv-scroll {
-                    touch-action: auto !important; /* Deixa rolar só o que for lista de itens */
-                }
-
-                .pdv-scroll::-webkit-scrollbar { width: 4px; }
-                .pdv-scroll::-webkit-scrollbar-track { background: transparent; }
-                .pdv-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-                .pdv-scroll:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
-                .scrollbar-hide::-webkit-scrollbar { display: none; }
-                .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-
-                @media print {
-                  html, body { height: auto !important; overflow: visible !important; background: white !important; touch-action: auto !important; }
-                  body * { visibility: hidden; }
-                  #main-app-wrapper { position: static !important; overflow: visible !important; height: auto !important; display: block !important; }
-                  #recibo-overlay, #resumo-turno-overlay { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: auto !important; background: none !important; visibility: visible !important; z-index: 9999 !important; display: block !important; }
-                  #recibo-content, #recibo-content *, #resumo-turno-content, #resumo-turno-content * { visibility: visible !important; }
-                  #recibo-content, #resumo-turno-content { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; background: white !important; }
-                  .no-print { display: none !important; }
-                  .bg-gray-50, .bg-gray-100 { background-color: white !important; }
-                }
-            `}</style>
+            {/* Styles are in PdvScreen.css — scoped to #pdv-root */}
         </div>
     );
 };

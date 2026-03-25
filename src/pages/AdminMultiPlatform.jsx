@@ -12,7 +12,8 @@ import {
     query,
     where
 } from 'firebase/firestore';
-import { db, auth, initializeUserPlatforms } from '../firebase';
+import { db, auth } from '../firebase';
+import { initializeUserPlatforms } from '../services/userService';
 import { useNotifications } from "../hooks/useNotifications";
 import { 
     IoArrowBack,

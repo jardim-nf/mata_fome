@@ -6,7 +6,8 @@ import Footer from './Footer';
 // Lista de rotas/prefixos que NÃO DEVEM exibir o Header e Footer
 const rotasSemLayout = [
     '/login', 
-    '/register'
+    '/register',
+    '/pdv'
     // Podes adicionar aqui outras rotas que devem ocupar o ecrã todo sem header
 ]; 
 

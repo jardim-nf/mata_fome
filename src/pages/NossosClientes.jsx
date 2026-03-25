@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase';
+import { functions, db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { FaArrowLeft, FaWhatsapp, FaEnvelopeOpenText, FaUsers, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -12,13 +13,13 @@ import { toast } from 'react-toastify';
  * Componente para o administrador de um estabelecimento enviar mensagens em massa
  * APENAS para os clientes que já fizeram pedidos nesse estabelecimento.
  */
-function ClientManagement() {
-    const { currentUser, userClaims } = useAuth();
+function ClientManagement({ estabelecimentoPrincipal }) {
+    const { currentUser, userData } = useAuth();
     const navigate = useNavigate();
 
     // Pega o ID do estabelecimento que o usuário está gerenciando
-    const estabelecimentoId = userClaims?.estabelecimentosGerenciados?.[0];
-    const estabelecimentoNome = currentUser?.estabelecimentoNome || 'Seu Estabelecimento';
+    const estabelecimentoId = estabelecimentoPrincipal;
+    const [estabelecimentoNome, setEstabelecimentoNome] = useState('Carregando...');
 
     const [message, setMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -27,6 +28,27 @@ function ClientManagement() {
     const [loadingCount, setLoadingCount] = useState(true);
     const [messageHistory, setMessageHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+
+    // Busca o nome real do estabelecimento no Firestore
+    useEffect(() => {
+        const fetchNomeEstabelecimento = async () => {
+            if (estabelecimentoId) {
+                try {
+                    const docRef = doc(db, "estabelecimentos", estabelecimentoId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        setEstabelecimentoNome(docSnap.data().nome || 'Seu Estabelecimento');
+                    } else {
+                        setEstabelecimentoNome('Seu Estabelecimento');
+                    }
+                } catch (error) {
+                    console.error("Erro ao buscar nome do estabelecimento:", error);
+                    setEstabelecimentoNome('Seu Estabelecimento');
+                }
+            }
+        };
+        fetchNomeEstabelecimento();
+    }, [estabelecimentoId]);
 
     // FUNÇÃO: BUSCA A CONTAGEM REAL NO BACKEND
     const fetchClientCount = useCallback(async () => {
@@ -53,11 +75,20 @@ function ClientManagement() {
 
         setLoadingHistory(true);
         try {
-            // Esta função precisaria ser implementada no backend
-            // Por enquanto vamos simular ou deixar vazio
-            setMessageHistory([]);
+            const { collection, getDocs, query, orderBy, limit, where } = await import('firebase/firestore');
+            const { db } = await import('../firebase');
+            const campSnap = await getDocs(
+                query(
+                    collection(db, 'estabelecimentos', estabelecimentoId, 'campanhas'),
+                    where('tipo', '==', 'envio_massa'),
+                    orderBy('enviadoEm', 'desc'),
+                    limit(50)
+                )
+            );
+            setMessageHistory(campSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch (error) {
             console.error("Erro ao carregar histórico:", error);
+            setMessageHistory([]);
         } finally {
             setLoadingHistory(false);
         }
@@ -128,20 +159,36 @@ function ClientManagement() {
     // Template de mensagens pré-definidas
     const messageTemplates = [
         {
-            title: "Horário de Funcionamento",
-            message: `Prezado cliente, informamos que ${estabelecimentoNome} funciona de segunda a sábado, das 11h às 23h. Aos domingos, das 12h às 22h. Agradecemos sua preferência!`
+            title: "🔥 Promoção Relâmpago",
+            message: `🔥 *PROMOÇÃO RELÂMPAGO* 🔥\n\nOi! Aqui é o *${estabelecimentoNome}*! 😋\n\nSó HOJE: *20% OFF* em todo o cardápio! 🎉\n\nÉ por tempo limitado, não perca! Peça agora pelo nosso delivery 👇\n\n📲 Faça seu pedido e mate essa fome com desconto!`
         },
         {
-            title: "Promoção Especial",
-            message: `Olá! ${estabelecimentoNome} tem uma promoção especial para você: 20% de desconto no seu próximo pedido! Use o código: CLIENTE20. Válido por 7 dias.`
+            title: "🍔 Novidade no Cardápio",
+            message: `🍔 *NOVIDADE QUENTINHA!* 🍔\n\nE aí, tudo bem? Aqui é o *${estabelecimentoNome}*!\n\nTemos novidades incríveis no cardápio que você precisa experimentar! 🤤\n\nVem conferir e nos conta o que achou! Peça pelo delivery 🛵💨`
         },
         {
-            title: "Fechamento Temporário",
-            message: `Prezados clientes, informamos que ${estabelecimentoNome} estará fechado temporariamente na próxima segunda-feira para manutenção. Retornaremos normalmente na terça-feira. Agradecemos a compreensão!`
+            title: "🎁 Cupom de Fidelidade",
+            message: `🎁 *PRESENTE PRA VOCÊ!*\n\nOi! Você é cliente especial do *${estabelecimentoNome}* e queremos te agradecer! ❤️\n\nUse o cupom *FIDEL10* e ganhe *10% OFF* no próximo pedido!\n\n⏰ Válido por 7 dias\n\n📲 Peça agora e aproveite!`
         },
         {
-            title: "Novo Cardápio",
-            message: `Grande novidade! ${estabelecimentoNome} acaba de lançar novo cardápio com pratos exclusivos. Venha experimentar! Faça seu pedido agora mesmo.`
+            title: "🚚 Frete Grátis",
+            message: `🚚 *FRETE GRÁTIS!* 🎉\n\nOi! O *${estabelecimentoNome}* tá com *entrega GRÁTIS* hoje!\n\nAproveita pra pedir aquele prato que você ama sem pagar nada de taxa! 😍\n\n📲 Corre que é só hoje!`
+        },
+        {
+            title: "⭐ Peça sua Avaliação",
+            message: `Oi! Aqui é o *${estabelecimentoNome}*! 😊\n\nVocê pediu com a gente recentemente e queremos saber: *gostou?*\n\n⭐ Sua opinião é super importante pra gente melhorar cada vez mais!\n\nNos conte o que achou, estamos ouvindo! 🙏`
+        },
+        {
+            title: "🍽️ Combo Especial",
+            message: `🍽️ *COMBO IMPERDÍVEL!* 🍽️\n\nOi! O *${estabelecimentoNome}* preparou um combo especial pra você!\n\n✅ Prato + Bebida + Sobremesa com preço único!\n\n😋 Só pedir e aproveitar! Válido enquanto durar o estoque.\n\n📲 Peça agora pelo delivery!`
+        },
+        {
+            title: "📅 Horário Especial / Feriado",
+            message: `📢 *AVISO IMPORTANTE*\n\nOi! Aqui é o *${estabelecimentoNome}*!\n\nInformamos que nosso horário será diferenciado:\n\n📅 Funcionamento especial neste feriado\n🕐 Das 11h às 22h\n\nPrograme seu pedido! 😉\nEstamos te esperando! 🛵`
+        },
+        {
+            title: "❤️ Agradecimento",
+            message: `❤️ *MUITO OBRIGADO!*\n\nOi! Aqui é o *${estabelecimentoNome}*!\n\nPassando pra agradecer por ser nosso cliente! Cada pedido seu faz a diferença pra gente. 🙏\n\nConte sempre com a gente quando bater aquela fome! 😋🛵\n\nAbraço da equipe *${estabelecimentoNome}*! 💚`
         }
     ];
 
@@ -281,17 +328,17 @@ function ClientManagement() {
                             <h3 className="text-lg font-semibold text-gray-800 mb-3">
                                 💡 Templates Prontos
                             </h3>
-                            <div className="space-y-2">
+                            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                                 {messageTemplates.map((template, index) => (
                                     <button
                                         key={index}
                                         onClick={() => setMessage(template.message)}
                                         disabled={isSending}
-                                        className="w-full text-left p-3 text-sm bg-gray-50 hover:bg-blue-50 rounded-lg border border-gray-200 transition duration-200 hover:border-blue-300"
+                                        className="w-full text-left p-3 text-sm bg-gray-50 hover:bg-green-50 rounded-lg border border-gray-200 transition duration-200 hover:border-green-400 hover:shadow-sm"
                                     >
                                         <div className="font-medium text-gray-800">{template.title}</div>
-                                        <div className="text-gray-600 text-xs mt-1 truncate">
-                                            {template.message.substring(0, 60)}...
+                                        <div className="text-gray-500 text-xs mt-1 truncate">
+                                            {template.message.replace(/\\n/g, ' ').replace(/\*/g, '').substring(0, 55)}...
                                         </div>
                                     </button>
                                 ))}

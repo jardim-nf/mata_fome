@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
         }
       }
     },
+    esbuild: {
+      drop: mode === 'production' ? ['console', 'debugger'] : [],
+    },
     define: {
       'process.env': Object.fromEntries(
         Object.entries(env).filter(([key]) => key.startsWith('VITE_'))

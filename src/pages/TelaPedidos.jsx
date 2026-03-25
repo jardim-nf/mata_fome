@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import {
-    getDocs, doc, getDoc, updateDoc, collection, serverTimestamp, writeBatch, onSnapshot, increment, query, where
+    getDocs, doc, getDoc, updateDoc, collection, serverTimestamp, writeBatch, onSnapshot, increment, query, where, addDoc
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -429,7 +429,7 @@ const TelaPedidos = () => {
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { nomesOcupantes: novosOcupantes, itens: novosItens });
     };
 
-    // 🔥 CORREÇÃO DE EXCLUSÃO (SOFT DELETE) 🔥
+    // 🔥 CORREÇÃO DE EXCLUSÃO (SOFT DELETE) + LOG DE AUDITORIA 🔥
     const confirmarExclusao = async () => {
         if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) return toast.error("Senha errada");
         
@@ -444,6 +444,25 @@ const TelaPedidos = () => {
             itens: novaLista, 
             total: novoTotal 
         });
+
+        // 🔥 GRAVA LOG DE CANCELAMENTO para o Relatório de Cancelamentos
+        try {
+            const logsRef = collection(db, 'estabelecimentos', estabelecimentoId, 'auditLogs');
+            await addDoc(logsRef, {
+                tipo: 'cancelamento_item',
+                mesaNumero: mesa?.numero || 'N/A',
+                item: {
+                    nome: `${itemParaExcluir.nome || itemParaExcluir.name || 'Item'} – ${itemParaExcluir.variacao || itemParaExcluir.opcaoSelecionada || 'Único'}`,
+                    quantidade: itemParaExcluir.quantidade || 1,
+                    precoUnitario: itemParaExcluir.preco || 0,
+                    observacao: itemParaExcluir.observacao || null
+                },
+                valorTotalCancelado: (itemParaExcluir.preco || 0) * (itemParaExcluir.quantidade || 1),
+                data: serverTimestamp()
+            });
+        } catch (e) {
+            console.error('[AUDIT] Erro ao gravar log de cancelamento:', e);
+        }
         
         setModalSenhaAberto(false);
         toast.info("Item cancelado com sucesso!");

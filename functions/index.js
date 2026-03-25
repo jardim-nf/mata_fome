@@ -4,16 +4,62 @@ import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
 import OpenAI from "openai";
+import archiver from "archiver";
+import nodemailer from "nodemailer";
 
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 // --- IMPORTS FIREBASE ADMIN ---
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { FieldValue } from "firebase-admin/firestore"; 
+import { FieldValue } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 // Inicializa o Admin SDK
 initializeApp();
 const db = getFirestore();
+const bucket = getStorage().bucket();
+
+// ==================================================================
+// FUNÇÃO AUXILIAR: Salvar XML no Firebase Storage
+// ==================================================================
+async function salvarArquivoNoStorage(estabelecimentoId, vendaId, urlOriginal, tipo, apiKey) {
+    try {
+        if (!urlOriginal || !estabelecimentoId || !vendaId) return null;
+
+        const response = await fetch(urlOriginal, {
+            headers: apiKey ? { "x-api-key": apiKey } : {}
+        });
+        if (!response.ok) {
+            logger.warn(`Falha ao baixar ${tipo} de ${urlOriginal}: ${response.status}`);
+            return null;
+        }
+
+        const contentBuffer = Buffer.from(await response.arrayBuffer());
+        const agora = new Date();
+        const ano = agora.getFullYear();
+        const mes = String(agora.getMonth() + 1).padStart(2, '0');
+        const filePath = `nfce/${estabelecimentoId}/${ano}/${mes}/xml_${vendaId}.xml`;
+
+        const file = bucket.file(filePath);
+        await file.save(contentBuffer, {
+            metadata: {
+                contentType,
+                metadata: {
+                    vendaId,
+                    estabelecimentoId,
+                    tipo,
+                    dataUpload: agora.toISOString()
+                }
+            }
+        });
+
+        logger.info(`✅ ${tipo.toUpperCase()} salvo no Storage: ${filePath}`);
+        return filePath;
+    } catch (error) {
+        logger.error(`❌ Erro ao salvar ${tipo} no Storage:`, error);
+        return null;
+    }
+}
 
 // Segredos
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
@@ -322,6 +368,15 @@ export const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, 
         if (status === 'CONCLUIDO') {
             if (pdf) updateData['fiscal.pdf'] = pdf;
             if (xml) updateData['fiscal.xml'] = xml;
+
+            // === AUTO-SALVAR XML NO FIREBASE STORAGE ===
+            const vendaData = vendaSnap.data();
+            const estabId = vendaData?.estabelecimentoId;
+            if (estabId && xml) {
+                const vendaIdReal = vendaRef.id;
+                const xmlPath = await salvarArquivoNoStorage(estabId, vendaIdReal, xml, 'xml');
+                if (xmlPath) updateData['fiscal.xmlStorage'] = xmlPath;
+            }
         } else if (status === 'REJEITADO' || status === 'DENEGADO') {
             updateData['fiscal.motivoRejeicao'] = mensagem || 'Rejeitada pela Sefaz';
         }
@@ -329,6 +384,7 @@ export const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, 
         await vendaRef.update(updateData);
         res.status(200).json({ message: "Notificação processada com sucesso" });
     } catch (error) {
+        logger.error('❌ Erro no webhook PlugNotas:', error);
         res.status(500).send('Erro Interno');
     }
 });
@@ -372,6 +428,14 @@ export const consultarResumoNfce = onCall({ cors: true, secrets: [plugNotasApiKe
         if (nota.status === 'CONCLUIDO' || nota.status === 'AUTORIZADA') {
             if (nota.pdf) updateData['fiscal.pdf'] = nota.pdf;
             if (nota.xml) updateData['fiscal.xml'] = nota.xml;
+
+            // === AUTO-SALVAR XML NO FIREBASE STORAGE ===
+            const vendaSnap = await db.collection('vendas').doc(vendaId).get();
+            const estabId = vendaSnap.data()?.estabelecimentoId;
+            if (estabId && nota.xml) {
+                const xmlPath = await salvarArquivoNoStorage(estabId, vendaId, nota.xml, 'xml', plugNotasApiKey.value());
+                if (xmlPath) updateData['fiscal.xmlStorage'] = xmlPath;
+            }
         } else if (nota.status === 'REJEITADO' || nota.status === 'REJEITADA' || nota.status === 'DENEGADO') {
             updateData['fiscal.motivoRejeicao'] = nota.mensagem || 'Rejeitada';
         }
@@ -451,7 +515,168 @@ export const baixarXmlCancelamentoNfcePlugNotas = onCall({ cors: true, secrets: 
 });
 
 // ==================================================================
-// 11. GERAR PIX MERCADO PAGO
+// 11. EXPORTAR XMLs PARA O CONTADOR (ZIP)
+// ==================================================================
+export const exportarXmlsContador = onCall({
+    cors: true,
+    timeoutSeconds: 540,
+    memory: '512MiB'
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { estabelecimentoId, ano, mes } = request.data;
+    if (!estabelecimentoId || !ano || !mes) {
+        throw new HttpsError('invalid-argument', 'estabelecimentoId, ano e mes são obrigatórios.');
+    }
+
+    const mesStr = String(mes).padStart(2, '0');
+    const prefix = `nfce/${estabelecimentoId}/${ano}/${mesStr}/`;
+
+    try {
+        const [files] = await bucket.getFiles({ prefix });
+        const xmlFiles = files.filter(f => f.name.endsWith('.xml'));
+
+        if (xmlFiles.length === 0) {
+            throw new HttpsError('not-found', `Nenhum XML encontrado para ${mesStr}/${ano}.`);
+        }
+
+        // Gerar ZIP em memória
+        const zipBuffer = await new Promise((resolve, reject) => {
+            const chunks = [];
+            const archive = archiver('zip', { zlib: { level: 9 } });
+
+            archive.on('data', chunk => chunks.push(chunk));
+            archive.on('end', () => resolve(Buffer.concat(chunks)));
+            archive.on('error', reject);
+
+            const downloadPromises = xmlFiles.map(async (file) => {
+                const [content] = await file.download();
+                const fileName = file.name.split('/').pop();
+                archive.append(content, { name: fileName });
+            });
+
+            Promise.all(downloadPromises).then(() => archive.finalize()).catch(reject);
+        });
+
+        logger.info(`✅ ZIP gerado: ${xmlFiles.length} XMLs de ${mesStr}/${ano} para estab ${estabelecimentoId}`);
+
+        return {
+            sucesso: true,
+            zipBase64: zipBuffer.toString('base64'),
+            nomeArquivo: `xmls_nfce_${mesStr}_${ano}.zip`,
+            totalArquivos: xmlFiles.length
+        };
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        logger.error('❌ Erro ao exportar XMLs:', error);
+        throw new HttpsError('internal', `Erro ao gerar ZIP: ${error.message}`);
+    }
+});
+
+// ==================================================================
+// 12. ENVIAR XMLs PARA O CONTADOR POR EMAIL
+// ==================================================================
+export const enviarXmlsContadorEmail = onCall({
+    cors: true,
+    timeoutSeconds: 540,
+    memory: '512MiB'
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { estabelecimentoId, ano, mes, emailContador } = request.data;
+    if (!estabelecimentoId || !ano || !mes || !emailContador) {
+        throw new HttpsError('invalid-argument', 'estabelecimentoId, ano, mes e emailContador são obrigatórios.');
+    }
+
+    const mesStr = String(mes).padStart(2, '0');
+    const prefix = `nfce/${estabelecimentoId}/${ano}/${mesStr}/`;
+
+    try {
+        // Buscar config de email do estabelecimento
+        const estabSnap = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
+        if (!estabSnap.exists) throw new HttpsError('not-found', 'Estabelecimento não encontrado.');
+        const estab = estabSnap.data();
+
+        const smtpConfig = estab.fiscal?.smtp || estab.smtp;
+        if (!smtpConfig?.user || !smtpConfig?.pass) {
+            throw new HttpsError('failed-precondition',
+                'Configure as credenciais SMTP do estabelecimento em fiscal.smtp (user, pass, host, port).');
+        }
+
+        const [files] = await bucket.getFiles({ prefix });
+        const xmlFiles = files.filter(f => f.name.endsWith('.xml'));
+
+        if (xmlFiles.length === 0) {
+            throw new HttpsError('not-found', `Nenhum XML encontrado para ${mesStr}/${ano}.`);
+        }
+
+        // Gerar ZIP
+        const zipBuffer = await new Promise((resolve, reject) => {
+            const chunks = [];
+            const archive = archiver('zip', { zlib: { level: 9 } });
+
+            archive.on('data', chunk => chunks.push(chunk));
+            archive.on('end', () => resolve(Buffer.concat(chunks)));
+            archive.on('error', reject);
+
+            const downloadPromises = xmlFiles.map(async (file) => {
+                const [content] = await file.download();
+                const fileName = file.name.split('/').pop();
+                archive.append(content, { name: fileName });
+            });
+
+            Promise.all(downloadPromises).then(() => archive.finalize()).catch(reject);
+        });
+
+        const nomeArquivo = `xmls_nfce_${mesStr}_${ano}.zip`;
+        const nomeEstab = estab.nome || estab.nomeFantasia || 'Estabelecimento';
+
+        // Enviar email
+        const transporter = nodemailer.createTransport({
+            host: smtpConfig.host || 'smtp.gmail.com',
+            port: smtpConfig.port || 587,
+            secure: smtpConfig.port === 465,
+            auth: { user: smtpConfig.user, pass: smtpConfig.pass }
+        });
+
+        await transporter.sendMail({
+            from: `"${nomeEstab}" <${smtpConfig.user}>`,
+            to: emailContador,
+            subject: `XMLs NFC-e - ${nomeEstab} - ${mesStr}/${ano}`,
+            html: `
+                <p>Olá,</p>
+                <p>Segue em anexo o arquivo ZIP contendo <strong>${xmlFiles.length}</strong> XML(s) de NFC-e referentes ao período <strong>${mesStr}/${ano}</strong> do estabelecimento <strong>${nomeEstab}</strong>.</p>
+                <p>Atenciosamente,<br>${nomeEstab}</p>
+            `,
+            attachments: [{ filename: nomeArquivo, content: zipBuffer }]
+        });
+
+        // Registrar envio no Firestore
+        await db.collection('estabelecimentos').doc(estabelecimentoId)
+            .collection('enviosContador').add({
+                emailContador,
+                periodo: `${mesStr}/${ano}`,
+                totalXmls: xmlFiles.length,
+                dataEnvio: FieldValue.serverTimestamp(),
+                enviadoPor: request.auth.uid
+            });
+
+        logger.info(`✅ Email enviado para ${emailContador} com ${xmlFiles.length} XMLs de ${mesStr}/${ano}`);
+
+        return {
+            sucesso: true,
+            mensagem: `${xmlFiles.length} XML(s) enviados para ${emailContador}.`,
+            totalArquivos: xmlFiles.length
+        };
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        logger.error('❌ Erro ao enviar XMLs por email:', error);
+        throw new HttpsError('internal', `Erro ao enviar email: ${error.message}`);
+    }
+});
+
+// ==================================================================
+// 13. GERAR PIX MERCADO PAGO
 // ==================================================================
 export const gerarPixMercadoPago = onCall({ region: 'us-central1', secrets: [mercadoPagoToken], maxInstances: 1 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Faça login primeiro.');
@@ -993,6 +1218,147 @@ export const configurarMarketing = onCall({ cors: true }, async (request) => {
 
   } catch (error) {
     logger.error('❌ Erro ao configurar marketing:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// ==================================================================
+// 17.5 CONTAR CLIENTES DO ESTABELECIMENTO
+// ==================================================================
+export const countEstablishmentClientsCallable = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado');
+
+  const { estabelecimentoId } = request.data || {};
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório');
+
+  try {
+    // Usa select() para trazer APENAS os campos de telefone — muito mais rápido
+    const pedidosSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('pedidos')
+      .select('cliente.telefone', 'clienteTelefone')
+      .get();
+
+    const telefonesUnicos = new Set();
+
+    pedidosSnap.forEach(pedidoDoc => {
+      const p = pedidoDoc.data();
+      const tel = p.cliente?.telefone || p.clienteTelefone || '';
+      const telLimpo = tel.replace(/\D/g, '');
+      if (telLimpo.length >= 10) {
+        telefonesUnicos.add(telLimpo);
+      }
+    });
+
+    logger.info(`📊 Contagem de clientes para ${estabelecimentoId}: ${telefonesUnicos.size}`);
+    return { uniqueClientCount: telefonesUnicos.size };
+
+  } catch (error) {
+    logger.error('❌ Erro ao contar clientes:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// ==================================================================
+// 17.6 ENVIAR MENSAGEM EM MASSA PARA CLIENTES DO ESTABELECIMENTO
+// ==================================================================
+export const sendEstablishmentMessageCallable = onCall({ cors: true, timeoutSeconds: 540 }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado');
+
+  const { estabelecimentoId, message } = request.data || {};
+  if (!estabelecimentoId || !message?.trim()) {
+    throw new HttpsError('invalid-argument', 'estabelecimentoId e message são obrigatórios');
+  }
+
+  try {
+    // 1. Buscar config do WhatsApp do estabelecimento
+    const estabDoc = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
+    if (!estabDoc.exists) throw new HttpsError('not-found', 'Estabelecimento não encontrado');
+
+    const estab = estabDoc.data();
+    const wConfig = estab.whatsapp || {};
+    const nomeEstab = estab.nome || 'Restaurante';
+
+    if (!wConfig.ativo || !wConfig.instanceName || !wConfig.serverUrl || !wConfig.apiKey) {
+      throw new HttpsError('failed-precondition', 'WhatsApp Bot não está configurado. Configure em Configurações > WhatsApp Bot.');
+    }
+
+    // 2. Buscar todos os pedidos e extrair telefones únicos com nomes
+    const pedidosSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('pedidos').get();
+
+    const clientesMap = new Map(); // telefone -> nome
+    pedidosSnap.forEach(pedidoDoc => {
+      const p = pedidoDoc.data();
+      const tel = p.cliente?.telefone || p.clienteTelefone || '';
+      const telLimpo = tel.replace(/\D/g, '');
+      if (telLimpo.length >= 10) {
+        const nome = p.cliente?.nome || p.clienteNome || 'Cliente';
+        if (!clientesMap.has(telLimpo)) {
+          clientesMap.set(telLimpo, nome);
+        }
+      }
+    });
+
+    if (clientesMap.size === 0) {
+      return { message: 'Nenhum cliente encontrado com telefone válido', total: 0, enviados: 0, falhas: 0 };
+    }
+
+    logger.info(`📤 Envio em massa para ${estabelecimentoId}: ${clientesMap.size} clientes | por ${uid}`);
+
+    // 3. Enviar mensagem para cada cliente
+    let enviados = 0;
+    let falhas = 0;
+
+    for (const [telefone, nome] of clientesMap) {
+      try {
+        const mensagemFinal = `*${nomeEstab}*\n\nOlá, ${nome}! ${message.trim()}`;
+        const result = await enviarWhatsAppUAZAPI(wConfig, telefone, mensagemFinal);
+
+        if (result.ok) {
+          enviados++;
+          logger.info(`✅ Mensagem enviada para ${result.telefone} (${nome})`);
+        } else {
+          falhas++;
+          logger.warn(`❌ Falha para ${result.telefone}: HTTP ${result.status} | ${result.body}`);
+        }
+
+        // Registrar no Firestore
+        await db.collection('estabelecimentos').doc(estabelecimentoId)
+          .collection('campanhas').add({
+            tipo: 'envio_massa',
+            clienteNome: nome,
+            clienteTelefone: telefone,
+            mensagem: mensagemFinal,
+            sucesso: result.ok,
+            erro: result.ok ? null : `HTTP ${result.status}`,
+            enviadoEm: FieldValue.serverTimestamp(),
+            enviadoPor: uid
+          });
+
+        // Delay de 2s entre envios para não sobrecarregar a API
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+      } catch (err) {
+        falhas++;
+        logger.error(`❌ Erro ao enviar para ${telefone}:`, err);
+      }
+    }
+
+    const resumo = `${enviados} mensagens enviadas com sucesso (${falhas} falhas) de ${clientesMap.size} clientes`;
+    logger.info(`🏁 ${nomeEstab}: ${resumo}`);
+
+    return {
+      message: resumo,
+      total: clientesMap.size,
+      enviados,
+      falhas
+    };
+
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    logger.error('❌ Erro fatal no envio em massa:', error);
     throw new HttpsError('internal', error.message);
   }
 });

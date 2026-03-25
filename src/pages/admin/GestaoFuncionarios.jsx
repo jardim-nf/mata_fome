@@ -1,6 +1,6 @@
 // src/pages/admin/GestaoFuncionarios.jsx
 import React, { useState, useEffect } from "react";
-import withAuth from "../../hocs/withAuth";
+import { useAuth } from "../../context/AuthContext";
 import { 
     getFuncionarios, 
     addFuncionario,
@@ -13,7 +13,8 @@ import { serverTimestamp } from "firebase/firestore";
 // Import dos ícones
 import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaUserPlus, FaExclamationTriangle } from 'react-icons/fa';
 
-const GestaoFuncionarios = ({ estabelecimentoPrincipal }) => {
+const GestaoFuncionarios = () => {
+    const { userData } = useAuth();
     const [funcionarios, setFuncionarios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -22,6 +23,7 @@ const GestaoFuncionarios = ({ estabelecimentoPrincipal }) => {
     const [loadingAction, setLoadingAction] = useState('');
 
     // 🔥 GARANTE O ID DO ESTABELECIMENTO
+    const estabelecimentoPrincipal = userData?.estabelecimentos?.[0] || userData?.estabelecimentosGerenciados?.[0] || null;
     const estabelecimentoId = estabelecimentoPrincipal;
 
     const cargos = [
@@ -617,4 +619,4 @@ const ModalFuncionario = ({ funcionario, onClose, onSave, cargos, permissoesDisp
     );
 };
 
-export default withAuth(GestaoFuncionarios, { requireAdmin: true });
+export default GestaoFuncionarios;

@@ -921,9 +921,7 @@ function Painel() {
                             }
                         });
 
-                        if (abaAtiva === 'cozinha') {
-                            listaPedidos = listaPedidos.filter(p => p.itensCozinha && p.itensCozinha.length > 0);
-                        }
+                        // NÃO filtra mais por itensCozinha — pedidos de mesa com só bebidas devem aparecer
                         
                         if (statusKey === 'finalizado') listaPedidos = [...listaPedidos].sort((a, b) => (b.dataFinalizado?.seconds || 0) - (a.dataFinalizado?.seconds || 0));
 
