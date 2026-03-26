@@ -204,15 +204,22 @@ export function usePermissions() {
         if (!currentUser || loading) return false;
         if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) return true;
         
-        const userCargo = currentUser.cargo || '';
-        const userCargoNorm = userCargo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        // Garante a liberação para administradores
+        if (isMasterAdmin && requiredRoles.includes('masterAdmin')) return true;
+        if (isAdmin && requiredRoles.includes('admin')) return true;
 
+        // Pega os cargos do usuário (garantindo que seja uma lista)
+        const cargosUsuarioRaw = Array.isArray(currentUser.cargo) ? currentUser.cargo : [currentUser.cargo || ''];
+        
+        // Normaliza os cargos do usuário (tira acento, põe minúsculo)
+        const cargosUsuarioNorm = cargosUsuarioRaw.map(c => 
+            String(c).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        );
+
+        // Verifica se ele tem pelo menos uma das permissões exigidas pela rota
         return requiredRoles.some(role => {
-            if (role === 'admin') return isAdmin;
-            if (role === 'masterAdmin') return isMasterAdmin;
-            
-            const roleNorm = role.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-            return userCargoNorm === roleNorm;
+            const roleNorm = String(role).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            return cargosUsuarioNorm.includes(roleNorm);
         });
     };
 
