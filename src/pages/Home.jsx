@@ -94,42 +94,42 @@ function Home() {
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
   const closeLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
 
-  // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO (MÚLTIPLOS CARGOS) ===
+ // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO ===
   useEffect(() => {
     if (authChecked && userData) {
       
-      // 1. Pega os cargos. Se for apenas um texto, transforma em lista. Se já for lista, mantém.
-      const cargosDoUsuario = Array.isArray(userData.cargo) 
-        ? userData.cargo 
-        : [userData.cargo || ''];
-
-      // 2. Normaliza todos os cargos da lista (tira acento, joga pra minúsculo)
-      const cargosNormalizados = cargosDoUsuario.map(cargo => 
+      const cargosRaw = Array.isArray(userData.cargo) ? userData.cargo : [userData.cargo || ''];
+      const cargosNormalizados = cargosRaw.map(cargo => 
         String(cargo).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
       );
 
-      // 3. Função "detetive": verifica se o usuário possui pelo menos um dos cargos exigidos
-      const temCargo = (cargosExigidos) => {
-        return cargosNormalizados.some(cargoUsuario => cargosExigidos.includes(cargoUsuario));
-      };
+      // Filtra apenas os cargos de funcionário para sabermos exatamente quantos ele tem
+      const cargosDeFuncionario = ['garcom', 'atendente', 'caixa', 'gerente', 'cozinheiro', 'entregador', 'auxiliar'];
+      const meusCargos = cargosNormalizados.filter(c => cargosDeFuncionario.includes(c));
 
-      // 4. Roteamento (A ordem aqui define a prioridade se ele tiver 2 cargos)
       if (userData.isMasterAdmin) {
         navigate('/master/estabelecimentos', { replace: true });
         
       } else if (userData.isAdmin) {
         navigate('/admin/dashboard', { replace: true });
         
-      } else if (temCargo(['garcom', 'atendente'])) {
-        navigate('/controle-salao', { replace: true });
+      } else if (meusCargos.length > 1) {
+        // MAIS DE UM CARGO: Vai para o Dashboard/Painel Geral
+        navigate('/painel', { replace: true }); // Se preferir a tela de dashboard, troque para '/dashboard'
         
-      } else if (temCargo(['caixa'])) {
-        navigate('/pdv', { replace: true });
+      } else if (meusCargos.length === 1) {
+        // APENAS UM CARGO: Vai direto para a tela específica
+        const cargoUnico = meusCargos[0];
         
-      } else if (temCargo(['gerente', 'cozinheiro', 'entregador', 'auxiliar'])) {
-        navigate('/painel', { replace: true });
+        if (['garcom', 'atendente'].includes(cargoUnico)) {
+          navigate('/controle-salao', { replace: true });
+        } else if (cargoUnico === 'caixa') {
+          navigate('/pdv', { replace: true });
+        } else {
+          navigate('/painel', { replace: true });
+        }
       }
-      // Se não for nenhum (cliente comum), fica na Home.
+      // Se length === 0 (cliente comum), fica na Home.
     }
   }, [authChecked, userData, navigate]);
 
