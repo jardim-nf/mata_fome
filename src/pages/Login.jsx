@@ -33,11 +33,19 @@ export default function LoginPage() {
   const [pontoReferencia, setPontoReferencia] = useState(''); 
 
   // 1. Redirecionamento Automático se já estiver logado (Atualizado para redirecionar funcionários)
+// 1. Redirecionamento Automático se já estiver logado
   useEffect(() => {
     if (authChecked && currentUser && userData) {
       
-      // Captura o cargo original em minúsculo e também cria uma versão sem acentos/cedilha
-      const cargoRaw = (userData.cargo || currentUser.cargo || '').toLowerCase();
+      // ESPIONANDO OS DADOS: Pressione F12 no navegador para ver isso!
+      console.log("🔍 === DEBUG DE LOGIN ===");
+      console.log("Todos os dados do usuário:", userData);
+      
+      // Tentando pegar o cargo de várias formas possíveis (cargo, role, funcao, etc)
+      const cargoIdentificado = userData.cargo || userData.role || currentUser.cargo || '';
+      console.log("Cargo que o sistema encontrou:", cargoIdentificado);
+
+      const cargoRaw = cargoIdentificado.toLowerCase();
       const cargoNorm = cargoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
       if (userData.isMasterAdmin) {
@@ -45,36 +53,29 @@ export default function LoginPage() {
         navigate('/master/estabelecimentos', { replace: true });
         
       } else if (userData.isAdmin) {
-        if (userData.estabelecimentosGerenciados?.length > 0) {
-            toast.success('Painel Administrativo carregado.');
-            navigate('/admin/dashboard', { replace: true });
-        } else {
-            toast.warning('Conta Admin sem estabelecimentos vinculados.');
-            navigate('/admin/dashboard', { replace: true });
-        }
+        navigate('/admin/dashboard', { replace: true });
         
-      } else if (['garcom', 'garçom', 'atendente'].includes(cargoNorm) || ['garcom', 'garçom', 'atendente'].includes(cargoRaw)) {
-        // Garçons (com ou sem 'ç') e atendentes vão direto para o salão
+      } else if (['garcom', 'atendente'].includes(cargoNorm) || ['garcom', 'atendente'].includes(cargoRaw)) {
+        console.log("✅ Redirecionando para SALÃO");
         toast.success(`Bem-vindo(a), ${userData.nome || 'Funcionário'}!`);
         navigate('/controle-salao', { replace: true });
         
       } else if (['caixa'].includes(cargoNorm) || ['caixa'].includes(cargoRaw)) {
-        // Caixas vão direto para o PDV
+        console.log("✅ Redirecionando para PDV");
         toast.success(`Bom trabalho, ${userData.nome || 'Caixa'}!`);
         navigate('/pdv', { replace: true });
         
       } else if (['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoNorm) || ['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoRaw)) {
-        // Outros funcionários vão para o painel geral
+        console.log("✅ Redirecionando para PAINEL GERAL");
         toast.success(`Bem-vindo(a) ao painel, ${userData.nome || 'Funcionário'}!`);
         navigate('/painel', { replace: true });
         
       } else {
-        // Se não tiver nenhum desses cargos (Cliente comum), vai para a Home
+        console.log("❌ Nenhum cargo de funcionário compatível. Mandando para a Home (Cliente)");
         navigate('/', { replace: true });
       }
     }
   }, [authChecked, currentUser, userData, navigate]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoadingLocal(true);
