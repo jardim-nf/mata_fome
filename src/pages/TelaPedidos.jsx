@@ -126,18 +126,26 @@ const TelaPedidos = () => {
     const enrichWithGlobalAdicionais = (item) => {
         const termosAdicionais = ['adicionais', 'adicional', 'extra', 'extras', 'complemento', 'complementos', 'acrescimo', 'acrescimos', 'molho', 'molhos', 'opcoes', 'opções'];
         const categoriaItemNorm = normalizarTexto(item.categoria || '');
+        const categoriaIdNorm = normalizarTexto(item.categoriaId || '');
         
+        // Se a própria categoria É de adicionais, não enriquece
         if (termosAdicionais.some(t => categoriaItemNorm.includes(t))) return item;
 
-        const categoriasBloqueadas = [
-            'bomboniere', 'bombonieres', 'doce', 'doces', 'chocolate', 'chocolates',
-            'bebida', 'bebidas', 'refrigerante', 'refrigerantes', 'suco', 'sucos', 'agua', 'água',
-            'cerveja', 'cervejas', 'drink', 'drinks', 'alcool', 'álcool',
-            'sobremesa', 'sobremesas', 'sorvete', 'sorvetes', 'gelado',
-            'mercearia', 'mercearias', 'tabacaria', 'cigarro'
+        // ✅ WHITELIST: Adicionais SÓ aparecem em categorias de HAMBÚRGUER
+        const categoriasComAdicionais = [
+            'classico', 'classicos', 'clássico', 'clássicos', 'os-classicos', 'os classicos',
+            'novato', 'novatos', 'os-novatos', 'os novatos',
+            'queridinho', 'queridinhos', 'os-queridinhos', 'os queridinhos',
+            'grande', 'grandes', 'grandes-fomes', 'grandes fomes',
+            'hamburguer', 'hamburgueres', 'hambúrguer', 'hambúrgueres', 'burger', 'burgers',
+            'artesanal', 'artesanais', 'smash', 'gourmet'
         ];
 
-        if (categoriasBloqueadas.some(bloq => categoriaItemNorm.includes(bloq))) return item;
+        const permitido = categoriasComAdicionais.some(cat => 
+            categoriaItemNorm.includes(cat) || categoriaIdNorm.includes(cat)
+        );
+
+        if (!permitido) return item;
 
         const globais = cardapio.filter(p => {
             const cat = normalizarTexto(p.categoria || '');

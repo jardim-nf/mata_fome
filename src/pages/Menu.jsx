@@ -330,11 +330,27 @@ export default function Menu() {
 
   const enrichWithGlobalAdicionais = useCallback((item) => {
     const termosAdicionais = ['adicionais','adicional','extra','extras','complemento','complementos','acrescimo','acrescimos','molho','molhos','opcoes','opções'];
-    const categoriasBloqueadas = ['bomboniere','doce','chocolate','bebida','refrigerante','suco','agua','cerveja','drink','alcool','sobremesa','sorvete','gelado','mercearia','tabacaria','cigarro'];
     const catNorm = normalizarTexto(item.categoria || '');
+    const catIdNorm = normalizarTexto(item.categoriaId || '');
 
+    // Se a própria categoria É de adicionais, não enriquece
     if (termosAdicionais.some(t => catNorm.includes(t))) return item;
-    if (categoriasBloqueadas.some(b => catNorm.includes(b))) return item;
+
+    // ✅ WHITELIST: Adicionais SÓ aparecem em categorias de HAMBÚRGUER
+    const categoriasComAdicionais = [
+      'classico', 'classicos', 'clássico', 'clássicos', 'os-classicos', 'os classicos',
+      'novato', 'novatos', 'os-novatos', 'os novatos',
+      'queridinho', 'queridinhos', 'os-queridinhos', 'os queridinhos',
+      'grande', 'grandes', 'grandes-fomes', 'grandes fomes',
+      'hamburguer', 'hamburgueres', 'hambúrguer', 'hambúrgueres', 'burger', 'burgers',
+      'artesanal', 'artesanais', 'smash', 'gourmet'
+    ];
+
+    const permitido = categoriasComAdicionais.some(cat => 
+      catNorm.includes(cat) || catIdNorm.includes(cat)
+    );
+
+    if (!permitido) return item;
 
     const globais = allProdutos.filter(p => termosAdicionais.some(t => normalizarTexto(p.categoria || '').includes(t)));
     const idsExistentes = new Set((item.adicionais || []).map(a => a.id));

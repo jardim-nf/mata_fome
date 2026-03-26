@@ -104,30 +104,29 @@
   }
 
   .front-right {
-    width: 28mm;
+    width: 26mm;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     z-index: 1;
-    gap: 1.5mm;
+    gap: 1mm;
   }
 
-  .front-right img {
-    width: 18mm;
-    height: auto;
+  .front-right img.qr-vcard {
+    width: 22mm;
+    height: 22mm;
     object-fit: contain;
   }
 
-  .front-right .brand-name {
+  .front-right .scan-label {
     font-family: 'Montserrat', sans-serif;
-    font-size: 7pt;
-    font-weight: 700;
-    color: #E8751A;
+    font-size: 5pt;
+    font-weight: 500;
+    color: rgba(255,255,255,0.45);
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 1px;
     text-align: center;
-    line-height: 1.2;
   }
 
   /* ═══════════════ VERSO ═══════════════ */
@@ -149,27 +148,47 @@
     background: linear-gradient(90deg, transparent, #E8751A, transparent);
   }
 
-  .back img {
-    width: 20mm;
-    height: auto;
+  .back-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5mm;
     z-index: 1;
+  }
+
+  .back-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .back-left img {
+    width: 16mm;
+    height: auto;
     object-fit: contain;
   }
 
-  .back .brand-name {
+  .back-left .brand-name {
     font-family: 'Montserrat', sans-serif;
-    font-size: 10pt;
+    font-size: 8pt;
     font-weight: 700;
     color: #E8751A;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-top: 2mm;
-    z-index: 1;
+    letter-spacing: 1.5px;
+    margin-top: 1.5mm;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .back-right img.qr {
+    width: 18mm;
+    height: 18mm;
+    object-fit: contain;
   }
 
   .back .tagline {
     font-family: 'Montserrat', sans-serif;
-    font-size: 6.5pt;
+    font-size: 6pt;
     color: rgba(255,255,255,0.55);
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -179,9 +198,9 @@
 
   .back .site {
     font-family: 'Montserrat', sans-serif;
-    font-size: 7pt;
+    font-size: 6.5pt;
     color: #E8751A;
-    margin-top: 1.5mm;
+    margin-top: 1mm;
     z-index: 1;
     font-weight: 600;
     letter-spacing: 0.5px;
@@ -266,8 +285,8 @@
     </div>
   </div>
   <div class="front-right">
-    <img src="logo-idea-solucoes-transp.png" alt="Idea Soluções"/>
-    <div class="brand-name">Idea<br>Soluções</div>
+    <img class="qr-vcard" src="qrcode-vcard.png" alt="QR Code Contato"/>
+    <div class="scan-label">Salvar contato</div>
   </div>
 </div>
 
@@ -275,10 +294,10 @@
 <div class="card back">
   <div class="corner tl"></div>
   <div class="corner br"></div>
-  <img src="logo-idea-solucoes-transp.png" alt="Idea Soluções"/>
-  <div class="brand-name">Idea Soluções</div>
+  <img src="logo-idea-solucoes-transp.png" alt="Idea Soluções" style="width:22mm;height:auto;z-index:1;"/>
+  <div style="font-family:'Montserrat',sans-serif;font-size:10pt;font-weight:700;color:#E8751A;text-transform:uppercase;letter-spacing:2px;margin-top:2mm;z-index:1;">Idea Soluções</div>
   <div class="tagline">Tecnologia para seu estabelecimento</div>
-  <div class="site">appdeufome.netlify.app</div>
+  <div class="site">ideamktce.com</div>
 </div>
 
 <button class="btn-print" onclick="window.print()">🖨️ Imprimir Cartão</button>
