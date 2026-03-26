@@ -1,25 +1,23 @@
-// src/components/AuthScreen.jsx (Novo Componente)
+// src/components/AuthScreen.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// Importe suas funções de autenticação do Firebase (login, cadastro, logout)
 import { doSignInWithEmailAndPassword, doCreateUserWithEmailAndPassword, doSignOut } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
-// Importe Firestore se você armazena dados de usuário lá
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase'; // Certifique-se de que 'db' é exportado do seu firebase.js
+import { db } from '../firebase'; 
 
 const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo = '/' }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState(''); // Apenas para cadastro de cliente
-  const [phone, setPhone] = useState(''); // Apenas para cadastro de cliente
-  const [address, setAddress] = useState(''); // Apenas para cadastro de cliente
+  const [name, setName] = useState(''); 
+  const [phone, setPhone] = useState(''); 
+  const [address, setAddress] = useState(''); 
   const [isRegister, setIsRegister] = useState(initialMode === 'register');
-  const [isAdminAuth, setIsAdminAuth] = useState(false); // Alterna entre auth de admin/cliente
+  const [isAdminAuth, setIsAdminAuth] = useState(false); 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { setCurrentUser } = useAuth(); // Para atualizar o contexto de autenticação
+  const { setCurrentUser } = useAuth(); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,53 +27,74 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
     try {
       let userCredential;
       if (isRegister) {
-        if (!isAdminAuth) { // Cadastro de Cliente
+        if (!isAdminAuth) { 
           userCredential = await doCreateUserWithEmailAndPassword(email, password);
-          // Salva dados adicionais do cliente no Firestore
-          await setDoc(doc(db, "users", userCredential.user.uid), {
+          // CORRIGIDO PARA A COLEÇÃO 'usuarios'
+          await setDoc(doc(db, "usuarios", userCredential.user.uid), {
             email: email,
-            name: name,
-            phone: phone,
-            address: address,
-            role: 'client', // Atribuir role de cliente
+            nome: name,
+            telefone: phone,
+            endereco: address,
+            cargo: 'cliente', 
           });
-        } else { // Administradores não podem se auto-registrar por aqui
-          setError('Administradores não podem se registrar por esta interface. Contate o administrador master.');
+        } else { 
+          setError('Administradores/Funcionários não podem se registrar por aqui.');
           setLoading(false);
           return;
         }
-      } else { // Login para Cliente ou Admin
+      } else { 
+        // Lógica de Login
         userCredential = await doSignInWithEmailAndPassword(email, password);
-        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+        
+        // CORRIGIDO: Buscando na coleção 'usuarios' em vez de 'users'
+        const userDoc = await getDoc(doc(db, "usuarios", userCredential.user.uid));
 
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          setCurrentUser({ ...userCredential.user, role: userData.role }); // Atualiza contexto com a role
+          
+          // Captura o cargo (ou se não tiver, define como cliente)
+          const cargoUser = (userData.cargo || 'cliente').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          
+          setCurrentUser({ ...userCredential.user, cargo: cargoUser }); 
 
-          if (isAdminAuth && (userData.role !== 'admin' && userData.role !== 'masterAdmin')) {
-            setError('Credenciais de administrador inválidas.');
-            await doSignOut(); // Desloga se não for admin
-            setLoading(false);
-            return;
-          }
-          if (!isAdminAuth && userData.role !== 'client') {
-            setError('Credenciais de cliente inválidas. Por favor, use a área de administrador ou registre-se como cliente.');
-            await doSignOut();
-            setLoading(false);
-            return;
+          // Se estiver tentando logar pela aba de Administrador/Funcionário
+          if (isAdminAuth) {
+            const cargosPermitidos = ['admin', 'masteradmin', 'garcom', 'gerente', 'caixa', 'atendente', 'cozinheiro', 'entregador', 'auxiliar'];
+            
+            // Verifica se é um funcionário ou admin/masterAdmin
+            if (!cargosPermitidos.includes(cargoUser) && !userData.isAdmin && !userData.isMasterAdmin) {
+              setError('Acesso negado. Área restrita para funcionários.');
+              await doSignOut(); 
+              setLoading(false);
+              return;
+            }
+            
+            // Redirecionamento correto dependendo do cargo
+            if (['garcom', 'atendente'].includes(cargoUser)) redirectTo = '/controle-salao';
+            else if (['caixa'].includes(cargoUser)) redirectTo = '/pdv';
+            else redirectTo = '/painel';
+            
+          } else {
+            // Cliente tentando logar na aba de cliente
+            if (cargoUser !== 'cliente' && !userData.isClient && !userData.cargo) {
+              // Permite passar, mas você pode tratar regras extras de cliente aqui se quiser
+            }
           }
         } else {
-          setError('Dados do usuário não encontrados. Por favor, tente novamente ou cadastre-se.');
+          setError('Dados do usuário não encontrados. Cadastre-se.');
           await doSignOut();
           setLoading(false);
           return;
         }
       }
-      onAuthSuccess?.(); // Chama callback de sucesso
-      navigate(redirectTo); // Redireciona após login bem-sucedido
-      onClose?.(); // Fecha o modal se estiver sendo usado como tal
+      
+      onAuthSuccess?.(); 
+      navigate(redirectTo); 
+      onClose?.(); 
+      
     } catch (err) {
-      setError(err.message || 'Erro na autenticação. Verifique suas credenciais.');
+      console.error(err);
+      setError('Erro na autenticação. Verifique suas credenciais.');
     } finally {
       setLoading(false);
     }
@@ -87,73 +106,36 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
 
       <div className="flex justify-center mb-6">
         <button
+          type="button"
           className={`px-6 py-2 rounded-l-lg font-semibold transition-colors duration-200 ${!isAdminAuth ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          onClick={() => setIsAdminAuth(false)}
+          onClick={() => { setIsAdminAuth(false); setError(''); }}
         >
           Cliente
         </button>
         <button
+          type="button"
           className={`px-6 py-2 rounded-r-lg font-semibold transition-colors duration-200 ${isAdminAuth ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          onClick={() => setIsAdminAuth(true)}
+          onClick={() => { setIsAdminAuth(true); setError(''); }}
         >
-          Administrador
+          Funcionário
         </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+        {error && <p className="text-red-500 text-center mb-4 font-medium">{error}</p>}
 
         {!isAdminAuth && isRegister && (
           <>
-            <input
-              type="text"
-              placeholder="Nome Completo"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
-            <input
-              type="tel"
-              placeholder="Telefone (DDNXXXXXXXXX)"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
-            <input
-              type="text"
-              placeholder="Endereço Completo (Rua, Número, Bairro, Cidade, Estado)"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              required
-              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
+            <input type="text" placeholder="Nome Completo" value={name} onChange={(e) => setName(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            <input type="tel" placeholder="Telefone (DDNXXXXXXXXX)" value={phone} onChange={(e) => setPhone(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            <input type="text" placeholder="Endereço Completo" value={address} onChange={(e) => setAddress(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </>
         )}
 
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
-        />
-        <input
-          type="password"
-          placeholder="Senha"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400"
-        />
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400" />
+        <input type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-400" />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-orange-500 text-white py-3 rounded-md font-bold hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <button type="submit" disabled={loading} className="w-full bg-orange-500 text-white py-3 rounded-md font-bold hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
           {loading ? 'Carregando...' : (isRegister ? 'Cadastrar' : 'Entrar')}
         </button>
       </form>
@@ -167,10 +149,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
       </p>
 
       {onClose && (
-        <button
-          onClick={onClose}
-          className="mt-4 w-full bg-gray-300 text-gray-800 py-2 rounded-md font-bold hover:bg-gray-400 transition-colors duration-200"
-        >
+        <button type="button" onClick={onClose} className="mt-4 w-full bg-gray-300 text-gray-800 py-2 rounded-md font-bold hover:bg-gray-400 transition-colors duration-200">
           Fechar
         </button>
       )}
