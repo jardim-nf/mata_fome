@@ -95,27 +95,42 @@ function Home() {
   const closeLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
 
   // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO ===
+ // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO (MÚLTIPLOS CARGOS) ===
   useEffect(() => {
     if (authChecked && userData) {
-      const cargoRaw = (userData.cargo || '').toLowerCase();
-      const cargoNorm = cargoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+      // 1. Pega os cargos. Se for apenas um texto, transforma em lista. Se já for lista, mantém.
+      const cargosDoUsuario = Array.isArray(userData.cargo) 
+        ? userData.cargo 
+        : [userData.cargo || ''];
 
+      // 2. Normaliza todos os cargos da lista (tira acento, joga pra minúsculo)
+      const cargosNormalizados = cargosDoUsuario.map(cargo => 
+        String(cargo).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      );
+
+      // 3. Função "detetive": verifica se o usuário possui pelo menos um dos cargos exigidos
+      const temCargo = (cargosExigidos) => {
+        return cargosNormalizados.some(cargoUsuario => cargosExigidos.includes(cargoUsuario));
+      };
+
+      // 4. Roteamento (A ordem aqui define a prioridade se ele tiver 2 cargos)
       if (userData.isMasterAdmin) {
         navigate('/master/estabelecimentos', { replace: true });
         
       } else if (userData.isAdmin) {
         navigate('/admin/dashboard', { replace: true });
         
-      } else if (['garcom', 'garçom', 'atendente'].includes(cargoNorm) || ['garcom', 'garçom', 'atendente'].includes(cargoRaw)) {
+      } else if (temCargo(['garcom', 'atendente'])) {
         navigate('/controle-salao', { replace: true });
         
-      } else if (['caixa'].includes(cargoNorm) || ['caixa'].includes(cargoRaw)) {
+      } else if (temCargo(['caixa'])) {
         navigate('/pdv', { replace: true });
         
-      } else if (['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoNorm) || ['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoRaw)) {
+      } else if (temCargo(['gerente', 'cozinheiro', 'entregador', 'auxiliar'])) {
         navigate('/painel', { replace: true });
       }
-      // Se for cliente comum, não faz nada e ele continua na Home.
+      // Se não for nenhum (cliente comum), fica na Home.
     }
   }, [authChecked, userData, navigate]);
 
