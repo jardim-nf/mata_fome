@@ -124,6 +124,7 @@ const AdminDashboard = () => {
         { path: '/admin/cores', title: 'Identidade Visual', sub: 'Cores e tema da loja', icon: <IoColorPalette />, cor: 'pink', adminOnly: true },
         { path: '/admin/configuracoes', title: 'Configurações Gerais', sub: 'Senha Master e segurança', icon: <IoSettings />, cor: 'slate', adminOnly: true },
         { path: '/admin/config-fiscal', title: 'Fiscal & Certificado', sub: 'Configurar NFC-e e PlugNotas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
+        { path: '/admin/relatorio-nfce', title: 'Relatório NFC-e', sub: 'Notas fiscais emitidas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
       ]
     }
   ];

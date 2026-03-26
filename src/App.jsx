@@ -64,6 +64,7 @@ const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
 const AdminPlansManagement = lazy(() => import('./pages/admin/AdminPlansManagement'));
 const FinanceiroMaster = lazy(() => import('./pages/admin/FinanceiroMaster'));
 const ConfigFiscalScreen = lazy(() => import('./pages/admin/ConfigFiscalScreen'));
+const RelatorioNfce = lazy(() => import('./pages/admin/RelatorioNfce'));
 const ImpressaoIsolada = lazy(() => import("./pages/ImpressaoIsolada"));
 const EntradaEstoqueXML = lazy(() => import("./pages/admin/EntradaEstoqueXML"));
 const RankingFuncionarios = lazy(() => import("./pages/admin/RankingFuncionarios"));
@@ -165,6 +166,7 @@ function App() {
                   <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AdminImageAssociation /></PrivateRoute>} />
                   <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AuditLogs /></PrivateRoute>} />
                   <Route path="/admin/config-fiscal" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ConfigFiscalScreen /></PrivateRoute>} />
+                  <Route path="/admin/relatorio-nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioNfce /></PrivateRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
 
