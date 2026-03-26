@@ -49,38 +49,40 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
         // CORRIGIDO: Buscando na coleção 'usuarios' em vez de 'users'
         const userDoc = await getDoc(doc(db, "usuarios", userCredential.user.uid));
 
-        if (userDoc.exists()) {
+        if (userDoc.exists()) {if (userDoc.exists()) {
           const userData = userDoc.data();
           
-          // Captura o cargo (ou se não tiver, define como cliente)
-          const cargoUser = (userData.cargo || 'cliente').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          // Garante que os cargos sejam uma lista e normaliza
+          const cargosRaw = Array.isArray(userData.cargo) ? userData.cargo : [userData.cargo || 'cliente'];
+          const cargosNormalizados = cargosRaw.map(c => 
+            String(c).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+          );
           
-          setCurrentUser({ ...userCredential.user, cargo: cargoUser }); 
+          setCurrentUser({ ...userCredential.user, cargos: cargosNormalizados, cargo: cargosNormalizados[0] }); 
 
           // Se estiver tentando logar pela aba de Administrador/Funcionário
           if (isAdminAuth) {
             const cargosPermitidos = ['admin', 'masteradmin', 'garcom', 'gerente', 'caixa', 'atendente', 'cozinheiro', 'entregador', 'auxiliar'];
             
-            // Verifica se é um funcionário ou admin/masterAdmin
-            if (!cargosPermitidos.includes(cargoUser) && !userData.isAdmin && !userData.isMasterAdmin) {
+            // Verifica se tem alguma permissão válida
+            const temPermissao = cargosNormalizados.some(c => cargosPermitidos.includes(c)) || userData.isAdmin || userData.isMasterAdmin;
+            
+            if (!temPermissao) {
               setError('Acesso negado. Área restrita para funcionários.');
               await doSignOut(); 
               setLoading(false);
               return;
             }
             
-            // Redirecionamento correto dependendo do cargo
-            if (['garcom', 'atendente'].includes(cargoUser)) redirectTo = '/controle-salao';
-            else if (['caixa'].includes(cargoUser)) redirectTo = '/pdv';
+            // Função rápida de verificação
+            const temCargo = (exigidos) => cargosNormalizados.some(c => exigidos.includes(c));
+
+            // Redirecionamento correto dependendo da lista de cargos
+            if (temCargo(['garcom', 'atendente'])) redirectTo = '/controle-salao';
+            else if (temCargo(['caixa'])) redirectTo = '/pdv';
             else redirectTo = '/painel';
             
           } else {
-            // Cliente tentando logar na aba de cliente
-            if (cargoUser !== 'cliente' && !userData.isClient && !userData.cargo) {
-              // Permite passar, mas você pode tratar regras extras de cliente aqui se quiser
-            }
-          }
-        } else {
           setError('Dados do usuário não encontrados. Cadastre-se.');
           await doSignOut();
           setLoading(false);
