@@ -32,12 +32,18 @@ export default function LoginPage() {
   const [cidade, setCidade] = useState('Nova Friburgo'); 
   const [pontoReferencia, setPontoReferencia] = useState(''); 
 
-  // 1. Redirecionamento Automático se já estiver logado
+  // 1. Redirecionamento Automático se já estiver logado (Atualizado para redirecionar funcionários)
   useEffect(() => {
     if (authChecked && currentUser && userData) {
+      
+      // Captura o cargo original em minúsculo e também cria uma versão sem acentos/cedilha
+      const cargoRaw = (userData.cargo || currentUser.cargo || '').toLowerCase();
+      const cargoNorm = cargoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
       if (userData.isMasterAdmin) {
         toast.success(`Olá Mestre, ${userData.nome}!`);
         navigate('/master/estabelecimentos', { replace: true });
+        
       } else if (userData.isAdmin) {
         if (userData.estabelecimentosGerenciados?.length > 0) {
             toast.success('Painel Administrativo carregado.');
@@ -46,8 +52,24 @@ export default function LoginPage() {
             toast.warning('Conta Admin sem estabelecimentos vinculados.');
             navigate('/admin/dashboard', { replace: true });
         }
+        
+      } else if (['garcom', 'garçom', 'atendente'].includes(cargoNorm) || ['garcom', 'garçom', 'atendente'].includes(cargoRaw)) {
+        // Garçons (com ou sem 'ç') e atendentes vão direto para o salão
+        toast.success(`Bem-vindo(a), ${userData.nome || 'Funcionário'}!`);
+        navigate('/controle-salao', { replace: true });
+        
+      } else if (['caixa'].includes(cargoNorm) || ['caixa'].includes(cargoRaw)) {
+        // Caixas vão direto para o PDV
+        toast.success(`Bom trabalho, ${userData.nome || 'Caixa'}!`);
+        navigate('/pdv', { replace: true });
+        
+      } else if (['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoNorm) || ['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoRaw)) {
+        // Outros funcionários vão para o painel geral
+        toast.success(`Bem-vindo(a) ao painel, ${userData.nome || 'Funcionário'}!`);
+        navigate('/painel', { replace: true });
+        
       } else {
-        // Cliente comum vai para a Home
+        // Se não tiver nenhum desses cargos (Cliente comum), vai para a Home
         navigate('/', { replace: true });
       }
     }
