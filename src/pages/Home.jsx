@@ -94,8 +94,7 @@ function Home() {
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
   const closeLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
 
-  // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO ===
- // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO (MÚLTIPLOS CARGOS) ===
+  // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO (MÚLTIPLOS CARGOS) ===
   useEffect(() => {
     if (authChecked && userData) {
       
