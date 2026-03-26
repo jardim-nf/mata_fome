@@ -49,7 +49,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
         // CORRIGIDO: Buscando na coleção 'usuarios' em vez de 'users'
         const userDoc = await getDoc(doc(db, "usuarios", userCredential.user.uid));
 
-        if (userDoc.exists()) {if (userDoc.exists()) {
+      if (userDoc.exists()) {
           const userData = userDoc.data();
           
           // Garante que os cargos sejam uma lista e normaliza
@@ -58,13 +58,14 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
             String(c).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
           );
           
+          // Atualiza o contexto salvando a lista completa de cargos
           setCurrentUser({ ...userCredential.user, cargos: cargosNormalizados, cargo: cargosNormalizados[0] }); 
 
           // Se estiver tentando logar pela aba de Administrador/Funcionário
           if (isAdminAuth) {
             const cargosPermitidos = ['admin', 'masteradmin', 'garcom', 'gerente', 'caixa', 'atendente', 'cozinheiro', 'entregador', 'auxiliar'];
             
-            // Verifica se tem alguma permissão válida
+            // Verifica se tem alguma permissão válida na lista
             const temPermissao = cargosNormalizados.some(c => cargosPermitidos.includes(c)) || userData.isAdmin || userData.isMasterAdmin;
             
             if (!temPermissao) {
@@ -74,7 +75,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
               return;
             }
             
-            // Função rápida de verificação
+            // Função rápida de verificação de rota
             const temCargo = (exigidos) => cargosNormalizados.some(c => exigidos.includes(c));
 
             // Redirecionamento correto dependendo da lista de cargos
@@ -83,6 +84,9 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
             else redirectTo = '/painel';
             
           } else {
+            // Cliente tentando logar na aba de cliente (não precisa alterar nada aqui)
+          }
+        }
           setError('Dados do usuário não encontrados. Cadastre-se.');
           await doSignOut();
           setLoading(false);
