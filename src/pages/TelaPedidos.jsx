@@ -110,6 +110,7 @@ const TelaPedidos = () => {
     const [modalSenhaAberto, setModalSenhaAberto] = useState(false);
     const [itemParaExcluir, setItemParaExcluir] = useState(null);
     const [senhaDigitada, setSenhaDigitada] = useState('');
+    const [qtdExcluir, setQtdExcluir] = useState(1);
 
     const [coresEstabelecimento, setCoresEstabelecimento] = useState({
         primaria: '#111827', destaque: '#059669', background: '#f9fafb', texto: { principal: '#111827' }
@@ -429,14 +430,26 @@ const TelaPedidos = () => {
         await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { nomesOcupantes: novosOcupantes, itens: novosItens });
     };
 
-    // 🔥 CORREÇÃO DE EXCLUSÃO (SOFT DELETE) + LOG DE AUDITORIA 🔥
+    // 🔥 EXCLUSÃO PARCIAL OU TOTAL (SOFT DELETE) + LOG DE AUDITORIA 🔥
     const confirmarExclusao = async () => {
         if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) return toast.error("Senha errada");
         
-        // Em vez de filtrar (apagar da existência), nós mapeamos e mudamos o status para 'cancelado'
-        const novaLista = resumoPedido.map(i => 
-            i.id === itemParaExcluir.id ? { ...i, status: 'cancelado' } : i
-        );
+        const qtdAtual = itemParaExcluir.quantidade || 1;
+        const qtdRemover = Math.min(qtdExcluir, qtdAtual);
+        const cancelaInteiro = qtdRemover >= qtdAtual;
+
+        let novaLista;
+        if (cancelaInteiro) {
+            // Cancela o item inteiro (soft delete)
+            novaLista = resumoPedido.map(i => 
+                i.id === itemParaExcluir.id ? { ...i, status: 'cancelado' } : i
+            );
+        } else {
+            // Reduz a quantidade do item
+            novaLista = resumoPedido.map(i => 
+                i.id === itemParaExcluir.id ? { ...i, quantidade: qtdAtual - qtdRemover } : i
+            );
+        }
         
         const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
         
@@ -453,11 +466,11 @@ const TelaPedidos = () => {
                 mesaNumero: mesa?.numero || 'N/A',
                 item: {
                     nome: `${itemParaExcluir.nome || itemParaExcluir.name || 'Item'} – ${itemParaExcluir.variacao || itemParaExcluir.opcaoSelecionada || 'Único'}`,
-                    quantidade: itemParaExcluir.quantidade || 1,
+                    quantidade: qtdRemover,
                     precoUnitario: itemParaExcluir.preco || 0,
                     observacao: itemParaExcluir.observacao || null
                 },
-                valorTotalCancelado: (itemParaExcluir.preco || 0) * (itemParaExcluir.quantidade || 1),
+                valorTotalCancelado: (itemParaExcluir.preco || 0) * qtdRemover,
                 data: serverTimestamp()
             });
         } catch (e) {
@@ -465,7 +478,7 @@ const TelaPedidos = () => {
         }
         
         setModalSenhaAberto(false);
-        toast.info("Item cancelado com sucesso!");
+        toast.info(cancelaInteiro ? "Item cancelado com sucesso!" : `${qtdRemover}x removido(s) com sucesso!`);
     };
 
     const ajustarQuantidade = async (id, cliente, qtd) => {
@@ -751,7 +764,7 @@ const TelaPedidos = () => {
                                                         {/* Se está cancelado, não mostra mais botões */}
                                                         {isCancelado ? null : 
                                                          item.status && item.status !== 'pendente' ? (
-                                                            <button onClick={() => { setItemParaExcluir(item); setSenhaDigitada(''); setModalSenhaAberto(true); }} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 px-2 py-1 rounded border border-red-100 hover:bg-red-50"><IoTrash /> Excluir</button>
+                                                            <button onClick={() => { setItemParaExcluir(item); setSenhaDigitada(''); setQtdExcluir(item.quantidade || 1); setModalSenhaAberto(true); }} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 px-2 py-1 rounded border border-red-100 hover:bg-red-50"><IoTrash /> Excluir</button>
                                                         ) : (
                                                             <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
                                                                 <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-red-500"><IoRemove /></button>
@@ -806,9 +819,37 @@ const TelaPedidos = () => {
                     <div className="bg-white p-6 rounded-2xl w-full max-w-xs text-center shadow-2xl">
                         <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3"><IoTrash className="text-2xl" /></div>
                         <h3 className="font-bold text-lg text-gray-900">Excluir Item Enviado?</h3>
-                        <p className="text-sm text-gray-500 mb-4">Digite a senha master para confirmar.</p>
-                        <input type="password" autoFocus className="w-full text-center text-2xl font-black tracking-widest p-3 border-2 rounded-xl mb-4 focus:border-red-500 outline-none" placeholder="••••" value={senhaDigitada} onChange={e => setSenhaDigitada(e.target.value)} />
-                        <div className="flex gap-2"><button onClick={() => setModalSenhaAberto(false)} className="flex-1 py-3 font-bold text-gray-600 bg-gray-100 rounded-xl">Cancelar</button><button onClick={confirmarExclusao} className="flex-1 py-3 font-bold text-white bg-red-500 rounded-xl shadow-lg">Confirmar</button></div>
+                        <p className="text-sm text-gray-500 mb-1 font-medium">{itemParaExcluir?.nome}</p>
+
+                        {/* Seletor de quantidade a excluir */}
+                        <div className="bg-gray-50 rounded-xl p-3 mb-4 border border-gray-200">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Quantidade a excluir</span>
+                            <div className="flex items-center justify-center gap-4 mt-2">
+                                <button 
+                                    onClick={() => setQtdExcluir(prev => Math.max(1, prev - 1))} 
+                                    className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow border border-gray-200 text-red-500 font-bold text-xl active:scale-90 transition-transform"
+                                >
+                                    <IoRemove />
+                                </button>
+                                <span className="text-3xl font-black text-gray-900 w-12 text-center">{qtdExcluir}</span>
+                                <button 
+                                    onClick={() => setQtdExcluir(prev => Math.min(itemParaExcluir?.quantidade || 1, prev + 1))} 
+                                    className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow border border-gray-200 text-green-600 font-bold text-xl active:scale-90 transition-transform"
+                                >
+                                    <IoAdd />
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-1.5">Total no pedido: {itemParaExcluir?.quantidade || 1}</p>
+                        </div>
+
+                        <p className="text-xs text-gray-500 mb-2">Digite a senha master para confirmar.</p>
+                        <input type="password" autoFocus className="w-full text-center text-2xl font-black tracking-widest p-3 border-2 rounded-xl mb-4 focus:border-red-500 outline-none" placeholder="••••" value={senhaDigitada} onChange={e => setSenhaDigitada(e.target.value)} onKeyDown={e => e.key === 'Enter' && confirmarExclusao()} />
+                        <div className="flex gap-2">
+                            <button onClick={() => setModalSenhaAberto(false)} className="flex-1 py-3 font-bold text-gray-600 bg-gray-100 rounded-xl">Cancelar</button>
+                            <button onClick={confirmarExclusao} className="flex-1 py-3 font-bold text-white bg-red-500 rounded-xl shadow-lg">
+                                {qtdExcluir >= (itemParaExcluir?.quantidade || 1) ? 'Excluir Tudo' : `Excluir ${qtdExcluir}x`}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

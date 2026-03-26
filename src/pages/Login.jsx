@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase'; 
 
@@ -15,6 +15,9 @@ export default function LoginPage() {
   // Estados de Controle
   const [isRegistering, setIsRegistering] = useState(false);
   const [loadingLocal, setLoadingLocal] = useState(false);
+  const [modoRecuperacao, setModoRecuperacao] = useState(false);
+  const [emailRecuperacao, setEmailRecuperacao] = useState('');
+  const [loadingRecuperacao, setLoadingRecuperacao] = useState(false);
 
   // Estados do Formulário
   const [email, setEmail] = useState('');
@@ -122,6 +125,33 @@ export default function LoginPage() {
     }
   };
 
+  // 🔑 RECUPERAÇÃO DE SENHA
+  const handleRecuperarSenha = async (e) => {
+    e.preventDefault();
+    if (!emailRecuperacao.trim()) return toast.error('Digite seu email.');
+    setLoadingRecuperacao(true);
+    try {
+      await sendPasswordResetEmail(auth, emailRecuperacao.trim());
+      toast.success('📧 Email de recuperação enviado! Verifique sua caixa de entrada e spam.');
+      setModoRecuperacao(false);
+      setEmail(emailRecuperacao.trim());
+      setEmailRecuperacao('');
+    } catch (error) {
+      console.error('Erro ao enviar email de recuperação:', error);
+      if (error.code === 'auth/user-not-found') {
+        toast.error('Nenhuma conta encontrada com este email.');
+      } else if (error.code === 'auth/too-many-requests') {
+        toast.error('Muitas tentativas. Aguarde alguns minutos.');
+      } else if (error.code === 'auth/invalid-email') {
+        toast.error('Email inválido.');
+      } else {
+        toast.error('Erro ao enviar email. Tente novamente.');
+      }
+    } finally {
+      setLoadingRecuperacao(false);
+    }
+  };
+
   if (authChecked && currentUser && !userData) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -131,6 +161,62 @@ export default function LoginPage() {
             </div>
         </div>
       );
+  }
+
+  // TELA DE RECUPERAÇÃO DE SENHA
+  if (modoRecuperacao) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 py-12">
+        <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-md border border-gray-200">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-yellow-500 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg">
+              <span className="text-2xl">🔑</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">Recuperar Senha</h1>
+            <p className="text-gray-500 mt-2 text-sm">Digite seu email e enviaremos um link para redefinir sua senha.</p>
+          </div>
+
+          <form onSubmit={handleRecuperarSenha} className="space-y-5">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Email da conta</label>
+              <input
+                type="email"
+                value={emailRecuperacao}
+                onChange={(e) => setEmailRecuperacao(e.target.value)}
+                placeholder="exemplo@email.com"
+                required
+                autoFocus
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-yellow-500 outline-none transition-all"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loadingRecuperacao}
+              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-3.5 rounded-xl hover:from-yellow-600 hover:to-orange-600 focus:ring-4 focus:ring-yellow-200 transition-all transform active:scale-95 shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loadingRecuperacao ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Enviando...
+                </>
+              ) : (
+                '📧 Enviar Link de Recuperação'
+              )}
+            </button>
+          </form>
+
+          <div className="mt-8 text-center pt-6 border-t border-gray-100">
+            <button
+              onClick={() => { setModoRecuperacao(false); setEmailRecuperacao(''); }}
+              className="text-yellow-600 font-bold hover:text-yellow-700 hover:underline transition-colors"
+            >
+              ← Voltar ao Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -253,7 +339,12 @@ export default function LoginPage() {
         
         {!isRegistering && (
             <div className="mt-4 text-center">
-                <button className="text-sm text-gray-400 hover:text-gray-600">Esqueceu sua senha?</button>
+                <button 
+                  onClick={() => { setModoRecuperacao(true); setEmailRecuperacao(email); }}
+                  className="text-sm text-gray-400 hover:text-yellow-600 hover:underline transition-colors"
+                >
+                  Esqueceu sua senha?
+                </button>
             </div>
         )}
 

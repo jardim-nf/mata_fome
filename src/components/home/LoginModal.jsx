@@ -1,12 +1,12 @@
 // src/components/home/LoginModal.jsx
 import { useState, useEffect } from 'react';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { X, Mail, Lock, User, Loader2, KeyRound, ArrowLeft } from 'lucide-react';
 
 const backdrop = {
   hidden: { opacity: 0 },
@@ -26,6 +26,9 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
   const [isAuthProcessing, setIsAuthProcessing] = useState(false);
+  const [modoRecuperacao, setModoRecuperacao] = useState(false);
+  const [emailRecuperacao, setEmailRecuperacao] = useState('');
+  const [loadingRecuperacao, setLoadingRecuperacao] = useState(false);
 
   const authFirebase = getAuth();
   const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
@@ -96,10 +99,35 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
 
   const toggleMode = () => {
     setIsRegistering(!isRegistering);
+    setModoRecuperacao(false);
     setError('');
     setNome('');
     setEmail('');
     setPassword('');
+  };
+
+  // 🔑 RECUPERAÇÃO DE SENHA
+  const handleRecuperarSenha = async (e) => {
+    e.preventDefault();
+    if (!emailRecuperacao.trim()) return toast.error('Digite seu email.');
+    setLoadingRecuperacao(true);
+    setError('');
+    try {
+      await sendPasswordResetEmail(authFirebase, emailRecuperacao.trim());
+      toast.success('📧 Email de recuperação enviado! Verifique sua caixa de entrada e spam.');
+      setModoRecuperacao(false);
+      setEmail(emailRecuperacao.trim());
+      setEmailRecuperacao('');
+    } catch (err) {
+      let msg = 'Erro ao enviar email. Tente novamente.';
+      if (err.code === 'auth/user-not-found') msg = 'Nenhuma conta encontrada com este email.';
+      else if (err.code === 'auth/too-many-requests') msg = 'Muitas tentativas. Aguarde alguns minutos.';
+      else if (err.code === 'auth/invalid-email') msg = 'Email inválido.';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoadingRecuperacao(false);
+    }
   };
 
   return (
@@ -125,10 +153,10 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
             <div className="flex justify-between items-center mb-8">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {isRegistering ? 'Crie Sua Conta' : 'Acesse Sua Conta'}
+                  {modoRecuperacao ? 'Recuperar Senha' : isRegistering ? 'Crie Sua Conta' : 'Acesse Sua Conta'}
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  {isRegistering ? 'Preencha os dados abaixo' : 'Entre com suas credenciais'}
+                  {modoRecuperacao ? 'Enviaremos um link para redefinir sua senha' : isRegistering ? 'Preencha os dados abaixo' : 'Entre com suas credenciais'}
                 </p>
               </div>
               <button
@@ -139,98 +167,165 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleAuthAction} className="space-y-5">
-              {isRegistering && (
-                <div>
-                  <label htmlFor="nome" className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Nome Completo
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="text"
-                      id="nome"
-                      placeholder="Seu Nome Completo"
-                      value={nome}
-                      onChange={(e) => setNome(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
-                      required={isRegistering}
-                    />
+            {/* TELA DE RECUPERAÇÃO DE SENHA */}
+            {modoRecuperacao ? (
+              <>
+                <form onSubmit={handleRecuperarSenha} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Email da conta</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="email"
+                        value={emailRecuperacao}
+                        onChange={(e) => setEmailRecuperacao(e.target.value)}
+                        placeholder="seuemail@exemplo.com"
+                        required
+                        autoFocus
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="email"
-                    id="email"
-                    placeholder="seuemail@exemplo.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
-                    required
-                  />
-                </div>
-              </div>
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                      ⚠️ {error}
+                    </div>
+                  )}
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Senha
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="password"
-                    id="password"
-                    placeholder="Mínimo 6 caracteres"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
-                    required
-                  />
-                </div>
-              </div>
+                  <button
+                    type="submit"
+                    disabled={loadingRecuperacao}
+                    className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3.5 rounded-xl text-lg transition-all shadow-lg shadow-yellow-500/20 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loadingRecuperacao ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Enviando...
+                      </span>
+                    ) : (
+                      '📧 Enviar Link de Recuperação'
+                    )}
+                  </button>
+                </form>
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-                  ⚠️ {error}
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={() => { setModoRecuperacao(false); setEmailRecuperacao(''); setError(''); }}
+                    className="text-yellow-600 hover:text-yellow-700 font-semibold transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <ArrowLeft size={16} /> Voltar ao Login
+                  </button>
                 </div>
-              )}
+              </>
+            ) : (
+              <>
+                {/* Form */}
+                <form onSubmit={handleAuthAction} className="space-y-5">
+                  {isRegistering && (
+                    <div>
+                      <label htmlFor="nome" className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Nome Completo
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          id="nome"
+                          placeholder="Seu Nome Completo"
+                          value={nome}
+                          onChange={(e) => setNome(e.target.value)}
+                          className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
+                          required={isRegistering}
+                        />
+                      </div>
+                    </div>
+                  )}
 
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3.5 rounded-xl text-lg transition-all shadow-lg shadow-yellow-500/20 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isAuthProcessing}
-              >
-                {isAuthProcessing ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    {isRegistering ? 'Cadastrando...' : 'Entrando...'}
-                  </span>
-                ) : (
-                  isRegistering ? '🎉 Cadastrar' : '🚀 Entrar'
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="email"
+                        id="email"
+                        placeholder="seuemail@exemplo.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Senha
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="password"
+                        id="password"
+                        placeholder="Mínimo 6 caracteres"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                      ⚠️ {error}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3.5 rounded-xl text-lg transition-all shadow-lg shadow-yellow-500/20 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isAuthProcessing}
+                  >
+                    {isAuthProcessing ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        {isRegistering ? 'Cadastrando...' : 'Entrando...'}
+                      </span>
+                    ) : (
+                      isRegistering ? '🎉 Cadastrar' : '🚀 Entrar'
+                    )}
+                  </button>
+                </form>
+
+                {/* Esqueceu a senha */}
+                {!isRegistering && (
+                  <div className="mt-3 text-center">
+                    <button
+                      onClick={() => { setModoRecuperacao(true); setEmailRecuperacao(email); setError(''); }}
+                      className="text-sm text-gray-400 hover:text-yellow-600 hover:underline transition-colors"
+                    >
+                      Esqueceu sua senha?
+                    </button>
+                  </div>
                 )}
-              </button>
-            </form>
 
-            {/* Toggle */}
-            <div className="mt-8 text-center">
-              <p className="text-gray-500 text-sm">
-                {isRegistering ? 'Já tem uma conta?' : 'Não tem uma conta?'}{' '}
-                <button
-                  onClick={toggleMode}
-                  className="text-yellow-600 hover:text-yellow-700 font-semibold transition-colors underline"
-                >
-                  {isRegistering ? 'Faça Login' : 'Cadastre-se'}
-                </button>
-              </p>
-            </div>
+                {/* Toggle Login/Cadastro */}
+                <div className="mt-6 text-center">
+                  <p className="text-gray-500 text-sm">
+                    {isRegistering ? 'Já tem uma conta?' : 'Não tem uma conta?'}{' '}
+                    <button
+                      onClick={toggleMode}
+                      className="text-yellow-600 hover:text-yellow-700 font-semibold transition-colors underline"
+                    >
+                      {isRegistering ? 'Faça Login' : 'Cadastre-se'}
+                    </button>
+                  </p>
+                </div>
+              </>
+            )}
           </motion.div>
         </motion.div>
       )}
