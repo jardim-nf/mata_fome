@@ -52,21 +52,19 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
       if (userDoc.exists()) {
           const userData = userDoc.data();
           
-          // Garante que os cargos sejam uma lista e normaliza
           const cargosRaw = Array.isArray(userData.cargo) ? userData.cargo : [userData.cargo || 'cliente'];
           const cargosNormalizados = cargosRaw.map(c => 
             String(c).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
           );
           
-          // Atualiza o contexto salvando a lista completa de cargos
           setCurrentUser({ ...userCredential.user, cargos: cargosNormalizados, cargo: cargosNormalizados[0] }); 
 
-          // Se estiver tentando logar pela aba de Administrador/Funcionário
           if (isAdminAuth) {
-            const cargosPermitidos = ['admin', 'masteradmin', 'garcom', 'gerente', 'caixa', 'atendente', 'cozinheiro', 'entregador', 'auxiliar'];
+            const cargosDeFuncionario = ['garcom', 'atendente', 'caixa', 'gerente', 'cozinheiro', 'entregador', 'auxiliar'];
+            const meusCargos = cargosNormalizados.filter(c => cargosDeFuncionario.includes(c));
             
-            // Verifica se tem alguma permissão válida na lista
-            const temPermissao = cargosNormalizados.some(c => cargosPermitidos.includes(c)) || userData.isAdmin || userData.isMasterAdmin;
+            // Verifica se tem alguma permissão válida
+            const temPermissao = meusCargos.length > 0 || userData.isAdmin || userData.isMasterAdmin;
             
             if (!temPermissao) {
               setError('Acesso negado. Área restrita para funcionários.');
@@ -75,15 +73,23 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
               return;
             }
             
-            // Função rápida de verificação de rota
-            const temCargo = (exigidos) => cargosNormalizados.some(c => exigidos.includes(c));
-
-            // Redirecionamento correto dependendo da lista de cargos
-            if (temCargo(['garcom', 'atendente'])) redirectTo = '/controle-salao';
-            else if (temCargo(['caixa'])) redirectTo = '/pdv';
-            else redirectTo = '/painel';
+            // REDIRECIONAMENTO COM BASE NA QUANTIDADE DE CARGOS
+            if (meusCargos.length > 1) {
+              redirectTo = '/painel'; // Se quiser que vá para o dashboard, mude para '/dashboard'
+              
+            } else if (meusCargos.length === 1) {
+              const cargoUnico = meusCargos[0];
+              if (['garcom', 'atendente'].includes(cargoUnico)) redirectTo = '/controle-salao';
+              else if (cargoUnico === 'caixa') redirectTo = '/pdv';
+              else redirectTo = '/painel';
+            } else {
+              redirectTo = '/painel';
+            }
             
           } else {
+            // Cliente tentando logar na aba de cliente
+          }
+        }
             // Cliente tentando logar na aba de cliente (não precisa alterar nada aqui)
           }
         }
