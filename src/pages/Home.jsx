@@ -17,7 +17,7 @@ import {
 } from '../components/home';
 
 /* ------------------------------------------------------------------ */
-/*  Hook – carrega estabelecimentos com cache no localStorage         */
+/* Hook – carrega estabelecimentos com cache no localStorage         */
 /* ------------------------------------------------------------------ */
 const useEstabelecimentos = () => {
   const [data, setData] = useState([]);
@@ -80,11 +80,13 @@ const useEstabelecimentos = () => {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Página Home                                                        */
+/* Página Home                                                       */
 /* ------------------------------------------------------------------ */
 function Home() {
   const { data: estabelecimentos, loading, error } = useEstabelecimentos();
-  const { currentUser, isAdmin, isMasterAdmin } = useAuth();
+  
+  // ADICIONADOS: userData e authChecked para verificarmos os cargos
+  const { currentUser, userData, authChecked, isAdmin, isMasterAdmin } = useAuth();
   const navigate = useNavigate();
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -92,16 +94,36 @@ function Home() {
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
   const closeLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
 
+  // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO ===
+  useEffect(() => {
+    if (authChecked && userData) {
+      const cargoRaw = (userData.cargo || '').toLowerCase();
+      const cargoNorm = cargoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+      if (userData.isMasterAdmin) {
+        navigate('/master/estabelecimentos', { replace: true });
+        
+      } else if (userData.isAdmin) {
+        navigate('/admin/dashboard', { replace: true });
+        
+      } else if (['garcom', 'garçom', 'atendente'].includes(cargoNorm) || ['garcom', 'garçom', 'atendente'].includes(cargoRaw)) {
+        navigate('/controle-salao', { replace: true });
+        
+      } else if (['caixa'].includes(cargoNorm) || ['caixa'].includes(cargoRaw)) {
+        navigate('/pdv', { replace: true });
+        
+      } else if (['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoNorm) || ['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoRaw)) {
+        navigate('/painel', { replace: true });
+      }
+      // Se for cliente comum, não faz nada e ele continua na Home.
+    }
+  }, [authChecked, userData, navigate]);
+
+  // Função simplificada: o useEffect acima já vai cuidar de mandar a pessoa pro lugar certo
   const handleLoginSucesso = useCallback(() => {
     closeLoginModal();
-    if (isMasterAdmin) {
-      navigate('/master-dashboard');
-    } else if (isAdmin) {
-      navigate('/dashboard');
-    } else {
-      toast.success('Login realizado com sucesso!');
-    }
-  }, [closeLoginModal, isAdmin, isMasterAdmin, navigate]);
+    toast.success('Login realizado com sucesso!');
+  }, [closeLoginModal]);
 
   return (
     <>
