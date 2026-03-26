@@ -29,7 +29,6 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
       if (isRegister) {
         if (!isAdminAuth) { 
           userCredential = await doCreateUserWithEmailAndPassword(email, password);
-          // CORRIGIDO PARA A COLEÇÃO 'usuarios'
           await setDoc(doc(db, "usuarios", userCredential.user.uid), {
             email: email,
             nome: name,
@@ -45,11 +44,9 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
       } else { 
         // Lógica de Login
         userCredential = await doSignInWithEmailAndPassword(email, password);
-        
-        // CORRIGIDO: Buscando na coleção 'usuarios' em vez de 'users'
         const userDoc = await getDoc(doc(db, "usuarios", userCredential.user.uid));
 
-      if (userDoc.exists()) {
+        if (userDoc.exists()) {
           const userData = userDoc.data();
           
           const cargosRaw = Array.isArray(userData.cargo) ? userData.cargo : [userData.cargo || 'cliente'];
@@ -63,7 +60,6 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
             const cargosDeFuncionario = ['garcom', 'atendente', 'caixa', 'gerente', 'cozinheiro', 'entregador', 'auxiliar'];
             const meusCargos = cargosNormalizados.filter(c => cargosDeFuncionario.includes(c));
             
-            // Verifica se tem alguma permissão válida
             const temPermissao = meusCargos.length > 0 || userData.isAdmin || userData.isMasterAdmin;
             
             if (!temPermissao) {
@@ -73,10 +69,8 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
               return;
             }
             
-            // REDIRECIONAMENTO COM BASE NA QUANTIDADE DE CARGOS
             if (meusCargos.length > 1) {
-              redirectTo = '/painel'; // Se quiser que vá para o dashboard, mude para '/dashboard'
-              
+              redirectTo = '/painel'; 
             } else if (meusCargos.length === 1) {
               const cargoUnico = meusCargos[0];
               if (['garcom', 'atendente'].includes(cargoUnico)) redirectTo = '/controle-salao';
@@ -85,14 +79,8 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
             } else {
               redirectTo = '/painel';
             }
-            
-          } else {
-            // Cliente tentando logar na aba de cliente
-          }
-        }
-            // Cliente tentando logar na aba de cliente (não precisa alterar nada aqui)
-          }
-        }
+          } 
+        } else {
           setError('Dados do usuário não encontrados. Cadastre-se.');
           await doSignOut();
           setLoading(false);
