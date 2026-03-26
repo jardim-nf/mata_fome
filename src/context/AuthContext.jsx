@@ -90,8 +90,9 @@ export function AuthProvider({ children }) {
                 
                 const firestoreData = await getFirestoreUserData(user);
                 
-                const isMasterAdminFromClaims = Boolean(claims.isMasterAdmin);
-                const isAdminFromClaims = Boolean(claims.isAdmin);
+                // Custom Claims (preferencial) com fallback para Firestore
+                const isMasterAdmin = Boolean(claims.isMasterAdmin) || Boolean(firestoreData?.isMasterAdmin);
+                const isAdmin = Boolean(claims.isAdmin) || Boolean(firestoreData?.isAdmin) || isMasterAdmin;
                 
                 // Normaliza os IDs dos estabelecimentos
                 const docEstabs = mapToArray(firestoreData?.estabelecimentos);
@@ -101,16 +102,13 @@ export function AuthProvider({ children }) {
                 
                 let allEstabs = [...new Set([...docEstabs, ...docEstabsGerenciados, ...claimEstabs, ...claimEstabsGerenciados])];
 
-                // Se for Master e não tiver nada, busca tudo (fallback)
-                if (isMasterAdminFromClaims && allEstabs.length === 0) {
+                // Se for Master/Admin e não tiver estabelecimentos, busca tudo (fallback)
+                if ((isMasterAdmin || isAdmin) && allEstabs.length === 0) {
                     try {
                         const estres = await getDocs(collection(db, 'estabelecimentos'));
                         allEstabs = estres.docs.map(doc => doc.id);
                     } catch (error) { console.error(error); }
                 }
-
-                const isMasterAdmin = isMasterAdminFromClaims || Boolean(firestoreData?.isMasterAdmin);
-                const isAdmin = isAdminFromClaims || (firestoreData?.isAdmin === true);
 
                 const combinedData = {
                     uid: user.uid,
@@ -131,7 +129,7 @@ export function AuthProvider({ children }) {
                     const clientDocRef = doc(db, 'clientes', user.uid);
                     const cd = await getDoc(clientDocRef);
                     if (cd.exists()) setCurrentClientData(cd.data());
-                } catch (ce) {}
+                } catch (ce) { console.error('[AuthContext] Erro ao buscar dados do cliente:', ce); }
 
             } else {
                 setCurrentUser(null);

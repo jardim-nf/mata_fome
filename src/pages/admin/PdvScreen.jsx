@@ -14,7 +14,7 @@ import {
     ModalFechamentoCaixa, ModalMovimentacao, ModalFinalizacao, 
     ModalRecibo, ModalHistorico, ModalListaTurnos, ModalResumoTurno, ModalVendasSuspensas,
     ModalPesoBalanca
-} from '../../components/PdvModals';
+} from '../../components/pdv-modals';
 import { IoArrowBack, IoSearch, IoCart, IoSettingsOutline, IoStorefrontOutline, IoPauseCircleOutline, IoTrashOutline, IoTimeOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
 import { toast, ToastContainer } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -298,7 +298,7 @@ const PdvScreen = () => {
         setSalvando(false);
     };
 
-    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) {} };
+    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) { console.error(e); } };
     
     const handleEmitirNfce = async () => {
         if (!dadosRecibo?.id) return; setNfceStatus('loading');
@@ -342,7 +342,7 @@ const PdvScreen = () => {
                         setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); setDadosRecibo(p => ({...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
                         if (ns === 'error') tocarBeepErro();
                     }
-                } catch (e) {}
+                } catch (e) { console.error(e); }
             }, 3000);
         }
         return () => clearInterval(intervalo);
@@ -387,8 +387,8 @@ const PdvScreen = () => {
         }, { title: 'Cancelar NFC-e', placeholder: 'Descreva o motivo...', submitText: 'Cancelar NFC-e' });
     };
 
-    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return toast.warning('Sem ID'); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} };
-    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return toast.warning('Sem ID'); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
+    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return toast.warning('Sem ID'); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } };
+    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return toast.warning('Sem ID'); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
 
     useEffect(() => { if (!estabelecimentoAtivo || !currentUser) return; const i = async () => { setVerificandoCaixa(true); const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo); if (c) { setCaixaAberto(c); setVendasBase(await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50)); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else { setMostrarAberturaCaixa(true); } setVerificandoCaixa(false); }; i(); }, [currentUser, estabelecimentoAtivo]);
     
@@ -712,8 +712,8 @@ const PdvScreen = () => {
                     <ModalMovimentacao visivel={mostrarMovimentacao} onClose={() => setMostrarMovimentacao(false)} onConfirmar={handleSalvarMovimentacao} />
                     <ModalFinalizacao visivel={mostrarFinalizacao} venda={vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pagamentosAdicionados} setPagamentos={setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={descontoValor} setDesconto={setDescontoValor} acrescimo={acrescimoValor} setAcrescimo={setAcrescimoValor} />
                     
-                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} }} onEnviarWhatsApp={handleEnviarWhatsApp} />
-                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) {} }} onEnviarWhatsApp={handleEnviarWhatsApp} />
+                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
+                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
 
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
                     <ModalResumoTurno visivel={mostrarResumoTurno} turno={turnoSelecionadoResumo} onClose={() => { setMostrarResumoTurno(false); if (!caixaAberto) setMostrarAberturaCaixa(true); }} />

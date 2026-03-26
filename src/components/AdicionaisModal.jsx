@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IoClose, IoCheckmarkCircle, IoSquareOutline, IoCheckbox } from 'react-icons/io5';
+import { formatarMoeda } from '../utils/formatCurrency';
 
 const AdicionaisModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => {
     // Fallback de cores para evitar erro se vier undefined
@@ -51,10 +52,7 @@ const AdicionaisModal = ({ item, onConfirm, onClose, coresEstabelecimento }) => 
         });
     };
 
-    const formatarMoeda = (val) => {
-        const valor = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
-    };
+
 
     return (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">

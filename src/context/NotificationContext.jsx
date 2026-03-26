@@ -42,7 +42,7 @@ export const NotificationProvider = ({ children }) => {
     if (Notification.permission === 'default') {
       Notification.requestPermission()
         .then(p => setPermission(p))
-        .catch(() => {});
+        .catch((err) => { console.error(err); });
     }
   }, []);
 

@@ -1,9 +1,8 @@
 import React from 'react';
 import { IoCart, IoAdd, IoRemove, IoTrash } from 'react-icons/io5';
 import SplitPayment from './SplitPayment';
+import { formatarMoeda } from '../../utils/formatCurrency';
 
-const formatarMoeda = (val) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
 const formatarItemCarrinho = (item) => {
   let nome = item.nome;

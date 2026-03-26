@@ -15,6 +15,7 @@ import {
   FaBolt, FaCrown
 } from 'react-icons/fa';
 import { IoSearchOutline } from 'react-icons/io5';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 const LIMIT = 50;
 const DEBOUNCE_DELAY = 300;
@@ -83,9 +84,6 @@ const formatId = (id) => {
   return `#${id}`;
 };
 
-const formatCurrency = (value) => {
-  return `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
-};
 
 // --- HOOKS CUSTOMIZADOS ---
 const useDebounce = (value, delay) => {
@@ -127,7 +125,7 @@ const useEstabelecimentos = () => {
         try {
           localStorage.setItem('estabelecimentos', JSON.stringify(lista));
           localStorage.setItem('estabelecimentos_timestamp', Date.now().toString());
-        } catch (e) {}
+        } catch (e) { console.error(e); }
       },
       (err) => {
         if (!mounted) return;

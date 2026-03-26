@@ -1,20 +1,22 @@
 // src/pages/Painel.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, addDoc, serverTimestamp, Timestamp, where } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import PedidoCard from "../components/PedidoCard";
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint, IoReceiptOutline, IoWalletOutline, IoCartOutline } from "react-icons/io5";
+import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint, IoReceiptOutline, IoWalletOutline, IoCartOutline, IoAddCircleOutline } from "react-icons/io5";
+import NovoPedidoDeliveryModal from '../components/NovoPedidoDeliveryModal';
 
 // IMPORTANDO NOSSO NOVO SERVIÇO DO QZ TRAY
 import { rotearEImprimir } from '../services/printService';
 
 // 🔥 IMPORTS PARA O FISCAL (NFC-e) 🔥
 import { vendaService } from '../services/vendaService';
-import { ModalRecibo, ModalHistorico } from '../components/PdvModals';
+import { ModalRecibo, ModalHistorico } from '../components/pdv-modals';
+import { formatarMoedaCurta } from '../utils/formatCurrency';
 
 // --- FUNÇÃO ANTI-TRAVAMENTO PARA CORTAR BEBIDAS E BOMBONIERE ---
 const isItemCozinha = (item) => {
@@ -51,7 +53,7 @@ const isItemCozinha = (item) => {
 };
 
 // --- GRUPO DE PEDIDOS DA MESA ---
-const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo, onEmitirNfce }) => {
+const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, estabelecimentoInfo, onEmitirNfce, onUpdateFormaPagamento }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
         pedidos.forEach(pedido => {
@@ -105,7 +107,7 @@ const GrupoPedidosMesa = ({ pedidos, onUpdateStatus, onExcluir, newOrderIds, est
                     </div>
                     <div className="p-3 space-y-3 bg-white">
                         {grupo.pedidos.map(pedido => (
-                            <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={onUpdateStatus} onExcluir={onExcluir} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} showMesaInfo={false} isAgrupado={true} motoboysDisponiveis={[]} onAtribuirMotoboy={null} onEmitirNfce={onEmitirNfce} />
+                            <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={onUpdateStatus} onExcluir={onExcluir} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} showMesaInfo={false} isAgrupado={true} motoboysDisponiveis={[]} onAtribuirMotoboy={null} onEmitirNfce={onEmitirNfce} onUpdateFormaPagamento={onUpdateFormaPagamento} />
                         ))}
                     </div>
                 </div>
@@ -149,6 +151,7 @@ function Painel() {
     const [isHistoricoVendasOpen, setIsHistoricoVendasOpen] = useState(false);
     const [vendasHistoricoExibicao, setVendasHistoricoExibicao] = useState([]);
     const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+    const [showNovoPedidoModal, setShowNovoPedidoModal] = useState(false);
 
     const [modoImpressao, setModoImpressaoState] = useState(() => {
         const salvo = localStorage.getItem('config_modo_impressao_painel');
@@ -275,12 +278,24 @@ function Painel() {
         finally { setTimeout(() => { isUpdatingRef.current = false; setBloqueioAtualizacao(prev => { const novo = new Set(prev); novo.delete(pedidoId); return novo; }); }, 500); }
     }, [estabelecimentoAtivo, bloqueioAtualizacao]);
 
+    // 🔥 ATUALIZAR FORMA DE PAGAMENTO NO FIRESTORE
+    const handleUpdateFormaPagamento = useCallback(async (pedidoId, novaForma) => {
+        try {
+            const path = `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`;
+            await updateDoc(doc(db, path), { formaPagamento: novaForma, atualizadoEm: serverTimestamp() });
+            toast.success('Forma de pagamento atualizada!');
+        } catch (error) {
+            console.error('Erro ao atualizar forma de pagamento:', error);
+            toast.error('Erro ao atualizar pagamento.');
+        }
+    }, [estabelecimentoAtivo]);
+
     // =============================================
     // 🔥 LÓGICA FISCAL NFC-e (MESMO PADRÃO DO CONTROLE DE SALÃO) 🔥
     // =============================================
     const formatarReal = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
 
-    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) {} };
+    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) { console.error(e); } };
 
     const tocarCampainha = useCallback(() => {
         try {
@@ -315,7 +330,7 @@ function Painel() {
                         osc.start(ctx2.currentTime + i * 0.12);
                         osc.stop(ctx2.currentTime + i * 0.12 + 0.35);
                     });
-                } catch (e) {}
+                } catch (e) { console.error(e); }
             }, 600);
         } catch (e) { console.warn('Web Audio API não suportada'); }
     }, []);
@@ -403,8 +418,8 @@ function Painel() {
         } catch (e) { setNfceStatus('error'); tocarBeepErro(); alert("Falha de conexão ao tentar cancelar a nota."); }
     };
 
-    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return alert("Sem ID"); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} };
-    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return alert("Sem ID"); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) alert("Erro: " + res.error); } catch (e) {} finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
+    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return alert("Sem ID"); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) { console.error(e); } };
+    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return alert("Sem ID"); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) alert("Erro: " + res.error); } catch (e) { console.error(e); } finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
 
     const handleEnviarWhatsApp = (venda) => {
         if (!venda.fiscal?.pdf) return alert("⚠️ Link PDF indisponível.");
@@ -522,7 +537,7 @@ function Painel() {
                         setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
                         if (ns === 'error') tocarBeepErro();
                     }
-                } catch (e) {}
+                } catch (e) { console.error(e); }
             }, 3000);
         }
         return () => clearInterval(intervalo);
@@ -733,30 +748,28 @@ function Painel() {
         processarFilaDeImpressao();
     }, [printQueue, isPrinting, estabelecimentoInfo, modoImpressao, estabelecimentoAtivo]);
 
-    const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'finalizado'], [abaAtiva]);
+    const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'pronto_para_servir', 'finalizado'], [abaAtiva]);
 
     const STATUS_UI = {
         recebido: { title: 'Novos', icon: '📥', dot: 'bg-rose-500', bgBadge: 'bg-rose-100', textBadge: 'text-rose-700', emptyTitle: 'Tudo certo!', emptyMsg: 'Nenhum pedido novo aguardando' },
         preparo: { title: 'Em Preparo', icon: '🔥', dot: 'bg-amber-500', bgBadge: 'bg-amber-100', textBadge: 'text-amber-700', emptyTitle: 'Cozinha livre', emptyMsg: 'Nenhum pedido em preparo' },
         em_entrega: { title: 'Em Entrega', icon: '🛵', dot: 'bg-blue-500', bgBadge: 'bg-blue-100', textBadge: 'text-blue-700', emptyTitle: 'Sem entregas', emptyMsg: 'Nenhum pedido na rua' },
-        pronto_para_servir: { title: 'Pronto (Mesa)', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700', emptyTitle: 'Nada pronto', emptyMsg: 'Os pedidos aparecerão aqui quando ficarem prontos' },
+        pronto_para_servir: { title: abaAtiva === 'cozinha' ? 'Pronto (Mesa)' : 'Pronto p/ Retirada', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700', emptyTitle: 'Nada pronto', emptyMsg: abaAtiva === 'cozinha' ? 'Os pedidos aparecerão aqui quando ficarem prontos' : 'Pedidos de retirada prontos aparecerão aqui' },
         finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700', emptyTitle: 'Sem concluídos', emptyMsg: 'Os pedidos finalizados aparecerão aqui' }
     };
 
     const statsDoDia = useMemo(() => {
-        const todosPedidos = [...(pedidos.recebido || []), ...(pedidos.preparo || []), ...(pedidos.em_entrega || []), ...(pedidos.pronto_para_servir || []), ...(pedidos.finalizado || [])];
+        // Só conta pedidos das colunas VISÍVEIS na aba ativa
+        const todosPedidos = colunasAtivas.flatMap(status => pedidos[status] || []);
         const pedidosFiltrados = todosPedidos.filter(p => {
             if (abaAtiva === 'cozinha') return p.source === 'salao' || p.tipo === 'mesa';
             return p.source !== 'salao' && p.tipo !== 'mesa';
         });
         const total = pedidosFiltrados.reduce((acc, p) => acc + (p.totalFinal || p.total || 0), 0);
         return { quantidade: pedidosFiltrados.length, faturamento: total };
-    }, [pedidos, abaAtiva]);
+    }, [pedidos, abaAtiva, colunasAtivas]);
 
-    const formatarMoedaCurta = (valor) => {
-        if (valor >= 1000) return `R$ ${(valor / 1000).toFixed(1).replace('.', ',')}k`;
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
-    };
+
 
     if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
     if (!estabelecimentoAtivo) return <div className="p-10 text-center font-medium text-slate-500">Sem estabelecimento selecionado.</div>;
@@ -777,7 +790,7 @@ function Painel() {
                 onBaixarXml={handleBaixarXml} 
                 onConsultarStatus={handleConsultarStatus} 
                 onBaixarPdf={handleBaixarPdf} 
-                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) { console.error(e); } }} 
                 onEnviarWhatsApp={handleEnviarWhatsApp} 
                 onCancelarNfce={handleCancelarNfce} 
             />
@@ -792,7 +805,7 @@ function Painel() {
                 onConsultarStatus={handleConsultarStatus} 
                 onBaixarPdf={handleBaixarPdf} 
                 onBaixarXml={handleBaixarXml} 
-                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) { console.error(e); } }} 
                 onEnviarWhatsApp={handleEnviarWhatsApp} 
                 onProcessarLote={async () => { toast.info("Acesse a tela principal do PDV para processar lotes."); }}
                 onCancelarNfce={handleCancelarNfce}
@@ -857,6 +870,19 @@ function Painel() {
                                 <IoRestaurant className="text-sm" /> Salão
                             </button>
                         </div>
+
+                        {/* 🔥 BOTÃO + PEDIDO — só aparece na aba DELIVERY 🔥 */}
+                        {abaAtiva === 'delivery' && (
+                            <button
+                                onClick={() => setShowNovoPedidoModal(true)}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border font-bold text-xs transition-all shadow-sm bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 active:scale-95 shrink-0"
+                                title="Criar pedido delivery manual"
+                            >
+                                <IoAddCircleOutline size={16} className="text-blue-500" />
+                                <span className="hidden sm:inline">+ Pedido</span>
+                                <span className="sm:hidden">+</span>
+                            </button>
+                        )}
 
                         <div className="relative group shrink-0">
                             <IoCalendarOutline className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-sm" />
@@ -953,11 +979,11 @@ function Painel() {
                                         </div>
                                     ) : (
                                         abaAtiva === 'cozinha' ? (
-                                            <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} onEmitirNfce={handleNfceDoPedido} />
+                                            <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} onEmitirNfce={handleNfceDoPedido} onUpdateFormaPagamento={handleUpdateFormaPagamento} />
                                         ) : (
                                             <div className="space-y-3">
                                                 {listaPedidos.map(pedido => (
-                                                    <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} motoboysDisponiveis={motoboys} onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} onEmitirNfce={handleNfceDoPedido} />
+                                                    <PedidoCard key={pedido.id} item={pedido} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} motoboysDisponiveis={motoboys} onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.source)} onEmitirNfce={handleNfceDoPedido} onUpdateFormaPagamento={handleUpdateFormaPagamento} />
                                                 ))}
                                             </div>
                                         )
@@ -968,6 +994,53 @@ function Painel() {
                     })}
                 </div>
             </main>
+            {/* 🔥 MODAL NOVO PEDIDO DELIVERY 🔥 */}
+            <NovoPedidoDeliveryModal
+                isOpen={showNovoPedidoModal}
+                onClose={() => setShowNovoPedidoModal(false)}
+                estabelecimentoId={estabelecimentoAtivo}
+                onSave={async (pedidoData) => {
+                    const estabId = estabelecimentoAtivo;
+                    if (!estabId) {
+                        toast.error('Estabelecimento não identificado.');
+                        return;
+                    }
+                    try {
+                        const novoPedido = {
+                            clienteNome: pedidoData.nomeCliente,
+                            clienteTelefone: pedidoData.telefoneCliente,
+                            endereco: { rua: pedidoData.enderecoEntrega, numero: '', bairro: pedidoData.bairro || '' },
+                            observacao: pedidoData.observacao || '',
+                            itens: pedidoData.itens.map(i => ({
+                                nome: i.nome,
+                                quantidade: i.quantidade,
+                                qtd: i.quantidade,
+                                preco: i.preco,
+                                precoFinal: i.precoFinal,
+                                produtoId: i.produtoId || '',
+                                categoria: i.categoria || '',
+                            })),
+                            subtotal: pedidoData.subtotal || pedidoData.total,
+                            taxaEntrega: pedidoData.taxaEntrega || 0,
+                            total: pedidoData.total,
+                            formaPagamento: 'A combinar',
+                            metodoPagamento: 'A combinar',
+                            tipoEntrega: 'delivery',
+                            status: 'recebido',
+                            source: 'delivery',
+                            createdAt: Timestamp.now(),
+                            dataPedido: Timestamp.now(),
+                            estabelecimentoId: estabId,
+                            manualEntry: true,
+                        };
+                        await addDoc(collection(db, 'estabelecimentos', estabId, 'pedidos'), novoPedido);
+                        toast.success('✅ Pedido delivery criado com sucesso!');
+                    } catch (err) {
+                        console.error('Erro ao criar pedido manual:', err);
+                        toast.error('Erro ao criar pedido. Tente novamente.');
+                    }
+                }}
+            />
         </div>
     );
 }

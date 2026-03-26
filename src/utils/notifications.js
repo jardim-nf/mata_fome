@@ -53,6 +53,6 @@ export function notificarStatusPedido(novoStatus, pedidoId) {
 // Registrar Service Worker
 export function registrarServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').catch((err) => { console.error(err); });
   }
 }

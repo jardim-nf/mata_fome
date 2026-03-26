@@ -6,6 +6,7 @@ import {
     IoReceiptOutline
 } from "react-icons/io5";
 import { useAuth } from '../context/AuthContext'; 
+import { formatarMoeda } from '../utils/formatCurrency';
 
 const PedidoCard = ({ 
     item, 
@@ -17,7 +18,8 @@ const PedidoCard = ({
     estabelecimentoInfo = null,
     motoboysDisponiveis = [], 
     onAtribuirMotoboy,
-    onEmitirNfce
+    onEmitirNfce,
+    onUpdateFormaPagamento
 }) => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -27,6 +29,10 @@ const PedidoCard = ({
     const { estabelecimentoIdPrincipal } = useAuth();
 
     const isNew = newOrderIds && newOrderIds.has ? newOrderIds.has(item.id) : false;
+
+    // 🔥 Helper: detecta se o pedido é RETIRADA (não delivery, não salão/mesa)
+    const isRetirada = item.tipoEntrega === 'retirada';
+    const isSalaoOuMesa = item.tipo === 'salao' || item.tipo === 'mesa' || item.source === 'salao';
 
     // Tempo decorrido desde o pedido
     const [tempoDecorrido, setTempoDecorrido] = useState('');
@@ -83,9 +89,8 @@ const PedidoCard = ({
         return somaItens + taxaEntrega;
     }, [item]);
 
-    // --- HELPERS DE DATA E TEMPO ---
-    const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
 
+    // --- HELPERS DE DATA E TEMPO ---
     const formatarDataHora = (timestamp) => {
         if (!timestamp) return '';
         try {
@@ -222,7 +227,7 @@ const PedidoCard = ({
         let nextStatus = null;
         if (item.status === 'aguardando_pagamento') nextStatus = 'recebido';
         else if (item.status === 'recebido') nextStatus = 'preparo';
-        else if (item.status === 'preparo') nextStatus = (item.source === 'salao' || item.tipo === 'salao') ? 'pronto_para_servir' : 'em_entrega';
+        else if (item.status === 'preparo') nextStatus = (isSalaoOuMesa || isRetirada) ? 'pronto_para_servir' : 'em_entrega';
         else if (item.status === 'pronto_para_servir' || item.status === 'em_entrega') nextStatus = 'finalizado';
 
         if (!nextStatus) return;
@@ -257,18 +262,23 @@ const PedidoCard = ({
             // 🔔 Push notification para o cliente (mantemos isto para o site)
             import('../utils/notifications.js').then(({ notificarStatusPedido }) => {
                 notificarStatusPedido(nextStatus, item.id);
-            }).catch(() => {});
+            }).catch((err) => { console.error(err); });
         } catch (error) { console.error(error); alert("Erro ao atualizar!"); } 
         finally { setIsUpdating(false); }
     }, [item, selectedMotoboyId, motoboysDisponiveis, onAtribuirMotoboy, onUpdateStatus, isUpdating]);
     const getBtnText = () => {
         if (item.status === 'aguardando_pagamento') return 'Aprovar Pagamento';
         if (item.status === 'recebido') return 'Mandar p/ Cozinha';
-        if (item.status === 'preparo') return (item.source === 'salao' || item.tipo === 'salao') ? 'Pronto' : 'Saiu p/ Entrega';
+        if (item.status === 'preparo') {
+            if (isSalaoOuMesa) return 'Pronto';
+            if (isRetirada) return 'Pronto p/ Retirada';
+            return 'Saiu p/ Entrega';
+        }
         return 'Finalizar';
     };
 
-    const showMotoboySelect = item.status === 'preparo' && item.tipo !== 'salao' && item.tipo !== 'mesa';
+    // Motoboy select: só mostra para delivery real (não salão, não mesa, não retirada)
+    const showMotoboySelect = item.status === 'preparo' && !isSalaoOuMesa && !isRetirada;
 
     return (
         <div className={`relative bg-white rounded-xl transition-all duration-200 w-full border shadow-sm ${isNew ? 'ring-2 ring-red-500 border-red-300 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-[pulse_1.5s_ease-in-out_infinite]' : 'border-gray-200'} ${item.status === 'finalizado' ? 'opacity-75' : ''}`}>
@@ -284,7 +294,7 @@ const PedidoCard = ({
                 <div className="flex justify-between items-start">
                     <div className="flex flex-col">
                         <span className="font-black text-gray-800 text-lg flex items-center gap-2">
-                            {(item.tipo === 'salao' || item.tipo === 'mesa') ? `Mesa ${item.mesaNumero}` : '🛵 Delivery'}
+                            {isSalaoOuMesa ? `Mesa ${item.mesaNumero}` : isRetirada ? '📦 Retirada' : '🛵 Delivery'}
                             <span className="text-xs font-normal text-gray-400">#{item.id?.slice(0,4).toUpperCase()}</span>
                         </span>
                         
@@ -294,7 +304,7 @@ const PedidoCard = ({
                             </span>
                         )}
                         
-                        {(item.tipo !== 'salao' && item.tipo !== 'mesa') && (
+                        {!isSalaoOuMesa && (
                             <span className="text-xs text-gray-600 flex items-center gap-1 mt-1">
                                 <IoPerson className="w-3 h-3" /> {item.cliente?.nome || 'Cliente'}
                             </span>
@@ -311,8 +321,8 @@ const PedidoCard = ({
                             </span>
                         )}
 
-                        {/* Endereço resumido (só delivery) */}
-                        {(item.tipo !== 'salao' && item.tipo !== 'mesa') && item.endereco && (
+                        {/* Endereço resumido (só delivery real, não retirada) */}
+                        {!isSalaoOuMesa && !isRetirada && item.endereco && (
                             <span className="text-[10px] text-gray-400 mt-1 truncate max-w-[200px] block" title={`${item.endereco.rua || item.endereco.logradouro || ''}, ${item.endereco.numero || ''} - ${item.endereco.bairro || ''}`}>
                                 📍 {item.endereco.bairro || item.endereco.rua || item.endereco.logradouro || ''}
                                 {item.endereco.numero ? `, ${item.endereco.numero}` : ''}
@@ -337,9 +347,26 @@ const PedidoCard = ({
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 w-fit ${statusConfig.color}`}>
                         <span>{statusConfig.icon}</span> {statusConfig.label}
                     </span>
-                    <span className="text-xs text-gray-500 font-semibold border border-gray-200 px-2 py-1 rounded bg-gray-50">
-                       {traduzirFormaPagamento(item.formaPagamento)}
-                    </span>
+                    {/* 🔥 FORMA DE PAGAMENTO EDITÁVEL */}
+                    {onUpdateFormaPagamento && item.status !== 'finalizado' ? (
+                        <select
+                            value={item.formaPagamento || 'outros'}
+                            onChange={(e) => onUpdateFormaPagamento(item.id, e.target.value)}
+                            className="text-xs font-semibold border border-gray-200 px-2 py-1 rounded bg-gray-50 text-gray-500 cursor-pointer hover:border-blue-300 focus:ring-1 focus:ring-blue-400 focus:outline-none"
+                        >
+                            <option value="pix">PIX</option>
+                            <option value="credit_card">CRÉDITO</option>
+                            <option value="debit_card">DÉBITO</option>
+                            <option value="cash">DINHEIRO</option>
+                            <option value="card">CARTÃO</option>
+                            <option value="pix_manual">PIX MANUAL</option>
+                            <option value="outros">OUTROS</option>
+                        </select>
+                    ) : (
+                        <span className="text-xs text-gray-500 font-semibold border border-gray-200 px-2 py-1 rounded bg-gray-50">
+                           {traduzirFormaPagamento(item.formaPagamento)}
+                        </span>
+                    )}
                     {item.itens?.length > 0 && (
                         <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-1 rounded border border-gray-200">
                             {item.itens.reduce((a, it) => a + (it.quantidade || 1), 0)} itens

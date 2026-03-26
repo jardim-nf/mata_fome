@@ -82,7 +82,7 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => {
-                const phoneNumber = "55229998102575";
+                const phoneNumber = "5522999812575";
                 const message = "Olá! Gostaria de cadastrar meu estabelecimento no IdeaFood.";
                 window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
               }}
@@ -95,8 +95,8 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
           {/* Stats */}
           <div className="flex flex-wrap gap-8 mt-10 justify-center lg:justify-start">
             {[
-              { value: '+500', label: 'Estabelecimentos' },
-              { value: '+10k', label: 'Pedidos Entregues' },
+              { value: '✅', label: 'Sem Comissão' },
+              { value: '⚡', label: 'Setup Rápido' },
               { value: '24/7', label: 'Disponível' },
             ].map((stat, i) => (
               <motion.div

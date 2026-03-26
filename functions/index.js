@@ -70,7 +70,7 @@ const mpClientSecret = defineSecret("MP_CLIENT_SECRET");
 const mpClientIdSecret = defineSecret("MP_CLIENT_ID"); 
 const whatsappVerifyToken = defineSecret("WHATSAPP_VERIFY_TOKEN");
 const whatsappApiToken = defineSecret("WHATSAPP_API_TOKEN");
-const meshyApiKey = defineSecret("MESHY_API_KEY");
+// const meshyApiKey = defineSecret("MESHY_API_KEY"); // desativado - 3D feito manual
 
 // ==================================================================
 // 1. SEU AGENTE DE IA
@@ -1404,7 +1404,7 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
 
       const nomeEstab = estab.nome || 'Restaurante';
       const nomeCliente = depois.cliente?.nome || depois.clienteNome || 'Cliente';
-      const totalPedido = depois.total || depois.valorTotal || 0;
+      const totalPedido = depois.totalFinal || depois.total || depois.valorTotal || 0;
       const formaPagamento = depois.formaPagamento || depois.pagamento || '';
       const isPixManual = formaPagamento === 'PIX_MANUAL' || formaPagamento === 'pix_manual';
 
@@ -1448,112 +1448,6 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
 );
 
 // ==================================================================
-// 🧊 GERAR MODELO 3D VIA MESHY (IMAGE-TO-3D)
+// 🧊 GERAR MODELO 3D VIA MESHY (IMAGE-TO-3D) — DESATIVADO (3D feito manual)
 // ==================================================================
-export const generateModel3D = onCall({
-    cors: true,
-    secrets: [meshyApiKey],
-    timeoutSeconds: 540,
-    memory: '512MiB'
-}, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
-
-    const { estabelecimentoId, categoriaId, itemId, imageUrl, itemName } = request.data;
-    if (!estabelecimentoId || !categoriaId || !itemId || !imageUrl) {
-        throw new HttpsError('invalid-argument', 'Dados incompletos para gerar modelo 3D.');
-    }
-
-    const MESHY_BASE = 'https://api.meshy.ai/openapi/v2';
-    const apiKey = meshyApiKey.value();
-
-    try {
-        // 1) Criar task Image-to-3D na Meshy
-        logger.info(`🧊 Criando task Meshy para item: ${itemName || itemId}`);
-        const createRes = await fetch(`${MESHY_BASE}/image-to-3d`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                image_url: imageUrl,
-                enable_pbr: true,
-                should_remesh: true,
-                topology: 'quad',
-                target_polycount: 30000
-            })
-        });
-
-        if (!createRes.ok) {
-            const errBody = await createRes.text();
-            logger.error('❌ Meshy create task falhou:', errBody);
-            throw new HttpsError('internal', `Meshy API erro: ${createRes.status}`);
-        }
-
-        const { result: taskId } = await createRes.json();
-        logger.info(`🧊 Task criada: ${taskId}`);
-
-        // 2) Polling até completar (max ~5 min)
-        let modelUrl = null;
-        const maxAttempts = 60; // 60 x 5s = 300s
-        for (let i = 0; i < maxAttempts; i++) {
-            await new Promise(r => setTimeout(r, 5000));
-
-            const statusRes = await fetch(`${MESHY_BASE}/image-to-3d/${taskId}`, {
-                headers: { 'Authorization': `Bearer ${apiKey}` }
-            });
-            const statusData = await statusRes.json();
-
-            if (statusData.status === 'SUCCEEDED') {
-                modelUrl = statusData.model_urls?.glb || statusData.model_urls?.obj;
-                logger.info(`✅ Modelo 3D pronto: ${modelUrl}`);
-                break;
-            } else if (statusData.status === 'FAILED' || statusData.status === 'EXPIRED') {
-                throw new HttpsError('internal', `Meshy falhou: ${statusData.task_error?.message || 'Erro desconhecido'}`);
-            }
-            // PENDING ou IN_PROGRESS — continua polling
-        }
-
-        if (!modelUrl) {
-            throw new HttpsError('deadline-exceeded', 'Timeout ao gerar modelo 3D. Tente novamente.');
-        }
-
-        // 3) Baixar GLB e fazer upload para Firebase Storage
-        const glbRes = await fetch(modelUrl);
-        if (!glbRes.ok) throw new HttpsError('internal', 'Falha ao baixar modelo GLB.');
-        const glbBuffer = Buffer.from(await glbRes.arrayBuffer());
-
-        const storagePath = `modelos3d/${estabelecimentoId}/${categoriaId}/${itemId}.glb`;
-        const file = bucket.file(storagePath);
-        await file.save(glbBuffer, {
-            metadata: {
-                contentType: 'model/gltf-binary',
-                metadata: { itemId, itemName: itemName || '', meshyTaskId: taskId }
-            }
-        });
-        await file.makePublic();
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
-
-        // 4) Atualizar Firestore com a URL do modelo
-        const itemRef = db.doc(
-            `estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/itens/${itemId}`
-        );
-        await itemRef.update({
-            modelo3dUrl: publicUrl,
-            modelo3dMeshyTaskId: taskId,
-            modelo3dGeradoEm: FieldValue.serverTimestamp()
-        });
-
-        logger.info(`🧊 ✅ Modelo 3D salvo e Firestore atualizado para ${itemId}`);
-
-        return {
-            sucesso: true,
-            modelUrl: publicUrl,
-            taskId
-        };
-    } catch (error) {
-        if (error instanceof HttpsError) throw error;
-        logger.error('❌ Erro ao gerar modelo 3D:', error);
-        throw new HttpsError('internal', `Erro ao gerar modelo 3D: ${error.message}`);
-    }
-});
+// export const generateModel3D = onCall({ ... }); // desativado - sem MESHY_API_KEY

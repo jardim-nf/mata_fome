@@ -86,7 +86,9 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         buscarPedido();
     }, [idUrl, authLoading, primeiroEstabelecimento, estabIdUrl, pedidoProp]);
 
-    const isDelivery = !pedido?.mesaNumero || pedido?.mesaNumero === 0 || pedido?.mesaNumero === '0';
+    const tipoEntrega = (pedido?.tipoEntrega || '').toLowerCase();
+    const isRetirada = tipoEntrega === 'retirada';
+    const isDelivery = !isRetirada && (!pedido?.mesaNumero || pedido?.mesaNumero === 0 || pedido?.mesaNumero === '0');
 
     // 💡 SOLUÇÃO: Variável global de itens para esse componente
     const listaItensGlobais = pedido?.itens || pedido?.carrinho || pedido?.produtos || [];
@@ -257,7 +259,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 {/* CABEÇALHO */}
                 <div className="text-center border-b-2 border-black pb-2 mb-2">
                     <h1 className="text-xl font-black uppercase flex items-center justify-center gap-1">
-                        {isDelivery ? '🚀 DELIVERY' : `MESA ${pedido.mesaNumero || pedido.numero}`}
+                        {isRetirada ? '📦 RETIRADA' : isDelivery ? '🚀 DELIVERY' : `MESA ${pedido.mesaNumero || pedido.numero}`}
                     </h1>
                     <p className="text-[12px] mt-1 font-bold">#{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
                     <p className="text-[10px]">{stringData}</p>
@@ -285,7 +287,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                             )}
                         </div>
                     )}
-                    {!isDelivery && !pedido.mesaNumero && (
+                    {isRetirada && (
                         <div className="mt-1 border-2 border-black p-1 text-center font-black text-xs uppercase">
                             RETIRADA NO BALCÃO
                         </div>
@@ -377,7 +379,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                             ) : (
                                 <div className="flex flex-col">
                                     <div className="bg-black text-white text-[13px] font-black uppercase py-1.5 tracking-wider">
-                                        {isDelivery ? 'COBRAR NA ENTREGA' : 'FALTA PAGAR'}
+                                        {isDelivery ? 'COBRAR NA ENTREGA' : isRetirada ? 'COBRAR NA RETIRADA' : 'FALTA PAGAR'}
                                     </div>
 
                                     <div className="py-3">

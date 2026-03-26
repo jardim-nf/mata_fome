@@ -1,6 +1,9 @@
 // src/components/PdvModals.jsx
 import React, { useState, useEffect } from 'react';
 import { IoTimeOutline, IoClose, IoCheckmarkCircleOutline, IoStorefrontOutline } from 'react-icons/io5';
+import { formatarMoeda } from '../utils/formatCurrency';
+// Re-exporta para quem importa daqui (PdvScreen, etc.)
+export { formatarMoeda };
 
 // --- FUNÇÕES AUXILIARES ---
 export const formatarHora = (data) => {
@@ -17,9 +20,7 @@ export const formatarData = (data) => {
     return '-';
 };
 
-export const formatarMoeda = (valor) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
-};
+
 
 // --- MODAIS ---
 
@@ -1007,7 +1008,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
         } catch (error) {
             console.error("Erro ao ler porta:", error);
             setErro("Falha na leitura. Tente novamente.");
-            try { await port.close(); } catch (e) { }
+            try { await port.close(); } catch (e) { console.error(e); }
         } finally {
             setLendo(false);
         }

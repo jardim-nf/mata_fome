@@ -1,8 +1,7 @@
 import React from 'react';
 import { IoChevronForward } from 'react-icons/io5';
+import { formatarMoeda } from '../../utils/formatCurrency';
 
-const formatarMoeda = (val) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
 export default function CartBar({ carrinho, finalOrderTotal, isWidgetOpen, coresEstabelecimento, onScrollToResumo }) {
   if (carrinho.length === 0 || isWidgetOpen) return null;

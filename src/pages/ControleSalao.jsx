@@ -21,7 +21,7 @@ import {
 
 // 🔥 IMPORTS PARA O FISCAL E HISTÓRICO 🔥
 import { vendaService } from "../services/vendaService";
-import { ModalRecibo, ModalHistorico } from "../components/PdvModals"; // 🔥 ADICIONADO ModalHistorico
+import { ModalRecibo, ModalHistorico } from "../components/pdv-modals"; // 🔥 ADICIONADO ModalHistorico
 
 // --- HELPER DE FORMATAÇÃO ---
 const formatarReal = (valor) => {
@@ -282,7 +282,7 @@ const selecionarVendaHistorico = (venda) => {
     };
 
     // 🔥 LÓGICA DE EMISSÃO NFC-E IMPORTADA DO PDV 🔥
-    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) {} };
+    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) { console.error(e); } };
 
     const handleEmitirNfce = async () => {
         if (!dadosRecibo?.id) return; setNfceStatus('loading');
@@ -322,8 +322,8 @@ const selecionarVendaHistorico = (venda) => {
         }
     };
 
-    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return alert("Sem ID"); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} };
-    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return alert("Sem ID"); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) alert("Erro: " + res.error); } catch (e) {} finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
+    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return alert("Sem ID"); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) { console.error(e); } };
+    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return alert("Sem ID"); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) alert("Erro: " + res.error); } catch (e) { console.error(e); } finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
 
     const handleEnviarWhatsApp = (venda) => {
         if (!venda.fiscal?.pdf) return alert("⚠️ Link PDF indisponível.");
@@ -367,7 +367,7 @@ const selecionarVendaHistorico = (venda) => {
                         setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
                         if (ns === 'error') tocarBeepErro();
                     }
-                } catch (e) {}
+                } catch (e) { console.error(e); }
             }, 3000);
         }
         return () => clearInterval(intervalo);
@@ -397,7 +397,7 @@ const selecionarVendaHistorico = (venda) => {
                         setFilaImpressao(prev => [...prev, urlImpressao]);
                         setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000); // Remove o iframe do DOM após 15s
                         
-                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) {}
+                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) { console.error(err); }
                     }
                 }
             });
@@ -419,7 +419,7 @@ const selecionarVendaHistorico = (venda) => {
                         setFilaImpressao(prev => [...prev, urlImpressao]);
                         setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000);
                         
-                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "pedidos", docPedido.id), { solicitarImpressao: false, setorImpressao: null }); } catch (err) {}
+                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "pedidos", docPedido.id), { solicitarImpressao: false, setorImpressao: null }); } catch (err) { console.error(err); }
                     }
                 }
             });
@@ -625,7 +625,7 @@ const handlePagamentoConcluido = (vendaFinalizada) => {
                 onBaixarXml={handleBaixarXml} 
                 onConsultarStatus={handleConsultarStatus} 
                 onBaixarPdf={handleBaixarPdf} 
-                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) {} }} 
+                onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) alert("Erro: " + res.error); } catch (e) { console.error(e); } }} 
                 onEnviarWhatsApp={handleEnviarWhatsApp} 
                 onCancelarNfce={handleCancelarNfce} 
             />

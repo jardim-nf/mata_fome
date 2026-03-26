@@ -107,7 +107,7 @@ function AdminAnalytics() {
         if (!estabId) return;
         getDoc(doc(db, 'estabelecimentos', estabId)).then(snap => {
             if (snap.exists()) setNomeEstab(snap.data().nome || '');
-        }).catch(() => {});
+        }).catch((err) => { console.error(err); });
     }, [estabId]);
 
     // ── QUERIES FIREBASE ──

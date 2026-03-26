@@ -70,7 +70,7 @@ const DetailViewer = ({ data }) => {
     if (!data) return <span className="text-gray-400 text-xs italic">Nenhum detalhe técnico registrado.</span>;
     let parsedData = data;
     if (typeof data === 'string') {
-        try { parsedData = JSON.parse(data); } catch (e) { }
+        try { parsedData = JSON.parse(data); } catch (e) { console.error(e); }
     }
     if (typeof parsedData === 'object' && Object.keys(parsedData).length === 0) {
         return <span className="text-gray-400 text-xs italic">Detalhes vazios.</span>;

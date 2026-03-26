@@ -14,7 +14,7 @@ function SplitPayment({ total, cor = '#EF4444' }) {
     const texto = `💰 Divisão da Conta\n\nTotal: R$ ${total.toFixed(2).replace('.', ',')}\n👥 ${pessoas} pessoas\n💵 Cada um: R$ ${valorPorPessoa.toFixed(2).replace('.', ',')}\n\n— MataFome 🍔`;
     
     if (navigator.share) {
-      navigator.share({ title: 'Divisão da Conta', text: texto }).catch(() => {});
+      navigator.share({ title: 'Divisão da Conta', text: texto }).catch((err) => { console.error(err); });
     } else {
       navigator.clipboard?.writeText(texto);
       alert('Texto copiado!');

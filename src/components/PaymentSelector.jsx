@@ -1,6 +1,7 @@
 // src/components/PaymentSelector.jsx
 import React from 'react';
 import { usePayment } from '../context/PaymentContext.jsx';
+import { formatCurrency } from '../utils/formatCurrency';
 
 const PaymentSelector = ({ amount, orderId, onPaymentSuccess }) => {
   const {
@@ -27,13 +28,6 @@ const PaymentSelector = ({ amount, orderId, onPaymentSuccess }) => {
     } catch (error) {
       console.error('Erro no pagamento:', error);
     }
-  };
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
   };
 
   return (

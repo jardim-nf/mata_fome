@@ -1,7 +1,7 @@
 // src/firebase.js
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
@@ -22,9 +22,9 @@ const app = initializeApp(firebaseConfig);
 // Serviços do Firebase
 export const auth = getAuth(app);
 
-// Usando cache em memória para evitar erro de corrupção do IndexedDB
+// Cache persistente com suporte multi-tab (IndexedDB)
 export const db = initializeFirestore(app, {
-  localCache: memoryLocalCache()
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
 export const storage = getStorage(app);

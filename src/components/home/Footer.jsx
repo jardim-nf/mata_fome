@@ -40,18 +40,21 @@ const Footer = () => {
           <div>
             <h4 className="text-white font-bold text-sm uppercase tracking-widest mb-5">Links Úteis</h4>
             <ul className="space-y-3">
-              {['Sobre Nós', 'Termos de Uso', 'Política de Privacidade', 'Fale Conosco', 'Seja Parceiro'].map(
-                (link) => (
-                  <li key={link}>
-                    <a
-                      href="#"
-                      className="text-gray-400 hover:text-yellow-500 transition-colors text-sm"
-                    >
-                      {link}
-                    </a>
-                  </li>
-                )
-              )}
+              {[
+                { label: 'Fale Conosco', href: 'https://wa.me/5522999812575' },
+                { label: 'Seja Parceiro', href: 'mailto:contato@ideafood.com.br' },
+              ].map(({ label, href }) => (
+                <li key={label}>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-yellow-500 transition-colors text-sm"
+                  >
+                    {label}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -65,7 +68,7 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                <span>(22) 99981-02575</span>
+                <span>(22) 99981-2575</span>
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-yellow-500 flex-shrink-0" />

@@ -235,7 +235,7 @@ const AdminReports = () => {
                 snapSub.docs.forEach(d => {
                     if (!isMesaDoc(d)) addData(d, 'delivery');
                 });
-            } catch(e) {}
+            } catch (e) { console.error(e); }
             
             try {
                 const qGlob = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
@@ -243,7 +243,7 @@ const AdminReports = () => {
                 snapGlob.docs.forEach(d => {
                     if (!isMesaDoc(d)) addData(d, 'delivery');
                 });
-            } catch(e) {}
+            } catch (e) { console.error(e); }
 
             // 2. BUSCA MESAS / PDV / VENDAS
             // ⚠️ Busca APENAS da raiz "vendas" — ModalPagamento.jsx já salva tudo lá.
@@ -257,7 +257,7 @@ const AdminReports = () => {
                     const tipo = data.origem === 'pdv_web' ? 'pdv' : 'mesa';
                     addData(d, tipo);
                 });
-            } catch(e) {}
+            } catch (e) { console.error(e); }
 
             let allData = Array.from(allDataMap.values());
 
