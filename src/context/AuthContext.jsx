@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx - CORRIGIDO (Exportando ID do Estabelecimento)
+// src/context/AuthContext.jsx
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import {
     createUserWithEmailAndPassword,
@@ -31,7 +31,6 @@ const mapToArray = (data) => {
 
 const getFirestoreUserData = async (user) => { 
     try {
-        console.log("🔍 Buscando dados do usuário no Firestore:", user.uid);
         const userDocRef = doc(db, 'usuarios', user.uid);
         const userDoc = await getDoc(userDocRef);
         
@@ -51,7 +50,7 @@ export function AuthProvider({ children }) {
     const [currentClientData, setCurrentClientData] = useState(null); 
     const [loading, setLoading] = useState(true);
     const [authChecked, setAuthChecked] = useState(false);
-    const isProcessingAuth = useRef(false); // Guard contra loop infinito
+    const isProcessingAuth = useRef(false); 
 
     const logout = async () => {
         try {
@@ -68,9 +67,7 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            // Guard: previne re-entrada concorrente (loop causado por token refresh)
             if (isProcessingAuth.current) {
-                console.log("⏭️ onAuthStateChanged: já processando, ignorando re-entrada");
                 return;
             }
             isProcessingAuth.current = true;
@@ -80,8 +77,6 @@ export function AuthProvider({ children }) {
                 let tokenResult;
                 let claims = {};
                 try {
-                    // CORRIGIDO: false em vez de true para NÃO forçar refresh do token
-                    // (evita re-disparar onAuthStateChanged em loop)
                     tokenResult = await user.getIdTokenResult(false); 
                     claims = tokenResult.claims || {};
                 } catch (e) { 
@@ -90,11 +85,9 @@ export function AuthProvider({ children }) {
                 
                 const firestoreData = await getFirestoreUserData(user);
                 
-                // Custom Claims (preferencial) com fallback para Firestore
                 const isMasterAdmin = Boolean(claims.isMasterAdmin) || Boolean(firestoreData?.isMasterAdmin);
                 const isAdmin = Boolean(claims.isAdmin) || Boolean(firestoreData?.isAdmin) || isMasterAdmin;
                 
-                // Normaliza os IDs dos estabelecimentos
                 const docEstabs = mapToArray(firestoreData?.estabelecimentos);
                 const docEstabsGerenciados = mapToArray(firestoreData?.estabelecimentosGerenciados);
                 const claimEstabs = mapToArray(claims.estabelecimentos);
@@ -102,7 +95,6 @@ export function AuthProvider({ children }) {
                 
                 let allEstabs = [...new Set([...docEstabs, ...docEstabsGerenciados, ...claimEstabs, ...claimEstabsGerenciados])];
 
-                // Se for Master/Admin e não tiver estabelecimentos, busca tudo (fallback)
                 if ((isMasterAdmin || isAdmin) && allEstabs.length === 0) {
                     try {
                         const estres = await getDocs(collection(db, 'estabelecimentos'));
@@ -139,14 +131,12 @@ export function AuthProvider({ children }) {
             
             setLoading(false);
             setAuthChecked(true);
-            isProcessingAuth.current = false; // Libera guard
+            isProcessingAuth.current = false; 
         });
 
         return unsubscribe;
     }, []);
     
-    // 🔥 CORREÇÃO PRINCIPAL AQUI:
-    // Pega o primeiro estabelecimento da lista para usar como padrão nas queries
     const activeEstab = userData?.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 0 
         ? userData.estabelecimentosGerenciados[0] 
         : null;
@@ -156,15 +146,12 @@ export function AuthProvider({ children }) {
         isAdmin: Boolean(userData?.isAdmin),
         isMasterAdmin: Boolean(userData?.isMasterAdmin),
         estabelecimentosGerenciados: userData?.estabelecimentosGerenciados || [],
-        
-        // 👇 ESTES DOIS CAMPOS ESTAVAM FALTANDO:
-        primeiroEstabelecimento: activeEstab, // Usado pelo DashBoardSummary
-        estabelecimentoIdPrincipal: activeEstab, // Usado pelo AdminReports
+        primeiroEstabelecimento: activeEstab, 
+        estabelecimentoIdPrincipal: activeEstab, 
         
         signup: async (email, password, additionalData = {}) => {
             const uc = await createUserWithEmailAndPassword(auth, email, password);
             if (additionalData.nome) await updateProfile(uc.user, { displayName: additionalData.nome });
-             // Sanitizar: remover campos de permissão do input do frontend
            const { isAdmin, isMasterAdmin, _claims, ...dadosSeguros } = additionalData;
             const userDataToSave = {
                 uid: uc.user.uid,
@@ -197,6 +184,7 @@ export function AuthProvider({ children }) {
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// 🔥 AQUI ESTÁ A CORREÇÃO PRINCIPAL QUE IMPEDE A TELA DE PISCAR/QUEBRAR
 export function usePermissions() {
     const { currentUser, loading, isAdmin, isMasterAdmin, estabelecimentosGerenciados } = useAuth();
     
@@ -204,22 +192,22 @@ export function usePermissions() {
         if (!currentUser || loading) return false;
         if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) return true;
         
-        // Garante a liberação para administradores
+        // Admin e Master passam direto
         if (isMasterAdmin && requiredRoles.includes('masterAdmin')) return true;
         if (isAdmin && requiredRoles.includes('admin')) return true;
 
-        // Pega os cargos do usuário (garantindo que seja uma lista)
-        const cargosUsuarioRaw = Array.isArray(currentUser.cargo) ? currentUser.cargo : [currentUser.cargo || ''];
+        // Pega o cargo do usuário e transforma em array se não for
+        const userCargoRaw = Array.isArray(currentUser.cargo) ? currentUser.cargo : [currentUser.cargo || ''];
         
-        // Normaliza os cargos do usuário (tira acento, põe minúsculo)
-        const cargosUsuarioNorm = cargosUsuarioRaw.map(c => 
+        // Remove acentos e joga tudo para minúsculo
+        const userCargosNorm = userCargoRaw.map(c => 
             String(c).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
         );
 
-        // Verifica se ele tem pelo menos uma das permissões exigidas pela rota
+        // Verifica se algum dos cargos dele bate com as rotas permitidas
         return requiredRoles.some(role => {
             const roleNorm = String(role).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-            return cargosUsuarioNorm.includes(roleNorm);
+            return userCargosNorm.includes(roleNorm);
         });
     };
 
