@@ -34,48 +34,44 @@ export default function LoginPage() {
 
   // 1. Redirecionamento Automático se já estiver logado (Atualizado para redirecionar funcionários)
 // 1. Redirecionamento Automático se já estiver logado
+  // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO (MÚLTIPLOS CARGOS) ===
   useEffect(() => {
-    if (authChecked && currentUser && userData) {
+    if (authChecked && userData) {
       
-      // ESPIONANDO OS DADOS: Pressione F12 no navegador para ver isso!
-      console.log("🔍 === DEBUG DE LOGIN ===");
-      console.log("Todos os dados do usuário:", userData);
-      
-      // Tentando pegar o cargo de várias formas possíveis (cargo, role, funcao, etc)
-      const cargoIdentificado = userData.cargo || userData.role || currentUser.cargo || '';
-      console.log("Cargo que o sistema encontrou:", cargoIdentificado);
+      // 1. Pega os cargos. Se for apenas um texto, transforma em lista. Se já for lista, mantém.
+      const cargosDoUsuario = Array.isArray(userData.cargo) 
+        ? userData.cargo 
+        : [userData.cargo || ''];
 
-      const cargoRaw = cargoIdentificado.toLowerCase();
-      const cargoNorm = cargoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      // 2. Normaliza todos os cargos da lista (tira acento, joga pra minúsculo)
+      const cargosNormalizados = cargosDoUsuario.map(cargo => 
+        String(cargo).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      );
 
+      // 3. Função "detetive": verifica se o usuário possui pelo menos um dos cargos exigidos
+      const temCargo = (cargosExigidos) => {
+        return cargosNormalizados.some(cargoUsuario => cargosExigidos.includes(cargoUsuario));
+      };
+
+      // 4. Roteamento (A ordem aqui define a prioridade se ele tiver 2 cargos)
       if (userData.isMasterAdmin) {
-        toast.success(`Olá Mestre, ${userData.nome}!`);
         navigate('/master/estabelecimentos', { replace: true });
         
       } else if (userData.isAdmin) {
         navigate('/admin/dashboard', { replace: true });
         
-      } else if (['garcom', 'atendente'].includes(cargoNorm) || ['garcom', 'atendente'].includes(cargoRaw)) {
-        console.log("✅ Redirecionando para SALÃO");
-        toast.success(`Bem-vindo(a), ${userData.nome || 'Funcionário'}!`);
+      } else if (temCargo(['garcom', 'atendente'])) {
         navigate('/controle-salao', { replace: true });
         
-      } else if (['caixa'].includes(cargoNorm) || ['caixa'].includes(cargoRaw)) {
-        console.log("✅ Redirecionando para PDV");
-        toast.success(`Bom trabalho, ${userData.nome || 'Caixa'}!`);
+      } else if (temCargo(['caixa'])) {
         navigate('/pdv', { replace: true });
         
-      } else if (['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoNorm) || ['gerente', 'cozinheiro', 'entregador', 'auxiliar'].includes(cargoRaw)) {
-        console.log("✅ Redirecionando para PAINEL GERAL");
-        toast.success(`Bem-vindo(a) ao painel, ${userData.nome || 'Funcionário'}!`);
+      } else if (temCargo(['gerente', 'cozinheiro', 'entregador', 'auxiliar'])) {
         navigate('/painel', { replace: true });
-        
-      } else {
-        console.log("❌ Nenhum cargo de funcionário compatível. Mandando para a Home (Cliente)");
-        navigate('/', { replace: true });
       }
+      // Se não for nenhum (cliente comum), fica na Home.
     }
-  }, [authChecked, currentUser, userData, navigate]);
+  }, [authChecked, userData, navigate]);
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoadingLocal(true);
