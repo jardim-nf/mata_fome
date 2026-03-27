@@ -154,13 +154,20 @@ const PedidoCard = ({
         const nomeCliente = item.cliente?.nome || 'Cliente';
         const idCurto = item.id?.slice(0,4).toUpperCase();
         const totalFormatado = formatarMoeda(valorTotalExibicao);
+        const formaPag = (item.formaPagamento || '').toLowerCase();
         
         let frasePrincipal = "";
         let mostrarTotal = true;
 
         switch (statusAlvo) {
-            case 'recebido': frasePrincipal = `Recebemos seu pedido *#${idCurto}*! 📝\nJá vamos conferir e enviar para a cozinha.`; break;
-            case 'preparo': frasePrincipal = `Boas notícias! 👨‍🍳🔥\nSeu pedido *#${idCurto}* foi recebido com sucesso!`; break;
+            case 'recebido':
+            case 'preparo':
+                if (formaPag === 'pix_manual' || formaPag === 'pix') {
+                    frasePrincipal = `Seu pedido *#${idCurto}* foi recebido! ✅\n\n🧾 *Seu pagamento foi no PIX via chave* — por favor, envie o comprovante por aqui para confirmarmos.`;
+                } else {
+                    frasePrincipal = `Seu pedido *#${idCurto}* foi recebido! ✅\n\nEm instantes você receberá atualizações sobre o preparo. 🍔`;
+                }
+                break;
             case 'em_entrega': 
                 const infoMoto = item.motoboyNome ? ` com o entregador *${item.motoboyNome}*` : '';
                 frasePrincipal = `Saiu para entrega! 🛵💨\nSeu pedido *#${idCurto}* está a caminho${infoMoto}.`; 
@@ -173,14 +180,7 @@ const PedidoCard = ({
             default: frasePrincipal = `Atualização do pedido *#${idCurto}*: Status *${getStatusConfig(statusAlvo).label.toUpperCase()}*.`;
         }
         
-        // 🔥 LÓGICA PARA PEDIR O COMPROVANTE DO PIX 🔥
-        let avisoPix = "";
-        // Verifica se a forma de pagamento é PIX e se o pedido acabou de chegar
-        if (item.formaPagamento?.toLowerCase() === 'pix' && (statusAlvo === 'recebido' || statusAlvo === 'preparo')) {
-            avisoPix = "\n\n🧾 *Seu pagamento foi via PIX. Por favor, me envie o seu comprovante por aqui.*";
-        }
-        
-        const msgFinal = `Olá, *${nomeCliente}*! 👋\n\n${frasePrincipal}${mostrarTotal ? `\n\n💰 *Valor Total: ${totalFormatado}*` : ''}${avisoPix}`;
+        const msgFinal = `Olá, *${nomeCliente}*! 👋\n\n${frasePrincipal}${mostrarTotal ? `\n\n💰 *Valor Total: ${totalFormatado}*` : ''}`;
         const numeroFormatado = telefone.replace(/\D/g, '');
         window.open(`https://wa.me/55${numeroFormatado}?text=${encodeURIComponent(msgFinal)}`, '_blank');
     };
