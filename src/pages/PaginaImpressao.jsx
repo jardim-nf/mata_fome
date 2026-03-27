@@ -7,10 +7,28 @@ import { IoPrint } from 'react-icons/io5';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+// --- Filtro de itens de cozinha (mesma lógica do Painel.jsx) ---
+const isItemCozinha = (item) => {
+    try {
+        if (!item || typeof item !== 'object') return false;
+        const nome = String(item.nome || item.name || item.produto?.nome || '').toLowerCase();
+        const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+        const textoCompleto = `${nome} ${categoria}`;
+        if (categoria.includes('combo') || nome.includes('combo')) return true;
+        const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];
+        if (categoriasBloqueadas.some(cat => categoria.includes(cat))) return false;
+        const palavrasBloqueadas = ['refrigerante', 'suco', 'cerveja', 'long neck', 'drink', 'vinho', 'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral', 'sorvete', 'bala ', 'chiclete', 'chocolate', 'pirulito', 'halls', 'mentos'];
+        if (palavrasBloqueadas.some(p => textoCompleto.includes(p))) return false;
+        return true;
+    } catch { return true; }
+};
+
 // --- LAYOUT SALÃO (Mesa) ---
-const LayoutSalao = ({ pedido, estabelecimento }) => {
+const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
     // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos'
-    const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
+    const todosItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
+    // 🔥 Se setor=cozinha, filtra bebidas/bomboniere
+    const listaItens = setor === 'cozinha' ? todosItens.filter(isItemCozinha) : todosItens;
 
     // Agrupa itens por pessoa
     const itensPorPessoa = useMemo(() => {
@@ -52,6 +70,11 @@ const LayoutSalao = ({ pedido, estabelecimento }) => {
                         : new Date().toLocaleString()}
                 </p>
                 <p className="text-[10px]">Senha: {pedido.senha || pedido.id?.slice(0,4)}</p>
+                {setor === 'cozinha' && (
+                    <div className="mt-1 border-2 border-black font-black uppercase text-sm py-1">
+                        ** COZINHA **
+                    </div>
+                )}
             </div>
 
             {/* Aviso se vazio */}
@@ -119,10 +142,12 @@ const LayoutSalao = ({ pedido, estabelecimento }) => {
 };
 
 // --- LAYOUT DELIVERY ---
-const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao }) => {
+const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao, setor }) => {
     const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
     // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos'
-    const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
+    const todosItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
+    // 🔥 Se setor=cozinha, filtra bebidas/bomboniere
+    const listaItens = setor === 'cozinha' ? todosItens.filter(isItemCozinha) : todosItens;
     
     // 🔥 CÁLCULO DE SEGURANÇA: Soma os itens na hora caso o total do banco venha zerado
     const totalCalculado = useMemo(() => {
@@ -226,7 +251,8 @@ const PaginaImpressao = () => {
     
     // Pega parâmetros da URL
     const origem = searchParams.get('origem'); // 'salao' ou 'delivery'
-    const modoImpressao = searchParams.get('modo'); // 'cozinha' ou undefined
+    const modoImpressao = searchParams.get('modo') || searchParams.get('setor'); // 'cozinha' ou undefined
+    const setor = searchParams.get('setor') || searchParams.get('modo'); // compatível com ambos
     const estabIdUrl = searchParams.get('estabId');
 
     const [pedido, setPedido] = useState(null);
@@ -339,9 +365,9 @@ const PaginaImpressao = () => {
             </button>
 
             {(origem === 'salao' || pedido.mesaNumero || pedido.isMesa) ? (
-                <LayoutSalao pedido={pedido} estabelecimento={estabelecimento} />
+                <LayoutSalao pedido={pedido} estabelecimento={estabelecimento} setor={setor} />
             ) : (
-                <LayoutDelivery pedido={pedido} estabelecimento={estabelecimento} modoImpressao={modoImpressao} />
+                <LayoutDelivery pedido={pedido} estabelecimento={estabelecimento} modoImpressao={modoImpressao} setor={setor} />
             )}
         </div>
     );
