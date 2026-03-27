@@ -14,12 +14,16 @@ function HomeRedirector() {
 
     // Normaliza o cargo removendo acentos e convertendo para minúsculas
     const cargoRaw = currentUser?.cargo || '';
-    const cargoNorm = cargoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    const cargoTokens = cargoRaw
+        .split(',')
+        .map(c => c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim())
+        .filter(Boolean);
+    const hasRole = (...roles) => cargoTokens.some(t => roles.includes(t));
 
     console.log('🔍 HomeRedirector - Analisando usuário:', {
       email: currentUser?.email,
       cargo: cargoRaw,
-      cargoNorm,
+      cargoTokens,
       isAdmin,
       isMasterAdmin
     });
@@ -36,30 +40,30 @@ function HomeRedirector() {
       targetPath = '/painel';
     }
     // Funcionários com cargo - redireciona para a rota adequada
-    else if (['gerente'].includes(cargoNorm)) {
+    else if (hasRole('gerente')) {
       // Gerente tem acesso similar ao admin
       targetPath = '/painel';
     }
-    else if (['garcom', 'garçom'].includes(cargoNorm) || cargoRaw.toLowerCase() === 'garçom') {
+    else if (hasRole('garcom', 'garçom')) {
       targetPath = '/controle-salao';
     }
-    else if (['cozinheiro', 'cozinha'].includes(cargoNorm)) {
+    else if (hasRole('cozinheiro', 'cozinha')) {
       targetPath = '/painel';
     }
-    else if (['caixa'].includes(cargoNorm)) {
+    else if (hasRole('caixa')) {
       targetPath = '/painel';
     }
-    else if (['atendente'].includes(cargoNorm)) {
+    else if (hasRole('atendente')) {
       targetPath = '/painel';
     }
-    else if (['entregador'].includes(cargoNorm)) {
+    else if (hasRole('entregador')) {
       targetPath = '/painel';
     }
-    else if (['auxiliar'].includes(cargoNorm)) {
+    else if (hasRole('auxiliar')) {
       targetPath = '/painel';
     }
     // Se tem qualquer cargo (é funcionário), manda pro painel
-    else if (cargoNorm) {
+    else if (cargoTokens.length > 0) {
       targetPath = '/painel';
     }
     else {

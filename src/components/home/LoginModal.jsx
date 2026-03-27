@@ -31,10 +31,11 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
   const [loadingRecuperacao, setLoadingRecuperacao] = useState(false);
 
   const authFirebase = getAuth();
-  const { currentUser, isAdmin, isMasterAdmin, loading: authLoading } = useAuth();
+  const { currentUser, userData, isAdmin, isMasterAdmin, loading: authLoading, authChecked } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && currentUser && isOpen) {
+    // Só redireciona quando userData já carregou do Firestore (inclui cargo)
+    if (authChecked && !authLoading && currentUser && userData && isOpen) {
       if (onSuccess) {
         onSuccess();
       } else {
@@ -42,7 +43,7 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
         toast.success(`Bem-vindo de volta! ${isMasterAdmin ? 'Master Admin' : isAdmin ? 'Admin' : ''}`);
       }
     }
-  }, [currentUser, isAdmin, isMasterAdmin, authLoading, isOpen, onClose, onSuccess]);
+  }, [currentUser, userData, isAdmin, isMasterAdmin, authLoading, authChecked, isOpen, onClose, onSuccess]);
 
   const handleAuthAction = async (e) => {
     e.preventDefault();
@@ -73,11 +74,11 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
           criadoEm: Timestamp.now(),
         });
 
-        toast.success('🎉 Cadastro realizado com sucesso! Faça login para continuar.');
-        if (onSuccess) onSuccess();
+        toast.success('🎉 Cadastro realizado com sucesso!');
+        // useEffect vai tratar o redirect quando userData carregar
       } else {
         await signInWithEmailAndPassword(authFirebase, email, password);
-        if (onSuccess) onSuccess();
+        // useEffect vai tratar o redirect quando userData carregar
       }
     } catch (err) {
       let errorMessage = 'Erro na operação. Verifique suas informações.';

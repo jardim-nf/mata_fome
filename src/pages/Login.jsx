@@ -32,8 +32,6 @@ export default function LoginPage() {
   const [cidade, setCidade] = useState('Nova Friburgo'); 
   const [pontoReferencia, setPontoReferencia] = useState(''); 
 
-  // 1. Redirecionamento Automático se já estiver logado (Atualizado para redirecionar funcionários)
-// 1. Redirecionamento Automático se já estiver logado
   // === REDIRECIONAMENTO AUTOMÁTICO BASEADO NO CARGO (MÚLTIPLOS CARGOS) ===
   useEffect(() => {
     if (authChecked && userData) {

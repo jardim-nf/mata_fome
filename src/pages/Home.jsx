@@ -44,10 +44,12 @@ const useEstabelecimentos = () => {
         }
 
         const querySnapshot = await getDocs(collection(db, 'estabelecimentos'));
-        const lista = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const lista = querySnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((est) => est.ativo !== false);
 
         if (isMounted) {
           setData(lista);

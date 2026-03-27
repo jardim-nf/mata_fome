@@ -4,12 +4,14 @@ import { IoClose, IoSearch, IoAdd, IoRemove, IoTrash, IoChevronDown } from 'reac
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { produtoService } from '../services/produtoService';
+import VariacoesModal from './VariacoesModal';
 
 export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estabelecimentoId }) {
   // --- Dados do cliente ---
   const [nomeCliente, setNomeCliente] = useState('');
   const [telefone, setTelefone] = useState('');
   const [endereco, setEndereco] = useState('');
+  const [pontoReferencia, setPontoReferencia] = useState('');
   const [bairro, setBairro] = useState('');
 
   // --- Taxa de entrega ---
@@ -25,6 +27,9 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
 
   // --- Carrinho ---
   const [carrinho, setCarrinho] = useState([]);
+
+  // --- Modal de variações ---
+  const [itemParaVariacao, setItemParaVariacao] = useState(null);
 
   // --- Observação ---
   const [observacao, setObservacao] = useState('');
@@ -112,15 +117,26 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
 
   // Totais
   const subtotalCarrinho = useMemo(() => {
-    return carrinho.reduce((acc, item) => acc + (item.price * item.quantidade), 0);
+    return carrinho.reduce((acc, item) => acc + ((item.precoFinal || item.price) * item.quantidade), 0);
   }, [carrinho]);
 
   const totalFinal = subtotalCarrinho + taxaEntrega;
 
   // Funções do carrinho
   const adicionarAoCarrinho = (produto) => {
+    // Se o produto tem variações, abre o modal de variações
+    if (produto.variacoes && produto.variacoes.length > 0) {
+      setItemParaVariacao({
+        ...produto,
+        preco: produto.price,
+        nome: produto.name,
+        categoriaId: produto.categoriaId || produto.category,
+      });
+      return;
+    }
+    // Produto simples — adiciona direto
     setCarrinho(prev => {
-      const idx = prev.findIndex(i => i.id === produto.id);
+      const idx = prev.findIndex(i => i.id === produto.id && !i._variacaoKey);
       if (idx >= 0) {
         const updated = [...prev];
         updated[idx] = { ...updated[idx], quantidade: updated[idx].quantidade + 1 };
@@ -130,10 +146,37 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
     });
   };
 
-  const alterarQuantidade = (produtoId, delta) => {
+  // Callback do VariacoesModal
+  const handleVariacaoConfirmada = (itemComVariacao) => {
+    const varNome = itemComVariacao.variacaoSelecionada?.nome || '';
+    const varKey = `${itemComVariacao.id}_${varNome}_${(itemComVariacao.adicionaisSelecionados || []).map(a => a.nome).join(',')}`;
+    setCarrinho(prev => {
+      const idx = prev.findIndex(i => i._variacaoKey === varKey);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], quantidade: updated[idx].quantidade + 1 };
+        return updated;
+      }
+      return [...prev, {
+        ...itemComVariacao,
+        name: itemComVariacao.nome || itemComVariacao.name,
+        price: itemComVariacao.precoFinal || itemComVariacao.preco || itemComVariacao.price,
+        precoFinal: itemComVariacao.precoFinal,
+        quantidade: 1,
+        _variacaoKey: varKey,
+        _variacaoNome: varNome,
+        _adicionaisNomes: (itemComVariacao.adicionaisSelecionados || []).map(a => a.nome),
+        _observacao: itemComVariacao.observacao || '',
+      }];
+    });
+    setItemParaVariacao(null);
+  };
+
+  const alterarQuantidade = (itemKey, delta) => {
     setCarrinho(prev => {
       return prev.map(item => {
-        if (item.id !== produtoId) return item;
+        const key = item._variacaoKey || item.id;
+        if (key !== itemKey) return item;
         const novaQtd = item.quantidade + delta;
         if (novaQtd <= 0) return null;
         return { ...item, quantidade: novaQtd };
@@ -141,8 +184,8 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
     });
   };
 
-  const removerDoCarrinho = (produtoId) => {
-    setCarrinho(prev => prev.filter(i => i.id !== produtoId));
+  const removerDoCarrinho = (itemKey) => {
+    setCarrinho(prev => prev.filter(i => (i._variacaoKey || i.id) !== itemKey));
   };
 
   const getQuantidadeNoCarrinho = (produtoId) => {
@@ -165,16 +208,20 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
       nomeCliente: nomeCliente.trim(),
       telefoneCliente: telefone.replace(/\D/g, ''),
       enderecoEntrega: endereco.trim(),
+      pontoReferencia: pontoReferencia.trim(),
       bairro: bairro.trim(),
       taxaEntrega,
       observacao: observacao.trim(),
       itens: carrinho.map(i => ({
         nome: i.name,
         quantidade: i.quantidade,
-        preco: i.price,
-        precoFinal: i.price * i.quantidade,
+        preco: i.precoFinal || i.price,
+        precoFinal: (i.precoFinal || i.price) * i.quantidade,
         produtoId: i.id,
         categoria: i.category,
+        variacao: i._variacaoNome || null,
+        adicionais: i._adicionaisNomes || [],
+        observacaoItem: i._observacao || '',
       })),
       subtotal: subtotalCarrinho,
       total: totalFinal,
@@ -185,12 +232,14 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
     setNomeCliente('');
     setTelefone('');
     setEndereco('');
+    setPontoReferencia('');
     setBairro('');
     setTaxaEntrega(0);
     setObservacao('');
     setCarrinho([]);
     setBusca('');
     setCategoriaFiltro('todas');
+    setItemParaVariacao(null);
     onClose();
   };
 
@@ -216,6 +265,8 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
             <input type="tel" placeholder="Telefone (WhatsApp) *" value={telefone} onChange={e => setTelefone(e.target.value)}
               className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
             <input type="text" placeholder="Endereço de Entrega *" value={endereco} onChange={e => setEndereco(e.target.value)}
+              className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
+            <input type="text" placeholder="Ponto de Referência (opcional)" value={pontoReferencia} onChange={e => setPontoReferencia(e.target.value)}
               className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
 
             {/* === BAIRRO + TAXA === */}
@@ -313,10 +364,17 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
                     <div key={prod.id} className={`flex items-center justify-between p-2.5 hover:bg-blue-50/50 transition-colors ${qtdNoCarrinho > 0 ? 'bg-blue-50/30' : ''}`}>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{prod.name}</p>
-                        <p className="text-xs text-slate-400">{categoriaNomes[prod.category]}</p>
+                        <p className="text-xs text-slate-400">
+                          {categoriaNomes[prod.category]}
+                          {prod.variacoes && prod.variacoes.length > 0 && (
+                            <span className="ml-1 text-blue-500 font-semibold">• {prod.variacoes.length} variações</span>
+                          )}
+                        </p>
                       </div>
                       <p className="text-sm font-bold text-emerald-600 mx-3 shrink-0">
-                        R$ {prod.price.toFixed(2)}
+                        {prod.variacoes && prod.variacoes.length > 0
+                          ? `A partir de R$ ${Math.min(...prod.variacoes.map(v => Number(v.preco) || 0)).toFixed(2)}`
+                          : `R$ ${prod.price.toFixed(2)}`}
                       </p>
                       {qtdNoCarrinho > 0 ? (
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -348,31 +406,44 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">🛒 Carrinho ({carrinho.length} {carrinho.length === 1 ? 'item' : 'itens'})</p>
               <div className="bg-slate-50 rounded-lg border border-slate-200 divide-y divide-slate-100">
-                {carrinho.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-2.5">
+                {carrinho.map(item => {
+                  const itemKey = item._variacaoKey || item.id;
+                  const precoUnit = item.precoFinal || item.price;
+                  return (
+                  <div key={itemKey} className="flex items-center justify-between p-2.5">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-800 truncate">{item.name}</p>
+                      {item._variacaoNome && (
+                        <p className="text-xs text-blue-500 font-medium">↳ {item._variacaoNome}</p>
+                      )}
+                      {item._adicionaisNomes && item._adicionaisNomes.length > 0 && (
+                        <p className="text-xs text-purple-500">+ {item._adicionaisNomes.join(', ')}</p>
+                      )}
+                      {item._observacao && (
+                        <p className="text-xs text-orange-500 italic">Obs: {item._observacao}</p>
+                      )}
                       <p className="text-xs text-slate-400">
-                        {item.quantidade}x R$ {item.price.toFixed(2)} = <span className="font-bold text-emerald-600">R$ {(item.price * item.quantidade).toFixed(2)}</span>
+                        {item.quantidade}x R$ {precoUnit.toFixed(2)} = <span className="font-bold text-emerald-600">R$ {(precoUnit * item.quantidade).toFixed(2)}</span>
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      <button onClick={() => alterarQuantidade(item.id, -1)}
+                      <button onClick={() => alterarQuantidade(itemKey, -1)}
                         className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">
                         <IoRemove size={12} />
                       </button>
                       <span className="text-sm font-bold w-4 text-center">{item.quantidade}</span>
-                      <button onClick={() => alterarQuantidade(item.id, 1)}
+                      <button onClick={() => alterarQuantidade(itemKey, 1)}
                         className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-emerald-100 hover:text-emerald-600 transition-colors">
                         <IoAdd size={12} />
                       </button>
-                      <button onClick={() => removerDoCarrinho(item.id)}
+                      <button onClick={() => removerDoCarrinho(itemKey)}
                         className="w-6 h-6 rounded-full bg-red-100 text-red-500 flex items-center justify-center hover:bg-red-200 transition-colors ml-1">
                         <IoTrash size={12} />
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -415,6 +486,16 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
           </div>
         </div>
       </div>
+
+      {/* === MODAL DE VARIAÇÕES === */}
+      {itemParaVariacao && (
+        <VariacoesModal
+          item={itemParaVariacao}
+          onConfirm={handleVariacaoConfirmada}
+          onClose={() => setItemParaVariacao(null)}
+          estabelecimentoId={estabelecimentoId}
+        />
+      )}
     </div>
   );
 }

@@ -134,13 +134,21 @@ const AdminDashboard = () => {
       <div className="w-full space-y-8">
 
         {/* TOP BAR — compacto */}
-        <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-black text-slate-800 tracking-tight">{saudacao}, {nomeUsuario} 👋</h1>
             <p className="text-xs text-slate-400 font-medium">
               {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
+          <button
+            onClick={() => { logout(); navigate('/'); }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 font-bold text-sm transition-all duration-200 shrink-0"
+            title="Sair"
+          >
+            <IoLogOutOutline className="text-lg" />
+            <span className="hidden sm:inline">Sair</span>
+          </button>
         </div>
 
         {/* FATURAMENTO */}

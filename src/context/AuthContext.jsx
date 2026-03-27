@@ -84,6 +84,7 @@ export function AuthProvider({ children }) {
                 }
                 
                 const firestoreData = await getFirestoreUserData(user);
+                console.log('📦 Firestore data retornado:', { firestoreData, cargo: firestoreData?.cargo, isAdmin: firestoreData?.isAdmin });
                 
                 const isMasterAdmin = Boolean(claims.isMasterAdmin) || Boolean(firestoreData?.isMasterAdmin);
                 const isAdmin = Boolean(claims.isAdmin) || Boolean(firestoreData?.isAdmin) || isMasterAdmin;
@@ -114,6 +115,7 @@ export function AuthProvider({ children }) {
                     _claims: claims
                 };
 
+                console.log('✅ combinedData final:', { cargo: combinedData.cargo, isAdmin, isMasterAdmin, estabs: allEstabs });
                 setCurrentUser({ ...user, ...combinedData });
                 setUserData(combinedData);
                 
@@ -189,7 +191,10 @@ export function usePermissions() {
     const { currentUser, loading, isAdmin, isMasterAdmin, estabelecimentosGerenciados } = useAuth();
     
     const canAccess = (requiredRoles = []) => {
-        if (!currentUser || loading) return false;
+        if (!currentUser || loading) {
+            console.log('🚫 canAccess: sem currentUser ou loading', { currentUser: !!currentUser, loading });
+            return false;
+        }
         if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) return true;
         
         // Admin e Master passam direto
@@ -205,10 +210,13 @@ export function usePermissions() {
         );
 
         // Verifica se algum dos cargos dele bate com as rotas permitidas
-        return requiredRoles.some(role => {
+        const result = requiredRoles.some(role => {
             const roleNorm = String(role).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
             return userCargosNorm.includes(roleNorm);
         });
+
+        console.log('🔐 canAccess resultado:', { userCargosNorm, requiredRoles, isAdmin, isMasterAdmin, result });
+        return result;
     };
 
     const canManageEstabelecimento = (estabelecimentoId) => {
@@ -235,7 +243,9 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
     }
 
     const accessGranted = canAccess(allowedRoles);
+    console.log('🛡️ PrivateRoute:', { path: location.pathname, allowedRoles, accessGranted, cargo: currentUser?.cargo });
     if (!accessGranted) {
+        console.log('❌ PrivateRoute DENIED → redirect to /dashboard');
         return <Navigate to="/dashboard" replace />;
     }
     

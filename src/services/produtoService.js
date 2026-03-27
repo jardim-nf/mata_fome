@@ -22,19 +22,23 @@ export const produtoService = {
     return mapeamentoNomes[categoriaId] || categoriaId;
   },
 
-  formatarProdutoReal(id, data, categoriaId) {
+  formatarProdutoReal(id, data, categoriaId, categoriaNomeReal) {
     return {
       id,
       name: data.nome || data.name || 'Produto sem nome',
       price: Number(data.preco || data.price || data.valor || 0),
       category: categoriaId,
-      categoriaNome: this.formatarNomeCategoria(categoriaId),
+      categoriaNome: categoriaNomeReal || this.formatarNomeCategoria(categoriaId),
       descricao: data.descricao || data.description || '',
       emEstoque: data.disponivel !== false && data.estoque !== false,
       imagem: data.imagem || '',
       ativo: data.ativo !== false,
       // 👇 NOVO CAMPO: CÓDIGO DE BARRAS (GTIN/EAN)
       codigoBarras: data.codigoBarras || data.ean || data.gtin || '',
+      // 👇 VARIAÇÕES E ADICIONAIS (para modal de pedido manual)
+      variacoes: Array.isArray(data.variacoes) ? data.variacoes.filter(v => v.ativo !== false) : [],
+      adicionais: Array.isArray(data.adicionais) ? data.adicionais : [],
+      categoriaId: categoriaId,
       // 👇 ESTRUTURA FISCAL
       fiscal: data.fiscal || {
         ncm: '',
@@ -79,7 +83,10 @@ export const produtoService = {
         // Ignora documentos de configuração se houver
         if (docSnapshot.id === 'config' || docSnapshot.id === 'layout') continue;
 
-        console.log(`🔎 Lendo categoria: ${docSnapshot.id}`);
+        const categoriaData = docSnapshot.data();
+        const categoriaNomeReal = categoriaData?.nome || this.formatarNomeCategoria(docSnapshot.id);
+
+        console.log(`🔎 Lendo categoria: ${docSnapshot.id} (${categoriaNomeReal})`);
         
         // Caminho: estabelecimentos/{uid}/cardapio/{categoria}/itens
         const itensRef = collection(db, 'estabelecimentos', uid, 'cardapio', docSnapshot.id, 'itens');
@@ -88,7 +95,7 @@ export const produtoService = {
         if (!itensSnapshot.empty) {
             itensSnapshot.forEach(itemDoc => {
                 const data = itemDoc.data();
-                todosProdutos.push(this.formatarProdutoReal(itemDoc.id, data, docSnapshot.id));
+                todosProdutos.push(this.formatarProdutoReal(itemDoc.id, data, docSnapshot.id, categoriaNomeReal));
             });
         }
       }
