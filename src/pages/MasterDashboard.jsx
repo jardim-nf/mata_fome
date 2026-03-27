@@ -519,7 +519,7 @@ function MasterDashboard() {
               </div>
               <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Ticket Médio</p>
               <p className="text-2xl sm:text-3xl font-black text-slate-900">{fmt(financeiroFiltrado ? financeiroFiltrado.ticketMedio : ticketMedio)}</p>
-              <p className="text-[10px] text-slate-400 mt-1">{financeiro.qtdPedidosTotal.toLocaleString()} pedidos total</p>
+              <p className="text-[10px] text-slate-400 mt-1">{financeiroFiltrado ? `${financeiroFiltrado.qtd} pedidos no período` : `${financeiro.qtdHoje} pedidos hoje`}</p>
             </div>
           </div>
 
