@@ -39,6 +39,7 @@ function MasterDashboard() {
   const [stats, setStats] = useState({ totalEstabelecimentos: 0, estabelecimentosAtivos: 0, totalUsuarios: 0 });
   const [estabelecimentosMap, setEstabelecimentosMap] = useState({});
   const [dadosBrutos, setDadosBrutos] = useState({ pedidos: [], vendas: [] });
+  const [alertas, setAlertas] = useState({ certVencidos: [], certVencendo: [], mensalidadeAtrasada: [], mensalidadeVencendo: [] });
   const historicosCarregados = useRef(false);
 
   // Date range filter state
@@ -95,6 +96,49 @@ function MasterDashboard() {
         estabelecimentosAtivos: estabs.filter(e => e.ativo).length,
         totalUsuarios: usersSnap.size,
       });
+
+      // ── Calcular alertas de certificados e mensalidades ──
+      const hoje = new Date();
+      hoje.setHours(0,0,0,0);
+      const newAlertas = { certVencidos: [], certVencendo: [], mensalidadeAtrasada: [], mensalidadeVencendo: [] };
+
+      estabs.forEach(estab => {
+        const nome = estab.nome || estab.name || 'Sem nome';
+
+        // Verificar certificado digital
+        const certVal = estab.fiscal?.certificadoValidade;
+        if (certVal) {
+          const certDate = certVal?.toDate ? certVal.toDate() : new Date(certVal);
+          certDate.setHours(0,0,0,0);
+          const diffCert = Math.ceil((certDate - hoje) / (1000*60*60*24));
+          if (diffCert < 0) {
+            newAlertas.certVencidos.push({ nome, dias: diffCert, id: estab.id });
+          } else if (diffCert <= 30) {
+            newAlertas.certVencendo.push({ nome, dias: diffCert, id: estab.id });
+          }
+        }
+
+        // Verificar mensalidade
+        const nextBilling = estab.nextBillingDate;
+        if (nextBilling) {
+          const billingDate = nextBilling?.toDate ? nextBilling.toDate() : new Date(nextBilling);
+          billingDate.setHours(0,0,0,0);
+          const diffBilling = Math.ceil((billingDate - hoje) / (1000*60*60*24));
+          if (diffBilling < 0) {
+            newAlertas.mensalidadeAtrasada.push({ nome, dias: diffBilling, id: estab.id });
+          } else if (diffBilling <= 7) {
+            newAlertas.mensalidadeVencendo.push({ nome, dias: diffBilling, id: estab.id });
+          }
+        }
+      });
+
+      // Ordenar por urgência (mais atrasado primeiro)
+      newAlertas.certVencidos.sort((a, b) => a.dias - b.dias);
+      newAlertas.mensalidadeAtrasada.sort((a, b) => a.dias - b.dias);
+      newAlertas.certVencendo.sort((a, b) => a.dias - b.dias);
+      newAlertas.mensalidadeVencendo.sort((a, b) => a.dias - b.dias);
+      setAlertas(newAlertas);
+
       setLastUpdated(new Date());
     } catch (err) {
       toast.error('Erro ao atualizar dados.');
@@ -272,7 +316,7 @@ function MasterDashboard() {
   // ── Módulos ──────────────────────
   const modulos = [
     { to: '/master/financeiro', title: 'Financeiro', desc: 'Receitas e cobranças', icon: <FaMoneyBillWave />, cor: 'emerald' },
-    { to: '/master/estabelecimentos', title: 'Estabelecimentos', desc: 'Lojas e configs', icon: <FaStore />, cor: 'blue' },
+    { to: '/master/estabelecimentos', title: 'Estabelecimentos', desc: 'Lojas, certs e billing', icon: <FaStore />, cor: 'blue' },
     { to: '/master/usuarios', title: 'Usuários', desc: 'Acessos e permissões', icon: <FaUsers />, cor: 'violet' },
     { to: '/master/pedidos', title: 'Central de Pedidos', desc: 'Monitor da rede', icon: <FaClipboardList />, cor: 'orange' },
     { to: '/master/plans', title: 'Assinaturas', desc: 'Planos e billing', icon: <FaTags />, cor: 'pink' },
@@ -571,6 +615,95 @@ function MasterDashboard() {
             </div>
           </div>
         </div>
+
+        {/* ─── ALERTAS DE CERTIFICADOS E MENSALIDADES ─── */}
+        {(alertas.certVencidos.length > 0 || alertas.certVencendo.length > 0 || alertas.mensalidadeAtrasada.length > 0 || alertas.mensalidadeVencendo.length > 0) && (
+          <div className="mb-10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-100 to-orange-100 border border-red-200 flex items-center justify-center">
+                <IoNotificationsOutline className="text-red-600" size={16} />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-800 text-base">Alertas da Rede</h3>
+                <p className="text-[10px] text-slate-400 font-medium">Certificados e mensalidades que requerem atenção</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Certificados Vencidos */}
+              {alertas.certVencidos.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-red-600 text-lg">🔐</span>
+                    <h4 className="font-black text-red-800 text-sm">Certificados Vencidos ({alertas.certVencidos.length})</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {alertas.certVencidos.slice(0, 5).map((a, i) => (
+                      <div key={i} className="flex items-center justify-between bg-white/60 rounded-xl px-3 py-2 text-[11px]">
+                        <span className="font-bold text-red-700">{a.nome}</span>
+                        <span className="text-red-500 font-bold">Vencido há {Math.abs(a.dias)}d</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Certificados Vencendo */}
+              {alertas.certVencendo.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-orange-600 text-lg">🔐</span>
+                    <h4 className="font-black text-orange-800 text-sm">Certificados Vencem em Breve ({alertas.certVencendo.length})</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {alertas.certVencendo.slice(0, 5).map((a, i) => (
+                      <div key={i} className="flex items-center justify-between bg-white/60 rounded-xl px-3 py-2 text-[11px]">
+                        <span className="font-bold text-orange-700">{a.nome}</span>
+                        <span className="text-orange-500 font-bold">Vence em {a.dias}d</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mensalidades Atrasadas */}
+              {alertas.mensalidadeAtrasada.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-red-600 text-lg">🚨</span>
+                    <h4 className="font-black text-red-800 text-sm">Mensalidades Atrasadas ({alertas.mensalidadeAtrasada.length})</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {alertas.mensalidadeAtrasada.slice(0, 5).map((a, i) => (
+                      <div key={i} className="flex items-center justify-between bg-white/60 rounded-xl px-3 py-2 text-[11px]">
+                        <span className="font-bold text-red-700">{a.nome}</span>
+                        <span className="text-red-500 font-bold">Atrasada há {Math.abs(a.dias)}d</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mensalidades Vencendo */}
+              {alertas.mensalidadeVencendo.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-amber-600 text-lg">⏰</span>
+                    <h4 className="font-black text-amber-800 text-sm">Mensalidades Vencem em Breve ({alertas.mensalidadeVencendo.length})</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {alertas.mensalidadeVencendo.slice(0, 5).map((a, i) => (
+                      <div key={i} className="flex items-center justify-between bg-white/60 rounded-xl px-3 py-2 text-[11px]">
+                        <span className="font-bold text-amber-700">{a.nome}</span>
+                        <span className="text-amber-500 font-bold">Vence em {a.dias}d</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ─── MÓDULOS DE GESTÃO ─── */}
         <div className="mb-10">

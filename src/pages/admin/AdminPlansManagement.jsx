@@ -16,44 +16,10 @@ import {
   FaArrowLeft,
   FaSave,
   FaTags,
-  FaLayerGroup
+  FaLayerGroup,
+  FaBolt,
+  FaCrown
 } from 'react-icons/fa';
-
-// --- Header Premium (Reutilizado) ---
-const DashboardHeader = ({ navigate, logout, currentUser }) => {
-  const userEmailPrefix = currentUser?.email ? currentUser.email.split('@')[0] : 'Admin';
-  
-  return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100/50 shadow-sm h-16 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-           <div className="flex items-center gap-2">
-              <div className="bg-gradient-to-br from-yellow-400 to-yellow-500 text-white font-bold p-1.5 rounded-lg shadow-md transform -skew-x-6 group-hover:rotate-3 transition-transform">
-                  <svg className="w-5 h-5 drop-shadow-sm" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" /></svg>
-              </div>
-              <span className="text-gray-900 font-black text-xl tracking-tighter">
-                  Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-yellow-600">Food</span>
-              </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-5">
-            <div className="hidden md:flex flex-col items-end">
-              <span className="text-sm font-bold text-gray-800 tracking-tight">{userEmailPrefix}</span>
-              <span className="text-[9px] uppercase tracking-widest text-yellow-600 font-bold bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-100 mt-0.5">Master Access</span>
-            </div>
-            <div className="h-8 w-px bg-gray-200 mx-2 hidden md:block"></div>
-            <button 
-                onClick={logout} 
-                className="text-gray-400 hover:text-red-500 transition-all duration-300 p-2 rounded-xl hover:bg-red-50/80 active:scale-95"
-                title="Encerrar Sessão"
-            >
-              <FaSignOutAlt size={18} />
-            </button>
-          </div>
-      </div>
-    </header>
-  );
-};
 
 // --- Componente de Input Premium ---
 const FormInput = ({ label, icon: Icon, ...props }) => (
@@ -199,31 +165,50 @@ function AdminPlansManagement() {
     setFormData({ ...formData, recursos: formData.recursos.filter((_, i) => i !== index) });
   };
 
-  if (loading || authLoading) return <div className="flex h-screen items-center justify-center bg-[#f8fafc]"><div className="w-12 h-12 border-4 border-gray-200 border-t-yellow-400 rounded-full animate-spin shadow-lg"></div></div>;
+  if (loading || authLoading) return <div className="flex h-screen items-center justify-center bg-slate-50"><div className="w-12 h-12 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin"></div></div>;
+
+  const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Admin';
 
   return (
-    <div className="bg-[#f8fafc] min-h-screen pt-24 pb-12 px-4 sm:px-6 font-sans text-gray-900 selection:bg-yellow-200 selection:text-black">
-      <DashboardHeader navigate={navigate} logout={logout} currentUser={currentUser} />
+    <div className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 min-h-screen font-sans text-gray-900 selection:bg-yellow-200 selection:text-black">
+      {/* NAVBAR PADRÃO */}
+      <nav className="sticky top-0 z-50 h-16 border-b border-slate-100 bg-white/80 backdrop-blur-xl shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25 group-hover:scale-105 transition-transform">
+              <FaBolt className="text-white text-xs" />
+            </div>
+            <span className="text-slate-900 font-black text-lg tracking-tight">Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-amber-500">Food</span></span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-center"><FaCrown className="text-yellow-600 text-[10px]" /></div>
+              <span className="text-sm font-bold text-slate-700">{userName}</span>
+            </div>
+            <button onClick={async () => { await logout(); navigate('/'); }} className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all"><FaSignOutAlt size={14} /></button>
+          </div>
+        </div>
+      </nav>
 
-      <div className="max-w-7xl mx-auto">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-16">
         
         {/* HEADER DA PÁGINA */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
           <div>
             <button 
               onClick={() => navigate('/master-dashboard')} 
-              className="text-gray-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group"
+              className="text-slate-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group"
             >
-              <span className="bg-white p-1.5 rounded-lg shadow-sm border border-gray-100 group-hover:border-yellow-200 transition-colors">
+              <span className="bg-white p-1.5 rounded-lg shadow-sm border border-slate-100 group-hover:border-yellow-200 transition-colors">
                 <FaArrowLeft />
               </span> 
-              Voltar ao Painel Master
+              Voltar ao Dashboard
             </button>
             <div className="flex items-center gap-3 mb-2">
-                <span className="bg-gray-900 text-yellow-400 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Assinaturas e Pacotes</span>
+                <span className="bg-yellow-50 text-yellow-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-yellow-200">Assinaturas e Pacotes</span>
             </div>
-            <h1 className="text-4xl font-black text-gray-900 tracking-tight">Gestão de Planos</h1>
-            <p className="text-gray-500 text-sm mt-2 font-medium">Crie e configure os planos de venda disponíveis para as lojas parceiras.</p>
+            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Gestão de Planos</h1>
+            <p className="text-slate-500 text-sm mt-1 font-medium">Crie e configure os planos de venda disponíveis para as lojas parceiras.</p>
           </div>
           <button 
             onClick={() => { setEditingPlan(null); setShowModal(true); }} 
@@ -465,7 +450,7 @@ function AdminPlansManagement() {
             </div>
         )}
 
-      </div>
+      </main>
     </div>
   );
 }

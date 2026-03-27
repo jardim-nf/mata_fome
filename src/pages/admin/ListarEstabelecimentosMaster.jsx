@@ -275,7 +275,7 @@ function ListarEstabelecimentos() {
                 </div>
 
                 {/* Info */}
-                <div className="px-5 pb-5 flex-1 space-y-2">
+                <div className="px-5 pb-3 flex-1 space-y-2">
                   <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                     <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center shadow-sm text-slate-400"><FaLink className="text-[9px]" /></div>
                     <span className="truncate text-slate-600">/{estab.slug}</span>
@@ -286,6 +286,65 @@ function ListarEstabelecimentos() {
                       {estab.adminUID ? 'Admin Vinculado' : 'Sem Admin'}
                     </span>
                   </div>
+
+                  {/* STATUS MENSALIDADE */}
+                  {(() => {
+                    const nextBilling = estab.nextBillingDate;
+                    if (!nextBilling) return (
+                      <div className="flex items-center gap-2 text-[11px] font-semibold bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <span className="text-slate-400">💳 Cobrança não configurada</span>
+                      </div>
+                    );
+                    const billingDate = nextBilling?.toDate ? nextBilling.toDate() : new Date(nextBilling);
+                    const hoje = new Date();
+                    hoje.setHours(0,0,0,0);
+                    billingDate.setHours(0,0,0,0);
+                    const diff = Math.ceil((billingDate - hoje) / (1000*60*60*24));
+                    const fmtDate = billingDate.toLocaleDateString('pt-BR');
+                    
+                    if (diff < 0) return (
+                      <div className="flex items-center gap-2 text-[11px] font-bold bg-red-50 p-2.5 rounded-xl border border-red-200 text-red-700">
+                        <span>🚨</span><span>Atrasada há {Math.abs(diff)}d — {fmtDate}</span>
+                      </div>
+                    );
+                    if (diff <= 5) return (
+                      <div className="flex items-center gap-2 text-[11px] font-bold bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-amber-700">
+                        <span>⏰</span><span>Vence em {diff}d — {fmtDate}</span>
+                      </div>
+                    );
+                    return (
+                      <div className="flex items-center gap-2 text-[11px] font-semibold bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 text-emerald-700">
+                        <span>✅</span><span>Em dia — Próx: {fmtDate}</span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* STATUS CERTIFICADO DIGITAL */}
+                  {(() => {
+                    const certVal = estab.fiscal?.certificadoValidade;
+                    if (!certVal && !estab.fiscal?.certificadoUrl) return null;
+                    if (!certVal) return (
+                      <div className="flex items-center gap-2 text-[11px] font-semibold bg-orange-50 p-2.5 rounded-xl border border-orange-200 text-orange-600">
+                        <span>🔐</span><span>Cert. sem validade informada</span>
+                      </div>
+                    );
+                    const certDate = certVal?.toDate ? certVal.toDate() : new Date(certVal);
+                    const hoje = new Date();
+                    const diff = Math.ceil((certDate - hoje) / (1000*60*60*24));
+                    const fmtDate = certDate.toLocaleDateString('pt-BR');
+
+                    if (diff < 0) return (
+                      <div className="flex items-center gap-2 text-[11px] font-bold bg-red-50 p-2.5 rounded-xl border border-red-200 text-red-700">
+                        <span>🔐</span><span>Cert. VENCIDO — {fmtDate}</span>
+                      </div>
+                    );
+                    if (diff <= 30) return (
+                      <div className="flex items-center gap-2 text-[11px] font-bold bg-orange-50 p-2.5 rounded-xl border border-orange-200 text-orange-600">
+                        <span>🔐</span><span>Cert. vence em {diff}d — {fmtDate}</span>
+                      </div>
+                    );
+                    return null; // OK, no need to show
+                  })()}
                 </div>
 
                 {/* Actions */}

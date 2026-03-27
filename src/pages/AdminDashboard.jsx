@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
+import BannerMensalidade from "../components/BannerMensalidade";
 import { useAuth } from "../context/AuthContext";
 
 
@@ -150,6 +151,9 @@ const AdminDashboard = () => {
             <span className="hidden sm:inline">Sair</span>
           </button>
         </div>
+
+        {/* AVISO DE MENSALIDADE E CERTIFICADO */}
+        <BannerMensalidade />
 
         {/* FATURAMENTO */}
         {(isRealAdmin || temPermissao('financeiro')) && (

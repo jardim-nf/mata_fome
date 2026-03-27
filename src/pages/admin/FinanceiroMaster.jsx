@@ -12,7 +12,8 @@ import {
   FaCheck, FaTimes, FaPlus, FaUndo, FaArrowLeft, FaMoneyBillWave, 
   FaExclamationCircle, FaCheckCircle, FaCalendarAlt, FaWallet,
   FaHandHoldingUsd, FaFileInvoiceDollar, FaSearch, FaSignOutAlt,
-  FaBolt, FaCrown, FaExclamationTriangle, FaPercentage, FaStore
+  FaBolt, FaCrown, FaExclamationTriangle, FaPercentage, FaStore,
+  FaWhatsapp, FaLayerGroup
 } from 'react-icons/fa';
 import { IoSearchOutline } from 'react-icons/io5';
 
@@ -176,6 +177,62 @@ function FinanceiroMaster() {
     } catch (error) { toast.error("Erro ao atualizar status."); }
   };
 
+  // ─── Cobranças em Massa ───
+  const [loadingMassa, setLoadingMassa] = useState(false);
+  const [modalMassa, setModalMassa] = useState(false);
+  const [massaConfig, setMassaConfig] = useState({
+    valor: '', vencimento: '', descricao: 'Mensalidade Sistema'
+  });
+
+  const handleCobrancaEmMassa = async (e) => {
+    e.preventDefault();
+    if (!massaConfig.valor || !massaConfig.vencimento) {
+      return toast.warn('Preencha valor e vencimento.');
+    }
+    setLoadingMassa(true);
+    try {
+      const qEstab = query(collection(db, 'estabelecimentos'), where('ativo', '==', true));
+      const snapEstab = await getDocs(qEstab);
+      let count = 0;
+      for (const docSnap of snapEstab.docs) {
+        const data = docSnap.data();
+        await financeiroService.criarFatura({
+          estabelecimentoId: docSnap.id,
+          estabelecimentoNome: data.nome,
+          valor: parseFloat(massaConfig.valor),
+          vencimento: massaConfig.vencimento,
+          descricao: massaConfig.descricao || 'Mensalidade Sistema'
+        });
+        count++;
+      }
+      toast.success(`${count} cobranças geradas com sucesso!`);
+      setModalMassa(false);
+      setMassaConfig({ valor: '', vencimento: '', descricao: 'Mensalidade Sistema' });
+      carregarDados();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao gerar cobranças em massa.');
+    } finally { setLoadingMassa(false); }
+  };
+
+  // ─── WhatsApp Lembrete ───
+  const handleLembreteWhatsApp = (fatura) => {
+    const estab = estabs.find(e => e.id === fatura.estabelecimentoId);
+    const nome = estab?.nome || fatura.estabelecimentoNome || 'Cliente';
+    const valor = Number(fatura.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const venc = formatData(fatura.vencimento);
+    const msg = encodeURIComponent(
+      `Olá ${nome}! 👋\n\n` +
+      `Identificamos uma pendência financeira no sistema *IdeaFood*:\n\n` +
+      `📄 *${fatura.descricao || 'Mensalidade'}*\n` +
+      `💰 Valor: *${valor}*\n` +
+      `📅 Vencimento: *${venc}*\n\n` +
+      `Por favor, regularize o pagamento para evitar a suspensão dos serviços.\n\n` +
+      `Qualquer dúvida, estamos à disposição! 🙏`
+    );
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  };
+
   const getStatusBadge = (fatura) => {
     const status = getVencimentoStatus(fatura);
     const styles = {
@@ -243,10 +300,16 @@ function FinanceiroMaster() {
             <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Recebíveis</h1>
             <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de mensalidades e faturamento da rede.</p>
           </div>
-          <button onClick={() => setModalOpen(true)} 
-            className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white px-6 py-3 rounded-xl hover:shadow-xl hover:shadow-yellow-400/30 transition-all shadow-lg shadow-yellow-400/20 font-black text-sm active:scale-95">
-            <FaPlus /> Nova Cobrança
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setModalOpen(true)} 
+              className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white px-5 py-3 rounded-xl hover:shadow-xl hover:shadow-yellow-400/30 transition-all shadow-lg shadow-yellow-400/20 font-black text-sm active:scale-95">
+              <FaPlus /> Nova Cobrança
+            </button>
+            <button onClick={() => setModalMassa(true)}
+              className="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 font-black text-sm active:scale-95">
+              <FaLayerGroup /> Em Massa
+            </button>
+          </div>
         </div>
 
         {/* ─── QUICK STATS BAR ─── */}
@@ -443,17 +506,26 @@ function FinanceiroMaster() {
                         </td>
                         <td className="p-5">{getStatusBadge(fatura)}</td>
                         <td className="p-5 text-right">
-                          {fatura.status === 'pago' ? (
-                            <button onClick={() => handleBaixa(fatura.id, 'pago')}
-                              className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl text-[11px] font-bold flex items-center justify-end gap-1.5 ml-auto transition-all">
-                              <FaUndo /> Estornar
-                            </button>
-                          ) : (
-                            <button onClick={() => handleBaixa(fatura.id, 'pendente')}
-                              className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center justify-end gap-2 ml-auto active:scale-95">
-                              <FaCheck /> Confirmar
-                            </button>
-                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            {getVencimentoStatus(fatura) === 'atrasado' && (
+                              <button onClick={() => handleLembreteWhatsApp(fatura)}
+                                className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 flex items-center justify-center transition-all active:scale-95"
+                                title="Enviar lembrete via WhatsApp">
+                                <FaWhatsapp size={14} />
+                              </button>
+                            )}
+                            {fatura.status === 'pago' ? (
+                              <button onClick={() => handleBaixa(fatura.id, 'pago')}
+                                className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all">
+                                <FaUndo /> Estornar
+                              </button>
+                            ) : (
+                              <button onClick={() => handleBaixa(fatura.id, 'pendente')}
+                                className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95">
+                                <FaCheck /> Confirmar
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -572,6 +644,72 @@ function FinanceiroMaster() {
                   </button>
                   <button type="submit" className="flex-1 py-3.5 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl font-black text-sm hover:shadow-lg hover:shadow-yellow-400/30 transition-all active:scale-95 flex items-center justify-center gap-2">
                     <FaCheckCircle /> Gerar Boleto
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ─── MODAL COBRANÇAS EM MASSA ─── */}
+        {modalMassa && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setModalMassa(false)}>
+            <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100">
+              
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <FaLayerGroup className="text-yellow-500" /> Cobranças em Massa
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Gerar cobrança para TODAS as lojas ativas.</p>
+                </div>
+                <button onClick={() => setModalMassa(false)} className="bg-slate-50 text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-2.5 rounded-xl transition-colors"><FaTimes /></button>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 flex items-start gap-2">
+                <FaExclamationTriangle className="text-amber-600 mt-0.5 shrink-0" />
+                <p className="text-[11px] font-bold text-amber-700">
+                  Atenção: Serão criadas cobranças para todos os <span className="text-amber-900">{estabs.length} estabelecimentos ativos</span>. Esta ação não pode ser desfeita de uma vez.
+                </p>
+              </div>
+              
+              <form onSubmit={handleCobrancaEmMassa} className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor Unitário</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-3.5 text-slate-400 text-sm font-bold">R$</span>
+                      <input type="number" step="0.01" placeholder="0.00"
+                        className="w-full border border-slate-200 bg-slate-50 p-3.5 pl-10 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all font-black text-slate-900 text-lg tabular-nums" 
+                        value={massaConfig.valor}
+                        onChange={e => setMassaConfig({...massaConfig, valor: e.target.value})} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vencimento</label>
+                    <input type="date" 
+                      className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-bold text-slate-700" 
+                      value={massaConfig.vencimento}
+                      onChange={e => setMassaConfig({...massaConfig, vencimento: e.target.value})} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
+                  <input type="text" placeholder="Ex: Mensalidade Abril 2026"
+                    className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-semibold text-slate-700" 
+                    value={massaConfig.descricao}
+                    onChange={e => setMassaConfig({...massaConfig, descricao: e.target.value})} />
+                </div>
+
+                <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
+                  <button type="button" onClick={() => setModalMassa(false)} className="flex-1 py-3.5 text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-xl font-bold text-sm transition-colors border border-slate-200">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={loadingMassa}
+                    className="flex-1 py-3.5 bg-slate-900 text-white rounded-xl font-black text-sm hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50">
+                    {loadingMassa ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div> : <FaLayerGroup />}
+                    {loadingMassa ? 'Gerando...' : 'Gerar Para Todos'}
                   </button>
                 </div>
               </form>

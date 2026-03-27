@@ -27,7 +27,8 @@ const ConfigFiscalScreen = () => {
     cscId: '',
     cscCodigo: '',
     certificadoSenha: '',
-    certificadoUrl: '' // URL do arquivo no Storage
+    certificadoUrl: '', // URL do arquivo no Storage
+    certificadoValidade: '' // Data de vencimento do certificado digital
   });
 
   const [arquivoCertificado, setArquivoCertificado] = useState(null);
@@ -209,6 +210,18 @@ const ConfigFiscalScreen = () => {
                 <input name="certificadoSenha" value={form.certificadoSenha} onChange={handleChange} type="password" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 outline-none transition-all" placeholder="Digite a senha..." />
               </div>
               {form.certificadoUrl && <p className="text-xs text-green-600 font-bold bg-green-50 p-2 rounded-lg text-center">✅ Certificado Configurado</p>}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Validade do Certificado (Data de Vencimento)</label>
+                <input name="certificadoValidade" value={form.certificadoValidade} onChange={handleChange} type="date" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 outline-none transition-all" />
+                {form.certificadoValidade && (() => {
+                  const venc = new Date(form.certificadoValidade);
+                  const hoje = new Date();
+                  const diff = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24));
+                  if (diff < 0) return <p className="text-xs text-red-600 font-bold bg-red-50 p-2 rounded-lg text-center mt-2">🚨 Certificado VENCIDO há {Math.abs(diff)} dias!</p>;
+                  if (diff <= 30) return <p className="text-xs text-orange-600 font-bold bg-orange-50 p-2 rounded-lg text-center mt-2">⚠️ Certificado vence em {diff} dias</p>;
+                  return <p className="text-xs text-green-600 font-bold bg-green-50 p-2 rounded-lg text-center mt-2">✅ Válido por mais {diff} dias</p>;
+                })()}
+              </div>
             </div>
           </div>
 
