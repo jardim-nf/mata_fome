@@ -979,7 +979,7 @@ function Painel() {
                                         </div>
                                     ) : (
                                         abaAtiva === 'cozinha' ? (
-                                            <GrupoPedidosMesa pedidos={listaPedidos} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} onEmitirNfce={handleNfceDoPedido} onUpdateFormaPagamento={handleUpdateFormaPagamento} />
+                                            <GrupoPedidosMesa pedidos={listaPedidos.map(p => ({ ...p, itens: p.itensCozinha || p.itens }))} onUpdateStatus={handleUpdateStatusAndNotify} onExcluir={handleExcluirPedido} newOrderIds={newOrderIds} estabelecimentoInfo={estabelecimentoInfo} onEmitirNfce={handleNfceDoPedido} onUpdateFormaPagamento={handleUpdateFormaPagamento} />
                                         ) : (
                                             <div className="space-y-3">
                                                 {listaPedidos.map(pedido => (
