@@ -32,7 +32,7 @@ function MasterDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [financeiro, setFinanceiro] = useState({
-    totalHistorico: 0, qtdPedidosTotal: 0, faturamentoHoje: 0, qtdHoje: 0, topLojas: [],
+    totalHistorico: 0, qtdPedidosTotal: 0, faturamentoHoje: 0, qtdHoje: 0, topLojas: [], topLojasOntem: [],
     faturamentoOntem: 0, qtdOntem: 0
   });
 
@@ -253,13 +253,26 @@ function MasterDashboard() {
       });
       const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 5);
 
+      // Ranking de ontem (fallback quando hoje está vazio)
+      const rankingOntemMap = {};
+      doOntem.forEach(item => {
+        let estabId = item.estabelecimentoId;
+        if (!estabId && item._path) { const parts = item._path.split('/'); const idx = parts.indexOf('estabelecimentos'); if (idx >= 0 && parts.length > idx + 1) estabId = parts[idx + 1]; }
+        if (!estabId) estabId = 'desconhecido';
+        if (!rankingOntemMap[estabId]) rankingOntemMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0 };
+        rankingOntemMap[estabId].total += getTotal(item);
+        rankingOntemMap[estabId].pedidos += 1;
+      });
+      const topLojasOntem = Object.values(rankingOntemMap).sort((a, b) => b.total - a.total).slice(0, 5);
+
       setFinanceiro(prev => ({
         ...prev,
         faturamentoHoje: doDia.reduce((acc, item) => acc + getTotal(item), 0),
         qtdHoje: doDia.length,
         faturamentoOntem: doOntem.reduce((acc, item) => acc + getTotal(item), 0),
         qtdOntem: doOntem.length,
-        topLojas
+        topLojas,
+        topLojasOntem
       }));
       return atualizado;
     });
@@ -538,8 +551,16 @@ function MasterDashboard() {
                   <FaTrophy className="text-yellow-600 text-sm" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-800 text-sm">Top Lojas — {financeiroFiltrado ? 'Período' : 'Hoje'}</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">{financeiroFiltrado ? 'Ranking por faturamento filtrado' : 'Ranking por faturamento do dia'}</p>
+                  <h3 className="font-black text-slate-800 text-sm">
+                    Top Lojas — {financeiroFiltrado ? 'Período' : (financeiro.topLojas.length > 0 ? 'Hoje' : 'Ontem')}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    {financeiroFiltrado
+                      ? 'Ranking por faturamento filtrado'
+                      : (financeiro.topLojas.length > 0
+                        ? 'Ranking por faturamento do dia'
+                        : 'Ranking de ontem (sem vendas hoje ainda)')}
+                  </p>
                 </div>
               </div>
               <Link to="/master/estabelecimentos" className="text-[11px] text-slate-400 hover:text-yellow-600 font-bold flex items-center gap-1 transition-colors">
@@ -547,41 +568,45 @@ function MasterDashboard() {
               </Link>
             </div>
             
-            {((financeiroFiltrado?.topLojas || financeiro.topLojas).length === 0) ? (
-              <div className="text-center py-12">
-                <FaStore className="text-slate-200 text-4xl mx-auto mb-3" />
-                <p className="text-slate-400 text-sm font-medium">{financeiroFiltrado ? 'Nenhuma venda no período' : 'Nenhuma venda hoje na rede'}</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {(financeiroFiltrado?.topLojas || financeiro.topLojas).map((loja, i) => {
-                  const nome = estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || `Filial #${loja.id.slice(0,4).toUpperCase()}`;
-                  const medals = ['🥇', '🥈', '🥉'];
-                  const maxTotal = (financeiroFiltrado?.topLojas || financeiro.topLojas)[0]?.total || 1;
-                  const barWidth = (loja.total / maxTotal * 100);
-                  const barColors = ['bg-yellow-100', 'bg-slate-100', 'bg-orange-50', 'bg-slate-50', 'bg-slate-50'];
-                  
-                  return (
-                    <div key={loja.id} className="group relative flex items-center gap-4 p-4 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all">
-                      {/* Progress bar */}
-                      <div className="absolute inset-0 rounded-xl overflow-hidden">
-                        <div className={`h-full ${barColors[i] || 'bg-slate-50'} transition-all duration-1000`}
-                          style={{ width: `${barWidth}%` }} />
-                      </div>
-                      
-                      <div className="relative flex items-center gap-4 flex-1">
-                        <span className="text-lg w-8 text-center">{medals[i] || <span className="text-slate-400 text-sm font-black">{i + 1}º</span>}</span>
-                        <div className="flex-1">
-                          <p className="font-bold text-slate-800 text-sm group-hover:text-yellow-700 transition-colors">{nome}</p>
-                          <p className="text-[10px] text-slate-400">{loja.pedidos} pedidos</p>
+            {(() => {
+              const lojas = financeiroFiltrado?.topLojas || (financeiro.topLojas.length > 0 ? financeiro.topLojas : financeiro.topLojasOntem);
+              if (!lojas || lojas.length === 0) return (
+                <div className="text-center py-12">
+                  <FaStore className="text-slate-200 text-4xl mx-auto mb-3" />
+                  <p className="text-slate-400 text-sm font-medium">{financeiroFiltrado ? 'Nenhuma venda no período' : 'Nenhuma venda recente na rede'}</p>
+                </div>
+              );
+              return (
+                <div className="space-y-2">
+                  {lojas.map((loja, i) => {
+                    const nome = estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || `Filial #${loja.id.slice(0,4).toUpperCase()}`;
+                    const medals = ['🥇', '🥈', '🥉'];
+                    const maxTotal = lojas[0]?.total || 1;
+                    const barWidth = (loja.total / maxTotal * 100);
+                    const barColors = ['bg-yellow-100', 'bg-slate-100', 'bg-orange-50', 'bg-slate-50', 'bg-slate-50'];
+                    
+                    return (
+                      <div key={loja.id} className="group relative flex items-center gap-4 p-4 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all">
+                        {/* Progress bar */}
+                        <div className="absolute inset-0 rounded-xl overflow-hidden">
+                          <div className={`h-full ${barColors[i] || 'bg-slate-50'} transition-all duration-1000`}
+                            style={{ width: `${barWidth}%` }} />
                         </div>
-                        <p className="font-black text-slate-900 text-sm tabular-nums">{fmt(loja.total)}</p>
+                        
+                        <div className="relative flex items-center gap-4 flex-1">
+                          <span className="text-lg w-8 text-center">{medals[i] || <span className="text-slate-400 text-sm font-black">{i + 1}º</span>}</span>
+                          <div className="flex-1">
+                            <p className="font-bold text-slate-800 text-sm group-hover:text-yellow-700 transition-colors">{nome}</p>
+                            <p className="text-[10px] text-slate-400">{loja.pedidos} pedidos</p>
+                          </div>
+                          <p className="font-black text-slate-900 text-sm tabular-nums">{fmt(loja.total)}</p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Receita Total */}
