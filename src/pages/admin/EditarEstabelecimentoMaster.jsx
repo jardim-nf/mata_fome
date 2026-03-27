@@ -108,6 +108,9 @@ function EditarEstabelecimentoMaster() {
         if (type === 'file') {
             const file = files[0]; setLogoImage(file);
             setLogoPreview(file ? URL.createObjectURL(file) : (formData.imageUrl || ''));
+        } else if (name === 'nextBillingDate') {
+            // Converte string "YYYY-MM-DD" para Date object
+            setFormData(prev => ({ ...prev, nextBillingDate: value ? new Date(value + 'T12:00:00') : null }));
         } else if (name.includes('.')) {
             const [parent, child] = name.split('.');
             setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [child]: type === 'checkbox' ? checked : (value || '') } }));
@@ -135,7 +138,13 @@ function EditarEstabelecimentoMaster() {
                 const slugSnap = await getDocs(slugQuery);
                 if (!slugSnap.empty && slugSnap.docs[0].id !== id) { setError('Este slug já está em uso.'); setFormLoading(false); return; }
             }
-            const dataToUpdate = { ...formData, imageUrl: finalLogoUrl, rating: Number(formData.rating) || 0, updatedAt: new Date() };
+            const dataToUpdate = {
+                ...formData,
+                imageUrl: finalLogoUrl,
+                rating: Number(formData.rating) || 0,
+                nextBillingDate: formData.nextBillingDate instanceof Date ? formData.nextBillingDate : (formData.nextBillingDate ? new Date(formData.nextBillingDate) : null),
+                updatedAt: new Date()
+            };
             await updateDoc(doc(db, 'estabelecimentos', id), dataToUpdate);
 
             if (currentData.adminUID !== formData.adminUID) {
@@ -302,7 +311,7 @@ function EditarEstabelecimentoMaster() {
                                         <input type="date" name="nextBillingDate" value={(() => {
                                             const d = formData.nextBillingDate;
                                             if (!d) return '';
-                                            const dateObj = d.toDate ? d.toDate() : new Date(d);
+                                            const dateObj = d instanceof Date ? d : (d.toDate ? d.toDate() : new Date(d));
                                             return isNaN(dateObj.getTime()) ? '' : dateObj.toISOString().split('T')[0];
                                         })()} onChange={handleInputChange}
                                             className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-yellow-100 focus:border-yellow-400 outline-none transition-all" />
