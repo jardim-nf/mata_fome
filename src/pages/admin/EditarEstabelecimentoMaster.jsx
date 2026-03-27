@@ -299,7 +299,12 @@ function EditarEstabelecimentoMaster() {
                                     </div>
                                     <div>
                                         <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">Próxima Cobrança</label>
-                                        <input type="date" name="nextBillingDate" value={formData.nextBillingDate ? formData.nextBillingDate.toISOString().split('T')[0] : ''} onChange={handleInputChange}
+                                        <input type="date" name="nextBillingDate" value={(() => {
+                                            const d = formData.nextBillingDate;
+                                            if (!d) return '';
+                                            const dateObj = d.toDate ? d.toDate() : new Date(d);
+                                            return isNaN(dateObj.getTime()) ? '' : dateObj.toISOString().split('T')[0];
+                                        })()} onChange={handleInputChange}
                                             className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-yellow-100 focus:border-yellow-400 outline-none transition-all" />
                                     </div>
                                 </div>

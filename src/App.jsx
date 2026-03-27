@@ -125,6 +125,7 @@ function App() {
                   <Route path="/admin-dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminDashboard /></PrivateRoute>} />
                   <Route path="/admin/configuracoes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminSettings /></PrivateRoute>} />
                   <Route path="/dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><AdminDashboard /></PrivateRoute>} />
+                  <Route path="/admin/dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><AdminDashboard /></PrivateRoute>} />
                   <Route path="/admin/gerenciar-cardapio" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminMenuManagement /></PrivateRoute>} />
                   <Route path="/admin/cores" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminColorSettings /></PrivateRoute>} />
                   <Route path="/admin/ordenar-categorias" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminOrderCategories /></PrivateRoute>} />
