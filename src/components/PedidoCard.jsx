@@ -243,7 +243,8 @@ const PedidoCard = ({
                     setIsUpdating(true);
                     try {
                         await onAtribuirMotoboy(item.id, motoboy.id, motoboy.nome);
-                        // 👇 REMOVIDO: enviarWhatsApp(nextStatus); para não abrir pop-up!
+                        // Se NÃO tem bot ativo, abre WhatsApp manual
+                        if (!estabelecimentoInfo?.whatsapp?.ativo) enviarWhatsApp(nextStatus);
                     } catch (error) { console.error(error); alert("Erro ao atribuir!"); } 
                     finally { setIsUpdating(false); }
                     return;
@@ -257,7 +258,8 @@ const PedidoCard = ({
         try {
             await onUpdateStatus(item.id, nextStatus);
             
-            // 👇 REMOVIDO: enviarWhatsApp(nextStatus); para o bot fazer o trabalho sozinho!
+            // Se NÃO tem bot UAZAPI ativo, abre WhatsApp manual para o operador
+            if (!estabelecimentoInfo?.whatsapp?.ativo) enviarWhatsApp(nextStatus);
             
             // 🔔 Push notification para o cliente (mantemos isto para o site)
             import('../utils/notifications.js').then(({ notificarStatusPedido }) => {
@@ -265,7 +267,7 @@ const PedidoCard = ({
             }).catch((err) => { console.error(err); });
         } catch (error) { console.error(error); alert("Erro ao atualizar!"); } 
         finally { setIsUpdating(false); }
-    }, [item, selectedMotoboyId, motoboysDisponiveis, onAtribuirMotoboy, onUpdateStatus, isUpdating]);
+    }, [item, selectedMotoboyId, motoboysDisponiveis, onAtribuirMotoboy, onUpdateStatus, isUpdating, estabelecimentoInfo]);
     const getBtnText = () => {
         if (item.status === 'aguardando_pagamento') return 'Aprovar Pagamento';
         if (item.status === 'recebido') return 'Mandar p/ Cozinha';
