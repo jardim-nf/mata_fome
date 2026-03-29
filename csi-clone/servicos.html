@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serviços - CSI Locações</title>
+    <meta name="description" content="Conheça todos os serviços da CSI Locações: aluguel de geradores, torres de iluminação e equipamentos audiovisuais em Fortaleza.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="pages.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-container">
+            <a href="index.html" class="logo">
+                <div class="logo-text">
+                    <span class="logo-csi">CSI</span>
+                    <span class="logo-years">25</span>
+                    <span class="logo-sub">GERADORES</span>
+                </div>
+            </a>
+            <button class="menu-toggle" id="menuToggle"><span></span><span></span><span></span></button>
+            <nav class="nav" id="mainNav">
+                <ul class="nav-list">
+                    <li><a href="index.html">Início</a></li>
+                    <li class="has-submenu">
+                        <a href="servicos.html" class="active">Serviços <i class="fas fa-chevron-down"></i></a>
+                        <ul class="submenu">
+                            <li><a href="audiovisual.html">Aluguel de Equipamento Audiovisual</a></li>
+                            <li><a href="torres.html">Aluguel de Torre de Iluminação</a></li>
+                            <li><a href="geradores.html">Aluguel de Gerador</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="quem-somos.html">Quem Somos</a></li>
+                    <li><a href="blog.html">Blog e Notícias</a></li>
+                    <li><a href="contato.html">Contato</a></li>
+                </ul>
+            </nav>
+            <div class="header-badge">
+                <div class="badge-icon"><i class="fas fa-trophy"></i><span>Nº1</span></div>
+                <div class="badge-text">NA LOCAÇÃO<br>DE GRUPOS DE<br><strong>GERADORES</strong></div>
+            </div>
+        </div>
+    </header>
+    <div class="nav-overlay" id="navOverlay"></div>
+
+    <!-- Page Hero -->
+    <section class="page-hero">
+        <div class="page-hero-bg" style="background-image: url('images/generator-industry.png')"></div>
+        <div class="page-hero-overlay"></div>
+        <div class="container page-hero-content">
+            <h1>Nossos Serviços</h1>
+            <div class="breadcrumb">
+                <a href="index.html">Início</a>
+                <i class="fas fa-chevron-right"></i>
+                <span>Serviços</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Grid -->
+    <section class="page-section">
+        <div class="container">
+            <div class="page-intro">
+                <h2>Soluções completas em energia e iluminação</h2>
+                <p>A CSI Locações oferece serviços de alta qualidade com frota moderna, suporte técnico especializado e entrega ágil em todo o Nordeste.</p>
+            </div>
+            <div class="service-cards-full">
+
+                <div class="service-full-card" data-reveal="up">
+                    <div class="sfc-image">
+                        <img src="images/generator-industry.png" alt="Aluguel de Gerador">
+                        <div class="sfc-badge"><i class="fas fa-bolt"></i></div>
+                    </div>
+                    <div class="sfc-content">
+                        <h3>Aluguel de Gerador</h3>
+                        <p>Contamos com uma frota moderna de grupos geradores com diversas potências para atender eventos, obras, indústrias, supermercados, hospitais e muito mais.</p>
+                        <ul class="sfc-features">
+                            <li><i class="fas fa-check"></i> Várias potências disponíveis</li>
+                            <li><i class="fas fa-check"></i> Entrega e retirada inclusa</li>
+                            <li><i class="fas fa-check"></i> Suporte técnico 24h</li>
+                            <li><i class="fas fa-check"></i> Manutenção preventiva</li>
+                        </ul>
+                        <a href="geradores.html" class="btn-page">Saiba mais <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                </div>
+
+                <div class="service-full-card reverse" data-reveal="up">
+                    <div class="sfc-image">
+                        <img src="images/lighting-tower.png" alt="Torres de Iluminação">
+                        <div class="sfc-badge"><i class="fas fa-lightbulb"></i></div>
+                    </div>
+                    <div class="sfc-content">
+                        <h3>Aluguel de Torre de Iluminação</h3>
+                        <p>Nossas torres de iluminação móveis com refletores LED de alta potência são ideais para obras, eventos, estacionamentos, feiras e áreas externas.</p>
+                        <ul class="sfc-features">
+                            <li><i class="fas fa-check"></i> Refletores LED de alta potência</li>
+                            <li><i class="fas fa-check"></i> Fácil mobilidade</li>
+                            <li><i class="fas fa-check"></i> Baixo consumo de combustível</li>
+                            <li><i class="fas fa-check"></i> Ideal para grandes áreas abertas</li>
+                        </ul>
+                        <a href="torres.html" class="btn-page">Saiba mais <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                </div>
+
+                <div class="service-full-card" data-reveal="up">
+                    <div class="sfc-image">
+                        <img src="images/generator-events.png" alt="Equipamento Audiovisual">
+                        <div class="sfc-badge"><i class="fas fa-volume-up"></i></div>
+                    </div>
+                    <div class="sfc-content">
+                        <h3>Aluguel de Equipamento Audiovisual</h3>
+                        <p>Sistemas de som, iluminação cênica e equipamentos audiovisuais para shows, eventos corporativos, feiras e festivais com qualidade profissional.</p>
+                        <ul class="sfc-features">
+                            <li><i class="fas fa-check"></i> Som profissional de alta fidelidade</li>
+                            <li><i class="fas fa-check"></i> Iluminação cênica e arquitetural</li>
+                            <li><i class="fas fa-check"></i> Operação técnica especializada</li>
+                            <li><i class="fas fa-check"></i> Montagem e desmontagem inclusa</li>
+                        </ul>
+                        <a href="audiovisual.html" class="btn-page">Saiba mais <i class="fas fa-arrow-right"></i></a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Banner -->
+    <section class="cta-banner">
+        <div class="container cta-banner-content">
+            <h2>Precisa de um orçamento?</h2>
+            <p>Entre em contato agora e receba uma proposta personalizada para o seu projeto.</p>
+            <div class="cta-banner-btns">
+                <a href="contato.html" class="btn-cta-wh">Solicitar orçamento</a>
+                <a href="https://wa.me/558533057000" class="btn-cta-green" target="_blank"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-top">
+            <div class="container footer-grid">
+                <div class="footer-brand">
+                    <div class="footer-logo"><span class="logo-csi">CSI</span><span class="logo-years">25</span></div>
+                    <div class="footer-badge-small"><i class="fas fa-trophy"></i><span>Nº1 NA LOCAÇÃO DE GRUPOS DE GERADORES</span></div>
+                    <p class="footer-desc">Há mais de 25 anos entregando energia e confiança para empresas de todo o Nordeste.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Mapa do site</h4>
+                    <ul>
+                        <li><a href="index.html"><i class="fas fa-chevron-right"></i> INÍCIO</a></li>
+                        <li><a href="servicos.html"><i class="fas fa-chevron-right"></i> SERVIÇOS</a></li>
+                        <li><a href="blog.html"><i class="fas fa-chevron-right"></i> BLOG E NOTÍCIAS</a></li>
+                        <li><a href="quem-somos.html"><i class="fas fa-chevron-right"></i> QUEM SOMOS</a></li>
+                        <li><a href="contato.html"><i class="fas fa-chevron-right"></i> CONTATO</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Serviços</h4>
+                    <ul>
+                        <li><a href="audiovisual.html"><i class="fas fa-chevron-right"></i> Aluguel de Equipamento Audiovisual</a></li>
+                        <li><a href="torres.html"><i class="fas fa-chevron-right"></i> Aluguel de Torre de Iluminação</a></li>
+                        <li><a href="geradores.html"><i class="fas fa-chevron-right"></i> Aluguel de Gerador</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Entre em contato</h4>
+                    <ul class="footer-contact">
+                        <li><i class="fas fa-map-marker-alt"></i><span>Rua Antonio Augusto, 2460 Aldeota - Fortaleza - CE</span></li>
+                        <li><i class="fas fa-phone-alt"></i><span>85 3305-7000</span></li>
+                        <li><i class="fas fa-clock"></i><span>Seg. à Sex. 08:00h às 18:00h</span></li>
+                    </ul>
+                    <div class="footer-social">
+                        <a href="#"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="#"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <div class="container footer-bottom-content">
+                <p>&copy; 2025 CSI Locações. Todos os direitos reservados.</p>
+                <div class="footer-bottom-links"><a href="#">Política de Privacidade</a><a href="#">Termos de Uso</a></div>
+            </div>
+        </div>
+    </footer>
+
+    <a href="https://wa.me/558533057000" class="whatsapp-float" target="_blank" id="whatsappFloat">
+        <i class="fab fa-whatsapp"></i>
+        <span class="whatsapp-tooltip">O QUE PODEMOS GERAR<br>PARA VOCÊ HOJE?</span>
+    </a>
+    <button class="back-to-top" id="backToTop"><i class="fas fa-chevron-up"></i></button>
+    <script src="script.js"></script>
+</body>
+</html>

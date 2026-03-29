@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contato - CSI Locações</title>
+    <meta name="description" content="Entre em contato com a CSI Locações para solicitar um orçamento de aluguel de geradores ou torres de iluminação em Fortaleza.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="pages.css">
+</head>
+<body>
+    <header class="header" id="header">
+        <div class="header-container">
+            <a href="index.html" class="logo">
+                <div class="logo-text">
+                    <span class="logo-csi">CSI</span><span class="logo-years">25</span><span class="logo-sub">GERADORES</span>
+                </div>
+            </a>
+            <button class="menu-toggle" id="menuToggle"><span></span><span></span><span></span></button>
+            <nav class="nav" id="mainNav">
+                <ul class="nav-list">
+                    <li><a href="index.html">Início</a></li>
+                    <li class="has-submenu">
+                        <a href="servicos.html">Serviços <i class="fas fa-chevron-down"></i></a>
+                        <ul class="submenu">
+                            <li><a href="audiovisual.html">Aluguel de Equipamento Audiovisual</a></li>
+                            <li><a href="torres.html">Aluguel de Torre de Iluminação</a></li>
+                            <li><a href="geradores.html">Aluguel de Gerador</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="quem-somos.html">Quem Somos</a></li>
+                    <li><a href="blog.html">Blog e Notícias</a></li>
+                    <li><a href="contato.html" class="active">Contato</a></li>
+                </ul>
+            </nav>
+            <div class="header-badge">
+                <div class="badge-icon"><i class="fas fa-trophy"></i><span>Nº1</span></div>
+                <div class="badge-text">NA LOCAÇÃO<br>DE GRUPOS DE<br><strong>GERADORES</strong></div>
+            </div>
+        </div>
+    </header>
+    <div class="nav-overlay" id="navOverlay"></div>
+
+    <section class="page-hero">
+        <div class="page-hero-bg" style="background-image: url('images/worker-hero.png')"></div>
+        <div class="page-hero-overlay"></div>
+        <div class="container page-hero-content">
+            <h1>Entre em Contato</h1>
+            <div class="breadcrumb">
+                <a href="index.html">Início</a>
+                <i class="fas fa-chevron-right"></i>
+                <span>Contato</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Page -->
+    <section class="page-section">
+        <div class="container">
+            <div class="contact-page-grid">
+
+                <!-- Info Cards -->
+                <div class="contact-info-col" data-reveal="left">
+                    <h2>Fale com a CSI Locações</h2>
+                    <p>Nossa equipe está pronta para atender você e apresentar a melhor solução para a sua necessidade de energia.</p>
+
+                    <div class="contact-info-cards">
+                        <div class="contact-info-card">
+                            <div class="cic-icon"><i class="fas fa-map-marker-alt"></i></div>
+                            <div class="cic-text">
+                                <h4>Endereço</h4>
+                                <p>Rua Antonio Augusto, 2460<br>Aldeota - Fortaleza - CE<br>CEP: 60110-371</p>
+                            </div>
+                        </div>
+                        <div class="contact-info-card">
+                            <div class="cic-icon"><i class="fas fa-phone-alt"></i></div>
+                            <div class="cic-text">
+                                <h4>Telefone</h4>
+                                <p>(85) 3305-7000</p>
+                            </div>
+                        </div>
+                        <div class="contact-info-card">
+                            <div class="cic-icon"><i class="fab fa-whatsapp"></i></div>
+                            <div class="cic-text">
+                                <h4>WhatsApp</h4>
+                                <a href="https://wa.me/558533057000" target="_blank">(85) 3305-7000</a>
+                            </div>
+                        </div>
+                        <div class="contact-info-card">
+                            <div class="cic-icon"><i class="fas fa-envelope"></i></div>
+                            <div class="cic-text">
+                                <h4>E-mail</h4>
+                                <p>contato@csilocacoes.com.br</p>
+                            </div>
+                        </div>
+                        <div class="contact-info-card">
+                            <div class="cic-icon"><i class="fas fa-clock"></i></div>
+                            <div class="cic-text">
+                                <h4>Horário de Atendimento</h4>
+                                <p>Segunda à Sexta<br>08:00h às 18:00h</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="contact-social">
+                        <h4>Nos siga nas redes sociais</h4>
+                        <div class="footer-social" style="margin-top:12px">
+                            <a href="#" style="background:var(--red)"><i class="fab fa-facebook-f"></i></a>
+                            <a href="#" style="background:var(--red)"><i class="fab fa-instagram"></i></a>
+                            <a href="#" style="background:var(--red)"><i class="fab fa-linkedin-in"></i></a>
+                            <a href="#" style="background:var(--red)"><i class="fab fa-youtube"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form -->
+                <div class="contact-form-col" data-reveal="right">
+                    <div class="contact-form-wrapper" style="box-shadow:none;padding:0">
+                        <h3 style="text-align:left;margin-bottom:25px">Envie sua mensagem</h3>
+                        <form id="contactForm" class="contact-form">
+                            <div class="form-row full">
+                                <div class="input-group">
+                                    <i class="fas fa-user"></i>
+                                    <input type="text" placeholder="Nome completo" required id="formName">
+                                </div>
+                            </div>
+                            <div class="form-row half">
+                                <div class="input-group">
+                                    <i class="fas fa-envelope"></i>
+                                    <input type="email" placeholder="E-mail" required id="formEmail">
+                                </div>
+                                <div class="input-group">
+                                    <i class="fas fa-phone"></i>
+                                    <input type="tel" placeholder="Telefone / WhatsApp" required id="formPhone">
+                                </div>
+                            </div>
+                            <div class="form-row half">
+                                <div class="input-group">
+                                    <i class="fas fa-building"></i>
+                                    <input type="text" placeholder="Nome da empresa" id="formCompany">
+                                </div>
+                                <div class="input-group">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    <input type="text" placeholder="Cidade" id="formCity">
+                                </div>
+                            </div>
+                            <div class="form-row full">
+                                <div class="input-group">
+                                    <i class="fas fa-list"></i>
+                                    <select id="formService" style="width:100%;padding:14px 18px 14px 42px;border:2px solid var(--g2);border-radius:8px;font-family:'Montserrat',sans-serif;font-size:.9rem;color:var(--g4);background:var(--g1);outline:none;appearance:none">
+                                        <option value="">Qual serviço você precisa?</option>
+                                        <option>Aluguel de Gerador</option>
+                                        <option>Aluguel de Torre de Iluminação</option>
+                                        <option>Aluguel de Equipamento Audiovisual</option>
+                                        <option>Outro</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row full">
+                                <div class="input-group textarea-group">
+                                    <i class="fas fa-comment-alt"></i>
+                                    <textarea placeholder="Descreva sua necessidade..." rows="5" id="formMessage"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-row full checkbox-row">
+                                <label>
+                                    <input type="checkbox" required id="formTerms">
+                                    Li e concordo com os <a href="#">Termos e Condições e Política de Privacidade.</a>
+                                </label>
+                            </div>
+                            <div class="form-row full">
+                                <button type="submit" class="btn-submit" id="formSubmit" style="width:100%;border-radius:8px">
+                                    <span>Enviar Mensagem</span>
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Map Section -->
+    <section class="map-section">
+        <iframe
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3981.1794!2d-38.5023!3d-3.7436!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zM8KwNDQnMzYuOSJTIDM4wrAzMCcwOC4zIlc!5e0!3m2!1spt-BR!2sbr!4v1234567890"
+            width="100%" height="400" style="border:0;" allowfullscreen="" loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade" title="Localização CSI Locações">
+        </iframe>
+    </section>
+
+    <footer class="footer">
+        <div class="footer-top">
+            <div class="container footer-grid">
+                <div class="footer-brand">
+                    <div class="footer-logo"><span class="logo-csi">CSI</span><span class="logo-years">25</span></div>
+                    <div class="footer-badge-small"><i class="fas fa-trophy"></i><span>Nº1 NA LOCAÇÃO DE GRUPOS DE GERADORES</span></div>
+                    <p class="footer-desc">Há mais de 25 anos entregando energia e confiança.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Mapa do site</h4>
+                    <ul>
+                        <li><a href="index.html"><i class="fas fa-chevron-right"></i> INÍCIO</a></li>
+                        <li><a href="servicos.html"><i class="fas fa-chevron-right"></i> SERVIÇOS</a></li>
+                        <li><a href="blog.html"><i class="fas fa-chevron-right"></i> BLOG E NOTÍCIAS</a></li>
+                        <li><a href="quem-somos.html"><i class="fas fa-chevron-right"></i> QUEM SOMOS</a></li>
+                        <li><a href="contato.html"><i class="fas fa-chevron-right"></i> CONTATO</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Serviços</h4>
+                    <ul>
+                        <li><a href="audiovisual.html"><i class="fas fa-chevron-right"></i> Equipamento Audiovisual</a></li>
+                        <li><a href="torres.html"><i class="fas fa-chevron-right"></i> Torre de Iluminação</a></li>
+                        <li><a href="geradores.html"><i class="fas fa-chevron-right"></i> Aluguel de Gerador</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Entre em contato</h4>
+                    <ul class="footer-contact">
+                        <li><i class="fas fa-map-marker-alt"></i><span>Rua Antonio Augusto, 2460 - Fortaleza - CE</span></li>
+                        <li><i class="fas fa-phone-alt"></i><span>85 3305-7000</span></li>
+                        <li><i class="fas fa-clock"></i><span>Seg. à Sex. 08:00h às 18:00h</span></li>
+                    </ul>
+                    <div class="footer-social">
+                        <a href="#"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="#"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <div class="container footer-bottom-content">
+                <p>&copy; 2025 CSI Locações. Todos os direitos reservados.</p>
+                <div class="footer-bottom-links"><a href="#">Política de Privacidade</a><a href="#">Termos de Uso</a></div>
+            </div>
+        </div>
+    </footer>
+    <a href="https://wa.me/558533057000" class="whatsapp-float" target="_blank" id="whatsappFloat">
+        <i class="fab fa-whatsapp"></i>
+        <span class="whatsapp-tooltip">O QUE PODEMOS GERAR<br>PARA VOCÊ HOJE?</span>
+    </a>
+    <button class="back-to-top" id="backToTop"><i class="fas fa-chevron-up"></i></button>
+    <script src="script.js"></script>
+</body>
+</html>

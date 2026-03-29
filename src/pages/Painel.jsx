@@ -176,6 +176,7 @@ function Painel() {
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
     const pedidosJaImpressos = useRef(new Set());
+    const pedidosJaNotificados = useRef(new Set());
 
     const estabelecimentoAtivo = useMemo(() => estabelecimentosGerenciados?.[0] || null, [estabelecimentosGerenciados]);
 
@@ -689,6 +690,7 @@ function Painel() {
                         audioRef.current?.play().catch(e => console.warn("Erro no som", e));
                     }
                 }
+
                 
                 setTimeout(() => setNewOrderIds(prev => { const next = new Set(prev); novosIds.forEach(id => next.delete(id)); return next; }), 15000);
             }

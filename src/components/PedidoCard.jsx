@@ -149,7 +149,10 @@ const PedidoCard = ({
 // --- WHATSAPP AUTOMÁTICO ---
     const enviarWhatsApp = (statusAlvo) => {
         const telefone = item.cliente?.telefone || item.telefone;
-        if (!telefone) return; 
+        if (!telefone) {
+            console.warn('[WhatsApp] Pedido sem telefone, não é possível enviar.');
+            return;
+        }
         
         const nomeCliente = item.cliente?.nome || 'Cliente';
         const idCurto = item.id?.slice(0,4).toUpperCase();
@@ -258,7 +261,7 @@ const PedidoCard = ({
         try {
             await onUpdateStatus(item.id, nextStatus);
             
-            // Se NÃO tem bot UAZAPI ativo, abre WhatsApp manual para o operador
+            // Se NÃO tem bot ativo, abre WhatsApp manual
             if (!estabelecimentoInfo?.whatsapp?.ativo) enviarWhatsApp(nextStatus);
             
             // 🔔 Push notification para o cliente (mantemos isto para o site)

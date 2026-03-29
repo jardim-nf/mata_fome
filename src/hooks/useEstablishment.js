@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
 const CORES_PADRAO = {
   primaria: '#EA1D2C',
@@ -89,11 +89,29 @@ export function useEstablishment(estabelecimentoSlug) {
     const load = async () => {
       setLoading(true);
       try {
-        const snap = await getDocs(query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug)));
-        if (snap.empty) { navigate('/'); return; }
-
-        const data = snap.docs[0].data();
-        const id = snap.docs[0].id;
+        // 1. Tenta buscar por slug
+        let snap = await getDocs(query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug)));
+        
+        let data, id;
+        
+        if (!snap.empty) {
+          // Encontrou por slug
+          data = snap.docs[0].data();
+          id = snap.docs[0].id;
+        } else {
+          // 2. Fallback: tenta buscar pelo ID do documento diretamente
+          const docRef = doc(db, 'estabelecimentos', estabelecimentoSlug);
+          const docSnap = await getDoc(docRef);
+          
+          if (!docSnap.exists()) {
+            console.warn('Estabelecimento não encontrado:', estabelecimentoSlug);
+            navigate('/cardapio');
+            return;
+          }
+          
+          data = docSnap.data();
+          id = docSnap.id;
+        }
 
         setEstabelecimentoInfo({ ...data, id });
         setActualEstabelecimentoId(id);

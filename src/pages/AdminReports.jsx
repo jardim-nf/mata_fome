@@ -11,7 +11,7 @@ import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 // Bibliotecas para PDF e Gráficos
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, Filler } from 'chart.js';
 import { Line, Pie, Bar } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 
@@ -25,7 +25,7 @@ import {
 import { FaMotorcycle } from "react-icons/fa";
 
 // Registro dos componentes do Chart.js
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, ChartDataLabels);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement, Filler, ChartDataLabels);
 
 // --- COMPONENTES UI ---
 const Card = ({ title, children, className = "", ...rest }) => (
@@ -194,13 +194,30 @@ const AdminReports = () => {
             const businessKeySet = new Set(); // 🔥 FIX: dedup por chave de negócio
 
             // Gera chave de negócio para detectar mesma venda em collections diferentes
-            // Usa data do DIA (não timestamp exato) porque vendas e historico_mesas têm timestamps diferentes
+            // Usa data do DIA (não timestamp exato) porque vendas e pedidos têm timestamps diferentes
             const gerarBusinessKey = (item) => {
                 const mesa = item.mesaNumero || item.mesaId || '';
                 const total = (item.totalFinal || 0).toFixed(2);
                 // Usa apenas o dia (YYYY-MM-DD) para evitar diferença de timestamps entre collections
                 const dia = item.data ? `${item.data.getFullYear()}-${String(item.data.getMonth()+1).padStart(2,'0')}-${String(item.data.getDate()).padStart(2,'0')}` : '';
-                return mesa ? `mesa_${mesa}_${total}_${dia}` : null;
+                
+                if (mesa) {
+                    return `mesa_${mesa}_${total}_${dia}`;
+                }
+                
+                // 🔥 FIX: Gera chave para DELIVERY também (antes retornava null e não deduplicava)
+                const cliente = (item.clienteNome || '').toLowerCase().trim();
+                const pagamento = (item.formaPagamento || '').toLowerCase().trim();
+                if (cliente && total !== '0.00') {
+                    return `delivery_${cliente}_${total}_${pagamento}_${dia}`;
+                }
+                
+                // Para pedidos vinculados por pedidoId (vendas que referenciam o pedido original)
+                if (item.pedidoId) {
+                    return `ref_${item.pedidoId}`;
+                }
+                
+                return null;
             };
 
             const addData = (doc, origem) => {
@@ -209,7 +226,15 @@ const AdminReports = () => {
                     // 1. Dedup por doc.id (mesmo doc)
                     if (allDataMap.has(item.id)) return;
                     
-                    // 2. Dedup por chave de negócio (mesma venda em collections diferentes)
+                    // 2. Dedup por referência cruzada (pedidoId ↔ id)
+                    // Se esta venda tem pedidoId, verifica se o pedido original já está no mapa
+                    if (item.pedidoId && allDataMap.has(item.pedidoId)) return;
+                    // Se já existe uma venda que referencia ESTE item como pedidoId
+                    for (const [, existing] of allDataMap) {
+                        if (existing.pedidoId === item.id) return;
+                    }
+                    
+                    // 3. Dedup por chave de negócio (mesma venda em collections diferentes)
                     const bk = gerarBusinessKey(item);
                     if (bk && businessKeySet.has(bk)) {
                         console.log('🔥 DEDUP: Ignorando duplicata:', item.id, 'key:', bk);

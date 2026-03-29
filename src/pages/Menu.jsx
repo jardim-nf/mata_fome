@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, Timestamp, updateDoc, arrayUnion, increment } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -74,6 +74,7 @@ function LoadMoreSentinel({ category, onLoadMore }) {
 
 export default function Menu() {
   const { estabelecimentoSlug } = useParams();
+  const navigate = useNavigate();
   const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
   const { isWidgetOpen } = useAI();
 
@@ -219,10 +220,12 @@ export default function Menu() {
   }, [subtotalCalculado, taxaAplicada, discountAmount]);
 
   // Efeitos
+  // Login NÃO é mais forçado ao abrir o menu.
+  // O login só é solicitado quando o cliente tenta adicionar ao carrinho.
   useEffect(() => {
-    if (!authLoading) {
-      if (!currentUser) { setForceLogin(true); setShowLoginPrompt(true); }
-      else { setForceLogin(false); setShowLoginPrompt(false); }
+    if (!authLoading && currentUser) {
+      setForceLogin(false);
+      setShowLoginPrompt(false);
     }
   }, [authLoading, currentUser]);
 
@@ -593,18 +596,22 @@ export default function Menu() {
     return <MenuSkeleton />;
   }
 
-  if (currentUser && (isAdmin || isMasterAdmin)) {
-    return (
-      <div className="p-10 text-center">
-        Acesso Admin. Saia para ver o cardápio.
-        <button onClick={handleLogout} className="block mx-auto mt-4 bg-red-600 text-white p-2 rounded">Sair</button>
-      </div>
-    );
-  }
+  // Admin pode ver o cardápio como preview (sem comprar)
+  const isAdminPreview = currentUser && (isAdmin || isMasterAdmin);
 
   return (
     <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>
       <div className="max-w-7xl mx-auto px-4 w-full">
+
+        {/* Banner de preview para admins */}
+        {isAdminPreview && (
+          <div className="bg-amber-100 border border-amber-300 rounded-xl p-3 mb-4 flex items-center justify-between">
+            <p className="text-amber-800 text-sm font-bold">👁️ Modo Preview — Você está vendo o cardápio como um cliente</p>
+            <button onClick={() => navigate('/painel')} className="bg-amber-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-amber-600 transition-all">
+              ← Voltar ao Painel
+            </button>
+          </div>
+        )}
 
         <EstablishmentHeader
           estabelecimentoInfo={estabelecimentoInfo}
@@ -795,18 +802,32 @@ export default function Menu() {
         <AIWidgetButton bottomOffset={carrinho.length > 0 ? '100px' : '24px'} />
       </Suspense>
 
-      {/* Modal de confirmação */}
+      {/* Modal de confirmação — Melhorado com número do pedido e redirecionamento */}
       {showOrderConfirmationModal && (
         <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 text-gray-900">
           <div className="bg-white p-8 rounded-2xl text-center shadow-2xl max-w-sm w-full">
-            <h2 className="text-3xl font-bold mb-2">🎉 Sucesso!</h2>
-            <p className="text-gray-500 text-sm mb-6">Seu pedido foi enviado e está sendo preparado</p>
-            <div className="space-y-3">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-4xl">✅</span>
+            </div>
+            <h2 className="text-3xl font-bold mb-2">Pedido Enviado!</h2>
+            <p className="text-gray-500 text-sm mb-2">Seu pedido foi enviado e está sendo preparado</p>
+            {ultimoPedidoId && (
+              <p className="text-xs text-gray-400 mb-4 font-mono bg-gray-50 rounded-lg py-2 px-3 inline-block">
+                Pedido #{ultimoPedidoId.slice(-6).toUpperCase()}
+              </p>
+            )}
+            <div className="space-y-3 mt-4">
+              <button
+                onClick={() => { setShowOrderConfirmationModal(false); navigate('/historico-pedidos'); }}
+                className="w-full bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition-all"
+              >
+                📋 Acompanhar Meu Pedido
+              </button>
               <button onClick={() => { setShowOrderConfirmationModal(false); setTimeout(() => setShowReviewModal(true), 500); }} className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-amber-600 transition-all">
                 ⭐ Avaliar Pedido
               </button>
               <button onClick={() => setShowOrderConfirmationModal(false)} className="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all">
-                Fechar
+                Continuar no Cardápio
               </button>
             </div>
           </div>

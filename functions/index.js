@@ -1,6 +1,6 @@
 // functions/index.js
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentUpdated, onDocumentCreated } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import { defineSecret } from "firebase-functions/params";
 import OpenAI from "openai";
@@ -1373,7 +1373,8 @@ function formatarValor(valor) {
 }
 
 const MENSAGENS_STATUS = {
-  preparo: (p) => `🔥 *${p.nomeEstab}*\n\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* já está sendo preparado! 👨‍🍳${p.pixManual ? `\n\n💳 *Pagamento via PIX* — Por favor, envie o comprovante de pagamento.` : ''}`,
+  recebido: (p) => `🔥 *${p.nomeEstab}*\n*\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* foi recebido! ✅${p.pixManual ? `\n\n🧾 *Seu pagamento foi no PIX via chave* — por favor, envie o comprovante por aqui para confirmarmos.` : `\n\nEm instantes você receberá atualizações sobre o preparo. 🍔`}`,
+  preparo: (p) => `🔥 *${p.nomeEstab}*\n*\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* já está sendo preparado! 👨‍🍳${p.pixManual ? `\n\n💳 *Pagamento via PIX* — Por favor, envie o comprovante de pagamento.` : ''}`,
   em_entrega: (p) => `🛵 *${p.nomeEstab}*\n\nÓtima notícia, ${p.nome}! Seu pedido no valor de *${p.valor}* saiu para entrega!${p.motoboy ? `\n🏍️ Entregador: *${p.motoboy}*` : ''}`,
   pronto_para_servir: (p) => `✅ *${p.nomeEstab}*\n\n${p.nome}, seu pedido no valor de *${p.valor}* está *pronto*! Pode retirar. 🎉`,
   finalizado: (p) => `✅ *${p.nomeEstab}*\n\nPedido entregue! Obrigado pela preferência, ${p.nome}! 😊\nValor: *${p.valor}*\n\nVolte sempre! 💛`
@@ -1451,3 +1452,67 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
 // 🧊 GERAR MODELO 3D VIA MESHY (IMAGE-TO-3D) — DESATIVADO (3D feito manual)
 // ==================================================================
 // export const generateModel3D = onCall({ ... }); // desativado - sem MESHY_API_KEY
+
+// ==================================================================
+// 19. NOTIFICAÇÃO AUTOMÁTICA WHATSAPP — PEDIDO NOVO (onCreate)
+// ==================================================================
+export const notificarPedidoNovo = onDocumentCreated(
+  { document: 'estabelecimentos/{estabId}/pedidos/{pedidoId}' },
+  async (event) => {
+    try {
+      const pedido = event.data?.data();
+      if (!pedido) return;
+
+      // Só notifica pedidos delivery (não mesa/salão)
+      if (pedido.source === 'salao' || pedido.tipo === 'mesa') return;
+
+      const telefoneCliente = pedido.cliente?.telefone || pedido.clienteTelefone || '';
+      if (!telefoneCliente) return;
+
+      const estabSnap = await db.collection('estabelecimentos').doc(event.params.estabId).get();
+      if (!estabSnap.exists) return;
+
+      const estab = estabSnap.data();
+      const wConfig = estab.whatsapp || {};
+
+      if (!wConfig.ativo || !wConfig.instanceName || !wConfig.serverUrl) return;
+
+      const nomeEstab = estab.nome || 'Restaurante';
+      const nomeCliente = pedido.cliente?.nome || pedido.clienteNome || 'Cliente';
+      const totalPedido = pedido.totalFinal || pedido.total || pedido.valorTotal || 0;
+      const formaPagamento = pedido.formaPagamento || pedido.pagamento || '';
+      const isPixManual = formaPagamento === 'PIX_MANUAL' || formaPagamento === 'pix_manual' || formaPagamento.toLowerCase() === 'pix';
+
+      const gerarMensagem = MENSAGENS_STATUS['recebido'];
+      const mensagem = gerarMensagem({
+        nome: nomeCliente,
+        nomeEstab,
+        valor: formatarValor(totalPedido),
+        motoboy: '',
+        pixManual: isPixManual
+      });
+
+      const tel = telefoneCliente.replace(/\D/g, '');
+      const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
+      const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
+      const fullUrl = `${urlFormatada}/send/text`;
+
+      logger.info(`📱 Enviando notificação de NOVO PEDIDO para ${telFinal} via UAZAPI`);
+
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: telFinal, text: mensagem })
+      });
+
+      const responseBody = await response.text();
+      if (response.ok) {
+        logger.info(`📱 ✅ Pedido novo notificado! ${telFinal} | Response: ${responseBody}`);
+      } else {
+        logger.warn(`⚠️ ❌ Falha ao notificar pedido novo ${telFinal} | HTTP ${response.status} | Response: ${responseBody}`);
+      }
+    } catch (error) {
+      logger.error('❌ Erro no trigger de notificação pedido novo:', error);
+    }
+  }
+);

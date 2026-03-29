@@ -248,12 +248,6 @@ const ListaEstabelecimentos = () => {
                         )}
                     </div>
                 )}
-
-                {/* Debug Info */}
-                <div className="mt-8 text-center text-sm text-gray-500">
-                    <p>Estabelecimentos encontrados: {filteredEstabelecimentos.length}</p>
-                    <p>Usuário: {userRole} | Pode criar: {podeCriarEstabelecimento ? 'Sim' : 'Não'}</p>
-                </div>
             </div>
         </div>
     );
