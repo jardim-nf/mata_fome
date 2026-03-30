@@ -506,7 +506,7 @@ export default function Menu() {
       vendaId: `ord_${Date.now()}`,
       cliente: { nome: nomeCliente, telefone: telefoneCliente, endereco: isRetirada ? null : { rua, numero, bairro, cidade, complemento, referencia: pontoReferencia }, userId: currentUser.uid },
       estabelecimentoId: actualEstabelecimentoId,
-      itens: carrinho.map(item => ({ nome: formatarItem(item), quantidade: item.qtd, preco: Number(item.precoFinal), adicionais: item.adicionaisSelecionados || [], variacao: item.variacaoSelecionada || null, produtoIdOriginal: item.id, categoriaId: item.categoriaId })),
+      itens: carrinho.map(item => ({ nome: formatarItem(item), quantidade: item.qtd, preco: Number(item.precoFinal), adicionais: item.adicionaisSelecionados || [], variacao: item.variacaoSelecionada || null, produtoIdOriginal: item.id, categoriaId: item.categoriaId, categoria: item.categoria || item.categoriaId || '' })),
       totalFinal: Number(finalOrderTotal),
       taxaEntrega: Number(taxaAplicada),
       createdAt: serverTimestamp(),

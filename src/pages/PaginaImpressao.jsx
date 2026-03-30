@@ -12,7 +12,8 @@ const isItemCozinha = (item) => {
     try {
         if (!item || typeof item !== 'object') return false;
         const nome = String(item.nome || item.name || item.produto?.nome || '').toLowerCase();
-        const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+        // 🔥 Verifica tanto 'categoria' quanto 'categoriaId' (campo salvo pelo delivery)
+        const categoria = String(item.categoria || item.categoriaId || item.produto?.categoria || '').toLowerCase();
         const textoCompleto = `${nome} ${categoria}`;
         if (categoria.includes('combo') || nome.includes('combo')) return true;
         const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];

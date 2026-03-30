@@ -24,7 +24,10 @@ const isItemCozinha = (item) => {
         if (!item || typeof item !== 'object') return false;
         
         const nome = String(item.nome || item.produto?.nome || '').toLowerCase();
-        const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
+        // 🔥 Verifica tanto 'categoria' quanto 'categoriaId' (campo salvo pelo delivery)
+        const categoria = String(
+            item.categoria || item.categoriaId || item.produto?.categoria || ''
+        ).toLowerCase();
         const textoCompleto = `${nome} ${categoria}`;
         
         // 🔥 LÓGICA ATUALIZADA: Regra de exceção para COMBOS 🔥
