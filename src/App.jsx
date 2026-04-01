@@ -74,6 +74,8 @@ const PrevisaoDemanda = lazy(() => import("./pages/admin/PrevisaoDemanda"));
 const ResponderAvaliacoes = lazy(() => import("./pages/admin/ResponderAvaliacoes"));
 const RelatorioLucro = lazy(() => import("./pages/admin/RelatorioLucro"));
 const Divulgacao = lazy(() => import('./pages/Divulgacao'));
+const AcertoMotoboys = lazy(() => import('./pages/AcertoMotoboys'));
+const BotPedidosConfig = lazy(() => import('./pages/admin/BotPedidosConfig'));
 
 // Wrapper que carrega providers pesados apenas para rotas autenticadas
 function AuthenticatedProviders({ children }) {
@@ -150,6 +152,8 @@ function App() {
                   <Route path="/admin/lucro" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><RelatorioLucro /></PrivateRoute>} />
                   <Route path="/admin/relatorio-cancelamentos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioCancelamentos /></PrivateRoute>} />
                   <Route path="/admin/entrada-estoque" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><EntradaEstoqueXML /></PrivateRoute>} />
+                  <Route path="/admin/acerto-motoboys" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><AcertoMotoboys /></PrivateRoute>} />
+                  <Route path="/admin/bot-pedidos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><BotPedidosConfig /></PrivateRoute>} />
 
                   {/* Rotas Master */}
                   <Route path="/master-dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterDashboard /></PrivateRoute>} />

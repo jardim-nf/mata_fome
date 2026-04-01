@@ -55,7 +55,7 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
             lista.push({
               id: docSnap.id,
               nome: data.nomeBairro || docSnap.id,
-              taxa: Number(data.valorTaxa || 0),
+              taxa: Number(data.taxa || data.valorTaxa || 0),
             });
           });
           // Ordena alfabeticamente

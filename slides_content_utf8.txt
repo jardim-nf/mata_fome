@@ -1,0 +1,1098 @@
+﻿Total: 44 slides
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 1:
+  ÔÇó Reforma tribut├íria e aspectos da LC 214/2025
+  ÔÇó Conceitos gerais da reforma sobre o consumo
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 2:
+  ÔÇó Apresenta├º├úo ÔÇô Eduardo Oliveira
+  ÔÇó Contador, Graduado em Ci├¬ncias Cont├íbeis pela Universidade 7 de Setembro;
+  ÔÇó Especializado em Direito, Processo e Planejamento Tribut├írio pela UNIFOR;
+  ÔÇó S├│cio da CEO Consultoria Tribut├íria;
+  ÔÇó Experi├¬ncia como gestor de planejamento tribut├írio de ind├║stria de grande porte, e ex-Consultor
+  ÔÇó Tributos com atua├º├úo em big four - EY (uma das maiores empresas do mundo na ├írea de auditoria,impostos e transa├º├Áes corporativas);
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 3:
+  ÔÇó Introdu├º├úo ÔÇô O novo sistema tribut├írio
+  ÔÇó Por que a Reforma foi criada: objetivos, princ├¡pios e cronograma de transi├º├úo;
+  ÔÇó Regras gerais do IBS e CBS (estrutura, base de c├ílculo e fato gerador);
+  ÔÇó 2. Impactos no setor de presta├º├úo de servi├ºos;
+  ÔÇó Impactos em pre├ºo e em cr├®ditos;
+  ÔÇó Cesta b├ísica, al├¡quota reduzida e redu├º├úo de 100%: quando o setor de servi├ºos se enquadra (ou n├úo);
+  ÔÇó C├ílculo estimado de al├¡quotas e cen├írios para empresas de servi├ºos;
+  ÔÇó 3. N├úo cumulatividade e Split Payment
+  ÔÇó Como funcionar├í a apura├º├úo assistida do IBS/CBS
+  ÔÇó Obriga├º├Áes acess├│rias e transmiss├Áes de dados
+  ÔÇó Fiscaliza├º├úo eletr├┤nica autom├ítica: riscos e responsabilidades
+  ÔÇó Como se preparar para a contabilidade digital integrada;
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 4:
+  ÔÇó Introdu├º├úo ÔÇô O novo sistema tribut├írio
+  ÔÇó Por que a Reforma foi criada: objetivos, princ├¡pios e cronograma de transi├º├úo;
+  ÔÇó Regras gerais do IBS e CBS (estrutura, base de c├ílculo e fato gerador);
+  ÔÇó 2. Impactos no setor de presta├º├úo de servi├ºos;
+  ÔÇó Impactos em pre├ºo e em cr├®ditos;
+  ÔÇó Cesta b├ísica, al├¡quota reduzida e redu├º├úo de 100%: quando o setor de servi├ºos se enquadra (ou n├úo);
+  ÔÇó C├ílculo estimado de al├¡quotas e cen├írios para empresas de servi├ºos;
+  ÔÇó 3. N├úo cumulatividade e Split Payment
+  ÔÇó Como funcionar├í a apura├º├úo assistida do IBS/CBS
+  ÔÇó Obriga├º├Áes acess├│rias e transmiss├Áes de dados
+  ÔÇó Fiscaliza├º├úo eletr├┤nica autom├ítica: riscos e responsabilidades
+  ÔÇó Como se preparar para a contabilidade digital integrada;
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 5:
+  ÔÇó Apresenta├º├úo ÔÇô Eduardo Oliveira
+  ÔÇó Contador, Graduado em Ci├¬ncias Cont├íbeis pela Universidade 7 de Setembro;
+  ÔÇó Especializado em Direito, Processo e Planejamento Tribut├írio pela UNIFOR;
+  ÔÇó S├│cio da CEO Consultoria Tribut├íria;
+  ÔÇó Experi├¬ncia como gestor de planejamento tribut├írio de ind├║stria de grande porte, e ex-Consultor Tributos com atua├º├úo em big four - EY (uma das maiores empresas do mundo na ├írea de auditoria, impostos e transa├º├Áes corporativas);
+  ÔÇó Consultor tribut├írio com mais de 10 (dez) anos de atua├º├úo nas ├íreas cont├íbil/tribut├íria, consultoria e planejamento tribut├írio, com experi├¬ncias em projetos diversos realizados em empresas nacionais e multinacionais de diversos portes e segmentos;
+  ÔÇó Palestrante registrado no CRC-CE, professor de cursos de extens├úo/in company na ├írea tribut├íria h├í mais de 8 anos, e professor convidado em p├│s gradua├º├Áes diversas para temas relacionados ao Direito Tribut├írio, e mais recentemente, Reforma Tribut├íria;
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 6:
+  ÔÇó Introdu├º├úo ÔÇô O novo sistema tribut├írio
+  ÔÇó Por que a Reforma foi criada: objetivos, princ├¡pios e cronograma de transi├º├úo;
+  ÔÇó Regras gerais do IBS e CBS (estrutura, base de c├ílculo e fato gerador);
+  ÔÇó 2. Impactos no setor de presta├º├úo de servi├ºos;
+  ÔÇó Impactos em pre├ºo e em cr├®ditos;
+  ÔÇó Cesta b├ísica, al├¡quota reduzida e redu├º├úo de 100%: quando o setor de servi├ºos se enquadra (ou n├úo);
+  ÔÇó C├ílculo estimado de al├¡quotas e cen├írios para empresas de servi├ºos;
+  ÔÇó 3. N├úo cumulatividade e Split Payment
+  ÔÇó Como funcionar├í a apura├º├úo assistida do IBS/CBS
+  ÔÇó Obriga├º├Áes acess├│rias e transmiss├Áes de dados
+  ÔÇó Fiscaliza├º├úo eletr├┤nica autom├ítica: riscos e responsabilidades
+  ÔÇó Como se preparar para a contabilidade digital integrada;
+  ÔÇó 4. Pr├│ximos passos para se preparar para a reforma tribut├íria e Debates;
+  ÔÇó Apresenta├º├úo ÔÇô Eduardo Oliveira
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 7:
+  ÔÇó Reforma Tribut├íria - Introdu├º├úo
+  ÔÇó Bike Sharing
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 8:
+  ÔÇó Reforma tribut├íria sobre o consumo
+  ÔÇó PIS/COFINS
+  ÔÇó ICMS e FECOP
+  ÔÇó ISS
+  ÔÇó REFORMA TRIBUT├üRIA
+  ÔÇó CBS
+  ÔÇó FEDERAL
+  ÔÇó IBS
+  ÔÇó SUBNACIONAL
+  ÔÇó IS
+  ÔÇó FEDERAL
+  ÔÇó IPI
+  ÔÇó Contribui├º├úo sobre bens e servi├ºos.
+  ÔÇó Imposto  sobre bens e servi├ºos.
+  ÔÇó Imposto seletivo que incidir├í sobre bens e servi├ºos prejudiciais ├á sa├║de ou ao meio ambiente.
+  ÔÇó EXTIN├ç├âO
+  ÔÇó CRIA├ç├âO
+  ÔÇó Exceto para produtos com similar fabricado na ZFM
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 9:
+  ÔÇó Transi├º├úo
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 10:
+  ÔÇó Princ├¡pios do novo IVA
+  ÔÇó Base ampla de incid├¬ncia:
+  ÔÇó inclusive alugu├®is, intang├¡veis, e m├║tuos.
+  ÔÇó Veda├º├úo aos incentivos fiscais;
+  ÔÇó N├úo cumulatividade ampla:
+  ÔÇó Cr├®dito de tudo, exceto uso e consumo pessoal.
+  ÔÇó Legisla├º├úo uniforme em todo o territ├│rio nacional:
+  ÔÇó Estado n├úo legisla mais sobre o IVA, mas poder├í fixar sua al├¡quota.
+  ÔÇó Princ├¡pio da neutralidade:
+  ÔÇó Decis├Áes econ├┤micas n├úo podem mais ser afetadas por quest├Áes tribut├írias.
+  ÔÇó Implanta├º├úo da sistem├ítica de split payment
+  ÔÇó *
+  ÔÇó Cobran├ºa por fora:
+  ÔÇó mais transpar├¬ncia no c├ílculo do tributo
+  ÔÇó Tributa├º├úo no destino
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 11:
+  ÔÇó Incentivos fiscais na constitui├º├úo federal
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 12:
+  ÔÇó Lei Complementar 214/25
+  ÔÇó Incentivos fiscais
+  ÔÇó Requisitos estabelecidos (resumo)
+  ÔÇó Contribuinte devem estar ÔÇ£adimplentesÔÇØ as normas do seu ato concessivo;
+  ÔÇó As condi├º├Áes do ato concessivo devem envolver, devem exigir do titular do benef├¡cio ├┤nus ou restri├º├Áes ├á sua atividade, tais como: finalidade de expans├úo do empreendimento, gera├º├úo de empregos, limita├º├Áes de pre├ºo;
+  ÔÇó N├úo se enquadram como contrapartidas: que configurem mera declara├º├úo de inten├º├Áes, mero cumprimento de deveres de observ├óncia obrigat├│ria, destina├º├úo a fundos (Ex: FEEF).
+  ÔÇó Habilita├º├úo perante ├á RFB, entre jan/2026 e dez/2028, conforme regulamenta├º├úo da RFB.
+  ÔÇó As pessoas f├¡sicas ou jur├¡dicas, que em fun├º├úo das redu├º├Áes do ICMS e ICMS, no per├¡odo de 2029 a 2032, ser├úo compensados pelo fundo de compensa├º├úo de incentivos, de acordo com os crit├®rios e limites para apura├º├úo do n├¡vel de benef├¡cios e de sua redu├º├úo, em linha com os procedimentos desta Lei Complementar;
+  ÔÇó Requisitos: Titular de incentivo concedido at├® 31/05/2023, e desde que tenham cumprido os requisitos da Lei Complementar 160 de 2017;
+  ÔÇó O incentivo deve ser concedido sobre prazo certo e sob condi├º├úo, com efetiva repercuss├úo econ├┤mica;
+  ÔÇó Incentivos fiscais na constitui├º├úo federal
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 13:
+  ÔÇó Reforma tribut├íria sobre o consumo ÔÇô Tributa├º├úo no destino
+  ÔÇó Prestador Servi├ºo
+  ÔÇó Eus├®bio
+  ÔÇó Tomador Servi├ºo
+  ÔÇó Fortaleza
+  ÔÇó Tomador Servi├ºo
+  ÔÇó Maracana├║
+  ÔÇó Hoje
+  ÔÇó Com Reforma
+  ÔÇó Prestador Servi├ºo
+  ÔÇó Eus├®bio
+  ÔÇó Tomador Servi├ºo
+  ÔÇó Fortaleza
+  ÔÇó Tomador Servi├ºo
+  ÔÇó Maracana├║
+  ÔÇó ISS: 2% ISS
+  ÔÇó A al├¡quota utilizada ├® a do munic├¡pio de origem;
+  ÔÇó Planejamentos tribut├írios envolvendo estes casos dever├úo ser revistos;
+  ÔÇó A al├¡quota utilizada ├® a do munic├¡pio de destino, independente de onde o contribuinte estiver localizado (origem)*;
+  ÔÇó PISCO: 3,65%
+  ÔÇó CBS: 10%
+  ÔÇó IBS Estado: 14%
+  ÔÇó IBS Munic├¡pio: 4%
+  ÔÇó IBS Estado: 14%
+  ÔÇó IBS Munic├¡pio: 5%
+  ÔÇó Total: 5,65%
+  ÔÇó Total: 28%*
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 14:
+  ÔÇó Como precificar com a reforma tribut├íria?
+  ÔÇó Pre├ºo Bruto
+  ÔÇó 1.094,69
+  ÔÇó ISS
+  ÔÇó 54,73
+  ÔÇó PIS/COFINS
+  ÔÇó 39,96
+  ÔÇó Receita Liquida
+  ÔÇó 1.000,00
+  ÔÇó Hoje
+  ÔÇó O cliente v├¬ o pre├ºo bruto na nota fiscal, e os impostos j├í se presumem embutidos no pre├ºo;
+  ÔÇó ├ë necess├írio considerar precifica├º├úo com os impostos embutidos (t├®cnica de ÔÇ£gross upÔÇØ)
+  ÔÇó Com Reforma
+  ÔÇó Pre├ºo L├¡quido
+  ÔÇó 1.000,00
+  ÔÇó IBS
+  ÔÇó 180,00
+  ÔÇó CBS
+  ÔÇó 100,00
+  ÔÇó Pre├ºo Bruto
+  ÔÇó 1.280,00
+  ÔÇó O cliente v├¬ o pre├ºo l├¡quido da nota, com os impostos ÔÇ£por foraÔÇØ, sabendo exatamente qual parcela ├® acrescida ao pre├ºo cobrado pelo produto/servi├ºo;
+  ÔÇó A precifica├º├úo ser├í feita pelo valor l├¡quido de impostos, e a cada opera├º├úo o valor ├® acrescido na nota fiscal;
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 15:
+  ÔÇó N├úo cumulatividade
+  ÔÇó ICMS, PIS e COFINS e ISS
+  ÔÇó N├úo cumulatividade tradicional
+  ÔÇó IBS e CBS
+  ÔÇó N├úo cumulatividade plena
+  ÔÇó Exemplos (principais cr├®ditos):
+  ÔÇó Compra de mercadorias (ICMS, PIS, COFINS e
+  ÔÇó ISS
+  ÔÇó );
+  ÔÇó Aquisi├º├úo de insumos (ICMS, PIS, COFINS e
+  ÔÇó ISS
+  ÔÇó );
+  ÔÇó Aquisi├º├úo de servi├ºos de comunica├º├úo e transporte interestadual e intermunicipal (ICMS, PIS e COFINS e
+  ÔÇó ISS
+  ÔÇó );
+  ÔÇó Servi├ºos sujeitos ao ISS (
+  ÔÇó ICMS
+  ÔÇó , PIS e COFINS e
+  ÔÇó ISS
+  ÔÇó );
+  ÔÇó Aquisi├º├úo de material de uso e consumo (
+  ÔÇó ICMS, PIS, COFINS e ISS
+  ÔÇó );
+  ÔÇó Exemplos:
+  ÔÇó Tudo, exceto despesas que n├úo tenham rela├º├úo com as atividades da empresa (IBS e CBS).
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 16:
+  ÔÇó Como reconhecer despesas com a reforma tribut├íria
+  ÔÇó Hoje
+  ÔÇó Hoje o pre├ºo bruto do servi├ºo ├® R$ 1.800,00, e como a empresa prestadora de servi├ºo n├úo tem nenhum cr├®dito, os impostos pagam viram custo da opera├º├úo;
+  ÔÇó Com Reforma
+  ÔÇó Estima-se que a empresa v├í pagar mais caro pela aquisi├º├úo de bens e servi├ºos, por├®m, o cr├®dito amplo vai permitir a despesa ficar em valor igual ou menor;
+  ÔÇó Essa an├ílise deve ser caso a caso;
+  ÔÇó Valor Bruto
+  ÔÇó 1.800,00
+  ÔÇó ISS
+  ÔÇó 90,00
+  ÔÇó PIS/COFINS
+  ÔÇó 65,70
+  ÔÇó Receita Liquida
+  ÔÇó 1.644,30
+  ÔÇó Pre├ºo L├¡quido
+  ÔÇó 1.644,30
+  ÔÇó IBS
+  ÔÇó 295,97
+  ÔÇó CBS
+  ÔÇó 164,43
+  ÔÇó Pre├ºo Bruto
+  ÔÇó 2.104,70
+  ÔÇó Custo do Servi├ºo
+  ÔÇó 1.644,30
+  ÔÇó Cr├®ditos a Compensar
+  ÔÇó 460,40
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 17:
+  ÔÇó Al├¡quotas
+  ÔÇó Al├¡quota refer├¬ncia
+  ÔÇó Al├¡quota definida por resolu├º├úo do senado federal, com base em calculo do TCU, de maneira a manter a carga tribut├íria neutra ÔÇô sem aumento de arrecada├º├úo;
+  ÔÇó Ser├í adotada como al├¡quota padr├úo de cobran├ºa, em caso de aus├¬ncia de lei espec├¡fica do ente federativo definindo a sua al├¡quota;
+  ÔÇó Al├¡quota padr├úo
+  ÔÇó Al├¡quota definida pelo ente federado para efeito de cobran├ºa do IBS e CBS (Uni├úo ÔÇô CBS, Estados ÔÇô IBS, e Munic├¡pios ÔÇô IBS);
+  ÔÇó Liberdade para o ente federativo utilizar a al├¡quota refer├¬ncia ou adotar outra;
+  ÔÇó A al├¡quota definida pelo ente federado se aplica ├á todas as opera├º├Áes com bens e servi├ºos naquela localidade;
+  ÔÇó Utiliza como par├ómetro o destino para identificar a al├¡quota da opera├º├úo,
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 18:
+  ÔÇó Al├¡quotas
+  ÔÇó 0%
+  ÔÇó Cesta b├ísica
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 19:
+  ÔÇó Al├¡quotas por setor
+  ÔÇó Escolas
+  ÔÇó Cl├¡nicas m├®dicas
+  ÔÇó Advogados e Contadores
+  ÔÇó Servi├ºos em Geral sem redu├º├úo
+  ÔÇó Redu├º├úo de 60% da al├¡quota;
+  ÔÇó Estimado aumento de carga tribut├íria;
+  ÔÇó Presta├º├úo de servi├ºos em regra para PF;
+  ÔÇó Prov├ível repasse de pre├ºo;
+  ÔÇó Se estiver no Simples, A PRIORI, nada muda;
+  ÔÇó Redu├º├úo de 60% da al├¡quota;
+  ÔÇó Estimado aumento de carga tribut├íria;
+  ÔÇó Necess├írio verificar estrutura de custos para avaliar impacto na carga efetiva ;
+  ÔÇó Se estiver no Simples, A PRIORI, nada muda;
+  ÔÇó Redu├º├úo de 30% da al├¡quota;
+  ÔÇó Estimado aumento de carga tribut├íria;
+  ÔÇó Maior custo com folha, que n├úo gera cr├®dito;
+  ÔÇó Possibilidade de repasse, pois em regra o cliente ├® PJ;
+  ÔÇó Al├¡quota de 28%, sem redu├º├úo;
+  ÔÇó Necess├írio uma real discuss├úo de repasse de pre├ºo, considerando o cr├®dito do adquirente;
+  ÔÇó Caso  o cliente seja PF, ser├í bastante onerado esse setor, com prov├ível impacto de margem
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 20:
+  ÔÇó Estrutura Atual
+  ÔÇó SERVIARM SERVICO DE VIGILANCIA ARMADA LTDA
+  ÔÇó 80.11-1-01 - Atividades de vigil├óncia e seguran├ºa privada
+  ÔÇó SERVAL SERVICOS DE SEGURANCA LTDA
+  ÔÇó .
+  ÔÇó 80.11-1-01 - Atividades de vigil├óncia e seguran├ºa privada
+  ÔÇó SERVAL SERVICOS E LIMPEZA LTDA.
+  ÔÇó 78.20-5-00 - Loca├º├úo de m├úo-de-obra tempor├íria
+  ÔÇó AVANCE SERVICOS ADMINISTRATIVOS LTDA
+  ÔÇó 62.04-0-00 - Consultoria em tecnologia da informa├º├úo
+  ÔÇó Grande parte dos custos associados ├á m├úo de obra ÔÇô sem cr├®ditos associados;
+  ÔÇó N├úo h├í previs├úo de redu├º├úo de al├¡quotas previstas na legisla├º├úo;
+  ÔÇó Necess├írio verificar estrutura de custos para avaliar impacto na carga efetiva;
+  ÔÇó Necess├írio avaliar impactos das opera├º├Áes intragrupo, especialmente o CSC.
+  ÔÇó Principais coment├írios
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 21:
+  ÔÇó Al├¡quotas e previs├úo ao longo do tempo
+  ÔÇó Descri├º├úo
+  ÔÇó Hoje
+  ÔÇó (25 e 26)
+  ÔÇó 2027
+  ÔÇó 2028
+  ÔÇó 2029
+  ÔÇó 2030
+  ÔÇó 2031
+  ÔÇó 2032
+  ÔÇó 2033
+  ÔÇó IBS
+  ÔÇó 1,8%
+  ÔÇó 3,6%
+  ÔÇó 5,4%
+  ÔÇó 7,2%
+  ÔÇó 18,0%
+  ÔÇó CBS
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó ISS
+  ÔÇó 5,0%
+  ÔÇó 5,0%
+  ÔÇó 5,0%
+  ÔÇó 4,5%
+  ÔÇó 4,0%
+  ÔÇó 3,5%
+  ÔÇó 3,0%
+  ÔÇó 0,0%
+  ÔÇó PISCO
+  ÔÇó 3,65%
+  ÔÇó IRPJ
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó CSLL
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó Total
+  ÔÇó 19,5%
+  ÔÇó 25,9%
+  ÔÇó 25,9%
+  ÔÇó 27,2%
+  ÔÇó 28,5%
+  ÔÇó 29,8%
+  ÔÇó 31,1%
+  ÔÇó 38,9%
+  ÔÇó *N├úo considera impacto de cr├®ditos
+  ÔÇó Regime Geral
+  ÔÇó Com redu├º├úo de 60%
+  ÔÇó Descri├º├úo
+  ÔÇó Hoje
+  ÔÇó 2027
+  ÔÇó 2028
+  ÔÇó 2029
+  ÔÇó 2030
+  ÔÇó 2031
+  ÔÇó 2032
+  ÔÇó 2033
+  ÔÇó IBS
+  ÔÇó 0,7%
+  ÔÇó 1,4%
+  ÔÇó 2,2%
+  ÔÇó 2,9%
+  ÔÇó 7,2%
+  ÔÇó CBS
+  ÔÇó 4,0%
+  ÔÇó 4,0%
+  ÔÇó 4,0%
+  ÔÇó 4,0%
+  ÔÇó 4,0%
+  ÔÇó 4,0%
+  ÔÇó 4,0%
+  ÔÇó ISS
+  ÔÇó 5,00%
+  ÔÇó 5,00%
+  ÔÇó 5,00%
+  ÔÇó 4,5%
+  ÔÇó 4,0%
+  ÔÇó 3,5%
+  ÔÇó 3,0%
+  ÔÇó 0,0%
+  ÔÇó PISCO
+  ÔÇó 3,65%
+  ÔÇó IRPJ
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó CSLL
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó Total
+  ÔÇó 19,53%
+  ÔÇó 19,9%
+  ÔÇó 19,9%
+  ÔÇó 20,1%
+  ÔÇó 20,3%
+  ÔÇó 20,5%
+  ÔÇó 20,8%
+  ÔÇó 22,1%
+  ÔÇó *N├úo considera impacto de cr├®ditos
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 22:
+  ÔÇó Cuidados com o fato gerador
+  ÔÇó Nova regra de incid├¬ncia
+  ÔÇó A partir de 2026, o fato gerador das opera├º├Áes de consumo ser├í:
+  ÔÇó realiza├º├úo de opera├º├úo onerosa com outras pessoas ÔÇô f├¡sicas ou jur├¡dicas;
+  ÔÇó Aluguel, cess├úo, permuta e diversos outros itens que atualmente n├úo s├úo tributados, passar├úo a ser no pr├│ximo ano;
+  ÔÇó Menor campo de discuss├úo para n├úo pagar os impostos;
+  ÔÇó Opera├º├Áes com partes relacionadas
+  ÔÇó A distribui├º├úo a t├¡tulo gratuito de bens e servi├ºos pela pessoa jur├¡dica s├úo enquadradas como fato gerador.
+  ÔÇó Ex: Pagamento da escola do filho pela PJ, despesas do s├│cios, entre outras.
+  ÔÇó Venda entre PJs do mesmo grupo econ├┤mico, visando economia tribut├íria
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 23:
+  ÔÇó Como ficam os contribuintes do simples nacional?
+  ÔÇó Equipara├º├úo ao regime regular de IBS/CBS
+  ÔÇó O contribuinte do simples nacional n├úo ser├í afetado pelo regime regular de IBS e CBS, por regra;
+  ÔÇó Opcionalmente, o contribuinte poder├í aderir ao regime regular de IBS e CBS;
+  ÔÇó Em caso de op├º├úo pelo regime regular, a parcela da tributa├º├úo sobre o consumo (IBS e CBS) n├úo ser├í cobrada no regime ├║nico (CF, Art. 146, ┬º 2)
+  ÔÇó Oportunidade:
+  ÔÇó Em opera├º├Áes B2B, pode ser mais vantajoso a op├º├úo pelo regime regular.
+  ÔÇó R$ 100 (8$ DAS - IVA embutido)
+  ÔÇó Cr├®dito IVA: 0
+  ÔÇó Custo: R$ 100
+  ÔÇó R$ 92 + R$ 25 IVA (Por fora) = R$ 117
+  ÔÇó Cr├®dito IVA: 25$
+  ÔÇó Custo: R$ 92
+  ÔÇó Contribuintes do Simples Nacional (art. 47, ┬º 9┬║):
+  ÔÇó Fica vedado o direito ao cr├®dito (empresa do SN);
+  ÔÇó Fica permitido apropriar cr├®dito do simples, no montante pago nesse regime
+  ÔÇó Op├º├úo ao regime regular (art. 41, ┬º 3┬║)
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 24:
+  ÔÇó Exemplos
+  ÔÇó Escola no regime Simples Nacional
+  ÔÇó Carga Efetiva antes da reforma: 12,3% (Exemplo)
+  ÔÇó Carga Efetiva depois da reforma: 12,3% - NADA MUDA!
+  ÔÇó A escola pode optar pelo regime regular, e passa a apropriar cr├®ditos de IVA nas aquisi├º├Áes, e tributar na sa├¡da (com redu├º├úo de 60%).
+  ÔÇó Vale a pena?
+  ÔÇó ├ë necess├írio calcular, mas em tese, N├âO.
+  ÔÇó Escrit├│rio Cont├íbil no regime Simples Nacional
+  ÔÇó Carga Efetiva antes da reforma: 9,8% (Exemplo)
+  ÔÇó Carga Efetiva depois da reforma: 9,8% - NADA MUDA!
+  ÔÇó ├ë importante ser avaliado pelo escrit├│rio ir pro regime regular, e passar a destacar IVA, pois todos os clientes (em tese) poder├úo tomar cr├®dito.
+  ÔÇó Risco:
+  ÔÇó Caso haja clientes do Simples, eles n├úo poder├úo tomar cr├®dito.
+  ÔÇó Necess├írio an├ílise!
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 25:
+  ÔÇó Primeiras discuss├Áes a partir da nova Lei Complementar
+  ÔÇó https://valor.globo.com/legislacao/noticia/2025/02/09/projeto-de-lei-quer-excluir-ibscbs-do-calculo-do-icms.ghtml
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 26:
+  ÔÇó Primeiras discuss├Áes a partir da nova Lei Complementar
+  ÔÇó Exemplo em 2027
+  ÔÇó Exemplo em 2033
+  ÔÇó Pre├ºo do Servi├ºo
+  ÔÇó 5.000.000
+  ÔÇó Pre├ºo do Servi├ºo
+  ÔÇó 5.000.000
+  ÔÇó CBS
+  ÔÇó 500.000
+  ÔÇó CBS/IBS
+  ÔÇó 1.400.000
+  ÔÇó ISS
+  ÔÇó ISS
+  ÔÇó Base de C├ílculo 1
+  ÔÇó 5.500.000
+  ÔÇó Base de C├ílculo 1
+  ÔÇó 6.400.000
+  ÔÇó Base de C├ílculo 2
+  ÔÇó 5.000.000
+  ÔÇó Base de C├ílculo 2
+  ÔÇó 5.000.000
+  ÔÇó Diferen├ºa
+  ÔÇó 500.000
+  ÔÇó Diferen├ºa
+  ÔÇó 1.400.000
+  ÔÇó Diferen├ºa de ISS (5%)
+  ÔÇó 25.000
+  ÔÇó Diferen├ºa de ISS (5%)
+  ÔÇó 70.000
+  ÔÇó Diferen├ºa de ICMS (20%)
+  ÔÇó 100.000
+  ÔÇó Diferen├ºa de ICMS (20%)
+  ÔÇó 280.000
+  ÔÇó A base de c├ílculo do ISS/ICMS n├úo deve considerar o novo IVA, baseado nos princ├¡pios tribut├írios que regem o novo imposto;
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 27:
+  ÔÇó Simula├º├úo da Reforma Tribut├íria ÔÇô Servi├ºos
+  ÔÇó Premissa: Sem repasse (Mesma RBT)
+  ÔÇó Premissa: Com repasse (Mesma RL)
+  ÔÇó Conta
+  ÔÇó Descri├º├úo
+  ÔÇó Valor
+  ÔÇó C/ Reforma
+  ÔÇó C/ Reforma
+  ÔÇó 3.1.1.02
+  ÔÇó RECEITA DE PRESTA├ç├âO DE SERVI├çOS
+  ÔÇó -              4.532.309
+  ÔÇó -       4.532.309
+  ÔÇó -
+  ÔÇó -       5.299.538
+  ÔÇó 767.229
+  ÔÇó 3.1.2.03
+  ÔÇó (-) IMPOSTOS SOBRE VENDAS E SERVI├çOS
+  ÔÇó 392.045
+  ÔÇó 1.269.046
+  ÔÇó -           877.002
+  ÔÇó 1.159.274
+  ÔÇó -          767.229
+  ÔÇó 3.1.2.03.00003
+  ÔÇó (-) ISS
+  ÔÇó 226.615
+  ÔÇó -
+  ÔÇó 226.615
+  ÔÇó -
+  ÔÇó 226.615
+  ÔÇó IVA
+  ÔÇó 1.269.046
+  ÔÇó -       1.269.046
+  ÔÇó 1.159.274
+  ÔÇó -      1.159.274
+  ÔÇó 3.1.2.03.00004
+  ÔÇó (-) COFINS
+  ÔÇó 135.969
+  ÔÇó -
+  ÔÇó 135.969
+  ÔÇó -
+  ÔÇó 135.969
+  ÔÇó 3.1.2.03.00005
+  ÔÇó (-) PIS
+  ÔÇó 29.460
+  ÔÇó -
+  ÔÇó 29.460
+  ÔÇó -
+  ÔÇó 29.460
+  ÔÇó RECEITA L├ìQUIDA
+  ÔÇó -              4.140.264
+  ÔÇó -       3.263.262
+  ÔÇó -           877.002
+  ÔÇó -       4.140.264
+  ÔÇó -
+  ÔÇó 3.2.2.01
+  ÔÇó DESPESAS FINANCEIRAS
+  ÔÇó 137.508
+  ÔÇó 137.508
+  ÔÇó -
+  ÔÇó 137.508
+  ÔÇó -
+  ÔÇó 3.2.2.02
+  ÔÇó RECEITAS FINANCEIRAS
+  ÔÇó -                    28.420
+  ÔÇó -             28.420
+  ÔÇó -
+  ÔÇó -             28.420
+  ÔÇó -
+  ÔÇó 3.2.3.01
+  ÔÇó DESPESAS ADMINISTRATIVAS - PESSOAL
+  ÔÇó 1.854.402
+  ÔÇó 1.854.402
+  ÔÇó -
+  ÔÇó 1.854.402
+  ÔÇó -
+  ÔÇó 3.2.3.02
+  ÔÇó ALUGU├ëIS E ARRENDAMENTOS
+  ÔÇó 52.652
+  ÔÇó 37.909
+  ÔÇó 14.742
+  ÔÇó 37.909
+  ÔÇó 14.742
+  ÔÇó 3.2.3.03
+  ÔÇó IMPOSTOS, TAXAS E CONTRIBUI├ç├òES
+  ÔÇó 14.946
+  ÔÇó 14.946
+  ÔÇó -
+  ÔÇó 14.946
+  ÔÇó -
+  ÔÇó 3.2.3.04
+  ÔÇó DESPESAS ADMINISTRATIVAS - GERAIS
+  ÔÇó 447.928
+  ÔÇó 327.860
+  ÔÇó 120.068
+  ÔÇó 327.860
+  ÔÇó 120.068
+  ÔÇó 3.2.3.05
+  ÔÇó OUTRAS DESPESAS OPERACIONAIS
+  ÔÇó 8.379
+  ÔÇó 8.379
+  ÔÇó -
+  ÔÇó 8.379
+  ÔÇó -
+  ÔÇó 3.2.5.01
+  ÔÇó RECEITAS DIVERSAS
+  ÔÇó -                    11.880
+  ÔÇó -             11.880
+  ÔÇó -
+  ÔÇó -             11.880
+  ÔÇó -
+  ÔÇó 4.1.1.01
+  ÔÇó IMPOSTO DE RENDA E CSLL
+  ÔÇó 480.372
+  ÔÇó 480.372
+  ÔÇó -
+  ÔÇó 480.372
+  ÔÇó -
+  ÔÇó Total Resultado
+  ÔÇó -              1.184.377
+  ÔÇó -           442.185
+  ÔÇó -           742.191
+  ÔÇó -       1.319.187
+  ÔÇó 134.810
+  ÔÇó Total Recolhido
+  ÔÇó Total Recolhido
+  ÔÇó Total Recolhido
+  ÔÇó ISS
+  ÔÇó 226.615  5%
+  ÔÇó PIS
+  ÔÇó 29.460  0,65%
+  ÔÇó COFINS
+  ÔÇó 135.969  3%
+  ÔÇó IVA Total
+  ÔÇó 1.134.236  25%
+  ÔÇó IVA Total
+  ÔÇó 1.024.464
+  ÔÇó 19,3%
+  ÔÇó IRPJ
+  ÔÇó 348.450  8%
+  ÔÇó IRPJ
+  ÔÇó 348.450  8%
+  ÔÇó IRPJ
+  ÔÇó 348.450
+  ÔÇó 8%
+  ÔÇó CSLL
+  ÔÇó 131.922  2,9%
+  ÔÇó CSLL
+  ÔÇó 131.922  2,9%
+  ÔÇó CSLL
+  ÔÇó 131.922
+  ÔÇó 2,9%
+  ÔÇó Total
+  ÔÇó 872.417
+  ÔÇó Total
+  ÔÇó 1.614.608
+  ÔÇó Total
+  ÔÇó 1.504.836
+  ÔÇó Total %
+  ÔÇó -19,25%
+  ÔÇó Total %
+  ÔÇó -35,62%
+  ÔÇó Total %
+  ÔÇó -28,40%
+  ÔÇó Apura├º├úo IVA
+  ÔÇó Apura├º├úo IVA
+  ÔÇó D├®bitos
+  ÔÇó 1.269.046
+  ÔÇó D├®bitos
+  ÔÇó 1.159.274
+  ÔÇó Cr├®ditos
+  ÔÇó 134.810
+  ÔÇó Cr├®ditos
+  ÔÇó 134.810
+  ÔÇó Diferen├ºa
+  ÔÇó 1.134.236
+  ÔÇó Diferen├ºa
+  ÔÇó 1.024.464
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 28:
+  ÔÇó Simula├º├úo da Reforma Tribut├íria - Em valores nominais, no per├¡odo de transi├º├úo
+  ÔÇó Descri├º├úo
+  ÔÇó Hoje
+  ÔÇó 2027
+  ÔÇó 2028
+  ÔÇó 2029
+  ÔÇó 2030
+  ÔÇó 2031
+  ÔÇó 2032
+  ÔÇó 2033
+  ÔÇó IBS
+  ÔÇó 1,8%
+  ÔÇó 3,6%
+  ÔÇó 5,4%
+  ÔÇó 7,2%
+  ÔÇó 18,0%
+  ÔÇó CBS
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó 10,0%
+  ÔÇó ISS
+  ÔÇó 5,0%
+  ÔÇó 5,0%
+  ÔÇó 5,0%
+  ÔÇó 4,5%
+  ÔÇó 4,0%
+  ÔÇó 3,5%
+  ÔÇó 3,0%
+  ÔÇó 0,0%
+  ÔÇó PISCO
+  ÔÇó 3,7%
+  ÔÇó IRPJ
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó 8,0%
+  ÔÇó CSLL
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó 2,9%
+  ÔÇó Total
+  ÔÇó 19,5%
+  ÔÇó 25,9%
+  ÔÇó 25,9%
+  ÔÇó 27,2%
+  ÔÇó 28,5%
+  ÔÇó 29,8%
+  ÔÇó 31,1%
+  ÔÇó 38,9%
+  ÔÇó *N├úo considera impacto de cr├®ditos
+  ÔÇó % Efetivo do ano
+  ÔÇó 19,5%
+  ÔÇó 25,0%
+  ÔÇó 25,0%
+  ÔÇó 26,2%
+  ÔÇó 27,3%
+  ÔÇó 28,5%
+  ÔÇó 29,6%
+  ÔÇó 35,6%
+  ÔÇó Recolhimento
+  ÔÇó 872.417
+  ÔÇó 1.134.959
+  ÔÇó 1.134.959
+  ÔÇó 1.187.039
+  ÔÇó 1.239.118
+  ÔÇó 1.291.198
+  ÔÇó 1.343.277
+  ÔÇó 1.614.408
+  ÔÇó Aumento % por ano
+  ÔÇó 30,1%
+  ÔÇó 30,1%
+  ÔÇó 36,1%
+  ÔÇó 42,0%
+  ÔÇó 48,0%
+  ÔÇó 54,0%
+  ÔÇó 85,1%
+  ÔÇó Simula├º├úo de impacto
+  ÔÇó E agora?
+  ÔÇó Esse neg├│cio precisa discutir repasse de pre├ºo para os clientes, e essa conversa tem que ocorrer no pr├│ximo ano (2026);
+  ÔÇó ├ë necess├írio avaliar quem s├úo os clientes (se PJ ou PF, ou ainda, optantes pelo Simples), para medir o impacto em cada um;
+  ÔÇó Rever contratos passados, e passar a j├í considerar nos contratos futuros cl├íusulas de reajuste por conta de impacto de norma tribut├íria;
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 29:
+  ÔÇó Regras gerais da n├úo cumulatividade e Apura├º├úo Assistida (No├º├Áes de RTC)
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 30:
+  ÔÇó N├úo cumulatividade
+  ÔÇó O contribuinte pode se creditar de toda e qualquer opera├º├úo onerada com IBS e CBS, desde que tenha havido a extin├º├úo por qualquer das modalidades previstas no art. 27 (Split Payment), e n├úo se enquadre como bens de uso e consumo pessoal;
+  ÔÇó Art. 47 - Regime de Caixa!
+  ÔÇó Condicionantes ao cr├®dito (Art. 47, ┬º 1┬║):
+  ÔÇó i. Existir documento fiscal id├┤nio; e
+  ÔÇó ii. Realizar a apura├º├úo de forma segregada, n├úo sendo permitido compensa├º├úo cruzada (CBS x IBS);
+  ÔÇó Possibilidade de creditamento via destaque de nota fiscal, caso n├úo senha sido implementado nenhuma das modalidades de liquida├º├úo (Split e outras)
+  ÔÇó (Art. 48)
+  ÔÇó Contribuintes do Simples Nacional (art. 47, ┬º 9┬║):
+  ÔÇó Fica vedado o direito ao cr├®dito (empresa do SN);
+  ÔÇó Fica permitido apropriar cr├®dito do simples, no montante pago nesse regime
+  ÔÇó Op├º├úo ao regime regular (art. 41, ┬º 3┬║)
+  ÔÇó Estornos:
+  ÔÇó A realiza├º├úo de opera├º├Áes sujeitas a al├¡quota reduzida n├úo acarretar├í o estorno, parcial ou integral, dos cr├®ditos(...), salvo quando expressamente previsto nesta Lei Complementar.
+  ÔÇó (Art. 47, ┬º 10)
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 31:
+  ÔÇó Bens de uso e consumo pessoal
+  ÔÇó a) joias, pedras e metais preciosos;
+  ÔÇó b) obras de arte e antiguidades de valor hist├│rico ou arqueol├│gico;
+  ÔÇó c) bebidas alco├│licas;
+  ÔÇó d) derivados do tabaco;
+  ÔÇó e) armas e muni├º├Áes;
+  ÔÇó f) bens e servi├ºos recreativos, esportivos e est├®ticos;
+  ÔÇó Os seguintes bens:
+  ÔÇó Exce├º├úo acima ser├í flexibilizada quando destinados ├á atividade fim.
+  ÔÇó Ex: Fabrica├º├úo de bebidas, armas para empresa de seguran├ºa, entre outras.
+  ÔÇó Os seguintes bens e servi├ºos fornecidos de forma n├úo onerosa ou a valor inferior ao de marcado para:
+  ÔÇó a) o pr├│prio contribuinte, quando este for pessoa f├¡sica;
+  ÔÇó b) as pessoas f├¡sicas que sejam s├│cios, acionistas, administradores e membros de conselhos de administra├º├úo e fiscal e comit├¬s de assessoramento do conselho de administra├º├úo do contribuinte previstos em lei;
+  ÔÇó c) os empregados dos contribuintes de que tratam as al├¡neas ÔÇ£aÔÇØ e ÔÇ£bÔÇØ deste inciso; e
+  ÔÇó d) os c├┤njuges, companheiros ou parentes, consangu├¡neos ou afins, at├® o terceiro grau, das pessoas f├¡sicas referidas nas al├¡neas ÔÇ£aÔÇØ, ÔÇ£bÔÇØ e ÔÇ£cÔÇØ deste inciso.
+  ÔÇó Exce├º├úo acima ser├í flexibilizada para um rol de itens classificados na pr├│pria Lei complementar, tais como EPIs, fardamentos, servi├ºos de sa├║de, planos de sa├║de, creche, benef├¡cios trabalhistas.
+  ÔÇó Previs├úo aberta de N├âO classifica├º├úo de uso e consumo pessoal direcionada para um regulamento.
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 32:
+  ÔÇó Split Payment
+  ÔÇó Formas de pagamento*
+  ÔÇó Recolhimento do saldo devedor
+  ÔÇó Split Payment (3 modalidades)
+  ÔÇó Recolhimento pelo adquirente
+  ÔÇó Compensa├º├úo
+  ÔÇó Compensa├º├úo ÔÇô Cr├®ditos do mesmo per├¡odo;
+  ÔÇó Compensa├º├úo ÔÇô Cr├®ditos de per├¡odos anteriores;
+  ÔÇó Ressarcimento por op├º├úo;
+  ÔÇó Apropria├º├úo por valor nominal;
+  ÔÇó Uso em 5 anos
+  ÔÇó Cr├®dito presumido: compras de produtor rural;
+  ÔÇó Cr├®dito presumido: aquisi├º├úo de servi├ºos de transporte PF;
+  ÔÇó Cr├®dito presumido: aquisi├º├úo de res├¡duos s├│lidos de coletores incentivados (com exce├º├Áes);
+  ÔÇó Caso o split payment n├úo seja implementado, o cr├®dito estar├í vinculado ao destaque em nota.
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 33:
+  ÔÇó Split Payment
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 34:
+  ÔÇó Split Payment
+  ÔÇó Split superinteligente (definitivo)
+  ÔÇó Split inteligente
+  ÔÇó Split simplificado
+  ÔÇó Atacadista
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 28
+  ÔÇó Bem ou servi├ºo
+  ÔÇó (100 + 28% IVA = 128)
+  ÔÇó Comit├¬ GESTOR do IBS e CBS
+  ÔÇó Pagamento:
+  ÔÇó 100$
+  ÔÇó Split 1:
+  ÔÇó R$ 28
+  ÔÇó Consulta:
+  ÔÇó para esta opera├º├úo,
+  ÔÇó h├í cr├®ditos?
+  ÔÇó Resposta:
+  ÔÇó N├úo
+  ÔÇó Meio de pagamento
+  ÔÇó Varejista
+  ÔÇó ADQUIRENTE
+  ÔÇó CR├ëDITO
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 28
+  ÔÇó R$ 42
+  ÔÇó Consumidor Final
+  ÔÇó (N├úo h├í cr├®dito)
+  ÔÇó Bem ou servi├ºo
+  ÔÇó (150 + 28% IVA = 192)
+  ÔÇó Meio de pagamento
+  ÔÇó Consulta:
+  ÔÇó para esta opera├º├úo,
+  ÔÇó h├í cr├®ditos?
+  ÔÇó Resposta:
+  ÔÇó Sim
+  ÔÇó Quanto:
+  ÔÇó 28$
+  ÔÇó Split 2:
+  ÔÇó R$ 14
+  ÔÇó Pagamento:
+  ÔÇó R$ 178
+  ÔÇó Total do IVA na cadeia: R$ 42
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 35:
+  ÔÇó Split Payment
+  ÔÇó Split superinteligente (definitivo)
+  ÔÇó Split inteligente
+  ÔÇó Split simplificado
+  ÔÇó Atacadista
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 28
+  ÔÇó Varejista
+  ÔÇó Consumidor Final
+  ÔÇó ADQUIRENTE
+  ÔÇó CR├ëDITO
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 28
+  ÔÇó R$ 42
+  ÔÇó (N├úo h├í cr├®dito)
+  ÔÇó Bem ou servi├ºo
+  ÔÇó (100 + 28% IVA = 128)
+  ÔÇó Comit├¬ GESTOR do IBS e CBS
+  ÔÇó Pagamento:
+  ÔÇó 100$
+  ÔÇó Split 1:
+  ÔÇó R$ 28
+  ÔÇó Bem ou servi├ºo
+  ÔÇó (150 + 28% IVA = 192)
+  ÔÇó Pagamento:
+  ÔÇó 150$
+  ÔÇó Split 2:
+  ÔÇó R$ 42
+  ÔÇó sem consulta
+  ÔÇó R$ 28
+  ÔÇó (Devolu├º├úo
+  ÔÇó em 3 dias)
+  ÔÇó Total do IVA na cadeia: R$ 42
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 36:
+  ÔÇó Split Payment ÔÇô Varia├º├úo em compras a prazo
+  ÔÇó Split superinteligente (definitivo)
+  ÔÇó Split inteligente
+  ÔÇó Split simplificado
+  ÔÇó Atacadista
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 28
+  ÔÇó (a ser pago)
+  ÔÇó Varejista
+  ÔÇó Consumidor Final
+  ÔÇó ADQUIRENTE
+  ÔÇó CR├ëDITO
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 0
+  ÔÇó (n├úo houve pagamento)
+  ÔÇó R$ 42
+  ÔÇó (N├úo h├í cr├®dito)
+  ÔÇó Bem ou servi├ºo a prazo de 90 dias
+  ÔÇó (100 + 28% IVA = 128)
+  ÔÇó Comit├¬ GESTOR do IBS e CBS
+  ÔÇó Pagamento:
+  ÔÇó 0
+  ÔÇó Bem ou servi├ºo ├á vista
+  ÔÇó (150 + 28% IVA = 192)
+  ÔÇó Pagamento:
+  ÔÇó 150$
+  ÔÇó Split 2:
+  ÔÇó R$ 42
+  ÔÇó Total do IVA na cadeia: R$ 42
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 37:
+  ÔÇó Split Payment
+  ÔÇó Split superinteligente (definitivo)
+  ÔÇó Split inteligente
+  ÔÇó Split simplificado
+  ÔÇó Atacadista
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 28
+  ÔÇó Varejista
+  ÔÇó Consumidor Final
+  ÔÇó ADQUIRENTE
+  ÔÇó CR├ëDITO
+  ÔÇó FORNECEDOR
+  ÔÇó D├ëBITO
+  ÔÇó R$ 28
+  ÔÇó R$ 42
+  ÔÇó (N├úo h├í cr├®dito)
+  ÔÇó Bem ou servi├ºo
+  ÔÇó (100 + 28% IVA = 128)
+  ÔÇó Comit├¬ GESTOR do IBS e CBS
+  ÔÇó Pagamento:
+  ÔÇó 100$
+  ÔÇó Split 1:
+  ÔÇó R$ 28
+  ÔÇó Bem ou servi├ºo
+  ÔÇó (150 + 28% IVA = 192)
+  ÔÇó Pagamento:
+  ÔÇó 154,2$
+  ÔÇó Split 2:
+  ÔÇó R$ 37,8
+  ÔÇó ÔÇô Presumido (90% * 42)
+  ÔÇó R$ 23,80
+  ÔÇó (Devolu├º├úo
+  ÔÇó em 3 dias)
+  ÔÇó Total do IVA na cadeia: R$ 42
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 38:
+  ÔÇó Split Payment ÔÇô Comunica├º├úo entre sistemas
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 39:
+  ÔÇó Exemplo da apura├º├úo assistida
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 40:
+  ÔÇó Quais os pr├│ximos passos?
+  ÔÇó 2025
+  ÔÇó 2026
+  ÔÇó 2027
+  ÔÇó Prepara├º├úo de sistemas da Receita Federal;
+  ÔÇó Adequa├º├úo de par├ómetros de emiss├úo de nota fiscal com as tags do IVA;
+  ÔÇó Nota T├®cnica N┬║ 004/005 ÔÇô Adequa├º├Áes de campo da NFSe;
+  ÔÇó Demais normativos regulamentadores.
+  ÔÇó Simula├º├úo de cen├írios;
+  ÔÇó Revis├úo de contratos e discuss├úo de repasses;
+  ÔÇó Revis├úo de estrutura societ├íria e tribut├íria;
+  ÔÇó Planejamento estrat├®gico dos pr├│ximos passos;
+  ÔÇó Mudan├ºa de plantas industriais, estabelecimentos, considerando o novo cen├írio;
+  ÔÇó Operacionaliza├º├úo de decis├Áes tribut├írias estrat├®gicas;
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 41:
+  ÔÇó Roadmap da Reforma Tribut├íria
+  ÔÇó Garantia da opera├º├úo
+  ÔÇó Planejamento
+  ÔÇó Adequa├º├úo ao novo cen├írio
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 42:
+  ÔÇó Panorama Geral de Impactos
+  ÔÇó Sistemas
+  ÔÇó Planejamento financeiro
+  ÔÇó Precifica├º├úo
+  ÔÇó Mapeamento de riscos
+  ÔÇó Log├¡stica e distribui├º├úo
+  ÔÇó Revis├úo de contratos
+  ÔÇó Planejamento tribut├írio
+  ÔÇó Decis├Áes de investimentos
+  ÔÇó Estrutura societ├íria
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 43:
+  ÔÇó Fim
+  ÔÇó A reforma tribut├íria chegou.
+  ÔÇó O que voc├¬ est├í fazendo para lidar com essa nova realidade?
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+SLIDE 44:
+  ÔÇó Fim
+  ÔÇó Eduardo Oliveira
+  ÔÇó Consultor Tribut├írio
+  ÔÇó eduardo@
+  ÔÇó ceotax
+  ÔÇó .com.br
+  ÔÇó Linkedin:
+  ÔÇó Eduardo Oliveira
+  ÔÇó Contato:
+  ÔÇó (85) 99938-0443
+

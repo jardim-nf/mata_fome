@@ -113,12 +113,14 @@ const AdminDashboard = () => {
         { path: '/admin/avaliacoes', title: 'Avaliações', sub: 'Responder reviews dos clientes', icon: <IoStatsChart />, cor: 'yellow', adminOnly: true },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
       ]
+
     },
     {
       title: "⚙️ Configurações do Sistema",
       description: "Ajustes técnicos e integrações",
       items: [
         { path: '/admin/multi-platform', title: 'Integrações', sub: 'iFood, WhatsApp e impressoras', icon: <IoShareSocial />, cor: 'teal', adminOnly: true },
+        { path: '/admin/bot-pedidos', title: 'Bot IA de Pedidos', sub: 'Clientes pedem via WhatsApp com IA', icon: <IoMegaphoneOutline />, cor: 'green', adminOnly: true },
         { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: 'Pedido automático via WhatsApp', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
 
         { path: '/nossos-clientes', title: 'Nossos Clientes', sub: 'Envio manual de WhatsApp em massa', icon: <IoPersonOutline />, cor: 'cyan', adminOnly: true },

@@ -210,10 +210,14 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     if (!pedido) return null;
 
     const enderecoFinal = pedido.endereco || pedido.cliente?.endereco || null;
-    const nomeClientePrincipal = pedido.clienteNome || pedido.cliente?.nome || 'Cliente';
-    const telefoneCliente = pedido.telefone || pedido.cliente?.telefone || null;
-    
-    const referenciaFinal = enderecoFinal?.referencia || pedido.pontoReferencia || pedido.referencia || null;
+    // enderecoEntrega pode ser string (pedido do bot) ou objeto (pedido manual)
+    const enderecoString = typeof pedido.enderecoEntrega === 'string' ? pedido.enderecoEntrega : null;
+    const enderecoObj = enderecoFinal && typeof enderecoFinal === 'object' ? enderecoFinal : null;
+    const temEndereco = !!enderecoString || !!enderecoObj;
+    const nomeClientePrincipal = pedido.clienteNome || pedido.nomeCliente || pedido.cliente?.nome || 'Cliente';
+    const telefoneCliente = pedido.clienteTelefone || pedido.telefoneCliente || pedido.telefone || pedido.cliente?.telefone || null;
+    const bairroEntrega = pedido.bairro || pedido.bairroEntrega || null;
+    const referenciaFinal = enderecoObj?.referencia || pedido.pontoReferencia || pedido.referencia || null;
 
     let stringData = new Date().toLocaleString('pt-BR');
     if (pedido.createdAt?.toDate) stringData = pedido.createdAt.toDate().toLocaleString('pt-BR');
@@ -273,13 +277,13 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     <p className="font-black text-sm uppercase mb-1">{nomeClientePrincipal}</p>
                     {telefoneCliente && <p className="text-xs font-bold mb-1">Tel: {telefoneCliente}</p>}
 
-                    {isDelivery && enderecoFinal && (
+                    {/* Endereço objeto (modal manual) */}
+                    {isDelivery && enderecoObj && (
                         <div className="border-2 border-black p-1 mt-1">
                             <p className="font-bold text-xs uppercase underline">ENTREGA:</p>
-                            <p className="font-bold text-[13px] uppercase mt-1">{enderecoFinal.rua}, {enderecoFinal.numero}</p>
-                            <p className="text-xs uppercase">{enderecoFinal.bairro}</p>
-                            {enderecoFinal.complemento && <p className="text-xs italic uppercase">({enderecoFinal.complemento})</p>}
-                            
+                            <p className="font-bold text-[13px] uppercase mt-1">{enderecoObj.rua}, {enderecoObj.numero}</p>
+                            <p className="text-xs uppercase">{enderecoObj.bairro}</p>
+                            {enderecoObj.complemento && <p className="text-xs italic uppercase">({enderecoObj.complemento})</p>}
                             {referenciaFinal && (
                                 <p className="text-[10px] font-bold mt-1 uppercase break-words whitespace-normal">
                                     REF: {referenciaFinal}
@@ -287,6 +291,22 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                             )}
                         </div>
                     )}
+
+                    {/* Endereço string (bot WhatsApp) */}
+                    {isDelivery && !enderecoObj && enderecoString && (
+                        <div className="border-2 border-black p-1 mt-1">
+                            <p className="font-bold text-xs uppercase underline">ENTREGA:</p>
+                            <p className="font-bold text-[13px] uppercase mt-1 break-words whitespace-normal">{enderecoString}</p>
+                            {bairroEntrega && <p className="text-xs font-bold uppercase">BAIRRO: {bairroEntrega}</p>}
+                        </div>
+                    )}
+
+                    {!temEndereco && isDelivery && (
+                        <div className="border border-dashed border-black p-1 mt-1 text-center text-xs font-bold uppercase">
+                            ENDEREÇO NÃO INFORMADO
+                        </div>
+                    )}
+
                     {isRetirada && (
                         <div className="mt-1 border-2 border-black p-1 text-center font-black text-xs uppercase">
                             RETIRADA NO BALCÃO

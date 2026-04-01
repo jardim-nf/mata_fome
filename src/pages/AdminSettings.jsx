@@ -15,7 +15,9 @@ import {
   IoCalendarOutline, 
   IoWalletOutline, 
   IoCheckmarkCircle,
-  IoPrintOutline 
+  IoPrintOutline,
+  IoBanOutline,
+  IoShareSocialOutline
 } from 'react-icons/io5'; 
 import { SiMercadopago } from 'react-icons/si';
 
@@ -61,6 +63,16 @@ const AdminSettings = () => {
 
   // Estado Mercado Pago
   const [mpConectado, setMpConectado] = useState(false);
+
+  // Opt-out
+  const [optoutMensagem, setOptoutMensagem] = useState('SAIR');
+
+  // Indicação de Clientes
+  const [indicacaoAtivo, setIndicacaoAtivo] = useState(false);
+  const [indicacaoTipo, setIndicacaoTipo] = useState('fixo'); // 'fixo' | 'percentual'
+  const [indicacaoValor, setIndicacaoValor] = useState('5');
+  const [indicacaoPercentual, setIndicacaoPercentual] = useState('5');
+  const [savingIndicacao, setSavingIndicacao] = useState(false);
 
   // =========================================================
   // 1. CAPTURA DO CÓDIGO OAUTH (MERCADO PAGO)
@@ -131,6 +143,14 @@ const AdminSettings = () => {
              });
              setHorarios(oldHorarios);
           }
+
+          // Carregar indicação
+          if (data.indicacao) {
+            setIndicacaoAtivo(data.indicacao.ativo || false);
+            setIndicacaoTipo(data.indicacao.tipo || 'fixo');
+            setIndicacaoValor(String(data.indicacao.valor || '5'));
+            setIndicacaoPercentual(String(data.indicacao.percentual || '5'));
+          }
         }
 
         // B. Carrega as Categorias do Cardápio (Para Mapeamento de Impressão)
@@ -195,8 +215,14 @@ const AdminSettings = () => {
         valorMinimoRaspadinha,
         horariosFuncionamento: horarios, 
         roteamentoImpressao: roteamentoImpressao, 
-        impressoraBalcao, // Salva o nome da impressora no BD
-        impressoraCozinha, // Salva o nome da impressora no BD
+        impressoraBalcao,
+        impressoraCozinha,
+        indicacao: {
+          ativo: indicacaoAtivo,
+          tipo: indicacaoTipo,
+          valor: Number(indicacaoValor) || 5,
+          percentual: Number(indicacaoPercentual) || 5
+        },
         updatedAt: new Date()
       });
 
@@ -441,7 +467,52 @@ const AdminSettings = () => {
             </div>
           </div>
 
+          {/* BLOCO: Opt-out de Marketing */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-4 border-b pb-4">
+              <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                <IoBanOutline size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">Opt-out de Marketing</h2>
+                <p className="text-sm text-gray-500">Clientes que enviarem "SAIR" são descadastrados automaticamente</p>
+              </div>
+            </div>
+
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+              <p className="text-sm font-bold text-red-800 mb-2">🚫 Como funciona o descadastro automático:</p>
+              <ol className="text-sm text-red-700 space-y-1 list-decimal list-inside">
+                <li>O cliente envia uma mensagem com a palavra: <strong>SAIR</strong>, <strong>PARAR</strong>, <strong>STOP</strong> ou <strong>CANCELAR</strong></li>
+                <li>O sistema detecta automaticamente e registra o opt-out</li>
+                <li>Uma confirmação é enviada ao cliente</li>
+                <li>O cliente não receberá mais mensagens de marketing automático</li>
+              </ol>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Link do Webhook (configurar no UAZAPI)</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 font-mono text-slate-700 break-all">
+                  {`https://us-central1-matafome-98455.cloudfunctions.net/webhookWhatsAppOptout?estabId=${primeiroEstabelecimento || 'SEU_ESTAB_ID'}`}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `https://us-central1-matafome-98455.cloudfunctions.net/webhookWhatsAppOptout?estabId=${primeiroEstabelecimento}`;
+                    navigator.clipboard.writeText(url);
+                    toast.success('Link copiado!');
+                  }}
+                  className="shrink-0 px-3 py-2 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-800"
+                >
+                  Copiar
+                </button>
+              </div>
+              <p className="text-xs text-slate-400 mt-2">Configure este link como webhook de mensagens recebidas no painel do UAZAPI.</p>
+            </div>
+          </div>
+
           {/* BLOCO: Gamificação (RASPADINHA) */}
+
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-4 border-b pb-4">
               <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">

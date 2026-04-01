@@ -6,7 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { IoArrowBack, IoLogoWhatsapp, IoCheckmarkCircle, IoAlertCircle, IoCopyOutline } from 'react-icons/io5';
+import { IoArrowBack, IoLogoWhatsapp, IoCheckmarkCircle, IoAlertCircle, IoCopyOutline, IoRocketOutline, IoChatbubbleEllipsesOutline } from 'react-icons/io5';
+
 
 function WhatsAppConfig() {
   const { userData } = useAuth();
@@ -94,6 +95,21 @@ function WhatsAppConfig() {
             )}
           </div>
         </div>
+
+        {/* Atalho: Bot de Pedidos IA */}
+        <Link
+          to="/admin/bot-pedidos"
+          className="flex items-center gap-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 mb-6 text-white shadow-md hover:shadow-lg hover:scale-[1.01] transition-all"
+        >
+          <div className="bg-white/20 rounded-xl p-3">
+            <IoRocketOutline size={24} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="font-black text-sm">🤖 Bot de Pedidos (IA)</p>
+            <p className="text-[11px] text-green-100 font-medium">Configure o bot inteligente que recebe pedidos pelo WhatsApp</p>
+          </div>
+          <IoChatbubbleEllipsesOutline size={20} className="text-white/70" />
+        </Link>
 
         <div className="bg-gray-800 rounded-2xl p-4 mb-6">
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-2">🔗 URL do Webhook (Cole no painel da Uazapi)</p>

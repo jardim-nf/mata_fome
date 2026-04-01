@@ -70,6 +70,8 @@ const mpClientSecret = defineSecret("MP_CLIENT_SECRET");
 const mpClientIdSecret = defineSecret("MP_CLIENT_ID"); 
 const whatsappVerifyToken = defineSecret("WHATSAPP_VERIFY_TOKEN");
 const whatsappApiToken = defineSecret("WHATSAPP_API_TOKEN");
+// iFood Partner API — lidos via process.env (já configurados como env vars no Cloud Run)
+// Não usar defineSecret para evitar conflito com env vars normais existentes
 // const meshyApiKey = defineSecret("MESHY_API_KEY"); // desativado - 3D feito manual
 
 // ==================================================================
@@ -770,6 +772,7 @@ export const vincularMercadoPago = onCall({ secrets: [mpClientSecret, mpClientId
 const conversas = {};
 
 export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsappApiToken], maxInstances: 5 }, async (req, res) => {
+
     if (req.method === 'GET') {
       if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === whatsappVerifyToken.value()) {
         return res.status(200).send(req.query['hub.challenge']);
@@ -785,18 +788,14 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       let instanceId = '';
       let isUazapi = false;
 
-      // Detecta Uazapi (Evolution API)
       if (body?.event === 'messages.upsert' || body?.data?.key) {
         isUazapi = true;
-        const msgData = body.data || body.data?.[0]; // Evoluton as vezes manda array
+        const msgData = body.data || body.data?.[0];
         if (!msgData || msgData.key?.fromMe) return res.status(200).send('OK'); 
-        
         from = msgData.key.remoteJid.split('@')[0];
         messageText = msgData.message?.conversation || msgData.message?.extendedTextMessage?.text || '';
         instanceId = body.instance;
-      } 
-      // Detecta Meta (Oficial)
-      else if (body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
+      } else if (body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
         const msg = body.entry[0].changes[0].value.messages[0];
         from = msg.from;
         messageText = msg.text?.body?.trim() || '';
@@ -825,91 +824,151 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       const produtos = cardapioSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       const chatKey = `${estabId}_${from}`;
-      if (!conversas[chatKey]) conversas[chatKey] = { etapa: 'inicio', itens: [], nome: '' };
+      if (!conversas[chatKey]) conversas[chatKey] = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
       const chat = conversas[chatKey];
 
       let resposta = '';
-      const msgLower = messageText.toLowerCase();
+      const msgLower = messageText.toLowerCase().trim();
 
-      if (chat.etapa === 'inicio' || msgLower === 'oi' || msgLower === 'olá' || msgLower === 'menu' || msgLower === 'cardápio' || msgLower === 'cardapio') {
+      // ——— REINICIAR ———
+      if (['cancelar', 'sair', 'reiniciar'].includes(msgLower)) {
+        delete conversas[chatKey];
+        resposta = '🔄 Pedido cancelado. Digite *"oi"* para recomeçar.';
+
+      // ——— CARDÁPIO / INÍCIO ———
+      } else if (chat.etapa === 'inicio' || ['oi', 'olá', 'menu', 'cardápio', 'cardapio'].includes(msgLower)) {
         const categorias = {};
         produtos.forEach(p => {
           const cat = p.categoria || 'Outros';
           if (!categorias[cat]) categorias[cat] = [];
           categorias[cat].push(p);
         });
-
         let cardapioTexto = `🍔 *${estab.nome || 'Nosso Cardápio'}*\n\n`;
         Object.entries(categorias).forEach(([cat, items]) => {
           cardapioTexto += `*📌 ${cat}*\n`;
           items.forEach((p, i) => {
-            const precoCru = typeof p.preco === 'string' ? p.preco.replace(',', '.') : p.preco;
-            const precoValidado = Number(precoCru) || 0;
-            cardapioTexto += `${i + 1}. ${p.nome} — R$ ${precoValidado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+            const preco = Number(String(p.preco).replace(',', '.')) || 0;
+            cardapioTexto += `${i + 1}. ${p.nome} — R$ ${preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
           });
           cardapioTexto += '\n';
         });
-        cardapioTexto += `_Para pedir, digite o nome do item e a quantidade._\nEx: *2 X-Bacon*\n\nDigite *"finalizar"* para fechar o pedido.`;
+        cardapioTexto += `_Digite o nome do item e quantidade. Ex: *2 X-Bacon*_\n\nDigite *"finalizar"* para concluir o pedido.`;
         resposta = cardapioTexto;
         chat.etapa = 'pedindo';
         chat.itens = [];
 
-      } else if (chat.etapa === 'pedindo' && msgLower === 'finalizar') {
-        if (chat.itens.length === 0) {
-          resposta = '⚠️ Seu pedido está vazio! Diga o que deseja pedir primeiro.';
+      // ——— ADICIONANDO ITENS ———
+      } else if (chat.etapa === 'pedindo') {
+        if (msgLower === 'finalizar') {
+          if (chat.itens.length === 0) {
+            resposta = '⚠️ Seu pedido está vazio! Adicione itens primeiro.';
+          } else {
+            // Buscar bairros cadastrados no Firestore
+            const taxasSnap = await db.collection(`estabelecimentos/${estabId}/taxasDeEntrega`).orderBy('nomeBairro').get();
+            chat.bairrosLista = taxasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            let subtotal = 0;
+            let resumo = '📋 *Resumo do Pedido:*\n\n';
+            chat.itens.forEach(item => {
+              const sub = item.preco * item.qtd;
+              subtotal += sub;
+              resumo += `• ${item.qtd}x ${item.nome} — R$ ${sub.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+            });
+            resumo += `\n💰 *Subtotal: R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
+
+            if (chat.bairrosLista.length > 0) {
+              resumo += `🛵 *Selecione seu bairro de entrega:*\n`;
+              chat.bairrosLista.forEach((b, i) => {
+                const taxa = Number(b.valorTaxa) || 0;
+                resumo += `*${i + 1}.* ${b.nomeBairro} — Taxa: R$ ${taxa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+              });
+              resumo += `\nDigite o *número* do seu bairro:`;
+              chat.etapa = 'bairro';
+            } else {
+              chat.bairro = '';
+              chat.taxaEntrega = 0;
+              resumo += `📍 *Digite seu endereço de entrega:*\n_Ex: Rua das Flores, 123_`;
+              chat.etapa = 'endereco';
+            }
+            resposta = resumo;
+          }
         } else {
-          chat.etapa = 'nome';
-          let resumo = '📋 *Resumo do Pedido:*\n\n';
-          let total = 0;
-          chat.itens.forEach(item => {
-            const precoCru = typeof item.preco === 'string' ? String(item.preco).replace(',', '.') : item.preco;
-            const precoValidado = Number(precoCru) || 0;
-            const subtotal = precoValidado * item.qtd;
-            total += subtotal;
-            resumo += `• ${item.qtd}x ${item.nome} — R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
-          });
-          resumo += `\n💰 *Total: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\nPara confirmar, *digite seu nome:*`;
-          resposta = resumo;
+          // Adicionar item ao pedido
+          const match = messageText.match(/^(\d+)\s*[xX]?\s*(.+)$/) || messageText.match(/^(.+?)\s+(\d+)$/);
+          let qtd = 1; let nomeProduto = messageText;
+          if (match) {
+            if (/^\d+$/.test(match[1])) { qtd = parseInt(match[1]); nomeProduto = match[2].trim(); }
+            else { nomeProduto = match[1].trim(); qtd = parseInt(match[2]); }
+          }
+          const prod = produtos.find(p => p.nome.toLowerCase().includes(nomeProduto.toLowerCase()) || nomeProduto.toLowerCase().includes(p.nome.toLowerCase()));
+          if (prod) {
+            const preco = Number(String(prod.preco).replace(',', '.')) || 0;
+            chat.itens.push({ nome: prod.nome, preco, qtd, id: prod.id });
+            resposta = `✅ *${qtd}x ${prod.nome}* adicionado! (R$ ${(preco * qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})\n\nContinue adicionando ou digite *"finalizar"*.`;
+          } else {
+            resposta = `❌ Não encontrei "${nomeProduto}" no cardápio.\nDigite *"menu"* para ver os itens.`;
+          }
         }
 
-      } else if (chat.etapa === 'nome') {
-        chat.nome = messageText;
-        chat.etapa = 'confirmado';
+      // ——— SELEÇÃO DE BAIRRO ———
+      } else if (chat.etapa === 'bairro') {
+        const idx = parseInt(msgLower) - 1;
+        if (!isNaN(idx) && idx >= 0 && idx < (chat.bairrosLista || []).length) {
+          const bairroSel = chat.bairrosLista[idx];
+          chat.bairro = bairroSel.nomeBairro;
+          chat.taxaEntrega = Number(bairroSel.valorTaxa) || 0;
+          const subtotal = chat.itens.reduce((acc, i) => acc + i.preco * i.qtd, 0);
+          const totalComTaxa = subtotal + chat.taxaEntrega;
+          resposta = `✅ *Bairro:* ${chat.bairro}\n🛵 *Taxa:* R$ ${chat.taxaEntrega.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n💰 *Total c/ taxa: R$ ${totalComTaxa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n📍 *Agora, informe seu endereço de entrega:*\n_Ex: Rua das Flores, 123 — Apto 4_`;
+          chat.etapa = 'endereco';
+        } else {
+          resposta = `❌ Opção inválida. Digite o *número* do bairro:\n`;
+          (chat.bairrosLista || []).forEach((b, i) => {
+            resposta += `*${i + 1}.* ${b.nomeBairro} — R$ ${Number(b.valorTaxa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+          });
+        }
 
-        let total = 0;
+      // ——— ENDEREÇO ———
+      } else if (chat.etapa === 'endereco') {
+        if (messageText.trim().length < 5) {
+          resposta = '⚠️ Informe um endereço válido.\n_Ex: Rua das Flores, 123_';
+        } else {
+          chat.enderecoEntrega = messageText.trim();
+          chat.etapa = 'nome';
+          resposta = `✅ *Endereço:* ${chat.enderecoEntrega}\n\n*Qual é o seu nome?*`;
+        }
+
+      // ——— NOME E CONFIRMAÇÃO ———
+      } else if (chat.etapa === 'nome') {
+        chat.nome = messageText.trim();
+
+        let subtotal = 0;
         const itensFormatados = chat.itens.map(item => {
-          const precoCru = typeof item.preco === 'string' ? String(item.preco).replace(',', '.') : item.preco;
-          const precoVal = Number(precoCru) || 0;
-          total += precoVal * item.qtd;
-          return { nome: item.nome, quantidade: item.qtd, preco: precoVal, id: item.id };
+          subtotal += item.preco * item.qtd;
+          return { nome: item.nome, quantidade: item.qtd, preco: item.preco, id: item.id };
         });
+        const taxaEntrega = chat.taxaEntrega || 0;
+        const totalFinal = subtotal + taxaEntrega;
 
         const pedidoRef = await db.collection(`estabelecimentos/${estabId}/pedidos`).add({
-          itens: itensFormatados, cliente: { nome: chat.nome, telefone: from }, status: 'recebido',
-          totalFinal: total, source: 'whatsapp', tipo: 'delivery', createdAt: FieldValue.serverTimestamp(),
-          observacao: `Pedido via WhatsApp de ${from}`
+          itens: itensFormatados,
+          cliente: { nome: chat.nome, telefone: from },
+          status: 'recebido',
+          subtotal,
+          taxaEntrega,
+          totalFinal,
+          bairro: chat.bairro || '',
+          enderecoEntrega: chat.enderecoEntrega || '',
+          source: 'whatsapp',
+          tipo: 'delivery',
+          createdAt: FieldValue.serverTimestamp(),
+          observacao: `Pedido via WhatsApp — ${from}`
         });
 
-        resposta = `✅ *Pedido confirmed!*\n\n🧑 ${chat.nome}\n📱 ${from}\n🆔 #${pedidoRef.id.slice(-6).toUpperCase()}\n\nSeu pedido foi recebido e está sendo preparado! 🎉\n\nDigite *"oi"* para fazer novo pedido.`;
+        const taxaTexto = taxaEntrega > 0 ? `\n🛵 Taxa: R$ ${taxaEntrega.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+        resposta = `✅ *Pedido confirmado!*\n\n🆔 #${pedidoRef.id.slice(-6).toUpperCase()}\n👤 ${chat.nome}\n📍 ${chat.enderecoEntrega}${chat.bairro ? ` — ${chat.bairro}` : ''}${taxaTexto}\n💰 *Total: R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\nSeu pedido está sendo preparado! 🎉\nDigite *"oi"* para novo pedido.`;
         delete conversas[chatKey];
 
-      } else if (chat.etapa === 'pedindo') {
-        const match = messageText.match(/^(\d+)\s*[xX]?\s*(.+)$/) || messageText.match(/^(.+?)\s+(\d+)$/);
-        let qtd = 1; let nomeProduto = messageText;
-        if (match) {
-          if (/^\d+$/.test(match[1])) { qtd = parseInt(match[1]); nomeProduto = match[2].trim(); } 
-          else { nomeProduto = match[1].trim(); qtd = parseInt(match[2]); }
-        }
-
-        const produtoEncontrado = produtos.find(p => p.nome.toLowerCase().includes(nomeProduto.toLowerCase()) || nomeProduto.toLowerCase().includes(p.nome.toLowerCase()));
-        if (produtoEncontrado) {
-          const precoItemCru = typeof produtoEncontrado.preco === 'string' ? produtoEncontrado.preco.replace(',', '.') : produtoEncontrado.preco;
-          const precoItemValidado = Number(precoItemCru) || 0;
-          chat.itens.push({ nome: produtoEncontrado.nome, preco: precoItemValidado, qtd, id: produtoEncontrado.id });
-          resposta = `✅ *${qtd}x ${produtoEncontrado.nome}* adicionado! (R$ ${(precoItemValidado * qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})\n\nContinue adicionando ou digite *"finalizar"*.`;
-        } else {
-          resposta = `❌ Não encontrei "${nomeProduto}" no cardápio.\n\nDigite *"menu"* para ver os itens disponíveis.`;
-        }
       } else {
         resposta = 'Olá! 👋 Digite *"oi"* ou *"menu"* para começar seu pedido!';
       }
@@ -917,19 +976,12 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       // ─── RESPONDER (UAZAPI OU META) ───
       if (wConfig.serverUrl && wConfig.apiKey && wConfig.instanceName) {
          const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
-         
          const numeroLimpo = from.replace(/\D/g, '');
          const telFinal = numeroLimpo.startsWith('55') ? numeroLimpo : `55${numeroLimpo}`;
-         
-         const payloadEnvio = {
-            number: telFinal,
-            text: resposta
-         };
-
          await fetch(`${urlFormatada}/send/text`, {
             method: 'POST',
             headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify(payloadEnvio)
+            body: JSON.stringify({ number: telFinal, text: resposta })
          });
       } else if (wConfig.phoneNumberId) {
          await fetch(`https://graph.facebook.com/v18.0/${wConfig.phoneNumberId}/messages`, {
@@ -950,6 +1002,7 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
 // 15. ENVIAR MENSAGEM WHATSAPP (Do admin para o cliente)
 // ==================================================================
 export const enviarMensagemWhatsApp = onCall(async (request) => {
+
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     const { telefone, mensagem, estabelecimentoId } = request.data;
     if (!telefone || !mensagem || !estabelecimentoId) throw new HttpsError('invalid-argument', 'Dados obrigatórios.');
@@ -1082,8 +1135,8 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
           clientesInativos.push(cliente);
         }
 
-        // Aniversário hoje
-        if (mktConfig.aniversario && cliente.dataNascimento) {
+        // Aniversário hoje — também verifica opt-out
+        if (mktConfig.aniversario && cliente.dataNascimento && !telOptouts.has(cliente.telefone)) {
           let nascimento = null;
           if (cliente.dataNascimento?.toDate) nascimento = cliente.dataNascimento.toDate();
           else if (typeof cliente.dataNascimento === 'string') nascimento = new Date(cliente.dataNascimento);
@@ -1096,6 +1149,11 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
 
       logger.info(`📤 ${nomeEstab}: ${clientesInativos.length} inativos | ${aniversariantes.length} aniversariantes`);
 
+        // 👇 Pré-carregar lista de optouts para não fazer query por cliente
+      const optoutsSnap = await db.collection('estabelecimentos').doc(estabDoc.id)
+        .collection('optout').get();
+      const telOptouts = new Set(optoutsSnap.docs.map(d => d.id));
+
       // 5. Enviar mensagens para inativos (até o limite diário)
       let enviadosHoje = 0;
 
@@ -1103,6 +1161,12 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
         if (enviadosHoje >= limiteDiario) {
           logger.info(`⏸️ ${nomeEstab}: limite diário atingido (${limiteDiario})`);
           break;
+        }
+
+        // 🚫 Pular clientes que fizeram opt-out
+        if (telOptouts.has(cliente.telefone)) {
+          logger.info(`🚫 Opt-out: pulando ${cliente.telefone}`);
+          continue;
         }
 
         try {
@@ -1306,8 +1370,17 @@ export const sendEstablishmentMessageCallable = onCall({ cors: true, timeoutSeco
       return { message: 'Nenhum cliente encontrado com telefone válido', total: 0, enviados: 0, falhas: 0 };
     }
 
-    logger.info(`📤 Envio em massa para ${estabelecimentoId}: ${clientesMap.size} clientes | por ${uid}`);
+    // 🚫 Carregar opt-outs e filtrar
+    const optoutsSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('optout').get();
+    const telOptouts = new Set(optoutsSnap.docs.map(d => d.id));
+    for (const tel of telOptouts) clientesMap.delete(tel);
 
+    logger.info(`📤 Envio em massa para ${estabelecimentoId}: ${clientesMap.size} clientes (${telOptouts.size} opt-outs removidos) | por ${uid}`);
+
+    if (clientesMap.size === 0) {
+      return { message: 'Todos os clientes fizeram opt-out', total: 0, enviados: 0, falhas: 0 };
+    }
     // 3. Enviar mensagem para cada cliente
     let enviados = 0;
     let falhas = 0;
@@ -1516,3 +1589,1774 @@ export const notificarPedidoNovo = onDocumentCreated(
     }
   }
 );
+
+// ==================================================================
+// iFood PARTNER API — INTEGRAÇÃO REAL
+// ==================================================================
+
+const IFOOD_BASE_URL = 'https://merchant-api.ifood.com.br';
+
+// ------------------------------------------------------------------
+// HELPER: Obter (ou renovar) token OAuth2 do iFood por estabelecimento
+// ------------------------------------------------------------------
+async function getIfoodToken(estabelecimentoId) {
+    const tokenRef = db.collection('estabelecimentos').doc(estabelecimentoId)
+        .collection('integracoes').doc('ifood_token');
+    const tokenSnap = await tokenRef.get();
+
+    if (tokenSnap.exists) {
+        const t = tokenSnap.data();
+        // Usa token em cache se ainda válido (com 60s de margem)
+        if (t.expiresAt && t.expiresAt.toMillis() > Date.now() + 60000) {
+            return t.accessToken;
+        }
+        // Tenta renovar com refresh_token
+        if (t.refreshToken) {
+            try {
+                const res = await fetch(`${IFOOD_BASE_URL}/authentication/v1.0/oauth/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        grantType: 'refresh_token',
+                        clientId: process.env.IFOOD_CLIENT_ID,
+                        clientSecret: process.env.IFOOD_CLIENT_SECRET,
+                        refreshToken: t.refreshToken
+                    }).toString()
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const expiresAt = new Date(Date.now() + (data.expiresIn || 3600) * 1000);
+                    await tokenRef.set({
+                        accessToken: data.accessToken,
+                        refreshToken: data.refreshToken || t.refreshToken,
+                        expiresAt: FieldValue.serverTimestamp(),
+                        atualizadoEm: FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    return data.accessToken;
+                }
+            } catch(e) {
+                logger.warn('iFood: falha ao renovar refresh_token, tentando client_credentials...', e.message);
+            }
+        }
+    }
+
+    // Fallback: client_credentials (acesso somente leitura/sandbox)
+    const res = await fetch(`${IFOOD_BASE_URL}/authentication/v1.0/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            grantType: 'client_credentials',
+            clientId: process.env.IFOOD_CLIENT_ID,
+            clientSecret: process.env.IFOOD_CLIENT_SECRET
+        }).toString()
+    });
+
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`iFood auth falhou: ${res.status} - ${err}`);
+    }
+
+    const data = await res.json();
+    await tokenRef.set({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken || null,
+        expiresAt: new Date(Date.now() + (data.expiresIn || 3600) * 1000),
+        atualizadoEm: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    return data.accessToken;
+}
+
+// ------------------------------------------------------------------
+// HELPER: Mapear pedido iFood → modelo interno Mata Fome
+// ------------------------------------------------------------------
+function mapearPedidoIfood(ifoodOrder, estabelecimentoId) {
+    const mapStatus = {
+        'PLACED': 'recebido',
+        'CONFIRMED': 'preparo',
+        'READY_TO_PICKUP': 'pronto_para_servir',
+        'DISPATCHED': 'em_entrega',
+        'CONCLUDED': 'finalizado',
+        'CANCELLED': 'cancelado'
+    };
+
+    const mapPagamento = {
+        'CREDIT': 'cartao_credito',
+        'DEBIT': 'cartao_debito',
+        'MEAL_VOUCHER': 'voucher',
+        'DIGITAL_WALLET': 'carteira_digital',
+        'PIX': 'pix',
+        'CASH': 'dinheiro'
+    };
+
+    const itens = (ifoodOrder.items || []).map(item => ({
+        id: item.externalCode || item.id,
+        nome: item.name,
+        quantidade: item.quantity,
+        preco: (item.unitPrice || 0) / 100,
+        precoFinal: (item.totalPrice || 0) / 100,
+        categoria: item.externalCode ? 'ifood' : 'outros',
+        observacao: item.observations || '',
+        adicionais: (item.subItems || []).map(sub => ({
+            nome: sub.name,
+            quantidade: sub.quantity,
+            preco: (sub.unitPrice || 0) / 100
+        }))
+    }));
+
+    const pagamento = ifoodOrder.payments?.methods?.[0];
+    const formaPagamento = pagamento ? (mapPagamento[pagamento.method] || pagamento.method.toLowerCase()) : 'outros';
+
+    const endereco = ifoodOrder.deliveryAddress ? {
+        rua: ifoodOrder.deliveryAddress.streetName || '',
+        numero: ifoodOrder.deliveryAddress.streetNumber || '',
+        bairro: ifoodOrder.deliveryAddress.neighborhood || '',
+        cidade: ifoodOrder.deliveryAddress.city || '',
+        estado: ifoodOrder.deliveryAddress.state || '',
+        cep: ifoodOrder.deliveryAddress.postalCode || '',
+        complemento: ifoodOrder.deliveryAddress.complement || '',
+        referencia: ifoodOrder.deliveryAddress.reference || ''
+    } : null;
+
+    return {
+        vendaId: `ifood_${ifoodOrder.id}`,
+        ifoodOrderId: ifoodOrder.id,
+        source: 'ifood',
+        tipo: ifoodOrder.orderType === 'TAKEOUT' ? 'retirada' : 'delivery',
+        tipoEntrega: ifoodOrder.orderType === 'TAKEOUT' ? 'retirada' : 'delivery',
+        status: mapStatus[ifoodOrder.status] || 'recebido',
+        estabelecimentoId,
+        cliente: {
+            nome: ifoodOrder.customer?.name || 'Cliente iFood',
+            telefone: ifoodOrder.customer?.phone || '',
+            userId: null
+        },
+        endereco,
+        itens,
+        totalFinal: (ifoodOrder.displayTotalPrice || ifoodOrder.totalPrice || 0) / 100,
+        taxaEntrega: (ifoodOrder.deliveryFee || 0) / 100,
+        formaPagamento,
+        metodoPagamento: formaPagamento,
+        observacoes: ifoodOrder.observations || '',
+        createdAt: FieldValue.serverTimestamp(),
+        atualizadoEm: FieldValue.serverTimestamp(),
+        dataPedido: FieldValue.serverTimestamp()
+    };
+}
+
+// ==================================================================
+// FUNÇÃO 1: Webhook — iFood envia pedidos em tempo real
+// ==================================================================
+export const ifoodWebhook = onRequest({
+    cors: false
+}, async (req, res) => {
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    try {
+        const eventos = req.body;
+        logger.info('📦 iFood Webhook recebido:', JSON.stringify(eventos).slice(0, 500));
+
+        if (!Array.isArray(eventos) || eventos.length === 0) {
+            return res.status(200).send('OK');
+        }
+
+        for (const evento of eventos) {
+            const { code, orderId, merchantId, fullCode } = evento;
+
+            if (!orderId || !merchantId) continue;
+
+            // Buscar o estabelecimentoId no Firestore pelo merchantId do iFood
+            const estabSnap = await db.collection('estabelecimentos')
+                .where('ifoodMerchantId', '==', merchantId)
+                .limit(1).get();
+
+            if (estabSnap.empty) {
+                logger.warn(`iFood: merchantId ${merchantId} não encontrado no Firestore.`);
+                continue;
+            }
+
+            const estabelecimentoId = estabSnap.docs[0].id;
+
+            // Buscar detalhes do pedido na API
+            try {
+                const token = await getIfoodToken(estabelecimentoId);
+                const orderRes = await fetch(`${IFOOD_BASE_URL}/order/v1.0/orders/${orderId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!orderRes.ok) {
+                    logger.error(`iFood: falha ao buscar pedido ${orderId}: ${orderRes.status}`);
+                    continue;
+                }
+
+                const ifoodOrder = await orderRes.json();
+                const pedidoMapeado = mapearPedidoIfood(ifoodOrder, estabelecimentoId);
+
+                // Salvar/atualizar no Firestore
+                const pedidoRef = db.collection('estabelecimentos')
+                    .doc(estabelecimentoId)
+                    .collection('pedidos')
+                    .doc(pedidoMapeado.vendaId);
+
+                await pedidoRef.set(pedidoMapeado, { merge: true });
+
+                // Dar ACK para o iFood (confirmar recebimento do evento)
+                await fetch(`${IFOOD_BASE_URL}/order/v1.0/events/acknowledgment`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify([{ id: evento.id }])
+                });
+
+                logger.info(`✅ iFood: pedido ${orderId} salvo como ${pedidoMapeado.vendaId}`);
+
+            } catch (e) {
+                logger.error(`❌ iFood: erro ao processar evento ${orderId}:`, e.message);
+            }
+        }
+
+        res.status(200).send('OK');
+    } catch (error) {
+        logger.error('❌ iFood Webhook erro geral:', error);
+        res.status(200).send('OK'); // Sempre 200 para o iFood não retentar em loop
+    }
+});
+
+// ==================================================================
+// FUNÇÃO 2: Polling — buscar pedidos pendentes periodicamente
+// ==================================================================
+export const ifoodPolling = onCall({
+    cors: true
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { estabelecimentoId } = request.data || {};
+    if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+    try {
+        const token = await getIfoodToken(estabelecimentoId);
+
+        // Buscar eventos pendentes (pedidos não confirmados)
+        const eventsRes = await fetch(`${IFOOD_BASE_URL}/order/v1.0/events:polling`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!eventsRes.ok) {
+            const err = await eventsRes.text();
+            throw new HttpsError('internal', `iFood API erro: ${eventsRes.status} - ${err}`);
+        }
+
+        const eventos = await eventsRes.json();
+        logger.info(`📡 iFood Polling: ${eventos?.length || 0} eventos encontrados`);
+
+        if (!eventos || eventos.length === 0) {
+            return { sucesso: true, pedidosNovos: 0, mensagem: 'Nenhum pedido novo.' };
+        }
+
+        let pedidosNovos = 0;
+        const idsParaACK = [];
+
+        for (const evento of eventos) {
+            const { orderId } = evento;
+            if (!orderId) continue;
+
+            const orderRes = await fetch(`${IFOOD_BASE_URL}/order/v1.0/orders/${orderId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!orderRes.ok) continue;
+
+            const ifoodOrder = await orderRes.json();
+            const pedidoMapeado = mapearPedidoIfood(ifoodOrder, estabelecimentoId);
+
+            const pedidoRef = db.collection('estabelecimentos')
+                .doc(estabelecimentoId)
+                .collection('pedidos')
+                .doc(pedidoMapeado.vendaId);
+
+            const existe = await pedidoRef.get();
+            if (!existe.exists) {
+                await pedidoRef.set(pedidoMapeado);
+                pedidosNovos++;
+            }
+
+            if (evento.id) idsParaACK.push({ id: evento.id });
+        }
+
+        // Confirmar recebimento de todos os eventos
+        if (idsParaACK.length > 0) {
+            await fetch(`${IFOOD_BASE_URL}/order/v1.0/events/acknowledgment`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(idsParaACK)
+            });
+        }
+
+        return {
+            sucesso: true,
+            pedidosNovos,
+            mensagem: `${pedidosNovos} pedido(s) novos sincronizados do iFood.`
+        };
+
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        logger.error('❌ ifoodPolling erro:', error);
+        throw new HttpsError('internal', `Erro no polling iFood: ${error.message}`);
+    }
+});
+
+// ==================================================================
+// FUNÇÃO 3: Atualizar status do pedido no iFood
+// ==================================================================
+export const ifoodAtualizarStatus = onCall({
+    cors: true
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { estabelecimentoId, ifoodOrderId, novoStatus } = request.data || {};
+    if (!estabelecimentoId || !ifoodOrderId || !novoStatus) {
+        throw new HttpsError('invalid-argument', 'estabelecimentoId, ifoodOrderId e novoStatus são obrigatórios.');
+    }
+
+    // Mapa de status interno → endpoint iFood
+    const endpointMap = {
+        'preparo':          `/order/v1.0/orders/${ifoodOrderId}/startPreparation`,
+        'pronto_para_servir': `/order/v1.0/orders/${ifoodOrderId}/readyToPickup`,
+        'em_entrega':       `/order/v1.0/orders/${ifoodOrderId}/dispatch`,
+        'finalizado':       `/order/v1.0/orders/${ifoodOrderId}/conclude`,
+        'cancelado':        `/order/v1.0/orders/${ifoodOrderId}/requestCancellation`
+    };
+
+    const endpoint = endpointMap[novoStatus];
+    if (!endpoint) {
+        return { sucesso: true, mensagem: 'Status não precisa ser sincronizado com o iFood.' };
+    }
+
+    try {
+        const token = await getIfoodToken(estabelecimentoId);
+
+        const res = await fetch(`${IFOOD_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!res.ok) {
+            const errBody = await res.text();
+            logger.warn(`iFood status update falhou: ${res.status} - ${errBody}`);
+            // Não lança erro — o painel interno já atualizou, iFood é best-effort
+            return { sucesso: false, mensagem: `iFood retornou ${res.status}: ${errBody}` };
+        }
+
+        logger.info(`✅ iFood: pedido ${ifoodOrderId} → status "${novoStatus}" sincronizado.`);
+        return { sucesso: true, mensagem: `Status "${novoStatus}" enviado ao iFood com sucesso.` };
+
+    } catch (error) {
+        logger.error('❌ ifoodAtualizarStatus erro:', error);
+        throw new HttpsError('internal', `Erro ao atualizar status iFood: ${error.message}`);
+    }
+});
+
+// ==================================================================
+// FUNÇÃO 4: Testar autenticação OAuth2 do iFood (para a tela de config)
+// ==================================================================
+export const ifoodTestarConexao = onCall({
+    cors: true
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { estabelecimentoId } = request.data || {};
+    if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+    try {
+        const token = await getIfoodToken(estabelecimentoId);
+
+        // Tentar buscar merchants vinculados para confirmar que o token funciona
+        const res = await fetch(`${IFOOD_BASE_URL}/merchant/v1.0/merchants`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        let merchants = [];
+        if (res.ok) {
+            const data = await res.json();
+            merchants = Array.isArray(data) ? data : (data.merchants || []);
+        }
+
+        // Salvar merchantId no estabelecimento (se encontrado)
+        if (merchants.length > 0) {
+            await db.collection('estabelecimentos').doc(estabelecimentoId).update({
+                ifoodMerchantId: merchants[0].id,
+                ifoodMerchantName: merchants[0].name,
+                ifoodConectado: true,
+                ifoodTestadoEm: FieldValue.serverTimestamp()
+            });
+        }
+
+        logger.info(`✅ iFood conexão testada com sucesso para ${estabelecimentoId}`);
+        return {
+            sucesso: true,
+            merchants,
+            mensagem: merchants.length > 0
+                ? `Conectado! ${merchants.length} restaurante(s) encontrado(s).`
+                : 'Token válido. Nenhum merchant vinculado ainda (aguardando aprovação iFood).'
+        };
+
+    } catch (error) {
+        logger.error('❌ ifoodTestarConexao erro:', error);
+        throw new HttpsError('internal', `Falha na conexão com iFood: ${error.message}`);
+    }
+});
+
+// ==================================================================
+// FUNÇÃO 5: Configurar URL do webhook no iFood
+// ==================================================================
+export const ifoodConfigurarWebhook = onCall({
+    cors: true
+}, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+    const { estabelecimentoId, merchantId } = request.data || {};
+    if (!estabelecimentoId || !merchantId) {
+        throw new HttpsError('invalid-argument', 'estabelecimentoId e merchantId são obrigatórios.');
+    }
+
+    try {
+        const token = await getIfoodToken(estabelecimentoId);
+        const webhookUrl = `https://us-central1-matafome-98455.cloudfunctions.net/ifoodWebhook`;
+
+        const res = await fetch(`${IFOOD_BASE_URL}/merchant/v1.0/merchant/${merchantId}/webhook`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ url: webhookUrl, events: ['PLACED', 'CONFIRMED', 'READY_TO_PICKUP', 'DISPATCHED', 'CONCLUDED', 'CANCELLED'] })
+        });
+
+        if (!res.ok) {
+            const errBody = await res.text();
+            throw new HttpsError('internal', `iFood webhook config falhou: ${res.status} - ${errBody}`);
+        }
+
+        await db.collection('estabelecimentos').doc(estabelecimentoId).update({
+            ifoodWebhookConfigurado: true,
+            ifoodWebhookUrl: webhookUrl,
+            ifoodWebhookConfigEm: FieldValue.serverTimestamp()
+        });
+
+        logger.info(`✅ iFood webhook configurado para ${merchantId}: ${webhookUrl}`);
+        return { sucesso: true, webhookUrl, mensagem: 'Webhook configurado com sucesso no iFood!' };
+
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        logger.error('❌ ifoodConfigurarWebhook erro:', error);
+        throw new HttpsError('internal', `Erro ao configurar webhook: ${error.message}`);
+    }
+});
+
+// ==================================================================
+// 20. OPT-OUT DE MARKETING
+// ==================================================================
+
+/**
+ * Registra opt-out de um cliente (via chamada direta ou webhook WhatsApp).
+ * Salva em estabelecimentos/{estabId}/optout/{telefone}
+ */
+export const registrarOptout = onCall({ cors: true }, async (request) => {
+  const { estabelecimentoId, telefone, motivo } = request.data || {};
+  if (!estabelecimentoId || !telefone) {
+    throw new HttpsError('invalid-argument', 'estabelecimentoId e telefone são obrigatórios.');
+  }
+
+  const telLimpo = String(telefone).replace(/\D/g, '');
+  if (telLimpo.length < 10) throw new HttpsError('invalid-argument', 'Telefone inválido.');
+
+  try {
+    await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('optout').doc(telLimpo).set({
+        telefone: telLimpo,
+        motivo: motivo || 'solicitado pelo cliente',
+        criadoEm: FieldValue.serverTimestamp()
+      });
+
+    logger.info(`✅ Opt-out registrado: ${telLimpo} para ${estabelecimentoId}`);
+    return { sucesso: true, mensagem: 'Descadastro realizado com sucesso.' };
+  } catch (error) {
+    logger.error('❌ Erro ao registrar opt-out:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Remove opt-out de um cliente (admin reativa o cliente)
+ */
+export const removerOptout = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, telefone } = request.data || {};
+  if (!estabelecimentoId || !telefone) throw new HttpsError('invalid-argument', 'Dados incompletos.');
+
+  const telLimpo = String(telefone).replace(/\D/g, '');
+  try {
+    await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('optout').doc(telLimpo).delete();
+    return { sucesso: true };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Lista todos os opt-outs de um estabelecimento
+ */
+export const listarOptouts = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId } = request.data || {};
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  try {
+    const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('optout').orderBy('criadoEm', 'desc').limit(200).get();
+    const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return { sucesso: true, lista };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Webhook HTTP para receber mensagens do WhatsApp (UAZAPI).
+ * Detecta "SAIR", "PARAR", "STOP", "CANCELAR" e registra opt-out automaticamente.
+ */
+export const webhookWhatsAppOptout = onRequest({ cors: false }, async (req, res) => {
+  try {
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    const body = req.body;
+    // UAZAPI envia: { phone, message: { text }, ... }
+    const telefone = body?.phone || body?.from || body?.numero || '';
+    const texto = String(body?.message?.text || body?.text || body?.mensagem || '').trim().toUpperCase();
+    const estabId = req.query.estabId || body?.estabId || '';
+
+    logger.info(`📨 WebhookOptout: from=${telefone} | texto="${texto}" | estabId=${estabId}`);
+
+    const palavrasOptout = ['SAIR', 'PARAR', 'STOP', 'PARE', 'CANCELAR', 'DESCADASTRAR', 'NAO QUERO', 'NÃO QUERO', 'REMOVER'];
+    const isOptout = palavrasOptout.some(p => texto === p || texto.startsWith(p + ' '));
+
+    if (isOptout && estabId && telefone) {
+      const telLimpo = String(telefone).replace(/\D/g, '');
+      await db.collection('estabelecimentos').doc(estabId)
+        .collection('optout').doc(telLimpo).set({
+          telefone: telLimpo,
+          motivo: `cliente enviou: "${body?.message?.text || texto}"`,
+          criadoEm: FieldValue.serverTimestamp(),
+          viaWhatsapp: true
+        });
+
+      // Responder automaticamente confirmando o descadastro
+      const estabSnap = await db.collection('estabelecimentos').doc(estabId).get();
+      if (estabSnap.exists()) {
+        const estab = estabSnap.data();
+        const wConfig = estab.whatsapp || {};
+        if (wConfig.ativo && wConfig.serverUrl && wConfig.apiKey) {
+          const nomeEstab = estab.nome || 'o estabelecimento';
+          try {
+            await enviarWhatsAppUAZAPI(wConfig, telLimpo,
+              `✅ Você foi descadastrado das mensagens automáticas de *${nomeEstab}*.\n\nVocê não receberá mais nossas promoções automáticas. Obrigado!`
+            );
+          } catch (e) {
+            logger.warn('Falha ao enviar confirmação de optout:', e.message);
+          }
+        }
+      }
+
+      logger.info(`✅ Opt-out automático registrado: ${telLimpo} para ${estabId}`);
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    logger.error('❌ Erro webhookWhatsAppOptout:', error);
+    res.status(200).json({ ok: false }); // Sempre 200 para webhook
+  }
+});
+
+// ==================================================================
+// 21. CONTROLE DE ESTOQUE
+// ==================================================================
+
+/**
+ * Atualiza o estoque de um produto (chamado pelo admin no painel de cardápio)
+ */
+export const atualizarEstoque = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, produtoId, quantidade, controlaEstoque, estoqueMinimo } = request.data || {};
+  if (!estabelecimentoId || !produtoId) {
+    throw new HttpsError('invalid-argument', 'estabelecimentoId e produtoId são obrigatórios.');
+  }
+
+  try {
+    const produtoRef = db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('cardapio').doc(produtoId);
+
+    const update = { atualizadoEm: FieldValue.serverTimestamp() };
+
+    if (controlaEstoque !== undefined) update.controlaEstoque = !!controlaEstoque;
+    if (quantidade !== undefined) update.estoque = Number(quantidade);
+    if (estoqueMinimo !== undefined) update.estoqueMinimo = Number(estoqueMinimo) || 0;
+
+    await produtoRef.update(update);
+
+    logger.info(`📦 Estoque atualizado: ${produtoId} → qty=${quantidade}`);
+    return { sucesso: true };
+  } catch (error) {
+    logger.error('❌ Erro ao atualizar estoque:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Repõe/ajusta estoque em lote (ex: reabastecimento do dia)
+ */
+export const reporEstoque = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, itens } = request.data || {};
+  // itens: [{ produtoId, quantidade }]
+  if (!estabelecimentoId || !Array.isArray(itens)) {
+    throw new HttpsError('invalid-argument', 'Dados incompletos.');
+  }
+
+  const batch = db.batch();
+  for (const item of itens) {
+    if (!item.produtoId) continue;
+    const ref = db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('cardapio').doc(item.produtoId);
+    batch.update(ref, {
+      estoque: Number(item.quantidade) || 0,
+      atualizadoEm: FieldValue.serverTimestamp()
+    });
+  }
+  await batch.commit();
+
+  logger.info(`📦 Reposição em lote: ${itens.length} produtos para ${estabelecimentoId}`);
+  return { sucesso: true, atualizados: itens.length };
+});
+
+/**
+ * Busca relatório de estoque de um estabelecimento
+ */
+export const buscarRelatorioEstoque = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId } = request.data || {};
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  try {
+    const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('cardapio')
+      .where('controlaEstoque', '==', true)
+      .get();
+
+    const produtos = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        nome: data.nome || data.name || 'Sem nome',
+        estoque: data.estoque ?? -1,
+        estoqueMinimo: data.estoqueMinimo || 0,
+        disponivel: data.disponivel !== false,
+        baixoEstoque: data.estoqueMinimo > 0 && (data.estoque ?? 0) <= data.estoqueMinimo,
+        esgotado: data.estoque !== undefined && data.estoque !== -1 && data.estoque <= 0,
+        categoria: data.categoria || data.categoriaId || '',
+        preco: data.preco || 0
+      };
+    });
+
+    // Ordenar: esgotados primeiro, depois baixo estoque, depois normal
+    produtos.sort((a, b) => {
+      if (a.esgotado && !b.esgotado) return -1;
+      if (!a.esgotado && b.esgotado) return 1;
+      if (a.baixoEstoque && !b.baixoEstoque) return -1;
+      if (!a.baixoEstoque && b.baixoEstoque) return 1;
+      return a.nome.localeCompare(b.nome);
+    });
+
+    return { sucesso: true, produtos };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// ==================================================================
+// 22. ACERTO COM MOTOBOYS
+// ==================================================================
+
+/**
+ * Gera relatório de acerto para um motoboy em um período
+ */
+export const gerarAcertoMotoboy = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, motoboyId, dataInicio, dataFim } = request.data || {};
+  if (!estabelecimentoId || !motoboyId || !dataInicio || !dataFim) {
+    throw new HttpsError('invalid-argument', 'estabelecimentoId, motoboyId, dataInicio e dataFim são obrigatórios.');
+  }
+
+  try {
+    const inicio = new Date(dataInicio);
+    const fim = new Date(dataFim);
+    fim.setHours(23, 59, 59, 999);
+
+    // Buscar pedidos do motoboy no período
+    const pedidosSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('pedidos')
+      .where('motoboyId', '==', motoboyId)
+      .get();
+
+    // Filtrar por período manualmente (Firestore não suporta múltiplos where em campos diferentes sem índice)
+    const pedidosFiltrados = [];
+    pedidosSnap.forEach(doc => {
+      const p = doc.data();
+      const dataEntrega = p.dataEntrega?.toDate?.() || (p.dataEntrega ? new Date(p.dataEntrega) : null);
+      const dataCriadoEm = p.criadoEm?.toDate?.() || (p.criadoEm ? new Date(p.criadoEm) : null);
+      const dataRef = dataEntrega || dataCriadoEm;
+
+      if (dataRef && dataRef >= inicio && dataRef <= fim) {
+        pedidosFiltrados.push({
+          id: doc.id,
+          ...p,
+          _dataRef: dataRef
+        });
+      }
+    });
+
+    // Buscar dados do motoboy
+    const motoboySnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('entregadores').doc(motoboyId).get();
+    const motoboyData = motoboySnap.exists() ? motoboySnap.data() : {};
+
+    // Calcular totais
+    let totalEntregas = 0;
+    let totalValor = 0;
+
+    const pedidosAcerto = pedidosFiltrados.map(p => {
+      const taxaEntrega = Number(p.taxaEntregaMotoboy || p.taxaEntrega || motoboyData.valorPorEntrega || 0);
+      totalEntregas++;
+      totalValor += taxaEntrega;
+      return {
+        pedidoId: p.id,
+        vendaId: p.vendaId || p.id,
+        clienteNome: p.cliente?.nome || p.clienteNome || 'Cliente',
+        totalPedido: p.totalFinal || p.total || 0,
+        taxaEntrega,
+        dataEntrega: p._dataRef?.toISOString?.() || null,
+        status: p.status || 'finalizado',
+        formaPagamento: p.formaPagamento || '',
+        enderecoEntrega: p.endereco?.rua ? `${p.endereco.rua}, ${p.endereco.numero}` : ''
+      };
+    });
+
+    // Salvar o acerto no Firestore
+    const acertoRef = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('acertos').add({
+        motoboyId,
+        motoboyNome: motoboyData.nome || 'Motoboy',
+        motoboyTelefone: motoboyData.telefone || '',
+        motoboyPix: motoboyData.pixKey || '',
+        periodo: { inicio: inicio, fim: fim },
+        periodo_str: `${inicio.toLocaleDateString('pt-BR')} a ${fim.toLocaleDateString('pt-BR')}`,
+        pedidos: pedidosAcerto,
+        totalEntregas,
+        totalValor,
+        status: 'pendente',
+        pago: false,
+        criadoEm: FieldValue.serverTimestamp(),
+        criadoPor: uid
+      });
+
+    logger.info(`✅ Acerto gerado: ${acertoRef.id} | motoboy=${motoboyId} | entregas=${totalEntregas} | R$${totalValor}`);
+
+    return {
+      sucesso: true,
+      acertoId: acertoRef.id,
+      motoboyNome: motoboyData.nome || 'Motoboy',
+      totalEntregas,
+      totalValor,
+      pedidos: pedidosAcerto
+    };
+  } catch (error) {
+    logger.error('❌ Erro ao gerar acerto:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Marca um acerto como pago
+ */
+export const marcarAcertoPago = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, acertoId } = request.data || {};
+  if (!estabelecimentoId || !acertoId) throw new HttpsError('invalid-argument', 'Dados incompletos.');
+
+  try {
+    await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('acertos').doc(acertoId).update({
+        pago: true,
+        status: 'pago',
+        pagoEm: FieldValue.serverTimestamp(),
+        pagoPor: uid
+      });
+
+    logger.info(`✅ Acerto ${acertoId} marcado como pago por ${uid}`);
+    return { sucesso: true };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Lista acertos de um estabelecimento (com filtro opcional por motoboy)
+ */
+export const listarAcertosMotoboy = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, motoboyId } = request.data || {};
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  try {
+    let q = db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('acertos').orderBy('criadoEm', 'desc').limit(50);
+
+    const snap = await q.get();
+    let lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (motoboyId) {
+      lista = lista.filter(a => a.motoboyId === motoboyId);
+    }
+
+    return { sucesso: true, lista };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// ==================================================================
+// 23. INDICAÇÃO DE CLIENTES (REFERRAL COM CASHBACK)
+// ==================================================================
+
+/**
+ * Gera ou retorna o código de indicação único de um cliente
+ */
+export const gerarCodigoIndicacao = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId } = request.data || {};
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  const uid = request.auth.uid;
+
+  try {
+    // Verificar se já tem código
+    const clienteRef = db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('clientes').doc(uid);
+    const clienteSnap = await clienteRef.get();
+
+    if (clienteSnap.exists() && clienteSnap.data().codigoIndicacao) {
+      return { sucesso: true, codigo: clienteSnap.data().codigoIndicacao, geradoAgora: false };
+    }
+
+    // Gerar código único de 6 chars (ex: MTF7X2)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const gerarCodigo = () => Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+
+    let codigo = gerarCodigo();
+    let tentativas = 0;
+
+    // Garantir que não exista outro com o mesmo código
+    while (tentativas < 10) {
+      const existeSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+        .collection('codigos_indicacao').doc(codigo).get();
+      if (!existeSnap.exists()) break;
+      codigo = gerarCodigo();
+      tentativas++;
+    }
+
+    // Registrar o código
+    await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('codigos_indicacao').doc(codigo).set({
+        uid,
+        criadoEm: FieldValue.serverTimestamp(),
+        totalIndicados: 0,
+        cashbackGerado: 0
+      });
+
+    // Salvar no perfil do cliente
+    await clienteRef.set({
+      codigoIndicacao: codigo,
+      uid,
+      criadoEm: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    logger.info(`🎁 Código de indicação gerado: ${codigo} para ${uid}`);
+    return { sucesso: true, codigo, geradoAgora: true };
+  } catch (error) {
+    logger.error('❌ Erro ao gerar código de indicação:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Valida e processa uma indicação — chamado ao criar pedido com código
+ * Credita cashback ao INDICADOR (quem indicou), não a quem foi indicado
+ */
+export const processarIndicacao = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, codigoIndicacao, pedidoId, valorPedido } = request.data || {};
+  if (!estabelecimentoId || !codigoIndicacao) {
+    throw new HttpsError('invalid-argument', 'Dados incompletos.');
+  }
+
+  const uidIndicado = request.auth.uid; // Quem está fazendo o pedido
+
+  try {
+    // 1. Buscar o código de indicação
+    const codigoRef = db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('codigos_indicacao').doc(codigoIndicacao.toUpperCase());
+    const codigoSnap = await codigoRef.get();
+
+    if (!codigoSnap.exists()) {
+      return { sucesso: false, mensagem: 'Código de indicação inválido.' };
+    }
+
+    const codigoData = codigoSnap.data();
+    const uidIndicador = codigoData.uid;
+
+    // Não pode usar o próprio código
+    if (uidIndicador === uidIndicado) {
+      return { sucesso: false, mensagem: 'Você não pode usar seu próprio código.' };
+    }
+
+    // Verificar se esse cliente já usou um código antes (primeira compra apenas)
+    const clienteIndicadoRef = db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('clientes').doc(uidIndicado);
+    const clienteIndicadoSnap = await clienteIndicadoRef.get();
+
+    if (clienteIndicadoSnap.exists() && clienteIndicadoSnap.data().indicadoPor) {
+      return { sucesso: false, mensagem: 'Você já usou um código de indicação anteriormente.' };
+    }
+
+    // 2. Buscar configuração de cashback por indicação do estabelecimento
+    const estabSnap = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
+    const estab = estabSnap.data() || {};
+    const configIndicacao = estab.indicacao || {};
+    const tipoRecompensa = configIndicacao.tipo || 'fixo'; // 'fixo' ou 'percentual'
+    const valorRecompensa = Number(configIndicacao.valor || 5); // R$5 padrão
+    const percentualRecompensa = Number(configIndicacao.percentual || 5); // 5% padrão
+
+    // Calcular cashback
+    let cashbackValor = 0;
+    if (tipoRecompensa === 'fixo') {
+      cashbackValor = valorRecompensa;
+    } else {
+      cashbackValor = ((Number(valorPedido) || 0) * percentualRecompensa) / 100;
+    }
+    cashbackValor = Math.round(cashbackValor * 100) / 100; // 2 casas decimais
+
+    // 3. Creditar cashback ao INDICADOR
+    const clienteIndicadorRef = db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('clientes').doc(uidIndicador);
+
+    await clienteIndicadorRef.set({
+      cashbackPendente: FieldValue.increment(cashbackValor),
+      cashbackTotal: FieldValue.increment(cashbackValor),
+      totalIndicados: FieldValue.increment(1),
+      atualizadoEm: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    // 4. Registrar que o indicado usou o código (para não usar de novo)
+    await clienteIndicadoRef.set({
+      indicadoPor: codigoIndicacao.toUpperCase(),
+      uidIndicador,
+      indicadoEm: FieldValue.serverTimestamp(),
+      atualizadoEm: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    // 5. Atualizar stats do código
+    await codigoRef.update({
+      totalIndicados: FieldValue.increment(1),
+      cashbackGerado: FieldValue.increment(cashbackValor),
+      ultimaIndicacaoEm: FieldValue.serverTimestamp()
+    });
+
+    // 6. Registrar indicação no histórico
+    await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('indicacoes').add({
+        codigoIndicacao: codigoIndicacao.toUpperCase(),
+        uidIndicador,
+        uidIndicado,
+        pedidoId: pedidoId || null,
+        valorPedido: Number(valorPedido) || 0,
+        cashbackCreditado: cashbackValor,
+        tipoRecompensa,
+        criadoEm: FieldValue.serverTimestamp()
+      });
+
+    // 7. Notificar indicador via WhatsApp (se configurado)
+    try {
+      const wConfig = estab.whatsapp || {};
+      if (wConfig.ativo && wConfig.serverUrl && wConfig.apiKey) {
+        const indicadorSnap = await clienteIndicadorRef.get();
+        const indicadorData = indicadorSnap.data() || {};
+        const telefoneIndicador = indicadorData.telefone || '';
+        if (telefoneIndicador) {
+          const nomeEstab = estab.nome || 'Restaurante';
+          await enviarWhatsAppUAZAPI(wConfig, telefoneIndicador,
+            `🎉 *${nomeEstab}*\n\nParabéns! Um amigo fez o primeiro pedido usando seu código de indicação!\n\n💰 Você ganhou *R$ ${cashbackValor.toFixed(2).replace('.', ',')}* de cashback!\n\nContinue indicando e acumule mais!`
+          );
+        }
+      }
+    } catch (e) {
+      logger.warn('Falha ao notificar indicador:', e.message);
+    }
+
+    logger.info(`🎁 Indicação processada: indicador=${uidIndicador} | cashback=R$${cashbackValor}`);
+    return {
+      sucesso: true,
+      cashbackCreditado: cashbackValor,
+      mensagem: `Código válido! O indicador ganhou R$ ${cashbackValor.toFixed(2).replace('.', ',')} de cashback.`
+    };
+  } catch (error) {
+    logger.error('❌ Erro ao processar indicação:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Configura as regras de indicação de um estabelecimento
+ */
+export const configurarIndicacao = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, config } = request.data || {};
+  if (!estabelecimentoId || !config) throw new HttpsError('invalid-argument', 'Dados incompletos.');
+
+  try {
+    await db.collection('estabelecimentos').doc(estabelecimentoId).update({
+      indicacao: {
+        ativo: !!config.ativo,
+        tipo: config.tipo === 'percentual' ? 'percentual' : 'fixo',
+        valor: Math.max(0, Math.min(100, Number(config.valor) || 5)),
+        percentual: Math.max(0, Math.min(50, Number(config.percentual) || 5)),
+        atualizadoEm: FieldValue.serverTimestamp()
+      }
+    });
+
+    logger.info(`✅ Configuração de indicação atualizada para ${estabelecimentoId}`);
+    return { sucesso: true };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Busca ranking de indicadores de um estabelecimento
+ */
+export const buscarRankingIndicadores = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId } = request.data || {};
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  try {
+    const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('clientes')
+      .where('totalIndicados', '>', 0)
+      .orderBy('totalIndicados', 'desc')
+      .limit(20)
+      .get();
+
+    const ranking = snap.docs.map((d, i) => {
+      const data = d.data();
+      return {
+        posicao: i + 1,
+        uid: d.id,
+        nome: data.nome || 'Cliente',
+        telefone: data.telefone || '',
+        totalIndicados: data.totalIndicados || 0,
+        cashbackTotal: data.cashbackTotal || 0,
+        codigoIndicacao: data.codigoIndicacao || ''
+      };
+    });
+
+    return { sucesso: true, ranking };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// ==================================================================
+// 🤖 BOT DE PEDIDOS VIA WHATSAPP (OpenAI + UAZAPI)
+// ==================================================================
+
+// Helper: busca cardápio formatado do Firestore
+async function buscarCardapioFormatado(estabelecimentoId) {
+  try {
+    // Buscar categorias do cardápio
+    const categoriasSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('cardapio').get();
+
+    if (categoriasSnap.empty) return 'Cardápio não disponível no momento.';
+
+    let texto = '';
+    let totalProdutos = 0;
+
+    // Para cada categoria, buscar os itens na subcoleção
+    for (const catDoc of categoriasSnap.docs) {
+      const catData = catDoc.data();
+      const catNome = catData.nome || catDoc.id;
+
+      const itensSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+        .collection('cardapio').doc(catDoc.id)
+        .collection('itens').where('ativo', '!=', false).get();
+
+      if (itensSnap.empty) continue;
+
+      texto += `\n*${catNome.toUpperCase()}*\n`;
+      itensSnap.docs.forEach(itemDoc => {
+        const p = itemDoc.data();
+        const preco = Number(p.preco || p.precoFinal || 0).toFixed(2);
+        texto += `• ${p.nome} — R$ ${preco}`;
+        if (p.descricao) texto += ` (${p.descricao.slice(0, 60)})`;
+        texto += ` [ID:${itemDoc.id}]\n`;
+        // Variações (só mostrar se tiver mais de 1 ou for diferente do preço base)
+        const precoBase = Number(p.preco || p.precoFinal || 0);
+        const variacoesFiltradas = (p.variacoes || []).filter(v =>
+          v.nome && v.preco > 0 && (
+            (p.variacoes.length > 1) || // múltiplas variações
+            (Math.abs(Number(v.preco) - precoBase) > 0.01) // preço diferente
+          )
+        );
+        variacoesFiltradas.forEach(v => {
+          texto += `  - ${v.nome}: R$ ${Number(v.preco).toFixed(2)}\n`;
+        });
+        totalProdutos++;
+      });
+    }
+
+    if (totalProdutos === 0) return 'Cardápio não disponível no momento.';
+    return texto;
+  } catch (e) {
+    logger.error('Erro ao buscar cardápio:', e);
+    return 'Cardápio indisponível.';
+  }
+}
+
+// Helper: busca taxa de entrega por bairro/endereço
+async function buscarTaxaEntrega(estabelecimentoId, enderecoTexto) {
+  try {
+    const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('taxasDeEntrega').get();
+    if (snap.empty) return { taxa: 0, bairro: null };
+
+    // Normalizar o endereço para busca
+    const endLower = (enderecoTexto || '').toLowerCase();
+    let melhor = null;
+
+    snap.docs.forEach(doc => {
+      const t = doc.data();
+      const bairroLower = (t.nomeBairro || '').toLowerCase();
+      if (bairroLower && endLower.includes(bairroLower)) {
+        melhor = { taxa: Number(t.valorTaxa || 0), bairro: t.nomeBairro, id: doc.id };
+      }
+    });
+
+    // Se não encontrou por bairro, retornar taxa padrão (menor taxa)
+    if (!melhor) {
+      const taxas = snap.docs.map(d => ({ taxa: Number(d.data().valorTaxa || 0), bairro: d.data().nomeBairro }));
+      taxas.sort((a, b) => a.taxa - b.taxa);
+      return taxas[0] || { taxa: 0, bairro: null };
+    }
+    return melhor;
+  } catch (e) {
+    return { taxa: 0, bairro: null };
+  }
+}
+
+// Helper: busca nome do cliente em pedidos anteriores (tenta múltiplos formatos de fone)
+async function buscarNomeCliente(estabelecimentoId, telefone) {
+  try {
+    const digitos = telefone.replace(/\D/g, '').replace('cus', '').replace('swhatsappnet', '');
+    const sem55 = digitos.startsWith('55') ? digitos.slice(2) : digitos;
+    const com55 = digitos.startsWith('55') ? digitos : `55${digitos}`;
+    const formatos = [telefone, digitos, sem55, com55];
+
+    for (const fmt of formatos) {
+      try {
+        const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+          .collection('pedidos')
+          .where('clienteTelefone', '==', fmt)
+          .orderBy('createdAt', 'desc')
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          const nome = snap.docs[0].data().clienteNome;
+          if (nome && nome !== 'Cliente WhatsApp') {
+            logger.info(`👤 Nome encontrado para ${fmt}: ${nome}`);
+            return nome;
+          }
+        }
+      } catch (_) { /* continua para próximo formato */ }
+    }
+    return null;
+  } catch (e) {
+    logger.warn(`buscarNomeCliente erro: ${e.message}`);
+    return null;
+  }
+}
+
+// Helper: salva/atualiza sessão de conversa
+async function getOuCriarSessao(estabelecimentoId, telefone) {
+  const ref = db.collection('estabelecimentos').doc(estabelecimentoId)
+    .collection('bot_sessoes').doc(telefone);
+  const snap = await ref.get();
+
+  if (snap.exists) {
+    const data = snap.data();
+    // Sessão expira em 30 minutos de inatividade
+    const ultimaMensagem = data.ultimaMensagem?.toDate?.() || new Date(0);
+    const minutosPassados = (Date.now() - ultimaMensagem.getTime()) / 60000;
+    if (minutosPassados > 30) {
+      // Reseta sessão expirada
+      await ref.set({ historico: [], estado: 'saudacao', criadoEm: FieldValue.serverTimestamp(), ultimaMensagem: FieldValue.serverTimestamp() });
+      return { historico: [], estado: 'saudacao' };
+    }
+    return { historico: data.historico || [], estado: data.estado || 'saudacao', pedidoAtual: data.pedidoAtual || null };
+  }
+
+  await ref.set({ historico: [], estado: 'saudacao', criadoEm: FieldValue.serverTimestamp(), ultimaMensagem: FieldValue.serverTimestamp() });
+  return { historico: [], estado: 'saudacao', pedidoAtual: null };
+}
+
+// Helper: envia mensagem WhatsApp via UAZAPI (meunumero.uazapi.com)
+// Endpoint: POST /send/text | Headers: token | Body: { number, text }
+async function enviarMensagemBot(wConfig, telefone, mensagem) {
+  try {
+    const url = `${wConfig.serverUrl}/send/text`;
+    logger.info(`📤 Enviando para ${telefone} via ${url}`);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'token': wConfig.apiKey   // UAZAPI usa 'token', não 'apikey'
+      },
+      body: JSON.stringify({
+        number: telefone,         // campo 'number' (não 'phone')
+        text: mensagem            // campo 'text'
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    logger.info(`📤 Resposta UAZAPI: status=${res.status} | ${JSON.stringify(data).slice(0, 200)}`);
+    return res.ok;
+  } catch (e) {
+    logger.error('Erro ao enviar mensagem bot:', e.message);
+    return false;
+  }
+}
+
+async function salvarSessao(estabelecimentoId, telefone, historico, estado, pedidoAtual = null) {
+  const ref = db.collection('estabelecimentos').doc(estabelecimentoId)
+    .collection('bot_sessoes').doc(telefone);
+  await ref.set({
+    historico: historico.slice(-20), // manter últimas 20 mensagens
+    estado,
+    pedidoAtual,
+    ultimaMensagem: FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+
+async function criarPedidoBot({ estabelecimentoId, itens, clienteNome, clienteTelefone, observacoes, enderecoEntrega, taxaEntrega, bairroEntrega }) {
+  let totalCalculado = 0;
+  const itensProcessados = [];
+
+  // Buscar TODOS os produtos reais (nas subcoleções itens de cada categoria)
+  const categoriasSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+    .collection('cardapio').get();
+
+  const todosProdutos = [];
+  for (const catDoc of categoriasSnap.docs) {
+    const itensSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('cardapio').doc(catDoc.id).collection('itens').get();
+    itensSnap.docs.forEach(itemDoc => {
+      todosProdutos.push({ id: itemDoc.id, catId: catDoc.id, ...itemDoc.data() });
+    });
+  }
+
+  for (const item of itens) {
+    let produtoReal = null;
+
+    if (item.id && !['ID_DO_PRODUTO', 'id', ''].includes(item.id)) {
+      produtoReal = todosProdutos.find(p => p.id === item.id);
+    }
+    if (!produtoReal && item.nome) {
+      const nomeQuery = item.nome.toLowerCase().trim();
+      produtoReal = todosProdutos.find(p =>
+        p.nome && (
+          p.nome.toLowerCase() === nomeQuery ||
+          p.nome.toLowerCase().includes(nomeQuery) ||
+          nomeQuery.includes(p.nome.toLowerCase())
+        )
+      );
+    }
+    if (!produtoReal) { logger.warn(`⚠️ Não encontrado: ${item.id}/${item.nome}`); continue; }
+
+    let preco = Number(produtoReal.preco || produtoReal.precoFinal) || 0;
+    let nomeItem = produtoReal.nome;
+    if (item.observacao && produtoReal.variacoes?.length > 0) {
+      const varMatch = produtoReal.variacoes.find(v =>
+        v.nome && item.observacao.toLowerCase().includes(v.nome.toLowerCase())
+      );
+      if (varMatch && varMatch.preco > 0) { preco = Number(varMatch.preco); nomeItem = `${produtoReal.nome} (${varMatch.nome})`; }
+    }
+    const qtd = Number(item.quantidade) || 1;
+    totalCalculado += preco * qtd;
+    itensProcessados.push({ id: produtoReal.id, nome: nomeItem, preco, quantidade: qtd, observacao: item.observacao || '' });
+  }
+
+  if (itensProcessados.length === 0) return null;
+
+  const taxaFrete = Number(taxaEntrega) || 0;
+  const totalComFrete = totalCalculado + taxaFrete;
+
+  const pedido = {
+    estabelecimentoId,
+    itens: itensProcessados,
+    subtotal: totalCalculado,
+    taxaEntrega: taxaFrete,
+    totalFinal: totalComFrete,
+    clienteNome: clienteNome || 'Cliente WhatsApp',
+    clienteTelefone,
+    // objeto `cliente` para compatibilidade com Painel e ComandaParaImpressao
+    cliente: { nome: clienteNome || 'Cliente WhatsApp', telefone: clienteTelefone },
+    observacoes: observacoes || '',
+    enderecoEntrega: enderecoEntrega || '',
+    bairro: bairroEntrega || '',           // campo principal lido pela comanda
+    bairroEntrega: bairroEntrega || '',    // retrocompatibilidade
+    formaPagamento: 'cobrar_na_entrega',   // exibe "COBRAR NA ENTREGA" na comanda
+    status: 'pendente',
+    origem: 'whatsapp_bot',
+    source: 'whatsapp',
+    tipo: 'delivery',
+    tipoEntrega: enderecoEntrega?.trim().toUpperCase() === 'RETIRADA' ? 'retirada' : 'delivery',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp()
+  };
+
+  const ref = await db.collection('estabelecimentos').doc(estabelecimentoId)
+    .collection('pedidos').add(pedido);
+
+  logger.info(`🤖 Pedido criado: ${ref.id} | ${clienteTelefone} | subtotal=R$${totalCalculado} frete=R$${taxaFrete} total=R$${totalComFrete}`);
+  return { pedidoId: ref.id, subtotal: totalCalculado, taxaEntrega: taxaFrete, totalFinal: totalComFrete, itens: itensProcessados };
+}
+
+// ==================================================================
+// WEBHOOK PRINCIPAL DO BOT
+// POST /webhookBotPedidos?estabId=XXX
+// Configurar este URL no UAZAPI como webhook de mensagens recebidas
+// ==================================================================
+export const webhookBotPedidos = onRequest({ // v4-202603312127
+
+  cors: true,
+  secrets: [openAiApiKey]
+}, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  const estabelecimentoId = req.query.estabId;
+  if (!estabelecimentoId) return res.status(400).json({ erro: 'estabId obrigatório' });
+
+  try {
+    const body = req.body;
+    logger.info('🤖 Webhook recebido:', JSON.stringify(body).slice(0, 800));
+
+    // ================================================================
+    // PARSER UNIVERSAL — suporta múltiplos formatos do UAZAPI
+    // ================================================================
+    let telefone = '';
+    let mensagemTexto = '';
+    let fromMe = false;
+
+    // Log diagnóstico: ver estrutura completa do payload
+    logger.info(`🔍 body keys=${Object.keys(body).join(',')} | chat=${JSON.stringify(body.chat||{})} | messages[0]=${JSON.stringify((body.messages||[])[0]||{}).slice(0,300)}`);
+
+    if (body.BaseUrl) {
+      // Formato A — meunumero.uazapi.com
+      const msgArr = body.messages || (body.message ? [body.message] : []);
+      const msg = msgArr[0] || {};
+
+      // Prioridade: remoteJid no messages[] > phone/sender/from na raiz > chat.phone
+      // NAO usar chat.id — é ID interno do UAZAPI, não número WhatsApp
+      telefone = msg?.key?.remoteJid
+        || msg?.remoteJid
+        || body?.phone
+        || body?.sender
+        || body?.from
+        || body?.chat?.phone
+        || body?.chat?.number
+        || '';
+
+      mensagemTexto = msg?.message?.conversation
+        || msg?.message?.extendedTextMessage?.text
+        || msg?.text || msg?.body
+        || body?.text || body?.body || body?.content || '';
+      fromMe = msg?.key?.fromMe ?? msg?.fromMe ?? body?.fromMe ?? false;
+
+    } else if (body?.data?.key?.remoteJid) {
+      // Formato B
+      telefone      = body.data.key.remoteJid;
+      mensagemTexto = body.data?.message?.conversation
+        || body.data?.message?.extendedTextMessage?.text || '';
+      fromMe        = body.data.key.fromMe || false;
+    } else if (body?.key?.remoteJid) {
+      // Formato C — legado
+      telefone      = body.key.remoteJid;
+      mensagemTexto = body.message?.conversation
+        || body.message?.extendedTextMessage?.text || '';
+      fromMe        = body.key.fromMe || false;
+    }
+
+    // Limpar telefone
+    telefone = String(telefone).replace(/@[\w.]+/g, '').replace(/[^0-9]/g, '');
+    logger.info(`📱 tel=${telefone} fromMe=${fromMe} msg="${String(mensagemTexto).slice(0, 80)}"`);
+
+    // Ignorar: próprio bot, grupos, sem telefone/texto
+    if (fromMe || !telefone || !mensagemTexto || telefone.length < 8) {
+      return res.status(200).json({ ok: true, ignorado: true, motivo: `fromMe=${fromMe} tel='${telefone}' msg=${!!mensagemTexto}` });
+    }
+
+    mensagemTexto = String(mensagemTexto).trim();
+    logger.info(`📩 Mensagem de ${telefone}: "${mensagemTexto}"`);
+
+    // Buscar configuração do estabelecimento
+    const estabSnap = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
+    if (!estabSnap.exists) return res.status(404).json({ erro: 'Estabelecimento não encontrado' });
+
+    const estab = estabSnap.data();
+    const wConfig = estab.whatsapp || {};
+    const botConfig = estab.botPedidos || {};
+    const nomeEstab = estab.nome || 'Restaurante';
+
+    // Verificar se o bot está ativo
+    if (!botConfig.ativo) return res.status(200).json({ ok: true, botDesativado: true });
+
+    // Verificar opt-out
+    const optoutSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('optout').doc(telefone).get();
+    if (optoutSnap.exists) return res.status(200).json({ ok: true, optout: true });
+
+    if (!wConfig.instanceName || !wConfig.serverUrl || !wConfig.apiKey) {
+      logger.warn(`Bot: WhatsApp não configurado para ${estabelecimentoId}`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Buscar sessão, cardápio, nome do cliente e taxas em paralelo
+    const [sessao, cardapioTexto, nomeClienteSalvo, taxasEntregaSnap] = await Promise.all([
+      getOuCriarSessao(estabelecimentoId, telefone),
+      buscarCardapioFormatado(estabelecimentoId),
+      buscarNomeCliente(estabelecimentoId, telefone),
+      db.collection('estabelecimentos').doc(estabelecimentoId).collection('taxasDeEntrega').get()
+    ]);
+
+    // Formatar taxas: lista interna para o prompt + lista numerada para mostrar ao cliente
+    let taxasTexto = '';
+    let listaBairrosCliente = '';
+    if (!taxasEntregaSnap.empty) {
+      const taxasOrdenadas = taxasEntregaSnap.docs
+        .map(d => ({ nome: d.data().nomeBairro || '', taxa: Number(d.data().valorTaxa || 0) }))
+        .filter(t => t.nome)
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+
+      // Lista interna (para o GPT saber os valores)
+      const taxasInternas = taxasOrdenadas
+        .map(t => `  ${t.nome}: R$ ${t.taxa.toFixed(2).replace('.', ',')}`)
+        .join('\n');
+
+      // Lista formatada para ENVIAR ao cliente no WhatsApp
+      listaBairrosCliente = taxasOrdenadas
+        .map((t, i) => `${i + 1}. *${t.nome}* — R$ ${t.taxa.toFixed(2).replace('.', ',')}`)
+        .join('\n');
+
+      taxasTexto = `\n\nBAIRROS ATENDIDOS E TAXAS:\n${taxasInternas}\n\nQUANDO PEDIR O BAIRRO, SEMPRE ENVIE ESTE TEXTO EXATO AO CLIENTE:\n"Qual é o seu bairro? Atendemos os seguintes:\n${listaBairrosCliente}\nDigite o número ou o nome do seu bairro! 📍"`;
+    } else {
+      taxasTexto = '\n\nENTREGA: Sem bairros cadastrados. Combine a taxa com o cliente.';
+    }
+
+    // ================================================================
+    // HANDOFF HUMANO: detecta pedido de atendente
+    // ================================================================
+    const PALAVRAS_HUMANO = [
+      'falar com atendente', 'falar com responsavel', 'falar com o responsavel',
+      'falar com humano', 'falar com pessoa', 'atendente humano',
+      'quero atendente', 'chamar atendente', 'responsavel', 'gerente',
+      'falar com voces', 'falar com vocês', 'atendimento humano',
+      'preciso de ajuda humana', 'me passa pra atendente', 'me passa para atendente'
+    ];
+    const PALAVRAS_RETOMAR = ['bot', 'voltar bot', 'continuar', 'fazer pedido', 'cardapio', 'cardápio', 'menu'];
+
+    const msgLower = mensagemTexto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // Se está em atendimento humano, verifica se quer retomar o bot
+    if (sessao.estado === 'atendimento_humano') {
+      const querRetomar = PALAVRAS_RETOMAR.some(p => msgLower.includes(p));
+      if (querRetomar) {
+        await salvarSessao(estabelecimentoId, telefone, sessao.historico, 'saudacao');
+        const msgRetomada = `🤖 Bot reativado! Olá${nomeClienteSalvo ? `, ${nomeClienteSalvo}` : ''}! Como posso ajudar? 😊`;
+        await enviarMensagemBot(wConfig, telefone, msgRetomada);
+        return res.status(200).json({ ok: true, retomouBot: true });
+      }
+      // Bot está pausado — não responde automaticamente
+      logger.info(`🙋 ${telefone} em atendimento_humano — bot pausado`);
+      return res.status(200).json({ ok: true, pause: true });
+    }
+
+    // Detecta pedido de atendente humano
+    const querHumano = PALAVRAS_HUMANO.some(p => msgLower.includes(p));
+    if (querHumano) {
+      // Pausar o bot para este cliente
+      await salvarSessao(estabelecimentoId, telefone, sessao.historico, 'atendimento_humano');
+
+      // Avisar o cliente
+      const msgCliente = `👋 Claro! Vou chamar um de nossos atendentes agora.\n\nEm instantes alguém entrará em contato com você. ⏳\n\n_Para retomar o pedido pelo bot, digite *bot*._`;
+      await enviarMensagemBot(wConfig, telefone, msgCliente);
+
+      // Notificar o dono (telefone_whatsapp do estabelecimento)
+      const telefoneDono = estab.informacoes_contato?.telefone_whatsapp || estab.telefone || null;
+      if (telefoneDono) {
+        const telDonoNum = String(telefoneDono).replace(/\D/g, '');
+        const telDonoFmt = telDonoNum.startsWith('55') ? telDonoNum : `55${telDonoNum}`;
+        const nomeClienteMsg = nomeClienteSalvo || telefone;
+        const msgDono = `🔔 *ATENÇÃO — ${nomeEstab}*\n\nO cliente *${nomeClienteMsg}* (${telefone}) quer falar com um atendente!\n\n📱 Clique para responder: https://wa.me/${telefone}`;
+        await enviarMensagemBot(wConfig, telDonoFmt, msgDono);
+        logger.info(`🔔 Notificação enviada ao dono ${telDonoFmt}`);
+      } else {
+        logger.warn(`⚠️ Telefone do dono não cadastrado em informacoes_contato.telefone_whatsapp`);
+      }
+
+      return res.status(200).json({ ok: true, handoff: true });
+    }
+
+    const openai = new OpenAI({ apiKey: openAiApiKey.value() });
+
+    // System prompt do bot
+    const jsonExNome = nomeClienteSalvo ? `"${nomeClienteSalvo}"` : '"Nome do cliente"';
+    const jsonExample = `{"acao":"CRIAR_PEDIDO","itens":[{"id":"ID_DO_PRODUTO","nome":"Nome do produto exato do cardápio","quantidade":1,"observacao":""}],"clienteNome":${jsonExNome},"enderecoEntrega":"Endereço ou RETIRADA","observacoes":""}`;
+
+    const regrasCliente = nomeClienteSalvo
+      ? `CLIENTE FIEL: O nome dele é "${nomeClienteSalvo}". NUNCA peça o nome dele. Cumprimente-o pelo nome. No JSON do pedido use sempre clienteNome: "${nomeClienteSalvo}".`
+      : `CLIENTE NOVO: Você precisa perguntar o nome completo ANTES de confirmar o pedido. Só pergunte uma vez.`;
+
+    const systemPrompt = `Você é o atendente virtual do *${nomeEstab}* no WhatsApp. Seja simpático, direto e use emojis com moderação.
+
+${regrasCliente}
+
+CARDÁPIO DISPONÍVEL (use EXATAMENTE os IDs entre [ID:...] ao criar pedidos):
+${cardapioTexto}
+${taxasTexto}
+
+REGRAS:
+1. Apresente o cardápio organizado por categoria quando solicitado
+2. ${nomeClienteSalvo ? `NÃO peça o nome — já é "${nomeClienteSalvo}". Pergunte só o endereço e bairro.` : 'Primeiro colete o pedido, depois peça: nome completo + endereço + bairro.'}
+3. OBRIGATÓRIO: Sempre que pedir o bairro, envie a lista de bairros EXATAMENTE como descrita acima (com números e taxas). NÃO pergunte só "qual é seu bairro?" sem mostrar a lista.
+4. Após o cliente escolher o bairro (pelo número ou nome), confirme: "Bairro X — taxa R$ Y." e mostre o resumo: subtotal + frete + total
+5. Quando o cliente CONFIRMAR, retorne APENAS (JSON puro, sem markdown, uma linha):
+PEDIDO_JSON:${jsonExample}:FIM_JSON
+6. Se quiser cancelar: CANCELAR_PEDIDO
+7. Nunca invente produtos fora do cardápio
+8. Valores exatamente como no cardápio
+9. Se o bairro não está na lista, avise e mostre a lista novamente
+10. No JSON, coloque em "bairro" o nome EXATO do bairro escolhido e em "enderecoEntrega" apenas rua e número
+11. Se o cliente quiser falar com atendente/responsável/humano, responda APENAS: "Claro, vou chamar um atendente! 🙋" — nunca tente resolver a questão sozinho`;
+
+    // Montar histórico para GPT
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...sessao.historico,
+      { role: 'user', content: mensagemTexto }
+    ];
+
+    // Chamar GPT
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages,
+      temperature: 0.3,
+      max_tokens: 800
+    });
+
+    const respostaGPT = completion.choices[0].message.content;
+    logger.info(`🤖 Resposta GPT para ${telefone}: ${respostaGPT.slice(0, 300)}`);
+
+    // Parser: detecta PEDIDO_JSON:...:FIM_JSON ou CANCELAR_PEDIDO
+    const jsonMatch = respostaGPT.match(/PEDIDO_JSON:([\s\S]*?):FIM_JSON/);
+    const isCancelar = respostaGPT.includes('CANCELAR_PEDIDO');
+    let respostaFinal = respostaGPT.replace(/PEDIDO_JSON:[\s\S]*?:FIM_JSON/g, '').replace('CANCELAR_PEDIDO', '').trim();
+    let novoEstado = 'conversando';
+    let pedidoCriado = null;
+
+    if (isCancelar) {
+      novoEstado = 'saudacao';
+      respostaFinal = '🙆 Tudo bem! Pedido cancelado. Se quiser fazer um novo pedido é só chamar! 😊';
+    } else if (jsonMatch) {
+      try {
+        const dadosPedido = JSON.parse(jsonMatch[1].trim());
+
+        if (dadosPedido.acao === 'CRIAR_PEDIDO' && dadosPedido.itens?.length > 0) {
+          // Buscar taxa de entrega pelo endereço informado
+          const enderecoInfo = dadosPedido.enderecoEntrega || '';
+          const isRetirada = enderecoInfo.trim().toUpperCase() === 'RETIRADA';
+          let taxaInfo = { taxa: 0, bairro: null };
+          if (!isRetirada && enderecoInfo) {
+            taxaInfo = await buscarTaxaEntrega(estabelecimentoId, enderecoInfo);
+          }
+
+          // Criar pedido no Firestore
+          pedidoCriado = await criarPedidoBot({
+            estabelecimentoId,
+            itens: dadosPedido.itens,
+            clienteNome: dadosPedido.clienteNome || nomeClienteSalvo || 'Cliente WhatsApp',
+            clienteTelefone: telefone,
+            observacoes: dadosPedido.observacoes,
+            enderecoEntrega: enderecoInfo,
+            taxaEntrega: taxaInfo.taxa,
+            bairroEntrega: taxaInfo.bairro || ''
+          });
+
+          if (pedidoCriado) {
+            novoEstado = 'pedido_realizado';
+            const resumoItens = pedidoCriado.itens.map(i => `• ${i.quantidade}x ${i.nome}`).join('\n');
+            respostaFinal = `✅ *Pedido registrado com sucesso!* 🎉\n\n*Resumo do seu pedido:*\n${resumoItens}\n\n💰 *Total: R$ ${pedidoCriado.totalFinal.toFixed(2).replace('.', ',')}*\n\n⏱️ Em breve você receberá atualizações do status. Obrigado, ${dadosPedido.clienteNome}! 🍔`;
+          } else {
+            respostaFinal = '❌ Ops! Não consegui processar seu pedido. Algum item pode estar indisponível. Pode repetir?';
+          }
+        }
+      } catch (parseErr) {
+        logger.warn('Erro ao parsear JSON do GPT:', parseErr);
+        // Resposta normal sem JSON
+        respostaFinal = respostaGPT.replace(/```json[\s\S]*?```/g, '').trim();
+      }
+    }
+
+    // Enviar resposta ao cliente
+    await enviarMensagemBot(wConfig, telefone, respostaFinal);
+
+    // Atualizar histórico da sessão
+    const novoHistorico = [
+      ...sessao.historico,
+      { role: 'user', content: mensagemTexto },
+      { role: 'assistant', content: respostaGPT }
+    ];
+    await salvarSessao(estabelecimentoId, telefone, novoHistorico, novoEstado, pedidoCriado);
+
+    // Registrar conversa no Firestore para auditoria
+    await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('bot_conversas').add({
+        telefone,
+        mensagemCliente: mensagemTexto,
+        respostaBot: respostaFinal,
+        pedidoCriado: !!pedidoCriado,
+        pedidoId: pedidoCriado?.pedidoId || null,
+        timestamp: FieldValue.serverTimestamp()
+      });
+
+    return res.status(200).json({ ok: true, respondido: true, pedidoCriado: !!pedidoCriado });
+
+  } catch (error) {
+    logger.error('❌ Erro no webhookBotPedidos:', error);
+    return res.status(500).json({ erro: error.message });
+  }
+});
+
+// ==================================================================
+// CONFIGURAR/ATIVAR O BOT DE PEDIDOS (Admin)
+// ==================================================================
+export const configurarBotPedidos = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, ativo, mensagemBoasVindas, horarioAtendimento } = request.data;
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  try {
+    await db.collection('estabelecimentos').doc(estabelecimentoId).update({
+      botPedidos: {
+        ativo: ativo !== false,
+        mensagemBoasVindas: mensagemBoasVindas || `Olá! 👋 Bem-vindo ao nosso cardápio digital via WhatsApp!\nDigite *CARDÁPIO* para ver nossos produtos ou já me diga o que deseja pedir! 😊`,
+        horarioAtendimento: horarioAtendimento || null,
+        configuradoEm: FieldValue.serverTimestamp()
+      }
+    });
+
+    return { sucesso: true, mensagem: ativo ? 'Bot ativado com sucesso!' : 'Bot desativado.' };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// ==================================================================
+// BUSCAR CONVERSAS DO BOT (Admin)
+// ==================================================================
+export const buscarConversasBot = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+
+  const { estabelecimentoId, limite = 50 } = request.data;
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  try {
+    const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('bot_conversas')
+      .orderBy('timestamp', 'desc')
+      .limit(limite)
+      .get();
+
+    const conversas = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      timestamp: d.data().timestamp?.toDate?.()?.toISOString() || null
+    }));
+
+    // Sessões ativas (últimos 30 min)
+    const sessoesSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+      .collection('bot_sessoes')
+      .where('ultimaMensagem', '>=', new Date(Date.now() - 30 * 60 * 1000))
+      .get();
+
+    return {
+      sucesso: true,
+      conversas,
+      sessoesAtivas: sessoesSnap.size
+    };
+  } catch (error) {
+    throw new HttpsError('internal', error.message);
+  }
+});
+
