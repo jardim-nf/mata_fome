@@ -22,6 +22,7 @@ function Painel() {
     const {
         dataSelecionada, setDataSelecionada,
         pedidos, loading, motoboys,
+        estabelecimentoInfo,
         abaAtiva, setAbaAtiva,
         colunaMobile, setColunaMobile,
         notificationsEnabled, setNotificationsEnabled, userInteracted, setUserInteracted,
@@ -162,7 +163,7 @@ function Painel() {
                                                     ) : (
                                                         listaRender.map(pedido => (
                                                             <div key={pedido.id} className="relative group/card transform transition-all duration-200">
-                                                                <PedidoCard item={pedido} motoboysDisponiveis={motoboys} onUpdateStatus={handleUpdateStatusAndNotify} onAtribuirMotoboy={handleAtribuirMotoboy} onEmitirNfce={() => nfce.handleNfceDoPedido(pedido)} newOrderIds={newOrderIds} onExcluir={handleExcluirPedido} onUpdateFormaPagamento={handleUpdateFormaPagamento} />
+                                                                <PedidoCard item={pedido} motoboysDisponiveis={motoboys} onUpdateStatus={handleUpdateStatusAndNotify} onAtribuirMotoboy={handleAtribuirMotoboy} onEmitirNfce={() => nfce.handleNfceDoPedido(pedido)} newOrderIds={newOrderIds} onExcluir={handleExcluirPedido} onUpdateFormaPagamento={handleUpdateFormaPagamento} estabelecimentoInfo={estabelecimentoInfo} />
                                                             </div>
                                                         ))
                                                     )}

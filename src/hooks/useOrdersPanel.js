@@ -275,6 +275,7 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
 
     return {
         dataSelecionada, setDataSelecionada,
+        estabelecimentoInfo,
         pedidos, loading, motoboys,
         abaAtiva, setAbaAtiva,
         colunaMobile, setColunaMobile,
