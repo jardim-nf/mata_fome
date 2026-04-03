@@ -1,10 +1,20 @@
 // src/components/home/HeroSection.jsx
 import { motion } from 'framer-motion';
-import { ChevronDown, LogIn, LayoutDashboard } from 'lucide-react';
+import { ChevronDown, LogIn, LayoutDashboard, LogOut, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMasterAdmin }) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Erro ao sair:', error);
+    }
+  };
 
   return (
     <section className="relative w-full overflow-hidden bg-gradient-to-br from-white via-yellow-50 to-orange-50 pt-24 md:pt-32">
@@ -15,27 +25,55 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
             🍔 IdeaFood
           </span>
 
-          {(isAdmin || isMasterAdmin) ? (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate(isMasterAdmin ? '/master-dashboard' : '/dashboard')}
-              className="flex items-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-5 rounded-xl text-sm shadow-md hover:shadow-lg transition-shadow"
-            >
-              <LayoutDashboard size={16} />
-              Painel
-            </motion.button>
-          ) : (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onLoginClick}
-              className="flex items-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-5 rounded-xl text-sm shadow-md hover:shadow-lg transition-shadow"
-            >
-              <LogIn size={16} />
-              Entrar
-            </motion.button>
-          )}
+          <div className="flex items-center gap-3">
+            {currentUser ? (
+              <div className="flex items-center gap-4">
+                <div className="hidden sm:flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 flex items-center justify-center text-white shadow-inner">
+                    <User size={14} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500 font-medium leading-none">Olá,</span>
+                    <span className="text-sm font-bold text-gray-800 leading-none">
+                      {currentUser.displayName || currentUser.email?.split('@')[0] || 'Visitante'}
+                    </span>
+                  </div>
+                </div>
+
+                {(isAdmin || isMasterAdmin) && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate(isMasterAdmin ? '/master-dashboard' : '/dashboard')}
+                    className="flex items-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-4 rounded-xl text-sm shadow-md hover:shadow-lg transition-all"
+                  >
+                    <LayoutDashboard size={16} className="hidden sm:block" />
+                    Painel
+                  </motion.button>
+                )}
+
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 bg-red-50 text-red-600 font-bold py-2 px-4 rounded-xl text-sm shadow-sm hover:bg-red-100 transition-colors"
+                >
+                  Sair
+                  <LogOut size={16} />
+                </motion.button>
+              </div>
+            ) : (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onLoginClick}
+                className="flex items-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-6 rounded-xl text-sm shadow-md hover:shadow-lg transition-shadow"
+              >
+                <LogIn size={16} />
+                Entrar
+              </motion.button>
+            )}
+          </div>
         </div>
       </nav>
       {/* Decorative blobs */}
