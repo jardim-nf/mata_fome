@@ -1446,8 +1446,8 @@ function formatarValor(valor) {
 }
 
 const MENSAGENS_STATUS = {
-  recebido: (p) => `🔥 *${p.nomeEstab}*\n*\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* foi recebido! ✅${p.pixManual ? `\n\n🧾 *Seu pagamento foi no PIX via chave* — por favor, envie o comprovante por aqui para confirmarmos.` : `\n\nEm instantes você receberá atualizações sobre o preparo. 🍔`}`,
-  preparo: (p) => `🔥 *${p.nomeEstab}*\n*\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* já está sendo preparado! 👨‍🍳${p.pixManual ? `\n\n💳 *Pagamento via PIX* — Por favor, envie o comprovante de pagamento.` : ''}`,
+  recebido: (p) => `🔥 *${p.nomeEstab}*\n\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* foi recebido! ✅${p.pixManual ? `\n\n🧾 *Seu pagamento foi no PIX via chave* — por favor, envie o comprovante por aqui para confirmarmos.` : `\n\nEm instantes você receberá atualizações sobre o preparo. 🍔`}`,
+  preparo: (p) => `🔥 *${p.nomeEstab}*\n\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* já está sendo preparado! 👨‍🍳${p.pixManual ? `\n\n💳 *Pagamento via PIX* — Por favor, envie o comprovante de pagamento.` : ''}`,
   em_entrega: (p) => `🛵 *${p.nomeEstab}*\n\nÓtima notícia, ${p.nome}! Seu pedido no valor de *${p.valor}* saiu para entrega!${p.motoboy ? `\n🏍️ Entregador: *${p.motoboy}*` : ''}`,
   pronto_para_servir: (p) => `✅ *${p.nomeEstab}*\n\n${p.nome}, seu pedido no valor de *${p.valor}* está *pronto*! Pode retirar. 🎉`,
   finalizado: (p) => `✅ *${p.nomeEstab}*\n\nPedido entregue! Obrigado pela preferência, ${p.nome}! 😊\nValor: *${p.valor}*\n\nVolte sempre! 💛`
@@ -1778,8 +1778,7 @@ function mapearPedidoIfood(ifoodOrder, estabelecimentoId) {
 // FUNÇÃO 1: Webhook — iFood envia pedidos em tempo real
 // ==================================================================
 export const ifoodWebhook = onRequest({
-    cors: false,
-    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
+    cors: false
 }, async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
@@ -1859,8 +1858,7 @@ export const ifoodWebhook = onRequest({
 // FUNÇÃO 2: Polling — buscar pedidos pendentes periodicamente
 // ==================================================================
 export const ifoodPolling = onCall({
-    cors: true,
-    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
+    cors: true
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
@@ -1946,8 +1944,7 @@ export const ifoodPolling = onCall({
 // FUNÇÃO 3: Atualizar status do pedido no iFood
 // ==================================================================
 export const ifoodAtualizarStatus = onCall({
-    cors: true,
-    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
+    cors: true
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
@@ -2002,7 +1999,7 @@ export const ifoodAtualizarStatus = onCall({
 // ==================================================================
 export const ifoodTestarConexao = onCall({
     cors: true,
-    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
+    invoker: 'public'
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
@@ -2053,7 +2050,7 @@ export const ifoodTestarConexao = onCall({
 // ==================================================================
 export const ifoodConfigurarWebhook = onCall({
     cors: true,
-    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
+    invoker: 'public'
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
