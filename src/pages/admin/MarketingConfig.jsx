@@ -36,7 +36,9 @@ function MarketingConfig() {
       try {
         const campSnap = await getDocs(query(collection(db, 'estabelecimentos', estabId, 'campanhas'), orderBy('enviadoEm', 'desc'), limit(20)));
         setCampanhas(campSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch {}
+      } catch (e) {
+        console.warn('[MarketingConfig] Erro ao carregar campanhas anteriores:', e);
+      }
       
       setLoading(false);
     };

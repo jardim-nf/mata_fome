@@ -1,13 +1,9 @@
 // src/pages/admin/FinanceiroMaster.jsx — Premium Light v2
-import React, { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
-import { financeiroService } from '../../services/financeiroService';
-import { toast } from 'react-toastify';
-import { format, isToday, differenceInDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { differenceInDays } from 'date-fns';
+import { useFinanceiroMasterData } from '../../hooks/useFinanceiroMasterData';
 import { 
   FaCheck, FaTimes, FaPlus, FaUndo, FaArrowLeft, FaMoneyBillWave, 
   FaExclamationCircle, FaCheckCircle, FaCalendarAlt, FaWallet,
@@ -34,204 +30,21 @@ const SkeletonRow = () => (
 function FinanceiroMaster() {
   const navigate = useNavigate();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
-  const [faturas, setFaturas] = useState([]);
-  const [estabs, setEstabs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [filtroStatus, setFiltroStatus] = useState('todos');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [novaFatura, setNovaFatura] = useState({
-    estabelecimentoId: '', valor: '', vencimento: '', descricao: 'Mensalidade Sistema'
-  });
-
-  const carregarDados = async () => {
-    setLoading(true);
-    try {
-      const qEstab = query(collection(db, 'estabelecimentos'), orderBy('nome'));
-      const snapEstab = await getDocs(qEstab);
-      setEstabs(snapEstab.docs.map(d => ({ id: d.id, nome: d.data().nome })));
-
-      const lista = await financeiroService.listarTodasFaturas();
-      lista.sort((a, b) => {
-        const dateA = a.vencimento?.toDate ? a.vencimento.toDate() : new Date(a.vencimento);
-        const dateB = b.vencimento?.toDate ? b.vencimento.toDate() : new Date(b.vencimento);
-        return dateB - dateA;
-      });
-      setFaturas(lista);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erro ao carregar dados financeiros.");
-    } finally { setLoading(false); }
-  };
-
-  useEffect(() => { carregarDados(); }, []);
-
-  // ─── Helpers ───
-  const parseDate = (timestamp) => {
-    if (!timestamp) return null;
-    return timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  };
-
-  const formatData = (timestamp) => {
-    const date = parseDate(timestamp);
-    if (!date) return '--/--';
-    return format(date, 'dd/MM/yyyy');
-  };
-
-  const getVencimentoStatus = (fatura) => {
-    if (fatura.status === 'pago') return 'pago';
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const venc = parseDate(fatura.vencimento);
-    if (!venc) return 'pendente';
-    venc.setHours(0,0,0,0);
-    if (venc < hoje) return 'atrasado';
-    if (differenceInDays(venc, hoje) <= 3) return 'vencendo';
-    return 'pendente';
-  };
-
-  // ─── Computed Data ───
-  const resumo = useMemo(() => {
-    const pendente = faturas.filter(f => f.status === 'pendente').reduce((acc, c) => acc + parseFloat(c.valor || 0), 0);
-    const pago = faturas.filter(f => f.status === 'pago').reduce((acc, c) => acc + parseFloat(c.valor || 0), 0);
-    const total = pendente + pago;
-
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const atrasados = faturas.filter(f => {
-      if (f.status === 'pago') return false;
-      const venc = parseDate(f.vencimento);
-      if (!venc) return false;
-      venc.setHours(0,0,0,0);
-      return venc < hoje;
-    });
-    const valorAtrasado = atrasados.reduce((acc, c) => acc + parseFloat(c.valor || 0), 0);
-
-    const vencendoHoje = faturas.filter(f => {
-      if (f.status === 'pago') return false;
-      const venc = parseDate(f.vencimento);
-      return venc && isToday(venc);
-    }).length;
-
-    const inadimplencia = total > 0 ? ((valorAtrasado / total) * 100) : 0;
-
-    return { 
-      pendente, pago, total, 
-      atrasados: atrasados.length, valorAtrasado,
-      vencendoHoje, inadimplencia,
-      totalFaturas: faturas.length,
-      pendentesCount: faturas.filter(f => f.status === 'pendente').length,
-      pagosCount: faturas.filter(f => f.status === 'pago').length,
-    };
-  }, [faturas]);
-
-  const faturasFiltradas = useMemo(() => {
-    let filtered = faturas;
-    if (filtroStatus === 'pendente') filtered = filtered.filter(f => f.status === 'pendente');
-    else if (filtroStatus === 'pago') filtered = filtered.filter(f => f.status === 'pago');
-    else if (filtroStatus === 'atrasado') {
-      const hoje = new Date(); hoje.setHours(0,0,0,0);
-      filtered = filtered.filter(f => {
-        if (f.status === 'pago') return false;
-        const venc = parseDate(f.vencimento);
-        if (!venc) return false;
-        venc.setHours(0,0,0,0);
-        return venc < hoje;
-      });
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(f => 
-        (f.estabelecimentoNome || '').toLowerCase().includes(q) ||
-        (f.descricao || '').toLowerCase().includes(q)
-      );
-    }
-    return filtered;
-  }, [faturas, filtroStatus, searchQuery]);
-
-  const handleCriarFatura = async (e) => {
-    e.preventDefault();
-    if (!novaFatura.estabelecimentoId || !novaFatura.valor || !novaFatura.vencimento) {
-      return toast.warn("Preencha todos os campos obrigatórios.");
-    }
-    try {
-      const estabSelecionado = estabs.find(e => e.id === novaFatura.estabelecimentoId);
-      await financeiroService.criarFatura({
-        ...novaFatura,
-        estabelecimentoNome: estabSelecionado.nome,
-        valor: parseFloat(novaFatura.valor)
-      });
-      toast.success("Cobrança gerada com sucesso!");
-      setModalOpen(false);
-      setNovaFatura({ estabelecimentoId: '', valor: '', vencimento: '', descricao: 'Mensalidade Sistema' });
-      carregarDados();
-    } catch (error) { toast.error("Erro ao gerar cobrança."); }
-  };
-
-  const handleBaixa = async (id, statusAtual) => {
-    try {
-      if (statusAtual === 'pago') {
-        if (window.confirm("Deseja estornar este pagamento?")) { await financeiroService.reabrirFatura(id); toast.info("Pagamento estornado."); }
-      } else {
-        if (window.confirm("Confirmar o recebimento?")) { await financeiroService.marcarComoPago(id); toast.success("Pagamento confirmado!"); }
-      }
-      carregarDados();
-    } catch (error) { toast.error("Erro ao atualizar status."); }
-  };
-
-  // ─── Cobranças em Massa ───
-  const [loadingMassa, setLoadingMassa] = useState(false);
-  const [modalMassa, setModalMassa] = useState(false);
-  const [massaConfig, setMassaConfig] = useState({
-    valor: '', vencimento: '', descricao: 'Mensalidade Sistema'
-  });
-
-  const handleCobrancaEmMassa = async (e) => {
-    e.preventDefault();
-    if (!massaConfig.valor || !massaConfig.vencimento) {
-      return toast.warn('Preencha valor e vencimento.');
-    }
-    setLoadingMassa(true);
-    try {
-      const qEstab = query(collection(db, 'estabelecimentos'), where('ativo', '==', true));
-      const snapEstab = await getDocs(qEstab);
-      let count = 0;
-      for (const docSnap of snapEstab.docs) {
-        const data = docSnap.data();
-        await financeiroService.criarFatura({
-          estabelecimentoId: docSnap.id,
-          estabelecimentoNome: data.nome,
-          valor: parseFloat(massaConfig.valor),
-          vencimento: massaConfig.vencimento,
-          descricao: massaConfig.descricao || 'Mensalidade Sistema'
-        });
-        count++;
-      }
-      toast.success(`${count} cobranças geradas com sucesso!`);
-      setModalMassa(false);
-      setMassaConfig({ valor: '', vencimento: '', descricao: 'Mensalidade Sistema' });
-      carregarDados();
-    } catch (error) {
-      console.error(error);
-      toast.error('Erro ao gerar cobranças em massa.');
-    } finally { setLoadingMassa(false); }
-  };
-
-  // ─── WhatsApp Lembrete ───
-  const handleLembreteWhatsApp = (fatura) => {
-    const estab = estabs.find(e => e.id === fatura.estabelecimentoId);
-    const nome = estab?.nome || fatura.estabelecimentoNome || 'Cliente';
-    const valor = Number(fatura.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const venc = formatData(fatura.vencimento);
-    const msg = encodeURIComponent(
-      `Olá ${nome}! 👋\n\n` +
-      `Identificamos uma pendência financeira no sistema *IdeaFood*:\n\n` +
-      `📄 *${fatura.descricao || 'Mensalidade'}*\n` +
-      `💰 Valor: *${valor}*\n` +
-      `📅 Vencimento: *${venc}*\n\n` +
-      `Por favor, regularize o pagamento para evitar a suspensão dos serviços.\n\n` +
-      `Qualquer dúvida, estamos à disposição! 🙏`
-    );
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
-  };
+  
+  // Utilizando o Hook para gerenciar as rotinas brutais de cálculo 
+  const {
+    faturasFiltradas, estabs, loading, 
+    filtroStatus, setFiltroStatus,
+    searchQuery, setSearchQuery,
+    modalOpen, setModalOpen,
+    novaFatura, setNovaFatura,
+    modalMassa, setModalMassa,
+    massaConfig, setMassaConfig,
+    loadingMassa,
+    resumo,
+    handleCriarFatura, handleBaixa, handleCobrancaEmMassa, handleLembreteWhatsApp,
+    formatData, getVencimentoStatus, parseDate
+  } = useFinanceiroMasterData();
 
   const getStatusBadge = (fatura) => {
     const status = getVencimentoStatus(fatura);
@@ -453,7 +266,7 @@ function FinanceiroMaster() {
           {/* ─── TABLE (desktop) / CARDS (mobile) ─── */}
           {loading ? (
             <div className="divide-y divide-slate-50">
-              {[1,2,3,4,5].map(i => <SkeletonRow key={i} />)}
+               {[1,2,3,4,5].map(i => <SkeletonRow key={i} />)}
             </div>
           ) : faturasFiltradas.length === 0 ? (
             <div className="p-16 text-center">
@@ -488,7 +301,7 @@ function FinanceiroMaster() {
                               <FaStore className="text-xs" />
                             </div>
                             <div>
-                              <div className="font-black text-slate-800 text-sm tracking-tight">{fatura.estabelecimentoNome}</div>
+                               <div className="font-black text-slate-800 text-sm tracking-tight">{fatura.estabelecimentoNome}</div>
                               <div className="text-[11px] font-medium text-slate-400 mt-0.5">{fatura.descricao}</div>
                             </div>
                           </div>
@@ -507,20 +320,20 @@ function FinanceiroMaster() {
                         <td className="p-5">{getStatusBadge(fatura)}</td>
                         <td className="p-5 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {getVencimentoStatus(fatura) === 'atrasado' && (
-                              <button onClick={() => handleLembreteWhatsApp(fatura)}
+                             {getVencimentoStatus(fatura) === 'atrasado' && (
+                               <button onClick={() => handleLembreteWhatsApp(fatura)}
                                 className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 flex items-center justify-center transition-all active:scale-95"
                                 title="Enviar lembrete via WhatsApp">
                                 <FaWhatsapp size={14} />
                               </button>
-                            )}
+                             )}
                             {fatura.status === 'pago' ? (
-                              <button onClick={() => handleBaixa(fatura.id, 'pago')}
+                               <button onClick={() => handleBaixa(fatura.id, 'pago')}
                                 className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all">
                                 <FaUndo /> Estornar
                               </button>
                             ) : (
-                              <button onClick={() => handleBaixa(fatura.id, 'pendente')}
+                               <button onClick={() => handleBaixa(fatura.id, 'pendente')}
                                 className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95">
                                 <FaCheck /> Confirmar
                               </button>
@@ -532,10 +345,10 @@ function FinanceiroMaster() {
                   </tbody>
                 </table>
               </div>
-
+              
               {/* Mobile Cards */}
               <div className="md:hidden divide-y divide-slate-50">
-                {faturasFiltradas.map(fatura => (
+                 {faturasFiltradas.map(fatura => (
                   <div key={fatura.id} className="p-4 hover:bg-yellow-50/20 transition-colors">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
@@ -549,7 +362,7 @@ function FinanceiroMaster() {
                       </div>
                       {getStatusBadge(fatura)}
                     </div>
-
+                    
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
                       <div className="flex items-center gap-4">
                         <div>
@@ -562,25 +375,25 @@ function FinanceiroMaster() {
                         </div>
                       </div>
                       {fatura.status === 'pago' ? (
-                        <button onClick={() => handleBaixa(fatura.id, 'pago')}
-                          className="text-slate-400 hover:text-red-600 p-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all">
-                          <FaUndo /> Estornar
-                        </button>
-                      ) : (
-                        <button onClick={() => handleBaixa(fatura.id, 'pendente')}
-                          className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95">
-                          <FaCheck /> Pagar
-                        </button>
-                      )}
+                          <button onClick={() => handleBaixa(fatura.id, 'pago')}
+                            className="text-slate-400 hover:text-red-600 p-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all">
+                            <FaUndo /> Estornar
+                          </button>
+                        ) : (
+                          <button onClick={() => handleBaixa(fatura.id, 'pendente')}
+                            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95">
+                            <FaCheck /> Pagar
+                          </button>
+                        )}
                     </div>
 
                     {getVencimentoStatus(fatura) === 'atrasado' && (
-                      <p className="text-[10px] text-red-500 font-bold mt-2 bg-red-50 px-2 py-1 rounded-lg inline-block">
-                        ⚠️ {differenceInDays(new Date(), parseDate(fatura.vencimento))} dias de atraso
-                      </p>
+                        <p className="text-[10px] text-red-500 font-bold mt-2 bg-red-50 px-2 py-1 rounded-lg inline-block">
+                          ⚠️ {differenceInDays(new Date(), parseDate(fatura.vencimento))} dias de atraso
+                        </p>
                     )}
                   </div>
-                ))}
+                 ))}
               </div>
             </>
           )}
@@ -661,7 +474,7 @@ function FinanceiroMaster() {
                   <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                     <FaLayerGroup className="text-yellow-500" /> Cobranças em Massa
                   </h2>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Gerar cobrança para TODAS as lojas ativas.</p>
+                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">Gerar cobrança para TODAS as lojas ativas.</p>
                 </div>
                 <button onClick={() => setModalMassa(false)} className="bg-slate-50 text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-2.5 rounded-xl transition-colors"><FaTimes /></button>
               </div>
@@ -676,7 +489,7 @@ function FinanceiroMaster() {
               <form onSubmit={handleCobrancaEmMassa} className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor Unitário</label>
+                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor Unitário</label>
                     <div className="relative">
                       <span className="absolute left-4 top-3.5 text-slate-400 text-sm font-bold">R$</span>
                       <input type="number" step="0.01" placeholder="0.00"
@@ -686,7 +499,7 @@ function FinanceiroMaster() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vencimento</label>
+                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vencimento</label>
                     <input type="date" 
                       className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-bold text-slate-700" 
                       value={massaConfig.vencimento}
@@ -694,8 +507,8 @@ function FinanceiroMaster() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
+                 <div>
+                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
                   <input type="text" placeholder="Ex: Mensalidade Abril 2026"
                     className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-semibold text-slate-700" 
                     value={massaConfig.descricao}

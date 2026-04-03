@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ROLE_GROUPS } from './constants/roles';
+import IosInstallPrompt from "./components/IosInstallPrompt";
 
 // Lazy imports dos context providers pesados (só carregam em rotas autenticadas)
 const AIProvider = lazy(() => import('./context/AIContext').then(m => ({ default: m.AIProvider })));
@@ -36,6 +37,7 @@ const AdminMenuManagement = lazy(() => import("./pages/AdminMenuManagement"));
 const TaxasDeEntrega = lazy(() => import("./pages/TaxasDeEntrega"));
 const AdminEstablishmentManagement = lazy(() => import("./pages/AdminEstablishmentManagement"));
 const NossosClientes = lazy(() => import('./pages/NossosClientes'));
+const DepartamentosFiscaisMaster = lazy(() => import('./pages/admin/DepartamentosFiscaisMaster'));
 const ClientDetails = lazy(() => import("./pages/ClientDetails"));
 const TelaPedidos = lazy(() => import('./pages/TelaPedidos'));
 const AdminCouponManagement = lazy(() => import('./pages/AdminCouponManagement'));
@@ -76,6 +78,7 @@ const RelatorioLucro = lazy(() => import("./pages/admin/RelatorioLucro"));
 const Divulgacao = lazy(() => import('./pages/Divulgacao'));
 const AcertoMotoboys = lazy(() => import('./pages/AcertoMotoboys'));
 const BotPedidosConfig = lazy(() => import('./pages/admin/BotPedidosConfig'));
+const MarketingConfig = lazy(() => import('./pages/admin/MarketingConfig'));
 
 // Wrapper que carrega providers pesados apenas para rotas autenticadas
 function AuthenticatedProviders({ children }) {
@@ -154,6 +157,7 @@ function App() {
                   <Route path="/admin/entrada-estoque" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><EntradaEstoqueXML /></PrivateRoute>} />
                   <Route path="/admin/acerto-motoboys" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><AcertoMotoboys /></PrivateRoute>} />
                   <Route path="/admin/bot-pedidos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><BotPedidosConfig /></PrivateRoute>} />
+                  <Route path="/admin/marketing" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarketingConfig /></PrivateRoute>} />
 
                   {/* Rotas Master */}
                   <Route path="/master-dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterDashboard /></PrivateRoute>} />
@@ -169,6 +173,7 @@ function App() {
                   <Route path="/master/pedidos/:id" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><PedidoDetalhesMaster /></PrivateRoute>} />
                   <Route path="/master/usuarios/criar" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><CriarUsuarioMaster /></PrivateRoute>} />
                   <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AdminImageAssociation /></PrivateRoute>} />
+                  <Route path="/master/departamentos-fiscais" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><DepartamentosFiscaisMaster /></PrivateRoute>} />
                   <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AuditLogs /></PrivateRoute>} />
                   <Route path="/admin/config-fiscal" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ConfigFiscalScreen /></PrivateRoute>} />
                   <Route path="/admin/relatorio-nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioNfce /></PrivateRoute>} />
@@ -178,7 +183,7 @@ function App() {
                 <Route path="/historico-pedidos" element={<PrivateRoute><ClientOrderHistory /></PrivateRoute>} />
               </Routes>
             </Suspense>
-
+            <IosInstallPrompt />
             <ToastContainer position="bottom-right" autoClose={5000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
           </div>
         </HeaderProvider>

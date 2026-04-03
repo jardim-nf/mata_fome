@@ -1,6 +1,21 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import '@google/model-viewer';
 import { IoCubeOutline, IoExpandOutline, IoPhonePortraitOutline, IoClose } from 'react-icons/io5';
+
+// Carrega model-viewer via CDN sob demanda (evita crash de dependência circular do three.js no bundle
+// e não bloqueia o app quando offline)
+let modelViewerLoaded = false;
+function loadModelViewer() {
+  if (modelViewerLoaded || typeof window === 'undefined') return;
+  if (document.querySelector('script[data-model-viewer]')) { modelViewerLoaded = true; return; }
+  if (!navigator.onLine) return; // Não tenta carregar offline
+  const script = document.createElement('script');
+  script.type = 'module';
+  script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js';
+  script.dataset.modelViewer = 'true';
+  script.onerror = () => console.warn('model-viewer CDN indisponível (offline?)');
+  document.head.appendChild(script);
+  modelViewerLoaded = true;
+}
 
 /**
  * Componente de visualização 3D usando Google <model-viewer>.
@@ -36,6 +51,9 @@ function ModelViewer3D({ src, poster, alt = 'Modelo 3D', compact = true, coresEs
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const viewerRef = useRef(null);
+
+  // Carrega o script do model-viewer via CDN quando o componente monta (só se online)
+  useEffect(() => { loadModelViewer(); }, []);
 
   // URL do modelo (passa pelo proxy em dev)
   const modelSrc = useMemo(() => proxyStorageUrl(src), [src]);

@@ -36,13 +36,17 @@ async function carregarProdutosRapido(estabId) {
         try {
           const addSnap = await getDocs(collection(docItem.ref, 'adicionais'));
           listaAdicionais = addSnap.docs.map(a => ({ id: a.id, ...a.data() }));
-        } catch {}
+        } catch (e) {
+          console.warn(`[useEstablishment] Erro ao carregar adicionais do item ${docItem.id}:`, e);
+        }
 
         let listaVariacoes = [];
         try {
           const varSnap = await getDocs(collection(docItem.ref, 'variacoes'));
           listaVariacoes = varSnap.docs.map(v => ({ id: v.id, ...v.data() }));
-        } catch {}
+        } catch (e) {
+          console.warn(`[useEstablishment] Erro ao carregar variações do item ${docItem.id}:`, e);
+        }
 
         return {
           ...dados,

@@ -1,6 +1,7 @@
 // src/pages/Divulgacao.jsx — Material de Vendas PDF (Download Direto)
 import React, { useEffect, useState } from 'react';
 import { IoLogoWhatsapp, IoDownloadOutline } from 'react-icons/io5';
+import { toast } from 'react-toastify';
 
 const TELEFONE = '(22) 99810-2575';
 
@@ -86,7 +87,7 @@ function Divulgacao() {
       if (btnEl) btnEl.style.display = 'block';
     } catch (err) {
       console.error('Erro ao gerar PDF:', err);
-      alert('Erro ao gerar o PDF. Tente novamente.');
+      toast.error('Erro ao gerar o PDF. Tente novamente.');
     } finally {
       setGenerating(false);
     }

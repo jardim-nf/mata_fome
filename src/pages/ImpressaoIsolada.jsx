@@ -54,6 +54,7 @@ export default function ImpressaoIsolada() {
     const [pedido, setPedido] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [impressoraConfig, setImpressoraConfig] = useState({ balcao: null, cozinha: null });
 
     useEffect(() => {
         const buscarDados = async () => {
@@ -63,6 +64,17 @@ export default function ImpressaoIsolada() {
                 return;
             }
             try {
+                // Busca config das impressoras do estabelecimento
+                const estabRef = doc(db, 'estabelecimentos', estabId);
+                const estabSnap = await getDoc(estabRef);
+                if (estabSnap.exists()) {
+                    const estabData = estabSnap.data();
+                    setImpressoraConfig({
+                        balcao: estabData.impressoraBalcao || null,
+                        cozinha: estabData.impressoraCozinha || null
+                    });
+                }
+
                 let dadosPedido = null;
 
                 // 1. Tenta buscar na coleção global de Vendas (Recibos do PDV e Salão finalizados)
@@ -158,7 +170,20 @@ export default function ImpressaoIsolada() {
     useEffect(() => {
         if (!loading && printData && !error && !printData.vazio) {
             const realizarImpressao = async () => {
-                const nomeImpressora = setorAlvo === 'cozinha' || setorAlvo === 'bar' ? 'COZINHA' : 'ELGIN i7(USB)';
+                // 🔥 CORREÇÃO: Usa as impressoras configuradas no Firestore ao invés de nomes fixos
+                const ehSetorCozinha = setorAlvo === 'cozinha' || setorAlvo === 'bar';
+                const nomeImpressora = ehSetorCozinha 
+                    ? (impressoraConfig.cozinha || impressoraConfig.balcao) 
+                    : (impressoraConfig.balcao || impressoraConfig.cozinha);
+
+                // Se não tem impressora configurada, vai direto pro window.print()
+                if (!nomeImpressora) {
+                    console.log("Nenhuma impressora configurada no estabelecimento, usando impressão do navegador.");
+                    window.focus();
+                    setTimeout(() => window.print(), 500);
+                    window.onafterprint = () => window.close();
+                    return;
+                }
 
                 try {
                     if (!qz.websocket.isActive()) await qz.websocket.connect();
@@ -183,7 +208,7 @@ export default function ImpressaoIsolada() {
             };
             setTimeout(realizarImpressao, 1000); 
         }
-    }, [loading, printData, error, setorAlvo]);
+    }, [loading, printData, error, setorAlvo, impressoraConfig]);
 
     const formatarMoeda = (valor) => (valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 

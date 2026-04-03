@@ -1,20 +1,15 @@
-// src/pages/TelaPedidos.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../firebase';
-import {
-    getDocs, doc, getDoc, updateDoc, collection, serverTimestamp, writeBatch, onSnapshot, increment, query, where, addDoc
-} from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-toastify';
 import {
     IoArrowBack, IoCart, IoSearch, IoAdd,
     IoRemove, IoRestaurant, IoClose,
-    IoPerson, IoPencil, IoAddCircle, IoCheckmarkCircle,
+    IoPerson, IoPencil, IoAddCircle, 
     IoPersonAdd, IoTrash, IoCheckmarkDoneCircle, IoPrint
 } from 'react-icons/io5';
 
 import VariacoesModal from '../components/VariacoesModal';
+import { useTelaPedidosData } from '../hooks/useTelaPedidosData';
 
 const getSetorItem = (categoria) => {
     const c = (categoria || '').toLowerCase();
@@ -61,15 +56,12 @@ const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho
 
             <div className="flex-1 flex flex-col justify-center min-w-0 py-0.5">
                 <h3 className="font-bold text-gray-900 text-sm leading-tight pr-1 mb-1">{produto.nome}</h3>
-                
                 <div className="mb-1">
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap inline-flex items-center gap-1 w-fit ${setor.corBg} ${setor.corTexto} ${setor.border}`}>
                         {setor.icon} {setor.nome}
                     </span>
                 </div>
-
                 <p className="text-[11px] text-gray-500 line-clamp-2 mb-1 leading-tight">{produto.descricao || 'Sem descrição'}</p>
-                
                 <div className="flex items-center gap-2 mt-auto pt-1">
                     <span className="font-black text-sm" style={{ color: cores.destaque }}>R$ {precoExibicao}</span>
                     {hasOpcoes && <span className="text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Opções</span>}
@@ -83,234 +75,31 @@ const TelaPedidos = () => {
     const { id: mesaId, estabelecimentoId: urlEstabelecimentoId } = useParams();
     const { estabelecimentoIdPrincipal, user, userData } = useAuth();
     const navigate = useNavigate();
-    
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId;
 
-    const [mesa, setMesa] = useState(null);
-    const [cardapio, setCardapio] = useState([]);
-    const [categorias, setCategorias] = useState(['Todos']);
-    const [resumoPedido, setResumoPedido] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const {
+        loading, mesa, categoriasOrdenadas, produtosFiltrados, coresEstabelecimento, senhaMasterEstabelecimento,
+        resumoPedido, quantidadesNoCarrinho, itensAgrupados, totalGeral, totalItens, temItensPendentes,
+        ocupantes, clienteSelecionado, setClienteSelecionado,
+        termoBusca, setTermoBusca, categoriaAtiva, setCategoriaAtiva,
+        salvando, pedidoRecemEnviadoId,
+        prepararProdutoParaSelecao, confirmarAdicaoAoCarrinho, confirmarNovaPessoa, salvarEdicaoPessoa,
+        confirmarExclusao, ajustarQuantidade, dispararImpressao, salvarAlteracoes
+    } = useTelaPedidosData(estabelecimentoId, mesaId, userData, user);
 
-    const [termoBusca, setTermoBusca] = useState('');
-    const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
-    const [salvando, setSalvando] = useState(false);
     const [showOrderSummary, setShowOrderSummary] = useState(false);
-
-    const [pedidoRecemEnviadoId, setPedidoRecemEnviadoId] = useState(null);
-
-    const [ocupantes, setOcupantes] = useState(['Mesa']);
-    const [clienteSelecionado, setClienteSelecionado] = useState('Mesa');
-
     const [isAddingPerson, setIsAddingPerson] = useState(false);
     const [editandoNomeIndex, setEditandoNomeIndex] = useState(null);
     const [novoNomeTemp, setNovoNomeTemp] = useState('');
-
+    
     const [produtoEmSelecao, setProdutoEmSelecao] = useState(null);
     const [modalSenhaAberto, setModalSenhaAberto] = useState(false);
     const [itemParaExcluir, setItemParaExcluir] = useState(null);
     const [senhaDigitada, setSenhaDigitada] = useState('');
     const [qtdExcluir, setQtdExcluir] = useState(1);
 
-    const [coresEstabelecimento, setCoresEstabelecimento] = useState({
-        primaria: '#111827', destaque: '#059669', background: '#f9fafb', texto: { principal: '#111827' }
-    });
-    const [ordemCategorias, setOrdemCategorias] = useState([]);
-    const [senhaMasterEstabelecimento, setSenhaMasterEstabelecimento] = useState('');
-
-    const normalizarTexto = (texto) => {
-        if (!texto) return '';
-        return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-    };
-
-    const enrichWithGlobalAdicionais = (item) => {
-        const termosAdicionais = ['adicionais', 'adicional', 'extra', 'extras', 'complemento', 'complementos', 'acrescimo', 'acrescimos', 'molho', 'molhos', 'opcoes', 'opções'];
-        const categoriaItemNorm = normalizarTexto(item.categoria || '');
-        const categoriaIdNorm = normalizarTexto(item.categoriaId || '');
-        
-        // Se a própria categoria É de adicionais, não enriquece
-        if (termosAdicionais.some(t => categoriaItemNorm.includes(t))) return item;
-
-        // ✅ WHITELIST: Adicionais SÓ aparecem em categorias de HAMBÚRGUER
-        const categoriasComAdicionais = [
-            'classico', 'classicos', 'clássico', 'clássicos', 'os-classicos', 'os classicos',
-            'novato', 'novatos', 'os-novatos', 'os novatos',
-            'queridinho', 'queridinhos', 'os-queridinhos', 'os queridinhos',
-            'grande', 'grandes', 'grandes-fomes', 'grandes fomes',
-            'hamburguer', 'hamburgueres', 'hambúrguer', 'hambúrgueres', 'burger', 'burgers',
-            'artesanal', 'artesanais', 'smash', 'gourmet'
-        ];
-
-        const permitido = categoriasComAdicionais.some(cat => 
-            categoriaItemNorm.includes(cat) || categoriaIdNorm.includes(cat)
-        );
-
-        if (!permitido) return item;
-
-        const globais = cardapio.filter(p => {
-            const cat = normalizarTexto(p.categoria || '');
-            return termosAdicionais.some(termo => cat.includes(termo));
-        });
-
-        const idsExistentes = new Set((item.adicionais || []).map(a => a.id));
-        const globaisFiltrados = globais.filter(g => !idsExistentes.has(g.id));
-
-        return { ...item, adicionais: [...(item.adicionais || []), ...globaisFiltrados] };
-    };
-
-    useEffect(() => {
-        if (!estabelecimentoId) return;
-
-        const carregarConfigECardapio = async () => {
-            setLoading(true);
-            try {
-                const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
-                const estabSnap = await getDoc(estabRef);
-                if (estabSnap.exists()) {
-                    const dados = estabSnap.data();
-                    if (dados.cores) setCoresEstabelecimento(prev => ({ ...prev, ...dados.cores }));
-                    if (dados.ordemCategorias) setOrdemCategorias(dados.ordemCategorias);
-                    if (dados.senhaMaster) setSenhaMasterEstabelecimento(String(dados.senhaMaster));
-                }
-
-                const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
-                const categoriasSnap = await getDocs(categoriasRef);
-
-                let listaCats = ['Todos'];
-                const catsAtivas = [];
-                categoriasSnap.docs.forEach(doc => {
-                    if (doc.data().ativo !== false) {
-                        const nome = doc.data().nome || doc.id;
-                        listaCats.push(nome);
-                        catsAtivas.push({ id: doc.id, nome });
-                    }
-                });
-
-                const promessasItens = catsAtivas.map(cat => {
-                    const p1 = getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens')).then(s => ({snap: s, tipo: 'itens', cat}));
-                    const p2 = getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'produtos')).then(s => ({snap: s, tipo: 'produtos', cat}));
-                    return [p1, p2];
-                }).flat();
-
-                const resultadosBuscas = await Promise.all(promessasItens);
-                
-                let produtosFinaisBrutos = [];
-
-                for (const res of resultadosBuscas) {
-                    for (const docItem of res.snap.docs) {
-                        const dados = docItem.data();
-                        if (dados.ativo === false) continue;
-
-                        produtosFinaisBrutos.push({
-                            ...dados,
-                            id: docItem.id,
-                            categoria: res.cat.nome,
-                            categoriaId: res.cat.id,
-                            tipoColecao: res.tipo 
-                        });
-                    }
-                }
-
-                setCardapio(produtosFinaisBrutos);
-                setCategorias([...new Set(listaCats)]);
-
-            } catch (error) {
-                console.error("Erro ao carregar cardápio:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        carregarConfigECardapio();
-    }, [estabelecimentoId]);
-
-    useEffect(() => {
-        if (!estabelecimentoId || !mesaId) return;
-        const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-        const unsubscribe = onSnapshot(mesaRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setMesa({ id: docSnap.id, ...data });
-                if (data.itens) setResumoPedido(data.itens);
-                if (data.nomesOcupantes?.length > 0) {
-                    setOcupantes(data.nomesOcupantes);
-                    setClienteSelecionado(prev => data.nomesOcupantes.includes(prev) ? prev : (data.nomesOcupantes[0] || 'Mesa'));
-                } else {
-                    setOcupantes(['Mesa']);
-                }
-            } else {
-                navigate('/controle-salao');
-            }
-        });
-        return () => unsubscribe();
-    }, [estabelecimentoId, mesaId, navigate]);
-
-    const categoriasOrdenadas = useMemo(() => {
-        return [...categorias].sort((a, b) => {
-            if (a === 'Todos') return -1;
-            if (b === 'Todos') return 1;
-            if (!ordemCategorias.length) return a.localeCompare(b);
-            const idxA = ordemCategorias.indexOf(a), idxB = ordemCategorias.indexOf(b);
-            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-            if (idxA !== -1) return -1;
-            if (idxB !== -1) return 1;
-            return a.localeCompare(b);
-        });
-    }, [categorias, ordemCategorias]);
-
-    const produtosFiltrados = useMemo(() => {
-        return cardapio.filter(p =>
-            (!termoBusca || p.nome.toLowerCase().includes(termoBusca.toLowerCase())) &&
-            (categoriaAtiva === 'Todos' || p.categoria === categoriaAtiva)
-        );
-    }, [cardapio, termoBusca, categoriaAtiva]);
-
-    const quantidadesNoCarrinho = useMemo(() => {
-        const mapa = {};
-        resumoPedido.forEach(item => {
-            // Ignora os itens cancelados na contagem do badge vermelho
-            if (item.status === 'cancelado') return;
-
-            const idOrig = item.produtoIdOriginal;
-            if (idOrig) {
-                if (!mapa[idOrig]) mapa[idOrig] = 0;
-                mapa[idOrig] += item.quantidade;
-            }
-        });
-        return mapa;
-    }, [resumoPedido]);
-
     const handleItemClick = async (prod) => {
-        let itemAtualizado = { ...prod };
-        
-        const precisaBuscarAdicionais = itemAtualizado.adicionais === undefined;
-        const precisaBuscarVariacoes = itemAtualizado.variacoes === undefined;
-
-        if (precisaBuscarAdicionais || precisaBuscarVariacoes) {
-            const toastId = toast.loading("Carregando opções...", { autoClose: false });
-            try {
-                if (precisaBuscarAdicionais) {
-                    const adicsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'adicionais'));
-                    itemAtualizado.adicionais = adicsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                }
-                if (precisaBuscarVariacoes) {
-                    const varsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'variacoes'));
-                    itemAtualizado.variacoes = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                }
-                
-                setCardapio(prev => prev.map(p => p.id === prod.id ? itemAtualizado : p));
-                toast.dismiss(toastId);
-            } catch (e) {
-                console.error("Erro ao buscar subcoleções:", e);
-                toast.dismiss(toastId);
-            }
-        }
-
-        const itemEnriquecido = enrichWithGlobalAdicionais(itemAtualizado);
-        const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || 
-                          (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || 
-                          (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || 
-                          (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
+        const { itemEnriquecido, itemAtualizado, temOpcoes } = await prepararProdutoParaSelecao(prod);
         
         if (temOpcoes) {
             setProdutoEmSelecao(itemEnriquecido);
@@ -319,298 +108,34 @@ const TelaPedidos = () => {
         }
     };
 
-    const confirmarAdicaoAoCarrinho = async (itemConfig) => {
-        if (navigator.vibrate) {
-            navigator.vibrate(50);
+    const runConfirmarNovaPessoa = async () => {
+        const ok = await confirmarNovaPessoa(novoNomeTemp);
+        if (ok || !novoNomeTemp.trim()) {
+            setIsAddingPerson(false);
+            setNovoNomeTemp('');
         }
-
-        const { nome, variacaoSelecionada, observacao, precoFinal, adicionaisSelecionados, ...restoDoItem } = itemConfig;
-        
-        let nomeFinal = nome;
-        if (variacaoSelecionada) nomeFinal += ` - ${variacaoSelecionada.nome}`;
-        
-        const temAdicionais = adicionaisSelecionados && adicionaisSelecionados.length > 0;
-        const listaFinalAdicionais = temAdicionais ? adicionaisSelecionados : [];
-
-        if (temAdicionais) {
-             const nomesAdics = listaFinalAdicionais.map(a => a.nome).join(', ');
-             nomeFinal += ` (+ ${nomesAdics})`;
-        }
-
-        const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
-        const novaLista = [...resumoPedido];
-        
-        const indexExistente = novaLista.findIndex(i => {
-            const adicsAtuais = i.adicionaisSelecionados || [];
-            const adicsNovos = listaFinalAdicionais;
-            const mesmaQtd = adicsAtuais.length === adicsNovos.length;
-            const mesmosAdics = mesmaQtd && adicsAtuais.every(a => adicsNovos.some(b => b.nome === a.nome));
-
-            return i.produtoIdOriginal === itemConfig.id && 
-                   i.nome === nomeFinal &&
-                   i.observacao === (observacao || '') &&
-                   i.cliente === clienteSelecionado &&
-                   (!i.status || i.status === 'pendente') &&
-                   i.status !== 'cancelado' && // Não agrupa com itens cancelados
-                   mesmosAdics;
-        });
-
-        const toastConfigNinja = {
-            position: "top-center", 
-            autoClose: 800,         
-            hideProgressBar: true,  
-            closeButton: false,     
-            theme: "dark",          
-            style: { 
-                borderRadius: '50px', 
-                minHeight: '40px', 
-                padding: '8px 20px', 
-                fontWeight: '900', 
-                fontSize: '13px', 
-                textAlign: 'center',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
-            }
-        };
-
-        if (indexExistente >= 0) {
-            novaLista[indexExistente].quantidade += 1;
-            novaLista[indexExistente].adicionadoPor = nomeGarcom;
-            toast.success(`+1 ${nomeFinal}`, toastConfigNinja);
-        } else {
-            const novoItem = {
-                ...restoDoItem,
-                id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
-                produtoIdOriginal: itemConfig.id, 
-                categoriaId: itemConfig.categoriaId,
-                categoria: itemConfig.categoria || '', 
-                nome: nomeFinal, 
-                preco: precoFinal,
-                observacao: observacao || '', 
-                quantidade: 1, 
-                cliente: clienteSelecionado,
-                adicionadoEm: new Date(), 
-                status: 'pendente',
-                adicionadoPor: nomeGarcom,
-                adicionaisSelecionados: listaFinalAdicionais,
-                adicionais: listaFinalAdicionais, 
-                variacaoSelecionada: variacaoSelecionada || null
-            };
-            novaLista.push(novoItem);
-            toast.success(`Adicionado: ${nomeFinal}`, toastConfigNinja);
-        }
-
-        setResumoPedido(novaLista);
-        setProdutoEmSelecao(null);
-
-        try {
-            // Recalcula o total ignorando os cancelados
-            const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-            
-            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-                itens: novaLista,
-                total: novoTotal,
-                updatedAt: serverTimestamp()
-            });
-        } catch(e) { console.error(e); }
     };
 
     const iniciarAdicaoPessoa = () => { setIsAddingPerson(true); setNovoNomeTemp(''); };
-    const confirmarNovaPessoa = async () => {
-        if (!novoNomeTemp.trim()) { setIsAddingPerson(false); return; }
-        const novoNome = novoNomeTemp.trim();
-        const novosOcupantes = [...ocupantes, novoNome];
-        setOcupantes(novosOcupantes); setClienteSelecionado(novoNome); setIsAddingPerson(false); setNovoNomeTemp('');
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { nomesOcupantes: novosOcupantes });
-    };
     const iniciarEdicaoPessoa = (index, nome) => { setEditandoNomeIndex(index); setNovoNomeTemp(nome); };
-    const salvarEdicaoPessoa = async (index) => {
+
+    const runSalvarEdicaoPessoa = async (index) => {
         if (editandoNomeIndex === null) return;
-        if (!novoNomeTemp.trim()) { setEditandoNomeIndex(null); return; }
-        const nomeAntigo = ocupantes[index];
-        const novoNome = novoNomeTemp.trim();
-        if (nomeAntigo === novoNome) { setEditandoNomeIndex(null); return; }
-        const novosOcupantes = [...ocupantes];
-        novosOcupantes[index] = novoNome;
-        setOcupantes(novosOcupantes); setEditandoNomeIndex(null);
-        if (clienteSelecionado === nomeAntigo) setClienteSelecionado(novoNome);
-        const novosItens = resumoPedido.map(i => (i.cliente === nomeAntigo ? { ...i, cliente: novoNome } : i));
-        setResumoPedido(novosItens);
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { nomesOcupantes: novosOcupantes, itens: novosItens });
+        await salvarEdicaoPessoa(index, novoNomeTemp);
+        setEditandoNomeIndex(null);
     };
 
-    // 🔥 EXCLUSÃO PARCIAL OU TOTAL (SOFT DELETE) + LOG DE AUDITORIA 🔥
-    const confirmarExclusao = async () => {
-        if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) return toast.error("Senha errada");
-        
-        const qtdAtual = itemParaExcluir.quantidade || 1;
-        const qtdRemover = Math.min(qtdExcluir, qtdAtual);
-        const cancelaInteiro = qtdRemover >= qtdAtual;
-
-        let novaLista;
-        if (cancelaInteiro) {
-            // Cancela o item inteiro (soft delete)
-            novaLista = resumoPedido.map(i => 
-                i.id === itemParaExcluir.id ? { ...i, status: 'cancelado' } : i
-            );
-        } else {
-            // Reduz a quantidade do item
-            novaLista = resumoPedido.map(i => 
-                i.id === itemParaExcluir.id ? { ...i, quantidade: qtdAtual - qtdRemover } : i
-            );
-        }
-        
-        const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-        
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-            itens: novaLista, 
-            total: novoTotal 
-        });
-
-        // 🔥 GRAVA LOG DE CANCELAMENTO para o Relatório de Cancelamentos
-        try {
-            const logsRef = collection(db, 'estabelecimentos', estabelecimentoId, 'auditLogs');
-            await addDoc(logsRef, {
-                tipo: 'cancelamento_item',
-                mesaNumero: mesa?.numero || 'N/A',
-                item: {
-                    nome: `${itemParaExcluir.nome || itemParaExcluir.name || 'Item'} – ${itemParaExcluir.variacao || itemParaExcluir.opcaoSelecionada || 'Único'}`,
-                    quantidade: qtdRemover,
-                    precoUnitario: itemParaExcluir.preco || 0,
-                    observacao: itemParaExcluir.observacao || null
-                },
-                valorTotalCancelado: (itemParaExcluir.preco || 0) * qtdRemover,
-                data: serverTimestamp()
-            });
-        } catch (e) {
-            console.error('[AUDIT] Erro ao gravar log de cancelamento:', e);
-        }
-        
-        setModalSenhaAberto(false);
-        toast.info(cancelaInteiro ? "Item cancelado com sucesso!" : `${qtdRemover}x removido(s) com sucesso!`);
-    };
-
-    const ajustarQuantidade = async (id, cliente, qtd) => {
-        if (navigator.vibrate) navigator.vibrate(20);
-        // Só permite ajustar quantidade se o item for pendente e não for cancelado
-        const novaLista = resumoPedido.map(i => i.id === id ? { ...i, quantidade: qtd } : i).filter(i => i.quantidade > 0);
-        setResumoPedido(novaLista);
-        
-        const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-            itens: novaLista, 
-            total: novoTotal 
-        });
-    };
-
-    const dispararImpressao = async (pedidoIdParaImpressao, setor) => {
-        const toastId = toast.loading("Enviando sinal para o Caixa...");
-        
-        try {
-            if (pedidoIdParaImpressao) {
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', pedidoIdParaImpressao), {
-                    solicitarImpressao: true,
-                    setorImpressao: setor || 'tudo'
-                });
-            } else {
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
-                    solicitarImpressaoConferencia: true,
-                    setorImpressao: setor || 'tudo'
-                });
-            }
-            
-            toast.update(toastId, { render: `Impressão enviada com sucesso! ${setor ? `(${setor})` : ''}`, type: "success", isLoading: false, autoClose: 2000 });
-            setShowOrderSummary(false); 
-            
-        } catch (error) {
-            toast.update(toastId, { render: "Erro ao comunicar com o Caixa.", type: "error", isLoading: false, autoClose: 3000 });
+    const runExcluirItem = async () => {
+        const ok = await confirmarExclusao(itemParaExcluir, qtdExcluir, senhaDigitada);
+        if (ok) {
+            setModalSenhaAberto(false);
         }
     };
-
-    const salvarAlteracoes = async () => {
-        setSalvando(true);
-        try {
-            // 🔥 Filtra quem é novo, mas IGNORA os itens cancelados
-            const itensNovos = resumoPedido.filter(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
-            const totalMesa = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-            
-            const batch = writeBatch(db);
-            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-            
-            let idPedidoGerado = null;
-
-            if(itensNovos.length > 0) {
-                idPedidoGerado = `pedido_${mesaId}_${Date.now()}`;
-                const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoGerado);
-                
-                batch.set(pedidoRef, {
-                    id: idPedidoGerado, 
-                    mesaId: mesaId, 
-                    mesaNumero: mesa?.numero || 'Sem Número',
-                    clienteNome: `Mesa ${mesa?.numero}`,
-                    tipo: 'mesa',
-                    itens: itensNovos.map(i => ({...i, status: 'recebido'})), 
-                    status: 'recebido', 
-                    total: itensNovos.reduce((a,i)=>a+(i.preco*i.quantidade),0), 
-                    dataPedido: serverTimestamp(), 
-                    createdAt: serverTimestamp(), 
-                    source: 'salao'
-                });
-
-                const todosItensAtualizados = resumoPedido.map(i => {
-                    if ((!i.status || i.status === 'pendente') && i.status !== 'cancelado') {
-                        return { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado };
-                    }
-                    return i;
-                });
-                
-                batch.update(mesaRef, { 
-                    itens: todosItensAtualizados, 
-                    status: 'ocupada', 
-                    total: totalMesa, 
-                    updatedAt: serverTimestamp() 
-                });
-
-            } else {
-                batch.update(mesaRef, { 
-                    itens: resumoPedido, 
-                    total: totalMesa, 
-                    updatedAt: serverTimestamp() 
-                });
-            }
-
-            await batch.commit();
-            
-            toast.success("Pedido confirmado com sucesso!", { position: "top-center", autoClose: 2000, theme: "colored" });
-            
-            if (idPedidoGerado) {
-                setPedidoRecemEnviadoId(idPedidoGerado);
-            }
-
-        } catch(error) { 
-            console.error("Erro fatal ao salvar pedido:", error); 
-            toast.error("Erro na internet! Tente novamente.", { position: "top-center", theme: "colored", autoClose: 4000 }); 
-        } finally { 
-            setSalvando(false); 
-        }
-    };
-
-    const itensAgrupados = useMemo(() => {
-        return resumoPedido.reduce((acc, item) => {
-            const k = item.cliente || 'Mesa';
-            if (!acc[k]) acc[k] = []; acc[k].push(item); return acc;
-        }, {});
-    }, [resumoPedido]);
-
-    // 🔥 Totais recalculados ignorando os cancelados 🔥
-    const totalGeral = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-    const totalItens = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + i.quantidade, 0);
-    const temItensPendentes = resumoPedido.some(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-10 w-10 border-b-4" style={{borderColor: coresEstabelecimento.destaque}}></div></div>;
 
     return (
         <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden flex flex-col w-full">
-            
             <header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
                 <div className="flex items-center justify-between w-full px-4">
                     <div className="flex items-center gap-3">
@@ -628,11 +153,11 @@ const TelaPedidos = () => {
                     </button>
                 </div>
                 
-                <div className="flex items-center gap-2 overflow-x-auto py-3 pl-4 hide-scrollbar w-full">
+                <div className="flex items-center gap-2 flex-wrap py-3 px-4 w-full">
                     {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
                         <div key={idx} className="flex-shrink-0">
                             {editandoNomeIndex === idx ? (
-                                <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => salvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && salvarEdicaoPessoa(idx)} />
+                                <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => runSalvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && runSalvarEdicaoPessoa(idx)} />
                             ) : (
                                 <button onClick={() => setClienteSelecionado(nome)} className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`} style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}>
                                     <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />{nome}
@@ -651,8 +176,8 @@ const TelaPedidos = () => {
                                 placeholder="Nome..." 
                                 value={novoNomeTemp} 
                                 onChange={e => setNovoNomeTemp(e.target.value)} 
-                                onBlur={confirmarNovaPessoa} 
-                                onKeyDown={e => e.key === 'Enter' && confirmarNovaPessoa()} 
+                                onBlur={runConfirmarNovaPessoa} 
+                                onKeyDown={e => e.key === 'Enter' && runConfirmarNovaPessoa()} 
                             />
                         ) : (
                             <button 
@@ -675,7 +200,7 @@ const TelaPedidos = () => {
                     {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-7 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
                 </div>
 
-                <div className="flex gap-2 overflow-x-auto hide-scrollbar py-3 pl-4 w-full">
+                <div className="flex gap-2 flex-wrap py-3 px-4 w-full">
                     {categoriasOrdenadas.map(cat => (<button key={cat} onClick={() => setCategoriaAtiva(cat)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all ${categoriaAtiva === cat ? 'text-white border-transparent shadow-md' : 'bg-white text-gray-500 border-gray-200'}`} style={categoriaAtiva === cat ? { backgroundColor: coresEstabelecimento.primaria } : {}}>{cat}</button>))}
                     <div className="flex-shrink-0 w-6 h-1 text-transparent select-none pointer-events-none">.</div>
                 </div>
@@ -714,7 +239,6 @@ const TelaPedidos = () => {
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowOrderSummary(false)} />
                     
                     <div className="relative w-full max-w-lg bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
-                        
                         <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-center shrink-0">
                             <div><h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2><p className="text-xs text-gray-500 mt-0.5">Confira e envie para produção</p></div>
                             <button onClick={() => setShowOrderSummary(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200"><IoClose /></button>
@@ -722,7 +246,6 @@ const TelaPedidos = () => {
                         
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
                             {Object.entries(itensAgrupados).map(([pessoa, itens]) => {
-                                // O total por pessoa também não pode contar os cancelados
                                 const totalPessoa = itens.reduce((a, i) => i.status === 'cancelado' ? a : a + (i.preco * i.quantidade), 0);
 
                                 return (
@@ -769,15 +292,14 @@ const TelaPedidos = () => {
                                                     <div className="mt-3 flex items-center justify-between">
                                                         {item.adicionadoPor ? (<div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium"><IoPersonAdd className="text-gray-300" size={10} /> <span>{item.adicionadoPor}</span></div>) : <div></div>}
                                                         
-                                                        {/* Se está cancelado, não mostra mais botões */}
                                                         {isCancelado ? null : 
                                                          item.status && item.status !== 'pendente' ? (
                                                             <button onClick={() => { setItemParaExcluir(item); setSenhaDigitada(''); setQtdExcluir(item.quantidade || 1); setModalSenhaAberto(true); }} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 px-2 py-1 rounded border border-red-100 hover:bg-red-50"><IoTrash /> Excluir</button>
                                                         ) : (
                                                             <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
-                                                                <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade - 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-red-500"><IoRemove /></button>
+                                                                <button onClick={() => ajustarQuantidade(item.id, item.quantidade - 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-red-500"><IoRemove /></button>
                                                                 <span className="font-bold text-sm w-4 text-center">{item.quantidade}</span>
-                                                                <button onClick={() => ajustarQuantidade(item.id, item.cliente, item.quantidade + 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-green-600"><IoAdd /></button>
+                                                                <button onClick={() => ajustarQuantidade(item.id, item.quantidade + 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-green-600"><IoAdd /></button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -805,13 +327,13 @@ const TelaPedidos = () => {
                                         <IoPrint className="mr-1 text-sm" /> Mande para a Impressora:
                                     </span>
                                     <div className="flex gap-2">
-                                        <button onClick={() => dispararImpressao(pedidoRecemEnviadoId, 'cozinha')} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('cozinha', () => setShowOrderSummary(false))} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
                                             <span className="text-xl">🍳</span> Cozinha
                                         </button>
-                                        <button onClick={() => dispararImpressao(pedidoRecemEnviadoId, 'bar')} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('bar', () => setShowOrderSummary(false))} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
                                             <span className="text-xl">🍺</span> Bar
                                         </button>
-                                        <button onClick={() => dispararImpressao(pedidoRecemEnviadoId, '')} className="flex-1 bg-gray-200 hover:bg-gray-800 hover:text-white text-gray-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-gray-300 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('', () => setShowOrderSummary(false))} className="flex-1 bg-gray-200 hover:bg-gray-800 hover:text-white text-gray-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-gray-300 hover:border-transparent">
                                             <span className="text-xl">🧾</span> Tudo
                                         </button>
                                     </div>
@@ -829,7 +351,6 @@ const TelaPedidos = () => {
                         <h3 className="font-bold text-lg text-gray-900">Excluir Item Enviado?</h3>
                         <p className="text-sm text-gray-500 mb-1 font-medium">{itemParaExcluir?.nome}</p>
 
-                        {/* Seletor de quantidade a excluir */}
                         <div className="bg-gray-50 rounded-xl p-3 mb-4 border border-gray-200">
                             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Quantidade a excluir</span>
                             <div className="flex items-center justify-center gap-4 mt-2">
@@ -851,10 +372,10 @@ const TelaPedidos = () => {
                         </div>
 
                         <p className="text-xs text-gray-500 mb-2">Digite a senha master para confirmar.</p>
-                        <input type="password" autoFocus className="w-full text-center text-2xl font-black tracking-widest p-3 border-2 rounded-xl mb-4 focus:border-red-500 outline-none" placeholder="••••" value={senhaDigitada} onChange={e => setSenhaDigitada(e.target.value)} onKeyDown={e => e.key === 'Enter' && confirmarExclusao()} />
+                        <input type="password" autoFocus className="w-full text-center text-2xl font-black tracking-widest p-3 border-2 rounded-xl mb-4 focus:border-red-500 outline-none" placeholder="••••" value={senhaDigitada} onChange={e => setSenhaDigitada(e.target.value)} onKeyDown={e => e.key === 'Enter' && runExcluirItem()} />
                         <div className="flex gap-2">
                             <button onClick={() => setModalSenhaAberto(false)} className="flex-1 py-3 font-bold text-gray-600 bg-gray-100 rounded-xl">Cancelar</button>
-                            <button onClick={confirmarExclusao} className="flex-1 py-3 font-bold text-white bg-red-500 rounded-xl shadow-lg">
+                            <button onClick={runExcluirItem} className="flex-1 py-3 font-bold text-white bg-red-500 rounded-xl shadow-lg">
                                 {qtdExcluir >= (itemParaExcluir?.quantidade || 1) ? 'Excluir Tudo' : `Excluir ${qtdExcluir}x`}
                             </button>
                         </div>
@@ -862,7 +383,7 @@ const TelaPedidos = () => {
                 </div>
             )}
 
-            {produtoEmSelecao && (<VariacoesModal item={produtoEmSelecao} onConfirm={confirmarAdicaoAoCarrinho} onClose={() => setProdutoEmSelecao(null)} coresEstabelecimento={coresEstabelecimento} estabelecimentoId={estabelecimentoId} />)}
+            {produtoEmSelecao && (<VariacoesModal item={produtoEmSelecao} onConfirm={(item) => { confirmarAdicaoAoCarrinho(item); setProdutoEmSelecao(null); }} onClose={() => setProdutoEmSelecao(null)} coresEstabelecimento={coresEstabelecimento} estabelecimentoId={estabelecimentoId} />)}
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } } .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }`}</style>
         </div>
     );

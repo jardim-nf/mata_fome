@@ -1,27 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  query, 
-  collectionGroup, 
-  where, 
-  getDocs 
-} from 'firebase/firestore';
-import { db } from '../../firebase';
+import React from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { auditLogger } from '../../utils/auditLogger';
-import { vendaService } from '../../services/vendaService';
+import PromptDialog from '../../components/ui/PromptDialog';
+import { usePedidoDetalhesMasterData, formatId, getDate } from '../../hooks/usePedidoDetalhesMasterData';
 import { 
   FaStore, 
   FaUser, 
   FaMoneyBillWave, 
   FaMotorcycle, 
-  FaBoxOpen, 
   FaArrowLeft, 
   FaWhatsapp, 
   FaPrint,
@@ -29,7 +17,6 @@ import {
   FaUtensils,
   FaSignOutAlt,
   FaCheck,
-  FaTimes,
   FaBan,
   FaFileInvoice 
 } from 'react-icons/fa';
@@ -44,7 +31,7 @@ const DashboardHeader = ({ navigate, logout }) => (
                 <FaStore />
             </div>
             <span className="text-gray-900 font-extrabold text-xl tracking-tight">
-Idea<span className="text-yellow-500">Food</span>
+              Idea<span className="text-yellow-500">Food</span>
             </span>
         </div>
       </div>
@@ -59,262 +46,28 @@ Idea<span className="text-yellow-500">Food</span>
   </header>
 );
 
-// --- HELPERS ---
-const formatId = (id) => {
-  if (!id) return '#---';
-  const parts = id.split('_');
-  if (parts.length > 1) return `#${parts[1].substring(0, 6).toUpperCase()}`;
-  if (id.length > 8) return `#${id.substring(0, 6).toUpperCase()}`;
-  return `#${id.toUpperCase()}`;
-};
-
-const getDate = (data) => {
-  if (!data) return null;
-  const t = data.dataPedido || data.criadoEm || data.createdAt || data.adicionadoEm || data.updatedAt;
-  if (!t) return null;
-  if (t.toDate) return t.toDate();
-  return new Date(t);
-};
-
 function PedidoDetalhesMaster() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
+  
+  const {
+      pedido,
+      loadingPedido,
+      updating,
+      nfceStatus,
+      error,
+      promptCancelNfce, setPromptCancelNfce,
+      handleStatusChange,
+      handleReprocessarNfce,
+      handleConsultarStatus,
+      handleVerXml,
+      handleVerPdf,
+      handleCancelarNfce,
+      executarCancelamentoNfce,
+      handleVerXmlCancelamento
+  } = usePedidoDetalhesMasterData(id, isMasterAdmin, currentUser);
 
-  const [pedido, setPedido] = useState(null);
-  const [loadingPedido, setLoadingPedido] = useState(true);
-  const [updating, setUpdating] = useState(false); 
-  const [nfceStatus, setNfceStatus] = useState('idle'); 
-  const [error, setError] = useState('');
-  const [estabNome, setEstabNome] = useState('Carregando...');
-  const [docRefPath, setDocRefPath] = useState(null);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!isMasterAdmin) {
-      navigate('/master-dashboard');
-      return;
-    }
-
-    const fetchPedido = async () => {
-      try {
-        setLoadingPedido(true);
-        let foundData = null;
-        let foundEstabId = null;
-        let path = null;
-
-        let docSnap = await getDoc(doc(db, 'pedidos', id));
-        if (docSnap.exists()) {
-            foundData = { id: docSnap.id, ...docSnap.data() };
-            path = docSnap.ref;
-        }
-
-        if (!foundData) {
-           const qPed = query(collectionGroup(db, 'pedidos'), where('id', '==', id));
-           const snapPed = await getDocs(qPed);
-           if (!snapPed.empty) {
-              const d = snapPed.docs[0];
-              foundData = { id: d.id, ...d.data() };
-              path = d.ref;
-           }
-        }
-
-        if (!foundData) throw new Error('Pedido não encontrado.');
-
-        setPedido(foundData);
-        setDocRefPath(path);
-        
-        foundEstabId = foundData.estabelecimentoId;
-        if (!foundEstabId && path.path.includes('estabelecimentos/')) {
-            const parts = path.path.split('/');
-            foundEstabId = parts[1];
-        }
-
-        if (foundEstabId) {
-          try {
-            const estabSnap = await getDoc(doc(db, 'estabelecimentos', foundEstabId));
-            if (estabSnap.exists()) setEstabNome(estabSnap.data().nome);
-            else setEstabNome('ID não encontrado');
-          } catch { setEstabNome('Erro bus. estab.'); }
-        } else {
-          setEstabNome('Global / N/A');
-        }
-
-      } catch (err) {
-        console.error(err);
-        setError("Não foi posible cargar este pedido.");
-      } finally {
-        setLoadingPedido(false);
-      }
-    };
-
-    if (id) fetchPedido();
-  }, [id, isMasterAdmin, authLoading, navigate]);
-
-  const handleStatusChange = async (newStatus) => {
-    if (!window.confirm(`Tem certeza que deseja mudar o status para "${newStatus.toUpperCase()}"?`)) return;
-    if (!docRefPath) return toast.error("Referência do pedido perdida.");
-
-    setUpdating(true);
-    try {
-        const oldStatus = pedido.status;
-
-        await updateDoc(docRefPath, { 
-            status: newStatus,
-            updatedAt: new Date()
-        });
-
-        await auditLogger(
-            'PEDIDO_STATUS_ALTERADO',
-            { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, 
-            { type: 'pedido', id: pedido.id, name: `Pedido ${formatId(pedido.id)}` }, 
-            { de: oldStatus, para: newStatus, estabelecimento: estabNome } 
-        );
-
-        setPedido(prev => ({ ...prev, status: newStatus }));
-        toast.success(`Status alterado para ${newStatus}`);
-
-    } catch (err) {
-        console.error("Erro ao atualizar:", err);
-        toast.error("Erro ao atualizar status.");
-    } finally {
-        setUpdating(false);
-    }
-  };
-
-  // --- FUNÇÕES FISCAIS (NFC-E) ---
-
-  const handleReprocessarNfce = async () => {
-    setNfceStatus('loading');
-    try {
-        const res = await vendaService.emitirNfce(pedido.id, pedido.clienteCpf || pedido.cliente?.cpf);
-        if (res.sucesso || res.success) {
-            toast.success("Nota enviada para reprocessamento com sucesso!");
-            setPedido(prev => ({
-                ...prev,
-                fiscal: {
-                    ...prev.fiscal,
-                    status: 'PROCESSANDO',
-                    idPlugNotas: res.idPlugNotas
-                }
-            }));
-        } else {
-            toast.error("Erro ao reprocessar: " + (res.error || res.message));
-        }
-    } catch (error) {
-        toast.error("Erro de comunicação ao reprocessar a nota.");
-    } finally {
-        setNfceStatus('idle');
-    }
-  };
-
-  const handleConsultarStatus = async () => {
-    if (!pedido.fiscal?.idPlugNotas) return toast.error("A nota não possui ID de Integração.");
-    setNfceStatus('loading');
-    try {
-        const res = await vendaService.consultarStatusNfce(pedido.id, pedido.fiscal.idPlugNotas);
-        if (res.sucesso) {
-            toast.success(`Status Sincronizado: ${res.statusAtual}`);
-            setPedido(prev => ({
-                ...prev, 
-                fiscal: { 
-                    ...prev.fiscal, 
-                    status: res.statusAtual, 
-                    pdf: res.pdf || prev.fiscal?.pdf, 
-                    xml: res.xml || prev.fiscal?.xml,
-                    motivoRejeicao: res.mensagem || prev.fiscal?.motivoRejeicao
-                } 
-            }));
-        } else {
-            toast.error("Erro ao consultar status: " + res.error);
-        }
-    } catch (error) {
-        toast.error("Erro de conexão ao consultar a Sefaz.");
-    } finally {
-        setNfceStatus('idle');
-    }
-  };
-
-  const handleVerXml = async () => {
-    const idPlugNotas = pedido.fiscal?.idPlugNotas;
-    if (!idPlugNotas) return toast.error("A nota não possui ID na PlugNotas.");
-
-    setNfceStatus('loading');
-    try {
-        const res = await vendaService.baixarXmlNfce(idPlugNotas, pedido.id.slice(-6));
-        if (!res.success) {
-            toast.error("Erro ao baixar XML: " + res.error);
-        }
-    } catch (error) {
-        toast.error("Erro de conexão ao tentar baixar o XML.");
-    } finally {
-        setNfceStatus('idle');
-    }
-  };
-
-  const handleVerPdf = async () => {
-    const idPlugNotas = pedido.fiscal?.idPlugNotas;
-    const linkSefaz = pedido.fiscal?.pdf;
-    if (!idPlugNotas) return toast.error("A nota não possui ID na PlugNotas.");
-
-    setNfceStatus('loading');
-    try {
-        const res = await vendaService.baixarPdfNfce(idPlugNotas, linkSefaz);
-        if (!res.success) {
-            toast.error("Erro ao generar PDF: " + res.error);
-        }
-    } catch (error) {
-        toast.error("Falha de comunicación ao tentar abrir o PDF.");
-    } finally {
-        setNfceStatus('idle');
-    }
-  };
-
-  const handleCancelarNfce = async () => {
-    if (!pedido.fiscal?.idPlugNotas) return;
-    const justificativa = window.prompt("Digite o motivo del cancelamento de la nota (MÍNIMO 15 caracteres):");
-    if (!justificativa) return;
-    
-    if (justificativa.trim().length < 15) {
-        toast.warning("A justificativa debe ter pelo menos 15 caracteres.");
-        return;
-    }
-
-    setNfceStatus('loading');
-    try {
-        const res = await vendaService.cancelarNfce(pedido.id, justificativa.trim());
-        if (res.success) {
-            toast.success("Solicitud de cancelamento enviada!");
-            setPedido(prev => ({
-                ...prev,
-                status: 'cancelado',
-                fiscal: { ...prev.fiscal, status: 'PROCESSANDO' }
-            }));
-        } else {
-            toast.error("Erro ao cancelar: " + res.error);
-        }
-    } catch (e) {
-        toast.error('Falha de comunicación ao tentar cancelar la nota.');
-    } finally {
-        setNfceStatus('idle');
-    }
-  };
-const handleVerXmlCancelamento = async () => {
-    const idPlugNotas = pedido.fiscal?.idPlugNotas;
-    if (!idPlugNotas) return toast.error("A nota não possui ID na PlugNotas.");
-
-    setNfceStatus('loading');
-    try {
-        const res = await vendaService.baixarXmlCancelamentoNfce(idPlugNotas, pedido.id.slice(-6));
-        if (!res.success) {
-            toast.error("Erro ao baixar XML de Cancelamento: " + res.error);
-        }
-    } catch (error) {
-        toast.error("Erro de conexão ao tentar baixar o XML.");
-    } finally {
-        setNfceStatus('idle');
-    }
-  };
   const renderStatusBadge = (status) => {
       const s = (status || '').toLowerCase();
       let colorClass = 'bg-gray-100 text-gray-600';
@@ -341,9 +94,18 @@ const handleVerXmlCancelamento = async () => {
     <div className="bg-gray-50 min-h-screen pt-20 pb-12 px-4 sm:px-6 font-sans text-gray-900">
       <DashboardHeader navigate={navigate} logout={logout} />
 
+      <PromptDialog
+        open={promptCancelNfce}
+        title="Cancelar NFC-e"
+        message="Digite o motivo do cancelamento (mínimo 15 caracteres):"
+        placeholder="Ex: Pedido cancelado a pedido do cliente"
+        confirmText="Cancelar Nota"
+        cancelText="Voltar"
+        onConfirm={executarCancelamentoNfce}
+        onCancel={() => setPromptCancelNfce(false)}
+      />
+
       <div className="max-w-6xl mx-auto">
-        
-        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <button onClick={() => navigate('/master/pedidos')} className="text-gray-400 hover:text-gray-600 flex items-center gap-2 mb-2 text-sm font-medium transition-colors">
@@ -372,13 +134,9 @@ const handleVerXmlCancelamento = async () => {
             </div>
         </div>
 
-        {/* CONTEÚDO */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* COLUNA ESQUERDA */}
             <div className="space-y-6">
                 
-                {/* 🚀 CARD STATUS E AÇÕES */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-sm font-bold uppercase text-gray-400">Status Atual</h3>
@@ -411,7 +169,6 @@ const handleVerXmlCancelamento = async () => {
                     </div>
                 </div>
 
-                {/* Card Cliente */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
                         <FaUser /> Cliente
@@ -429,7 +186,6 @@ const handleVerXmlCancelamento = async () => {
                     </div>
                 </div>
 
-                {/* Card Pagamento */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
                         <FaMoneyBillWave /> Pagamento
@@ -438,13 +194,11 @@ const handleVerXmlCancelamento = async () => {
                     {pedido.trocoPara && <p className="text-xs text-gray-500 mt-1">Troco para: R$ {pedido.trocoPara}</p>}
                 </div>
 
-                {/* 🔥 NOVO: Card Fiscal (NFC-e) */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
                         <FaFileInvoice /> Área Fiscal (NFC-e)
                     </h3>
                     
-                    {/* Status da Nota na Sefaz */}
                     <div className="mb-4">
                         <p className="text-xs text-gray-500 font-bold uppercase mb-1">Status da Sefaz:</p>
                         {pedido.fiscal?.status ? (
@@ -460,7 +214,6 @@ const handleVerXmlCancelamento = async () => {
                             <span className="text-sm font-medium text-gray-500">Não emitida</span>
                         )}
                         
-                        {/* Motivo de Rejeição */}
                         {pedido.fiscal?.motivoRejeicao && (
                             <div className="mt-2 p-3 bg-red-50 border border-red-100 text-red-700 text-xs rounded-lg font-medium leading-relaxed">
                                 ⚠️ <b>Motivo:</b> {pedido.fiscal.motivoRejeicao}
@@ -468,15 +221,12 @@ const handleVerXmlCancelamento = async () => {
                         )}
                     </div>
 
-{/* Botões de Ações Fiscais */}
                     <div className="flex flex-col gap-2 border-t border-gray-50 pt-4">
                         {(() => {
-                            // 👇 Lendo os status com proteção máxima
                             const fStatus = pedido.fiscal?.status?.toUpperCase() || '';
                             const pStatus = pedido.status?.toLowerCase() || '';
                             const temId = !!pedido.fiscal?.idPlugNotas;
 
-                            // Se o pedido foi cancelado no app ANTES de emitir a nota (sem ID)
                             if ((pStatus === 'cancelado' || pStatus === 'cancelada') && !temId) {
                                 return (
                                     <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
@@ -488,21 +238,18 @@ const handleVerXmlCancelamento = async () => {
 
                             return (
                                 <>
-                                    {/* 1. Emitir / Reprocessar */}
                                     {(!fStatus || fStatus === 'REJEITADO' || fStatus === 'REJEITADA' || fStatus === 'ERRO') && (
                                         <button onClick={handleReprocessarNfce} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2">
                                             {nfceStatus === 'loading' ? 'Processando...' : (temId ? '🔄 Corrigir e Reenviar' : '🧾 Emitir NFC-e')}
                                         </button>
                                     )}
 
-                                    {/* 2. Processando -> Apenas Sincronizar */}
                                     {(fStatus === 'PROCESSANDO') && temId && (
                                         <button onClick={handleConsultarStatus} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600 transition-colors flex justify-center items-center gap-2">
                                             {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Sefaz'}
                                         </button>
                                     )}
 
-                                    {/* 3. Autorizada -> XML Normal, PDF e Cancelar */}
                                     {(fStatus === 'AUTORIZADA' || fStatus === 'CONCLUIDO') && temId && (
                                         <>
                                             <div className="grid grid-cols-2 gap-2">
@@ -515,14 +262,12 @@ const handleVerXmlCancelamento = async () => {
                                         </>
                                     )}
 
-                                    {/* 4. Rejeitada -> Ver XML do Erro */}
                                     {(fStatus === 'REJEITADO' || fStatus === 'REJEITADA') && temId && (
                                         <button onClick={handleVerXml} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors mt-1">
                                             {'</>'} Ver XML de Retorno (Sefaz)
                                         </button>
                                     )}
 
-                                    {/* 5. 🔥 MODO FORÇA BRUTA: Se tiver QUALQUER indicativo de cancelamento no status e tiver ID, mostra o botão! */}
                                     {(fStatus.includes('CANCEL') || pStatus === 'cancelada') && temId && (
                                         <button 
                                             onClick={handleVerXmlCancelamento} 
@@ -533,7 +278,6 @@ const handleVerXmlCancelamento = async () => {
                                         </button>
                                     )}
 
-                                    {/* 6. 🔄 Sincronizador sempre visível se a nota tem ID */}
                                     {temId && fStatus !== 'PROCESSANDO' && (
                                         <button onClick={handleConsultarStatus} disabled={nfceStatus === 'loading'} className="w-full py-2 bg-white text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-50 transition-colors mt-3 flex justify-center items-center gap-2">
                                             {nfceStatus === 'loading' ? 'Consultando...' : '🔄 Sincronizar Status (Sefaz)'}
@@ -547,7 +291,6 @@ const handleVerXmlCancelamento = async () => {
 
             </div>
 
-            {/* COLUNA DIREITA: ITENS */}
             <div className="lg:col-span-2">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
                     <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
@@ -582,7 +325,6 @@ const handleVerXmlCancelamento = async () => {
                         ) : <div className="text-center py-10 text-gray-400">Lista vazia.</div>}
                     </div>
 
-                    {/* Totais */}
                     <div className="bg-gray-50 p-6 border-t border-gray-100 space-y-2">
                         <div className="flex justify-between text-sm text-gray-500"><span>Subtotal</span><span>R$ {(pedido.subtotal || totalExibicao).toFixed(2).replace('.', ',')}</span></div>
                         {pedido.taxaEntrega > 0 && <div className="flex justify-between text-sm text-gray-500"><span>Taxa de Entrega</span><span>R$ {Number(pedido.taxaEntrega).toFixed(2).replace('.', ',')}</span></div>}

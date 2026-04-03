@@ -1,243 +1,34 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import DateRangeFilter, { getPresetRange } from '../../components/DateRangeFilter';
-import { useNavigate, Link } from 'react-router-dom';
-import { 
-  collection, query, onSnapshot, doc, getDoc, limit, orderBy, collectionGroup, where
-} from 'firebase/firestore'; 
-import { db } from '../../firebase';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { 
-  FaStore, FaUser, FaSearch, FaFilter, FaBoxOpen, FaMotorcycle, FaCheckCircle, 
-  FaTimesCircle, FaClock, FaSignOutAlt, FaExclamationTriangle, FaRedoAlt,
-  FaChevronDown, FaChevronUp, FaArrowLeft, FaReceipt, FaSync, FaMapMarkerAlt,
+  FaStore, FaUser, FaBoxOpen, FaMotorcycle, FaCheckCircle, 
+  FaTimesCircle, FaClock, FaSignOutAlt, FaExclamationTriangle,
+  FaChevronUp, FaArrowLeft, FaReceipt, FaSync,
   FaBolt, FaCrown
 } from 'react-icons/fa';
 import { IoSearchOutline } from 'react-icons/io5';
 import { formatCurrency } from '../../utils/formatCurrency';
 
-const LIMIT = 50;
-const DEBOUNCE_DELAY = 300;
-const INITIAL_VISIBLE_ITEMS = 20;
-const LOAD_MORE_ITEMS = 20;
+// Importa todas as constantes e inteligência do Hook Refatorado
+import { 
+  useListarPedidosMasterData, 
+  STATUS_OPTIONS, 
+  LOAD_MORE_ITEMS,
+  formatId,
+  formatDate,
+  getOrderDate
+} from '../../hooks/useListarPedidosMasterData';
 
-const STATUS_OPTIONS = [
-  { value: 'todos', label: 'Todos os Status' },
-  { value: 'recebido', label: 'Recebido / Pendente' },
-  { value: 'preparo', label: 'Em Preparo / Aceito' },
-  { value: 'em_entrega', label: 'Em Entrega / Saiu' },
-  { value: 'finalizado', label: 'Finalizado / Entregue' },
-  { value: 'cancelado', label: 'Cancelado / Recusado' },
-];
-
-const STATUS_MATCH = {
-  recebido: ['recebido', 'aberto', 'pendente', 'aguardando', 'novo'],
-  preparo: ['preparo', 'aceito', 'cozinha', 'andamento'],
-  em_entrega: ['entrega', 'saiu', 'rota'],
-  finalizado: ['finalizado', 'finalizada', 'entregue', 'concluido', 'fechado', 'pago'],
-  cancelado: ['cancelado', 'cancelada', 'recusado', 'estornado']
-};
-
-const STATUS_CONFIG = {
-  recebido: { icon: FaClock, bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', label: 'Recebido' },
-  preparo: { icon: FaBoxOpen, bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200', label: 'Em Preparo', pulse: true },
-  em_entrega: { icon: FaMotorcycle, bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200', label: 'Em Entrega', pulse: true },
-  finalizado: { icon: FaCheckCircle, bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', label: 'Finalizado' },
-  cancelado: { icon: FaTimesCircle, bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200', label: 'Cancelado' },
-  default: { icon: FaClock, bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', label: 'Desconhecido' }
-};
-
-// --- UTILS ---
-const safeString = (val) => {
-  if (!val) return '';
-  if (typeof val === 'string') return val;
-  if (typeof val === 'number') return String(val);
-  if (typeof val === 'object') return val.nome || val.name || val.cliente || '';
-  return String(val);
-};
-
-const normalizeText = (text) => {
-  return safeString(text).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-};
-
-const getOrderDate = (item) => {
-  if (!item) return null;
-  const timestamp = item.dataPedido || item.adicionadoEm || item.updatedAt || item.createdAt || item.criadoEm;
-  if (!timestamp) return null;
-  if (timestamp.toDate) return timestamp.toDate();
-  return new Date(timestamp);
-};
-
-const formatDate = (dateObj) => {
-  if (!dateObj) return '--/-- --:--';
-  try { return format(dateObj, 'dd/MM HH:mm', { locale: ptBR }); } catch (e) { return 'Data Inv.'; }
-};
-
-const formatId = (id) => {
-  if (!id) return '#---';
-  if (id.length > 8) {
-    const parts = id.split('_');
-    if (parts.length > 1) return `#${parts[1].substring(0, 6)}...`;
-    return `#${id.substring(0, 6)}...`;
-  }
-  return `#${id}`;
-};
-
-
-// --- HOOKS CUSTOMIZADOS ---
-const useDebounce = (value, delay) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debouncedValue;
-};
-
-const useEstabelecimentos = () => {
-  const [estabelecimentos, setEstabelecimentos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadFromCache = () => {
-      try {
-        const cached = localStorage.getItem('estabelecimentos');
-        const cachedTimestamp = localStorage.getItem('estabelecimentos_timestamp');
-        if (cached && cachedTimestamp) {
-          const age = Date.now() - parseInt(cachedTimestamp);
-          if (age < 5 * 60 * 1000) setEstabelecimentos(JSON.parse(cached));
-        }
-      } catch (e) { console.warn('Erro cache:', e); }
-    };
-
-    loadFromCache();
-
-    const q = query(collection(db, 'estabelecimentos'), orderBy('nome', 'asc'));
-    const unsub = onSnapshot(q, 
-      (snap) => {
-        if (!mounted) return;
-        const lista = snap.docs.map(d => ({ id: d.id, nome: d.data().nome }));
-        setEstabelecimentos(lista);
-        setLoading(false);
-        try {
-          localStorage.setItem('estabelecimentos', JSON.stringify(lista));
-          localStorage.setItem('estabelecimentos_timestamp', Date.now().toString());
-        } catch (e) { console.error(e); }
-      },
-      (err) => {
-        if (!mounted) return;
-        setError('Falha ao carregar estabelecimentos');
-        setLoading(false);
-      }
-    );
-    return () => { mounted = false; unsub(); };
-  }, []);
-
-  const estabMap = useMemo(() => {
-    return estabelecimentos.reduce((acc, curr) => { acc[curr.id] = curr.nome; return acc; }, {});
-  }, [estabelecimentos]);
-
-  return { estabelecimentos, estabMap, loading, error };
-};
-
-const usePedidosMaster = (filterEstabelecimento, estabMap) => {
-  const [itemsMap, setItemsMap] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { currentUser, isMasterAdmin } = useAuth();
-
-  useEffect(() => {
-    if (!currentUser || !isMasterAdmin) return;
-    setLoading(true);
-    setError(null);
-    const unsubscribes = [];
-    let mounted = true;
-
-    const setupListeners = () => {
-      let strategies = [];
-
-      if (filterEstabelecimento === 'todos') {
-        strategies = [
-          { name: 'GLOBAL_PEDIDOS_RAIZ', q: query(collection(db, 'pedidos'), orderBy('createdAt', 'desc'), limit(LIMIT)) },
-          { name: 'GLOBAL_PEDIDOS_SALAO', q: query(collectionGroup(db, 'pedidos'), orderBy('createdAt', 'desc'), limit(LIMIT)) },
-          { name: 'GLOBAL_VENDAS', q: query(collectionGroup(db, 'vendas'), orderBy('createdAt', 'desc'), limit(LIMIT)) }
-        ];
-      } else {
-        strategies = [
-          { name: 'LOCAL_PEDIDOS_RAIZ', q: query(collection(db, 'pedidos'), where('estabelecimentoId', '==', filterEstabelecimento), orderBy('createdAt', 'desc'), limit(LIMIT)) },
-          { name: 'LOCAL_PEDIDOS_SALAO', q: query(collection(db, 'estabelecimentos', filterEstabelecimento, 'pedidos'), orderBy('createdAt', 'desc'), limit(LIMIT)) },
-          { name: 'LOCAL_VENDAS', q: query(collection(db, 'estabelecimentos', filterEstabelecimento, 'vendas'), orderBy('createdAt', 'desc'), limit(LIMIT)) }
-        ];
-      }
-
-      strategies.forEach(strat => {
-        const unsub = onSnapshot(strat.q, 
-          async (snapshot) => {
-            if (!mounted) return;
-            try {
-              const rawDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
-              const processed = await Promise.all(rawDocs.map(async (item) => {
-                let finalEstabId = filterEstabelecimento !== 'todos' ? filterEstabelecimento : item.estabelecimentoId;
-                let eNome = filterEstabelecimento !== 'todos' ? estabMap[filterEstabelecimento] : item.estabelecimentoNome;
-
-                if (!finalEstabId && item._path && item._path.includes('estabelecimentos/')) {
-                  const parts = item._path.split('/');
-                  const index = parts.indexOf('estabelecimentos');
-                  if (index >= 0 && parts.length > index + 1) finalEstabId = parts[index + 1];
-                }
-                
-                if (!eNome && finalEstabId && estabMap[finalEstabId]) eNome = estabMap[finalEstabId];
-                
-                let cNome = safeString(item.clienteNome || item.cliente);
-                if ((!cNome || cNome === 'Cliente') && (item.mesaNumero || item.mesaId)) {
-                  cNome = item.mesaNumero ? `Mesa ${item.mesaNumero}` : 'Mesa (Balcão)';
-                }
-                
-                let tipoExibicao = 'DELIVERY';
-                if (strat.name.includes('VENDAS') || strat.name.includes('SALAO') || item.source === 'salao' || item.mesaId) {
-                    tipoExibicao = 'SALÃO';
-                }
-
-                let statusRaw = safeString(item.status).toLowerCase().trim();
-                
-                return {
-                  ...item,
-                  id: item.id,
-                  clienteNomeFinal: cNome || 'Consumidor',
-                  estabelecimentoNomeFinal: eNome || 'Não Identificado',
-                  estabelecimentoIdFinal: finalEstabId,
-                  tipoExibicao,
-                  statusRaw,
-                  valorFinal: item.totalFinal ?? item.total ?? item.valorFinal ?? 0
-                };
-              }));
-
-              setItemsMap(prev => {
-                const next = { ...prev };
-                processed.forEach(p => next[p.id] = p);
-                return next;
-              });
-              setLoading(false);
-            } catch (err) {
-              if (mounted) setError('Erro ao processar dados dos pedidos');
-            }
-          },
-          (err) => {
-            if (mounted && filterEstabelecimento !== 'todos') setLoading(false);
-          }
-        );
-        unsubscribes.push(unsub);
-      });
-    };
-
-    setupListeners();
-    return () => { mounted = false; unsubscribes.forEach(u => u()); };
-  }, [currentUser, isMasterAdmin, filterEstabelecimento, estabMap]);
-
-  return { itemsMap, loading, error };
+// --- CONFIGURAÇÃO DE STATUS VISUAL ---
+export const STATUS_CONFIG = {
+  recebido: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', icon: FaClock, label: 'Novo / Recebido' },
+  preparo: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', icon: FaStore, label: 'Em Preparo', pulse: true },
+  em_entrega: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', icon: FaMotorcycle, label: 'Em Entrega', pulse: true },
+  finalizado: { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200', icon: FaCheckCircle, label: 'Finalizado' },
+  cancelado: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', icon: FaTimesCircle, label: 'Cancelado' },
+  default: { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200', icon: FaBoxOpen, label: 'Desconhecido' }
 };
 
 // --- COMPONENTES VISUAIS PREMIUM ---
@@ -282,14 +73,13 @@ const StatusBadge = ({ statusRaw, statusLabel }) => {
 };
 
 const OrderCard = ({ item, onViewDetails }) => {
-  const orderDate = useMemo(() => getOrderDate(item), [item]);
-  const formattedDate = useMemo(() => formatDate(orderDate), [orderDate]);
-  const formattedId = useMemo(() => formatId(item.id), [item.id]);
-  const formattedValue = useMemo(() => formatCurrency(item.valorFinal), [item.valorFinal]);
+  const orderDate = getOrderDate(item);
+  const formattedDate = formatDate(orderDate);
+  const formattedId = formatId(item.id);
+  const formattedValue = formatCurrency(item.valorFinal);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-100 hover:-translate-y-0.5 transition-all duration-300 group flex flex-col relative overflow-hidden">
-      {/* Top Banner indicating type */}
       <div className={`h-1.5 w-full ${item.tipoExibicao === 'SALÃO' ? 'bg-gradient-to-r from-blue-400 to-indigo-400' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`} />
 
       <div className="p-6 flex flex-col h-full">
@@ -421,81 +211,33 @@ const EmptyState = ({ onClearFilters }) => (
 function ListarPedidosMaster() {
   const navigate = useNavigate();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
-  
-  // Estados
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEstabelecimento, setFilterEstabelecimento] = useState('todos');
-  const [filterStatus, setFilterStatus] = useState('todos');
-  const [dateInicio, setDateInicio] = useState(null);
-  const [dateFim, setDateFim] = useState(null);
-  const [datePreset, setDatePreset] = useState(null);
-  const [dateRange, setDateRange] = useState({ start: null, end: null });
-  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  
-  // Refs
   const containerRef = useRef(null);
-  
-  // Hooks customizados
-  const debouncedSearch = useDebounce(searchTerm, DEBOUNCE_DELAY);
-  const { estabelecimentos, estabMap, error: estabError } = useEstabelecimentos();
-  const { itemsMap, loading: ordersLoading, error: ordersError } = usePedidosMaster(filterEstabelecimento, estabMap);
 
-  // Memoized values
-  const listaFinal = useMemo(() => {
-    return Object.values(itemsMap).sort((a, b) => (getOrderDate(b) || 0) - (getOrderDate(a) || 0));
-  }, [itemsMap]);
-
-  const displayed = useMemo(() => {
-    return listaFinal.filter(item => {
-      const term = normalizeText(debouncedSearch);
-      const searchableText = normalizeText(item.id + ' ' + item.clienteNomeFinal + ' ' + item.estabelecimentoNomeFinal);
-      const matchText = searchableText.includes(term);
-      const matchEstab = filterEstabelecimento === 'todos' || item.estabelecimentoIdFinal === filterEstabelecimento;
-
-      let matchStatus = false;
-      const s = item.statusRaw;
-
-      if (filterStatus === 'todos') matchStatus = true;
-      else matchStatus = STATUS_MATCH[filterStatus]?.some(st => s.includes(st)) || false;
-
-      // Date range filter
-      let matchDate = true;
-      if (dateInicio || dateFim) {
-        const orderDate = getOrderDate(item);
-        if (!orderDate) {
-          matchDate = false;
-        } else {
-          if (dateInicio && orderDate < dateInicio) matchDate = false;
-          if (dateFim && orderDate > dateFim) matchDate = false;
-        }
-      }
-
-      return matchText && matchEstab && matchStatus && matchDate;
-    });
-  }, [listaFinal, debouncedSearch, filterEstabelecimento, filterStatus, dateInicio, dateFim]);
-
-  const displayedPaginated = useMemo(() => {
-    return displayed.slice(0, visibleCount);
-  }, [displayed, visibleCount]);
+  // Instanciando The One Hook!
+  const {
+    searchTerm, setSearchTerm,
+    filterEstabelecimento, setFilterEstabelecimento,
+    filterStatus, setFilterStatus,
+    dateRange, setDateRange,
+    datePreset, setDatePreset,
+    setDateInicio, setDateFim,
+    estabelecimentos,
+    ordersLoading,
+    estabError, ordersError,
+    listaFinal,
+    displayed,
+    displayedPaginated,
+    handleClearFilters,
+    handleLoadMore
+  } = useListarPedidosMasterData({ currentUser, isMasterAdmin });
 
   // Handlers
   const handleViewDetails = useCallback((orderId) => {
     navigate(`/master/pedidos/${orderId}`);
   }, [navigate]);
 
-  const handleClearFilters = useCallback(() => {
-    setSearchTerm('');
-    setFilterStatus('todos');
-    setFilterEstabelecimento('todos');
-    setDateInicio(null);
-    setDateFim(null);
-    setDatePreset(null);
-    setDateRange({ start: null, end: null });
-    setVisibleCount(INITIAL_VISIBLE_ITEMS);
-  }, []);
-
-  // DateRangeFilter handlers
+  // DateRangeFilter handlers formatados para a lib Component DateRange
   const handleDatePresetChange = useCallback((preset) => {
     setDatePreset(preset);
     if (preset !== 'custom') {
@@ -506,33 +248,28 @@ function ListarPedidosMaster() {
         setDateFim(range.end);
       }
     }
-  }, []);
+  }, [setDatePreset, setDateRange, setDateInicio, setDateFim]);
 
   const handleDateRangeChange = useCallback((range) => {
     setDateRange(range);
     setDateInicio(range.start);
     setDateFim(range.end);
-  }, []);
+  }, [setDateRange, setDateInicio, setDateFim]);
 
   const handleDateClear = useCallback(() => {
     setDatePreset(null);
     setDateRange({ start: null, end: null });
     setDateInicio(null);
     setDateFim(null);
-  }, []);
+  }, [setDatePreset, setDateRange, setDateInicio, setDateFim]);
 
-  const handleLoadMore = useCallback(() => {
-    setVisibleCount(prev => Math.min(prev + LOAD_MORE_ITEMS, displayed.length));
-  }, [displayed.length]);
-
-  // Scroll to top button
+  // Scroll to top button Event
   useEffect(() => {
     const handleScroll = () => {
       if (containerRef.current) {
         setShowScrollTop(containerRef.current.scrollTop > 400);
       }
     };
-
     const currentRef = containerRef.current;
     if (currentRef) {
       currentRef.addEventListener('scroll', handleScroll);
@@ -544,14 +281,13 @@ function ListarPedidosMaster() {
     containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // Auth loading
+  // View States
   const masterUserName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Admin';
 
   if (authLoading) {
     return <div className="flex h-screen items-center justify-center bg-slate-50"><div className="w-12 h-12 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin"></div></div>;
   }
 
-  // Auth check
   if (!currentUser || !isMasterAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50/20 flex items-center justify-center p-4">

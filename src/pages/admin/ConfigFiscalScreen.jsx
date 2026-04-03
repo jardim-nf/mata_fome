@@ -1,14 +1,17 @@
 // src/pages/admin/ConfigFiscalScreen.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { db, storage } from '../../firebase'; // Certifique-se de ter o 'storage' exportado no seu firebase.js
+import { db, storage } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { toast } from 'react-toastify';
+import { AdminDepartamentosFiscais } from '../../components/admin/AdminDepartamentosFiscais';
 
 const ConfigFiscalScreen = () => {
   const { userData, currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [estabelecimentoId, setEstabelecimentoId] = useState(null);
+  const [activeTab, setActiveTab] = useState('BASICO');
   
   // Estado do Formulário
   const [form, setForm] = useState({
@@ -86,10 +89,10 @@ const ConfigFiscalScreen = () => {
       const docRef = doc(db, 'estabelecimentos', estabelecimentoId);
       await updateDoc(docRef, { fiscal: dadosFiscais });
 
-      alert('✅ Configurações Fiscais salvas com sucesso!');
+      toast.success('Configurações Fiscais salvas com sucesso!');
     } catch (error) {
       console.error(error);
-      alert('❌ Erro ao salvar: ' + error.message);
+      toast.error('Erro ao salvar: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -100,15 +103,33 @@ const ConfigFiscalScreen = () => {
       <div className="max-w-4xl mx-auto">
         
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-black text-gray-900">Configuração Fiscal</h1>
-            <p className="text-gray-500 mt-1">Dados para emissão de NFC-e</p>
+            <p className="text-gray-500 mt-1">Dados para emissão de NFC-e e Matriz Tributária</p>
           </div>
           <button onClick={() => window.history.back()} className="text-gray-500 hover:text-gray-800 font-bold">Voltar</button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Abas */}
+        <div className="flex border-b border-gray-200 mb-8 overflow-x-auto scroller-hide">
+          <button 
+            onClick={() => setActiveTab('BASICO')} 
+            className={`py-3 px-6 font-bold text-sm transition-all whitespace-nowrap border-b-2 ${activeTab === 'BASICO' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          >
+            🏢 Dados da Empresa & Certificado
+          </button>
+          <button 
+            onClick={() => setActiveTab('DEPARTAMENTOS')} 
+            className={`py-3 px-6 font-bold text-sm transition-all whitespace-nowrap border-b-2 ${activeTab === 'DEPARTAMENTOS' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          >
+            📑 Departamentos Fiscais (Grupos Tributários)
+          </button>
+        </div>
+
+        {activeTab === 'BASICO' ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* CARTÃO 1: DADOS DA EMPRESA */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 md:col-span-2">
@@ -230,9 +251,13 @@ const ConfigFiscalScreen = () => {
         {/* Botão Salvar */}
         <div className="mt-8 mb-20">
           <button onClick={handleSalvar} disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-2xl shadow-lg transition-all disabled:opacity-50 text-lg flex items-center justify-center gap-2">
-            {loading ? <span className="animate-spin">⏳</span> : '💾'} SALVAR CONFIGURAÇÕES
+            {loading ? <span className="animate-spin">⏳</span> : '💾'} SALVAR CONFIGURAÇÕES DA EMPRESA
           </button>
         </div>
+          </>
+        ) : (
+           <AdminDepartamentosFiscais />
+        )}
 
       </div>
     </div>

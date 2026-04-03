@@ -26,7 +26,7 @@ const PedidoCard = ({
     const [selectedMotoboyId, setSelectedMotoboyId] = useState("");
     const [isExpanded, setIsExpanded] = useState(false); // Estado para expandir itens
     
-    const { estabelecimentoIdPrincipal } = useAuth();
+    const { estabelecimentoIdPrincipal, isMasterAdmin } = useAuth();
 
     const isNew = newOrderIds && newOrderIds.has ? newOrderIds.has(item.id) : false;
 
@@ -393,25 +393,34 @@ const PedidoCard = ({
 
                 {/* LISTA DE ITENS */}
                 <div className="space-y-3 mb-4">
-                    {item.itens?.slice(0, isExpanded ? undefined : 3).map((it, idx) => (
-                        <div key={idx} className="flex gap-2 text-sm border-b border-dashed border-gray-100 pb-2 last:border-0 last:pb-0">
-                            <span className="font-bold text-gray-900 min-w-[20px]">{it.quantidade}x</span>
-                            <div className="flex-1">
-                                <p className="text-gray-700 font-medium leading-tight">{it.nome}</p>
-                                {it.adicionais?.length > 0 && (
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        + {it.adicionais.map(a => a.nome).join(', ')}
-                                    </p>
-                                )}
-                                {it.observacoes && (
-                                    <p className="text-xs text-amber-600 italic mt-1">Obs: {it.observacoes}</p>
-                                )}
+                    {(() => {
+                        const listaReal = isAgrupado 
+                            ? (item.itens || []).filter(it => {
+                                const c = (it.categoria || it.category || '').toLowerCase();
+                                return !['bebida', 'drink', 'suco', 'refrigerante', 'agua', 'cerveja'].some(t => c.includes(t));
+                            })
+                            : (item.itens || []);
+                            
+                        return listaReal.slice(0, isExpanded ? undefined : 3).map((it, idx) => (
+                            <div key={idx} className="flex gap-2 text-sm border-b border-dashed border-gray-100 pb-2 last:border-0 last:pb-0">
+                                <span className="font-bold text-gray-900 min-w-[20px]">{it.quantidade}x</span>
+                                <div className="flex-1">
+                                    <p className="text-gray-700 font-medium leading-tight">{it.nome}</p>
+                                    {it.adicionais?.length > 0 && (
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            + {it.adicionais.map(a => a.nome).join(', ')}
+                                        </p>
+                                    )}
+                                    {it.observacoes && (
+                                        <p className="text-xs text-amber-600 italic mt-1">Obs: {it.observacoes}</p>
+                                    )}
+                                </div>
+                                <span className="text-xs text-gray-500 font-semibold min-w-[60px] text-right">
+                                    {formatarMoeda((Number(it.preco) || 0) * (it.quantidade || 1))}
+                                </span>
                             </div>
-                            <span className="text-xs text-gray-500 font-semibold min-w-[60px] text-right">
-                                {formatarMoeda((Number(it.preco) || 0) * (it.quantidade || 1))}
-                            </span>
-                        </div>
-                    ))}
+                        ));
+                    })()}
                 </div>
                 
                 {item.itens?.length > 3 && (
@@ -482,7 +491,7 @@ const PedidoCard = ({
                         <IoLogoWhatsapp className="text-lg" />
                     </button>
                     
-                    {onExcluir && (item.status === 'recebido' || item.status === 'aguardando_pagamento') && (
+                    {onExcluir && (isMasterAdmin || item.status === 'recebido' || item.status === 'aguardando_pagamento') && (
                         <button 
                             onClick={() => onExcluir(item.id, item.source)} 
                             className="w-10 h-10 shrink-0 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors border border-gray-200" 

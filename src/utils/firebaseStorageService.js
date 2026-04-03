@@ -2,6 +2,7 @@
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import imageCompression from 'browser-image-compression';
 
 const storage = getStorage();
 
@@ -22,8 +23,28 @@ export const uploadFile = async (file, path) => {
   console.log(`📤 Upload para: ${finalPath}`);
   
   try {
+    let finalFile = file;
+
+    // Apenas comprime se for uma imagem e não for SVG
+    if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+       const options = {
+         maxSizeMB: 0.3,          // Max 300 KB
+         maxWidthOrHeight: 1200,  // Resolução máxima p/ cardápio
+         useWebWorker: true,
+         fileType: 'image/jpeg',  // Força conversão pra jpg para economizar mais
+       };
+       try {
+         console.log(`🗜️ Comprimindo imagem: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+         finalFile = await imageCompression(file, options);
+         console.log(`✅ Imagem comprimida para: ${(finalFile.size / 1024 / 1024).toFixed(2)} MB`);
+       } catch (error) {
+         console.warn(`⚠️ Erro ao comprimir imagem, enviando o original:`, error);
+         finalFile = file;
+       }
+    }
+
     const storageRef = ref(storage, finalPath);
-    const snapshot = await uploadBytes(storageRef, file);
+    const snapshot = await uploadBytes(storageRef, finalFile);
     const downloadURL = await getDownloadURL(snapshot.ref);
     
     console.log(`✅ Upload realizado: ${downloadURL}`);

@@ -1,6 +1,6 @@
 // src/pages/KitchenDisplay.jsx — KDS (Kitchen Display System)
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, updateDoc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
@@ -161,7 +161,10 @@ function KitchenDisplay() {
 
   useEffect(() => {
     if (!estabId) return;
-    const q = query(collection(db, 'estabelecimentos', estabId, 'pedidos'), orderBy('createdAt', 'desc'));
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const tsHoje = Timestamp.fromDate(hoje);
+    const q = query(collection(db, 'estabelecimentos', estabId, 'pedidos'), where('createdAt', '>=', tsHoje), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
       const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setPedidos(lista);

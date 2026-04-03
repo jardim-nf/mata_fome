@@ -8,7 +8,11 @@ export const estoqueService = {
    * Também atualiza o estoque das variações se houver.
    */
   async darBaixaEstoque(estabelecimentoId, itens) {
-    if (!estabelecimentoId || !itens || itens.length === 0) return { success: true };
+    console.log('🚨🚨🚨 [estoqueService] darBaixaEstoque CHAMADO!', { estabelecimentoId, qtdItens: itens?.length, itens });
+    if (!estabelecimentoId || !itens || itens.length === 0) {
+      console.log('⚠️ [estoqueService] Ignorando baixa (sem estabelecimento ou sem itens)');
+      return { success: true };
+    }
 
     const alertas = []; // Produtos com estoque baixo/zerado
 
@@ -18,10 +22,21 @@ export const estoqueService = {
 
         // 1. PRIMEIRO: Ler todos os documentos
         for (const item of itens) {
+          console.log("🛠️ processando item baixa:", item);
           const categoriaId = item.categoriaId || item.category || item.categoria;
-          if (!categoriaId || !item.id) continue;
+          // 🔥 CORREÇÃO: Usa o produtoIdOriginal (ID real do Firestore) ao invés do id gerado localmente
+          const produtoId = item.produtoIdOriginal || item.id;
+          
+          // Tenta extrair a variacaoId de vários lugares (PDV, Delivery, Salão)
+          const extratoVariacaoId = item.variacaoId || item.variacaoSelecionada?.id || null;
+          
+          console.log("🛠️ categoriaId:", categoriaId, "produtoId:", produtoId, "variacaoId:", extratoVariacaoId);
+          if (!categoriaId || !produtoId) {
+             console.log("⚠️ item sem categoria ou produto, ignorando:", item);
+             continue;
+          }
 
-          const itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens', item.id);
+          const itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens', produtoId);
           const itemDoc = await transaction.get(itemRef);
           
           if (itemDoc.exists()) {
@@ -29,8 +44,8 @@ export const estoqueService = {
               ref: itemRef,
               data: itemDoc.data(),
               nome: item.nome || itemDoc.data().nome || 'Produto',
-              quantidadeComprada: item.quantidade || item.quantity || 1,
-              variacaoId: item.variacaoId || null
+              quantidadeComprada: item.quantidade || item.quantity || item.qtd || 1, // 'qtd' is used in delivery
+              variacaoId: extratoVariacaoId
             });
           }
         }
@@ -66,11 +81,14 @@ export const estoqueService = {
           }
 
           // --- Atualiza variações (se existem) ---
+          console.log("🛠️ checkando variações...", { isArray: Array.isArray(dados.variacoes), variacaoIdItem: itemAt.variacaoId, variacoesCadastradas: dados.variacoes });
+          
           if (Array.isArray(dados.variacoes) && itemAt.variacaoId) {
             const variacoes = dados.variacoes.map(v => {
               if (v.id === itemAt.variacaoId) {
                 let novoEstoque = (Number(v.estoque) || 0) - itemAt.quantidadeComprada;
                 if (novoEstoque < 0) novoEstoque = 0;
+                console.log(`🛠️ variação ${v.id} bateu! antigo: ${v.estoque}, novo: ${novoEstoque}`);
                 return { ...v, estoque: novoEstoque };
               }
               return v;
@@ -78,6 +96,7 @@ export const estoqueService = {
             updates.variacoes = variacoes;
             // Recalcula estoque total baseado nas variações
             updates.estoque = variacoes.reduce((acc, v) => acc + (Number(v.estoque) || 0), 0);
+            console.log("🛠️ novas variacoes:", updates.variacoes, "estoque somado:", updates.estoque);
           }
 
           if (Object.keys(updates).length > 0) {

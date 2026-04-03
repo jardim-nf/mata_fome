@@ -1,21 +1,23 @@
-// src/pages/admin/PdvScreen.jsx
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { vendaService } from '../../services/vendaService';
-import { caixaService } from '../../services/caixaService';
 import { db } from '../../firebase';
-import { collection, query, orderBy, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
-// IMPORTAÇÃO DOS MODAIS E FUNÇÕES AUXILIARES
+import { usePdvProducts } from '../../hooks/usePdvProducts';
+import { usePdvCart } from '../../hooks/usePdvCart';
+import { usePdvCaixa } from '../../hooks/usePdvCaixa';
+import { usePdvNfce } from '../../hooks/usePdvNfce';
+
 import { 
-    formatarMoeda, formatarData, formatarHora,
+    formatarMoeda,
     ModalEdicaoItemCarrinho, ModalSelecaoVariacao, ModalAberturaCaixa, 
     ModalFechamentoCaixa, ModalMovimentacao, ModalFinalizacao, 
     ModalRecibo, ModalHistorico, ModalListaTurnos, ModalResumoTurno, ModalVendasSuspensas,
     ModalPesoBalanca
 } from '../../components/pdv-modals';
-import { IoArrowBack, IoSearch, IoCart, IoSettingsOutline, IoStorefrontOutline, IoPauseCircleOutline, IoTrashOutline, IoTimeOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
+import { IoArrowBack, IoSearch, IoCart, IoStorefrontOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
 import { toast, ToastContainer } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import PromptDialog from '../../components/ui/PromptDialog';
@@ -25,70 +27,10 @@ const PdvScreen = () => {
     const { userData, currentUser } = useAuth();
     const navigate = useNavigate();
 
-    // Estados
+    // Store Picker
     const [estabelecimentos, setEstabelecimentos] = useState([]);
     const [estabelecimentoAtivo, setEstabelecimentoAtivo] = useState(null);
     const [nomeLoja, setNomeLoja] = useState('...');
-    const [vendaAtual, setVendaAtual] = useState(null);
-    const [produtos, setProdutos] = useState([]);
-    const [categorias, setCategorias] = useState([]);
-    const [vendasBase, setVendasBase] = useState([]);
-    const [vendasHistoricoExibicao, setVendasHistoricoExibicao] = useState([]);
-    const [tituloHistorico, setTituloHistorico] = useState("Histórico");
-    const [listaTurnos, setListaTurnos] = useState([]);
-    const [carregandoProdutos, setCarregandoProdutos] = useState(true);
-    const [carregandoHistorico, setCarregandoHistorico] = useState(false);
-    const [categoriaAtiva, setCategoriaAtiva] = useState('todos');
-    const [busca, setBusca] = useState('');
-    const [mostrarCarrinhoMobile, setMostrarCarrinhoMobile] = useState(false);
-
-    // Modais
-    const [caixaAberto, setCaixaAberto] = useState(null);
-    const [verificandoCaixa, setVerificandoCaixa] = useState(true);
-    const [mostrarAberturaCaixa, setMostrarAberturaCaixa] = useState(false);
-    const [mostrarFechamentoCaixa, setMostrarFechamentoCaixa] = useState(false);
-    const [mostrarMovimentacao, setMostrarMovimentacao] = useState(false);
-    const [movimentacoesDoTurno, setMovimentacoesDoTurno] = useState({ totalSuprimento: 0, totalSangria: 0 });
-    const [mostrarHistorico, setMostrarHistorico] = useState(false);
-    const [mostrarListaTurnos, setMostrarListaTurnos] = useState(false);
-    const [mostrarFinalizacao, setMostrarFinalizacao] = useState(false);
-    const [mostrarRecibo, setMostrarRecibo] = useState(false);
-    const [mostrarResumoTurno, setMostrarResumoTurno] = useState(false);
-    const [turnoSelecionadoResumo, setTurnoSelecionadoResumo] = useState(null);
-    const [itemParaEditar, setItemParaEditar] = useState(null);
-    const [produtoParaPeso, setProdutoParaPeso] = useState(null);
-
-    const [vendasSuspensas, setVendasSuspensas] = useState([]);
-    const [mostrarSuspensas, setMostrarSuspensas] = useState(false);
-
-    // Dialogs (substitui alert/confirm/prompt nativos)
-    const [confirmDialog, setConfirmDialog] = useState(null);
-    const [promptDialog, setPromptDialog] = useState(null);
-
-    const showConfirm = useCallback((message, onConfirm, opts = {}) => {
-        setConfirmDialog({ message, onConfirmCb: onConfirm, title: opts.title || '', variant: opts.variant || 'default', confirmText: opts.confirmText || 'Confirmar', cancelText: opts.cancelText || 'Cancelar' });
-    }, []);
-
-    const showPrompt = useCallback((message, onSubmit, opts = {}) => {
-        setPromptDialog({ message, onSubmitCb: onSubmit, title: opts.title || '', placeholder: opts.placeholder || '', defaultValue: opts.defaultValue || '', confirmText: opts.submitText || opts.confirmText || 'OK', cancelText: opts.cancelText || 'Cancelar' });
-    }, []);
-
-    // Pagamento
-    const [dadosRecibo, setDadosRecibo] = useState(null);
-    const [cpfNota, setCpfNota] = useState('');
-    const [nfceStatus, setNfceStatus] = useState('idle');
-    const [nfceUrl, setNfceUrl] = useState(null);
-    const [produtoParaSelecao, setProdutoParaSelecao] = useState(null);
-    const [pagamentosAdicionados, setPagamentosAdicionados] = useState([]);
-    const [salvando, setSalvando] = useState(false);
-    const [descontoValor, setDescontoValor] = useState('');
-    const [acrescimoValor, setAcrescimoValor] = useState('');
-    
-    // Leitor de Código de Barras
-    const [barcodeAviso, setBarcodeAviso] = useState(null);
-    const bufferCodigoBarras = useRef('');
-    const timeoutCodigoBarras = useRef(null);
-    const inputBuscaRef = useRef(null);
 
     useEffect(() => {
         if (!userData || !currentUser) return;
@@ -104,155 +46,103 @@ const PdvScreen = () => {
             if (!estabelecimentoAtivo && lojasCarregadas.length > 0) { setEstabelecimentoAtivo(lojasCarregadas[0].id); setNomeLoja(lojasCarregadas[0].nome); }
         };
         carregarLojas();
-    }, [userData, currentUser]);
+    }, [userData, currentUser, estabelecimentoAtivo]);
 
-    const trocarLoja = (id) => { const loja = estabelecimentos.find(e => e.id === id); if (loja) { setEstabelecimentoAtivo(id); setNomeLoja(loja.nome); setCaixaAberto(null); setVendasBase([]); setProdutos([]); setVendasSuspensas([]); } };
+    // Refs Globais e UI states básicos
+    const inputBuscaRef = useRef(null);
+    const [mostrarCarrinhoMobile, setMostrarCarrinhoMobile] = useState(false);
+    
+    // UI - Históricos e Modais Extra
+    const [vendasBase, setVendasBase] = useState([]);
+    const [vendasHistoricoExibicao, setVendasHistoricoExibicao] = useState([]);
+    const [tituloHistorico, setTituloHistorico] = useState("Histórico");
+    const [mostrarHistorico, setMostrarHistorico] = useState(false);
+    const [mostrarAberturaCaixa, setMostrarAberturaCaixa] = useState(false);
+    const [mostrarFinalizacao, setMostrarFinalizacao] = useState(false);
+    const [mostrarRecibo, setMostrarRecibo] = useState(false);
+    const [mostrarListaTurnos, setMostrarListaTurnos] = useState(false);
+    const [dadosRecibo, setDadosRecibo] = useState(null);
+    const [salvando, setSalvando] = useState(false);
+    const [cpfNota, setCpfNota] = useState('');
 
-    const vendasTurnoAtual = useMemo(() => {
-        if (!caixaAberto) return [];
-        let timeAbertura; try { timeAbertura = caixaAberto.dataAbertura?.toDate ? caixaAberto.dataAbertura.toDate().getTime() : new Date(caixaAberto.dataAbertura).getTime(); } catch { timeAbertura = Date.now(); }
-        return vendasBase.filter(v => { let timeVenda; try { timeVenda = v.createdAt?.toDate ? v.createdAt.toDate().getTime() : new Date(v.createdAt).getTime(); } catch { return false; } return v.usuarioId === currentUser.uid && timeVenda >= (timeAbertura - 60000); });
-    }, [vendasBase, caixaAberto, currentUser]);
+    // Dialogs
+    const [confirmDialog, setConfirmDialog] = useState(null);
+    const [promptDialog, setPromptDialog] = useState(null);
 
-    const produtosFiltrados = useMemo(() => {
-        const termo = busca?.toLowerCase().trim() || "";
-        return produtos.filter(p => {
-            if (categoriaAtiva !== 'todos' && p.categoria !== categoriaAtiva && p.categoriaId !== categoriaAtiva) return false;
-            if (!termo) return true;
-            return (p.name?.toLowerCase() || "").includes(termo) || (p.codigoBarras ? String(p.codigoBarras).toLowerCase() : "").includes(termo) || (p.id ? String(p.id).toLowerCase() : "").includes(termo) || (p.referencia ? String(p.referencia).toLowerCase() : "").includes(termo);
-        });
-    }, [produtos, categoriaAtiva, busca]);
+    const showConfirm = useCallback((message, onConfirm, opts = {}) => {
+        setConfirmDialog({ message, onConfirmCb: onConfirm, title: opts.title || '', variant: opts.variant || 'default', confirmText: opts.confirmText || 'Confirmar', cancelText: opts.cancelText || 'Cancelar' });
+    }, []);
+    const showPrompt = useCallback((message, onSubmit, opts = {}) => {
+        setPromptDialog({ message, onSubmitCb: onSubmit, title: opts.title || '', placeholder: opts.placeholder || '', defaultValue: opts.defaultValue || '', confirmText: opts.submitText || opts.confirmText || 'OK', cancelText: opts.cancelText || 'Cancelar' });
+    }, []);
 
-    const iniciarVendaBalcao = useCallback(() => {
-        if (!caixaAberto) return;
-        setMostrarRecibo(false); setMostrarHistorico(false); setMostrarFinalizacao(false);
-        setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 });
-        setCpfNota(''); setNfceStatus('idle'); setBusca(''); setDescontoValor(''); setAcrescimoValor(''); setPagamentosAdicionados([]);
-        setTimeout(() => inputBuscaRef.current?.focus(), 100);
-    }, [caixaAberto]);
+    const trocarLoja = (id) => { 
+        const loja = estabelecimentos.find(e => e.id === id); 
+        if (loja) { setEstabelecimentoAtivo(id); setNomeLoja(loja.nome); } 
+    };
 
-    const suspenderVenda = useCallback(() => {
-        if (!vendaAtual || vendaAtual.itens.length === 0) return toast.warning("O carrinho está vazio!");
-        showPrompt("Nome identificador (Opcional):", (nomeCliente) => {
-            const nome = nomeCliente || `Cliente ${vendasSuspensas.length + 1}`;
-            setVendasSuspensas(prev => [...prev, { ...vendaAtual, nomeReferencia: nome, dataSuspensao: new Date(), descontoGuardado: descontoValor, acrescimoGuardado: acrescimoValor, pagamentosGuardados: pagamentosAdicionados }]);
-            iniciarVendaBalcao();
-        }, { title: 'Suspender Venda', placeholder: 'Ex: Mesa 5, João...', submitText: 'Suspender' });
-    }, [vendaAtual, vendasSuspensas, iniciarVendaBalcao, descontoValor, acrescimoValor, pagamentosAdicionados, showPrompt]);
+    // ----- INJETANDO NOSSOS HOOKS DE NEGÓCIO -----
+    const { 
+        produtos, categorias, carregandoProdutos, categoriaAtiva, setCategoriaAtiva, busca, setBusca, produtosFiltrados 
+    } = usePdvProducts(estabelecimentoAtivo);
 
-    const restaurarVendaSuspensa = (vs) => {
-        const doRestore = () => {
-            setVendaAtual({ id: vs.id, itens: vs.itens, total: vs.total }); setDescontoValor(vs.descontoGuardado || ''); setAcrescimoValor(vs.acrescimoGuardado || ''); setPagamentosAdicionados(vs.pagamentosGuardados || []);
-            setVendasSuspensas(prev => prev.filter(v => v.id !== vs.id)); setMostrarSuspensas(false); setTimeout(() => inputBuscaRef.current?.focus(), 100);
+    // O hook de Carrinho precisa saber se o caixa tá aberto, passemos temporariamente true se os hooks tiverem ordem
+    const pdvCaixa = usePdvCaixa(
+        currentUser, estabelecimentoAtivo, 
+        // mocked setters para o useEffect do PDVCaixa:
+        (vd) => pdvCart.setVendaAtual(vd), 
+        setVendasBase, inputBuscaRef, setMostrarAberturaCaixa, setVendasHistoricoExibicao, setTituloHistorico, setMostrarListaTurnos, setMostrarHistorico
+    );
+
+    const pdvCart = usePdvCart(pdvCaixa.caixaAberto, inputBuscaRef, showPrompt, showConfirm);
+    
+    // Sync for barcode
+    useEffect(() => { 
+        pdvCart.pdvSyncRef.current = { 
+            produtos, handleProdutoClick: pdvCart.handleProdutoClick, 
+            bloqueado: mostrarFinalizacao || mostrarRecibo || mostrarHistorico || pdvCart.mostrarSuspensas || pdvCaixa.mostrarMovimentacao || mostrarListaTurnos || mostrarAberturaCaixa || !pdvCaixa.caixaAberto || pdvCart.produtoParaSelecao !== null || pdvCart.itemParaEditar !== null || pdvCart.produtoParaPeso !== null 
+        }; 
+    });
+
+    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) { console.error(e); } };
+
+    const pdvNfce = usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendasHistoricoExibicao, showPrompt, showConfirm, tocarBeepErro);
+
+    // Ações de Venda Conclusivas
+    const finalizarVenda = async () => {
+        setSalvando(true);
+        const descNum = parseFloat(pdvCart.descontoValor || 0); const acrNum = parseFloat(pdvCart.acrescimoValor || 0);
+        const totalFinal = Math.max(0, pdvCart.vendaAtual.total + acrNum - descNum);
+        const totalPago = pdvCart.pagamentosAdicionados.reduce((acc, p) => acc + p.valor, 0);
+        const d = { 
+            estabelecimentoId: estabelecimentoAtivo, status: 'finalizada', 
+            formaPagamento: pdvCart.pagamentosAdicionados.length === 1 ? pdvCart.pagamentosAdicionados[0].forma : 'misto', 
+            pagamentos: pdvCart.pagamentosAdicionados, subtotal: pdvCart.vendaAtual.total, desconto: descNum, acrescimo: acrNum, total: totalFinal, 
+            troco: Math.max(0, totalPago - totalFinal), valorRecebido: totalPago, itens: pdvCart.vendaAtual.itens, usuarioId: currentUser.uid, 
+            cliente: 'Balcão', clienteCpf: cpfNota || null, createdAt: new Date() 
         };
-        if (vendaAtual && vendaAtual.itens.length > 0) { showConfirm("O seu carrinho atual tem produtos. Substituir pela venda em espera?", doRestore, { title: 'Atenção', variant: 'warning' }); } else { doRestore(); }
-    };
-
-    const excluirVendaSuspensa = (id) => { showConfirm("Excluir este pedido em espera?", () => setVendasSuspensas(prev => prev.filter(v => v.id !== id)), { variant: 'danger' }); };
-    const abrirHistoricoAtual = useCallback(() => { setTituloHistorico("Vendas Turno Atual"); setVendasHistoricoExibicao(vendasTurnoAtual); setMostrarHistorico(prev => !prev); }, [vendasTurnoAtual]);
-    const carregarListaTurnos = useCallback(async () => { if (!estabelecimentoAtivo) return; setCarregandoHistorico(true); setMostrarListaTurnos(true); setListaTurnos(await caixaService.listarTurnos(currentUser.uid, estabelecimentoAtivo)); setCarregandoHistorico(false); }, [currentUser, estabelecimentoAtivo]);
-    const visualizarVendasTurno = useCallback(async (turno) => { setCarregandoHistorico(true); setTituloHistorico(`Vendas ${turno.dataAbertura ? formatarData(turno.dataAbertura) : ''}`); setVendasHistoricoExibicao(await vendaService.buscarVendasPorIntervalo(currentUser.uid, estabelecimentoAtivo, turno.dataAbertura, turno.dataFechamento)); setCarregandoHistorico(false); setMostrarListaTurnos(false); setMostrarHistorico(true); }, [currentUser, estabelecimentoAtivo]);
-    const prepararFechamento = useCallback(async () => { if (!caixaAberto) return; setMovimentacoesDoTurno(await caixaService.buscarMovimentacoes(caixaAberto.id)); setMostrarFechamentoCaixa(true); }, [caixaAberto]);
-    const abrirMovimentacao = useCallback(() => { if (!caixaAberto) return toast.warning("Caixa Fechado!"); setMostrarMovimentacao(true); }, [caixaAberto]);
-    const handleSalvarMovimentacao = async (dados) => { const res = await caixaService.adicionarMovimentacao(caixaAberto.id, { ...dados, usuarioId: currentUser.uid }); if (res.success) { toast.success('Movimentação registrada!'); setMostrarMovimentacao(false); } else toast.error('Erro: ' + res.error); };
-
-    const handleConfirmarFechamento = async (dados) => { 
-        const res = await caixaService.fecharCaixa(caixaAberto.id, dados); 
+        const res = await vendaService.salvarVenda(d);
         if (res.success) { 
-            toast.success('🔒 Turno encerrado!'); setCaixaAberto(null); setVendasBase([]); setVendasSuspensas([]); setMostrarFechamentoCaixa(false); setVendaAtual(null); 
-            setTurnoSelecionadoResumo({ ...caixaAberto, resumoVendas: dados.resumoVendas, saldoFinalInformado: dados.saldoFinalInformado, diferenca: dados.diferenca, dataFechamento: new Date(), status: 'fechado' }); setMostrarResumoTurno(true);
-        } else toast.error('Erro ao fechar caixa: ' + res.error);
-    };
-
-    const handleAbrirCaixa = async (saldoInicial) => {
-        const checkAtivo = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo);
-        if (checkAtivo) { toast.warning('Você já possui um turno em andamento!'); setCaixaAberto(checkAtivo); setMostrarAberturaCaixa(false); return; }
-        const res = await caixaService.abrirCaixa({ usuarioId: currentUser.uid, estabelecimentoId: estabelecimentoAtivo, saldoInicial });
-        if (res.success) { setCaixaAberto(await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo) || res); setVendasBase([]); setVendasSuspensas([]); setMostrarAberturaCaixa(false); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else toast.error('Erro: ' + res.error);
-    };
-
-    const selecionarVendaHistorico = (v) => { setDadosRecibo(v); setNfceStatus(v.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle'); setNfceUrl(v.fiscal?.pdf || null); setMostrarHistorico(false); setMostrarRecibo(true); };
-
-    const handleProdutoClick = useCallback((p) => {
-        const ePeso = p.vendidoPorPeso === true || String(p.fiscal?.unidade || '').trim().toUpperCase() === 'KG' || String(p.unidade || '').trim().toUpperCase() === 'KG';
-        const cb = (nova) => { if (ePeso) setProdutoParaPeso(p); else if (p.temVariacoes) setProdutoParaSelecao(p); else adicionarItem(p, null, nova); };
-        if (!vendaAtual) { const novaVenda = { id: Date.now().toString(), itens: [], total: 0 }; setVendaAtual(novaVenda); setTimeout(() => cb(novaVenda), 0); } else cb(null);
-    }, [vendaAtual]);
-
-    // 🔥 AQUI FOI ALTERADO PARA SALVAR O CATEGORIAID
-    const adicionarItemPeso = (produto, pesoKg, totalCalculado) => {
-        setVendaAtual(prev => { 
-            if (!prev) return null; 
-            const nv = [...prev.itens, { 
-                uid: `${produto.id}-peso-${Date.now()}`, 
-                id: produto.id, 
-                name: `${produto.name} (${pesoKg} Kg)`, 
-                price: totalCalculado, 
-                quantity: 1, 
-                observacao: `Peso: ${pesoKg} Kg`, 
-                pesoKg,
-                categoriaId: produto.categoriaId || produto.categoria // 🔥 SALVANDO PARA O ESTOQUE
-            }]; 
-            return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; 
-        });
-        setProdutoParaPeso(null); setBusca(''); inputBuscaRef.current?.focus();
-    };
-
-    // 🔥 AQUI FOI ALTERADO PARA SALVAR O CATEGORIAID
-    const adicionarItem = (p, v, vendaRef = null) => {
-        setVendaAtual(prev => {
-            const target = prev || vendaRef; if (!target) return null;
-            const uid = `${p.id}-${v ? v.id : 'p'}`; const ex = target.itens.find(i => i.uid === uid);
-            const nv = ex ? target.itens.map(i => i.uid === uid ? { ...i, quantity: i.quantity + 1 } : i) : [...target.itens, { 
-                uid, 
-                id: p.id, 
-                name: v ? `${p.name} ${v.nome}` : p.name, 
-                price: v ? Number(v.preco) : p.price, 
-                quantity: 1, 
-                observacao: '',
-                categoriaId: p.categoriaId || p.categoria // 🔥 SALVANDO PARA O ESTOQUE
-            }];
-            return { ...target, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) };
-        }); setProdutoParaSelecao(null); setBusca(''); inputBuscaRef.current?.focus();
-    };
-
-    const salvarEdicaoItem = (uid, novaQuantidade, novaObservacao) => {
-        setVendaAtual(prev => { 
-            if (!prev) return null; 
-            const nv = prev.itens.map(i => i.uid === uid ? { ...i, quantity: novaQuantidade, observacao: novaObservacao } : i ); 
-            return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; 
-        }); 
-        setItemParaEditar(null);
-    };
-
-    const handleConsultarStatus = async (venda) => {
-        const st = venda.fiscal?.status;
-        if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'ERRO') {
-            showConfirm("Tentar reenviar para a SEFAZ?", async () => {
-                setNfceStatus('loading');
-                try {
-                    const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
-                    if (res.sucesso || res.success) {
-                        toast.success('Enviada com sucesso!');
-                        const atualiza = (l) => l.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
-                        setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza);
-                        if (dadosRecibo?.id === venda.id) setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
-                    } else { setNfceStatus('error'); toast.error('Erro: ' + res.error); }
-                } catch (e) { setNfceStatus('error'); toast.error('Falha ao reenviar.'); }
-            }, { title: 'Reenviar NFC-e', confirmText: 'Reenviar' });
-        } else {
-            if (!venda.fiscal?.idPlugNotas) return toast.warning('Sem ID PlugNotas.');
-            setNfceStatus('loading');
-            try {
-                const res = await vendaService.consultarStatusNfce(venda.id, venda.fiscal.idPlugNotas);
-                if (res.sucesso) {
-                    const atualiza = (l) => l.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf || v.fiscal?.pdf, xml: res.xml || v.fiscal?.xml, motivoRejeicao: res.mensagem || v.fiscal?.motivoRejeicao } } : v );
-                    setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza);
-                    if (dadosRecibo?.id === venda.id) { setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } })); setNfceStatus(res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO' ? 'success' : 'idle'); setNfceUrl(res.pdf); }
-                    toast.info(`Status: ${res.statusAtual}`);
-                } else { setNfceStatus('error'); toast.error('Erro: ' + res.error); }
-            } catch (e) { setNfceStatus('error'); toast.error('Falha ao consultar.'); }
+            setVendasBase(p => [{ ...d, id: res.vendaId }, ...p]); 
+            setDadosRecibo({ ...d, id: res.vendaId }); 
+            pdvCart.setVendaAtual(null); setMostrarFinalizacao(false); setMostrarRecibo(true); 
+            pdvCart.setDescontoValor(''); pdvCart.setAcrescimoValor(''); setCpfNota(''); pdvCart.setPagamentosAdicionados([]); 
+            pdvCaixa.setVendasBaseLocal(p => [{ ...d, id: res.vendaId }, ...p]);
         }
+        setSalvando(false);
+    };
+
+    const abrirHistoricoAtual = useCallback(() => { 
+        setTituloHistorico("Vendas Turno Atual"); 
+        setVendasHistoricoExibicao(pdvCaixa.vendasTurnoAtual); 
+        setMostrarHistorico(prev => !prev); 
+    }, [pdvCaixa.vendasTurnoAtual]);
+
+    const selecionarVendaHistorico = (v) => { 
+        setDadosRecibo(v); 
+        pdvNfce.setNfceStatus(v.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle'); 
+        pdvNfce.setNfceUrl(v.fiscal?.pdf || null); 
+        setMostrarHistorico(false); setMostrarRecibo(true); 
     };
 
     const handleEnviarWhatsApp = (venda) => {
@@ -264,235 +154,41 @@ const PdvScreen = () => {
         }, { title: '📱 Enviar WhatsApp', defaultValue: venda.clienteTelefone || venda.cliente?.telefone || '', placeholder: '(XX) XXXXX-XXXX', submitText: 'Enviar' });
     };
 
-    const removerItem = (uid) => setVendaAtual(prev => ({ ...prev, itens: prev.itens.filter(i => i.uid !== uid), total: prev.itens.filter(i => i.uid !== uid).reduce((s, i) => s + (i.price * i.quantity), 0) }));
+    useEffect(() => { const handler = (e) => { pdvCaixa.setTurnoSelecionadoResumo(e.detail); setMostrarListaTurnos(false); pdvCaixa.setMostrarResumoTurno(true); }; document.addEventListener('abrirRelatorioTurno', handler); return () => document.removeEventListener('abrirRelatorioTurno', handler); }, [pdvCaixa]);
 
-    const pdvSyncRef = useRef({});
-    useEffect(() => { pdvSyncRef.current = { produtos, handleProdutoClick, bloqueado: mostrarFinalizacao || mostrarRecibo || mostrarHistorico || mostrarSuspensas || mostrarMovimentacao || mostrarListaTurnos || mostrarAberturaCaixa || !caixaAberto || produtoParaSelecao !== null || itemParaEditar !== null || produtoParaPeso !== null }; });
-
-    useEffect(() => {
-        const onBarcodeRead = (e) => {
-            if (e.key.length > 1 && e.key !== 'Enter') return;
-            if (e.key === 'Enter' && bufferCodigoBarras.current.length >= 3) {
-                const codigo = bufferCodigoBarras.current; bufferCodigoBarras.current = '';
-                if (timeoutCodigoBarras.current) clearTimeout(timeoutCodigoBarras.current);
-                const state = pdvSyncRef.current; if (state.bloqueado) return;
-                const pEncontrado = state.produtos.find(p => String(p.codigoBarras) === codigo || String(p.codigo) === codigo || String(p.referencia) === codigo );
-                if (pEncontrado) state.handleProdutoClick(pEncontrado); else { tocarBeepErro(); setBarcodeAviso(`Produto não registado.`); setTimeout(() => setBarcodeAviso(null), 3000); }
-                return;
-            }
-            bufferCodigoBarras.current += e.key;
-            if (timeoutCodigoBarras.current) clearTimeout(timeoutCodigoBarras.current);
-            timeoutCodigoBarras.current = setTimeout(() => { bufferCodigoBarras.current = ''; }, 50);
-        };
-        window.addEventListener('keydown', onBarcodeRead); return () => window.removeEventListener('keydown', onBarcodeRead);
-    }, []);
-
-    const finalizarVenda = async () => {
-        setSalvando(true);
-        const descNum = parseFloat(descontoValor || 0); const acrNum = parseFloat(acrescimoValor || 0);
-        const totalFinal = Math.max(0, vendaAtual.total + acrNum - descNum);
-        const totalPago = pagamentosAdicionados.reduce((acc, p) => acc + p.valor, 0);
-        const d = { estabelecimentoId: estabelecimentoAtivo, status: 'finalizada', formaPagamento: pagamentosAdicionados.length === 1 ? pagamentosAdicionados[0].forma : 'misto', pagamentos: pagamentosAdicionados, subtotal: vendaAtual.total, desconto: descNum, acrescimo: acrNum, total: totalFinal, troco: Math.max(0, totalPago - totalFinal), valorRecebido: totalPago, itens: vendaAtual.itens, usuarioId: currentUser.uid, cliente: 'Balcão', clienteCpf: cpfNota || null, createdAt: new Date() };
-        const res = await vendaService.salvarVenda(d);
-        if (res.success) { setVendasBase(p => [{ ...d, id: res.vendaId }, ...p]); setDadosRecibo({ ...d, id: res.vendaId }); setVendaAtual(null); setMostrarFinalizacao(false); setMostrarRecibo(true); setDescontoValor(''); setAcrescimoValor(''); setCpfNota(''); setPagamentosAdicionados([]); }
-        setSalvando(false);
-    };
-
-    const tocarBeepErro = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.5); } catch (e) { console.error(e); } };
-    
-    const handleEmitirNfce = async () => {
-        if (!dadosRecibo?.id) return; setNfceStatus('loading');
-        try {
-            const res = await vendaService.emitirNfce(dadosRecibo.id, dadosRecibo.clienteCpf);
-            if (res.sucesso || res.success) {
-                const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
-                setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
-            } else { setNfceStatus('error'); tocarBeepErro(); toast.error(res.error || 'Erro ao solicitar'); }
-        } catch (e) { setNfceStatus('error'); tocarBeepErro(); toast.error('Erro de conexão.'); }
-    };
-
-    useEffect(() => {
-        let unsub = () => {};
-        if (mostrarRecibo && dadosRecibo?.id) {
-            unsub = onSnapshot(doc(db, 'vendas', dadosRecibo.id), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data(); setDadosRecibo(p => ({ ...p, fiscal: data.fiscal }));
-                    if (data.fiscal) {
-                        const st = data.fiscal.status?.toUpperCase();
-                        if (st === 'AUTORIZADA' || st === 'CONCLUIDO') { setNfceStatus('success'); setNfceUrl(data.fiscal.pdf); const atualiza = p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v); setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); } 
-                        else if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'DENEGADO') { setNfceStatus('error'); setNfceUrl(null); const atualiza = p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v); setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); } 
-                        else if (st === 'PROCESSANDO') { setNfceStatus('loading'); }
-                    }
-                }
-            });
-        }
-        return () => unsub();
-    }, [mostrarRecibo, dadosRecibo?.id]);
-
-    useEffect(() => {
-        let intervalo;
-        if (nfceStatus === 'loading' && dadosRecibo?.fiscal?.idPlugNotas) {
-            intervalo = setInterval(async () => {
-                try {
-                    const res = await vendaService.consultarStatusNfce(dadosRecibo.id, dadosRecibo.fiscal.idPlugNotas);
-                    if (res.sucesso && res.statusAtual !== 'PROCESSANDO') {
-                        clearInterval(intervalo); const ns = (res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO') ? 'success' : 'error';
-                        setNfceStatus(ns); if (ns === 'success') setNfceUrl(res.pdf);
-                        const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v );
-                        setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); setDadosRecibo(p => ({...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
-                        if (ns === 'error') tocarBeepErro();
-                    }
-                } catch (e) { console.error(e); }
-            }, 3000);
-        }
-        return () => clearInterval(intervalo);
-    }, [nfceStatus, dadosRecibo]);
-
-    const handleProcessarLoteNfce = async (vendasParaProcessar) => {
-        if (!vendasParaProcessar || vendasParaProcessar.length === 0) return;
-        showConfirm(`Reprocessar ${vendasParaProcessar.length} notas?`, async () => {
-            let sucesso = 0; let canceladas = 0; let falhas = 0; let listaAtualizada = [...vendasHistoricoExibicao];
-            for (let i = 0; i < vendasParaProcessar.length; i++) {
-                const venda = vendasParaProcessar[i]; const idPlugNotas = venda.fiscal?.idPlugNotas;
-                try {
-                    let statusAtual = 'REJEITADO'; let pdfAtual = null;
-                    if (idPlugNotas) {
-                        const res = await vendaService.consultarStatusNfce(venda.id, idPlugNotas);
-                        if (res.sucesso) {
-                            statusAtual = res.statusAtual?.toUpperCase(); pdfAtual = res.pdf || venda.fiscal?.pdf;
-                            if (statusAtual === 'CONCLUIDO' || statusAtual === 'AUTORIZADA') { sucesso++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'AUTORIZADA', pdf: pdfAtual } } : v ); continue; }
-                            if (statusAtual === 'CANCELADO' || statusAtual === 'CANCELADA') { canceladas++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'CANCELADO' } } : v ); continue; }
-                        }
-                    }
-                    if (statusAtual === 'REJEITADO' || statusAtual === 'ERRO' || !idPlugNotas) {
-                        const res = await vendaService.emitirNfce(venda.id, venda.clienteCpf);
-                        if (res.sucesso || res.success) { sucesso++; listaAtualizada = listaAtualizada.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v ); } else { falhas++; }
-                    }
-                } catch (e) { falhas++; }
-            }
-            setVendasHistoricoExibicao(listaAtualizada); setVendasBase(prev => prev.map(v => listaAtualizada.find(lu => lu.id === v.id) || v));
-            if (falhas > 0) { tocarBeepErro(); toast.error(`Concluído com ${falhas} falha(s). ✅ ${sucesso} | 🚫 ${canceladas}`); } else { toast.success(`Concluído! ✅ ${sucesso} sucesso(s), 🚫 ${canceladas} cancelada(s)`); }
-        }, { title: 'Reprocessar Lote NFC-e', confirmText: 'Reprocessar' });
-    };
-
-    const handleCancelarNfce = async () => {
-        if (!dadosRecibo?.id) return;
-        showPrompt('Motivo do cancelamento (mínimo 15 caracteres):', async (motivo) => {
-            if (motivo.trim().length < 15) return toast.warning('Mínimo 15 caracteres.');
-            setNfceStatus('loading');
-            try {
-                const res = await vendaService.cancelarNfce(dadosRecibo.id, motivo.trim());
-                if (res.success) { toast.success('Cancelamento enviado!'); setDadosRecibo(p => ({ ...p, status: 'cancelada', fiscal: { ...p.fiscal, status: 'PROCESSANDO' } })); const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'PROCESSANDO' } } : v ); setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); } else { toast.error('Erro: ' + res.error); }
-            } catch (e) { toast.error('Falha de comunicação.'); } finally { setNfceStatus('idle'); }
-        }, { title: 'Cancelar NFC-e', placeholder: 'Descreva o motivo...', submitText: 'Cancelar NFC-e' });
-    };
-
-    const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return toast.warning('Sem ID'); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } };
-    const handleBaixarPdf = async (venda) => { const id = venda.fiscal?.idPlugNotas; if (!id) return toast.warning('Sem ID'); setNfceStatus('loading'); try { const res = await vendaService.baixarPdfNfce(id, venda.fiscal?.pdf); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } finally { if (nfceStatus === 'loading') setNfceStatus('idle'); } };
-
-    useEffect(() => { if (!estabelecimentoAtivo || !currentUser) return; const i = async () => { setVerificandoCaixa(true); const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo); if (c) { setCaixaAberto(c); setVendasBase(await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50)); setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 }); setTimeout(() => inputBuscaRef.current?.focus(), 500); } else { setMostrarAberturaCaixa(true); } setVerificandoCaixa(false); }; i(); }, [currentUser, estabelecimentoAtivo]);
-    
-    useEffect(() => {
-        if (!estabelecimentoAtivo) return;
-        setCarregandoProdutos(true);
-        setProdutos([]);
-        setCategorias([]);
-
-        // Track ALL nested unsub functions so we can clean them up
-        const innerUnsubs = [];
-
-        const outerUnsub = onSnapshot(
-            query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc')),
-            (s) => {
-                const c = s.docs.map(d => ({ id: d.id, ...d.data() }));
-                setCategorias([{ id: 'todos', name: 'Todos' }, ...c.map(x => ({ id: x.nome || x.id, name: x.nome || x.id }))]);
-
-                const all = new Map();
-                let cp = 0;
-
-                if (c.length === 0) {
-                    setProdutos([]);
-                    setCarregandoProdutos(false);
-                    return;
-                }
-
-                // Kill previous inner listeners before creating new ones
-                innerUnsubs.forEach(fn => fn());
-                innerUnsubs.length = 0;
-
-                c.forEach(k => {
-                    const unsub = onSnapshot(
-                        collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'),
-                        (is) => {
-                            const it = is.docs.map(i => {
-                                const d = i.data();
-                                const vs = d.variacoes?.filter(v => v.ativo) || [];
-                                return {
-                                    ...d, id: i.id,
-                                    name: d.nome || "S/ Nome",
-                                    categoria: k.nome || "Geral",
-                                    categoriaId: k.id,
-                                    price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0),
-                                    temVariacoes: vs.length > 0,
-                                    variacoes: vs,
-                                };
-                            });
-                            all.set(k.id, it);
-                            setProdutos(Array.from(all.values()).flat());
-                            cp++;
-                            if (cp >= c.length) setCarregandoProdutos(false);
-                        }
-                    );
-                    innerUnsubs.push(unsub);
-                });
-            }
-        );
-
-        return () => {
-            outerUnsub();
-            innerUnsubs.forEach(fn => fn());
-        };
-    }, [estabelecimentoAtivo]);
-
-    useEffect(() => { const handler = (e) => { setTurnoSelecionadoResumo(e.detail); setMostrarListaTurnos(false); setMostrarResumoTurno(true); }; document.addEventListener('abrirRelatorioTurno', handler); return () => document.removeEventListener('abrirRelatorioTurno', handler); }, []);
-
+    // Listener Global de Atalhos
     useEffect(() => {
         const h = (e) => {
-            if (!caixaAberto && !mostrarAberturaCaixa) return;
+            if (!pdvCaixa.caixaAberto && !mostrarAberturaCaixa) return;
             if (e.key === 'F1') { e.preventDefault(); inputBuscaRef.current?.focus(); }
-            if (e.key === 'F2') { e.preventDefault(); iniciarVendaBalcao(); }
+            if (e.key === 'F2') { e.preventDefault(); pdvCart.iniciarVendaBalcao(false); }
             if (e.key === 'F3') { e.preventDefault(); abrirHistoricoAtual(); }
-            if (e.key === 'F4') { e.preventDefault(); suspenderVenda(); }
-            if (e.key === 'F5') { e.preventDefault(); setMostrarSuspensas(true); }
-            if (e.key === 'F8') { e.preventDefault(); abrirMovimentacao(); }
-            if (e.key === 'F9') { e.preventDefault(); prepararFechamento(); }
-            if (e.key === 'F10' && vendaAtual?.itens.length > 0) { e.preventDefault(); setMostrarFinalizacao(true); setMostrarCarrinhoMobile(false); }
-            if (e.key === 'F11') { e.preventDefault(); carregarListaTurnos(); }
-            if (e.key === 'Escape') { setItemParaEditar(null); setProdutoParaSelecao(null); setProdutoParaPeso(null); setMostrarFinalizacao(false); setMostrarRecibo(false); setMostrarHistorico(false); setMostrarFechamentoCaixa(false); setMostrarListaTurnos(false); setMostrarMovimentacao(false); setMostrarResumoTurno(false); setMostrarSuspensas(false); setMostrarCarrinhoMobile(false); }
+            if (e.key === 'F4') { e.preventDefault(); pdvCart.suspenderVenda(); }
+            if (e.key === 'F5') { e.preventDefault(); pdvCart.setMostrarSuspensas(true); }
+            if (e.key === 'F8') { e.preventDefault(); pdvCaixa.abrirMovimentacao(); }
+            if (e.key === 'F9') { e.preventDefault(); pdvCaixa.prepararFechamento(); }
+            if (e.key === 'F10' && pdvCart.vendaAtual?.itens.length > 0) { e.preventDefault(); setMostrarFinalizacao(true); setMostrarCarrinhoMobile(false); }
+            if (e.key === 'F11') { e.preventDefault(); pdvCaixa.carregarListaTurnos(); }
+            if (e.key === 'Escape') { pdvCart.setItemParaEditar(null); pdvCart.setProdutoParaSelecao(null); pdvCart.setProdutoParaPeso(null); setMostrarFinalizacao(false); setMostrarRecibo(false); setMostrarHistorico(false); pdvCaixa.setMostrarFechamentoCaixa(false); setMostrarListaTurnos(false); pdvCaixa.setMostrarMovimentacao(false); pdvCaixa.setMostrarResumoTurno(false); pdvCart.setMostrarSuspensas(false); setMostrarCarrinhoMobile(false); }
         }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
-    }, [caixaAberto, iniciarVendaBalcao, prepararFechamento, abrirHistoricoAtual, carregarListaTurnos, abrirMovimentacao, vendaAtual, suspenderVenda]);
+    }, [pdvCaixa, pdvCart, abrirHistoricoAtual, mostrarAberturaCaixa]);
 
     return (
-        // 🔥 Container ajustado para fixed inset-0 (sem w-full nem h-dvh explícitos)
-<div id="pdv-root" className="flex flex-col bg-slate-100 font-sans text-slate-800">
-            {/* Notificações Topo */}
-            {barcodeAviso && (
+        <div id="pdv-root" className="flex flex-col bg-slate-100 font-sans text-slate-800">
+            {pdvCart.barcodeAviso && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-[9999] font-bold text-xs flex items-center gap-2">
-                    <IoStorefrontOutline size={16} /> {barcodeAviso}
+                    <IoStorefrontOutline size={16} /> {pdvCart.barcodeAviso}
                 </div>
             )}
 
-            {verificandoCaixa && !caixaAberto && !mostrarAberturaCaixa ? (
+            {pdvCaixa.verificandoCaixa && !pdvCaixa.caixaAberto && !mostrarAberturaCaixa ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-white">
                     <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-200 border-t-emerald-600"></div>
                     <span className="font-bold text-slate-500 text-sm">Carregando PDV...</span>
                 </div>
             ) : (
                 <>
-                    {/* CORPO DA TELA - Com relative para ancorar o carrinho absolute no mobile */}
                     <div className="flex-1 flex min-h-0 overflow-hidden bg-white relative">
-                        
-                        {/* ⬅️ LADO ESQUERDO: CATÁLOGO DE PRODUTOS */}
                         <div className="flex-1 flex flex-col min-w-0 min-h-0">
                             <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-white shrink-0">
                                 <div className="flex items-center gap-3">
@@ -500,7 +196,7 @@ const PdvScreen = () => {
                                         <IoArrowBack size={18} />
                                     </button>
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${caixaAberto ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                                        <div className={`w-2 h-2 rounded-full ${pdvCaixa.caixaAberto ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                                         <h1 className="text-sm font-black text-slate-800 uppercase truncate max-w-[150px]">{nomeLoja}</h1>
                                         {estabelecimentos.length > 1 && (
                                             <select
@@ -512,16 +208,15 @@ const PdvScreen = () => {
                                             </select>
                                         )}
                                     </div>
-                                    {/* Mini stats do turno */}
-                                    {caixaAberto && (
+                                    {pdvCaixa.caixaAberto && (
                                         <div className="hidden sm:flex items-center gap-3 ml-4">
                                             <div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
                                                 <span className="text-[10px] text-emerald-600 font-medium">Vendas:</span>
-                                                <span className="text-xs font-black text-emerald-700">{vendasTurnoAtual.length}</span>
+                                                <span className="text-xs font-black text-emerald-700">{pdvCaixa.vendasTurnoAtual.length}</span>
                                             </div>
                                             <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
                                                 <span className="text-[10px] text-blue-600 font-medium">Total:</span>
-                                                <span className="text-xs font-black text-blue-700">{formatarMoeda(vendasTurnoAtual.reduce((a, v) => a + (v.total || 0), 0))}</span>
+                                                <span className="text-xs font-black text-blue-700">{formatarMoeda(pdvCaixa.vendasTurnoAtual.reduce((a, v) => a + (v.total || 0), 0))}</span>
                                             </div>
                                         </div>
                                     )}
@@ -549,93 +244,75 @@ const PdvScreen = () => {
                                 ))}
                             </div>
 
-                            {/* ÁREA DOS PRODUTOS */}
                             <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-slate-100/50 pdv-scroll">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                                    {produtosFiltrados.map(p => (
-                                        <button 
-                                            key={p.id} 
-                                            onClick={() => handleProdutoClick(p)} 
-                                            className="bg-white rounded-xl p-2 shadow-sm border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all flex flex-row items-center gap-3 w-full text-left cursor-pointer group"
-                                        >
-                                            <div className="w-16 h-16 shrink-0 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100 relative overflow-hidden">
-                                                {p.imagem || p.foto || p.urlImagem || p.imageUrl ? (
-                                                    <img src={p.imagem || p.foto || p.urlImagem || p.imageUrl} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                                ) : (
-                                                    <IoStorefrontOutline className="text-2xl text-slate-300" />
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col justify-center flex-1 min-w-0">
-                                                <div className="font-bold text-slate-800 text-[11px] sm:text-xs leading-normal break-words whitespace-normal">
-                                                    {p.name}
-                                                </div>
-                                                <div className="font-black text-emerald-600 text-[13px] sm:text-sm whitespace-nowrap mt-1">
-                                                    {formatarMoeda(p.price)}
-                                                </div>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* ➡️ LADO DIREITO: CARRINHO (Absolute no mobile, relative no pc) */}
-                        <div className={`absolute md:relative top-0 right-0 bottom-0 flex flex-col shrink-0 min-h-0 w-[85vw] sm:w-[320px] md:w-[350px] bg-white border-l border-slate-200 z-[110] transition-transform duration-300 ${mostrarCarrinhoMobile ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:translate-x-0'}`}>
-                            <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
-                                <h2 className="font-black text-[13px] text-slate-800 flex items-center gap-2"><IoCart /> Pedido #{vendaAtual?.id?.slice(-6).toUpperCase() || 'NOVO'}</h2>
-                                <div className="flex gap-1">
-                                    <button onClick={() => setMostrarCarrinhoMobile(false)} className="md:hidden p-1 text-slate-500 font-bold bg-white border rounded">✕</button>
-                                    <button onClick={suspenderVenda} disabled={!vendaAtual?.itens?.length} className="bg-white text-blue-600 border px-1.5 py-1 rounded text-[10px] font-bold">PAUSAR</button>
-                                    <button onClick={iniciarVendaBalcao} className="bg-white text-red-500 border px-1.5 py-1 rounded text-[10px] font-bold">LIMPAR</button>
-                                </div>
-                            </div>
-
-                            {/* LISTA DOS ITENS NO CARRINHO */}
-                            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 bg-white pdv-scroll">
-                                {vendaAtual?.itens?.length > 0 ? (
-                                    vendaAtual.itens.map(i => (
-                                        <div 
-                                            key={i.uid} 
-                                            onClick={() => setItemParaEditar(i)} 
-                                            className="bg-white p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 cursor-pointer flex flex-row items-center gap-2 w-full transition-colors"
-                                        >
-                                            <div className="shrink-0">
-                                                <span className="inline-block text-center bg-slate-100 border border-slate-200 text-slate-800 font-black text-[11px] leading-normal min-w-[28px] px-1.5 py-1 rounded-md">
-                                                    {i.quantity}x
-                                                </span>
-                                            </div>
-
-                                            <div className="flex flex-col flex-1 min-w-0">
-                                                <span className="font-bold text-slate-800 text-[11px] sm:text-xs leading-normal break-words whitespace-normal m-0">
-                                                    {i.name}
-                                                </span>
-                                                {i.observacao && (
-                                                    <span className="text-[10px] text-slate-500 font-medium break-words whitespace-normal mt-0.5 m-0">
-                                                        * {i.observacao}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <div className="shrink-0 pl-1 text-right">
-                                                <span className="inline-block font-black text-slate-900 text-[13px] whitespace-nowrap">
-                                                    {formatarMoeda(i.price * i.quantity)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))
+                                {(carregandoProdutos) ? (
+                                    <div className="text-center p-10 text-gray-400"><div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-emerald-600 mx-auto"></div></div>
                                 ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60">
-                                        <IoCart size={40} />
-                                        <p className="text-[10px] font-bold uppercase mt-2">Caixa Livre</p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                                        {produtosFiltrados.map(p => (
+                                            <button 
+                                                key={p.id} 
+                                                onClick={() => pdvCart.handleProdutoClick(p)} 
+                                                className="bg-white rounded-xl p-2 shadow-sm border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all flex flex-row items-center gap-3 w-full text-left cursor-pointer group"
+                                            >
+                                                <div className="w-16 h-16 shrink-0 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100 relative overflow-hidden">
+                                                    {p.imagem || p.foto || p.urlImagem || p.imageUrl ? (
+                                                        <img src={p.imagem || p.foto || p.urlImagem || p.imageUrl} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                    ) : (
+                                                        <IoStorefrontOutline className="text-2xl text-slate-300" />
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col justify-center flex-1 min-w-0">
+                                                    <div className="font-bold text-slate-800 text-[11px] sm:text-xs leading-normal break-words whitespace-normal">
+                                                        {p.name}
+                                                    </div>
+                                                    <div className="font-black text-emerald-600 text-[13px] sm:text-sm whitespace-nowrap mt-1">
+                                                        {formatarMoeda(p.price)}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        ))}
                                     </div>
                                 )}
                             </div>
+                        </div>
 
-                            {vendaAtual?.itens?.length > 0 && (
+                        <div className={`absolute md:relative top-0 right-0 bottom-0 flex flex-col shrink-0 min-h-0 w-[85vw] sm:w-[320px] md:w-[350px] bg-white border-l border-slate-200 z-[110] transition-transform duration-300 ${mostrarCarrinhoMobile ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:translate-x-0'}`}>
+                            <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+                                <h2 className="font-black text-[13px] text-slate-800 flex items-center gap-2"><IoCart /> Pedido #{pdvCart.vendaAtual?.id?.slice(-6).toUpperCase() || 'NOVO'}</h2>
+                                <div className="flex gap-1">
+                                    <button onClick={() => setMostrarCarrinhoMobile(false)} className="md:hidden p-1 text-slate-500 font-bold bg-white border rounded">✕</button>
+                                    <button onClick={pdvCart.suspenderVenda} disabled={!pdvCart.vendaAtual?.itens?.length} className="bg-white text-blue-600 border px-1.5 py-1 rounded text-[10px] font-bold">PAUSAR</button>
+                                    <button onClick={() => pdvCart.iniciarVendaBalcao()} className="bg-white text-red-500 border px-1.5 py-1 rounded text-[10px] font-bold">LIMPAR</button>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 bg-white pdv-scroll">
+                                {pdvCart.vendaAtual?.itens?.length > 0 ? (
+                                    pdvCart.vendaAtual.itens.map(i => (
+                                        <div 
+                                            key={i.uid} 
+                                            onClick={() => pdvCart.setItemParaEditar(i)} 
+                                            className="bg-white p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 cursor-pointer flex flex-row items-center gap-2 w-full transition-colors"
+                                        >
+                                            <div className="shrink-0"><span className="inline-block text-center bg-slate-100 border border-slate-200 text-slate-800 font-black text-[11px] leading-normal min-w-[28px] px-1.5 py-1 rounded-md">{i.quantity}x</span></div>
+                                            <div className="flex flex-col flex-1 min-w-0">
+                                                <span className="font-bold text-slate-800 text-[11px] sm:text-xs leading-normal break-words whitespace-normal m-0">{i.name}</span>
+                                                {i.observacao && <span className="text-[10px] text-slate-500 font-medium break-words whitespace-normal mt-0.5 m-0">* {i.observacao}</span>}
+                                            </div>
+                                            <div className="shrink-0 pl-1 text-right"><span className="inline-block font-black text-slate-900 text-[13px] whitespace-nowrap">{formatarMoeda(i.price * i.quantity)}</span></div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-60"><IoCart size={40} /><p className="text-[10px] font-bold uppercase mt-2">Caixa Livre</p></div>
+                                )}
+                            </div>
+
+                            {pdvCart.vendaAtual?.itens?.length > 0 && (
                                 <div className="p-3 bg-white border-t border-slate-200 shrink-0">
                                     <div className="flex justify-between items-end mb-3 px-1 gap-2">
                                         <span className="text-[11px] font-bold text-slate-500 uppercase shrink-0">Total:</span>
-                                        <span className="font-black text-emerald-600 text-xl sm:text-2xl whitespace-nowrap shrink-0">{formatarMoeda(vendaAtual.total)}</span>
+                                        <span className="font-black text-emerald-600 text-xl sm:text-2xl whitespace-nowrap shrink-0">{formatarMoeda(pdvCart.vendaAtual.total)}</span>
                                     </div>
                                     <button onClick={() => { setMostrarFinalizacao(true); setMostrarCarrinhoMobile(false); }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-[14px] hover:bg-emerald-700 shadow-md flex items-center justify-center gap-2">
                                         <IoCheckmarkCircleOutline size={20} /> COBRAR (F10)
@@ -647,87 +324,53 @@ const PdvScreen = () => {
                         {mostrarCarrinhoMobile && <div className="absolute inset-0 bg-black/50 z-[105] md:hidden" onClick={() => setMostrarCarrinhoMobile(false)}></div>}
                     </div>
 
-{/* 🔥 BARRA DE ATALHOS INFERIOR - DARK THEME PROFISSIONAL 🔥 */}
                     <div className="w-full shrink-0 bg-slate-800 border-t border-slate-700 p-2 sm:p-3 flex justify-center shadow-[0_-10px_20px_rgba(0,0,0,0.15)] z-[120] relative no-print">
                         <div className="flex flex-wrap justify-center items-center gap-2 w-full max-w-7xl">
-                            
-                            <button onClick={() => inputBuscaRef.current?.focus()} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
-                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F1</kbd> BUSCAR
-                            </button>
-                            
-                            <button onClick={iniciarVendaBalcao} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
-                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F2</kbd> NOVA
-                            </button>
-                            
-                            <button onClick={abrirHistoricoAtual} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
-                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F3</kbd> HISTÓRICO
-                            </button>
-                            
-                            <button onClick={suspenderVenda} className={`text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm ${!vendaAtual?.itens?.length ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-orange-400 font-mono leading-normal">F4</kbd> PAUSAR
-                            </button>
-                            
-                            <button onClick={() => setMostrarSuspensas(true)} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm relative">
+                            <button onClick={() => inputBuscaRef.current?.focus()} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F1</kbd> BUSCAR</button>
+                            <button onClick={() => pdvCart.iniciarVendaBalcao()} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F2</kbd> NOVA</button>
+                            <button onClick={abrirHistoricoAtual} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F3</kbd> HISTÓRICO</button>
+                            <button onClick={pdvCart.suspenderVenda} className={`text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm ${!pdvCart.vendaAtual?.itens?.length ? 'opacity-50 cursor-not-allowed' : ''}`}><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-orange-400 font-mono leading-normal">F4</kbd> PAUSAR</button>
+                            <button onClick={() => pdvCart.setMostrarSuspensas(true)} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm relative">
                                 <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-blue-400 font-mono leading-normal">F5</kbd> ESPERA
-                                {vendasSuspensas.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] min-w-[18px] px-1 py-0.5 flex items-center justify-center rounded-full leading-none shadow-md">{vendasSuspensas.length}</span>}
+                                {pdvCart.vendasSuspensas.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] min-w-[18px] px-1 py-0.5 flex items-center justify-center rounded-full leading-none shadow-md">{pdvCart.vendasSuspensas.length}</span>}
                             </button>
-
-                            {/* Separador */}
                             <div className="w-px h-6 bg-slate-600 mx-1 hidden sm:block"></div>
-
-                            <button onClick={abrirMovimentacao} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
-                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-amber-400 font-mono leading-normal">F8</kbd> CAIXA
-                            </button>
-                            
-                            <button onClick={prepararFechamento} className="bg-rose-900/60 hover:bg-rose-800 text-white border border-rose-700/50 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
-                                <kbd className="bg-rose-700 px-1.5 py-0.5 rounded border border-rose-900 text-white font-mono leading-normal">F9</kbd> FECHAR TURNO
-                            </button>
-
-                            <button onClick={carregarListaTurnos} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
-                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F11</kbd> TURNOS
-                            </button>
-
+                            <button onClick={pdvCaixa.abrirMovimentacao} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-amber-400 font-mono leading-normal">F8</kbd> CAIXA</button>
+                            <button onClick={pdvCaixa.prepararFechamento} className="bg-rose-900/60 hover:bg-rose-800 text-white border border-rose-700/50 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-rose-700 px-1.5 py-0.5 rounded border border-rose-900 text-white font-mono leading-normal">F9</kbd> FECHAR TURNO</button>
+                            <button onClick={pdvCaixa.carregarListaTurnos} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F11</kbd> TURNOS</button>
                         </div>
                     </div>
 
-                    {/* 🔥 Carrinho flutuante mobile (Posicionado de forma inteligente) 🔥 */}
                     <button 
                         onClick={() => setMostrarCarrinhoMobile(true)} 
                         style={{ bottom: 'calc(1rem + var(--altura-da-barra, 60px))' }} 
-                        className={`md:hidden fixed right-4 bg-emerald-600 text-white p-4 rounded-full shadow-2xl z-[90] flex items-center gap-2 transition-transform ${vendaAtual?.itens?.length > 0 ? 'scale-100' : 'scale-0'}`}
+                        className={`md:hidden fixed right-4 bg-emerald-600 text-white p-4 rounded-full shadow-2xl z-[90] flex items-center gap-2 transition-transform ${pdvCart.vendaAtual?.itens?.length > 0 ? 'scale-100' : 'scale-0'}`}
                     >
                         <IoCart size={24} />
-                        <span className="absolute -top-1 -right-1 bg-white text-emerald-600 font-black text-[10px] min-w-[20px] h-5 flex items-center justify-center rounded-full shadow-sm">
-                            {vendaAtual?.itens?.length || 0}
-                        </span>
+                        <span className="absolute -top-1 -right-1 bg-white text-emerald-600 font-black text-[10px] min-w-[20px] h-5 flex items-center justify-center rounded-full shadow-sm">{pdvCart.vendaAtual?.itens?.length || 0}</span>
                     </button>
 
-
-
                     {/* Modais Componentes */}
-                    <ModalSelecaoVariacao produto={produtoParaSelecao} onClose={() => setProdutoParaSelecao(null)} onConfirm={adicionarItem} />
-                    <ModalEdicaoItemCarrinho visivel={itemParaEditar !== null} item={itemParaEditar} onClose={() => setItemParaEditar(null)} onConfirm={salvarEdicaoItem} />
-                    <ModalAberturaCaixa visivel={mostrarAberturaCaixa} onAbrir={handleAbrirCaixa} usuarioNome={userData?.name} />
-                    <ModalFechamentoCaixa visivel={mostrarFechamentoCaixa} caixa={caixaAberto} vendasDoDia={vendasTurnoAtual} movimentacoes={movimentacoesDoTurno} onClose={() => setMostrarFechamentoCaixa(false)} onConfirmarFechamento={handleConfirmarFechamento} />
-                    <ModalMovimentacao visivel={mostrarMovimentacao} onClose={() => setMostrarMovimentacao(false)} onConfirmar={handleSalvarMovimentacao} />
-                    <ModalFinalizacao visivel={mostrarFinalizacao} venda={vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pagamentosAdicionados} setPagamentos={setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={descontoValor} setDesconto={setDescontoValor} acrescimo={acrescimoValor} setAcrescimo={setAcrescimoValor} />
+                    <ModalSelecaoVariacao produto={pdvCart.produtoParaSelecao} onClose={() => pdvCart.setProdutoParaSelecao(null)} onConfirm={pdvCart.adicionarItem} />
+                    <ModalEdicaoItemCarrinho visivel={pdvCart.itemParaEditar !== null} item={pdvCart.itemParaEditar} onClose={() => pdvCart.setItemParaEditar(null)} onConfirm={(u, q, o) => { pdvCart.salvarEdicaoItem(u,q,o); if(q===0) pdvCart.removerItem(u); }} />
+                    <ModalAberturaCaixa visivel={mostrarAberturaCaixa} onAbrir={pdvCaixa.handleAbrirCaixa} usuarioNome={userData?.name} />
+                    <ModalFechamentoCaixa visivel={pdvCaixa.mostrarFechamentoCaixa} caixa={pdvCaixa.caixaAberto} vendasDoDia={pdvCaixa.vendasTurnoAtual} movimentacoes={pdvCaixa.movimentacoesDoTurno} onClose={() => pdvCaixa.setMostrarFechamentoCaixa(false)} onConfirmarFechamento={(d) => pdvCaixa.handleConfirmarFechamento(d, pdvCart.setVendasSuspensas)} />
+                    <ModalMovimentacao visivel={pdvCaixa.mostrarMovimentacao} onClose={() => pdvCaixa.setMostrarMovimentacao(false)} onConfirmar={pdvCaixa.handleSalvarMovimentacao} />
+                    <ModalFinalizacao visivel={mostrarFinalizacao} venda={pdvCart.vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pdvCart.pagamentosAdicionados} setPagamentos={pdvCart.setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={pdvCart.descontoValor} setDesconto={pdvCart.setDescontoValor} acrescimo={pdvCart.acrescimoValor} setAcrescimo={pdvCart.setAcrescimoValor} />
                     
-                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); iniciarVendaBalcao(); }} onNovaVenda={iniciarVendaBalcao} onEmitirNfce={handleEmitirNfce} nfceStatus={nfceStatus} nfceUrl={nfceUrl} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
-                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={carregandoHistorico} onProcessarLote={handleProcessarLoteNfce} onCancelarNfce={handleCancelarNfce} onBaixarXml={handleBaixarXml} onConsultarStatus={handleConsultarStatus} onBaixarPdf={handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
+                    <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); pdvCart.iniciarVendaBalcao(); }} onNovaVenda={() => pdvCart.iniciarVendaBalcao()} onEmitirNfce={pdvNfce.handleEmitirNfce} nfceStatus={pdvNfce.nfceStatus} nfceUrl={pdvNfce.nfceUrl} onBaixarXml={pdvNfce.handleBaixarXml} onConsultarStatus={pdvNfce.handleConsultarStatus} onBaixarPdf={pdvNfce.handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
+                    <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={pdvCaixa.carregandoHistorico} onProcessarLote={pdvNfce.handleProcessarLoteNfce} onCancelarNfce={pdvNfce.handleCancelarNfce} onBaixarXml={pdvNfce.handleBaixarXml} onConsultarStatus={pdvNfce.handleConsultarStatus} onBaixarPdf={pdvNfce.handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
 
-                    <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={listaTurnos} carregando={carregandoHistorico} onVerVendas={visualizarVendasTurno} vendasDoDia={vendasTurnoAtual} />   
-                    <ModalResumoTurno visivel={mostrarResumoTurno} turno={turnoSelecionadoResumo} onClose={() => { setMostrarResumoTurno(false); if (!caixaAberto) setMostrarAberturaCaixa(true); }} />
-                    <ModalVendasSuspensas visivel={mostrarSuspensas} onClose={() => setMostrarSuspensas(false)} vendas={vendasSuspensas} onRestaurar={restaurarVendaSuspensa} onExcluir={excluirVendaSuspensa} />              
-                    <ModalPesoBalanca visivel={produtoParaPeso !== null} produto={produtoParaPeso} onClose={() => setProdutoParaPeso(null)} onConfirm={adicionarItemPeso} />
+                    <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={pdvCaixa.listaTurnos} carregando={pdvCaixa.carregandoHistorico} onSelecionarTurno={pdvCaixa.visualizarVendasTurno} vendasDoDia={pdvCaixa.vendasTurnoAtual} />   
+                    <ModalResumoTurno visivel={pdvCaixa.mostrarResumoTurno} turno={pdvCaixa.turnoSelecionadoResumo} onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} />
+                    <ModalVendasSuspensas visivel={pdvCart.mostrarSuspensas} onClose={() => pdvCart.setMostrarSuspensas(false)} vendas={pdvCart.vendasSuspensas} onRestaurar={pdvCart.restaurarVendaSuspensa} onExcluir={pdvCart.excluirVendaSuspensa} />              
+                    <ModalPesoBalanca visivel={pdvCart.produtoParaPeso !== null} produto={pdvCart.produtoParaPeso} onClose={() => pdvCart.setProdutoParaPeso(null)} onConfirm={pdvCart.adicionarItemPeso} />
 
-                    {/* Toast & Dialogs (substitui alert/confirm/prompt nativos) */}
                     <ToastContainer />
                     {confirmDialog && <ConfirmDialog open={true} title={confirmDialog.title} message={confirmDialog.message} variant={confirmDialog.variant} confirmText={confirmDialog.confirmText} cancelText={confirmDialog.cancelText} onConfirm={() => { setConfirmDialog(null); confirmDialog.onConfirmCb?.(); }} onCancel={() => setConfirmDialog(null)} />}
                     {promptDialog && <PromptDialog open={true} title={promptDialog.title} message={promptDialog.message} defaultValue={promptDialog.defaultValue} placeholder={promptDialog.placeholder} confirmText={promptDialog.confirmText} cancelText={promptDialog.cancelText} onConfirm={(val) => { setPromptDialog(null); promptDialog.onSubmitCb?.(val); }} onCancel={() => setPromptDialog(null)} />}
                 </>
             )}
-            
-            {/* Styles are in PdvScreen.css — scoped to #pdv-root */}
         </div>
     );
 };

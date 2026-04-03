@@ -17,7 +17,9 @@ export function useCart() {
         localStorage.removeItem(CART_KEY);
         localStorage.removeItem(CART_TIME_KEY);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[useCart] Erro ao recuperar carrinho do localStorage:', e);
+    }
     return [];
   });
 
@@ -25,7 +27,10 @@ export function useCart() {
     try {
       const saved = localStorage.getItem(CART_KEY);
       return saved && JSON.parse(saved).length > 0;
-    } catch { return false; }
+    } catch (e) { 
+      console.warn('[useCart] Erro ao verificar status do carrinho recuperado:', e);
+      return false; 
+    }
   });
 
   // Salvar carrinho no localStorage a cada mudança

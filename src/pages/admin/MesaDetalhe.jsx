@@ -4,6 +4,8 @@ import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "../../firebase"; 
 import PedidoItem from "../../components/PedidoItem";
 import ModalPagamento from "../../components/ModalPagamento";
+import PromptDialog from "../../components/ui/PromptDialog";
+import { toast } from "react-toastify";
 
 export default function MesaDetalhe() {
   // 🔥 CORREÇÃO 1: Pegar o estabelecimentoId da URL também
@@ -11,6 +13,7 @@ export default function MesaDetalhe() {
   const navigate = useNavigate();
   const [mesa, setMesa] = useState(null);
   const [modalAberto, setModalAberto] = useState(false);
+  const [promptNome, setPromptNome] = useState({ open: false });
 
   useEffect(() => {
     // Evita rodar se a URL ainda não carregou os IDs
@@ -25,20 +28,30 @@ export default function MesaDetalhe() {
     return () => unsub();
   }, [estabelecimentoId, id]);
 
-  const adicionarItem = async () => {
-    const nomeCliente = prompt("Nome do cliente (Deixe vazio para 'Mesa'):") || "Mesa";
+  const adicionarItem = () => {
+    setPromptNome({ open: true });
+  };
+
+  const executarAdicionarItem = async (nomeValor) => {
+    setPromptNome({ open: false });
+    const nomeCliente = nomeValor || "Mesa";
 
     // 🔥 CORREÇÃO 3: Adicionar item na pasta do estabelecimento correto
     const mesaRef = doc(db, "estabelecimentos", estabelecimentoId, "mesas", id);
-    await updateDoc(mesaRef, {
-      pedidos: arrayUnion({
-        nome: "Produto Exemplo", 
-        qtd: 1,
-        preco: 10,
-        destinatario: nomeCliente, 
-        criadoEm: new Date().toISOString(),
-      }),
-    });
+    try {
+      await updateDoc(mesaRef, {
+        pedidos: arrayUnion({
+          nome: "Produto Exemplo", 
+          qtd: 1,
+          preco: 10,
+          destinatario: nomeCliente, 
+          criadoEm: new Date().toISOString(),
+        }),
+      });
+      toast.success("Item adicionado com sucesso!");
+    } catch (e) {
+      toast.error("Erro ao adicionar item.");
+    }
   };
 
   const solicitarImpressao = async () => {
@@ -49,10 +62,10 @@ export default function MesaDetalhe() {
         solicitarImpressaoConferencia: true,
         timestampImpressao: new Date().toISOString() 
       });
-      alert("Conferência enviada para a impressora do caixa!");
+      toast.success("Conferência enviada para a impressora do caixa!");
     } catch (erro) {
       console.error("Erro ao solicitar impressão:", erro);
-      alert("Erro ao comunicar com a impressora.");
+      toast.error("Erro ao comunicar com a impressora.");
     }
   };
 
@@ -60,6 +73,17 @@ export default function MesaDetalhe() {
 
   return (
     <div className="p-4">
+      <PromptDialog
+        open={promptNome.open}
+        title="Nome do Cliente"
+        message="Nome do cliente (Deixe vazio para 'Mesa'):"
+        placeholder="Ex: João"
+        confirmText="Adicionar"
+        cancelText="Cancelar"
+        onConfirm={executarAdicionarItem}
+        onCancel={() => setPromptNome({ open: false })}
+      />
+
       <button
         onClick={() => navigate(-1)}
         className="mb-4 px-3 py-1 bg-gray-200 rounded"

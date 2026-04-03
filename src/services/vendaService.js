@@ -19,7 +19,7 @@ export const vendaService = {
   // 1. Salvar venda DIRETO no Firestore
   async salvarVenda(vendaData) {
     try {
-      console.log('💾 Salvando venda no banco de dados...', vendaData);
+      console.log('🚨🚨🚨 [vendaService] SALVANDO VENDA!!! 🚨🚨🚨', JSON.stringify(vendaData, null, 2));
 
       const dadosLimpos = {
         ...vendaData,
@@ -38,13 +38,20 @@ export const vendaService = {
 
       console.log('✅ Venda salva com sucesso! ID:', docRef.id);
       
-      // 🔥 NOVA LINHA: CHAMA A BAIXA DE ESTOQUE APÓS SALVAR A VENDA
-      await estoqueService.darBaixaEstoque(vendaData.estabelecimentoId, vendaData.itens);
+      // 🔧 BAIXA DE ESTOQUE INTERNA (já faz aqui, NÃO chamar de novo fora)
+      let baixaResult = { success: true };
+      try {
+        baixaResult = await estoqueService.darBaixaEstoque(vendaData.estabelecimentoId, vendaData.itens);
+      } catch (e) {
+        console.warn('⚠️ Baixa de estoque falhou (venda já salva):', e);
+        baixaResult = { success: false, error: e };
+      }
 
       return {
         success: true,
         vendaId: docRef.id,
-        total: vendaData.total
+        total: vendaData.total,
+        _estoqueBaixado: baixaResult.success // 🔧 FLAG: informa que a baixa JÁ foi feita
       };
 
     } catch (error) {
@@ -269,6 +276,22 @@ if (response.data && response.data.sucesso) {
       return { success: false, error: 'Resposta inválida do servidor.' };
     } catch (error) {
       console.error("Erro ao baixar XML de cancelamento:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // 11. Baixar XML da NFC-e Dando o retorno RAW (P/ Lote)
+  async baixarXmlNfceRaw(idPlugNotas) {
+    try {
+      const functions = getFunctions();
+      const baixarXmlFn = httpsCallable(functions, 'baixarXmlNfcePlugNotas');
+      const result = await baixarXmlFn({ idPlugNotas });
+      if (result.data.sucesso && result.data.xml) {
+        return { success: true, xml: result.data.xml };
+      }
+      return { success: false, error: 'Resposta inválida do servidor.' };
+    } catch (error) {
+      console.error("Erro ao baixar XML RAW:", error);
       return { success: false, error: error.message };
     }
   }

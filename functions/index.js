@@ -2791,11 +2791,9 @@ async function buscarTaxaEntrega(estabelecimentoId, enderecoTexto) {
       }
     });
 
-    // Se não encontrou por bairro, retornar taxa padrão (menor taxa)
+    // Se não encontrou por bairro, não assume taxa — retorna naoEncontrado
     if (!melhor) {
-      const taxas = snap.docs.map(d => ({ taxa: Number(d.data().valorTaxa || 0), bairro: d.data().nomeBairro }));
-      taxas.sort((a, b) => a.taxa - b.taxa);
-      return taxas[0] || { taxa: 0, bairro: null };
+      return { taxa: null, bairro: null, naoEncontrado: true };
     }
     return melhor;
   } catch (e) {
@@ -3118,12 +3116,12 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
     // ================================================================
     const PALAVRAS_HUMANO = [
       'falar com atendente', 'falar com responsavel', 'falar com o responsavel',
-      'falar com humano', 'falar com pessoa', 'atendente humano',
-      'quero atendente', 'chamar atendente', 'responsavel', 'gerente',
-      'falar com voces', 'falar com vocês', 'atendimento humano',
-      'preciso de ajuda humana', 'me passa pra atendente', 'me passa para atendente'
+      'falar com humano', 'falar com pessoa', 'quero falar com',
+      'quero atendente', 'chamar atendente', 'atendimento humano',
+      'preciso de ajuda humana', 'me passa pra atendente', 'me passa para atendente',
+      'chama o responsavel', 'chama o gerente', 'fala com o dono'
     ];
-    const PALAVRAS_RETOMAR = ['bot', 'voltar bot', 'continuar', 'fazer pedido', 'cardapio', 'cardápio', 'menu'];
+    const PALAVRAS_RETOMAR = ['quero o bot', 'ativar bot', 'voltar pro bot', 'fazer pedido pelo bot', 'bot ativo'];
 
     const msgLower = mensagemTexto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -3171,7 +3169,7 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
 
     // System prompt do bot
     const jsonExNome = nomeClienteSalvo ? `"${nomeClienteSalvo}"` : '"Nome do cliente"';
-    const jsonExample = `{"acao":"CRIAR_PEDIDO","itens":[{"id":"ID_DO_PRODUTO","nome":"Nome do produto exato do cardápio","quantidade":1,"observacao":""}],"clienteNome":${jsonExNome},"enderecoEntrega":"Endereço ou RETIRADA","observacoes":""}`;
+    const jsonExample = `{"acao":"CRIAR_PEDIDO","itens":[{"id":"ID_DO_PRODUTO","nome":"Nome do produto exato do cardápio","quantidade":1,"observacao":""}],"clienteNome":${jsonExNome},"enderecoEntrega":"Rua e número apenas","bairro":"Nome do bairro escolhido","observacoes":""}`;
 
     const regrasCliente = nomeClienteSalvo
       ? `CLIENTE FIEL: O nome dele é "${nomeClienteSalvo}". NUNCA peça o nome dele. Cumprimente-o pelo nome. No JSON do pedido use sempre clienteNome: "${nomeClienteSalvo}".`
@@ -3206,10 +3204,14 @@ PEDIDO_JSON:${jsonExample}:FIM_JSON
       { role: 'user', content: mensagemTexto }
     ];
 
-    // Chamar GPT
+    // Chamar GPT (histórico limitado a últimas 10 mensagens para controle de tokens)
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...sessao.historico.slice(-10),
+        { role: 'user', content: mensagemTexto }
+      ],
       temperature: 0.3,
       max_tokens: 800
     });
@@ -3232,12 +3234,22 @@ PEDIDO_JSON:${jsonExample}:FIM_JSON
         const dadosPedido = JSON.parse(jsonMatch[1].trim());
 
         if (dadosPedido.acao === 'CRIAR_PEDIDO' && dadosPedido.itens?.length > 0) {
-          // Buscar taxa de entrega pelo endereço informado
+          // Buscar taxa de entrega — prioriza bairro do JSON do GPT, depois do endereço
           const enderecoInfo = dadosPedido.enderecoEntrega || '';
+          const bairroDoJSON = dadosPedido.bairro || '';
           const isRetirada = enderecoInfo.trim().toUpperCase() === 'RETIRADA';
           let taxaInfo = { taxa: 0, bairro: null };
-          if (!isRetirada && enderecoInfo) {
-            taxaInfo = await buscarTaxaEntrega(estabelecimentoId, enderecoInfo);
+          if (!isRetirada) {
+            // Busca pelo bairro exato do JSON primeiro, depois pelo endereço
+            const buscaPor = bairroDoJSON || enderecoInfo;
+            if (buscaPor) {
+              taxaInfo = await buscarTaxaEntrega(estabelecimentoId, buscaPor);
+              // Se não encontrado, usar bairro do GPT mesmo sem taxa confirmada
+              if (taxaInfo.naoEncontrado) {
+                taxaInfo = { taxa: 0, bairro: bairroDoJSON || null };
+                logger.warn(`Bot: bairro "${buscaPor}" não encontrado nas taxas cadastradas`);
+              }
+            }
           }
 
           // Criar pedido no Firestore
@@ -3248,14 +3260,17 @@ PEDIDO_JSON:${jsonExample}:FIM_JSON
             clienteTelefone: telefone,
             observacoes: dadosPedido.observacoes,
             enderecoEntrega: enderecoInfo,
-            taxaEntrega: taxaInfo.taxa,
-            bairroEntrega: taxaInfo.bairro || ''
+            taxaEntrega: taxaInfo.taxa ?? 0,
+            bairroEntrega: taxaInfo.bairro || bairroDoJSON || ''
           });
 
           if (pedidoCriado) {
             novoEstado = 'pedido_realizado';
+            const nomeParaConfirmacao = dadosPedido.clienteNome && dadosPedido.clienteNome !== 'Nome do cliente'
+              ? dadosPedido.clienteNome
+              : (nomeClienteSalvo || 'cliente');
             const resumoItens = pedidoCriado.itens.map(i => `• ${i.quantidade}x ${i.nome}`).join('\n');
-            respostaFinal = `✅ *Pedido registrado com sucesso!* 🎉\n\n*Resumo do seu pedido:*\n${resumoItens}\n\n💰 *Total: R$ ${pedidoCriado.totalFinal.toFixed(2).replace('.', ',')}*\n\n⏱️ Em breve você receberá atualizações do status. Obrigado, ${dadosPedido.clienteNome}! 🍔`;
+            respostaFinal = `✅ *Pedido registrado com sucesso!* 🎉\n\n*Resumo do seu pedido:*\n${resumoItens}\n\n💰 *Total: R$ ${pedidoCriado.totalFinal.toFixed(2).replace('.', ',')}*\n\n⏱️ Em breve você receberá atualizações do status. Obrigado, ${nomeParaConfirmacao}! 🍔`;
           } else {
             respostaFinal = '❌ Ops! Não consegui processar seu pedido. Algum item pode estar indisponível. Pode repetir?';
           }

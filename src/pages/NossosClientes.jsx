@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { FaArrowLeft, FaWhatsapp, FaEnvelopeOpenText, FaUsers, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -56,10 +56,25 @@ function ClientManagement({ estabelecimentoPrincipal }) {
 
         setLoadingCount(true);
         try {
-            const countFunction = httpsCallable(functions, 'countEstablishmentClientsCallable');
-            const result = await countFunction({ estabelecimentoId });
+            const pedidosRef = collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos');
+            const snap = await getDocs(pedidosRef);
             
-            setClientCount(result.data.uniqueClientCount);
+            // Usamos um Set para guardar telefones únicos
+            const uniquePhones = new Set();
+            
+            snap.forEach(docSnap => {
+                const data = docSnap.data();
+                const phone = data?.cliente?.telefone;
+                if (phone && phone.trim() !== '') {
+                    // Normaliza o telefone removendo caracteres não numéricos
+                    const cleanPhone = phone.replace(/\D/g, '');
+                    if (cleanPhone.length >= 10) {
+                        uniquePhones.add(cleanPhone);
+                    }
+                }
+            });
+            
+            setClientCount(uniquePhones.size);
         } catch (error) {
             console.error("Erro ao buscar contagem de clientes:", error);
             toast.error("Erro ao carregar o número de clientes.");
@@ -75,8 +90,6 @@ function ClientManagement({ estabelecimentoPrincipal }) {
 
         setLoadingHistory(true);
         try {
-            const { collection, getDocs, query, orderBy, limit, where } = await import('firebase/firestore');
-            const { db } = await import('../firebase');
             const campSnap = await getDocs(
                 query(
                     collection(db, 'estabelecimentos', estabelecimentoId, 'campanhas'),

@@ -117,7 +117,9 @@ export const NotificationProvider = ({ children }) => {
           tag: id
         });
         n.onclick = () => navigate('/painel');
-      } catch {}
+      } catch (e) {
+        console.warn('[NotificationContext] Falha ao disparar Push Notification:', e);
+      }
     }
   };
 

@@ -1,11 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore'; 
-import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext'; 
-import { toast } from 'react-toastify';
-import { auditLogger } from '../../utils/auditLogger';
-import { uploadFile } from '../../utils/firebaseStorageService'; 
+import { useAdminEstabelecimentoCadastroData } from '../../hooks/useAdminEstabelecimentoCadastroData';
 
 // Componente FormInput Atualizado
 function FormInput({ label, name, value, onChange, type = 'text', helpText = '', required = false, ...props }) {
@@ -52,220 +48,12 @@ function AdminEstabelecimentoCadastro() {
     const navigate = useNavigate();
     const { currentUser, isMasterAdmin, loading: authLoading } = useAuth(); 
 
-    const [formData, setFormData] = useState({
-        nome: '',
-        slug: '',
-        chavePix: '',
-        imageUrl: '',
-        rating: 0,
-        adminUID: '',
-        ativo: true,
-        currentPlanId: '',
-        endereco: { rua: '', numero: '', bairro: '', cidade: '' },
-        informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' }
-    });
-
-    const [logoImage, setLogoImage] = useState(null);
-    const [logoPreview, setLogoPreview] = useState('');
-    const [availableAdmins, setAvailableAdmins] = useState([]);
-    const [availablePlans, setAvailablePlans] = useState([]);
-    const [loadingForm, setLoadingForm] = useState(false);
-    const [loadingAdmins, setLoadingAdmins] = useState(true);
-    const [loadingPlans, setLoadingPlans] = useState(true);
-    const [formError, setFormError] = useState('');
-    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-
-    const slugify = useCallback((text) =>
-        text.toString().toLowerCase().trim()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/[^\w-]+/g, '')
-            .replace(/--+/g, '-'),
-    []);
-
-    // --- EFEITOS DE CARREGAMENTO DE DADOS ---
-    useEffect(() => {
-        if (!authLoading && (!currentUser || !isMasterAdmin)) {
-            toast.error('Acesso negado. Você não tem permissões de Master Administrador.');
-            navigate('/master-dashboard');
-            return;
-        }
-
-        if (isMasterAdmin && currentUser) {
-            // Carrega Admins
-            const fetchAdmins = async () => {
-                try {
-                    const q = query(collection(db, 'usuarios'), where('isAdmin', '==', true), orderBy('nome', 'asc'));
-                    const querySnapshot = await getDocs(q);
-                    const admins = querySnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome, email: doc.data().email }));
-                    setAvailableAdmins(admins);
-                } catch (err) {
-                    console.error("Erro ao carregar administradores:", err);
-                    setFormError("Erro ao carregar lista de administradores. Crie o índice (usuarios: isAdmin, nome).");
-                } finally {
-                    setLoadingAdmins(false);
-                }
-            };
-            fetchAdmins();
-
-            // Carrega Planos
-            const fetchPlans = async () => {
-                try {
-                    const q = query(collection(db, 'plans'), where('isActive', '==', true), orderBy('price', 'asc'));
-                    const querySnapshot = await getDocs(q);
-                    const plans = querySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
-                    setAvailablePlans(plans);
-                } catch (err) {
-                    console.error("Erro ao carregar planos:", err);
-                } finally {
-                    setLoadingPlans(false);
-                }
-            };
-            fetchPlans();
-        }
-    }, [currentUser, isMasterAdmin, authLoading, navigate]);
-
-    // Efeito para gerar slug automaticamente
-    useEffect(() => {
-        if (formData.nome && !slugManuallyEdited) {
-            setFormData(prev => ({ ...prev, slug: slugify(prev.nome) }));
-        }
-    }, [formData.nome, slugManuallyEdited, slugify]);
-
-    // Handler de Input
-    const handleInputChange = (e) => {
-        const { name, value, type, checked, files } = e.target;
-        if (name === 'slug') setSlugManuallyEdited(true);
-
-        if (type === 'file') {
-            const file = files[0];
-            setLogoImage(file);
-            if (file) setLogoPreview(URL.createObjectURL(file));
-            else setLogoPreview('');
-        } else if (name.includes('.')) {
-            const [parent, child] = name.split('.');
-            setFormData(prev => ({
-                ...prev,
-                [parent]: { ...prev[parent], [child]: type === 'checkbox' ? checked : value }
-            }));
-        } else {
-            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-        }
-    };
-
-// --- FUNÇÃO PRINCIPAL DE SUBMISSÃO (CORRIGIDA) ---
-const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoadingForm(true);
-    setFormError('');
-
-    // --- Validação Inicial ---
-    if (!formData.nome) {
-        setFormError('O nome do estabelecimento é obrigatório.');
-        setLoadingForm(false);
-        return;
-    }
-
-    if (!formData.adminUID) {
-        setFormError('É necessário selecionar um Administrador responsável.');
-        setLoadingForm(false);
-        return;
-    }
-
-    let finalLogoUrl = formData.imageUrl;
-
-    try {
-        // 1. Upload de Logo (se houver nova imagem)
-        if (logoImage) {
-            const logoName = `establishment_logos/${formData.slug || Date.now()}_${logoImage.name}`;
-            finalLogoUrl = await uploadFile(logoImage, logoName);
-            toast.success('Logo enviado com sucesso!');
-        }
-
-        // 2. Validação de Slug (Unicidade)
-        const slugQuery = query(collection(db, 'estabelecimentos'), where('slug', '==', formData.slug));
-        const slugSnapshot = await getDocs(slugQuery);
-        if (!slugSnapshot.empty) {
-            setFormError('Este slug (URL) já está em uso. Por favor, escolha outro.');
-            setLoadingForm(false);
-            return;
-        }
-
-        // 3. Preparar e Criar o Documento do Estabelecimento
-        // ✅ AQUI NASCE O ID (newEstabId)
-        const newEstabRef = doc(collection(db, 'estabelecimentos'));
-        const newEstabId = newEstabRef.id; 
-
-        const nextBilling = new Date();
-        nextBilling.setMonth(nextBilling.getMonth() + 1);
-
-        const planIdToSave = formData.currentPlanId === '' ? null : formData.currentPlanId;
-
-        // Salva no Firestore
-        await setDoc(newEstabRef, {
-            ...formData,
-            id: newEstabId,
-            imageUrl: finalLogoUrl,
-            currentPlanId: planIdToSave,
-            criadoEm: new Date(),
-            rating: Number(formData.rating),
-            nextBillingDate: nextBilling,
-        });
-
-        // 4. Vincular o Estabelecimento ao Administrador
-        // ✅ AGORA SIM podemos usar newEstabId, pois ele foi criado no passo 3
-        if (formData.adminUID) {
-            const adminRef = doc(db, 'usuarios', formData.adminUID);
-            const adminSnap = await getDoc(adminRef);
-
-            if (adminSnap.exists()) {
-                const adminData = adminSnap.data();
-
-                // Verificação defensiva de Array
-                let currentManagedEstabs = adminData.estabelecimentosGerenciados;
-                if (!Array.isArray(currentManagedEstabs)) {
-                    currentManagedEstabs = [];
-                }
-
-                if (!currentManagedEstabs.includes(newEstabId)) {
-                    await updateDoc(adminRef, {
-                        estabelecimentosGerenciados: [...currentManagedEstabs, newEstabId]
-                    });
-                    toast.info('Vínculo de estabelecimento com admin atualizado.');
-                }
-            }
-        }
-
-        // 5. Log de Auditoria e Redirecionamento
-        auditLogger(
-            'ESTABELECIMENTO_CRIADO', 
-            { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, 
-            { type: 'estabelecimento', id: newEstabId, name: formData.nome }, 
-            { ...formData, rating: Number(formData.rating), imageUrl: finalLogoUrl }
-        );
-
-        toast.success('Estabelecimento cadastrado com sucesso!');
-
-        // Limpa formulário
-        setFormData({ 
-            nome: '', slug: '', chavePix: '', imageUrl: '', rating: 0, 
-            adminUID: '', ativo: true, currentPlanId: '', nextBillingDate: null, 
-            endereco: { rua: '', numero: '', bairro: '', cidade: '' }, 
-            informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' } 
-        });
-        setLogoImage(null);
-        setLogoPreview('');
-
-        navigate('/master/estabelecimentos');
-
-    } catch (err) {
-        console.error("Erro ao cadastrar estabelecimento:", err);
-        setFormError(`Erro ao cadastrar: ${err.message}`);
-        toast.error(`Erro ao cadastrar: ${err.message}`);
-    } finally {
-        setLoadingForm(false);
-    }
-};
+    const {
+        formData, handleInputChange, logoPreview,
+        availableAdmins, availablePlans,
+        loadingForm, loadingAdmins, loadingPlans, formError,
+        handleSubmit
+    } = useAdminEstabelecimentoCadastroData(currentUser, isMasterAdmin, authLoading, navigate);
 
     if (authLoading || loadingAdmins || loadingPlans) {
         return (
@@ -301,7 +89,6 @@ const handleSubmit = async (e) => {
             </header>
 
             <div className="max-w-4xl mx-auto">
-                {/* Cabeçalho do Formulário */}
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-bold text-gray-900 mb-4">
                         Cadastrar Novo Estabelecimento
@@ -327,8 +114,6 @@ const handleSubmit = async (e) => {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-8">
-                    
-                    {/* SEÇÃO 1: INFORMAÇÕES GERAIS */}
                     <FormSection 
                         title="Informações Gerais" 
                         icon={
@@ -366,7 +151,6 @@ const handleSubmit = async (e) => {
                             placeholder="CPF/CNPJ, telefone, e-mail ou chave aleatória"
                         />
 
-                        {/* Upload de Logo */}
                         <div className="space-y-3">
                             <label className="block text-sm font-semibold text-gray-700">
                                 Logo do Estabelecimento
@@ -422,7 +206,6 @@ const handleSubmit = async (e) => {
                         />
                     </FormSection>
 
-                    {/* SEÇÃO 2: CONFIGURAÇÕES ADMINISTRATIVAS */}
                     <FormSection 
                         title="Configurações Administrativas" 
                         icon={
@@ -433,7 +216,6 @@ const handleSubmit = async (e) => {
                         }
                     >
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Seleção do Administrador */}
                             <div className="space-y-2">
                                 <label htmlFor="adminUID" className="block text-sm font-semibold text-gray-700">
                                     Admin Responsável <span className="text-red-500">*</span>
@@ -461,7 +243,6 @@ const handleSubmit = async (e) => {
                                 </div>
                             </div>
 
-                            {/* Seleção do Plano */}
                             <div className="space-y-2">
                                 <label htmlFor="currentPlanId" className="block text-sm font-semibold text-gray-700">
                                     Plano de Assinatura
@@ -488,7 +269,6 @@ const handleSubmit = async (e) => {
                         </div>
                     </FormSection>
 
-                    {/* SEÇÃO 3: INFORMAÇÕES DE CONTATO */}
                     <FormSection 
                         title="Informações de Contato" 
                         icon={
@@ -525,7 +305,6 @@ const handleSubmit = async (e) => {
                         />
                     </FormSection>
 
-                    {/* SEÇÃO 4: ENDEREÇO */}
                     <FormSection 
                         title="Endereço" 
                         icon={
@@ -567,7 +346,6 @@ const handleSubmit = async (e) => {
                         </div>
                     </FormSection>
 
-                    {/* BOTÕES DE AÇÃO */}
                     <div className="flex w-full gap-4 justify-end pt-6">
                         <Link
                             to="/master/estabelecimentos"

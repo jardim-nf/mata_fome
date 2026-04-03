@@ -13,8 +13,8 @@ export { ModalMovimentacao } from './ModalMovimentacao';
 export { ModalFinalizacao } from './ModalFinalizacao';
 export { ModalRecibo } from './ModalRecibo';
 
-// Aliases de compatibilidade — nomes usados pelo PdvModals.jsx legado
-export { default as ModalFechamentoCaixa } from './ModalFechamento';
+// Aliases e novos modais
+export { default as ModalFechamentoCaixa } from './ModalFechamentoCaixa';
 export { ModalHistoricoVendas as ModalHistorico } from './ModalHistoricoVendas';
 
 // Re-exporta helpers para quem importava de PdvModals (PdvScreen, etc.)

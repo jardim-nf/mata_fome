@@ -33,10 +33,17 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
         setImageLoading(true); setImageError(false);
         let finalUrl = safeItem.imageUrl;
         if (!safeItem.imageUrl.startsWith('http')) {
-          try { finalUrl = await getDownloadURL(ref(storage, safeItem.imageUrl)); } catch { }
+          try { 
+            finalUrl = await getDownloadURL(ref(storage, safeItem.imageUrl)); 
+          } catch (e) {
+            console.warn(`[CardapioItem] Não foi possível carregar a imagem do Storage para ${safeItem.nome}:`, e.code);
+          }
         }
         if (isMounted) setDisplayImageUrl(finalUrl);
-      } catch { if (isMounted) setImageError(true); } 
+      } catch (e) { 
+        if (isMounted) setImageError(true); 
+        console.warn(`[CardapioItem] Falha geral ao exibir imagem de ${safeItem.nome}:`, e);
+      } 
       finally { if (isMounted) setImageLoading(false); }
     };
     loadImageSafely();

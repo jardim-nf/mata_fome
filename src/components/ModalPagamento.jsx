@@ -1,426 +1,35 @@
-// src/components/ModalPagamento.jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { vendaService } from '../services/vendaService';
-import { estoqueService } from '../services/estoqueService';
-
+import React from 'react';
 import {
-    IoClose,
-    IoChevronBack,
-    IoChevronForward,
-    IoCash,
-    IoCard,
-    IoPhonePortrait,
-    IoAdd,
-    IoRemove,
-    IoCheckmark,
-    IoPerson,
-    IoPeople,
-    IoWallet,
-    IoPrint,
-    IoCheckbox,
-    IoSquareOutline,
-    IoTime,
-    IoReceiptOutline
+    IoClose, IoChevronBack, IoChevronForward, IoCash, IoCard,
+    IoPhonePortrait, IoAdd, IoRemove, IoCheckmark, IoPerson,
+    IoPeople, IoWallet, IoPrint, IoCheckbox, IoSquareOutline,
+    IoTime, IoReceiptOutline
 } from 'react-icons/io5';
-import { toast } from 'react-toastify';
+import { useModalPagamentoData } from '../hooks/useModalPagamentoData';
 
 const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
-    const [etapa, setEtapa] = useState(1);
-    const [tipoPagamento, setTipoPagamento] = useState(null);
-    const [pagamentos, setPagamentos] = useState({});
-    const [selecionados, setSelecionados] = useState({});
-    const [carregando, setCarregando] = useState(false);
-
-    // Estados para NFC-e
-    const [emitirNota, setEmitirNota] = useState(false);
-    const [cpfNota, setCpfNota] = useState('');
-
-    // Estado para Taxas e Descontos
-    const [incluirTaxa, setIncluirTaxa] = useState(false);
-    const [tipoDesconto, setTipoDesconto] = useState('reais'); // 'reais' ou 'porcentagem'
-    const [valorDescontoInput, setValorDescontoInput] = useState('');
-
-    // --- CÁLCULOS FINANCEIROS ---
-
-    const calcularTotalConsumo = () => {
-        const listaItens = mesa?.itens || mesa?.pedidos || [];
-        return listaItens.reduce((acc, item) => {
-            if (item.status === 'cancelado') return acc;
-            const qtd = item.quantidade || item.qtd || 1;
-            return acc + (item.preco * qtd);
-        }, 0);
-    };
-
-    const calcularValorTaxa = () => {
-        if (!incluirTaxa) return 0;
-        return calcularTotalConsumo() * 0.10;
-    };
-
-    // 🔥 NOVO: Cálculo do Desconto
-    const calcularValorDesconto = () => {
-        const consumo = calcularTotalConsumo();
-        const numDesconto = parseFloat(valorDescontoInput) || 0;
-        if (numDesconto <= 0) return 0;
-
-        if (tipoDesconto === 'porcentagem') {
-            return consumo * (numDesconto / 100);
-        }
-        return numDesconto;
-    };
-
-    const calcularJaPago = () => {
-        const historico = mesa?.pagamentosParciais || [];
-        return historico.reduce((acc, pgto) => acc + (Number(pgto.valor) || 0), 0);
-    };
-
-    const calcularRestanteMesa = () => {
-        const consumo = calcularTotalConsumo();
-        const taxa = calcularValorTaxa();
-        const desconto = calcularValorDesconto();
-        const jaPago = calcularJaPago();
-        return Math.max(0, (consumo + taxa - desconto) - jaPago);
-    };
-
-    // --- AGRUPAMENTO DE ITENS (Para visualização) ---
-    const agruparItensPorPessoa = useMemo(() => {
-        const listaItens = mesa?.itens || mesa?.pedidos || [];
-        if (listaItens.length === 0) return {};
-
-        const agrupados = {};
-        listaItens.forEach(item => {
-            if (item.status === 'cancelado') return;
-
-            let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
-            if ((!pessoa || pessoa === 'Mesa') && mesa.nomesOcupantes?.length > 0) {
-                if (!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0];
-            }
-            if (!pessoa) pessoa = 'Cliente 1';
-
-            if (!agrupados[pessoa]) {
-                agrupados[pessoa] = { itens: [], total: 0 };
-            }
-
-            const qtd = item.quantidade || item.qtd || 1;
-            agrupados[pessoa].itens.push(item);
-            agrupados[pessoa].total += (item.preco * qtd);
-        });
-
-        return agrupados;
-    }, [mesa]);
-
-    // --- INICIALIZAÇÃO E ATUALIZAÇÃO ---
-    useEffect(() => {
-        const restanteMesa = calcularRestanteMesa();
-        const listaItens = mesa?.itens || mesa?.pedidos || [];
-
-        if (tipoPagamento === 'unico') {
-            const key = 'Pagamento Único';
-            setPagamentos({
-                [key]: {
-                    valor: restanteMesa,
-                    formaPagamento: 'dinheiro',
-                    itens: listaItens.filter(i => i.status !== 'cancelado')
-                }
-            });
-            setSelecionados({ [key]: true });
-        } else if (tipoPagamento === 'individual') {
-            const pagamentosIniciais = {};
-            const selecionadosIniciais = {};
-            const grupos = agruparItensPorPessoa;
-
-            if (Object.keys(grupos).length === 0) {
-                const key = 'Mesa / Restante';
-                pagamentosIniciais[key] = {
-                    valor: restanteMesa,
-                    formaPagamento: 'dinheiro',
-                    itens: listaItens.filter(i => i.status !== 'cancelado')
-                };
-                selecionadosIniciais[key] = false;
-            } else {
-                // Cálculo rateado para desconto também (simplificado: não passa do limite restante)
-                Object.entries(grupos).forEach(([pessoa, dados]) => {
-                    const taxaPessoa = incluirTaxa ? (dados.total * 0.10) : 0;
-                    const descontoPessoa = calcularValorDesconto() > 0 ? (calcularValorDesconto() * (dados.total / calcularTotalConsumo())) : 0;
-                    const valorSugerido = Math.min(dados.total + taxaPessoa - descontoPessoa, restanteMesa);
-
-                    pagamentosIniciais[pessoa] = {
-                        valor: valorSugerido > 0 ? valorSugerido : 0,
-                        formaPagamento: 'dinheiro',
-                        itens: dados.itens
-                    };
-                    selecionadosIniciais[pessoa] = false;
-                });
-            }
-            setPagamentos(pagamentosIniciais);
-            setSelecionados(selecionadosIniciais);
-        }
-    // Adicionamos as dependências do desconto para atualizar em tempo real
-    }, [tipoPagamento, agruparItensPorPessoa, mesa, incluirTaxa, tipoDesconto, valorDescontoInput]);
-
-    // --- AÇÕES UI ---
-    const toggleSelecao = (pessoa) => {
-        setSelecionados(prev => ({ ...prev, [pessoa]: !prev[pessoa] }));
-    };
-
-    const editarFormaPagamento = (pessoaId, novaForma) => {
-        setPagamentos(prev => ({
-            ...prev,
-            [pessoaId]: { ...prev[pessoaId], formaPagamento: novaForma }
-        }));
-    };
-
-    const editarValorPagamento = (pessoaId, novoValor) => {
-        let valorFormatado = novoValor;
-        if (typeof novoValor === 'string') valorFormatado = novoValor.replace(',', '.');
-        const valorNovoFloat = parseFloat(valorFormatado) || 0;
-
-        setPagamentos(prev => ({
-            ...prev,
-            [pessoaId]: { ...prev[pessoaId], valor: valorNovoFloat }
-        }));
-        setSelecionados(prev => ({ ...prev, [pessoaId]: true }));
-    };
-
-    const adicionarPessoa = () => {
-        const novaPessoa = `Pagante Extra ${Object.keys(pagamentos).length + 1}`;
-        setPagamentos(prev => ({
-            ...prev,
-            [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] }
-        }));
-        setSelecionados(prev => ({ ...prev, [novaPessoa]: true }));
-    };
-
-    const removerPessoa = (pessoaId) => {
-        if (Object.keys(pagamentos).length <= 1) return;
-        const novosP = { ...pagamentos }; delete novosP[pessoaId];
-        const novosS = { ...selecionados }; delete novosS[pessoaId];
-        setPagamentos(novosP);
-        setSelecionados(novosS);
-    };
-
-    const handleImprimirConferencia = async () => {
-        if (!estabelecimentoId || !mesa?.id) {
-            toast.error("Erro: Dados da mesa ou estabelecimento não encontrados.");
-            return;
-        }
-
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || window.innerWidth < 1024;
-
-        if (isMobileDevice) {
-            try {
-                const mesaRef = doc(db, "estabelecimentos", estabelecimentoId, "mesas", mesa.id);
-                await updateDoc(mesaRef, {
-                    solicitarImpressaoConferencia: true,
-                    timestampImpressao: new Date().toISOString() 
-                });
-                toast.success("Conferência enviada para a impressora do caixa!");
-            } catch (erro) {
-                console.error("Erro ao solicitar impressão:", erro);
-                toast.error("Erro ao comunicar com a impressora.");
-            }
-            return; 
-        }
-
-        const totalConsumo = calcularTotalConsumo();
-        const valorTaxa = calcularValorTaxa();
-        const valorDesconto = calcularValorDesconto();
-        const jaPago = calcularJaPago();
-        const restante = calcularRestanteMesa();
+    const {
+        etapa, setEtapa,
+        tipoPagamento, setTipoPagamento,
+        pagamentos, selecionados, carregando,
+        emitirNota, setEmitirNota,
+        cpfNota, setCpfNota,
+        incluirTaxa, setIncluirTaxa,
+        tipoDesconto, setTipoDesconto,
+        valorDescontoInput, setValorDescontoInput,
         
-        const dadosBase = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
-        const dadosParaImpressao = etapa > 1 ? 
-            Object.fromEntries(Object.entries(dadosBase).filter(([k]) => selecionados[k])) : 
-            dadosBase;
-
-        const dadosFinais = Object.keys(dadosParaImpressao).length > 0 ? dadosParaImpressao : agruparItensPorPessoa;
-
-        const conteudo = `
-            <html>
-            <head>
-                <title>Conferência - Mesa ${mesa?.numero}</title>
-                <style>
-                    @media print { @page { margin: 0; size: 80mm auto; } body { margin: 0; } }
-                    body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0; padding: 5px; color: #000; background: #fff; font-weight: bold; }
-                    .header { text-align: center; margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 5px; }
-                    .header h2 { font-size: 14px; margin: 0; text-transform: uppercase; }
-                    .pagante-block { margin-bottom: 8px; }
-                    .pagante-header { display: flex; justify-content: space-between; font-weight: 900; border-bottom: 1px solid #000; margin-bottom: 2px; text-transform: uppercase; }
-                    .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 11px; margin-bottom: 1px; }
-                    .resumo-box { border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px; }
-                    .linha-resumo { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px; }
-                    .linha-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h2>PRÉ-CONFERÊNCIA</h2>
-                    <p style="font-size: 14px; margin: 5px 0;">MESA ${mesa?.numero}</p>
-                    <p style="font-size: 10px;">${new Date().toLocaleString('pt-BR')}</p>
-                </div>
-
-                ${Object.entries(dadosFinais).map(([pessoa, dados]) => `
-                    <div class="pagante-block">
-                        <div class="pagante-header">
-                            <span>${pessoa.substring(0, 15)}</span>
-                            <span>R$ ${(dados.valor !== undefined ? dados.valor : dados.total).toFixed(2)}</span>
-                        </div>
-                        ${dados.itens?.filter(i => i.preco > 0).map(item => `
-                            <div class="item-row">
-                                <span>${item.quantidade || 1}x ${item.nome.substring(0,20)}</span>
-                                <span>${((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</span>
-                            </div>
-                        `).join('') || '<div class="item-row"><i>Valor Manual</i></div>'}
-                    </div>
-                `).join('')}
-
-                <div class="resumo-box">
-                    <div class="linha-resumo"><span>TOTAL CONSUMO:</span><span>R$ ${totalConsumo.toFixed(2)}</span></div>
-                    ${incluirTaxa ? `<div class="linha-resumo"><span>TAXA SERVIÇO (10%):</span><span>R$ ${valorTaxa.toFixed(2)}</span></div>` : ''}
-                    ${valorDesconto > 0 ? `<div class="linha-resumo"><span>(-) DESCONTO:</span><span>R$ ${valorDesconto.toFixed(2)}</span></div>` : ''}
-                    ${jaPago > 0 ? `<div class="linha-resumo"><span>(-) JÁ PAGO:</span><span>R$ ${jaPago.toFixed(2)}</span></div>` : ''}
-                    <div class="linha-total"><span>A PAGAR:</span><span>R$ ${restante.toFixed(2)}</span></div>
-                </div>
-                <br/>
-                <div style="text-align:center; font-size:10px;">*** NÃO É DOCUMENTO FISCAL ***</div>
-            </body>
-            </html>
-        `;
+        totalConsumo, valorTaxa, valorDesconto, jaPago,
+        restanteMesa, totalPagoAgora, restanteFinal, vaiQuitar, troco,
         
-        const win = window.open('', '', 'height=600,width=400');
-        win.document.write(conteudo);
-        win.document.close();
-        setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
-    };
-
-    // --- FINALIZAR E EMITIR NOTA ---
-    const handleFinalizar = async (modo) => {
-        setCarregando(true);
-        try {
-            const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
-                return selecionados[pessoa] ? acc + dados.valor : acc;
-            }, 0);
-
-            const totalConsumo = calcularTotalConsumo();
-            const valorTaxa = calcularValorTaxa();
-            const valorDesconto = calcularValorDesconto();
-            const jaPagoAntigo = calcularJaPago();
-            const totalJaPagoNovo = jaPagoAntigo + totalPagoAgora;
-
-            const restanteFinal = (totalConsumo + valorTaxa - valorDesconto) - totalJaPagoNovo;
-            const mesaQuitada = restanteFinal <= 0.10;
-
-            const pagamentosValidos = Object.fromEntries(
-                Object.entries(pagamentos).filter(([k]) => selecionados[k] && pagamentos[k].valor > 0)
-            );
-
-            const todosItensMesa = mesa?.itens || mesa?.pedidos || [];
-            const itensValidos = Object.values(pagamentosValidos).flatMap(p => p.itens || []);
-            const itensCancelados = todosItensMesa.filter(i => i.status === 'cancelado');
-            const itensParaSalvar = [...itensValidos, ...itensCancelados];
-
-            const primeiraPessoaValida = Object.values(pagamentosValidos)[0];
-            const formaPagamentoPredominante = primeiraPessoaValida ? primeiraPessoaValida.formaPagamento : 'dinheiro';
-
-            // 1. Registrar Venda no Firestore
-            const dadosVenda = {
-                mesaId: mesa.id,
-                mesaNumero: mesa.numero,
-                estabelecimentoId: estabelecimentoId,
-                itens: itensParaSalvar,
-                pagamentos: pagamentosValidos,
-                total: totalPagoAgora, 
-                valorOriginal: totalConsumo,
-                taxaServicoCobrada: incluirTaxa ? valorTaxa : 0,
-                // 🔥 Informações de Desconto
-                valorDesconto: valorDesconto,
-                tipoDesconto: tipoDesconto,
-                valorDescontoInput: parseFloat(valorDescontoInput) || 0,
-                tipoPagamento: formaPagamentoPredominante,
-                metodoPagamento: formaPagamentoPredominante, 
-                status: mesaQuitada ? 'pago' : 'pago_parcial',
-                criadoEm: serverTimestamp(),
-                createdAt: serverTimestamp(),
-                criadoPor: auth.currentUser?.uid,
-                funcionario: auth.currentUser?.displayName || 'Garçom'
-            };
-
-            const docRef = await addDoc(collection(db, 'vendas'), dadosVenda);
-
-            // 2. BAIXA DE ESTOQUE
-            if (modo === 'total' || mesaQuitada) {
-                if (itensValidos.length > 0) {
-                    await estoqueService.darBaixaEstoque(estabelecimentoId, itensValidos);
-                }
-            }
-
-            // 3. Disparar Emissão de NFC-e
-            if (emitirNota) {
-                toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
-                const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
-
-                if (resultadoNfce.sucesso) {
-                    toast.success("Nota enviada para a Sefaz!");
-                } else {
-                    toast.error("Venda salva, mas ocorreu um erro na nota: " + resultadoNfce.error);
-                }
-            }
-
-            // 4. Atualizar Mesa
-            if (mesa.id) {
-                if (modo === 'total' || mesaQuitada) {
-                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
-                        status: 'livre',
-                        clientes: [],
-                        nomesOcupantes: ["Mesa"],
-                        itens: [],
-                        pedidos: [],
-                        total: 0,
-                        pagamentos: {},
-                        pagamentosParciais: [],
-                        updatedAt: serverTimestamp()
-                    });
-                    toast.success("Conta quitada! Mesa liberada.");
-                } else {
-                    const novoPagamentoInfo = {
-                        id: docRef.id,
-                        valor: totalPagoAgora,
-                        data: new Date().toISOString(),
-                        responsavel: auth.currentUser?.displayName || 'Garçom',
-                        tipo: tipoPagamento
-                    };
-
-                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
-                        status: 'ocupada',
-                        total: restanteFinal,
-                        pagamentosParciais: arrayUnion(novoPagamentoInfo),
-                        updatedAt: serverTimestamp()
-                    });
-                    toast.success(`Recebido R$ ${totalPagoAgora.toFixed(2)}. Restam R$ ${restanteFinal.toFixed(2)}`);
-                }
-            }
-
-            if (onSucesso) {
-                onSucesso({ 
-                    id: docRef.id, 
-                    ...dadosVenda, 
-                    parcial: !mesaQuitada 
-                });
-            }
-            onClose();
-
-        } catch (error) {
-            console.error('Erro:', error);
-            toast.error('Erro: ' + error.message);
-        } finally {
-            setCarregando(false);
-        }
-    };
+        agruparItensPorPessoa,
+        
+        toggleSelecao, editarFormaPagamento, editarValorPagamento,
+        adicionarPessoa, removerPessoa,
+        handleImprimirConferencia, handleFinalizar
+    } = useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucesso);
 
     // --- UI RENDERIZADORES ---
     const renderHistoricoPagamentos = () => {
-        const jaPago = calcularJaPago();
         if (jaPago <= 0) return null;
 
         return (
@@ -449,22 +58,22 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                     <h2 className="text-xl font-bold text-blue-100 mb-1">Restante a Pagar</h2>
                     
                     <span className="text-5xl font-black text-white">
-                        {calcularRestanteMesa().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        {restanteMesa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </span>
                     
                     <p className="text-blue-200 text-sm font-bold mt-2 uppercase tracking-widest">
-                        Total Consumo: {calcularTotalConsumo().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        Total Consumo: {totalConsumo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
 
                     {incluirTaxa && (
                         <p className="text-white text-sm font-medium mt-1 bg-white/20 inline-block px-3 py-1 rounded-full">
-                            + 10% Garçom: {calcularValorTaxa().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            + 10% Garçom: {valorTaxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                     )}
 
-                    {calcularValorDesconto() > 0 && (
+                    {valorDesconto > 0 && (
                         <p className="text-white text-sm font-medium mt-1 bg-white/20 inline-block px-3 py-1 rounded-full ml-1">
-                            - Desconto: {calcularValorDesconto().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            - Desconto: {valorDesconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                     )}
                     
@@ -474,7 +83,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 </div>
             </div>
 
-            {/* BOTÃO TAXA DE GARÇOM 10% */}
             <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-between">
                 <div>
                     <h4 className="font-bold text-gray-900">Taxa de Serviço (10%)</h4>
@@ -492,7 +100,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 </label>
             </div>
 
-            {/* 🔥 NOVO: CAMPO DE DESCONTO 🔥 */}
             <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                     <div>
@@ -632,20 +239,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     };
 
     const renderizarEtapa3 = () => {
-        const totalConsumo = calcularTotalConsumo();
-        const valorTaxa = calcularValorTaxa();
-        const valorDesconto = calcularValorDesconto();
-        const jaPago = calcularJaPago();
-        const totalPagoAgora = Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
-            return selecionados[pessoa] ? acc + dados.valor : acc;
-        }, 0);
-
-        const totalPagoGeral = jaPago + totalPagoAgora;
-        const restanteFinal = (totalConsumo + valorTaxa - valorDesconto) - totalPagoGeral;
-
-        const vaiQuitar = restanteFinal <= 0.10;
-        const troco = restanteFinal < -0.10 ? Math.abs(restanteFinal) : 0;
-
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-300">
                 <div className="text-center relative">
@@ -691,7 +284,6 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         </p>
                     </div>
 
-                    {/* TOGGLE PARA EMITIR NFC-E */}
                     <div className="mt-4 p-4 border-2 border-dashed border-gray-200 rounded-2xl">
                         <label className="flex items-center gap-3 cursor-pointer">
                             <input
@@ -712,10 +304,34 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                     type="text"
                                     placeholder="CPF na Nota (Opcional)"
                                     value={cpfNota}
-                                    onChange={(e) => setCpfNota(e.target.value.replace(/\D/g, ''))}
-                                    className="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    onChange={(e) => {
+                                        const nums = e.target.value.replace(/\D/g, '');
+                                        setCpfNota(nums);
+                                    }}
+                                    className={`w-full p-3 bg-gray-50 border rounded-xl text-sm focus:ring-2 outline-none ${
+                                        cpfNota.length > 0 && cpfNota.length !== 11
+                                            ? 'border-red-400 focus:ring-red-300'
+                                            : cpfNota.length === 11
+                                                ? (() => {
+                                                    if (/^(\d)\1{10}$/.test(cpfNota)) return 'border-red-400 focus:ring-red-300';
+                                                    let s = 0; for (let i = 0; i < 9; i++) s += parseInt(cpfNota[i]) * (10 - i);
+                                                    let r = (s * 10) % 11; if (r >= 10) r = 0;
+                                                    if (r !== parseInt(cpfNota[9])) return 'border-red-400 focus:ring-red-300';
+                                                    s = 0; for (let i = 0; i < 10; i++) s += parseInt(cpfNota[i]) * (11 - i);
+                                                    r = (s * 10) % 11; if (r >= 10) r = 0;
+                                                    if (r !== parseInt(cpfNota[10])) return 'border-red-400 focus:ring-red-300';
+                                                    return 'border-emerald-400 focus:ring-emerald-300';
+                                                  })()
+                                                : 'border-gray-300 focus:ring-emerald-500'
+                                    }`}
                                     maxLength={11}
                                 />
+                                {cpfNota.length > 0 && cpfNota.length < 11 && (
+                                    <p className="text-xs text-orange-500 mt-1">CPF deve ter 11 dígitos</p>
+                                )}
+                                {cpfNota.length === 11 && /^(\d)\1{10}$/.test(cpfNota) && (
+                                    <p className="text-xs text-red-500 mt-1">CPF inválido</p>
+                                )}
                             </div>
                         )}
                     </div>

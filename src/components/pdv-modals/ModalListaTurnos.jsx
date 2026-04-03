@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatarMoeda, formatarData, formatarHora } from './pdvHelpers';
 
-export const ModalListaTurnos = ({ visivel, onClose, turnos, onSelecionarTurno }) => {
+export const ModalListaTurnos = ({ visivel, onClose, turnos, onSelecionarTurno, vendasDoDia }) => {
     if (!visivel) return null;
     return (
         <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-[9500] p-4 backdrop-blur-sm no-print">
@@ -18,9 +18,18 @@ export const ModalListaTurnos = ({ visivel, onClose, turnos, onSelecionarTurno }
                         </div>
                     ) : (
                         <div className="grid gap-3">
-                            {turnos.map(turno => {
-                                const res = turno.resumoVendas || {};
+                            {turnos.map((turno, index) => {
                                 const isAberto = turno.status !== 'fechado';
+                                
+                                // Se o turno está aberto e temos vendasDoDia injetadas (o turno atual), calculamos o resumo dinamicamente
+                                let res = turno.resumoVendas || {};
+                                if (isAberto && index === 0 && vendasDoDia) { // index 0 é o turno aberto mais recente
+                                    res = {
+                                        qtd: vendasDoDia.length,
+                                        total: vendasDoDia.reduce((acc, v) => acc + (v.total || v.totalFinal || 0), 0)
+                                    };
+                                }
+
                                 return (
                                     <button key={turno.id} onClick={() => onSelecionarTurno(turno)}
                                         className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center hover:border-blue-200 transition-colors text-left group"

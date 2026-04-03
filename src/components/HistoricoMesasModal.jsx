@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, where, onSnapshot } from 'firebase/firestore';
+import React, { useEffect, useState, useCallback } from 'react';
+import { collection, query, orderBy, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { IoClose, IoPrint, IoRestaurant, IoSearch, IoCalendarOutline } from 'react-icons/io5';
 
@@ -18,29 +18,36 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
     const dia = String(hoje.getDate()).padStart(2, '0');
     const [dataFiltro, setDataFiltro] = useState(`${ano}-${mes}-${dia}`);
 
-    useEffect(() => {
+    const fetchHistorico = useCallback(async () => {
         if (!isOpen || !estabelecimentoId) return;
-
         setLoading(true);
-        // 🔥 BUSCA NA COLEÇÃO RAIZ "vendas" (onde ModalPagamento salva), filtrando pelo estabelecimento
-        const q = query(
-            collection(db, 'vendas'),
-            where('estabelecimentoId', '==', estabelecimentoId),
-            orderBy('criadoEm', 'desc')
-        );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        try {
+            const [y, m, d] = dataFiltro.split('-').map(Number);
+            const startOfDay = Timestamp.fromDate(new Date(y, m - 1, d, 0, 0, 0));
+            const endOfDay = Timestamp.fromDate(new Date(y, m - 1, d, 23, 59, 59));
+
+            const q = query(
+                collection(db, 'vendas'),
+                where('estabelecimentoId', '==', estabelecimentoId),
+                where('criadoEm', '>=', startOfDay),
+                where('criadoEm', '<=', endOfDay),
+                orderBy('criadoEm', 'desc')
+            );
+            const snapshot = await getDocs(q);
             const vendasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // Filtra para mostrar apenas o que veio de mesa
-            const pedidosMesas = vendasData.filter(v => v.mesaNumero);
-            
-            setHistoricoPedidos(pedidosMesas);
+            setHistoricoPedidos(vendasData.filter(v => v.mesaNumero));
+        } catch (e) {
+            console.error(e);
+            setHistoricoPedidos([]);
+        } finally {
             setLoading(false);
-        });
+        }
+    }, [isOpen, estabelecimentoId, dataFiltro]);
 
-        return () => unsubscribe();
-    }, [isOpen, estabelecimentoId]);
+    useEffect(() => {
+        fetchHistorico();
+    }, [fetchHistorico]);
 
     const handleImprimir = (pedido) => {
         // Usa criadoEm (da venda) ou createdAt (fallback)
@@ -117,21 +124,7 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
 
     const pedidosFiltrados = historicoPedidos.filter(p => {
         const termoBusca = busca.toLowerCase();
-        const matchTexto = String(p.mesaNumero || '').includes(termoBusca) || (p.funcionario || '').toLowerCase().includes(termoBusca);
-        
-        let matchData = true; 
-        const dataParaFiltro = p.criadoEm || p.createdAt;
-
-        if (dataFiltro && dataParaFiltro) {
-            const dataPedido = dataParaFiltro.toDate ? dataParaFiltro.toDate() : new Date(dataParaFiltro);
-            const pAno = dataPedido.getFullYear();
-            const pMes = String(dataPedido.getMonth() + 1).padStart(2, '0');
-            const pDia = String(dataPedido.getDate()).padStart(2, '0');
-            matchData = (`${pAno}-${pMes}-${pDia}` === dataFiltro);
-        } else if (dataFiltro && !dataParaFiltro) {
-            matchData = false;
-        }
-        return matchTexto && matchData;
+        return String(p.mesaNumero || '').includes(termoBusca) || (p.funcionario || '').toLowerCase().includes(termoBusca);
     });
 
     if (!isOpen) return null;

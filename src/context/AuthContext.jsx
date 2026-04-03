@@ -84,7 +84,7 @@ export function AuthProvider({ children }) {
                 }
                 
                 const firestoreData = await getFirestoreUserData(user);
-                console.log('📦 Firestore data retornado:', { firestoreData, cargo: firestoreData?.cargo, isAdmin: firestoreData?.isAdmin });
+                if (import.meta.env.DEV) console.log('📦 Firestore data:', { cargo: firestoreData?.cargo, isAdmin: firestoreData?.isAdmin });
                 
                 const isMasterAdmin = Boolean(claims.isMasterAdmin) || Boolean(firestoreData?.isMasterAdmin);
                 const isAdmin = Boolean(claims.isAdmin) || Boolean(firestoreData?.isAdmin) || isMasterAdmin;
@@ -115,7 +115,7 @@ export function AuthProvider({ children }) {
                     _claims: claims
                 };
 
-                console.log('✅ combinedData final:', { cargo: combinedData.cargo, isAdmin, isMasterAdmin, estabs: allEstabs });
+                if (import.meta.env.DEV) console.log('✅ auth ok:', { cargo: combinedData.cargo, isAdmin, isMasterAdmin });
                 setCurrentUser({ ...user, ...combinedData });
                 setUserData(combinedData);
                 
@@ -176,10 +176,15 @@ export function AuthProvider({ children }) {
         },
         logout,
         reloadUserData: async () => {
-             if (auth.currentUser) {
-                 await auth.currentUser.getIdToken(true);
-                 window.location.reload(); 
-             }
+            if (auth.currentUser) {
+                await auth.currentUser.getIdToken(true);
+                const freshData = await getFirestoreUserData(auth.currentUser);
+                if (freshData) {
+                    const updatedData = { uid: auth.currentUser.uid, email: auth.currentUser.email, ...freshData };
+                    setUserData(updatedData);
+                    setCurrentUser(prev => ({ ...prev, ...updatedData }));
+                }
+            }
         }
     };
 
@@ -192,7 +197,6 @@ export function usePermissions() {
     
     const canAccess = (requiredRoles = []) => {
         if (!currentUser || loading) {
-            console.log('🚫 canAccess: sem currentUser ou loading', { currentUser: !!currentUser, loading });
             return false;
         }
         if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) return true;
@@ -215,7 +219,7 @@ export function usePermissions() {
             return userCargosNorm.includes(roleNorm);
         });
 
-        console.log('🔐 canAccess resultado:', { userCargosNorm, requiredRoles, isAdmin, isMasterAdmin, result });
+        if (import.meta.env.DEV) console.log('🔐 canAccess:', { userCargosNorm, requiredRoles, result });
         return result;
     };
 
@@ -243,9 +247,7 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
     }
 
     const accessGranted = canAccess(allowedRoles);
-    console.log('🛡️ PrivateRoute:', { path: location.pathname, allowedRoles, accessGranted, cargo: currentUser?.cargo });
     if (!accessGranted) {
-        console.log('❌ PrivateRoute DENIED → redirect to /dashboard');
         return <Navigate to="/dashboard" replace />;
     }
     
