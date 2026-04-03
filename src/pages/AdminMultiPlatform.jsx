@@ -31,7 +31,8 @@ function AdminMultiPlatform() {
         syncPlatformOrders,
         syncAllPlatforms,
         handleToggleConnection,
-        handleConfigurePlatform
+        handleConfigurePlatform,
+        setupIfoodWebhook
     } = usePlatforms(addNotification);
 
     const metrics = useMemo(() => {
@@ -288,6 +289,7 @@ function AdminMultiPlatform() {
                                         handleToggleConnection={handleToggleConnection}
                                         setSelectedPlatform={setSelectedPlatform}
                                         setShowConfigModal={setShowConfigModal}
+                                        setupIfoodWebhook={setupIfoodWebhook}
                                     />
                                 ))}
                             </div>

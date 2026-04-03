@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 import { initializeUserPlatforms } from '../services/userService';
 import { IoRestaurant, IoChatbubble, IoPhonePortrait, IoGlobe, IoStorefront } from 'react-icons/io5';
 
@@ -57,7 +58,9 @@ export const usePlatforms = (addNotification) => {
             
             const platformsData = {};
             snapshot.forEach(doc => {
-                platformsData[doc.id] = { id: doc.id, ...doc.data() };
+                const data = doc.data();
+                const type = data.type || doc.id;
+                platformsData[type] = { id: doc.id, ...data };
             });
             
             setPlatforms(platformsData);
@@ -83,7 +86,7 @@ export const usePlatforms = (addNotification) => {
 
             if (addNotification) addNotification('info', 'Inicialização', 'Criando configurações iniciais das plataformas...');
             
-            const success = await initializeUserPlatforms(user.uid);
+            const success = await initializeUserPlatforms(user.uid, user.email || '');
             
             if (success) {
                 if (addNotification) addNotification('success', 'Sucesso', 'Plataformas inicializadas com sucesso!');
@@ -105,7 +108,8 @@ export const usePlatforms = (addNotification) => {
     const updatePlatformConfig = useCallback(async (platformId, config) => {
         try {
             const user = auth.currentUser;
-            const platformRef = doc(db, 'platforms', platformId);
+            const docId = `${platformId}_${user.uid}`;
+            const platformRef = doc(db, 'platforms', docId);
             
             const platformDoc = await getDoc(platformRef);
             
@@ -156,20 +160,48 @@ export const usePlatforms = (addNotification) => {
             if (addNotification) addNotification('info', 'Teste de Conexão', `Testando conexão com ${getPlatformName(platformId)}...`);
             addSyncLog('info', `Testando conexão com ${platformId}`);
             
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            await updatePlatformConfig(platformId, {
-                lastTest: new Date().toISOString(),
-                connectionStatus: 'connected',
-                syncStatus: 'connected'
-            });
-            
-            if (addNotification) addNotification('success', 'Conexão', `Conexão com ${getPlatformName(platformId)} testada com sucesso`);
-            addSyncLog('success', `Conexão com ${platformId} testada com sucesso`);
+            const user = auth.currentUser;
+            if (!user) throw new Error("Usuário não autenticado.");
+
+            // Buscar os dados do estabelecimento do usuário para pegar o estabelecimentoId
+            const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+            const userData = userDoc.exists() ? userDoc.data() : null;
+            const estabelecimentoIdPrincipal = userData?.estabelecimentoIdPrincipal || 
+                                               (userData?.estabelecimentosGerenciados?.length > 0 ? userData.estabelecimentosGerenciados[0] : user.uid);
+
+            if (platformId === 'ifood') {
+                if (!estabelecimentoIdPrincipal) throw new Error("Estabelecimento principal não encontrado.");
+                
+                const ifoodTestarConexao = httpsCallable(functions, 'ifoodTestarConexao');
+                const response = await ifoodTestarConexao({ estabelecimentoId: estabelecimentoIdPrincipal });
+                
+                if (response.data.sucesso) {
+                    await updatePlatformConfig(platformId, {
+                        lastTest: new Date().toISOString(),
+                        connectionStatus: 'connected',
+                        syncStatus: 'connected',
+                        merchantId: response.data.merchants?.length > 0 ? response.data.merchants[0].id : null
+                    });
+                    if (addNotification) addNotification('success', 'Conexão', response.data.mensagem || `Conexão com ${getPlatformName(platformId)} testada com sucesso`);
+                    addSyncLog('success', response.data.mensagem || `Conexão com ${platformId} testada com sucesso`);
+                } else {
+                    throw new Error(response.data.mensagem || "Falha na conexão.");
+                }
+            } else {
+                // Mock para outras plataformas
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                await updatePlatformConfig(platformId, {
+                    lastTest: new Date().toISOString(),
+                    connectionStatus: 'connected',
+                    syncStatus: 'connected'
+                });
+                if (addNotification) addNotification('success', 'Conexão', `Conexão com ${getPlatformName(platformId)} testada com sucesso`);
+                addSyncLog('success', `Conexão com ${platformId} testada com sucesso`);
+            }
         } catch (error) {
             console.error('Erro no teste de conexão:', error);
             if (addNotification) addNotification('error', 'Erro', `Falha no teste de conexão com ${getPlatformName(platformId)}`);
-            addSyncLog('error', `Falha no teste de conexão com ${platformId}`);
+            addSyncLog('error', `Falha no teste de conexão com ${platformId}: ${error.message}`);
         } finally {
             setSyncStatus('idle');
         }
@@ -181,26 +213,56 @@ export const usePlatforms = (addNotification) => {
             if (addNotification) addNotification('info', 'Sincronização', `Iniciando sincronização com ${getPlatformName(platformId)}`);
             addSyncLog('info', `Iniciando sincronização com ${platformId}`);
             
-            const newOrders = Math.floor(Math.random() * 10) + 1;
-            const newRevenue = Math.random() * 500 + 50;
-            
+            const user = auth.currentUser;
             const currentPlatform = platforms[platformId] || {};
             const currentOrders = currentPlatform.orders || 0;
             const currentRevenue = currentPlatform.revenue || 0;
             
-            await updatePlatformConfig(platformId, {
-                lastSync: new Date().toISOString(),
-                syncStatus: 'synced',
-                orders: currentOrders + newOrders,
-                revenue: currentRevenue + newRevenue
-            });
-            
-            if (addNotification) addNotification('success', 'Sincronização', `${getPlatformName(platformId)} sincronizado: ${newOrders} novos pedidos`);
-            addSyncLog('success', `Sincronização com ${platformId} concluída: ${newOrders} novos pedidos`);
+            if (platformId === 'ifood') {
+                 // Buscar os dados do estabelecimento do usuário para pegar o estabelecimentoId
+                const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+                const userData = userDoc.exists() ? userDoc.data() : null;
+                const estabelecimentoIdPrincipal = userData?.estabelecimentoIdPrincipal || 
+                                                   (userData?.estabelecimentosGerenciados?.length > 0 ? userData.estabelecimentosGerenciados[0] : user.uid);
+                if (!estabelecimentoIdPrincipal) throw new Error("Estabelecimento principal não encontrado.");
+                
+                const ifoodPolling = httpsCallable(functions, 'ifoodPolling');
+                const response = await ifoodPolling({ estabelecimentoId: estabelecimentoIdPrincipal });
+                
+                if (response.data.sucesso) {
+                    const newOrders = response.data.pedidosNovos || 0;
+                    
+                    await updatePlatformConfig(platformId, {
+                        lastSync: new Date().toISOString(),
+                        syncStatus: 'synced',
+                        orders: currentOrders + newOrders,
+                        // revenue não conseguimos mensurar certinho sem somar no backend por enquanto, vamos manter
+                    });
+
+                    if (addNotification) addNotification('success', 'Sincronização', response.data.mensagem || `${getPlatformName(platformId)} sincronizado: ${newOrders} novos pedidos`);
+                    addSyncLog('success', response.data.mensagem || `Sincronização com ${platformId} concluída: ${newOrders} novos pedidos`);
+                } else {
+                    throw new Error("Falha na sincronização");
+                }
+            } else {
+                // Mock para as demais
+                const newOrders = Math.floor(Math.random() * 10) + 1;
+                const newRevenue = Math.random() * 500 + 50;
+                
+                await updatePlatformConfig(platformId, {
+                    lastSync: new Date().toISOString(),
+                    syncStatus: 'synced',
+                    orders: currentOrders + newOrders,
+                    revenue: currentRevenue + newRevenue
+                });
+                
+                if (addNotification) addNotification('success', 'Sincronização', `${getPlatformName(platformId)} sincronizado: ${newOrders} novos pedidos`);
+                addSyncLog('success', `Sincronização com ${platformId} concluída: ${newOrders} novos pedidos`);
+            }
         } catch (error) {
             console.error('Erro na sincronização:', error);
             if (addNotification) addNotification('error', 'Erro', `Erro na sincronização com ${getPlatformName(platformId)}`);
-            addSyncLog('error', `Erro na sincronização com ${platformId}`);
+            addSyncLog('error', `Erro na sincronização com ${platformId}: ${error.message}`);
         } finally {
             setSyncStatus('idle');
         }
@@ -216,6 +278,7 @@ export const usePlatforms = (addNotification) => {
                 orders: data.orders || 0,
                 revenue: data.revenue || 0,
                 lastSync: data.lastSync,
+                merchantId: data.merchantId || null,
                 config: data.config || {},
             };
         });
@@ -304,6 +367,38 @@ export const usePlatforms = (addNotification) => {
         }
     }, [addNotification, addSyncLog, fetchPlatforms, getPlatformName, updatePlatformConfig]);
 
+    const setupIfoodWebhook = useCallback(async (merchantId) => {
+        const user = auth.currentUser;
+        if (!user) return false;
+
+        try {
+            setSyncStatus('testing');
+            const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+            const userData = userDoc.exists() ? userDoc.data() : null;
+            const estabelecimentoIdPrincipal = userData?.estabelecimentoIdPrincipal || 
+                                               (userData?.estabelecimentosGerenciados?.length > 0 ? userData.estabelecimentosGerenciados[0] : user.uid);
+            if (!estabelecimentoIdPrincipal) throw new Error("Estabelecimento principal não encontrado.");
+
+            const ifoodConfigurarWebhook = httpsCallable(functions, 'ifoodConfigurarWebhook');
+            const response = await ifoodConfigurarWebhook({ estabelecimentoId: estabelecimentoIdPrincipal, merchantId });
+            
+            if (response.data.sucesso) {
+                if (addNotification) addNotification('success', 'Webhook', response.data.mensagem || 'Webhook configurado!');
+                addSyncLog('success', response.data.mensagem || 'Webhook do iFood configurado com sucesso');
+                return true;
+            } else {
+                throw new Error("Falha ao configurar webhook.");
+            }
+        } catch (e) {
+            console.error('Erro configurando webhook:', e);
+            if (addNotification) addNotification('error', 'Erro', 'Erro ao configurar webhook no iFood.');
+            addSyncLog('error', `Erro ao configurar webhook do iFood: ${e.message}`);
+            return false;
+        } finally {
+            setSyncStatus('idle');
+        }
+    }, [addNotification, addSyncLog]);
+
     // Initial load
     useEffect(() => {
         fetchPlatforms();
@@ -325,6 +420,7 @@ export const usePlatforms = (addNotification) => {
         syncPlatformOrders,
         syncAllPlatforms,
         handleToggleConnection,
-        handleConfigurePlatform
+        handleConfigurePlatform,
+        setupIfoodWebhook
     };
 };

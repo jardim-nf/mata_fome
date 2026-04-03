@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
     IoSync, 
     IoCloudDownload, 
@@ -53,7 +52,8 @@ const PlatformCard = ({
     syncPlatformOrders, 
     handleToggleConnection, 
     setSelectedPlatform, 
-    setShowConfigModal 
+    setShowConfigModal,
+    setupIfoodWebhook
 }) => {
     return (
         <div 
@@ -164,6 +164,22 @@ const PlatformCard = ({
                     </div>
                 </div>
             </div>
+
+            {/* Configuração do Webhook iFood */}
+            {platform.id === 'ifood' && platform.status === 'connected' && platform.merchantId && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                    <p className="text-sm text-blue-800">
+                        🔗 Webhook do iFood
+                    </p>
+                    <button 
+                        onClick={() => setupIfoodWebhook(platform.merchantId)}
+                        disabled={syncStatus === 'testing' || syncStatus === 'syncing'}
+                        className="px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        Ativar Webhook
+                    </button>
+                </div>
+            )}
 
             {/* Configuração Rápida */}
             {platform.setupRequired && platform.status !== 'connected' && (

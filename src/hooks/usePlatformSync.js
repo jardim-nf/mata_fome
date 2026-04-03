@@ -12,7 +12,8 @@ import {
   orderBy,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -141,7 +142,7 @@ export const usePlatformSync = () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Aqui viria a lógica real de teste para cada plataforma
-      const isConnected = await testPlatformConnection(platformId, platforms[platformId]);
+      const isConnected = await testPlatformConnection(platformId, platforms[platformId], estabelecimentoIdPrincipal);
       
       if (isConnected) {
         await updatePlatformConfig(platformId, { 
@@ -175,7 +176,7 @@ export const usePlatformSync = () => {
     
     try {
       // Aqui viria a lógica real de sincronização para cada plataforma
-      const newOrders = await fetchPlatformOrders(platformId, platforms[platformId]);
+      const newOrders = await fetchPlatformOrders(platformId, platforms[platformId], estabelecimentoIdPrincipal);
       
       if (newOrders && newOrders.length > 0) {
         await saveOrdersToFirestore(newOrders, platformId);
@@ -249,13 +250,13 @@ export const usePlatformSync = () => {
     if (!estabelecimentoIdPrincipal) return;
 
     const ordersRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos');
-    const q = query(ordersRef, orderBy('criadoEm', 'desc'));
+    const q = query(ordersRef, orderBy('createdAt', 'desc')); // Usando createdAt pois o webhook salva como serverTimestamp
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const ordersData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        criadoEm: doc.data().criadoEm?.toDate?.(),
+        criadoEm: doc.data().criadoEm?.toDate?.() || doc.data().createdAt?.toDate?.() || new Date(),
         atualizadoEm: doc.data().atualizadoEm?.toDate?.()
       }));
       
@@ -338,6 +339,30 @@ export const usePlatformSync = () => {
     }
   }, [estabelecimentoIdPrincipal]);
 
+  // 📡 Configurar Webhook do iFood
+  const setupIfoodWebhook = useCallback(async (merchantId) => {
+    if (!estabelecimentoIdPrincipal || !merchantId) return false;
+    
+    setSyncStatus('syncing');
+    try {
+      const ifoodConfigurarWebhook = httpsCallable(functions, 'ifoodConfigurarWebhook');
+      const response = await ifoodConfigurarWebhook({ estabelecimentoId: estabelecimentoIdPrincipal, merchantId });
+      
+      if (response.data.sucesso) {
+        toast.success(response.data.mensagem || 'Webhook configurado com sucesso!');
+        await loadPlatformConfig(); // recarregar para pegar o novo webhookUrl
+        setSyncStatus('success');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('❌ Erro configurando webhook:', e);
+      toast.error('Erro ao configurar webhook no iFood.');
+      setSyncStatus('error');
+      return false;
+    }
+  }, [estabelecimentoIdPrincipal, loadPlatformConfig]);
+
   return {
     // Estado
     loading,
@@ -352,6 +377,7 @@ export const usePlatformSync = () => {
     syncPlatformOrders,
     syncAllPlatforms,
     loadPlatformConfig,
+    setupIfoodWebhook,
     
     // Métricas
     getPlatformMetrics,
@@ -364,11 +390,10 @@ export const usePlatformSync = () => {
 // 🛠️ FUNÇÕES AUXILIARES (serão implementadas para cada plataforma)
 
 // Simular teste de conexão - implementação real viria depois
-const testPlatformConnection = async (platformId, config) => {
+const testPlatformConnection = async (platformId, config, estabelecimentoId = null) => {
   switch (platformId) {
     case 'ifood':
-      // Lógica real de teste do iFood
-      return await testIfoodConnection(config);
+      return await testIfoodConnection(config, estabelecimentoId);
     case 'whatsapp':
       // Lógica real de teste do WhatsApp
       return await testWhatsAppConnection(config);
@@ -384,10 +409,10 @@ const testPlatformConnection = async (platformId, config) => {
 };
 
 // Simular busca de pedidos - implementação real viria depois
-const fetchPlatformOrders = async (platformId, config) => {
+const fetchPlatformOrders = async (platformId, config, estabelecimentoId = null) => {
   switch (platformId) {
     case 'ifood':
-      return await fetchIfoodOrders(config);
+      return await fetchIfoodOrders(config, estabelecimentoId);
     case 'whatsapp':
       return await fetchWhatsAppOrders(config);
     case 'rappi':
@@ -418,11 +443,25 @@ const saveOrdersToFirestore = async (orders, platformId) => {
   }
 };
 
-// 🎯 IMPLEMENTAÇÕES ESPECÍFICAS (placeholders - serão desenvolvidas depois)
+// 🎯 IMPLEMENTAÇÕES ESPECÍFICAS (Integrações backend via Firebase Cloud Functions)
 
-const testIfoodConnection = async (config) => {
-  // Implementação real da API do iFood
-  return Math.random() > 0.2; // 80% de chance de sucesso para demo
+const testIfoodConnection = async (config, estabelecimentoId) => {
+  if (!estabelecimentoId) return false;
+  try {
+    const ifoodTestarConexao = httpsCallable(functions, 'ifoodTestarConexao');
+    const response = await ifoodTestarConexao({ estabelecimentoId });
+    // Se sucesso, retorna o array de merchants no response.data.merchants
+    if (response.data.sucesso) {
+      if (response.data.merchants && response.data.merchants.length > 0) {
+        toast.info(response.data.mensagem);
+      }
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('API Error testing iFood connection:', error);
+    return false;
+  }
 };
 
 const testWhatsAppConnection = async (config) => {
@@ -440,9 +479,22 @@ const testUberEatsConnection = async (config) => {
   return Math.random() > 0.25; // 75% de chance de sucesso para demo
 };
 
-const fetchIfoodOrders = async (config) => {
-  // Implementação real para buscar pedidos do iFood
-  return []; // Retornar array de pedidos
+const fetchIfoodOrders = async (config, estabelecimentoId) => {
+  if (!estabelecimentoId) return [];
+  try {
+    const ifoodPolling = httpsCallable(functions, 'ifoodPolling');
+    const response = await ifoodPolling({ estabelecimentoId });
+    if (response.data.sucesso && response.data.pedidosNovos > 0) {
+      // Como a onSnapshot já vai ouvi-los assim que o backend salvar no firestore, 
+      // não precisamos obrigatoriamente retorná-los aqui para UI (ou podemos retornar vazio).
+      // Se houvesse arrays retornados, nós faríamos return array, mas o polling já salva no DB!
+      return []; 
+    }
+    return [];
+  } catch (error) {
+    console.error('API Error fetching iFood Orders:', error);
+    throw error;
+  }
 };
 
 const fetchWhatsAppOrders = async (config) => {

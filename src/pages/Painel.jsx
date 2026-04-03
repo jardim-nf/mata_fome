@@ -11,7 +11,9 @@ import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNoti
 import { useOrdersPanel } from '../hooks/useOrdersPanel';
 import { useFiscalNfce } from '../hooks/useFiscalNfce';
 import GrupoPedidosMesa from '../components/painel/GrupoPedidosMesa';
-
+import { db } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { toast } from 'react-toastify';
 function Painel() {
     const navigate = useNavigate();
     const { loading: authLoading, estabelecimentosGerenciados } = useAuth();
@@ -109,8 +111,8 @@ function Painel() {
                         {colunasAtivas.map(status => <option key={status} value={status}>{STATUS_UI[status].title} ({pedidosPorColuna[status].length})</option>)}
                     </select>
                 </div>
-                <div className="flex-1 overflow-x-auto pb-6 px-4">
-                    <div className="flex h-full min-w-max md:min-w-0 md:w-full gap-4">
+                <div className="flex-1 overflow-x-auto pb-4 px-2 sm:px-3">
+                    <div className="grid gap-2 sm:gap-3 h-full" style={{ gridTemplateColumns: `repeat(${colunasAtivas.length}, minmax(180px, 1fr))` }}>
                         {colunasAtivas.map((statusKey) => {
                             const isMobileActive = colunaMobile === statusKey;
                             const isMobile = window.innerWidth < 640;
@@ -130,20 +132,20 @@ function Painel() {
                             }
 
                             return (
-                                <div key={statusKey} className={`flex flex-col h-full ${isMobile ? 'w-full' : 'w-80 2xl:w-[22%]'} shrink-0 bg-white shadow-sm border border-gray-200 rounded-2xl overflow-hidden`}>
+                                <div key={statusKey} className={`flex flex-col h-full ${isMobile ? 'w-full' : ''} bg-white shadow-sm border border-gray-200 rounded-2xl overflow-hidden`}>
                                     <div className="p-4 border-b border-gray-200 bg-gray-50/80 shrink-0">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <div className={`w-8 h-8 rounded-full ${STATUS_UI[statusKey].bgBadge} flex items-center justify-center text-lg shadow-inner`}>{STATUS_UI[statusKey].icon}</div>
-                                                <h2 className="font-bold text-gray-800 text-[15px]">{STATUS_UI[statusKey].title}</h2>
+                                                <div className={`w-7 h-7 rounded-full ${STATUS_UI[statusKey].bgBadge} flex items-center justify-center text-base shadow-inner`}>{STATUS_UI[statusKey].icon}</div>
+                                                <h2 className="font-bold text-gray-800 text-[13px] truncate">{STATUS_UI[statusKey].title}</h2>
                                             </div>
                                             <div className={`px-2.5 py-1 rounded-full text-xs font-black shadow-sm ${STATUS_UI[statusKey].bgBadge} ${STATUS_UI[statusKey].textBadge}`}>
                                                 {listaRender.length}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto p-4 bg-[#F8FAFC]">
-                                        <div className="space-y-4">
+                                    <div className="flex-1 overflow-y-auto p-2 sm:p-3 bg-[#F8FAFC]">
+                                        <div className="space-y-3">
                                             {listaRender.length === 0 ? (
                                                 <div className="flex flex-col items-center justify-center h-48 text-center px-4"><div className={`w-16 h-16 rounded-full ${STATUS_UI[statusKey].bgBadge} flex items-center justify-center text-3xl mb-3 opacity-50`}>{STATUS_UI[statusKey].icon}</div><p className="font-bold text-gray-500">{STATUS_UI[statusKey].emptyTitle}</p><p className="text-xs text-gray-400 mt-1">{STATUS_UI[statusKey].emptyMsg}</p></div>
                                             ) : (
@@ -174,7 +176,39 @@ function Painel() {
                     </div>
                 </div>
             </div>
-            <NovoPedidoDeliveryModal isOpen={showNovoPedidoModal} onClose={() => setShowNovoPedidoModal(false)} />
+            <NovoPedidoDeliveryModal 
+                isOpen={showNovoPedidoModal} 
+                onClose={() => setShowNovoPedidoModal(false)} 
+                estabelecimentoId={estabelecimentoAtivo}
+                onSave={async (pedidoData) => {
+                    if (!estabelecimentoAtivo) {
+                        toast.error('Estabelecimento não identificado!');
+                        return;
+                    }
+                    try {
+                        const novaId = await addDoc(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), {
+                            ...pedidoData,
+                            // Objeto `cliente` para compatibilidade com trigger de WhatsApp e PedidoCard
+                            cliente: {
+                                nome: pedidoData.nomeCliente || 'Cliente',
+                                telefone: pedidoData.telefoneCliente || ''
+                            },
+                            clienteNome: pedidoData.nomeCliente || 'Cliente',
+                            clienteTelefone: pedidoData.telefoneCliente || '',
+                            totalFinal: pedidoData.total || 0,
+                            status: 'recebido',
+                            source: 'painel',
+                            tipo: 'delivery',
+                            createdAt: serverTimestamp(),
+                            dataPedido: serverTimestamp()
+                        });
+                        toast.success('✅ Pedido delivery adicionado com sucesso!');
+                    } catch (error) {
+                        console.error('Erro ao adicionar pedido manualmente:', error);
+                        toast.error('Erro ao salvar o pedido. Tente novamente.');
+                    }
+                }}
+            />
         </div>
     );
 }

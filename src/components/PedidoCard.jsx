@@ -7,6 +7,7 @@ import {
 } from "react-icons/io5";
 import { useAuth } from '../context/AuthContext'; 
 import { formatarMoeda } from '../utils/formatCurrency';
+import { toast } from 'react-toastify';
 
 const PedidoCard = ({ 
     item, 
@@ -184,8 +185,10 @@ const PedidoCard = ({
         }
         
         const msgFinal = `Olá, *${nomeCliente}*! 👋\n\n${frasePrincipal}${mostrarTotal ? `\n\n💰 *Valor Total: ${totalFormatado}*` : ''}`;
-        const numeroFormatado = telefone.replace(/\D/g, '');
-        window.open(`https://wa.me/55${numeroFormatado}?text=${encodeURIComponent(msgFinal)}`, '_blank');
+        let numeroFormatado = telefone.replace(/\D/g, '');
+        // Garante que o 55 não seja duplicado
+        if (!numeroFormatado.startsWith('55')) numeroFormatado = `55${numeroFormatado}`;
+        window.open(`https://wa.me/${numeroFormatado}?text=${encodeURIComponent(msgFinal)}`, '_blank');
     };
 
     // --- IMPRESSÃO OTIMIZADA ---
@@ -484,9 +487,15 @@ const PedidoCard = ({
                     </button>
                     
                     <button 
-                        onClick={() => enviarWhatsApp(item.status)} 
-                        className="w-10 h-10 shrink-0 flex items-center justify-center bg-green-100 text-green-600 rounded-lg hover:bg-green-200 border border-green-200 transition-colors" 
-                        title="Enviar WhatsApp (Status Atual)"
+                        onClick={() => {
+                            if (estabelecimentoInfo?.whatsapp?.ativo) {
+                                toast.success('📱 Mensagem enviada automaticamente pelo bot!');
+                            } else {
+                                enviarWhatsApp(item.status);
+                            }
+                        }} 
+                        className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border transition-colors ${estabelecimentoInfo?.whatsapp?.ativo ? 'bg-green-500 text-white border-green-600 hover:bg-green-600' : 'bg-green-100 text-green-600 border-green-200 hover:bg-green-200'}`}
+                        title={estabelecimentoInfo?.whatsapp?.ativo ? 'Bot ativo — Mensagem enviada automaticamente' : 'Enviar WhatsApp manual'}
                     >
                         <IoLogoWhatsapp className="text-lg" />
                     </button>

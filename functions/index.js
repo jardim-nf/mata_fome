@@ -1460,21 +1460,51 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
       const antes = event.data?.before?.data();
       const depois = event.data?.after?.data();
 
-      if (!antes || !depois || antes.status === depois.status) return;
+      if (!antes || !depois) {
+        logger.info('📱 ⏭️ Sem dados antes/depois — ignorando');
+        return;
+      }
+      if (antes.status === depois.status) {
+        return; // Status não mudou, silencioso é OK aqui
+      }
+
+      logger.info(`📱 🔄 Status mudou: ${antes.status} → ${depois.status} | pedido=${event.params.pedidoId}`);
 
       const gerarMensagem = MENSAGENS_STATUS[depois.status];
-      if (!gerarMensagem) return;
+      if (!gerarMensagem) {
+        logger.info(`📱 ⏭️ Sem template para status "${depois.status}" — ignorando`);
+        return;
+      }
 
       const telefoneCliente = depois.cliente?.telefone || depois.clienteTelefone || '';
-      if (!telefoneCliente) return;
+      if (!telefoneCliente) {
+        logger.warn(`📱 ⚠️ Pedido ${event.params.pedidoId} sem telefone do cliente — não enviando WhatsApp`);
+        return;
+      }
 
       const estabSnap = await db.collection('estabelecimentos').doc(event.params.estabId).get();
-      if (!estabSnap.exists) return;
+      if (!estabSnap.exists) {
+        logger.warn(`📱 ⚠️ Estabelecimento ${event.params.estabId} não encontrado`);
+        return;
+      }
 
       const estab = estabSnap.data();
       const wConfig = estab.whatsapp || {};
 
-      if (!wConfig.ativo || !wConfig.instanceName || !wConfig.serverUrl) return;
+      logger.info(`📱 🔧 Config WhatsApp: ativo=${wConfig.ativo} | instanceName=${wConfig.instanceName || 'VAZIO'} | serverUrl=${wConfig.serverUrl || 'VAZIO'} | apiKeyLen=${(wConfig.apiKey || '').length}`);
+
+      if (!wConfig.ativo) {
+        logger.info(`📱 ⏭️ WhatsApp DESATIVADO para estab ${event.params.estabId}`);
+        return;
+      }
+      if (!wConfig.instanceName) {
+        logger.warn(`📱 ⚠️ instanceName VAZIO — não enviando`);
+        return;
+      }
+      if (!wConfig.serverUrl) {
+        logger.warn(`📱 ⚠️ serverUrl VAZIO — não enviando`);
+        return;
+      }
 
       const nomeEstab = estab.nome || 'Restaurante';
       const nomeCliente = depois.cliente?.nome || depois.clienteNome || 'Cliente';
@@ -1501,7 +1531,7 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
       };
 
       const fullUrl = `${urlFormatada}/send/text`;
-      logger.info(`🔍 DEBUG UAZAPI | URL: ${fullUrl} | serverUrl: ${wConfig.serverUrl} | instanceName: ${wConfig.instanceName} | tokenLength: ${(wConfig.apiKey || '').length} | payload: ${JSON.stringify(payloadEnvio)}`);
+      logger.info(`📱 📤 Enviando para ${telFinal} | Status: ${depois.status} | URL: ${fullUrl}`);
 
       const response = await fetch(fullUrl, {
         method: 'POST',
@@ -1748,7 +1778,8 @@ function mapearPedidoIfood(ifoodOrder, estabelecimentoId) {
 // FUNÇÃO 1: Webhook — iFood envia pedidos em tempo real
 // ==================================================================
 export const ifoodWebhook = onRequest({
-    cors: false
+    cors: false,
+    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
 }, async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
@@ -1828,7 +1859,8 @@ export const ifoodWebhook = onRequest({
 // FUNÇÃO 2: Polling — buscar pedidos pendentes periodicamente
 // ==================================================================
 export const ifoodPolling = onCall({
-    cors: true
+    cors: true,
+    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
@@ -1914,7 +1946,8 @@ export const ifoodPolling = onCall({
 // FUNÇÃO 3: Atualizar status do pedido no iFood
 // ==================================================================
 export const ifoodAtualizarStatus = onCall({
-    cors: true
+    cors: true,
+    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
@@ -1968,7 +2001,8 @@ export const ifoodAtualizarStatus = onCall({
 // FUNÇÃO 4: Testar autenticação OAuth2 do iFood (para a tela de config)
 // ==================================================================
 export const ifoodTestarConexao = onCall({
-    cors: true
+    cors: true,
+    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
@@ -2018,7 +2052,8 @@ export const ifoodTestarConexao = onCall({
 // FUNÇÃO 5: Configurar URL do webhook no iFood
 // ==================================================================
 export const ifoodConfigurarWebhook = onCall({
-    cors: true
+    cors: true,
+    secrets: ["IFOOD_CLIENT_ID", "IFOOD_CLIENT_SECRET"]
 }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
