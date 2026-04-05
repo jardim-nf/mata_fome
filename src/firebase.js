@@ -5,6 +5,7 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { getAnalytics } from 'firebase/analytics';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY,
@@ -30,6 +31,17 @@ export const db = initializeFirestore(app, {
 export const storage = getStorage(app);
 export const analytics = getAnalytics(app);
 export const functions = getFunctions(app, 'us-central1');
+
+// Messaging só inicializa se suportado no navegador (previne crash no iOS Safari antigo)
+export const messaging = async () => {
+    try {
+        const supported = await isSupported();
+        if (supported) return getMessaging(app);
+        return null;
+    } catch(e) {
+        return null;
+    }
+};
 
 // Configuração para desenvolvimento (emulator)
 if (import.meta.env.DEV) {

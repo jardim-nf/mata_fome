@@ -117,17 +117,59 @@ export default function Menu() {
         if (loading || allProdutos.length === 0) return;
         const repetir = localStorage.getItem('ideafood_repetir_pedido');
         if (!repetir) return;
-        localStorage.removeItem('ideafood_repetir_pedido');
+        
         try {
             const itens = JSON.parse(repetir);
             let adicionados = 0;
             itens.forEach(item => {
-                const pEncontrado = allProdutos.find(p => p.nome === item.nome);
-                if (pEncontrado) { for (let i = 0; i < (item.quantidade || 1); i++) { adicionarItem({ ...pEncontrado, observacao: item.observacoes || '' }); } adicionados++; }
+                let pEncontrado = allProdutos.find(p => p.id === item.id);
+                if (!pEncontrado) {
+                    const nomeO = normalizarTexto(item.nomeOriginal || '');
+                    const nomeA = normalizarTexto(item.nome || '');
+                    pEncontrado = allProdutos.find(p => {
+                        const pNome = normalizarTexto(p.nome || '');
+                        return pNome === nomeO || pNome === nomeA || (nomeA.includes(pNome) && pNome.length > 3);
+                    });
+                }
+                
+                // FALLBACK SUPREMO: Produto "Fantasma". Se o dono deletou do sistema, a gente recria na memória!
+                if (!pEncontrado) {
+                    pEncontrado = {
+                        id: item.id || `recuperado_${Math.random()}`,
+                        nome: (item.variacaoSelecionada || item.adicionaisSelecionados?.length > 0) ? (item.nomeOriginal || item.nome) : item.nome,
+                        preco: item.preco
+                    };
+                }
+                
+                if (pEncontrado) { 
+                    const itemReconstruido = {
+                       ...pEncontrado,
+                       observacao: item.observacao,
+                       variacaoSelecionada: item.variacaoSelecionada,
+                       adicionaisSelecionados: item.adicionaisSelecionados,
+                       precoFinal: item.preco // Respeitamos o preço exato que ele pagou ou calculou antes
+                    };
+                    for (let i = 0; i < (item.quantidade || 1); i++) { 
+                       adicionarItem(itemReconstruido); 
+                    } 
+                    adicionados++; 
+                }
             });
-            if (adicionados > 0) toast.success(`🔁 ${adicionados} itens adicionados!`);
-        } catch (e) { console.warn(e); }
-    }, [loading, allProdutos, adicionarItem]);
+            
+            if (adicionados > 0) {
+               toast.success(`🔁 ${adicionados} itens recuperados para o carrinho!`);
+               scrollToResumo();
+            } else {
+               toast.warn('Não conseguimos localizar os itens originais no cardápio atual.');
+            }
+            
+            // Remover depois de processar (seguro contra strict mode)
+            localStorage.removeItem('ideafood_repetir_pedido');
+        } catch (e) { 
+            console.warn(e); 
+            localStorage.removeItem('ideafood_repetir_pedido');
+        }
+    }, [loading, allProdutos, adicionarItem, scrollToResumo]);
 
     useEffect(() => {
         if (triggerCheckout && carrinho.length > 0) { setTriggerCheckout(false); setTimeout(() => { scrollToResumo(); toast.info('👇 Confira seu pedido e finalize aqui!'); }, 200); }
@@ -157,6 +199,28 @@ export default function Menu() {
 
     const menuAgrupado = useMemo(() => produtosFiltrados.reduce((acc, p) => { const cat = p.categoria || 'Outros'; if (!acc[cat]) acc[cat] = []; acc[cat].push(p); return acc; }, {}), [produtosFiltrados]);
     const categoriasOrdenadas = useMemo(() => Object.keys(menuAgrupado).sort((a, b) => (!ordemCategorias.length ? a.localeCompare(b) : ordemCategorias.indexOf(a) - ordemCategorias.indexOf(b))), [menuAgrupado, ordemCategorias]);
+
+    const upsellItems = useMemo(() => {
+        if (carrinho.length === 0 || allProdutos.length === 0) return [];
+        const categoriasNoCarrinho = new Set(carrinho.map(c => (c.categoria || '').toLowerCase()));
+        const idsNoCarrinho = new Set(carrinho.map(c => c.id));
+        const sugestaoMap = {
+            'lanches': ['bebidas', 'refrigerante', 'sucos', 'sobremesas', 'porcoes'],
+            'hamburgueres': ['bebidas', 'refrigerante', 'acompanhamentos', 'porcoes'],
+            'pizzas': ['bebidas', 'refrigerante', 'sobremesas'],
+            'hot dog': ['bebidas', 'refrigerante', 'porcoes'],
+            'esfihas': ['bebidas', 'refrigerante', 'sobremesas'],
+            'acai': ['complementos', 'adicionais'],
+            'bebidas': ['lanches', 'hamburgueres', 'pizzas', 'porcoes'],
+            'porcoes': ['bebidas', 'refrigerante', 'sucos'],
+        };
+        const catsSugeridas = new Set();
+        categoriasNoCarrinho.forEach(cat => {
+            Object.entries(sugestaoMap).forEach(([key, vals]) => { if (cat.includes(key)) vals.forEach(v => catsSugeridas.add(v)); });
+        });
+        if (catsSugeridas.size === 0) { catsSugeridas.add('bebidas'); catsSugeridas.add('sobremesas'); }
+        return allProdutos.filter(p => !idsNoCarrinho.has(p.id) && p.ativo !== false && [...catsSugeridas].some(s => (p.categoria || '').toLowerCase().includes(s))).slice(0, 5);
+    }, [carrinho, allProdutos]);
 
     const enrichWithGlobalAdicionais = useCallback((item) => {
         const termosAdicionais = ['adicionais','adicional','extra','extras','complemento','complementos','acrescimo','acrescimos','molho','molhos','opcoes','opções'];
@@ -196,7 +260,7 @@ export default function Menu() {
                     </div>
                 )}
                 
-                <EstablishmentHeader estabelecimentoInfo={estabelecimentoInfo} coresEstabelecimento={coresEstabelecimento} isLojaAberta={isLojaAberta} currentTime={currentTime} currentUser={currentUser} onLogout={authActions.handleLogout} />
+                <EstablishmentHeader estabelecimentoInfo={estabelecimentoInfo} coresEstabelecimento={coresEstabelecimento} isLojaAberta={isLojaAberta} currentTime={currentTime} currentUser={currentUser} onLogout={authActions.handleLogout} saldoCarteira={checkoutActions.saldoCarteira} onViewHistory={() => navigate('/historico-pedidos')} />
                 <CategoryFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} categorias={categoriasOrdenadas} selectedCategory={selectedCategory} onCategoryClick={handleCategoryClick} coresEstabelecimento={coresEstabelecimento} />
 
                 {carrinho.length > 0 && <SugestoesCardapio carrinho={carrinho} allProdutos={allProdutos} handleAbrirModalProduto={(it) => handleClickItemModal(it, false)} />}
@@ -221,7 +285,8 @@ export default function Menu() {
 
                 <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
                     <CustomerForm nomeCliente={nomeCliente} setNomeCliente={setNomeCliente} telefoneCliente={telefoneCliente} setTelefoneCliente={setTelefoneCliente} rua={rua} setRua={setRua} numero={numero} setNumero={setNumero} bairro={bairro} setBairro={setBairro} pontoReferencia={pontoReferencia} setPontoReferencia={setPontoReferencia} isRetirada={isRetirada} setIsRetirada={setIsRetirada} bairrosDisponiveis={bairrosDisponiveis} />
-                    <CartSection carrinho={carrinho} subtotalCalculado={subtotalCalculado} taxaAplicada={checkoutActions.taxaAplicada} discountAmount={checkoutActions.discountAmount} finalOrderTotal={checkoutActions.finalOrderTotal} isRetirada={isRetirada} bairro={bairro} bairrosDisponiveis={bairrosDisponiveis} isLojaAberta={isLojaAberta} couponCodeInput={checkoutActions.couponCodeInput} setCouponCodeInput={checkoutActions.setCouponCodeInput} appliedCoupon={checkoutActions.appliedCoupon} couponLoading={checkoutActions.couponLoading} onApplyCoupon={checkoutActions.handleApplyCoupon} onRemoveCoupon={checkoutActions.handleRemoveCoupon} alterarQuantidade={alterarQuantidade} removerItem={removerItem} onCheckout={() => checkoutActions.prepararParaPagamento(isLojaAberta)} />
+                    <CartSection carrinho={carrinho} subtotalCalculado={subtotalCalculado} taxaAplicada={checkoutActions.taxaAplicada} discountAmount={checkoutActions.discountAmount} finalOrderTotal={checkoutActions.finalOrderTotal} isRetirada={isRetirada} bairro={bairro} bairrosDisponiveis={bairrosDisponiveis} isLojaAberta={isLojaAberta} couponCodeInput={checkoutActions.couponCodeInput} setCouponCodeInput={checkoutActions.setCouponCodeInput} appliedCoupon={checkoutActions.appliedCoupon} couponLoading={checkoutActions.couponLoading} onApplyCoupon={checkoutActions.handleApplyCoupon} onRemoveCoupon={checkoutActions.handleRemoveCoupon} alterarQuantidade={alterarQuantidade} removerItem={removerItem} onCheckout={() => checkoutActions.prepararParaPagamento(isLojaAberta)} saldoCarteira={checkoutActions.saldoCarteira} usarCashback={checkoutActions.usarCashback} setUsarCashback={checkoutActions.setUsarCashback} cashbackAplicado={checkoutActions.cashbackAplicado} upsellItems={upsellItems} onAddUpsell={(item) => handleClickItemModal(item, false)} />
+
                 </div>
             </div>
 

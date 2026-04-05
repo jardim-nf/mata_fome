@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../context/AuthContext'; 
 import { formatarMoeda } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
-
+import { db } from '../firebase';
 const PedidoCard = ({ 
     item, 
     onUpdateStatus, 
@@ -226,7 +226,25 @@ const PedidoCard = ({
     }, [item, estabelecimentoInfo, estabelecimentoIdPrincipal]);
 
     // --- AÇÕES DE STATUS ---
-// --- AÇÕES DE STATUS ---
+    const handleCancelarRadar = useCallback(async () => {
+        setIsUpdating(true);
+        try {
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const estabId = estabelecimentoInfo?.id || item.estabelecimentoId || estabelecimentoIdPrincipal;
+            const pedidoRef = doc(db, `estabelecimentos/${estabId}/pedidos`, item.id);
+            await updateDoc(pedidoRef, {
+                statusLogistica: null,
+                entregadorId: null,
+                motoboyNome: null
+            });
+            toast.success("Busca no radar cancelada!");
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao cancelar radar!");
+        } finally {
+            setIsUpdating(false);
+        }
+    }, [item, estabelecimentoInfo, estabelecimentoIdPrincipal]);
     const handleAction = useCallback(async () => {
         if (isUpdating) return;
         
@@ -241,9 +259,36 @@ const PedidoCard = ({
         if (nextStatus === 'em_entrega') {
             if (motoboysDisponiveis.length > 0) {
                 if (!selectedMotoboyId) {
-                    alert("⚠️ Selecione um MOTOBOY!");
+                    alert("⚠️ Selecione um MOTOBOY ou jogue no Radar!");
                     return;
                 }
+                
+                // Opção 1: Jogar no Radar Aberto para qualquer motoboy pegar
+                if (selectedMotoboyId === 'RADAR_MOTOBOYS') {
+                    setIsUpdating(true);
+                    try {
+                        import('firebase/firestore').then(({ doc, updateDoc }) => {
+                           const estabId = estabelecimentoInfo?.id || item.estabelecimentoId || estabelecimentoIdPrincipal;
+                           // Importante: A coleção correta é dentro do estabelecimento
+                           const pedidoRef = doc(db, `estabelecimentos/${estabId}/pedidos`, item.id);
+                           updateDoc(pedidoRef, {
+                               statusLogistica: 'buscando_entregador',
+                               // status: 'em_entrega', <-- REMOVIDO para não disparar webhook prematuramente
+                               entregadorId: 'radar',
+                               motoboyNome: 'Buscando Motoboy...',
+                               taxaEntrega: Number(item.taxaEntrega) || 0,
+                               restauranteLat: estabelecimentoInfo?.latitude || null, // Necessário no cadastro do estabelecimento
+                               restauranteLng: estabelecimentoInfo?.longitude || null,
+                               restauranteNome: estabelecimentoInfo?.nome || estabelecimentoInfo?.razaoSocial || 'Mata Fome Parceiro'
+                           });
+                        });
+                        toast.success("🚀 Pedido jogado no Radar de Motoboys!");
+                    } catch (error) { console.error(error); alert("Erro ao jogar no radar!"); } 
+                    finally { setIsUpdating(false); }
+                    return;
+                }
+
+                // Opção 2: Motoboy Fixo do Cardápio
                 const motoboy = motoboysDisponiveis.find(m => m.id === selectedMotoboyId);
                 if (motoboy && onAtribuirMotoboy) {
                     setIsUpdating(true);
@@ -275,6 +320,7 @@ const PedidoCard = ({
         finally { setIsUpdating(false); }
     }, [item, selectedMotoboyId, motoboysDisponiveis, onAtribuirMotoboy, onUpdateStatus, isUpdating, estabelecimentoInfo]);
     const getBtnText = () => {
+        if (item.statusLogistica === 'buscando_entregador') return 'Radar Buscando...';
         if (item.status === 'aguardando_pagamento') return 'Aprovar Pagamento';
         if (item.status === 'recebido') return 'Mandar p/ Cozinha';
         if (item.status === 'preparo') {
@@ -299,30 +345,32 @@ const PedidoCard = ({
             )}
             {/* HEADER */}
             <div className={`px-4 py-3 ${showMesaInfo && !isAgrupado ? 'bg-gray-50' : 'bg-white'} border-b border-gray-100 rounded-t-xl`}>
-                <div className="flex justify-between items-start">
-                    <div className="flex flex-col">
-                        <span className="font-black text-gray-800 text-lg flex items-center gap-2">
-                            {isSalaoOuMesa ? `Mesa ${item.mesaNumero}` : isRetirada ? '📦 Retirada' : '🛵 Delivery'}
-                            <span className="text-xs font-normal text-gray-400">#{item.id?.slice(0,4).toUpperCase()}</span>
+                <div className="flex flex-wrap justify-between items-start gap-2">
+                    <div className="flex flex-col min-w-[100px] flex-1">
+                        <span className="font-black text-gray-800 text-base sm:text-lg flex flex-wrap items-center gap-1">
+                            <span>{isSalaoOuMesa ? `Mesa ${item.mesaNumero}` : isRetirada ? '📦 Retirada' : '🛵 Delivery'}</span>
+                            {item.source === 'instagram' && <span className="text-sm flex items-center gap-1 bg-pink-50 text-pink-600 px-1.5 py-0.5 rounded-md border border-pink-200 ml-1" title="Instagram">📸 Insta</span>}
+                            {item.source === 'messenger' && <span className="text-sm flex items-center gap-1 bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-200 ml-1" title="Messenger">🔵 Msg</span>}
+                            <span className="text-[10px] sm:text-xs font-normal text-gray-400 ml-1">#{item.id?.slice(0,4).toUpperCase()}</span>
                         </span>
                         
                         {item.motoboyNome && (
-                            <span className="text-xs font-bold text-blue-600 flex items-center gap-1 mt-1 bg-blue-50 w-fit px-2 py-0.5 rounded-full border border-blue-100">
-                                <IoBicycle /> {item.motoboyNome}
+                            <span className="text-xs font-bold text-blue-600 flex items-center gap-1 mt-1 bg-blue-50 w-fit px-2 py-0.5 rounded-full border border-blue-100 break-words whitespace-normal leading-tight">
+                                <IoBicycle className="shrink-0" /> {item.motoboyNome}
                             </span>
                         )}
                         
                         {!isSalaoOuMesa && (
-                            <span className="text-xs text-gray-600 flex items-center gap-1 mt-1">
-                                <IoPerson className="w-3 h-3" /> {item.cliente?.nome || 'Cliente'}
+                            <span className="text-[11px] sm:text-xs text-gray-600 flex flex-wrap items-center gap-1 mt-1 break-words">
+                                <IoPerson className="w-3 h-3 shrink-0" /> <span className="break-words line-clamp-1">{item.cliente?.nome || 'Cliente'}</span>
                             </span>
                         )}
                         
                         {(item.createdAt || item.dataPedido) && (
-                            <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                                <IoTime className="w-3 h-3" /> {formatarDataHora(item.createdAt || item.dataPedido)}
+                            <span className="text-[10px] sm:text-xs text-gray-500 flex flex-wrap items-center gap-1 mt-1">
+                                <IoTime className="w-3 h-3 shrink-0" /> {formatarDataHora(item.createdAt || item.dataPedido)}
                                 {tempoDecorrido && item.status !== 'finalizado' && (
-                                    <span className={`ml-1 text-[10px] font-black px-1.5 py-0.5 rounded-full border ${corTempo}`}>
+                                    <span className={`ml-1 text-[10px] font-black px-1.5 py-0.5 rounded-full border shrink-0 ${corTempo}`}>
                                         ⏱ {tempoDecorrido}
                                     </span>
                                 )}
@@ -331,17 +379,17 @@ const PedidoCard = ({
 
                         {/* Endereço resumido (só delivery real, não retirada) */}
                         {!isSalaoOuMesa && !isRetirada && item.endereco && (
-                            <span className="text-[10px] text-gray-400 mt-1 truncate max-w-[200px] block" title={`${item.endereco.rua || item.endereco.logradouro || ''}, ${item.endereco.numero || ''} - ${item.endereco.bairro || ''}`}>
+                            <span className="text-[10px] text-gray-400 mt-1 line-clamp-2 leading-tight break-words" title={`${item.endereco.rua || item.endereco.logradouro || ''}, ${item.endereco.numero || ''} - ${item.endereco.bairro || ''}`}>
                                 📍 {item.endereco.bairro || item.endereco.rua || item.endereco.logradouro || ''}
                                 {item.endereco.numero ? `, ${item.endereco.numero}` : ''}
                             </span>
                         )}
                     </div>
                     
-                    <div className="text-right">
-                        <span className="font-black text-gray-900 text-base">{formatarMoeda(valorTotalExibicao)}</span>
+                    <div className="text-left sm:text-right shrink-0">
+                        <span className="font-black text-gray-900 text-sm sm:text-base whitespace-nowrap">{formatarMoeda(valorTotalExibicao)}</span>
                         {item.taxaEntrega > 0 && (
-                            <span className="text-xs text-gray-500 block mt-1">
+                            <span className="text-[10px] sm:text-xs text-gray-500 block mt-0.5 sm:mt-1 whitespace-nowrap">
                                 +{formatarMoeda(item.taxaEntrega)} taxa
                             </span>
                         )}
@@ -350,9 +398,9 @@ const PedidoCard = ({
             </div>
 
             {/* CONTEÚDO */}
-            <div className="p-4">
-                <div className="mb-3 flex justify-between items-center">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 w-fit ${statusConfig.color}`}>
+            <div className="p-3 sm:p-4">
+                <div className="mb-3 flex flex-wrap gap-2 justify-between items-center">
+                    <span className={`text-[10px] sm:text-xs font-bold px-2 py-1 rounded-lg border flex items-center gap-1 w-fit shrink-0 ${statusConfig.color}`}>
                         <span>{statusConfig.icon}</span> {statusConfig.label}
                     </span>
                     {/* 🔥 FORMA DE PAGAMENTO EDITÁVEL */}
@@ -360,7 +408,7 @@ const PedidoCard = ({
                         <select
                             value={item.formaPagamento || 'outros'}
                             onChange={(e) => onUpdateFormaPagamento(item.id, e.target.value)}
-                            className="text-xs font-semibold border border-gray-200 px-2 py-1 rounded bg-gray-50 text-gray-500 cursor-pointer hover:border-blue-300 focus:ring-1 focus:ring-blue-400 focus:outline-none"
+                            className="text-[10px] sm:text-xs max-w-[100px] sm:max-w-none font-semibold border border-gray-200 px-1 py-1 sm:px-2 rounded bg-gray-50 text-gray-500 cursor-pointer hover:border-blue-300 focus:ring-1 focus:ring-blue-400 focus:outline-none shrink-0"
                         >
                             <option value="pix">PIX</option>
                             <option value="credit_card">CRÉDITO</option>
@@ -371,12 +419,12 @@ const PedidoCard = ({
                             <option value="outros">OUTROS</option>
                         </select>
                     ) : (
-                        <span className="text-xs text-gray-500 font-semibold border border-gray-200 px-2 py-1 rounded bg-gray-50">
+                        <span className="text-[10px] sm:text-xs text-gray-500 font-semibold border border-gray-200 px-2 py-1 rounded bg-gray-50 shrink-0">
                            {traduzirFormaPagamento(item.formaPagamento)}
                         </span>
                     )}
                     {item.itens?.length > 0 && (
-                        <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                        <span className="hidden sm:inline-block text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-1 rounded border border-gray-200 shrink-0">
                             {item.itens.reduce((a, it) => a + (it.quantidade || 1), 0)} itens
                         </span>
                     )}
@@ -384,9 +432,9 @@ const PedidoCard = ({
 
                 {/* 🔥 EXIBIÇÃO DE TEMPOS DE ETAPA (só mostra > 0) */}
                 {temposEtapa.filter(t => t.val > 0).length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                    <div className="flex flex-wrap gap-1.5 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
                         {temposEtapa.filter(t => t.val > 0).map((tempo, i) => (
-                            <div key={i} className={`flex items-center gap-1 text-[10px] font-medium ${tempo.color} bg-white px-2 py-1 rounded border border-gray-200 shadow-sm`}>
+                            <div key={i} className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-medium ${tempo.color} bg-white px-1.5 py-0.5 rounded border border-gray-200 shadow-sm shrink-0`}>
                                 {tempo.icon}
                                 <span>{tempo.label}: {tempo.val}min</span>
                             </div>
@@ -405,20 +453,20 @@ const PedidoCard = ({
                             : (item.itens || []);
                             
                         return listaReal.slice(0, isExpanded ? undefined : 3).map((it, idx) => (
-                            <div key={idx} className="flex gap-2 text-sm border-b border-dashed border-gray-100 pb-2 last:border-0 last:pb-0">
-                                <span className="font-bold text-gray-900 min-w-[20px]">{it.quantidade}x</span>
-                                <div className="flex-1">
-                                    <p className="text-gray-700 font-medium leading-tight">{it.nome}</p>
+                            <div key={idx} className="flex gap-1 sm:gap-2 text-xs sm:text-sm border-b border-dashed border-gray-100 pb-2 last:border-0 last:pb-0 overflow-hidden">
+                                <span className="font-bold text-gray-900 shrink-0">{it.quantidade}x</span>
+                                <div className="flex-1 min-w-0 pr-1 sm:pr-2">
+                                    <p className="text-gray-700 font-medium leading-tight break-words">{it.nome}</p>
                                     {it.adicionais?.length > 0 && (
-                                        <p className="text-xs text-gray-400 mt-1">
+                                        <p className="text-[10px] sm:text-xs text-gray-400 mt-1 break-words leading-tight">
                                             + {it.adicionais.map(a => a.nome).join(', ')}
                                         </p>
                                     )}
                                     {it.observacoes && (
-                                        <p className="text-xs text-amber-600 italic mt-1">Obs: {it.observacoes}</p>
+                                        <p className="text-[10px] sm:text-xs text-amber-600 italic mt-1 break-words leading-tight">Obs: {it.observacoes}</p>
                                     )}
                                 </div>
-                                <span className="text-xs text-gray-500 font-semibold min-w-[60px] text-right">
+                                <span className="text-[11px] sm:text-xs text-gray-500 font-semibold shrink-0 text-right whitespace-nowrap">
                                     {formatarMoeda((Number(it.preco) || 0) * (it.quantidade || 1))}
                                 </span>
                             </div>
@@ -427,7 +475,7 @@ const PedidoCard = ({
                 </div>
                 
                 {item.itens?.length > 3 && (
-                    <button onClick={() => setIsExpanded(!isExpanded)} className="w-full text-center text-xs font-semibold text-gray-400 py-1 mb-2 hover:text-gray-600 transition-colors">
+                    <button onClick={() => setIsExpanded(!isExpanded)} className="w-full text-center text-[10px] sm:text-xs font-semibold text-gray-400 py-1 mb-2 hover:text-gray-600 transition-colors">
                         {isExpanded ? '▲ Ver menos' : `▼ Ver mais ${item.itens.length - 3} itens`}
                     </button>
                 )}
@@ -447,6 +495,9 @@ const PedidoCard = ({
                                     className={`w-full text-sm rounded-md shadow-sm py-2 px-3 mb-2 ${!selectedMotoboyId ? 'border-red-300 bg-red-50 text-red-800 focus:ring-red-500' : 'border-gray-300 bg-white text-gray-700 focus:ring-blue-500'}`}
                                 >
                                     <option value="">-- Selecione o Motoboy --</option>
+                                    <option value="RADAR_MOTOBOYS" className="font-black text-blue-700 bg-blue-100">
+                                        🚀 JOGAR NO RADAR AUTOMÁTICO (IDEA ENTREGAS)
+                                    </option>
                                     {motoboysDisponiveis.map(moto => (
                                         <option key={moto.id} value={moto.id}>
                                             {moto.nome} {moto.taxaEntrega ? `(${formatarMoeda(moto.taxaEntrega)})` : ''}
@@ -476,8 +527,9 @@ const PedidoCard = ({
                 )}
 
                 {/* BOTÕES DE AÇÃO */}
-                <div className="flex gap-2 mt-4 min-h-[40px] items-start">
-                    <button 
+                <div className="flex flex-wrap gap-2 mt-4 min-h-[40px] items-stretch">
+                    <div className="flex gap-2">
+                        <button 
                         onClick={handlePrint} 
                         disabled={isPrinting} 
                         className="w-10 h-10 shrink-0 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-blue-100 hover:text-blue-600 border border-gray-200 transition-colors" 
@@ -509,22 +561,42 @@ const PedidoCard = ({
                             <IoTrash className="text-lg" />
                         </button>
                     )}
+                    </div>
                     
                     {item.status !== 'finalizado' ? (
-                        <button 
-                            onClick={handleAction} 
-                            disabled={isUpdating} 
-                            className={`flex-1 min-h-[40px] h-auto py-2 rounded-lg font-bold text-white text-xs flex items-center justify-center gap-2 transition-all shadow-sm leading-tight break-words ${statusConfig.btn} ${isUpdating ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-md'}`}
-                        >
-                            {isUpdating ? (
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                        <>
+                            {item.statusLogistica === 'buscando_entregador' ? (
+                                <button 
+                                    onClick={handleCancelarRadar} 
+                                    disabled={isUpdating} 
+                                    className="flex-1 min-h-[40px] h-auto py-2 rounded-lg font-bold text-white text-xs flex items-center justify-center gap-2 transition-all shadow-sm leading-tight break-words bg-red-500 hover:bg-red-600 hover:shadow-md"
+                                >
+                                    {isUpdating ? (
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                                    ) : (
+                                        <>
+                                            <span className="text-center">Cancelar Radar</span>
+                                            <IoTrash className="text-lg shrink-0" />
+                                        </>
+                                    )}
+                                </button>
                             ) : (
-                                <>
-                                    <span className="text-center">{getBtnText()}</span>
-                                    <IoArrowForward className="text-lg shrink-0" />
-                                </>
+                                <button 
+                                    onClick={handleAction} 
+                                    disabled={isUpdating} 
+                                    className={`flex-1 min-h-[40px] h-auto py-2 rounded-lg font-bold text-white text-xs flex items-center justify-center gap-2 transition-all shadow-sm leading-tight break-words ${statusConfig.btn} ${isUpdating ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-md'}`}
+                                >
+                                    {isUpdating ? (
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                                    ) : (
+                                        <>
+                                            <span className="text-center">{getBtnText()}</span>
+                                            <IoArrowForward className="text-lg shrink-0" />
+                                        </>
+                                    )}
+                                </button>
                             )}
-                        </button>
+                        </>
                     ) : (
                         <>
                             <div className="flex-1 min-h-[40px] flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-bold text-sm rounded-lg border">
@@ -543,6 +615,39 @@ const PedidoCard = ({
                         </>
                     )}
                 </div>
+
+                {/* 🛵 MOTOBOY PAGAMENTO (Opcão 2) */}
+                {item.status === 'finalizado' && item.motoboyNome && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                         <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between">
+                              <div className="flex-1 min-w-0 pr-2">
+                                  <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Pagamento do Entregador</p>
+                                  <p className="text-sm text-gray-800 font-black truncate">{item.motoboyNome}</p>
+                                  {item.motoboyChavePix ? (
+                                    <p className="text-xs text-gray-500 font-medium truncate mt-0.5" title={item.motoboyChavePix}>
+                                        PIX: {item.motoboyChavePix}
+                                    </p>
+                                  ) : (
+                                    <p className="text-[10px] text-red-500 font-bold mt-0.5">Sem PIX cadastrado</p>
+                                  )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                  <p className="text-sm sm:text-base font-black text-emerald-600 mb-1 leading-none">{formatarMoeda(item.taxaEntrega || 0)}</p>
+                                  {item.motoboyChavePix && (
+                                     <button 
+                                         onClick={() => {
+                                             navigator.clipboard.writeText(item.motoboyChavePix);
+                                             toast.success('Chave PIX copiada para área de transferência!');
+                                         }}
+                                         className="bg-emerald-500 text-white px-2 py-1 rounded text-[10px] sm:text-xs font-black shadow-sm transition-all hover:bg-emerald-600 active:scale-95"
+                                     >
+                                         COPIAR PIX
+                                     </button>
+                                  )}
+                              </div>
+                         </div>
+                    </div>
+                )}
                 
                 {item.observacoes && (
                     <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">

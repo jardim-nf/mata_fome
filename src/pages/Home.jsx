@@ -168,6 +168,27 @@ function Home() {
         <EstabelecimentosGrid estabelecimentos={estabelecimentos} />
       )}
 
+      {/* CALL TO ACTION MOTOBOY */}
+      <section className="bg-slate-900 py-16 px-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <div className="w-20 h-20 bg-emerald-500/20 rounded-full mx-auto flex items-center justify-center mb-6">
+             <span className="text-4xl">🛵</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">Você é motoboy? Quer fazer um extra?</h2>
+          <p className="text-lg text-slate-400 mb-8 max-w-2xl mx-auto font-medium">
+            Cadastre-se no <span className="text-emerald-400 font-bold">IdeaEntregas</span>, faça seu próprio horário e ganhe por cada entrega realizada no seu raio de atuação. Seja parceiro da nossa rede!
+          </p>
+          <button 
+            onClick={() => navigate('/login-motoboy')}
+            className="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 px-10 rounded-full text-lg uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/25 active:scale-95"
+          >
+            Quero ser Entregador
+          </button>
+        </div>
+      </section>
+
       {/* Footer */}
       <Footer />
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { collection, query, onSnapshot, getDocs, collectionGroup, where, Timestamp } from 'firebase/firestore'; 
+import { collection, query, onSnapshot, getDocs, collectionGroup, where, Timestamp, getCountFromServer } from 'firebase/firestore'; 
 import { db } from '../firebase'; 
 import { startOfDay, subDays } from 'date-fns';
 import { toast } from 'react-toastify';
@@ -11,7 +11,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
 
   const [financeiro, setFinanceiro] = useState({
     totalHistorico: 0, qtdPedidosTotal: 0, faturamentoHoje: 0, qtdHoje: 0, topLojas: [], topLojasOntem: [],
-    faturamentoOntem: 0, qtdOntem: 0
+    faturamentoOntem: 0, qtdOntem: 0, qtdNfceTotal: 0, qtdCampanhasTotal: 0, qtdCuponsTotal: 0
   });
 
   const [stats, setStats] = useState({ totalEstabelecimentos: 0, estabelecimentosAtivos: 0, totalUsuarios: 0 });
@@ -218,7 +218,22 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
         const allDocs = [...pedidosDelivery, ...vendasFinais];
         const totalHist = allDocs.reduce((acc, item) => acc + getTotal(item), 0);
         const qtdTotal = allDocs.length;
-        setFinanceiro(prev => ({ ...prev, totalHistorico: totalHist, qtdPedidosTotal: qtdTotal }));
+        
+        // Contar NFCes emitidas em memória (fiscal status autorizado ou que possua URL da nota)
+        const qtdNfce = allDocs.filter(d => d.fiscal?.status === 'autorizado' || !!d.url_danfe).length;
+
+        // Contar campanhas e cupons no Firestore de forma performática
+        const campanhasCount = await getCountFromServer(query(collectionGroup(db, 'campanhas'))).catch(() => ({ data: () => ({ count: 0 }) }));
+        const cuponsCount = await getCountFromServer(query(collectionGroup(db, 'cupons'))).catch(() => ({ data: () => ({ count: 0 }) }));
+
+        setFinanceiro(prev => ({ 
+          ...prev, 
+          totalHistorico: totalHist, 
+          qtdPedidosTotal: qtdTotal, 
+          qtdNfceTotal: qtdNfce, 
+          qtdCampanhasTotal: campanhasCount.data().count, 
+          qtdCuponsTotal: cuponsCount.data().count 
+        }));
       } catch (err) {
         console.error('[IdeaFood] Erro ao carregar histórico:', err);
       }
@@ -254,7 +269,11 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
       rankingMap[estabId].pedidos += 1;
     });
     const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 5);
-    return { faturamento: totalPeriodo, qtd: qtdPeriodo, topLojas, ticketMedio: qtdPeriodo > 0 ? totalPeriodo / qtdPeriodo : 0 };
+    
+    // Filtro NFC-e no período
+    const qtdNfce = doPeriodo.filter(d => d.fiscal?.status === 'autorizado' || !!d.url_danfe).length;
+
+    return { faturamento: totalPeriodo, qtd: qtdPeriodo, topLojas, ticketMedio: qtdPeriodo > 0 ? totalPeriodo / qtdPeriodo : 0, qtdNfce };
   }, [dadosBrutos, dateRange]);
 
   const crescimento = useMemo(() => {

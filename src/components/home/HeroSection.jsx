@@ -133,7 +133,7 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
           {/* Stats */}
           <div className="flex flex-wrap gap-8 mt-10 justify-center lg:justify-start">
             {[
-              { value: '✅', label: 'Sem Comissão' },
+              { value: '0%', label: 'Sem Comissão' },
               { value: '⚡', label: 'Setup Rápido' },
               { value: '24/7', label: 'Disponível' },
             ].map((stat, i) => (

@@ -28,6 +28,8 @@ export default function CartSection({
   onApplyCoupon, onRemoveCoupon,
   alterarQuantidade, removerItem,
   onCheckout,
+  saldoCarteira, usarCashback, setUsarCashback, cashbackAplicado,
+  upsellItems = [], onAddUpsell
 }) {
   return (
     <div id="resumo-carrinho" className="bg-white p-6 rounded-xl border shadow-lg text-left text-gray-900 w-full transition-all duration-300">
@@ -108,11 +110,64 @@ export default function CartSection({
                 <span>- R$ {discountAmount.toFixed(2)}</span>
               </div>
             )}
+            {saldoCarteira > 0 && (
+              <div className="py-2 border-b">
+                <label className="flex items-center space-x-2 cursor-pointer bg-[#00E6A4]/10 p-3 rounded-lg border border-[#00E6A4]/30">
+                  <input 
+                    type="checkbox" 
+                    checked={usarCashback}
+                    onChange={(e) => setUsarCashback(e.target.checked)}
+                    className="w-5 h-5 text-[#00E6A4] rounded border-gray-300 focus:ring-[#00E6A4]"
+                  />
+                  <div className="flex flex-col">
+                    <span className="font-bold text-gray-800">Usar Saldo da Carteira</span>
+                    <span className="text-xs text-gray-600">Ter de volta: R$ {saldoCarteira.toFixed(2)}</span>
+                  </div>
+                </label>
+              </div>
+            )}
+            {cashbackAplicado > 0 && (
+              <div className="flex justify-between text-[#00E6A4] font-bold pb-2 border-b">
+                <span>Cashback Aplicado:</span>
+                <span>- R$ {cashbackAplicado.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-black text-base pt-1 border-t">
               <span>Total:</span>
               <span>{formatarMoeda(finalOrderTotal)}</span>
             </div>
           </div>
+
+          {/* Upsell / Compre Junto */}
+          {upsellItems.length > 0 && (
+            <div className="mt-6 mb-2">
+              <h4 className="text-xs font-black uppercase text-gray-500 mb-3 tracking-wider">Aproveite também</h4>
+              <div className="flex gap-3 overflow-x-auto pb-4 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none' }}>
+                {upsellItems.map(item => (
+                  <div key={item.id} className="min-w-[140px] max-w-[140px] bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col justify-between shrink-0 snap-center relative shadow-sm">
+                    {item.imageUrl && (
+                      <div className="w-full h-20 rounded-lg overflow-hidden mb-2 shadow-sm border border-gray-100">
+                        <img src={item.imageUrl} alt={item.nome} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-bold text-gray-800 line-clamp-2 leading-tight">{item.nome}</p>
+                      <p className="text-green-600 font-bold text-sm mt-1">{formatarMoeda(item.preco)}</p>
+                    </div>
+                    <button
+                      onClick={() => onAddUpsell(item)}
+                      className="mt-3 w-full bg-orange-100 hover:bg-orange-200 text-orange-600 border border-orange-200 font-bold text-xs py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 active:scale-95"
+                    >
+                      <IoAdd size={14} /> Juntar
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <style dangerouslySetInnerHTML={{__html: `
+                .hide-scrollbar::-webkit-scrollbar { display: none; }
+              `}} />
+            </div>
+          )}
 
           {/* Dividir conta */}
           <SplitPayment total={finalOrderTotal} />

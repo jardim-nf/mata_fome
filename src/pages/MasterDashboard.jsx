@@ -9,7 +9,7 @@ import { useMasterDashboardData } from '../hooks/useMasterDashboardData';
 import {
   FaStore, FaUsers, FaClipboardList, FaFileUpload, FaTags, FaShieldAlt, FaImages,
   FaDollarSign, FaSignOutAlt, FaShoppingCart, FaMoneyBillWave, FaSync, FaChevronRight,
-  FaBox, FaChartLine, FaTrophy, FaRocket, FaBolt, FaCrown
+  FaBox, FaChartLine, FaTrophy, FaRocket, FaBolt, FaCrown, FaRegCalendarAlt, FaReact
 } from 'react-icons/fa';
 import {
   IoNotificationsOutline, IoSearchOutline, IoSparklesOutline,
@@ -18,7 +18,7 @@ import {
 } from 'react-icons/io5';
 
 // ═══════════════════════════════════════════
-// IdeaFood Master Dashboard — Premium Light
+// IdeaEntregas Master Dashboard — Premium Light
 // ═══════════════════════════════════════════
 
 function MasterDashboard() {
@@ -167,9 +167,12 @@ function MasterDashboard() {
                 <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-1">
                   {saudacao}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 to-amber-600">{userName}</span> 🔥
                 </h1>
-                <p className="text-slate-500 text-sm font-medium">
-                  {financeiroFiltrado ? 'Dados filtrados por período personalizado' : 'Visão executiva da rede IdeaFood — dados em tempo real'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <FaRegCalendarAlt className="text-yellow-500" />
+                  <span className="text-slate-600 font-medium text-sm">
+                    {financeiroFiltrado ? 'Dados filtrados por período personalizado' : 'Visão executiva da rede IdeaFood — dados em tempo real'}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <DateRangeFilter
@@ -260,6 +263,91 @@ function MasterDashboard() {
               <p className="text-2xl sm:text-3xl font-black text-slate-900">{stats.estabelecimentosAtivos}<span className="text-base text-slate-400 font-medium">/{stats.totalEstabelecimentos}</span></p>
               <p className="text-[10px] text-slate-400 mt-1">{stats.totalUsuarios} usuários cadastrados</p>
             </div>
+          </div>
+        </div>
+
+        {/* ─── CONTROLE TOTAL & INTELIGÊNCIA ─── */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-100 border border-indigo-200 flex items-center justify-center">
+              <FaChartLine className="text-indigo-600" size={16} />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 text-base">Inteligência & Controle Total</h3>
+              <p className="text-[10px] text-slate-400 font-medium">Controle de automação, fiscalização e campanhas da rede</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Mensagens do Bot / Campanhas */}
+            <div className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md">
+                  <FaRocket className="text-white text-sm" />
+                </div>
+                <Link to="/master/mensagens" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded-lg">Gerenciar</Link>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">MENSAGENS DO BOT</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-black text-slate-900">{financeiro.qtdCampanhasTotal?.toLocaleString() || 0}</p>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase bg-slate-100 px-1.5 py-0.5 rounded">GLOBAL</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">Alertas de rede totais</p>
+              </div>
+            </div>
+
+            {/* Cupons de Desconto */}
+            <div className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-lg hover:border-amber-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
+                  <FaTags className="text-white text-sm" />
+                </div>
+                <Link to="/master/cupons-rede" className="text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 px-2 py-1 rounded-lg">Gerenciar</Link>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">CUPONS GERADOS</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-black text-slate-900">{financeiro.qtdCuponsTotal?.toLocaleString() || 0}</p>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase bg-slate-100 px-1.5 py-0.5 rounded">GLOBAL</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">Promoções ativas totais</p>
+              </div>
+            </div>
+
+            {/* Emissões NFC-e */}
+            <div className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md">
+                  <FaClipboardList className="text-white text-sm" />
+                </div>
+                <Link to="/master/nfce" className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg">Gerenciar</Link>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">NFC-E EMITIDAS</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-black text-slate-900">{financeiroFiltrado ? financeiroFiltrado.qtdNfce?.toLocaleString() : financeiro.qtdNfceTotal?.toLocaleString() || 0}</p>
+                  {financeiroFiltrado && <span className="text-[9px] text-amber-600 font-bold uppercase bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">FILTRADO</span>}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">{financeiroFiltrado ? 'No período selecionado' : 'Volumetria de notas fiscais'}</p>
+              </div>
+            </div>
+
+            {/* Controle de Clientes */}
+            <div className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-lg hover:border-rose-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-md">
+                  <FaUsers className="text-white text-sm" />
+                </div>
+                <Link to="/master/clientes" className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-2 py-1 rounded-lg">Gerenciar</Link>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">RELATÓRIO DE CLIENTES</p>
+                <p className="text-2xl font-black text-slate-900">Total</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Base globalizada de clientes</p>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -484,12 +572,14 @@ function MasterDashboard() {
         </div>
 
         {/* ─── FOOTER ─── */}
-        <div className="flex flex-col items-center justify-center pt-8 border-t border-slate-100">
-          <div className="flex items-center gap-2 mb-1">
-            <FaBolt className="text-yellow-400 text-xs" />
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 pt-8 border-t border-slate-100">
+          <div className="flex items-center gap-3">
+            <FaReact className="text-amber-500 animate-spin-slow text-lg" />
             <span className="text-slate-400 text-xs font-bold tracking-wide">IdeaFood Master • Edição Premium</span>
           </div>
-          <p className="text-slate-300 text-[10px]">© {new Date().getFullYear()} Todos os direitos reservados</p>
+          <div className="text-slate-400 text-xs">
+            © {new Date().getFullYear()} IdeaFood Inc. Todos os direitos reservados.
+          </div>
         </div>
       </main>
 
@@ -498,6 +588,8 @@ function MasterDashboard() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
         .tabular-nums { font-variant-numeric: tabular-nums; }
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin-slow 8s linear infinite; }
       `}</style>
     </div>
   );

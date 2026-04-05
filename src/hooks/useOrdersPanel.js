@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import { isItemCozinha } from '../utils/painelUtils';
 import { rotearEImprimir } from '../services/printService';
-import { tocarCampainha } from '../utils/audioUtils';
+import { tocarCampainha, falarNovaComanda } from '../utils/audioUtils';
 
 export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
     const [dataSelecionada, setDataSelecionada] = useState(() => {
@@ -103,7 +103,8 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         const checkAutoPrint = (change) => {
             if (!visualizandoHoje) return;
             const data = change.doc.data();
-            const status = data.status || 'recebido';
+            let status = data.status || 'recebido';
+            if (['pendente', 'aguardando_pagamento', 'pago', 'paid', 'approved', 'success'].includes(status)) status = 'recebido';
             const pedidoId = change.doc.id;
 
             const timestamp = data.createdAt || data.dataPedido || data.criadoEm || data.updatedAt;
@@ -153,8 +154,12 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             dadosSubcollection.forEach(d => mergedMap.set(d.id, d));
             dadosVendasRaiz.forEach(d => { if (!mergedMap.has(d.id)) mergedMap.set(d.id, d); });
 
-            const listaTodos = Array.from(mergedMap.values()).map(d => processarDadosPedido(d)).filter(p => p !== null && isSelectedDate(p.dataPedido || p.createdAt || p.criadoEm || p.updatedAt));
-            listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento'].includes(p.status)) p.status = 'recebido'; });
+            const listaTodos = Array.from(mergedMap.values()).map(d => processarDadosPedido(d)).filter(p => {
+                if (p === null) return false;
+                const dateOk = isSelectedDate(p.dataPedido || p.createdAt || p.criadoEm || p.updatedAt);
+                return visualizandoHoje && !(p.dataPedido || p.createdAt || p.criadoEm || p.updatedAt) ? true : dateOk;
+            });
+            listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento', 'pago', 'paid', 'approved', 'success'].includes(p.status)) p.status = 'recebido'; });
 
             setPedidos(prev => ({
                 ...prev,
@@ -195,14 +200,32 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             if (realmenteNovos.length > 0) {
                 const novosIds = realmenteNovos.map(p => p.id);
                 setNewOrderIds(prev => new Set([...prev, ...novosIds]));
-                
                 if (notificationsEnabled && userInteracted) {
+                    let mensagemParaFalar = '';
+                    
                     const deveTocarCampainha = realmenteNovos.some(p => {
                         const isMesa = p.source === 'salao' || p.tipo === 'mesa';
+                        
+                        // Constrói a mensagem dependendo do tipo do pedido
+                        if (isMesa) {
+                            mensagemParaFalar = `Novo Pedido. Mesa ${p.mesaNumero || 'Indefinida'}.`;
+                        } else {
+                            const nome = p.cliente?.nome?.split(' ')[0] || 'Desconhecido';
+                            mensagemParaFalar = `Novo Delivery de ${nome}.`;
+                        }
+
                         if (isMesa && modoImpressaoRef.current === 'cozinha') return p.itensCozinha && p.itensCozinha.length > 0;
                         return true; 
                     });
-                    if (deveTocarCampainha) tocarCampainha();
+                    
+                    if (deveTocarCampainha) {
+                        tocarCampainha();
+                        if (realmenteNovos.length === 1) {
+                            falarNovaComanda(mensagemParaFalar);
+                        } else {
+                            falarNovaComanda(`${realmenteNovos.length} novos pedidos chegaram.`);
+                        }
+                    }
                 }
                 setTimeout(() => setNewOrderIds(prev => { const next = new Set(prev); novosIds.forEach(id => next.delete(id)); return next; }), 15000);
             }

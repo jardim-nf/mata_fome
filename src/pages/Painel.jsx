@@ -192,7 +192,12 @@ function Painel() {
                             // Objeto `cliente` para compatibilidade com trigger de WhatsApp e PedidoCard
                             cliente: {
                                 nome: pedidoData.nomeCliente || 'Cliente',
-                                telefone: pedidoData.telefoneCliente || ''
+                                telefone: pedidoData.telefoneCliente || '',
+                                endereco: {
+                                    rua: pedidoData.enderecoEntrega || '',
+                                    bairro: pedidoData.bairro || '',
+                                    referencia: pedidoData.pontoReferencia || ''
+                                }
                             },
                             clienteNome: pedidoData.nomeCliente || 'Cliente',
                             clienteTelefone: pedidoData.telefoneCliente || '',

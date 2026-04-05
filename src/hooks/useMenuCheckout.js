@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, updateDoc, arrayUnion, increment, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, updateDoc, arrayUnion, increment, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import { estoqueService } from '../services/estoqueService';
@@ -55,6 +55,51 @@ export function useMenuCheckout({
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [ultimoPedidoId, setUltimoPedidoId] = useState(null);
 
+    // Cashback
+    const [saldoCarteira, setSaldoCarteira] = useState(0);
+    const [usarCashback, setUsarCashback] = useState(false);
+    const [clienteDocRefIdUtilizado, setClienteDocRefIdUtilizado] = useState(null);
+
+    // Buscar Cashback
+    useEffect(() => {
+        const fetchCashback = async () => {
+            if (!actualEstabelecimentoId || !currentUser) return;
+            
+            let saldoEncontrado = 0;
+            let docParaDescontar = null;
+            try {
+                const clienteRefId = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'clientes', currentUser.uid);
+                const clienteDocId = await getDoc(clienteRefId);
+                if (clienteDocId.exists()) {
+                   const sc = Number(clienteDocId.data().saldoCashback) || Number(clienteDocId.data().saldoCarteira) || 0;
+                   if (sc > 0) {
+                     saldoEncontrado += sc;
+                     docParaDescontar = clienteRefId;
+                   }
+                }
+
+                const t = telefoneCliente || currentUser?.phoneNumber || '';
+                const telefoneFormatado = t.replace(/\D/g, '');
+                if (telefoneFormatado && telefoneFormatado !== currentUser.uid) {
+                   const clienteRefTel = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'clientes', telefoneFormatado);
+                   const clienteDocTel = await getDoc(clienteRefTel);
+                   if (clienteDocTel.exists()) {
+                       const st = Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0;
+                       if (st > 0) {
+                         saldoEncontrado += st;
+                         if (!docParaDescontar) docParaDescontar = clienteRefTel;
+                       }
+                   }
+                }
+                setSaldoCarteira(saldoEncontrado);
+                setClienteDocRefIdUtilizado(docParaDescontar);
+            } catch (e) {
+                console.error("Erro ao buscar cashback:", e);
+            }
+        };
+        fetchCashback();
+    }, [actualEstabelecimentoId, currentUser, telefoneCliente]);
+
     useEffect(() => {
         const calcularTaxa = async () => {
             if (!actualEstabelecimentoId || !bairro || isRetirada) { 
@@ -87,9 +132,15 @@ export function useMenuCheckout({
         return taxaEntregaCalculada;
     }, [isRetirada, taxaEntregaCalculada, premioRaspadinha]);
 
+    const cashbackAplicado = useMemo(() => {
+        if (!usarCashback) return 0;
+        const totalSemCashback = Math.max(0, subtotalCalculado + taxaAplicada - discountAmount);
+        return Math.min(saldoCarteira, totalSemCashback);
+    }, [usarCashback, saldoCarteira, subtotalCalculado, taxaAplicada, discountAmount]);
+
     const finalOrderTotal = useMemo(() => {
-        return Math.max(0, subtotalCalculado + taxaAplicada - discountAmount);
-    }, [subtotalCalculado, taxaAplicada, discountAmount]);
+        return Math.max(0, subtotalCalculado + taxaAplicada - discountAmount - cashbackAplicado);
+    }, [subtotalCalculado, taxaAplicada, discountAmount, cashbackAplicado]);
 
     const handleApplyCoupon = async () => {
         if (!couponCodeInput) return;
@@ -179,6 +230,8 @@ export function useMenuCheckout({
             })),
             totalFinal: Number(finalOrderTotal),
             taxaEntrega: Number(taxaAplicada),
+            descontoAplicado: discountAmount,
+            cashbackResgatado: cashbackAplicado, // NOVO
             createdAt: serverTimestamp(),
             status: 'aguardando_pagamento'
         });
@@ -199,16 +252,38 @@ export function useMenuCheckout({
             const pedidoFinal = cleanData({
                 ...pedidoParaPagamento,
                 status: 'recebido',
-                formaPagamento,
-                metodoPagamento: formaPagamento,
-                trocoPara: Number(trocoPara) || 0,
-                desconto: discountAmount,
+                source: 'menu',
+                dataPedido: serverTimestamp(),
+                loteHorario: getLoteHorario(),
+                pagamento: {
+                    formaPagamento,
+                    metodoPagamento: formaPagamento,
+                    trocoPara: Number(trocoPara) || 0,
+                    desconto: discountAmount,
+                },
+                cashbackResgatado: cashbackAplicado,
                 totalFinal: finalOrderTotal,
                 tipoEntrega: isRetirada ? 'retirada' : 'delivery'
             });
 
             const idPedido = result.vendaId || pedidoParaPagamento.vendaId;
             await setDoc(doc(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos', idPedido), pedidoFinal);
+
+            // Subtrai cashback usado
+            if (cashbackAplicado > 0 && clienteDocRefIdUtilizado) {
+                try {
+                   const cDoc = await getDoc(clienteDocRefIdUtilizado);
+                   if (cDoc.exists()) {
+                      const saldoAtual = Number(cDoc.data().saldoCashback) || Number(cDoc.data().saldoCarteira) || 0;
+                      const novoSaldo = Math.max(0, saldoAtual - cashbackAplicado);
+                      await updateDoc(clienteDocRefIdUtilizado, {
+                          saldoCashback: novoSaldo
+                      });
+                   }
+                } catch (errCB) {
+                   console.error("Erro ao abater cashback", errCB);
+                }
+            }
 
             try { await estoqueService.darBaixaEstoque(actualEstabelecimentoId, carrinho); }
             catch (e) { console.warn('Erro estoque:', e); }
@@ -248,6 +323,7 @@ export function useMenuCheckout({
         handleApplyCoupon, handleRemoveCoupon,
         taxaEntregaCalculada, setTaxaEntregaCalculada,
         taxaAplicada, finalOrderTotal,
+        saldoCarteira, usarCashback, setUsarCashback, cashbackAplicado, // EXPORTANDO OS ESTADOS DO CASHBACK
         premioRaspadinha, setPremioRaspadinha,
         jaJogouRaspadinha, setJaJogouRaspadinha,
         showPaymentModal, setShowPaymentModal,

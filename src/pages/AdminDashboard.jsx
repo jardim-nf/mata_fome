@@ -80,8 +80,9 @@ const AdminDashboard = () => {
 
   const menuGroups = [
     {
-      title: "⚡ Operação Diária",
-      description: "Telas de acompanhamento e vendas em tempo real",
+      id: "operacao",
+      title: "⚡ Operação",
+      description: "Telas de acompanhamento e vendas",
       items: [
         { path: '/painel', title: 'Monitor de Pedidos', sub: 'Delivery e Salão em tempo real', icon: <IoStorefront />, cor: 'blue', perm: 'painel' },
         { path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' },
@@ -89,48 +90,90 @@ const AdminDashboard = () => {
       ]
     },
     {
-      title: "🍔 Catálogo & Logística",
-      description: "Gestão do que você vende e como entrega",
+      id: "cardapio",
+      title: "🍔 Cardápio & Estoque",
+      description: "Gestão do que você vende",
       items: [
         { path: '/admin/gerenciar-cardapio', title: 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true },
         { path: '/admin/ordenar-categorias', title: 'Categorias', sub: 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true },
-        { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e XML e atualize o estoque', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e e atualize', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true },
+      ]
+    },
+    {
+      id: "logistica",
+      title: "🛵 Logística",
+      description: "Área de entregas e motoboys",
+      items: [
         { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo', adminOnly: true },
         { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber', adminOnly: true },
+      ]
+    },
+    {
+      id: "financas",
+      title: "📈 Finanças e Análises",
+      description: "Seus lucros e inteligência",
+      items: [
+        { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
+        { path: '/admin/reports', title: 'Relatórios Fiscais', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
+        { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
+        { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
+      ]
+    },
+    {
+      id: "equipe",
+      title: "👤 Equipe e Atendimento",
+      description: "Tudo sobre quem trabalha com você",
+      items: [
+        { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: 'Gerencie garçons e permissões', icon: <FaUsers />, cor: 'indigo', adminOnly: true },
+        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: 'Performance de garçons', icon: <IoStatsChart />, cor: 'amber', perm: 'relatorios' },
+        { path: '/admin/avaliacoes', title: 'Avaliações', sub: 'Responder reviews dos clientes', icon: <IoStatsChart />, cor: 'yellow', adminOnly: true },
+      ]
+    },
+    {
+      id: "marketing",
+      title: "🚀 Marketing e Vendas",
+      description: "Como trazer mais clientes",
+      items: [
+        { path: '/nossos-clientes', title: 'Base de Clientes', sub: 'Disparo manual via Zap', icon: <IoPersonOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/marketing', title: 'Painel de Marketing', sub: 'Avisos Push e Copy com IA', icon: <IoMegaphoneOutline />, cor: 'purple', adminOnly: true },
+        { path: '/admin/cashback', title: 'Cashback e Carteira', sub: 'Devolva saldo nas compras', icon: <IoWalletOutline />, cor: 'emerald', adminOnly: true },
         { path: '/admin/cupons', title: 'Cupons de Desconto', sub: 'Crie códigos promocionais', icon: <IoTicketOutline />, cor: 'yellow', adminOnly: true },
       ]
     },
     {
-      title: "📊 Gestão & Relatórios",
-      description: "Análise financeira e controle da equipe",
+      id: "bots",
+      title: "🤖 Robôs",
+      description: "Peça ajuda à inteligência",
       items: [
-        { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
-        { path: '/admin/reports', title: 'Relatórios Fiscais', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
-        { path: '/admin/relatorio-cancelamentos', title: 'Cancelamentos', sub: 'Auditoria de exclusões master', icon: <IoTrashBin />, cor: 'red', adminOnly: true },
-        { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: 'Gerencie garçons e permissões', icon: <FaUsers />, cor: 'indigo', adminOnly: true },
-        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: 'Performance de garçons e motoboys', icon: <IoStatsChart />, cor: 'amber', perm: 'relatorios' },
-        { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
-        { path: '/admin/avaliacoes', title: 'Avaliações', sub: 'Responder reviews dos clientes', icon: <IoStatsChart />, cor: 'yellow', adminOnly: true },
-        { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
+        { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: 'Pedido automático no Zap', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
+        { path: '/admin/bot-pedidos', title: 'Copilot IA', sub: 'Assistente IA fecha pedidos', icon: <IoMegaphoneOutline />, cor: 'teal', adminOnly: true },
       ]
-
     },
     {
-      title: "⚙️ Configurações do Sistema",
-      description: "Ajustes técnicos e integrações",
+      id: "config",
+      title: "⚙️ Configurações",
+      description: "Administração do sistema",
       items: [
-        { path: '/admin/multi-platform', title: 'Integrações', sub: 'iFood, WhatsApp e impressoras', icon: <IoShareSocial />, cor: 'teal', adminOnly: true },
-        { path: '/admin/bot-pedidos', title: 'Bot IA de Pedidos', sub: 'Clientes pedem via WhatsApp com IA', icon: <IoMegaphoneOutline />, cor: 'green', adminOnly: true },
-        { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: 'Pedido automático via WhatsApp', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
-
-        { path: '/nossos-clientes', title: 'Nossos Clientes', sub: 'Envio manual de WhatsApp em massa', icon: <IoPersonOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/multi-platform', title: 'Integrações', sub: 'iFood e impressoras', icon: <IoShareSocial />, cor: 'teal', adminOnly: true },
         { path: '/admin/cores', title: 'Identidade Visual', sub: 'Cores e tema da loja', icon: <IoColorPalette />, cor: 'pink', adminOnly: true },
-        { path: '/admin/configuracoes', title: 'Configurações Gerais', sub: 'Senha Master e segurança', icon: <IoSettings />, cor: 'slate', adminOnly: true },
-        { path: '/admin/config-fiscal', title: 'Fiscal & Certificado', sub: 'Configurar NFC-e e PlugNotas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
+        { path: '/admin/config-fiscal', title: 'Fiscal & Certificado', sub: 'NFC-e e PlugNotas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
         { path: '/admin/relatorio-nfce', title: 'Relatório NFC-e', sub: 'Notas fiscais emitidas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
+        { path: '/admin/configuracoes', title: 'Configurações Gerais', sub: 'Senha Master e segurança', icon: <IoSettings />, cor: 'slate', adminOnly: true },
+        { path: '/admin/relatorio-cancelamentos', title: 'Cancelamentos', sub: 'Auditoria de exclusões', icon: <IoTrashBin />, cor: 'red', adminOnly: true },
       ]
     }
   ];
+
+  // Filtra as permissões 
+  const gruposPermitidos = menuGroups.map(grupo => {
+    const itens = grupo.items.filter(item => {
+      if (isRealAdmin) return true;
+      if (item.adminOnly) return false;
+      if (item.perm && !temPermissao(item.perm)) return false;
+      return true;
+    });
+    return { ...grupo, items: itens };
+  }).filter(g => g.items.length > 0);
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 font-sans pb-20">
@@ -188,36 +231,23 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* MENU GROUPS — cards grandes originais */}
+        {/* MENU GROUPS — renderizados todos verticalmente */}
         <div className="space-y-12">
-          {menuGroups.map((grupo, idx) => {
-            const itensPermitidos = grupo.items.filter(item => {
-              if (isRealAdmin) return true;
-              // Items adminOnly são exclusivos para admin/masterAdmin
-              if (item.adminOnly) return false;
-              // Items com perm definida: só aparece se o user tem essa permissão
-              if (item.perm && !temPermissao(item.perm)) return false;
-              return true;
-            });
-
-            if (itensPermitidos.length === 0) return null;
-
-            return (
-              <div key={idx} className="animate-slideUp" style={{ animationDelay: `${idx * 0.1}s` }}>
-                <div className="mb-6 ml-2">
-                  <h3 className="text-2xl font-black text-slate-800 tracking-tight">{grupo.title}</h3>
-                  <p className="text-sm text-slate-500 font-medium">{grupo.description}</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-fr">
-                  {itensPermitidos.map((item, itemIdx) => (
-                    <Link key={itemIdx} to={item.path} className="h-full">
-                      <ActionButton title={item.title} subtitle={item.sub} icon={item.icon} themeColor={item.cor} />
-                    </Link>
-                  ))}
-                </div>
+          {gruposPermitidos.map((grupo, idx) => (
+            <div key={grupo.id} className="animate-slideUp" style={{ animationDelay: `${idx * 0.1}s` }}>
+              <div className="mb-6 ml-2">
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight">{grupo.title}</h3>
+                <p className="text-sm text-slate-500 font-medium">{grupo.description}</p>
               </div>
-            );
-          })}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-fr">
+                {grupo.items.map((item, itemIdx) => (
+                  <Link key={itemIdx} to={item.path} className="h-full">
+                    <ActionButton title={item.title} subtitle={item.sub} icon={item.icon} themeColor={item.cor} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="text-center pt-8 border-t border-slate-200 mt-12">

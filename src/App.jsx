@@ -6,7 +6,8 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { ROLE_GROUPS } from './constants/roles';
+import LoginMotoboy from './pages/LoginMotoboy';
+import { ROLE_GROUPS, ROLES } from './constants/roles';
 import IosInstallPrompt from "./components/IosInstallPrompt";
 
 // Lazy imports dos context providers pesados (só carregam em rotas autenticadas)
@@ -57,6 +58,10 @@ const AdminEstabelecimentoCadastro = lazy(() => import('./pages/admin/AdminEstab
 const ListarEstabelecimentosMaster = lazy(() => import('./pages/admin/ListarEstabelecimentosMaster'));
 const ListarPedidosMaster = lazy(() => import('./pages/admin/ListarPedidosMaster'));
 const ListarUsuariosMaster = lazy(() => import('./pages/admin/ListarUsuariosMaster'));
+const MasterMensagens = lazy(() => import('./pages/admin/MasterMensagens'));
+const MasterCupons = lazy(() => import('./pages/admin/MasterCupons'));
+const MasterNfce = lazy(() => import('./pages/admin/MasterNfce'));
+const MasterClientes = lazy(() => import('./pages/admin/MasterClientes'));
 const EditarEstabelecimentoMaster = lazy(() => import('./pages/admin/EditarEstabelecimentoMaster'));
 const ImportarCardapioMaster = lazy(() => import('./pages/admin/ImportarCardapioMaster'));
 const PedidoDetalhesMaster = lazy(() => import('./pages/admin/PedidoDetalhesMaster'));
@@ -79,6 +84,8 @@ const Divulgacao = lazy(() => import('./pages/Divulgacao'));
 const AcertoMotoboys = lazy(() => import('./pages/AcertoMotoboys'));
 const BotPedidosConfig = lazy(() => import('./pages/admin/BotPedidosConfig'));
 const MarketingConfig = lazy(() => import('./pages/admin/MarketingConfig'));
+const CashbackConfig = lazy(() => import('./pages/admin/CashbackConfig'));
+const EntregadorApp = lazy(() => import('./pages/EntregadorApp'));
 
 // Wrapper que carrega providers pesados apenas para rotas autenticadas
 function AuthenticatedProviders({ children }) {
@@ -109,6 +116,7 @@ function App() {
                 <Route path="/home" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/login-admin" element={<Login />} />
+                <Route path="/login-motoboy" element={<LoginMotoboy />} />
                 <Route path="/imprimir-comanda/:pedidoId" element={<ComandaParaImpressao />} />
                 <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
                 <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
@@ -158,6 +166,10 @@ function App() {
                   <Route path="/admin/acerto-motoboys" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><AcertoMotoboys /></PrivateRoute>} />
                   <Route path="/admin/bot-pedidos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><BotPedidosConfig /></PrivateRoute>} />
                   <Route path="/admin/marketing" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarketingConfig /></PrivateRoute>} />
+                  <Route path="/admin/cashback" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CashbackConfig /></PrivateRoute>} />
+
+                  {/* App do Motoboy (Uberização) */}
+                  <Route path="/entregador" element={<PrivateRoute allowedRoles={[ROLES.ENTREGADOR, 'admin', 'masterAdmin']}><EntregadorApp /></PrivateRoute>} />
 
                   {/* Rotas Master */}
                   <Route path="/master-dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterDashboard /></PrivateRoute>} />
@@ -174,6 +186,10 @@ function App() {
                   <Route path="/master/usuarios/criar" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><CriarUsuarioMaster /></PrivateRoute>} />
                   <Route path="/master/associar-imagens" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AdminImageAssociation /></PrivateRoute>} />
                   <Route path="/master/departamentos-fiscais" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><DepartamentosFiscaisMaster /></PrivateRoute>} />
+                  <Route path="/master/mensagens" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterMensagens /></PrivateRoute>} />
+                  <Route path="/master/cupons-rede" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterCupons /></PrivateRoute>} />
+                  <Route path="/master/nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterNfce /></PrivateRoute>} />
+                  <Route path="/master/clientes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterClientes /></PrivateRoute>} />
                   <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AuditLogs /></PrivateRoute>} />
                   <Route path="/admin/config-fiscal" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ConfigFiscalScreen /></PrivateRoute>} />
                   <Route path="/admin/relatorio-nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioNfce /></PrivateRoute>} />

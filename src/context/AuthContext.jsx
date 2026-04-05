@@ -9,8 +9,9 @@ import {
     setPersistence,
     browserSessionPersistence
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
-import { auth, db } from '../firebase'; 
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { auth, db, messaging } from '../firebase'; 
+import { getToken } from 'firebase/messaging';
 import { Navigate, useLocation } from 'react-router-dom'; 
 import { toast } from 'react-toastify'; 
 
@@ -184,6 +185,40 @@ export function AuthProvider({ children }) {
                     setUserData(updatedData);
                     setCurrentUser(prev => ({ ...prev, ...updatedData }));
                 }
+            }
+        },
+        requestPushPermission: async () => {
+            try {
+                if (!('Notification' in window)) return false;
+                
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    const msg = await messaging();
+                    if (!msg) return false;
+                    
+                    // IMPORTANTE: Chave VAPID injetada do Firebase Console
+                    const vapidKey = 'BGIHYH0t-g1loGSJu2JdlWQe7WFJ-XhRHva0THgkEqibF-rreWpJYIoqCY6nS7n1WsvD8wxaTzQh2my6wHNDxc8'; 
+                    
+                    try {
+                        const currentToken = await getToken(msg, { vapidKey });
+                        if (currentToken && currentUser?.uid) {
+                            // Salva no Firestore do cliente
+                            const clientRef = doc(db, 'clientes', currentUser.uid);
+                            await updateDoc(clientRef, {
+                                fcmToken: currentToken,
+                                updatedAt: new Date()
+                            });
+                            console.log('✅ Token FCM salvo com sucesso.');
+                            return true;
+                        }
+                    } catch (e) {
+                        console.warn("⚠️ FCM getToken falhou. Geralmente requer rodar em HTTPS e uma chave VAPID real.", e);
+                    }
+                }
+                return false;
+            } catch (error) {
+                console.error("Erro ao solicitar permissão de Push", error);
+                return false;
             }
         }
     };

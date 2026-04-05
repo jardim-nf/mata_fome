@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
@@ -10,6 +10,7 @@ import { db } from '../firebase';
 export default function LoginPage() {
   const { currentUser, userData, authChecked } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = getAuth();
 
   // Estados de Controle
@@ -51,7 +52,14 @@ export default function LoginPage() {
         return cargosNormalizados.some(cargoUsuario => cargosExigidos.includes(cargoUsuario));
       };
 
-      // 4. Roteamento (A ordem aqui define a prioridade se ele tiver 2 cargos)
+      // Se tinha uma rota alvo antes do login (ex: digitou /entregador sem logar)
+      const destinoOriginal = location.state?.from?.pathname;
+      if (destinoOriginal && destinoOriginal !== '/' && destinoOriginal !== '/login' && destinoOriginal !== '/login-admin') {
+        navigate(destinoOriginal, { replace: true });
+        return;
+      }
+
+      // 4. Roteamento Padrão (A ordem aqui define a prioridade se ele tiver 2 cargos)
       if (userData.isMasterAdmin) {
         navigate('/master/estabelecimentos', { replace: true });
         
@@ -64,7 +72,10 @@ export default function LoginPage() {
       } else if (temCargo(['caixa'])) {
         navigate('/pdv', { replace: true });
         
-      } else if (temCargo(['gerente', 'cozinheiro', 'entregador', 'auxiliar'])) {
+      } else if (temCargo(['entregador'])) {
+        navigate('/entregador', { replace: true });
+        
+      } else if (temCargo(['gerente', 'cozinheiro', 'auxiliar'])) {
         navigate('/painel', { replace: true });
       }
       // Se não for nenhum (cliente comum), fica na Home.

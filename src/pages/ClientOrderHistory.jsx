@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, doc, getDoc, collectionGroup } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -21,7 +21,8 @@ import {
   IoLocation,
   IoCard,
   IoPricetag,
-  IoStorefront
+  IoStorefront,
+  IoWalletOutline
 } from 'react-icons/io5';
 
 function ClientOrderHistory() {
@@ -33,6 +34,7 @@ function ClientOrderHistory() {
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState('todos');
   const [estabelecimentos, setEstabelecimentos] = useState({});
+  const [saldoTotal, setSaldoTotal] = useState(0);
 
   useEffect(() => {
     if (!authLoading && !currentUser) {
@@ -51,20 +53,55 @@ function ClientOrderHistory() {
     setLoadingOrders(true);
     setError('');
     try {
-      // Buscar pedidos delivery do usuário
-      const pedidosQuery = query(
-        collection(db, 'pedidos'),
-        where('cliente.userId', '==', currentUser.uid),
-        orderBy('criadoEm', 'desc')
+      // 🔥 BUSCAR INFORMAÇÕES DO USUÁRIO PRIMEIRO PARA OBTER O TELEFONE (E BUSCAR PEDIDOS DO WHATSAPP)
+      const userDoc = await getDoc(doc(db, 'usuarios', currentUser.uid));
+      let telefoneFormatado = '';
+      if (userDoc.exists()) {
+        const t = userDoc.data().telefone || currentUser.phoneNumber || '';
+        telefoneFormatado = t.replace(/\D/g, '');
+      }
+
+      // Buscar pedidos delivery do usuário por UID (feitos no Web App)
+      const pedidosQueryId = query(
+        collectionGroup(db, 'pedidos'),
+        where('cliente.userId', '==', currentUser.uid)
       );
-      
-      const querySnapshot = await getDocs(pedidosQuery);
-      const fetchedOrders = querySnapshot.docs.map(doc => ({
+      const querySnapshotId = await getDocs(pedidosQueryId);
+      let fetchedOrders = querySnapshotId.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
+        criadoEm: doc.data().createdAt || doc.data().criadoEm,
         tipo: 'delivery',
         origem: 'pedidos'
       }));
+
+      // Buscar pedidos delivery do usuário por TELEFONE (feitos no WhatsApp via Bot)
+      if (telefoneFormatado) {
+         try {
+           const pedidosQueryTel = query(
+             collectionGroup(db, 'pedidos'),
+             where('cliente.telefone', '==', telefoneFormatado)
+           );
+           const querySnapshotTel = await getDocs(pedidosQueryTel);
+           const telOrders = querySnapshotTel.docs.map(doc => ({
+             id: doc.id,
+             ...doc.data(),
+             criadoEm: doc.data().createdAt || doc.data().criadoEm,
+             tipo: 'delivery',
+             origem: 'pedidos'
+           }));
+           
+           // Mesclar e remover duplicados (caso o pedido tenha os 2 campos)
+           const existingIds = new Set(fetchedOrders.map(o => o.id));
+           for (const order of telOrders) {
+              if (!existingIds.has(order.id)) {
+                 fetchedOrders.push(order);
+              }
+           }
+         } catch (errTel) {
+           console.log("Aviso: Falha ao buscar pedidos por telefone. É provável que o Firebase não possua o índice composite. Criar no console se necessário.", errTel);
+         }
+      }
 
       // 🔥 BUSCAR VENDAS DE MESA DO CLIENTE
       let vendasOrders = [];
@@ -83,7 +120,7 @@ function ClientOrderHistory() {
           ...doc.data(),
           tipo: 'mesa',
           origem: 'vendas',
-          criadoEm: doc.data().dataFechamento || doc.data().criadoEm
+          criadoEm: doc.data().dataFechamento || doc.data().criadoEm || doc.data().createdAt || new Date()
         }));
       } catch (vendasError) {
         console.log("Vendas de mesa não disponíveis:", vendasError);
@@ -96,15 +133,48 @@ function ClientOrderHistory() {
           return dateB - dateA;
         });
 
-      // 🔥 BUSCAR INFORMAÇÕES DOS ESTABELECIMENTOS
       const estabelecimentosMap = {};
       const estabelecimentoIds = [...new Set(allOrders.map(order => order.estabelecimentoId).filter(Boolean))];
+      
+      // Construir lista única de telefones deste cliente (baseado no perfil e nos pedidos)
+      const telefonesCliente = new Set();
+      if (telefoneFormatado) telefonesCliente.add(telefoneFormatado);
+      allOrders.forEach(o => {
+          const t = o.cliente?.telefone || o.clienteTelefone || '';
+          const tf = t.replace(/\D/g, '');
+          if (tf) telefonesCliente.add(tf);
+      });
+
+      let totalSaldoCarteira = 0;
       
       for (const estabelecimentoId of estabelecimentoIds) {
         try {
           const estabelecimentoDoc = await getDoc(doc(db, 'estabelecimentos', estabelecimentoId));
           if (estabelecimentoDoc.exists()) {
             estabelecimentosMap[estabelecimentoId] = estabelecimentoDoc.data();
+            
+            // BUSCAR SALDO DA CARTEIRA DIGITAL NESTE ESTABELECIMENTO
+            let saldoLocal = 0;
+            
+            // 1. Tenta buscar pelo UID 
+            const clienteRefId = doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', currentUser.uid);
+            const clienteDocId = await getDoc(clienteRefId);
+            if (clienteDocId.exists()) {
+               saldoLocal += (Number(clienteDocId.data().saldoCashback) || Number(clienteDocId.data().saldoCarteira) || 0);
+            }
+
+            // 2. Busca pelos Telefones Únicos (já que o bot e o backend criam pelo telefone)
+            for (const tel of telefonesCliente) {
+               if (tel !== currentUser.uid) {
+                 const clienteRefTel = doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', tel);
+                 const clienteDocTel = await getDoc(clienteRefTel);
+                 if (clienteDocTel.exists()) {
+                     saldoLocal += (Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0);
+                 }
+               }
+            }
+
+            totalSaldoCarteira += saldoLocal;
           }
         } catch (err) {
           console.log(`Erro ao buscar estabelecimento ${estabelecimentoId}:`, err);
@@ -112,6 +182,7 @@ function ClientOrderHistory() {
       }
 
       setEstabelecimentos(estabelecimentosMap);
+      setSaldoTotal(totalSaldoCarteira);
       setOrders(allOrders);
 
     } catch (err) {
@@ -234,6 +305,26 @@ function ClientOrderHistory() {
           
           <div className="w-32"></div>
         </div>
+
+        {/* CARTEIRA DIGITAL */}
+        {(saldoTotal > 0 || orders.some(o => o.cashbackGanho > 0 || o.cashbackUsado > 0)) && (
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl shadow-sm p-6 mb-6 text-white flex justify-between items-center relative overflow-hidden">
+             <div className="absolute -right-8 -top-8 text-white opacity-10 text-9xl">
+               <IoWalletOutline />
+             </div>
+             <div className="relative z-10 w-full flex flex-col md:flex-row justify-between items-start md:items-center">
+                 <div>
+                    <h2 className="text-3xl lg:text-4xl font-black text-white flex items-center gap-3">
+                       <IoWalletOutline /> R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </h2>
+                    <p className="text-sm mt-1 font-medium text-emerald-50">Saldo disponível em Cashback no App</p>
+                 </div>
+                 <div className="mt-4 md:mt-0 bg-white/20 px-4 py-2 rounded-xl backdrop-blur-sm">
+                   <p className="text-sm font-bold text-white uppercase tracking-wider">Cashback</p>
+                 </div>
+             </div>
+          </div>
+        )}
 
         {/* FILTROS E ESTATÍSTICAS */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
@@ -427,39 +518,56 @@ function ClientOrderHistory() {
                             <span className="text-green-600">- R$ {order.cupomAplicado.descontoCalculado?.toFixed(2).replace('.', ',')}</span>
                           </div>
                         )}
+
+                        {order.cashbackUsado > 0 && (
+                          <div className="flex justify-between text-sm pt-1">
+                            <span className="text-emerald-600 font-bold flex items-center space-x-1">
+                              <IoWalletOutline className="text-emerald-500" />
+                              <span>Cashback Resgatado:</span>
+                            </span>
+                            <span className="text-emerald-600 font-bold">- R$ {order.cashbackUsado?.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        )}
                         
                         <div className="flex justify-between text-lg font-bold mt-2 pt-2 border-t border-gray-200">
                           <span className="text-gray-900">Total:</span>
                           <span className="text-red-600">R$ {order.totalFinal?.toFixed(2).replace('.', ',')}</span>
                         </div>
+
+                        {order.cashbackGanho > 0 && order.status === 'finalizado' && (
+                          <div className="flex justify-between text-sm mt-3 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
+                            <span className="text-emerald-700 font-bold flex items-center space-x-1 pl-1">
+                              <IoCheckmarkCircle className="text-emerald-600" />
+                              <span>Cashback Ganho nesta compra:</span>
+                            </span>
+                            <span className="text-emerald-700 font-black">+ R$ {order.cashbackGanho?.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {/* AÇÕES */}
-                  <div className="flex lg:flex-col gap-2 lg:space-y-2">
-                    <button
-                      onClick={() => navigate(`/comanda/${order.id}`)}
-                      className="flex items-center justify-center space-x-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition flex-1 lg:flex-none"
-                    >
-                      <IoEye className="text-lg" />
-                      <span>Ver Comanda</span>
-                    </button>
+                  <div className="flex lg:flex-col gap-2 lg:space-y-2 mt-4">
                     {order.status !== 'cancelado' && order.estabelecimentoId && (
                       <button
                         onClick={() => {
                           const itensParaRepetir = (order.itens || []).map(item => ({
+                            id: item.produtoIdOriginal || item.id,
+                            nomeOriginal: item.nome.split(' - ')[0].split(' (+')[0].trim(),
                             nome: item.nome,
                             preco: item.preco,
                             quantidade: item.quantidade || item.qtd || 1,
-                            observacoes: item.observacoes || ''
+                            observacao: item.observacoes || item.observacao || '',
+                            variacaoSelecionada: item.variacao || item.variacaoSelecionada || null,
+                            adicionaisSelecionados: item.adicionais || item.adicionaisSelecionados || []
                           }));
                           localStorage.setItem('ideafood_repetir_pedido', JSON.stringify(itensParaRepetir));
                           const slug = estabelecimentos[order.estabelecimentoId]?.slug || order.estabelecimentoId;
-                          toast.info('🔁 Adicionando itens ao carrinho...');
+                          toast.info('🔁 Preparando seu carrinho...');
                           navigate(`/cardapio/${slug}`);
                         }}
-                        className="flex items-center justify-center space-x-2 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-medium transition flex-1 lg:flex-none"
+                        className="flex items-center justify-center space-x-2 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-medium transition flex-1"
                       >
                         <IoRefresh className="text-lg" />
                         <span>Pedir de Novo</span>

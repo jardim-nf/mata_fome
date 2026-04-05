@@ -1,4 +1,5 @@
 // functions/index.js
+import { setGlobalOptions } from "firebase-functions/v2";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentUpdated, onDocumentCreated } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
@@ -8,16 +9,30 @@ import archiver from "archiver";
 import nodemailer from "nodemailer";
 
 import { MercadoPagoConfig, Payment } from 'mercadopago';
+
+// Set global options to prevent GCP CPU quota exhaustion
+setGlobalOptions({
+  maxInstances: 2, // Limits instances per function to 2
+  concurrency: 80, // allows single container to process 80 requests at the same time
+  memory: "256MiB" // Limits memory size
+});
+
 // --- IMPORTS FIREBASE ADMIN ---
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import { getMessaging } from "firebase-admin/messaging";
 
 // Inicializa o Admin SDK
 initializeApp();
 const db = getFirestore();
-const bucket = getStorage().bucket();
+let bucket;
+try {
+  bucket = getStorage().bucket();
+} catch (e) {
+  logger.warn('Bucket do storage não inicializou no escopo global', e.message);
+}
 
 // ==================================================================
 // FUNÇÃO AUXILIAR: Salvar XML no Firebase Storage
@@ -70,6 +85,8 @@ const mpClientSecret = defineSecret("MP_CLIENT_SECRET");
 const mpClientIdSecret = defineSecret("MP_CLIENT_ID"); 
 const whatsappVerifyToken = defineSecret("WHATSAPP_VERIFY_TOKEN");
 const whatsappApiToken = defineSecret("WHATSAPP_API_TOKEN");
+// const metaVerifyToken = defineSecret("META_VERIFY_TOKEN");
+// const metaApiToken = defineSecret("META_API_TOKEN");
 // iFood Partner API — lidos via process.env (já configurados como env vars no Cloud Run)
 // Não usar defineSecret para evitar conflito com env vars normais existentes
 // const meshyApiKey = defineSecret("MESHY_API_KEY"); // desativado - 3D feito manual
@@ -767,9 +784,244 @@ export const vincularMercadoPago = onCall({ secrets: [mpClientSecret, mpClientId
 });
 
 // ==================================================================
-// 14. WHATSAPP BUSINESS API & UAZAPI (WEBHOOK HÍBRIDO)
+// 14. WHATSAPP BUSINESS API & UAZAPI E MOTOR FLUXO (HÍBRIDO)
 // ==================================================================
 const conversas = {};
+
+async function buscarProdutosRobo(estabId) {
+    const produtos = [];
+    const categoriasSnap = await db.collection(`estabelecimentos/${estabId}/cardapio`).get();
+    for (const catDoc of categoriasSnap.docs) {
+        const itensSnap = await db.collection(`estabelecimentos/${estabId}/cardapio/${catDoc.id}/itens`).where('ativo', '==', true).get();
+        itensSnap.forEach(d => {
+            const data = d.data();
+            produtos.push({ id: d.id, ...data, categoria: data.categoriaNome || catDoc.data().nome || 'Outros' });
+        });
+    }
+    return produtos;
+}
+
+// Função centralizada para atender requisições de WhatsApp, Messenger e Instagram
+async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText, from, origem) {
+    const agora = Date.now();
+    // Se a última mensagem foi há mais de 3 minutos, reseta a conversa para não ficar insistindo no erro
+    if (conversas[chatKey] && conversas[chatKey].ultimaMensagem && (agora - conversas[chatKey].ultimaMensagem) > 3 * 60 * 1000) {
+        delete conversas[chatKey];
+    }
+
+    if (!conversas[chatKey]) conversas[chatKey] = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
+    const chat = conversas[chatKey];
+    chat.ultimaMensagem = agora;
+
+    let resposta = '';
+    const msgLower = (messageText || '').toLowerCase().trim();
+
+    const frasesCancelamento = ['cancelar', 'sair', 'reiniciar', 'não quero', 'nao quero', 'deixa pra la', 'deixa pra lá', 'obrigado', 'obrigada', 'encerrar', 'pare', 'parar', 'desisto'];
+
+    // ——— REINICIAR / CANCELAR ———
+    if (frasesCancelamento.some(f => msgLower.includes(f)) || msgLower === 'nao' || msgLower === 'não') {
+      delete conversas[chatKey];
+      resposta = '✅ Atendimento encerrado! Qualquer coisa é só mandar um *"oi"*. 😉';
+
+    // ——— CARDÁPIO / INÍCIO ———
+    } else if (chat.etapa === 'inicio' || ['oi', 'olá', 'boa noite', 'bom dia', 'boa tarde', 'menu', 'cardápio', 'cardapio'].includes(msgLower)) {
+      const categorias = {};
+      produtos.forEach(p => {
+        const cat = p.categoria || 'Outros';
+        if (!categorias[cat]) categorias[cat] = [];
+        categorias[cat].push(p);
+      });
+      let cardapioTexto = `🍔 *${estab.nome || 'Nosso Cardápio'}*\n\n`;
+      Object.entries(categorias).forEach(([cat, items]) => {
+        cardapioTexto += `*📌 ${cat}*\n`;
+        items.forEach((p, i) => {
+          const preco = Number(String(p.preco).replace(',', '.')) || 0;
+          cardapioTexto += `${i + 1}. ${p.nome} — R$ ${preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+        });
+        cardapioTexto += '\n';
+      });
+      cardapioTexto += `_Digite o nome do item e quantidade. Ex: *2 X-Bacon*_\n\nDigite *"finalizar"* para concluir o pedido.`;
+      resposta = cardapioTexto;
+      chat.etapa = 'pedindo';
+      chat.itens = [];
+
+    // ——— ADICIONANDO ITENS ———
+    } else if (chat.etapa === 'pedindo') {
+      if (msgLower === 'finalizar') {
+        if (chat.itens.length === 0) {
+          resposta = '⚠️ Seu pedido está vazio! Adicione itens primeiro.';
+        } else {
+          // Buscar bairros cadastrados no Firestore
+          const taxasSnap = await db.collection(`estabelecimentos/${estabId}/taxasDeEntrega`).orderBy('nomeBairro').get();
+          chat.bairrosLista = taxasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+          let subtotal = 0;
+          let resumo = '📋 *Resumo do Pedido:*\n\n';
+          chat.itens.forEach(item => {
+            const sub = item.preco * item.qtd;
+            subtotal += sub;
+            resumo += `• ${item.qtd}x ${item.nome} — R$ ${sub.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+          });
+          resumo += `\n💰 *Subtotal: R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
+
+          if (chat.bairrosLista.length > 0) {
+            resumo += `🛵 *Selecione seu bairro de entrega:*\n`;
+            chat.bairrosLista.forEach((b, i) => {
+              const taxa = Number(b.valorTaxa) || 0;
+              resumo += `*${i + 1}.* ${b.nomeBairro} — Taxa: R$ ${taxa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+            });
+            resumo += `\nDigite o *número* do seu bairro:`;
+            chat.etapa = 'bairro';
+          } else {
+            chat.bairro = '';
+            chat.taxaEntrega = 0;
+            resumo += `📍 *Digite seu endereço de entrega:*\n_Ex: Rua das Flores, 123_`;
+            chat.etapa = 'endereco';
+          }
+          resposta = resumo;
+        }
+      } else {
+        // Adicionar item ao pedido
+        const match = messageText.match(/^(\d+)\s*[xX]?\s*(.+)$/) || messageText.match(/^(.+?)\s+(\d+)$/);
+        let qtd = 1; let nomeProduto = messageText;
+        if (match) {
+          if (/^\d+$/.test(match[1])) { qtd = parseInt(match[1]); nomeProduto = match[2].trim(); }
+          else { nomeProduto = match[1].trim(); qtd = parseInt(match[2]); }
+        }
+        const prod = produtos.find(p => p.nome.toLowerCase().includes(nomeProduto.toLowerCase()) || nomeProduto.toLowerCase().includes(p.nome.toLowerCase()));
+        if (prod) {
+          const preco = Number(String(prod.preco).replace(',', '.')) || 0;
+          chat.itens.push({ nome: prod.nome, preco, qtd, id: prod.id });
+          resposta = `✅ *${qtd}x ${prod.nome}* adicionado! (R$ ${(preco * qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})\n\nContinue adicionando ou digite *"finalizar"*.`;
+        } else {
+          resposta = `❌ Não encontrei "${nomeProduto}" no cardápio.\nDigite *"menu"* para ver os itens.`;
+        }
+      }
+
+    // ——— SELEÇÃO DE BAIRRO ———
+    } else if (chat.etapa === 'bairro') {
+      const idx = parseInt(msgLower) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < (chat.bairrosLista || []).length) {
+        const bairroSel = chat.bairrosLista[idx];
+        chat.bairro = bairroSel.nomeBairro;
+        chat.taxaEntrega = Number(bairroSel.valorTaxa) || 0;
+        const subtotal = chat.itens.reduce((acc, i) => acc + i.preco * i.qtd, 0);
+        const totalComTaxa = subtotal + chat.taxaEntrega;
+        resposta = `✅ *Bairro:* ${chat.bairro}\n🛵 *Taxa:* R$ ${chat.taxaEntrega.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n💰 *Total c/ taxa: R$ ${totalComTaxa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n📍 *Agora, informe seu endereço de entrega:*\n_Ex: Rua das Flores, 123 — Apto 4_`;
+        chat.etapa = 'endereco';
+      } else {
+        resposta = `❌ Opção inválida. Digite o *número* do bairro:\n`;
+        (chat.bairrosLista || []).forEach((b, i) => {
+          resposta += `*${i + 1}.* ${b.nomeBairro} — R$ ${Number(b.valorTaxa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+        });
+      }
+
+    // ——— ENDEREÇO ———
+    } else if (chat.etapa === 'endereco') {
+      if (messageText.trim().length < 5) {
+        resposta = '⚠️ Informe um endereço válido.\n_Ex: Rua das Flores, 123_';
+      } else {
+        chat.enderecoEntrega = messageText.trim();
+        chat.etapa = 'nome';
+        resposta = `✅ *Endereço:* ${chat.enderecoEntrega}\n\n*Qual é o seu nome?*`;
+      }
+
+    // ——— NOME ———
+    } else if (chat.etapa === 'nome') {
+      chat.nome = messageText.trim();
+      
+      if (origem !== 'whatsapp') {
+          chat.etapa = 'telefone_contato';
+          resposta = `✅ Prazer, ${chat.nome}!\n\n📱 *Para facilitar ou caso o entregador precise, qual o seu número de WhatsApp/Telefone para contato?*\n_Ex: (21) 99999-9999_`;
+      } else {
+          chat.telefoneContato = from;
+          chat.etapa = 'verificador_saldo';
+      }
+    } else if (chat.etapa === 'telefone_contato') {
+      chat.telefoneContato = messageText.trim();
+      chat.etapa = 'verificador_saldo';
+    } 
+
+    if (chat.etapa === 'verificador_saldo') {
+      const cashbackConfig = estab.cashback || {};
+      if (cashbackConfig.ativo) {
+        const formatTel = chat.telefoneContato.replace(/\D/g, '');
+        const telDoc = await db.doc(`estabelecimentos/${estabId}/clientes/${formatTel}`).get();
+        const saldo = telDoc.exists ? Number(telDoc.data().saldoCashback) || 0 : 0;
+        
+        if (saldo > 0) {
+          chat.saldoDisponivel = saldo;
+          chat.etapa = 'pergunta_cashback';
+          resposta = `💰 *Você tem R$ ${saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de Cashback disponíveis na sua carteira virtual!*\n\nDeseja utilizar este saldo como desconto neste pedido?\n\n*1.* Sim, quero usar!\n*2.* Não, vou guardar!`;
+        } else {
+          chat.etapa = 'salvar_pedido';
+        }
+      } else {
+        chat.etapa = 'salvar_pedido';
+      }
+    } else if (chat.etapa === 'pergunta_cashback') {
+      const respValida = messageText.trim().toLowerCase();
+      if (respValida === '1' || respValida === 'sim' || respValida === 's') {
+        chat.usarCashback = true;
+      } else {
+        chat.usarCashback = false;
+      }
+      chat.etapa = 'salvar_pedido';
+    }
+
+    // O pulo direto para salvar o pedido
+    if (chat.etapa === 'salvar_pedido') {
+      let subtotal = 0;
+      const itensFormatados = chat.itens.map(item => {
+        subtotal += item.preco * item.qtd;
+        return { nome: item.nome, quantidade: item.qtd, preco: item.preco, id: item.id };
+      });
+      const taxaEntrega = chat.taxaEntrega || 0;
+      let totalFinal = subtotal + taxaEntrega;
+      
+      let descontoAplicado = 0;
+      if (chat.usarCashback && chat.saldoDisponivel > 0) {
+        if (chat.saldoDisponivel >= totalFinal) {
+          descontoAplicado = totalFinal;
+        } else {
+          descontoAplicado = chat.saldoDisponivel;
+        }
+        totalFinal = totalFinal - descontoAplicado;
+        
+        const formatTel = chat.telefoneContato.replace(/\D/g, '');
+        await db.doc(`estabelecimentos/${estabId}/clientes/${formatTel}`).set({
+          saldoCashback: chat.saldoDisponivel - descontoAplicado,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      const pedidoRef = await db.collection(`estabelecimentos/${estabId}/pedidos`).add({
+        itens: itensFormatados,
+        cliente: { nome: chat.nome, telefone: chat.telefoneContato },
+        status: 'recebido',
+        subtotal,
+        taxaEntrega,
+        cashbackUsado: descontoAplicado || 0,
+        totalFinal,
+        bairro: chat.bairro || '',
+        enderecoEntrega: chat.enderecoEntrega || '',
+        source: origem,
+        tipo: 'delivery',
+        createdAt: FieldValue.serverTimestamp(),
+        observacao: `Pedido via ${origem.toUpperCase()}${descontoAplicado > 0 ? ` (Usou R$ ${descontoAplicado} de Cashback)` : ''} — Posição Pessoal (Meta ID: ${from})`
+      });
+
+      const descTexto = descontoAplicado > 0 ? `\n🎁 Cashback Usado: -R$ ${descontoAplicado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+      const taxaTexto = taxaEntrega > 0 ? `\n🛵 Taxa: R$ ${taxaEntrega.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+      resposta = `✅ *Pedido confirmado!*\n\n🆔 #${pedidoRef.id.slice(-6).toUpperCase()}\n👤 ${chat.nome}\n📞 Tel: ${chat.telefoneContato}\n📍 ${chat.enderecoEntrega}${chat.bairro ? ` — ${chat.bairro}` : ''}${taxaTexto}${descTexto}\n💰 *Total: R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\nSeu pedido está sendo preparado! 🎉\nPedido ficará pronto entre 45 a 60 minutos ok?\nDigite *"oi"* para novo pedido.`;
+      delete conversas[chatKey];
+
+    } else if (!['inicio', 'pedindo', 'bairro', 'endereco', 'nome', 'telefone_contato', 'verificador_saldo', 'pergunta_cashback', 'salvar_pedido'].includes(chat.etapa)) {
+      resposta = 'Olá! 👋 Digite *"oi"* ou *"menu"* para começar seu pedido!';
+    }
+
+    return resposta;
+}
 
 export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsappApiToken], maxInstances: 5 }, async (req, res) => {
 
@@ -820,158 +1072,11 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       const estab = estabDoc.data();
       const wConfig = estab.whatsapp || {};
 
-      const cardapioSnap = await db.collection(`estabelecimentos/${estabId}/cardapio`).where('ativo', '==', true).get();
-      const produtos = cardapioSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const produtos = await buscarProdutosRobo(estabId);
 
       const chatKey = `${estabId}_${from}`;
-      if (!conversas[chatKey]) conversas[chatKey] = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
-      const chat = conversas[chatKey];
-
-      let resposta = '';
-      const msgLower = messageText.toLowerCase().trim();
-
-      // ——— REINICIAR ———
-      if (['cancelar', 'sair', 'reiniciar'].includes(msgLower)) {
-        delete conversas[chatKey];
-        resposta = '🔄 Pedido cancelado. Digite *"oi"* para recomeçar.';
-
-      // ——— CARDÁPIO / INÍCIO ———
-      } else if (chat.etapa === 'inicio' || ['oi', 'olá', 'menu', 'cardápio', 'cardapio'].includes(msgLower)) {
-        const categorias = {};
-        produtos.forEach(p => {
-          const cat = p.categoria || 'Outros';
-          if (!categorias[cat]) categorias[cat] = [];
-          categorias[cat].push(p);
-        });
-        let cardapioTexto = `🍔 *${estab.nome || 'Nosso Cardápio'}*\n\n`;
-        Object.entries(categorias).forEach(([cat, items]) => {
-          cardapioTexto += `*📌 ${cat}*\n`;
-          items.forEach((p, i) => {
-            const preco = Number(String(p.preco).replace(',', '.')) || 0;
-            cardapioTexto += `${i + 1}. ${p.nome} — R$ ${preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
-          });
-          cardapioTexto += '\n';
-        });
-        cardapioTexto += `_Digite o nome do item e quantidade. Ex: *2 X-Bacon*_\n\nDigite *"finalizar"* para concluir o pedido.`;
-        resposta = cardapioTexto;
-        chat.etapa = 'pedindo';
-        chat.itens = [];
-
-      // ——— ADICIONANDO ITENS ———
-      } else if (chat.etapa === 'pedindo') {
-        if (msgLower === 'finalizar') {
-          if (chat.itens.length === 0) {
-            resposta = '⚠️ Seu pedido está vazio! Adicione itens primeiro.';
-          } else {
-            // Buscar bairros cadastrados no Firestore
-            const taxasSnap = await db.collection(`estabelecimentos/${estabId}/taxasDeEntrega`).orderBy('nomeBairro').get();
-            chat.bairrosLista = taxasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-            let subtotal = 0;
-            let resumo = '📋 *Resumo do Pedido:*\n\n';
-            chat.itens.forEach(item => {
-              const sub = item.preco * item.qtd;
-              subtotal += sub;
-              resumo += `• ${item.qtd}x ${item.nome} — R$ ${sub.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
-            });
-            resumo += `\n💰 *Subtotal: R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
-
-            if (chat.bairrosLista.length > 0) {
-              resumo += `🛵 *Selecione seu bairro de entrega:*\n`;
-              chat.bairrosLista.forEach((b, i) => {
-                const taxa = Number(b.valorTaxa) || 0;
-                resumo += `*${i + 1}.* ${b.nomeBairro} — Taxa: R$ ${taxa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
-              });
-              resumo += `\nDigite o *número* do seu bairro:`;
-              chat.etapa = 'bairro';
-            } else {
-              chat.bairro = '';
-              chat.taxaEntrega = 0;
-              resumo += `📍 *Digite seu endereço de entrega:*\n_Ex: Rua das Flores, 123_`;
-              chat.etapa = 'endereco';
-            }
-            resposta = resumo;
-          }
-        } else {
-          // Adicionar item ao pedido
-          const match = messageText.match(/^(\d+)\s*[xX]?\s*(.+)$/) || messageText.match(/^(.+?)\s+(\d+)$/);
-          let qtd = 1; let nomeProduto = messageText;
-          if (match) {
-            if (/^\d+$/.test(match[1])) { qtd = parseInt(match[1]); nomeProduto = match[2].trim(); }
-            else { nomeProduto = match[1].trim(); qtd = parseInt(match[2]); }
-          }
-          const prod = produtos.find(p => p.nome.toLowerCase().includes(nomeProduto.toLowerCase()) || nomeProduto.toLowerCase().includes(p.nome.toLowerCase()));
-          if (prod) {
-            const preco = Number(String(prod.preco).replace(',', '.')) || 0;
-            chat.itens.push({ nome: prod.nome, preco, qtd, id: prod.id });
-            resposta = `✅ *${qtd}x ${prod.nome}* adicionado! (R$ ${(preco * qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})\n\nContinue adicionando ou digite *"finalizar"*.`;
-          } else {
-            resposta = `❌ Não encontrei "${nomeProduto}" no cardápio.\nDigite *"menu"* para ver os itens.`;
-          }
-        }
-
-      // ——— SELEÇÃO DE BAIRRO ———
-      } else if (chat.etapa === 'bairro') {
-        const idx = parseInt(msgLower) - 1;
-        if (!isNaN(idx) && idx >= 0 && idx < (chat.bairrosLista || []).length) {
-          const bairroSel = chat.bairrosLista[idx];
-          chat.bairro = bairroSel.nomeBairro;
-          chat.taxaEntrega = Number(bairroSel.valorTaxa) || 0;
-          const subtotal = chat.itens.reduce((acc, i) => acc + i.preco * i.qtd, 0);
-          const totalComTaxa = subtotal + chat.taxaEntrega;
-          resposta = `✅ *Bairro:* ${chat.bairro}\n🛵 *Taxa:* R$ ${chat.taxaEntrega.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n💰 *Total c/ taxa: R$ ${totalComTaxa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n📍 *Agora, informe seu endereço de entrega:*\n_Ex: Rua das Flores, 123 — Apto 4_`;
-          chat.etapa = 'endereco';
-        } else {
-          resposta = `❌ Opção inválida. Digite o *número* do bairro:\n`;
-          (chat.bairrosLista || []).forEach((b, i) => {
-            resposta += `*${i + 1}.* ${b.nomeBairro} — R$ ${Number(b.valorTaxa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
-          });
-        }
-
-      // ——— ENDEREÇO ———
-      } else if (chat.etapa === 'endereco') {
-        if (messageText.trim().length < 5) {
-          resposta = '⚠️ Informe um endereço válido.\n_Ex: Rua das Flores, 123_';
-        } else {
-          chat.enderecoEntrega = messageText.trim();
-          chat.etapa = 'nome';
-          resposta = `✅ *Endereço:* ${chat.enderecoEntrega}\n\n*Qual é o seu nome?*`;
-        }
-
-      // ——— NOME E CONFIRMAÇÃO ———
-      } else if (chat.etapa === 'nome') {
-        chat.nome = messageText.trim();
-
-        let subtotal = 0;
-        const itensFormatados = chat.itens.map(item => {
-          subtotal += item.preco * item.qtd;
-          return { nome: item.nome, quantidade: item.qtd, preco: item.preco, id: item.id };
-        });
-        const taxaEntrega = chat.taxaEntrega || 0;
-        const totalFinal = subtotal + taxaEntrega;
-
-        const pedidoRef = await db.collection(`estabelecimentos/${estabId}/pedidos`).add({
-          itens: itensFormatados,
-          cliente: { nome: chat.nome, telefone: from },
-          status: 'recebido',
-          subtotal,
-          taxaEntrega,
-          totalFinal,
-          bairro: chat.bairro || '',
-          enderecoEntrega: chat.enderecoEntrega || '',
-          source: 'whatsapp',
-          tipo: 'delivery',
-          createdAt: FieldValue.serverTimestamp(),
-          observacao: `Pedido via WhatsApp — ${from}`
-        });
-
-        const taxaTexto = taxaEntrega > 0 ? `\n🛵 Taxa: R$ ${taxaEntrega.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
-        resposta = `✅ *Pedido confirmado!*\n\n🆔 #${pedidoRef.id.slice(-6).toUpperCase()}\n👤 ${chat.nome}\n📍 ${chat.enderecoEntrega}${chat.bairro ? ` — ${chat.bairro}` : ''}${taxaTexto}\n💰 *Total: R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\nSeu pedido está sendo preparado! 🎉\nDigite *"oi"* para novo pedido.`;
-        delete conversas[chatKey];
-
-      } else {
-        resposta = 'Olá! 👋 Digite *"oi"* ou *"menu"* para começar seu pedido!';
-      }
+      // Chama o robô genérico unificado, que foi isolado acima
+      const resposta = await processarFluxoRobo(chatKey, estabId, estab, produtos, messageText, from, 'whatsapp');
 
       // ─── RESPONDER (UAZAPI OU META) ───
       if (wConfig.serverUrl && wConfig.apiKey && wConfig.instanceName) {
@@ -1030,6 +1135,81 @@ export const enviarMensagemWhatsApp = onCall(async (request) => {
       return { sucesso: true };
     } catch (error) {
       throw new HttpsError('internal', error.message);
+    }
+});
+
+// ==================================================================
+// 15B. WEBHOOK META (INSTAGRAM E MESSENGER)
+// ==================================================================
+export const webhookMetaChat = onRequest({ maxInstances: 5 }, async (req, res) => {
+    
+    const verifyTokenReal = 'MataFomeMetaToken2026';
+    const apiTokenReal = 'EAAZAURhftZA9cBRJeGSJXlZBy4bkdWgYAKM3wmXMlH8RnKx9at6wOcVJdRBze0kVrn7N3kHhTSoQ7VA5r98uXQkTTsIY5zM34S8iO0r5VLm84cbPYA3OuGil6TRugY0KxVsgdOfKNCgs2ZBE85XrLpnLHkMwaZB7FkvduqTTvTV3wqUD8Cu1H8h2jxVB0KJPlM03x6wZDZD';
+
+    // Verificação oficial exigida pela Meta na configuração do Webhook
+    if (req.method === 'GET') {
+      if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === verifyTokenReal) {
+        return res.status(200).send(req.query['hub.challenge']);
+      }
+      return res.status(403).send('Token inválido');
+    }
+    
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    try {
+        const body = req.body;
+        // Identifica se é Instagram ou Página do Facebook (Messenger)
+        if (body.object === 'instagram' || body.object === 'page') {
+            const entry = body.entry?.[0];
+            const messaging = entry?.messaging?.[0];
+            
+            if (messaging && messaging.message && !messaging.message.is_echo) {
+                const senderId = messaging.sender.id;
+                const messageText = messaging.message.text || '';
+                const source = body.object === 'instagram' ? 'instagram' : 'messenger';
+                
+                logger.info(`[META WEBHOOK] Recebido de ${source} - Sender: ${senderId} - Texto: ${messageText}`);
+                
+                // Busca o ID do estabelecimento baseado no ID da Página/Perfil
+                const entryId = body.entry?.[0]?.id;
+                let respostaFinal = 'Olá! Nosso sistema automatizado está operando. Logo você poderá fazer seu pedido por aqui.\n\n⚠️ Lojista: Configure o campo "metaPageId" na engrenagem principal do painel.';
+
+                if (entryId) {
+                    const estabQuery = await db.collection('estabelecimentos').where('metaPageId', '==', entryId).limit(1).get();
+                    if (!estabQuery.empty) {
+                        const estabDoc = estabQuery.docs[0];
+                        const estabId = estabDoc.id;
+                        const estab = estabDoc.data();
+                        
+                        const produtos = await buscarProdutosRobo(estabId);
+
+                        const chatKey = `${estabId}_${senderId}`; // Permite sessões de conversas isoladas
+                        // MOTOR DO CARDÁPIO DIGITAL UNIFICADO
+                        respostaFinal = await processarFluxoRobo(chatKey, estabId, estab, produtos, messageText, senderId, source);
+                    } else {
+                        logger.warn(`META WEBHOOK: Page ID ${entryId} não cadastrado em nenhum estabelecimento.`);
+                    }
+                }
+
+                if (apiTokenReal && apiTokenReal.length > 10) {
+                    await fetch(`https://graph.facebook.com/v19.0/me/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${apiTokenReal}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            recipient: { id: senderId },
+                            message: { text: respostaFinal }
+                        })
+                    });
+                }
+            }
+        }
+        res.status(200).send('EVENT_RECEIVED');
+    } catch (error) {
+        logger.error('❌ Erro Meta Webhook:', error);
+        res.status(200).send('EVENT_RECEIVED'); // Requisito da Meta para não reenviar eventos fracassados loop infinito
     }
 });
 
@@ -1447,7 +1627,7 @@ function formatarValor(valor) {
 
 const MENSAGENS_STATUS = {
   recebido: (p) => `🔥 *${p.nomeEstab}*\n\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* foi recebido! ✅${p.pixManual ? `\n\n🧾 *Seu pagamento foi no PIX via chave* — por favor, envie o comprovante por aqui para confirmarmos.` : `\n\nEm instantes você receberá atualizações sobre o preparo. 🍔`}`,
-  preparo: (p) => `🔥 *${p.nomeEstab}*\n\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* já está sendo preparado! 👨‍🍳${p.pixManual ? `\n\n💳 *Pagamento via PIX* — Por favor, envie o comprovante de pagamento.` : ''}`,
+  preparo: (p) => `🔥 *${p.nomeEstab}*\n\nOlá, ${p.nome}! Seu pedido no valor de *${p.valor}* já está sendo preparado! 👨‍🍳\nTempo de espera de 40 a 60 minutos, ok?${p.pixManual ? `\n\n💳 *Pagamento via PIX* — Por favor, envie o comprovante de pagamento.` : ''}`,
   em_entrega: (p) => `🛵 *${p.nomeEstab}*\n\nÓtima notícia, ${p.nome}! Seu pedido no valor de *${p.valor}* saiu para entrega!${p.motoboy ? `\n🏍️ Entregador: *${p.motoboy}*` : ''}`,
   pronto_para_servir: (p) => `✅ *${p.nomeEstab}*\n\n${p.nome}, seu pedido no valor de *${p.valor}* está *pronto*! Pode retirar. 🎉`,
   finalizado: (p) => `✅ *${p.nomeEstab}*\n\nPedido entregue! Obrigado pela preferência, ${p.nome}! 😊\nValor: *${p.valor}*\n\nVolte sempre! 💛`
@@ -1512,13 +1692,52 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
       const formaPagamento = depois.formaPagamento || depois.pagamento || '';
       const isPixManual = formaPagamento === 'PIX_MANUAL' || formaPagamento === 'pix_manual';
 
-      const mensagem = gerarMensagem({
+      let mensagem = gerarMensagem({
         nome: nomeCliente,
         nomeEstab,
         valor: formatarValor(totalPedido),
         motoboy: depois.motoboyNome || '',
         pixManual: isPixManual
       });
+
+      // 💳 Geração de Cashback no fechamento do pedido
+      if (depois.status === 'finalizado') {
+        const cashbackConfig = estab.cashback || {};
+        if (cashbackConfig.ativo) {
+          const porcentagem = Number(cashbackConfig.porcentagem) || 5;
+          const valorCashback = (totalPedido * porcentagem) / 100;
+          
+          if (valorCashback > 0) {
+            const formatTel = telefoneCliente.replace(/\D/g, '');
+            const telDocRef = db.doc(`estabelecimentos/${event.params.estabId}/clientes/${formatTel}`);
+            
+            try {
+              const telDoc = await telDocRef.get();
+              let saldoAtual = 0;
+              if (telDoc.exists) {
+                saldoAtual = Number(telDoc.data().saldoCashback) || 0;
+              }
+              const novoSaldo = saldoAtual + valorCashback;
+              
+              await telDocRef.set({
+                nome: nomeCliente,
+                telefone: formatTel,
+                saldoCashback: novoSaldo,
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+              
+              const pedidoDocRef = db.doc(`estabelecimentos/${event.params.estabId}/pedidos/${event.params.pedidoId}`);
+              await pedidoDocRef.update({
+                cashbackGanho: valorCashback
+              });
+
+              mensagem += `\n\n🎉 *UHU! Você ganhou Cashback!* 🎉\nFinalizamos sua compra e guardamos *R$ ${valorCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}* de volta na sua carteira digital!\n\nSeu saldo atual para descontar na próxima compra é de: *R$ ${novoSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*.`;
+            } catch (err) {
+              logger.error(`📱 ❌ Erro ao adicionar cashback: ${err.message}`);
+            }
+          }
+        }
+      }
       
       const tel = telefoneCliente.replace(/\D/g, '');
       const telFinal = tel.startsWith('55') ? tel : `55${tel}`;
@@ -2063,19 +2282,8 @@ export const ifoodConfigurarWebhook = onCall({
         const token = await getIfoodToken(estabelecimentoId);
         const webhookUrl = `https://us-central1-matafome-98455.cloudfunctions.net/ifoodWebhook`;
 
-        const res = await fetch(`${IFOOD_BASE_URL}/merchant/v1.0/merchant/${merchantId}/webhook`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ url: webhookUrl, events: ['PLACED', 'CONFIRMED', 'READY_TO_PICKUP', 'DISPATCHED', 'CONCLUDED', 'CANCELLED'] })
-        });
-
-        if (!res.ok) {
-            const errBody = await res.text();
-            throw new HttpsError('internal', `iFood webhook config falhou: ${res.status} - ${errBody}`);
-        }
+        // The webhook URL must be pasted manually into the iFood dev portal.
+        // There is no API route to set it automatically for Partner/Merchant API v1.0.
 
         await db.collection('estabelecimentos').doc(estabelecimentoId).update({
             ifoodWebhookConfigurado: true,
@@ -3407,3 +3615,41 @@ export const buscarConversasBot = onCall({ cors: true }, async (request) => {
   }
 });
 
+// ==================================================================
+// DISPARO DE PUSH NOTIFICATIONS DE MARKETING (FCM)
+// ==================================================================
+export const sendMarketingPush = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
+
+  const { targetUid, titulo, mensagem, icone } = request.data;
+  if (!targetUid || !titulo || !mensagem) {
+    throw new HttpsError('invalid-argument', 'Faltam dados: targetUid, titulo, mensagem.');
+  }
+
+  try {
+    const clientSnap = await db.collection('clientes').doc(targetUid).get();
+    if (!clientSnap.exists) throw new HttpsError('not-found', 'Cliente não encontrado no DB.');
+    
+    const clientData = clientSnap.data();
+    if (!clientData.fcmToken) {
+      return { sucesso: false, message: 'Cliente não possui token de notificação push.' };
+    }
+
+    const payload = {
+      notification: {
+        title: titulo,
+        body: mensagem,
+      },
+      token: clientData.fcmToken
+    };
+    
+    if (icone) payload.notification.image = icone;
+
+    const response = await getMessaging().send(payload);
+    logger.info(`✅ Push enviado para ${targetUid} com sucesso. ID: ${response}`);
+    return { sucesso: true, messageId: response };
+  } catch (error) {
+    logger.error("❌ Falha no envio do Push Notification:", error);
+    throw new HttpsError('internal', error.message);
+  }
+});

@@ -10,7 +10,7 @@ import { estoqueService } from '../services/estoqueService';
 // 🔥 IMPORTS DO FIREBASE
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp, doc, getDoc, getDocs } from 'firebase/firestore'; 
+import { collection, addDoc, Timestamp, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore'; 
 
 // Normaliza texto para comparação de bairros (igual ao Menu.jsx)
 function normalizarTexto(texto) {
@@ -32,6 +32,11 @@ const CheckoutPage = () => {
   const [taxaLoading, setTaxaLoading] = useState(false);
   const [descontoValor, setDescontoValor] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Cashback
+  const [saldoCarteira, setSaldoCarteira] = useState(0);
+  const [usarCashback, setUsarCashback] = useState(false);
+  const [clienteDocRefIdUtilizado, setClienteDocRefIdUtilizado] = useState(null); // Guarda qual doc tem saldo para descontar
 
   // 🔥 Estado para armazenar o valor mínimo vindo do banco
   const [valorGatilhoRaspadinha, setValorGatilhoRaspadinha] = useState(9999); // Começa alto para não abrir sem querer
@@ -88,6 +93,47 @@ const CheckoutPage = () => {
     if (carrinho.length > 0) fetchConfigRaspadinha();
   }, [carrinho]);
 
+  // Busca saldo de Cashback do Cliente
+  useEffect(() => {
+    const fetchCashback = async () => {
+      const estabId = carrinho[0]?.estabelecimentoId;
+      if (!estabId || !currentUser) return;
+      
+      let saldoEncontrado = 0;
+      let docParaDescontar = null; // Vamos gravar qual documento abater
+      try {
+        const clienteRefId = doc(db, 'estabelecimentos', estabId, 'clientes', currentUser.uid);
+        const clienteDocId = await getDoc(clienteRefId);
+        if (clienteDocId.exists()) {
+           const sc = Number(clienteDocId.data().saldoCashback) || Number(clienteDocId.data().saldoCarteira) || 0;
+           if (sc > 0) {
+             saldoEncontrado += sc;
+             docParaDescontar = clienteRefId;
+           }
+        }
+
+        const t = currentClientData?.telefone || currentUser.phoneNumber || '';
+        const telefoneFormatado = t.replace(/\D/g, '');
+        if (telefoneFormatado && telefoneFormatado !== currentUser.uid) {
+           const clienteRefTel = doc(db, 'estabelecimentos', estabId, 'clientes', telefoneFormatado);
+           const clienteDocTel = await getDoc(clienteRefTel);
+           if (clienteDocTel.exists()) {
+               const st = Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0;
+               if (st > 0) {
+                 saldoEncontrado += st;
+                 if (!docParaDescontar) docParaDescontar = clienteRefTel; // Se uid nao tem saldo, desconta do tel
+               }
+           }
+        }
+        setSaldoCarteira(saldoEncontrado);
+        setClienteDocRefIdUtilizado(docParaDescontar);
+      } catch (e) {
+        console.error("Erro ao buscar cashback:", e);
+      }
+    };
+    fetchCashback();
+  }, [carrinho, currentUser, currentClientData]);
+
   // Gatilho da raspadinha
   useEffect(() => {
     if (subtotal >= valorGatilhoRaspadinha && !jaJogou && !premioAplicado) {
@@ -118,7 +164,9 @@ const CheckoutPage = () => {
   };
 
 
-  const totalFinal = subtotal + taxaEntrega - descontoValor;
+  const subtotalETaxas = subtotal + taxaEntrega - descontoValor;
+  const cashbackAplicado = usarCashback ? Math.min(saldoCarteira, subtotalETaxas) : 0;
+  const totalFinal = Math.max(0, subtotalETaxas - cashbackAplicado);
 
   const handlePaymentSuccess = async () => {
     if (isSaving) return;
@@ -162,12 +210,29 @@ const CheckoutPage = () => {
             dataPedido: Timestamp.now(),
             
             descontoAplicado: descontoValor,
+            cashbackResgatado: cashbackAplicado, // NEW: Salva quanto usou
             premioRaspadinha: premioAplicado ? premioAplicado.type : null,
             estabelecimentoId: estabelecimentoId
         };
 
         // Salva o pedido no Firestore
         await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'), pedido);
+
+        // Subtrai cashback usado do cliente
+        if (cashbackAplicado > 0 && clienteDocRefIdUtilizado) {
+            try {
+               const cDoc = await getDoc(clienteDocRefIdUtilizado);
+               if (cDoc.exists()) {
+                  const saldoAtual = Number(cDoc.data().saldoCashback) || Number(cDoc.data().saldoCarteira) || 0;
+                  const novoSaldo = Math.max(0, saldoAtual - cashbackAplicado);
+                  await updateDoc(clienteDocRefIdUtilizado, {
+                      saldoCashback: novoSaldo
+                  });
+               }
+            } catch (errCB) {
+               console.error("Erro ao abater cashback", errCB);
+            }
+        }
 
         // 🔥 NOVA LINHA: CHAMA A BAIXA DE ESTOQUE APÓS SALVAR O PEDIDO
         await estoqueService.darBaixaEstoque(estabelecimentoId, carrinho);
@@ -249,6 +314,30 @@ const CheckoutPage = () => {
                       <span>R$ {taxaEntrega.toFixed(2)}</span>
                   )}
                 </div>
+
+                {saldoCarteira > 0 && (
+                  <div className="py-2 border-b">
+                    <label className="flex items-center space-x-2 cursor-pointer bg-[#00E6A4]/10 p-3 rounded-lg border border-[#00E6A4]/30">
+                      <input 
+                        type="checkbox" 
+                        checked={usarCashback}
+                        onChange={(e) => setUsarCashback(e.target.checked)}
+                        className="w-5 h-5 text-[#00E6A4] rounded border-gray-300 focus:ring-[#00E6A4]"
+                      />
+                      <div className="flex flex-col">
+                        <span className="font-bold text-gray-800">Usar Saldo da Carteira</span>
+                        <span className="text-xs text-gray-600">Ter de volta: R$ {saldoCarteira.toFixed(2)}</span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {cashbackAplicado > 0 && (
+                  <div className="flex justify-between py-2 border-b text-[#00E6A4] font-bold">
+                      <span>Cashback Aplicado</span>
+                      <span>- R$ {cashbackAplicado.toFixed(2)}</span>
+                  </div>
+                )}
                 
                 <div className="flex justify-between py-3 text-lg font-bold">
                   <span>Total</span>

@@ -215,7 +215,10 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const enderecoObj = enderecoFinal && typeof enderecoFinal === 'object' ? enderecoFinal : null;
     const temEndereco = !!enderecoString || !!enderecoObj;
     const nomeClientePrincipal = pedido.clienteNome || pedido.nomeCliente || pedido.cliente?.nome || 'Cliente';
-    const telefoneCliente = pedido.clienteTelefone || pedido.telefoneCliente || pedido.telefone || pedido.cliente?.telefone || null;
+    let telefoneCliente = pedido.clienteTelefone || pedido.telefoneCliente || pedido.telefone || pedido.cliente?.telefone || null;
+    if (telefoneCliente && typeof telefoneCliente === 'object') {
+        telefoneCliente = telefoneCliente.number || telefoneCliente.numero || '';
+    }
     const bairroEntrega = pedido.bairro || pedido.bairroEntrega || null;
     const referenciaFinal = enderecoObj?.referencia || pedido.pontoReferencia || pedido.referencia || null;
 
