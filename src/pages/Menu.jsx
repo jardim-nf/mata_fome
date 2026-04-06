@@ -207,11 +207,12 @@ export default function Menu() {
         const sugestaoMap = {
             'lanches': ['bebidas', 'refrigerante', 'sucos', 'sobremesas', 'porcoes'],
             'hamburgueres': ['bebidas', 'refrigerante', 'acompanhamentos', 'porcoes'],
+            'baguetes': ['bebidas', 'refrigerante', 'acompanhamentos', 'porcoes'],
             'pizzas': ['bebidas', 'refrigerante', 'sobremesas'],
             'hot dog': ['bebidas', 'refrigerante', 'porcoes'],
             'esfihas': ['bebidas', 'refrigerante', 'sobremesas'],
             'acai': ['complementos', 'adicionais'],
-            'bebidas': ['lanches', 'hamburgueres', 'pizzas', 'porcoes'],
+            'bebidas': ['lanches', 'hamburgueres', 'baguetes', 'pizzas', 'porcoes'],
             'porcoes': ['bebidas', 'refrigerante', 'sucos'],
         };
         const catsSugeridas = new Set();
@@ -356,11 +357,12 @@ function SugestoesCardapio({ carrinho, allProdutos, handleAbrirModalProduto }) {
     const sugestaoMap = {
         'lanches': ['bebidas', 'refrigerante', 'sucos', 'sobremesas', 'porcoes'],
         'hamburgueres': ['bebidas', 'refrigerante', 'acompanhamentos', 'porcoes'],
+        'baguetes': ['bebidas', 'refrigerante', 'acompanhamentos', 'porcoes'],
         'pizzas': ['bebidas', 'refrigerante', 'sobremesas'],
         'hot dog': ['bebidas', 'refrigerante', 'porcoes'],
         'esfihas': ['bebidas', 'refrigerante', 'sobremesas'],
         'acai': ['complementos', 'adicionais'],
-        'bebidas': ['lanches', 'hamburgueres', 'pizzas', 'porcoes'],
+        'bebidas': ['lanches', 'hamburgueres', 'baguetes', 'pizzas', 'porcoes'],
         'porcoes': ['bebidas', 'refrigerante', 'sucos'],
     };
     const catsSugeridas = new Set();
