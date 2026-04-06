@@ -73,6 +73,8 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
         if (listaItens.length === 0) return {};
 
         const agrupados = {};
+        const pessoasPagas = mesa?.pessoasPagas || [];
+
         listaItens.forEach(item => {
             if (item.status === 'cancelado') return;
             let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
@@ -80,6 +82,8 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                 if (!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0];
             }
             if (!pessoa) pessoa = 'Cliente 1';
+
+            if (pessoasPagas.includes(pessoa)) return;
 
             if (!agrupados[pessoa]) {
                 agrupados[pessoa] = { itens: [], total: 0 };
@@ -339,20 +343,29 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                     });
                     toast.success("Conta quitada! Mesa liberada.");
                 } else {
+                    const pagantesArray = Object.keys(pagamentosValidos).filter(nome => !nome.includes('Mesa'));
+                    
                     const novoPagamentoInfo = {
                         id: docRef.id,
                         valor: totalPagoAgora,
                         data: new Date().toISOString(),
                         responsavel: auth.currentUser?.displayName || 'Garçom',
-                        tipo: tipoPagamento
+                        tipo: tipoPagamento,
+                        pagantes: pagantesArray.length > 0 ? pagantesArray.join(', ') : ''
                     };
 
-                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
+                    const mesaUpdate = {
                         status: 'ocupada',
                         total: restanteFinal,
                         pagamentosParciais: arrayUnion(novoPagamentoInfo),
                         updatedAt: serverTimestamp()
-                    });
+                    };
+                    
+                    if (pagantesArray.length > 0) {
+                        mesaUpdate.pessoasPagas = arrayUnion(...pagantesArray);
+                    }
+
+                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), mesaUpdate);
                     toast.success(`Recebido R$ ${totalPagoAgora.toFixed(2)}. Restam R$ ${restanteFinal.toFixed(2)}`);
                 }
             }

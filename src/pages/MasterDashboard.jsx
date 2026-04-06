@@ -9,7 +9,8 @@ import { useMasterDashboardData } from '../hooks/useMasterDashboardData';
 import {
   FaStore, FaUsers, FaClipboardList, FaFileUpload, FaTags, FaShieldAlt, FaImages,
   FaDollarSign, FaSignOutAlt, FaShoppingCart, FaMoneyBillWave, FaSync, FaChevronRight,
-  FaBox, FaChartLine, FaTrophy, FaRocket, FaBolt, FaCrown, FaRegCalendarAlt, FaReact
+  FaBox, FaChartLine, FaTrophy, FaRocket, FaBolt, FaCrown, FaRegCalendarAlt, FaReact,
+  FaAddressBook, FaReceipt, FaTicketAlt, FaCommentDots, FaBuilding
 } from 'react-icons/fa';
 import {
   IoNotificationsOutline, IoSearchOutline, IoSparklesOutline,
@@ -52,10 +53,16 @@ function MasterDashboard() {
   // ── Módulos ──────────────────────
   const modulos = [
     { to: '/master/financeiro', title: 'Financeiro', desc: 'Receitas e cobranças', icon: <FaMoneyBillWave />, cor: 'emerald' },
+    { to: '/master/analytics', title: 'Master Analytics', desc: 'Dashboard e BI Global', icon: <FaChartLine />, cor: 'indigo' },
     { to: '/master/estabelecimentos', title: 'Estabelecimentos', desc: 'Lojas, certs e billing', icon: <FaStore />, cor: 'blue' },
-    { to: '/master/usuarios', title: 'Usuários', desc: 'Acessos e permissões', icon: <FaUsers />, cor: 'violet' },
+    { to: '/master/clientes', title: 'CRM Master', desc: 'Clientes da rede', icon: <FaAddressBook />, cor: 'teal' },
     { to: '/master/pedidos', title: 'Central de Pedidos', desc: 'Monitor da rede', icon: <FaClipboardList />, cor: 'orange' },
+    { to: '/master/nfce', title: 'Gestão Fiscal', desc: 'Monitor NFC-e PDF', icon: <FaReceipt />, cor: 'sky' },
     { to: '/master/plans', title: 'Assinaturas', desc: 'Planos e billing', icon: <FaTags />, cor: 'pink' },
+    { to: '/master/cupons-rede', title: 'Cupons da Rede', desc: 'Promoções Globais', icon: <FaTicketAlt />, cor: 'fuchsia' },
+    { to: '/master/mensagens', title: 'Mensagens', desc: 'Lotes de disparo', icon: <FaCommentDots />, cor: 'lime' },
+    { to: '/master/departamentos-fiscais', title: 'Departamentos', desc: 'Config fiscal em lote', icon: <FaBuilding />, cor: 'slate' },
+    { to: '/master/usuarios', title: 'Usuários', desc: 'Acessos e permissões', icon: <FaUsers />, cor: 'violet' },
     { to: '/master/importar-cardapio', title: 'Importador', desc: 'Cardápios em massa', icon: <FaFileUpload />, cor: 'cyan' },
     { to: '/master/associar-imagens', title: 'Galeria Central', desc: 'Banco de imagens', icon: <FaImages />, cor: 'amber' },
     { to: '/admin/audit-logs', title: 'Auditoria', desc: 'Logs de segurança', icon: <FaShieldAlt />, cor: 'slate' },
@@ -72,6 +79,11 @@ function MasterDashboard() {
     amber: 'bg-amber-50 text-amber-600 border-amber-100 group-hover:bg-amber-500',
     slate: 'bg-slate-50 text-slate-600 border-slate-100 group-hover:bg-slate-500',
     rose: 'bg-rose-50 text-rose-600 border-rose-100 group-hover:bg-rose-500',
+    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100 group-hover:bg-indigo-500',
+    teal: 'bg-teal-50 text-teal-600 border-teal-100 group-hover:bg-teal-500',
+    sky: 'bg-sky-50 text-sky-600 border-sky-100 group-hover:bg-sky-500',
+    fuchsia: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100 group-hover:bg-fuchsia-500',
+    lime: 'bg-lime-50 text-lime-600 border-lime-100 group-hover:bg-lime-500',
   };
 
   const filteredModulos = searchQuery

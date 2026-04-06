@@ -1,4 +1,4 @@
-// src/components/home/BenefitsSection.jsx
+import React, { useState } from 'react';
 import { TrendingUp, LayoutDashboard, DollarSign, CheckCircle2 } from 'lucide-react';
 import AnimatedSection from './AnimatedSection';
 
@@ -49,6 +49,9 @@ const commissionData = [
 ];
 
 const BenefitsSection = () => {
+  const [activeTab, setActiveTab] = useState(0);
+  const activeBenefit = benefits[activeTab];
+
   return (
     <section className="bg-gradient-to-br from-gray-50 to-white py-20 md:py-28 px-4">
       <div className="container mx-auto">
@@ -66,41 +69,73 @@ const BenefitsSection = () => {
           <div className="w-32 h-1 bg-gradient-to-r from-yellow-400 to-orange-500 mx-auto mt-6 rounded-full" />
         </AnimatedSection>
 
-        {/* Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
-          {benefits.map((benefit, index) => (
-            <AnimatedSection key={index} delay={index * 0.15}>
-              <div className="group relative bg-white rounded-3xl p-8 shadow-lg border border-gray-100 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 h-full flex flex-col">
-                {/* Badge */}
-                <div className={`absolute -top-3 right-6 ${benefit.badgeColor} text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg`}>
-                  {benefit.badge}
-                </div>
-
-                {/* Icon */}
-                <div className={`w-16 h-16 bg-gradient-to-br ${benefit.iconColor} rounded-2xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
-                  <benefit.icon className="w-8 h-8 text-white" strokeWidth={1.5} />
-                </div>
-
-                <h3 className="text-xl font-bold text-gray-900 mb-3">{benefit.title}</h3>
-                <p className="text-gray-600 leading-relaxed mb-6">{benefit.description}</p>
-
-                {/* Checklist */}
-                <ul className="space-y-3 mb-8 flex-grow">
-                  {benefit.items.map((item, i) => (
-                    <li key={i} className="flex items-center text-gray-600 text-sm">
-                      <CheckCircle2 className={`w-5 h-5 ${benefit.checkColor} mr-3 flex-shrink-0`} />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-
-                {/* Button */}
-                <button className={`w-full bg-gradient-to-r ${benefit.btnColor} text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-xl`}>
-                  {benefit.btnText}
+        {/* Interactive Menu & Content */}
+        <div className="flex flex-col lg:flex-row gap-8 md:gap-12 mt-12 items-start">
+          
+          {/* Menu Lateral */}
+          <div className="w-full lg:w-1/3 flex flex-col gap-4">
+            {benefits.map((benefit, index) => {
+              const isActive = activeTab === index;
+              return (
+                <button
+                  key={index}
+                  onClick={() => setActiveTab(index)}
+                  className={`flex items-center text-left gap-4 p-5 rounded-2xl transition-all duration-300 border-2 ${
+                    isActive 
+                      ? 'border-yellow-500 bg-white shadow-xl scale-105' 
+                      : 'border-transparent bg-white/60 hover:bg-white hover:shadow-md'
+                  }`}
+                >
+                  <div className={`w-12 h-12 flex-shrink-0 bg-gradient-to-br ${benefit.iconColor} rounded-xl flex items-center justify-center shadow-md`}>
+                    <benefit.icon className="w-6 h-6 text-white" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h3 className={`font-bold text-lg ${isActive ? 'text-gray-900' : 'text-gray-600'}`}>
+                      {benefit.title}
+                    </h3>
+                  </div>
                 </button>
+              );
+            })}
+          </div>
+
+          {/* Painel de Conteúdo Ativo */}
+          <div className="w-full lg:w-2/3">
+            <AnimatedSection key={activeTab} className="bg-white rounded-3xl p-8 md:p-10 shadow-2xl border border-gray-100 flex flex-col h-full relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-gray-50 to-transparent rounded-bl-full z-0 opacity-50" />
+              
+              <div className="relative z-10">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-16 h-16 bg-gradient-to-br ${activeBenefit.iconColor} rounded-2xl flex items-center justify-center shadow-lg`}>
+                      <activeBenefit.icon className="w-8 h-8 text-white" strokeWidth={1.5} />
+                    </div>
+                    <h3 className="text-2xl md:text-3xl font-extrabold text-gray-900">{activeBenefit.title}</h3>
+                  </div>
+                  <div className={`${activeBenefit.badgeColor} text-white px-5 py-2.5 rounded-full text-sm font-bold shadow-lg whitespace-nowrap`}>
+                    ⭐ {activeBenefit.badge}
+                  </div>
+                </div>
+
+                <p className="text-lg text-gray-600 leading-relaxed mb-8">{activeBenefit.description}</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+                  {activeBenefit.items.map((item, i) => (
+                    <div key={i} className="flex items-center text-gray-700 font-medium">
+                      <CheckCircle2 className={`w-6 h-6 ${activeBenefit.checkColor} mr-3 flex-shrink-0`} />
+                      {item}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-auto">
+                  <button className={`w-full md:w-auto bg-gradient-to-r ${activeBenefit.btnColor} text-white font-bold py-4 px-8 rounded-2xl text-lg transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl`}>
+                    {activeBenefit.btnText}
+                  </button>
+                </div>
               </div>
             </AnimatedSection>
-          ))}
+          </div>
         </div>
 
         {/* Commission Comparison */}

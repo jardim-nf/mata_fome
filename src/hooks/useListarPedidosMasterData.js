@@ -199,8 +199,13 @@ function usePedidosMaster(filterEstabelecimento, estabMap, currentUser, isMaster
             });
             setLoading(false);
           } catch (err) {
-            if (mounted) setError('Erro ao processar dados dos pedidos');
-            setLoading(false);
+            console.error(`[MasterPedidos] Erro na query ${strat.name}:`, err.message);
+            // Não exibiremos o erro vermelho global se apenas uma das collections falhar (ex: falta de índice em 'vendas')
+            // O dashboard ainda continuará a exibir os pedidos que deram certo.
+            if (mounted) {
+               // Only set loading to false, don't block the UI with an error card if others succeed
+               setLoading(false); 
+            }
           }
         };
         fetchOrders();

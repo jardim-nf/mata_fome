@@ -218,7 +218,7 @@ function ListarEstabelecimentos() {
               className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all font-semibold text-slate-700 text-sm"
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-xl gap-0.5 self-start sm:self-auto">
+          <div className="flex overflow-x-auto hide-scrollbar w-full sm:w-auto bg-slate-100 p-1 rounded-xl gap-1 self-start sm:self-auto scroll-smooth">
             {[
               { id: 'todos', label: 'Todos', count: totalCount.total },
               { id: 'ativos', label: 'Ativos', count: totalCount.ativos },

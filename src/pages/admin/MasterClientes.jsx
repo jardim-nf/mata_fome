@@ -31,36 +31,45 @@ function MasterClientes() {
         setEstabMap(emap);
         setEstabList(elist.sort((a,b) => a.nome.localeCompare(b.nome)));
 
-        // Express fetch: We just pull a sample set without risking huge memory bounds if DB grows
-        // Adicionando um limit para evitar travamentos de memória do Firebase local se a base for muito grande
-        const snap = await getDocs(query(collectionGroup(db, 'clientes'), limit(1500)));
+        // Query pedidos directly since totalPedidos isn't maintained on client documents
+        const qPed = query(collectionGroup(db, 'pedidos'), limit(3500));
+        const snap = await getDocs(qPed);
         let data = snap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
 
-        // Deduplication by phone number if we want to merge network customers
         const mapByPhone = {};
-        data.forEach(c => {
-          const phone = c.whatsapp || c.telefone || c.id;
+        data.forEach(p => {
+          const cli = p.cliente || {};
+          const phone = cli.telefone || p.clienteTelefone || p.telefone || 'Sem número';
+          // Filter out generic bad phones if wanted, but let's keep all
+          
           if (!mapByPhone[phone]) {
             mapByPhone[phone] = {
-              ...c,
+              nome: cli.nome || p.nome || 'Não Registrado',
+              whatsapp: phone, // display field
               lojas: new Set(),
-              pedidosAcumulados: 0
+              pedidosAcumulados: 0,
+              dataCadastro: null
             };
           }
           
           let estabId = 'desconhecido';
-          if (c._path) {
-            const parts = c._path.split('/');
+          if (p._path) {
+            const parts = p._path.split('/');
             const idx = parts.indexOf('estabelecimentos');
-            if (idx >= 0) estabId = parts[idx+1];
+            if (idx >= 0 && parts.length > idx + 1) estabId = parts[idx+1];
           }
-          mapByPhone[phone].lojas.add(estabId);
-          mapByPhone[phone].pedidosAcumulados += (c.totalPedidos || 0) + (c.pedidos?.length || 0);
+          if (estabId && estabId !== 'desconhecido') {
+             mapByPhone[phone].lojas.add(estabId);
+          }
           
-          if (!mapByPhone[phone].nome) mapByPhone[phone].nome = c.nome;
+          mapByPhone[phone].pedidosAcumulados += 1;
+          
+          if (!mapByPhone[phone].nome || mapByPhone[phone].nome === 'Não Registrado') {
+             if (cli.nome || p.nome) mapByPhone[phone].nome = cli.nome || p.nome;
+          }
 
           // Guardar a data mais antiga como cadastro inicial
-          const rawDate = c.createdAt || c.dataCadastro || null;
+          const rawDate = p.createdAt || p.dataPedido || null;
           let currentData = null;
           if (rawDate) {
               if (typeof rawDate.toDate === 'function') {
@@ -82,10 +91,14 @@ function MasterClientes() {
           }
         });
 
-        const merged = Object.values(mapByPhone).map(c => ({
-          ...c,
-          lojasArray: Array.from(c.lojas)
-        }));
+        let merged = Object.values(mapByPhone).map(c => {
+          let lojasArr = Array.from(c.lojas);
+          if (lojasArr.length === 0) lojasArr = ['desconhecido'];
+          return {
+             ...c,
+             lojasArray: lojasArr
+          };
+        });
 
         // Sort by total orders
         merged.sort((a, b) => b.pedidosAcumulados - a.pedidosAcumulados);

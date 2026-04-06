@@ -239,7 +239,7 @@ function FinanceiroMaster() {
                 </div>
 
                 {/* Status Filters */}
-                <div className="flex bg-slate-100 p-1 rounded-xl gap-0.5">
+                <div className="flex overflow-x-auto hide-scrollbar bg-slate-100 p-1 rounded-xl gap-1 w-full sm:w-auto scroll-smooth">
                   {[
                     { id: 'todos', label: 'Todos', count: resumo.totalFaturas },
                     { id: 'pendente', label: 'Pendentes', count: resumo.pendentesCount },

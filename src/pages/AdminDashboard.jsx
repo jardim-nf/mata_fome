@@ -114,7 +114,7 @@ const AdminDashboard = () => {
       description: "Seus lucros e inteligência",
       items: [
         { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
-        { path: '/admin/reports', title: 'Relatórios Fiscais', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
+        { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
         { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
       ]
@@ -250,9 +250,6 @@ const AdminDashboard = () => {
           ))}
         </div>
 
-        <div className="text-center pt-8 border-t border-slate-200 mt-12">
-          <p className="text-slate-400 font-medium text-sm">IdeaFood • Gestão Inteligente</p>
-        </div>
       </div>
     </div>
   );

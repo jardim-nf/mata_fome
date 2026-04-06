@@ -327,13 +327,13 @@ const TelaPedidos = () => {
                                         <IoPrint className="mr-1 text-sm" /> Mande para a Impressora:
                                     </span>
                                     <div className="flex gap-2">
-                                        <button onClick={() => dispararImpressao('cozinha', () => setShowOrderSummary(false))} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('cozinha', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
                                             <span className="text-xl">🍳</span> Cozinha
                                         </button>
-                                        <button onClick={() => dispararImpressao('bar', () => setShowOrderSummary(false))} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('bar', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
                                             <span className="text-xl">🍺</span> Bar
                                         </button>
-                                        <button onClick={() => dispararImpressao('', () => setShowOrderSummary(false))} className="flex-1 bg-gray-200 hover:bg-gray-800 hover:text-white text-gray-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-gray-300 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-gray-200 hover:bg-gray-800 hover:text-white text-gray-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-gray-300 hover:border-transparent">
                                             <span className="text-xl">🧾</span> Tudo
                                         </button>
                                     </div>

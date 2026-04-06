@@ -120,7 +120,11 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
 
   const calcularTotaisRecentes = useCallback((novosDados, tipo) => {
     setDadosBrutos(prev => {
-      const atualizado = { ...prev, [tipo]: novosDados };
+      const map = new Map();
+      prev[tipo].forEach(item => { if(item.id) map.set(item.id, item); });
+      novosDados.forEach(item => { if(item.id) map.set(item.id, item); });
+      const arrayMerged = Array.from(map.values());
+      const atualizado = { ...prev, [tipo]: arrayMerged };
       
       const pedidosFiltrados = atualizado.pedidos
         .filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
@@ -179,7 +183,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
       
       return onSnapshot(qFiltered, 
         (snap) => {
-          const docs = snap.docs.map(d => ({...d.data(), _path: d.ref.path}));
+          const docs = snap.docs.map(d => ({id: d.id, ...d.data(), _path: d.ref.path}));
           calcularTotaisRecentes(docs, tipo);
         },
         (error) => {
@@ -207,13 +211,14 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
           getDocs(query(collectionGroup(db, 'pedidos'))),
           getDocs(query(collectionGroup(db, 'vendas')))
         ]);
-        const pedidosDelivery = pedSnap.docs
-          .map(d => d.data())
-          .filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
+        const pedidosDocs = pedSnap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
+        const vendasDocs = venSnap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
         
-        const vendasFinais = venSnap.docs
-          .map(d => d.data())
-          .filter(d => !isPedidoCancelado(d));
+        calcularTotaisRecentes(pedidosDocs, 'pedidos');
+        calcularTotaisRecentes(vendasDocs, 'vendas');
+
+        const pedidosDelivery = pedidosDocs.filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
+        const vendasFinais = vendasDocs.filter(d => !isPedidoCancelado(d));
         
         const allDocs = [...pedidosDelivery, ...vendasFinais];
         const totalHist = allDocs.reduce((acc, item) => acc + getTotal(item), 0);

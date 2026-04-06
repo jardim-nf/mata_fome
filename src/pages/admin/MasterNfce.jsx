@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collectionGroup, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { FaArrowLeft, FaClipboardList, FaFileInvoice, FaExternalLinkAlt, FaBoxOpen, FaStore } from 'react-icons/fa';
+import { FaArrowLeft, FaClipboardList, FaFileInvoice, FaExternalLinkAlt, FaBoxOpen, FaStore, FaFilePdf, FaSyncAlt } from 'react-icons/fa';
 import DateRangeFilter, { getPresetRange } from '../../components/DateRangeFilter';
+import { vendaService } from '../../services/vendaService';
+import { toast } from 'react-toastify';
 
 function MasterNfce() {
   const navigate = useNavigate();
@@ -14,9 +16,10 @@ function MasterNfce() {
   const [estabMap, setEstabMap] = useState({});
   const [estabList, setEstabList] = useState([]);
   const [filterEstab, setFilterEstab] = useState('todos');
+  const [loadingAcao, setLoadingAcao] = useState(null);
 
-  const [datePreset, setDatePreset] = useState('7D');
-  const [dateRange, setDateRange] = useState(getPresetRange('7D') || { start: null, end: null });
+  const [datePreset, setDatePreset] = useState('30d');
+  const [dateRange, setDateRange] = useState(getPresetRange('30d') || { start: null, end: null });
 
   useEffect(() => {
     if (!currentUser || !isMasterAdmin) return;
@@ -34,38 +37,41 @@ function MasterNfce() {
         setEstabMap(emap);
         setEstabList(elist.sort((a,b) => a.nome.localeCompare(b.nome)));
 
-        let q;
-        if (dateRange.start && dateRange.end) {
-            const startDate = new Date(dateRange.start);
-            startDate.setHours(0,0,0,0);
-            const endDate = new Date(dateRange.end);
-            endDate.setHours(23,59,59,999);
-            q = query(
-                collectionGroup(db, 'pedidos'),
-                where('createdAt', '>=', startDate),
-                where('createdAt', '<=', endDate)
-            );
-        } else {
-            const lastWeek = new Date();
-            lastWeek.setDate(lastWeek.getDate() - 7);
-            q = query(collectionGroup(db, 'pedidos'), where('createdAt', '>=', lastWeek));
-        }
+        const [pedSnap, venSnap] = await Promise.all([
+          getDocs(query(collectionGroup(db, 'pedidos'))),
+          getDocs(query(collectionGroup(db, 'vendas')))
+        ]);
 
-        const snap = await getDocs(q);
-        
-        let data = snap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
-        
-        // Filter only those with NFCe
-        let filtrados = data.filter(d => (d.fiscal && d.fiscal.status === 'autorizado') || !!d.url_danfe);
+        const extrairData = (c) => {
+          if (!c) return null;
+          if (typeof c.toDate === 'function') return c.toDate();
+          if (c.seconds) return new Date(c.seconds * 1000);
+          const d = new Date(c); return isNaN(d.getTime()) ? null : d;
+        };
+        const getDate = (item) => extrairData(item.createdAt) || extrairData(item.dataPedido) || extrairData(item.adicionadoEm) || extrairData(item.updatedAt);
 
-        // Sorting by date desc
-        filtrados.sort((a, b) => {
-          const dA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
-          const dB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
-          return dB - dA;
+        let todosFiltrados = [];
+
+        [...pedSnap.docs, ...venSnap.docs].forEach(d => {
+           let data = { id: d.id, ...d.data(), _path: d.ref.path };
+           
+           if ((data.fiscal && (data.fiscal.status === 'autorizado' || data.fiscal.status === 'CONCLUIDO')) || !!data.url_danfe || !!data?.fiscal?.urlDanfe) {
+               const dt = getDate(data) || new Date(0);
+               data._dataCalculada = dt; 
+
+               if (dateRange.start && dateRange.end) {
+                 const s = new Date(dateRange.start); s.setHours(0,0,0,0);
+                 const e = new Date(dateRange.end); e.setHours(23,59,59,999);
+                 if (dt >= s && dt <= e) todosFiltrados.push(data);
+               } else {
+                 const lm = new Date(); lm.setDate(lm.getDate() - 30);
+                 if (dt >= lm) todosFiltrados.push(data);
+               }
+           }
         });
 
-        setNfces(filtrados);
+        todosFiltrados.sort((a, b) => b._dataCalculada - a._dataCalculada);
+        setNfces(todosFiltrados);
       } catch (err) {
         console.error('Erro ao buscar NFC-es globais', err);
       } finally {
@@ -92,18 +98,48 @@ function MasterNfce() {
     setDateRange({ start: null, end: null });
   };
 
+  const getEstabId = (nota) => {
+    if (nota.estabelecimentoId) return nota.estabelecimentoId;
+    if (nota.estabelecimento_id) return nota.estabelecimento_id;
+    if (nota._path) {
+      const parts = nota._path.split('/');
+      const idx = parts.indexOf('estabelecimentos');
+      if (idx >= 0 && parts.length > idx + 1) return parts[idx+1];
+    }
+    return 'desconhecido';
+  };
+
+  const getTotal = (item) => Number(item.totalFinal) || Number(item.total) || Number(item.valorFinal) || Number(item.valorTotal) || 0;
+
   const nfcesFiltradas = nfces.filter(nota => {
     if (filterEstab !== 'todos') {
-      let estabId = 'desconhecido';
-      if (nota._path) {
-        const parts = nota._path.split('/');
-        const idx = parts.indexOf('estabelecimentos');
-        if (idx >= 0) estabId = parts[idx+1];
-      }
-      if (estabId !== filterEstab) return false;
+      const eId = getEstabId(nota);
+      if (eId !== filterEstab) return false;
     }
     return true;
   });
+
+  const handleBaixarPdf = async (nota) => {
+    const idPlugNotas = nota.fiscal?.idPlugNotas;
+    if (!idPlugNotas) {
+      toast.error('NFCE sem identificador PlugNotas. Não é possível baixar o PDF em tempo real.');
+      return;
+    }
+    setLoadingAcao(nota.id);
+    try {
+      const res = await vendaService.baixarPdfNfce(idPlugNotas, nota.fiscal?.pdf);
+      if (res && res.success) {
+        // Success handled silently as the window opens automatically in the service or here
+      } else {
+        toast.warning(res.error || 'Falha ao baixar o PDF.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao baixar PDF da NFC-e');
+    } finally {
+      setLoadingAcao(null);
+    }
+  };
 
   if (authLoading) return <div className="p-10 text-center">Carregando...</div>;
   if (!isMasterAdmin) return <div className="p-10 text-center text-red-500">Acesso Negado</div>;
@@ -167,33 +203,30 @@ function MasterNfce() {
                     </thead>
                     <tbody>
                         {nfcesFiltradas.map((nota, i) => {
-                            const data = nota.createdAt?.toDate ? nota.createdAt.toDate().toLocaleString('pt-BR') : '';
-                            let estabId = 'desconhecido';
-                            if (nota._path) {
-                                const parts = nota._path.split('/');
-                                const idx = parts.indexOf('estabelecimentos');
-                                if (idx >= 0) estabId = parts[idx+1];
-                            }
-                            const realNome = estabMap[estabId] || estabId;
-                            const valor = typeof nota.valorTotal === 'number' ? `R$ ${nota.valorTotal.toFixed(2)}` : 'R$ 0,00';
+                            const data = nota._dataCalculada ? nota._dataCalculada.toLocaleString('pt-BR') : '';
+                            const estabId = getEstabId(nota);
+                            const realNome = estabMap[estabId] || estabId.toUpperCase();
+                            const valNum = getTotal(nota);
+                            const valorStr = `R$ ${valNum.toFixed(2)}`;
                             
                             return (
                                 <tr key={nota.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/20'}`}>
                                 <td className="p-4 font-bold text-slate-700 text-sm">#{nota.id.substring(0,6)}</td>
                                 <td className="p-4 text-xs font-semibold text-slate-500">{data}</td>
                                 <td className="p-4">
-                                    <div className="text-sm font-bold text-slate-800">{nota.cliente?.nome || 'Anônimo'}</div>
-                                    <div className="text-xs text-slate-400">{valor}</div>
+                                    <div className="text-sm font-bold text-slate-800">{nota.cliente?.nome || nota.clienteNome || 'Anônimo'}</div>
+                                    <div className="text-xs text-slate-400">{valorStr}</div>
                                 </td>
                                 <td className="p-4"><span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded truncate max-w-[120px] inline-block" title={realNome}>{realNome}</span></td>
                                 <td className="p-4 text-center">
-                                    {(nota.fiscal?.urlDanfe || nota.url_danfe) ? (
-                                        <a href={nota.fiscal?.urlDanfe || nota.url_danfe} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg text-xs font-bold transition-colors">
-                                            <FaFileInvoice /> Ver DANFE <FaExternalLinkAlt className="ml-1 opacity-50" size={9} />
-                                        </a>
-                                    ) : (
-                                        <span className="text-slate-400 text-xs italic">Sem Link</span>
-                                    )}
+                                    <button 
+                                        onClick={() => handleBaixarPdf(nota)}
+                                        disabled={loadingAcao === nota.id}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                                    >
+                                        {loadingAcao === nota.id ? <FaSyncAlt className="animate-spin" /> : <FaFilePdf />}
+                                        {loadingAcao === nota.id ? 'Baixando...' : 'PDF DANFE'}
+                                    </button>
                                 </td>
                                 </tr>
                             )
@@ -204,7 +237,7 @@ function MasterNfce() {
              ) : (
                <div className="py-20 text-center">
                  <FaBoxOpen className="mx-auto text-4xl text-slate-200 mb-3" />
-                 <p className="text-slate-500 font-medium">Nenhuma nota fiscal emitida nos últimos 7 dias na plataforma.</p>
+                 <p className="text-slate-500 font-medium">Nenhuma nota fiscal encontrada no período selecionado e/ou na franquia filtrada.</p>
                </div>
              )}
           </div>

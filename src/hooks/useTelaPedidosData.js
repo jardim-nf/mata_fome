@@ -115,8 +115,12 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 if (data.itens) setResumoPedido(data.itens);
                 
                 if (data.nomesOcupantes && data.nomesOcupantes.length > 0) {
-                    setOcupantes(data.nomesOcupantes);
-                    setClienteSelecionado(prev => data.nomesOcupantes.includes(prev) ? prev : (data.nomesOcupantes[0] || 'Mesa'));
+                    const pessoasPagas = data.pessoasPagas || [];
+                    let nomesAtivos = data.nomesOcupantes.filter(n => !pessoasPagas.includes(n));
+                    if (nomesAtivos.length === 0) nomesAtivos = ['Mesa'];
+                    
+                    setOcupantes(nomesAtivos);
+                    setClienteSelecionado(prev => nomesAtivos.includes(prev) ? prev : (nomesAtivos[0] || 'Mesa'));
                 } else {
                     setOcupantes(['Mesa']);
                 }

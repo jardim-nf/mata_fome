@@ -4,6 +4,7 @@ import { saveAs } from 'file-saver';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { vendaService } from '../services/vendaService';
+import { getPresetRange } from '../components/DateRangeFilter';
 import { formatarMoeda } from '../utils/formatCurrency';
 import {
     FaCheckCircle, FaClock, FaTimesCircle,
@@ -28,8 +29,8 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
     // Filtros
     const [filtroStatus, setFiltroStatus] = useState('TODOS');
     const [busca, setBusca] = useState('');
-    const [dataInicio, setDataInicio] = useState('');
-    const [dataFim, setDataFim] = useState('');
+    const [datePreset, setDatePreset] = useState('30d');
+    const [dateRange, setDateRange] = useState(getPresetRange('30d') || { start: null, end: null });
     const [paginaAtual, setPaginaAtual] = useState(1);
 
     // Modal detalhes
@@ -60,7 +61,12 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
         if (!estabelecimentoPrincipal) return;
         setLoading(true);
         try {
-            const todas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoPrincipal, 500);
+            let todas = [];
+            if (dateRange.start && dateRange.end) {
+                todas = await vendaService.buscarVendasPorIntervalo(null, estabelecimentoPrincipal, dateRange.start, dateRange.end);
+            } else {
+                todas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoPrincipal, 500);
+            }
             const comFiscal = todas.filter(v => v.fiscal && v.fiscal.status);
             setVendas(comFiscal);
         } catch (err) {
@@ -69,7 +75,7 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
         } finally {
             setLoading(false);
         }
-    }, [estabelecimentoPrincipal]);
+    }, [estabelecimentoPrincipal, dateRange.start, dateRange.end]);
 
     useEffect(() => {
         carregarVendas();
@@ -81,15 +87,6 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
 
         if (filtroStatus !== 'TODOS') {
             resultado = resultado.filter(v => v.fiscal?.status === filtroStatus);
-        }
-
-        if (dataInicio) {
-            const inicio = new Date(dataInicio + 'T00:00:00');
-            resultado = resultado.filter(v => v.createdAt >= inicio);
-        }
-        if (dataFim) {
-            const fim = new Date(dataFim + 'T23:59:59');
-            resultado = resultado.filter(v => v.createdAt <= fim);
         }
 
         if (busca.trim()) {
@@ -104,7 +101,7 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
         }
 
         return resultado;
-    }, [vendas, filtroStatus, dataInicio, dataFim, busca]);
+    }, [vendas, filtroStatus, busca]);
 
     // ─── Paginação Dinâmica ──────────────────────────────────────────
     const totalPaginas = Math.ceil(vendasFiltradas.length / ITEMS_PER_PAGE);
@@ -115,7 +112,7 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
 
     useEffect(() => {
         setPaginaAtual(1);
-    }, [filtroStatus, dataInicio, dataFim, busca]);
+    }, [filtroStatus, dateRange, busca]);
 
     // ─── Estatísticas Globais ────────────────────────────────────────
     const stats = useMemo(() => {
@@ -279,7 +276,7 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
                 console.error("Erro ao buscar nome do estabelecimento", err);
             }
 
-            const dataBaseForName = dataInicio ? new Date(dataInicio + 'T12:00:00') : new Date();
+            const dataBaseForName = dateRange?.start ? new Date(dateRange.start) : new Date();
             const mesStr = (dataBaseForName.getMonth() + 1).toString().padStart(2, '0');
             const anoStr = dataBaseForName.getFullYear();
             
@@ -310,8 +307,8 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
             </tr>`;
         }).join('');
 
-        const periodoTxt = dataInicio || dataFim
-            ? `Período: ${dataInicio || '...'} a ${dataFim || '...'}`
+        const periodoTxt = dateRange?.start && dateRange?.end
+            ? `Período: ${dateRange.start.toLocaleDateString('pt-BR')} a ${dateRange.end.toLocaleDateString('pt-BR')}`
             : 'Período: Todos';
         const statusTxt = filtroStatus === 'TODOS' ? 'Todos' : getStatusInfo(filtroStatus).label;
 
@@ -367,8 +364,8 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
         // Filters Binding
         filtroStatus, setFiltroStatus,
         busca, setBusca,
-        dataInicio, setDataInicio,
-        dataFim, setDataFim,
+        datePreset, setDatePreset,
+        dateRange, setDateRange,
         paginaAtual, setPaginaAtual,
 
         // Ações Principais

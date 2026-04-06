@@ -8,6 +8,7 @@ import {
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import { formatarMoeda } from '../../utils/formatCurrency';
 import { useRelatorioNfceData } from '../../hooks/useRelatorioNfceData';
+import DateRangeFilter from '../../components/DateRangeFilter';
 
 // ─── Componente principal ───────────────────────────────────────────
 function RelatorioNfce({ estabelecimentoPrincipal }) {
@@ -23,8 +24,8 @@ function RelatorioNfce({ estabelecimentoPrincipal }) {
       // Filters Binding
       filtroStatus, setFiltroStatus,
       busca, setBusca,
-      dataInicio, setDataInicio,
-      dataFim, setDataFim,
+      datePreset, setDatePreset,
+      dateRange, setDateRange,
       paginaAtual, setPaginaAtual,
 
       // Ações Principais
@@ -119,23 +120,19 @@ function RelatorioNfce({ estabelecimentoPrincipal }) {
               <option value="CANCELADA">Cancelada</option>
             </select>
           </div>
-          {/* Data Início */}
+          {/* Período */}
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Data Início</label>
-            <div className="relative">
-              <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
-              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none" />
-            </div>
-          </div>
-          {/* Data Fim */}
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">Data Fim</label>
-            <div className="relative">
-              <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
-              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none" />
-            </div>
+            <label className="text-xs text-gray-500 mb-1 block">Período</label>
+            <DateRangeFilter
+                activePreset={datePreset}
+                dateRange={dateRange}
+                onPresetChange={setDatePreset}
+                onRangeChange={setDateRange}
+                onClear={() => {
+                   setDatePreset('');
+                   setDateRange({ start: null, end: null });
+                }}
+            />
           </div>
           {/* Busca */}
           <div>

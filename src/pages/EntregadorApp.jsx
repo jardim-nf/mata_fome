@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { collectionGroup, query, where, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collectionGroup, query, where, onSnapshot, updateDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { IoLocationOutline, IoNavigateCircle, IoBicycle, IoCheckmarkCircle, IoWarningOutline, IoSettingsOutline, IoLogOutOutline, IoClose } from 'react-icons/io5';
+import { useNavigate } from 'react-router-dom';
+import { IoLocationOutline, IoNavigateCircle, IoBicycle, IoCheckmarkCircle, IoWarningOutline, IoSettingsOutline, IoLogOutOutline, IoClose, IoWalletOutline, IoMapOutline, IoCloseCircleOutline, IoReceiptOutline, IoMenu } from 'react-icons/io5';
 import { tocarCampainha } from '../utils/audioUtils';
 
 // Constants
@@ -35,9 +36,13 @@ export default function EntregadorApp() {
     const [minhaCorridaAtual, setMinhaCorridaAtual] = useState(null);
     const [erroGps, setErroGps] = useState('');
     const [statsHoje, setStatsHoje] = useState({ qtde: 0, saldo: 0 });
+    const navigate = useNavigate();
     const [showSettings, setShowSettings] = useState(false);
     const [editChavePix, setEditChavePix] = useState('');
     const [isSavingPix, setIsSavingPix] = useState(false);
+    const [rejeitadas, setRejeitadas] = useState(new Set());
+    const [showCarteira, setShowCarteira] = useState(false);
+    const [historicoHoje, setHistoricoHoje] = useState([]);
 
     const { logout } = useAuth(); // Assume AuthContext provides logout
 
@@ -65,6 +70,9 @@ export default function EntregadorApp() {
             // OBS: Só dá pra filtrar se a corrida tiver as coordenadas do restaurante.
             // Para o MVP, se não tiver as coordenadas do restaurante, mostramos mesmo assim.
             const corridasPerto = corridas.filter(corrida => {
+                // Remove corridas ativamente rejeitadas localmente pelo motoboy
+                if (rejeitadas.has(corrida.id)) return false;
+
                 const restLat = corrida.restauranteLat; 
                 const restLon = corrida.restauranteLng;
 
@@ -164,6 +172,7 @@ export default function EntregadorApp() {
         const unsubscribe = onSnapshot(qHist, (snapshot) => {
             let qtde = 0;
             let total = 0;
+            const historyList = [];
             snapshot.forEach(docSnap => {
                 const data = docSnap.data();
                 const concluidoEm = data.horarioConclusaoLogistica?.toDate ? data.horarioConclusaoLogistica.toDate() : null;
@@ -171,8 +180,12 @@ export default function EntregadorApp() {
                 if (concluidoEm && concluidoEm >= dataInicio) {
                     qtde++;
                     total += Number(data.taxaEntrega) || 0;
+                    historyList.push({ id: docSnap.id, ...data, concluidoEm });
                 }
             });
+            // Ordenar histórico do mais recente pro mais antigo
+            historyList.sort((a,b) => b.concluidoEm - a.concluidoEm);
+            setHistoricoHoje(historyList);
             setStatsHoje({ qtde, saldo: total });
         }, (err) => {
             console.error("Erro ao puxar histórico de corridas: ", err);
@@ -217,11 +230,59 @@ export default function EntregadorApp() {
                 horarioConclusaoLogistica: serverTimestamp(),
                 dataFinalizado: serverTimestamp()
             });
+            setMinhaCorridaAtual(null); // Clear optimistic
             toast.success("🏁 Entrega finalizada com sucesso! Parabéns!");
         } catch (e) {
             toast.error("Erro ao finalizar corrida.");
         }
     }
+
+    const rejeitarCorridaLocamente = (corridaId) => {
+        setRejeitadas(prev => {
+           const n = new Set(prev);
+           n.add(corridaId);
+           return n;
+        });
+        toast.info("Corrida ignorada e removida do radar.");
+    };
+
+    // FUNCAO DEV / TESTE: Injeta uma corrida falsa no firebase para testar o radar
+    const simularCorridaDeTeste = async () => {
+        try {
+            // Usa a localização atual do motoboy para gerar a loja perto dele (evita que o filtro de 5km oculte a corrida simulada)
+            const lat = localizacaoAtual?.latitude || -23.5505;
+            const lng = localizacaoAtual?.longitude || -46.6333;
+
+            await addDoc(collection(db, 'estabelecimentos', 'LOJA_TESTE_UBER', 'pedidos'), {
+                statusLogistica: 'aguardando_entregador',
+                status: 'pronto',
+                taxaEntrega: Math.floor(Math.random() * 10) + 5.50, // Entre R$5.50 e R$15.50
+                enderecoOrigem: 'Rua do Restaurante, 123',
+                enderecoEntrega: 'Av. Cliente Fictício, 999',
+                bairro: 'Centro',
+                distanciaTxt: '3km',
+                restauranteNome: 'Restaurante Idea Dev',
+                coordenadasRestaurante: { latitude: lat, longitude: lng }, // Perto de você
+                cliente: { nome: 'João Testador', endereco: { rua: 'Rua Fake', numero: '10', bairro: 'Bairro Teste' } },
+                dataPedido: serverTimestamp()
+            });
+            toast.success("✅ Corrida DEV gerada com sucesso! O Radar vai apitar em instantes.");
+        } catch (e) {
+            console.error(e);
+            toast.error("Erro ao simular corrida de teste.");
+        }
+    };
+
+    const abrirRotaNoMaps = (lat, lng, label) => {
+        if (!lat || !lng) {
+            toast.error("Sem coordenadas para " + label);
+            return;
+        }
+        // Utiliza API universal (vai abrir no celular tanto iOS/Android)
+        // Se quisermos navegação ativa ('dir' api)
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+        window.open(url, '_blank');
+    };
 
     const handleSavePix = async () => {
         if (!editChavePix.trim()) return toast.error('Digite uma chave PIX!');
@@ -257,6 +318,9 @@ export default function EntregadorApp() {
                 <div className="flex justify-between items-center">
                     <div>
                         <h1 className="text-xl font-black text-white flex items-center gap-2">
+                           <button onClick={() => navigate('/painel')} className="mr-1 text-slate-300 hover:text-white transition-colors cursor-pointer p-1">
+                               <IoMenu className="text-3xl" />
+                           </button>
                            <IoBicycle className="text-emerald-400 text-3xl"/> IdeaEntregas
                         </h1>
                         <p className="text-sm font-medium text-slate-400 mt-1">Bem-vindo, {userData?.nome || 'Parceiro'}</p>
@@ -287,14 +351,14 @@ export default function EntregadorApp() {
                 )}
 
                 {/* PAINEL DE RENDIMENTOS DO DIA */}
-                <div className="mt-6 flex justify-between bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50 shadow-inner">
+                <div onClick={() => setShowCarteira(true)} className="mt-6 flex justify-between items-center bg-slate-900/50 hover:bg-slate-800 p-4 rounded-2xl border border-slate-700/50 shadow-inner cursor-pointer transition-colors group">
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Corridas Hoje</span>
-                        <span className="text-2xl font-black text-white leading-none">{statsHoje.qtde}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><IoReceiptOutline/> Corridas</span>
+                        <span className="text-2xl font-black text-white leading-none group-hover:text-emerald-400 transition-colors">{statsHoje.qtde}</span>
                     </div>
                     <div className="w-px bg-slate-700/50 mx-4"></div>
                     <div className="flex flex-col text-right">
-                        <span className="text-[10px] font-bold text-emerald-500/80 uppercase tracking-wider mb-1">Ganhos do Dia (Taxas)</span>
+                        <span className="text-[10px] font-bold text-emerald-500/80 uppercase tracking-wider mb-1 flex items-center justify-end gap-1"><IoWalletOutline/> Extrato (Hoje)</span>
                         <span className="text-2xl font-black text-emerald-400 leading-none">R$ {statsHoje.saldo.toFixed(2).replace('.', ',')}</span>
                     </div>
                 </div>
@@ -324,9 +388,26 @@ export default function EntregadorApp() {
                         <h3 className="text-lg font-bold text-slate-200 mb-2">
                            Entrega na {minhaCorridaAtual.enderecoEntrega || minhaCorridaAtual.endereco?.rua || minhaCorridaAtual.cliente?.endereco?.rua || 'Endereço não informado'}, {(minhaCorridaAtual.endereco?.numero || minhaCorridaAtual.cliente?.endereco?.numero) || 'SN'}
                         </h3>
-                        <p className="text-sm font-medium text-slate-400 mb-2">
+                        <p className="text-sm font-medium text-slate-400 mb-4">
                            Bairro: {minhaCorridaAtual.bairro || minhaCorridaAtual.endereco?.bairro || minhaCorridaAtual.cliente?.endereco?.bairro || 'Sem Bairro'}
                         </p>
+                        
+                        <div className="flex gap-2 mb-6">
+                            <button
+                                onClick={() => abrirRotaNoMaps(minhaCorridaAtual.restauranteLat, minhaCorridaAtual.restauranteLng, 'Restaurante')}
+                                className="flex-1 py-3 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/50 text-indigo-300 hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex justify-center items-center gap-2">
+                                <IoMapOutline size={18} /> Rota Lojista
+                            </button>
+                            <button
+                                onClick={() => abrirRotaNoMaps(
+                                    minhaCorridaAtual.endereco?.lat || minhaCorridaAtual.cliente?.endereco?.lat, 
+                                    minhaCorridaAtual.endereco?.lng || minhaCorridaAtual.cliente?.endereco?.lng, 
+                                    'Cliente'
+                                )}
+                                className="flex-1 py-3 bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/50 text-emerald-300 hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex justify-center items-center gap-2">
+                                <IoMapOutline size={18} /> Rota Cliente
+                            </button>
+                        </div>
                         {(minhaCorridaAtual.pontoReferencia || minhaCorridaAtual.endereco?.referencia || minhaCorridaAtual.cliente?.endereco?.referencia || minhaCorridaAtual.referencia) && <p className="text-blue-200 text-sm italic mb-6">" {minhaCorridaAtual.pontoReferencia || minhaCorridaAtual.endereco?.referencia || minhaCorridaAtual.cliente?.endereco?.referencia || minhaCorridaAtual.referencia} "</p>}
 
                         <div className="bg-slate-900/40 rounded-2xl p-4 mb-6 backdrop-blur-sm border border-white/10">
@@ -361,7 +442,15 @@ export default function EntregadorApp() {
                                     </div>
                                 </div>
                                 <h3 className="text-xl font-bold text-emerald-400 mt-8">Buscando Ofertas...</h3>
-                                <p className="text-sm font-medium text-slate-400 mt-2">Fique ligado! O radar está varrendo os restaurantes num raio de 5km.</p>
+                                <p className="text-sm font-medium text-slate-400 mt-2 mb-6">Fique ligado! O radar está varrendo os restaurantes num raio de 5km.</p>
+                                
+                                {/* Botão DEV para evitar ter que abrir outra aba para criar pedido */}
+                                <button
+                                    onClick={simularCorridaDeTeste}
+                                    className="border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all"
+                                >
+                                    [DEV] Simular Corrida
+                                </button>
                             </div>
                         ) : (
                             <div className="space-y-4">
@@ -391,11 +480,18 @@ export default function EntregadorApp() {
                                             </div>
                                         </div>
 
-                                        <button 
-                                          onClick={() => aceitarCorrida(corrida)}
-                                          className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
-                                          ACEITAR CORRIDA
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => rejeitarCorridaLocamente(corrida.id)}
+                                                className="w-1/3 py-4 border-2 border-slate-700 hover:bg-slate-700 text-slate-400 rounded-2xl font-black text-sm uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center">
+                                                <IoCloseCircleOutline size={24} />
+                                            </button>
+                                            <button 
+                                                onClick={() => aceitarCorrida(corrida)}
+                                                className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
+                                                ACEITAR CORRIDA
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -444,6 +540,50 @@ export default function EntregadorApp() {
                             >
                                 <IoLogOutOutline className="text-xl" /> SAIR DO APLICATIVO
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL CARTEIRA (REPASSES) */}
+            {showCarteira && (
+                <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
+                    <div className="bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 border-t sm:border border-slate-700 animate-slideUp flex flex-col max-h-[85vh]">
+                        <div className="flex justify-between items-center mb-6 shrink-0">
+                            <h2 className="text-xl font-black text-white flex items-center gap-2">
+                                <IoWalletOutline className="text-emerald-400" /> Carteira Diária
+                            </h2>
+                            <button onClick={() => setShowCarteira(false)} className="text-slate-400 hover:text-white p-2 bg-slate-700/50 rounded-full transition-colors">
+                                <IoClose className="text-xl" />
+                            </button>
+                        </div>
+
+                        <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-2xl p-5 mb-6 text-center shrink-0">
+                            <p className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-1">Total Hoje em Taxas</p>
+                            <p className="text-3xl font-black text-emerald-400">R$ {statsHoje.saldo.toFixed(2).replace('.', ',')}</p>
+                            <p className="text-[10px] text-slate-400 mt-2 font-medium">As corridas são pagas segundo a regra da central.</p>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2 pb-4">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Histórico de Hoje ({historicoHoje.length})</p>
+                            {historicoHoje.length === 0 ? (
+                                <div className="text-center py-10 opacity-50">
+                                    <IoReceiptOutline className="text-5xl mx-auto text-slate-600 mb-3" />
+                                    <p className="text-sm font-medium text-slate-400">Nenhuma entrega concluída hoje.</p>
+                                </div>
+                            ) : (
+                                historicoHoje.map(h => (
+                                    <div key={h.id} className="bg-slate-900/80 rounded-xl p-4 flex justify-between items-center border border-slate-700/50">
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-200">{h.restauranteNome || 'Restaurante'}</p>
+                                            <p className="text-[10px] uppercase font-bold text-slate-500">#{h.id.substring(0, 6)} • {h.concluidoEm ? h.concluidoEm.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : ''}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-base font-black text-emerald-400">R$ {(h.taxaEntrega || 0).toFixed(2).replace('.',',')}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

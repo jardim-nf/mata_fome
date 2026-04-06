@@ -82,7 +82,7 @@ function MasterCupons() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-6 flex flex-col sm:flex-row items-center gap-4 relative z-10 w-fit">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-6 flex flex-col sm:flex-row items-center gap-4 relative z-10 w-full sm:w-fit">
           <div className="flex items-center gap-2 w-full sm:w-auto">
              <FaStore className="text-slate-400" />
              <select 

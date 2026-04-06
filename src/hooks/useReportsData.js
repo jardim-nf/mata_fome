@@ -75,7 +75,7 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             } catch (e) { console.error(e); }
 
             try {
-                const qGlobVendas = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('criadoEm', '>=', startTs), where('criadoEm', '<=', endTs));
+                const qGlobVendas = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
                 const snapGlobVendas = await getDocs(qGlobVendas);
                 snapGlobVendas.docs.forEach(d => {
                     const data = d.data();

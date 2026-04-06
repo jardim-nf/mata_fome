@@ -8,7 +8,8 @@ import {
   doc, 
   getDoc,
   addDoc,
-  serverTimestamp 
+  serverTimestamp,
+  limit 
 } from 'firebase/firestore';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -94,7 +95,8 @@ export const vendaService = {
       const q = query(
         collection(db, 'vendas'),
         where('estabelecimentoId', '==', estabelecimentoId),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
+        limit(limite)
       );
       const querySnapshot = await getDocs(q);
       const vendas = [];
@@ -129,14 +131,17 @@ export const vendaService = {
   async buscarVendasPorIntervalo(usuarioId, estabelecimentoId, dataInicio, dataFim) {
     try {
       const fim = dataFim || new Date(); 
-      const q = query(
-        collection(db, 'vendas'),
+      let condicoes = [
         where('estabelecimentoId', '==', estabelecimentoId),
-        where('usuarioId', '==', usuarioId),
         where('createdAt', '>=', dataInicio),
         where('createdAt', '<=', fim),
         orderBy('createdAt', 'desc')
-      );
+      ];
+      if (usuarioId) {
+        condicoes.push(where('usuarioId', '==', usuarioId));
+      }
+      
+      const q = query(collection(db, 'vendas'), ...condicoes);
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => {
         const data = doc.data();

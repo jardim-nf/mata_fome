@@ -9,6 +9,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import LoginMotoboy from './pages/LoginMotoboy';
 import { ROLE_GROUPS, ROLES } from './constants/roles';
 import IosInstallPrompt from "./components/IosInstallPrompt";
+import ScrollToTop from "./components/ScrollToTop";
 
 // Lazy imports dos context providers pesados (só carregam em rotas autenticadas)
 const AIProvider = lazy(() => import('./context/AIContext').then(m => ({ default: m.AIProvider })));
@@ -61,6 +62,7 @@ const ListarUsuariosMaster = lazy(() => import('./pages/admin/ListarUsuariosMast
 const MasterMensagens = lazy(() => import('./pages/admin/MasterMensagens'));
 const MasterCupons = lazy(() => import('./pages/admin/MasterCupons'));
 const MasterNfce = lazy(() => import('./pages/admin/MasterNfce'));
+const MasterAnalytics = lazy(() => import('./pages/admin/MasterAnalytics'));
 const MasterClientes = lazy(() => import('./pages/admin/MasterClientes'));
 const EditarEstabelecimentoMaster = lazy(() => import('./pages/admin/EditarEstabelecimentoMaster'));
 const ImportarCardapioMaster = lazy(() => import('./pages/admin/ImportarCardapioMaster'));
@@ -106,6 +108,7 @@ function App() {
   return (
     <ErrorBoundary>
     <Router>
+      <ScrollToTop />
       <AuthProvider>
         <HeaderProvider>
           <div className="min-h-screen bg-gray-50">
@@ -125,6 +128,9 @@ function App() {
                 <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
                 <Route path="/divulgacao" element={<Divulgacao />} />
                 <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
+
+                {/* App do Motoboy (Uberização) - Renderiza full screen fora do Layout master */}
+                <Route path="/entregador" element={<PrivateRoute allowedRoles={[ROLES.ENTREGADOR, 'admin', 'masterAdmin']}><EntregadorApp /></PrivateRoute>} />
 
                 {/* Rotas autenticadas — COM providers pesados (AI, Payment, Notification) */}
                 <Route element={<AuthenticatedProviders><Layout /></AuthenticatedProviders>}>
@@ -168,8 +174,6 @@ function App() {
                   <Route path="/admin/marketing" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarketingConfig /></PrivateRoute>} />
                   <Route path="/admin/cashback" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CashbackConfig /></PrivateRoute>} />
 
-                  {/* App do Motoboy (Uberização) */}
-                  <Route path="/entregador" element={<PrivateRoute allowedRoles={[ROLES.ENTREGADOR, 'admin', 'masterAdmin']}><EntregadorApp /></PrivateRoute>} />
 
                   {/* Rotas Master */}
                   <Route path="/master-dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterDashboard /></PrivateRoute>} />
@@ -189,6 +193,7 @@ function App() {
                   <Route path="/master/mensagens" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterMensagens /></PrivateRoute>} />
                   <Route path="/master/cupons-rede" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterCupons /></PrivateRoute>} />
                   <Route path="/master/nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterNfce /></PrivateRoute>} />
+                  <Route path="/master/analytics" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterAnalytics /></PrivateRoute>} />
                   <Route path="/master/clientes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MasterClientes /></PrivateRoute>} />
                   <Route path="/admin/audit-logs" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AuditLogs /></PrivateRoute>} />
                   <Route path="/admin/config-fiscal" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ConfigFiscalScreen /></PrivateRoute>} />

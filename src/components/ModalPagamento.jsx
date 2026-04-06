@@ -37,12 +37,18 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 <div className="flex items-center gap-2 text-gray-500 mb-2">
                     <IoTime /> <span className="text-xs font-bold uppercase">Histórico de Pagamentos</span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-1">
                     <span className="text-sm text-gray-600">Já abatido da conta:</span>
                     <span className="text-lg font-bold text-green-600">- R$ {jaPago.toFixed(2)}</span>
                 </div>
-                <div className="mt-1 text-xs text-gray-400 text-right">
-                    (Este valor já está descontado do total a pagar)
+                {mesa.pagamentosParciais?.map(pg => (
+                    <div key={pg.id} className="flex justify-between items-center text-xs text-gray-500 mt-1 pl-2 border-l-2 border-gray-200">
+                        <span>{pg.pagantes ? pg.pagantes : 'Pagamento Parcial'}</span>
+                        <span className="font-bold text-gray-700">- R$ {Number(pg.valor).toFixed(2)}</span>
+                    </div>
+                ))}
+                <div className="mt-3 text-[10px] text-gray-400 text-center uppercase tracking-widest">
+                    (Valores já descontados do total a pagar)
                 </div>
             </div>
         );

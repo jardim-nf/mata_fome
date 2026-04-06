@@ -57,7 +57,7 @@ function HomeRedirector() {
       targetPath = '/painel';
     }
     else if (hasRole('entregador')) {
-      targetPath = '/painel';
+      targetPath = '/entregador';
     }
     else if (hasRole('auxiliar')) {
       targetPath = '/painel';
