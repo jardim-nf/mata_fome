@@ -10,10 +10,10 @@ import { format, subDays } from 'date-fns';
 import { FaMotorcycle } from 'react-icons/fa';
 import {
   IoCalendarOutline, IoDocumentTextOutline, IoCheckmarkCircle,
-  IoTimeOutline, IoCloseCircle, IoRefreshOutline, IoArrowBack,
+  IoTimeOutline, IoCloseCircle, IoRefreshOutline,
   IoCashOutline, IoSearchOutline
 } from 'react-icons/io5';
-import { Link } from 'react-router-dom';
+import BackButton from '../components/BackButton';
 
 const fmtBRL = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtData = (iso) => {
@@ -115,9 +115,7 @@ function AcertoMotoboys() {
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/relatorios" className="p-2 bg-white rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
-            <IoArrowBack className="text-slate-600" size={20} />
-          </Link>
+          <BackButton />
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
               <FaMotorcycle className="text-white" size={18} />

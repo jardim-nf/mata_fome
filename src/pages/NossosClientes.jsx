@@ -8,6 +8,7 @@ import { doc, getDoc, collection, getDocs, query, where, orderBy, limit } from '
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { FaArrowLeft, FaWhatsapp, FaEnvelopeOpenText, FaUsers, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import BackButton from '../components/BackButton';
 
 /**
  * Componente para o administrador de um estabelecimento enviar mensagens em massa
@@ -222,12 +223,7 @@ function ClientManagement({ estabelecimentoPrincipal }) {
         <div className="min-h-screen bg-gray-50 py-8 text-sm sm:text-base lg:px-8">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
-                <button
-                    onClick={() => navigate('/dashboard')}
-                    className="flex items-center text-gray-600 hover:text-gray-900 mb-6 transition duration-200"
-                >
-                    <FaArrowLeft className="mr-2" /> Voltar para o Dashboard
-                </button>
+                <BackButton className="mb-6" onClick={() => navigate('/dashboard')} />
 
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center justify-center">

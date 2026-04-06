@@ -1,5 +1,7 @@
 // src/pages/admin/WhatsAppConfig.jsx — Configuração do Bot WhatsApp (UAZAPI)
 import React, { useState, useEffect } from 'react';
+import BackButton from '../../components/BackButton';
+
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -75,9 +77,7 @@ function WhatsAppConfig() {
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 font-sans pb-20">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/dashboard" className="p-2.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 shadow-sm">
-            <IoArrowBack size={18} />
-          </Link>
+          <BackButton to="/dashboard" />
           <div>
             <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
               <IoLogoWhatsapp className="text-green-500" /> WhatsApp (Uazapi)

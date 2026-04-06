@@ -1,5 +1,7 @@
 // src/pages/admin/MarketingConfig.jsx — Configuração de Marketing Automático
 import React, { useState, useEffect } from 'react';
+import BackButton from '../../components/BackButton';
+
 import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
 import { db, functions } from '../../firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -154,9 +156,7 @@ function MarketingConfig() {
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/dashboard" className="p-2.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 shadow-sm">
-            <IoArrowBack size={18} />
-          </Link>
+          <BackButton to="/dashboard" />
           <div>
             <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
               <IoMegaphoneOutline className="text-purple-500" /> Marketing Automático

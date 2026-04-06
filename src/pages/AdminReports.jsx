@@ -10,6 +10,7 @@ import DetailedTable from '../components/admin/reports/DetailedTable';
 import { useReportsData } from '../hooks/useReportsData';
 import { useReportExport } from '../hooks/useReportExport';
 import { fmtBRL } from '../utils/reportUtils';
+import BackButton from '../components/BackButton';
 
 // Ícones
 import { 
@@ -92,6 +93,7 @@ const AdminReports = () => {
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-6 font-sans">
             <div className="max-w-7xl mx-auto mb-4">
+                <BackButton className="mb-6" />
                 <div className="flex justify-end gap-2 no-print">
                     <button onClick={() => handleExportCSV(filteredPedidos)} disabled={!filteredPedidos.length} className="bg-emerald-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm">
                         <IoDownloadOutline size={16}/> CSV

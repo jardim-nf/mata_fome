@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import BackButton from '../components/BackButton';
+
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -108,12 +110,7 @@ const AdminColorSettings = () => {
         {/* Header da Página */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
-            <button 
-              onClick={() => navigate('/dashboard')}
-              className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600 transition-colors"
-            >
-              <IoArrowBack size={24} />
-            </button>
+            <BackButton to="/dashboard" />
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center">
                 <IoColorPalette className="mr-3 text-blue-600" />

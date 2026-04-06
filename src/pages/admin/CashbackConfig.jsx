@@ -1,5 +1,7 @@
 // src/pages/admin/CashbackConfig.jsx — Configuração de Cashback Digital
 import React, { useState, useEffect } from 'react';
+import BackButton from '../../components/BackButton';
+
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -57,9 +59,7 @@ function CashbackConfig() {
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <Link to="/dashboard" className="p-2.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 shadow-sm">
-            <IoArrowBack size={18} />
-          </Link>
+          <BackButton to="/dashboard" />
           <div>
             <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
               <IoWalletOutline className="text-emerald-500" /> Cashback Virtual

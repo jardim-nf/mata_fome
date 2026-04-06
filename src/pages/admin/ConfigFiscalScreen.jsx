@@ -6,6 +6,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
 import { AdminDepartamentosFiscais } from '../../components/admin/AdminDepartamentosFiscais';
+import BackButton from '../../components/BackButton';
 
 const ConfigFiscalScreen = () => {
   const { userData, currentUser } = useAuth();
@@ -101,14 +102,13 @@ const ConfigFiscalScreen = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans text-gray-800">
       <div className="max-w-4xl mx-auto">
-        
+        <BackButton className="mb-6" />
         {/* Cabeçalho */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-black text-gray-900">Configuração Fiscal</h1>
             <p className="text-gray-500 mt-1">Dados para emissão de NFC-e e Matriz Tributária</p>
           </div>
-          <button onClick={() => window.history.back()} className="text-gray-500 hover:text-gray-800 font-bold">Voltar</button>
         </div>
 
         {/* Abas */}

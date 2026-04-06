@@ -1,5 +1,7 @@
 // src/pages/admin/BotPedidosConfig.jsx
 import React, { useState, useEffect } from 'react';
+import BackButton from '../../components/BackButton';
+
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -112,9 +114,7 @@ function BotPedidosConfig() {
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Link to="/admin/whatsapp" className="p-2 bg-white rounded-xl border border-slate-200 hover:bg-slate-50">
-            <IoArrowBack className="text-slate-600" size={20} />
-          </Link>
+          <BackButton to="/admin/whatsapp" />
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-600 rounded-xl flex items-center justify-center text-white text-xl">🤖</div>
             <div>

@@ -12,6 +12,7 @@ import {
     IoStatsChart, IoSparkles
 } from 'react-icons/io5';
 import PromptDialog from '../components/ui/PromptDialog';
+import BackButton from '../components/BackButton';
 
 export default function TaxasDeEntrega() {
     const { estabelecimentoIdPrincipal, currentUser, isAdmin, isMaster, loading: authLoading } = useAuth();
@@ -34,16 +35,7 @@ export default function TaxasDeEntrega() {
     useEffect(() => {
         setTitle('🛵 Taxas de Entrega');
         setSubtitle('Gerencie os valores de entrega por bairro');
-        const backButton = (
-            <button
-                onClick={() => navigate('/dashboard')}
-                className="inline-flex items-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-2 px-4 rounded-lg border border-gray-300 transition-all duration-200 hover:shadow-md hover:border-indigo-300"
-            >
-                <IoArrowBack />
-                <span>Voltar ao Dashboard</span>
-            </button>
-        );
-        setActions(backButton);
+        setActions(null);
 
         return () => {
             setTitle(null); setSubtitle(null); setActions(null);
@@ -91,9 +83,7 @@ export default function TaxasDeEntrega() {
                         {!estabelecimentoIdPrincipal ? "Configure seu estabelecimento primeiro para acessar as taxas de entrega." : "Você não tem permissão para acessar esta página."}
                     </p>
                     <div className="flex w-full gap-3 justify-center mt-6">
-                        <button onClick={() => navigate('/dashboard')} className="inline-flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg">
-                            <IoArrowBack /><span>Voltar ao Dashboard</span>
-                        </button>
+                        <BackButton />
                     </div>
                 </div>
             </div>
@@ -137,8 +127,9 @@ export default function TaxasDeEntrega() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
-            <div className="container mx-auto text-sm sm:text-base py-6">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-4 sm:p-6 lg:p-8 font-sans pb-24">
+            <div className="max-w-7xl mx-auto">
+                <BackButton className="mb-6" />
                 
                 {/* Estatísticas */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

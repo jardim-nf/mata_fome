@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import GerenciarOrdemCategoria from '../components/GerenciarOrdemCategoria';
 import { toast } from 'react-toastify';
 import { FaPlus, FaTrash } from 'react-icons/fa'; // Ícones para interface
+import BackButton from '../components/BackButton';
 
 const AdminOrderCategories = () => {
   const navigate = useNavigate();
@@ -198,9 +199,7 @@ const AdminOrderCategories = () => {
               <h1 className="text-2xl font-bold text-gray-900">Gerenciar Categorias</h1>
               <p className="text-gray-600 mt-1">Crie novas categorias ou reordene as existentes</p>
             </div>
-            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
-              Voltar
-            </button>
+            <BackButton onClick={handleClose} />
           </div>
 
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">

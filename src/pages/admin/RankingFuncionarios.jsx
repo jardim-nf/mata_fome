@@ -1,5 +1,7 @@
 // src/pages/admin/RankingFuncionarios.jsx
 import React, { useState, useEffect, useMemo } from 'react';
+import BackButton from '../../components/BackButton';
+
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -101,9 +103,7 @@ function RankingFuncionarios() {
         {/* HEADER */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link to="/dashboard" className="p-2.5 rounded-xl bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 shadow-sm">
-              <IoArrowBack size={18} />
-            </Link>
+            <BackButton to="/dashboard" />
             <div>
               <h1 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
                 <IoTrophyOutline className="text-amber-500" /> Ranking de Funcionários

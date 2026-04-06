@@ -10,6 +10,7 @@ import {
 } from 'react-icons/io5';
 import ModalVinculo from '../../components/estoque/ModalVinculo';
 import ModalNovoProduto from '../../components/estoque/ModalNovoProduto';
+import BackButton from '../../components/BackButton';
 
 const EntradaEstoqueXML = () => {
     const { estabelecimentoIdPrincipal } = useAuth();
@@ -19,6 +20,7 @@ const EntradaEstoqueXML = () => {
         <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
             <div className="max-w-6xl mx-auto space-y-6">
                 <header>
+                    <BackButton className="mb-6" />
                     <h1 className="text-3xl font-black text-gray-900 flex items-center gap-3">
                         <IoCloudUploadOutline className="text-blue-600" /> Entrada de Estoque via XML
                     </h1>

@@ -11,6 +11,7 @@ import {
     IoAddCircleOutline, IoSearch, IoClose, IoImageOutline, IoCheckmarkCircle,
     IoAlertCircle, IoCube, IoCash, IoPricetag, IoList, IoEyeOff, IoGrid, IoMenu, IoBarcodeOutline
 } from 'react-icons/io5';
+import BackButton from '../components/BackButton';
 
 // Skeleton Loader
 const SkeletonLoader = () => (
@@ -191,7 +192,7 @@ function AdminMenuManagement() {
   return (
     <div className="min-h-screen bg-[#F3F4F6] p-4 md:p-6 font-sans pb-24">
       <div className="max-w-7xl mx-auto">
-        
+        <BackButton className="mb-6" />
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
             <StatsCard title="Total Itens" value={menuParams.stockStatistics.totalItems} icon={IoList} colorClass="text-blue-600" bgClass="bg-blue-50" />
             <StatsCard title="Ativos" value={menuParams.stockStatistics.activeItems} icon={IoCheckmarkCircle} colorClass="text-emerald-600" bgClass="bg-emerald-50" />

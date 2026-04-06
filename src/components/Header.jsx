@@ -102,15 +102,7 @@ function Header() {
                 <div className="flex items-center justify-between h-16 md:h-20">
                     
                     <div className="flex-1 flex items-center justify-start gap-3">
-                        {isInternalPage && (
-                            <button
-                                onClick={() => navigate(-1)}
-                                className="flex items-center justify-center p-2 -ml-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-all group"
-                                title="Voltar"
-                            >
-                                <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
-                            </button>
-                        )}
+                        {/* Retirado o botão de voltar global daqui para usar o BackButton nas telas */}
                         
                         {isInternalPage && getBreadcrumbs().length > 0 && (
                             <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-400 font-medium">

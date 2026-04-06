@@ -9,6 +9,7 @@ import {
     IoCalendarOutline, IoTimeOutline, IoCardOutline,
     IoPodiumOutline, IoBicycle, IoStorefront
 } from 'react-icons/io5';
+import BackButton from '../components/BackButton';
 
 // ── HELPERS ──
 const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -108,7 +109,7 @@ function AdminAnalytics() {
                 <IoAlertCircle className="text-red-500 text-4xl mx-auto mb-3" />
                 <h2 className="text-xl font-bold text-gray-900 mb-2">Sem Estabelecimento</h2>
                 <p className="text-gray-600 mb-4">Nenhum estabelecimento vinculado.</p>
-                <Link to="/admin-dashboard" className="inline-flex items-center gap-2 bg-blue-600 text-white font-bold py-3 px-6 rounded-xl"><IoArrowBack /> Voltar</Link>
+                <div className="flex justify-center"><BackButton to="/admin-dashboard" className="!mb-0" /></div>
             </div>
         </div>
     );
@@ -116,13 +117,11 @@ function AdminAnalytics() {
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-6 font-sans pb-20">
             <div className="max-w-[1400px] mx-auto space-y-6">
+                <BackButton className="mb-6" />
 
                 {/* ═══ HEADER ═══ */}
                 <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <Link to="/admin-dashboard" className="p-2.5 rounded-xl hover:bg-white text-gray-600 border border-gray-200 transition-colors bg-white shadow-sm">
-                            <IoArrowBack size={18} />
-                        </Link>
                         <div>
                             <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Relatórios & BI</h1>
                             <p className="text-xs text-gray-500 font-medium">{nomeEstab || 'Carregando...'} • Dados em tempo real</p>

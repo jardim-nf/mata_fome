@@ -4,6 +4,7 @@ import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaUserPlus, FaExclamationTria
 
 import { useGestaoFuncionariosData } from "../../hooks/useGestaoFuncionariosData";
 import { ModalFuncionario } from "../../components/ModalFuncionario";
+import BackButton from "../../components/BackButton";
 
 const GestaoFuncionarios = () => {
     const { userData } = useAuth();
@@ -42,6 +43,7 @@ const GestaoFuncionarios = () => {
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
             <div className="max-w-7xl mx-auto">
+                <BackButton className="mb-6" />
                 
                 {/* Cabeçalho e Botão de Adicionar */}
                 <div className="flex justify-between items-center mb-6">

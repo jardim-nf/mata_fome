@@ -9,6 +9,7 @@ import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import { formatarMoeda } from '../../utils/formatCurrency';
 import { useRelatorioNfceData } from '../../hooks/useRelatorioNfceData';
 import DateRangeFilter from '../../components/DateRangeFilter';
+import BackButton from '../../components/BackButton';
 
 // ─── Componente principal ───────────────────────────────────────────
 function RelatorioNfce({ estabelecimentoPrincipal }) {
@@ -40,6 +41,7 @@ function RelatorioNfce({ estabelecimentoPrincipal }) {
   // ─── Render ─────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <BackButton className="mb-6" />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">

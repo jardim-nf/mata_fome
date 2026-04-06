@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import BackButton from '../../components/BackButton';
+
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { vendaService } from '../../services/vendaService';
@@ -192,9 +194,7 @@ const PdvScreen = () => {
                         <div className="flex-1 flex flex-col min-w-0 min-h-0">
                             <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-white shrink-0">
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => navigate('/admin-dashboard')} className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
-                                        <IoArrowBack size={18} />
-                                    </button>
+                                    <BackButton />
                                     <div className="flex items-center gap-2">
                                         <div className={`w-2 h-2 rounded-full ${pdvCaixa.caixaAberto ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                                         <h1 className="text-sm font-black text-slate-800 uppercase truncate max-w-[150px]">{nomeLoja}</h1>

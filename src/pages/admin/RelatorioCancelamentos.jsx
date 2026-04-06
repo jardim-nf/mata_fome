@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import BackButton from '../../components/BackButton';
+
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
@@ -63,9 +65,7 @@ const RelatorioCancelamentos = () => {
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate('/admin-dashboard')} className="p-2 bg-white rounded-full shadow hover:bg-gray-100">
-                            <IoArrowBack className="text-xl text-gray-700" />
-                        </button>
+                        <BackButton />
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                                 <IoTrashBin className="text-red-500" /> Relatório de Cancelamentos

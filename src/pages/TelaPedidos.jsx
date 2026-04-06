@@ -2,11 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-    IoArrowBack, IoCart, IoSearch, IoAdd,
+    IoCart, IoSearch, IoAdd,
     IoRemove, IoRestaurant, IoClose,
     IoPerson, IoPencil, IoAddCircle, 
     IoPersonAdd, IoTrash, IoCheckmarkDoneCircle, IoPrint
 } from 'react-icons/io5';
+import BackButton from '../components/BackButton';
 
 import VariacoesModal from '../components/VariacoesModal';
 import { useTelaPedidosData } from '../hooks/useTelaPedidosData';
@@ -139,7 +140,7 @@ const TelaPedidos = () => {
             <header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
                 <div className="flex items-center justify-between w-full px-4">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => navigate('/controle-salao')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><IoArrowBack className="text-xl" /></button>
+                        <BackButton to="/controle-salao" className="!p-2 border-none shadow-none bg-transparent hover:bg-gray-100 rounded-full !w-auto" label="" />
                         <div>
                             <h1 className="font-black text-xl text-gray-900 leading-none">Mesa {mesa?.numero}</h1>
                             <p className="text-xs text-gray-500 font-medium truncate max-w-[150px]">

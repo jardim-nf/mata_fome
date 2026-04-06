@@ -25,6 +25,7 @@ import {
   IoCheckmarkCircle,
   IoEllipse
 } from 'react-icons/io5';
+import BackButton from '../../components/BackButton';
 
 // Componente Card de Entregador
 const EntregadorCard = ({ entregador, onEdit, onDelete, onToggleStatus }) => (
@@ -207,6 +208,7 @@ function AdminEntregadores() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
+        <BackButton className="mb-6" />
         
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">

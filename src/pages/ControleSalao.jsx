@@ -1,3 +1,4 @@
+import BackButton from '../components/BackButton';
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -196,9 +197,7 @@ export default function ControleSalao() {
                 <div className="flex flex-col xl:flex-row justify-between gap-4 w-full">
                     <div className="flex flex-col gap-1 shrink-0">
                         {!isGarcom && (
-                            <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-800 font-bold text-xs flex items-center gap-1 w-fit transition-colors">
-                                <IoArrowBack /> Voltar ao Painel
-                            </button>
+                            <BackButton />
                         )}
                         <div className="flex items-center gap-3 mt-1">
                             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Salão</h1>

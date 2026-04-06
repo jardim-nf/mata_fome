@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import BackButton from '../components/BackButton';
+
 import { Link } from 'react-router-dom';
 import { usePlatforms } from '../hooks/usePlatforms';
 import { useNotifications } from "../hooks/useNotifications";
@@ -137,13 +139,7 @@ function AdminMultiPlatform() {
                     </div>
                     
                     <div className="flex w-full gap-3">
-                        <Link 
-                            to="/dashboard" 
-                            className="inline-flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-4 rounded-lg border border-gray-300 transition-colors"
-                        >
-                            <IoArrowBack />
-                            <span>Voltar ao Dashboard</span>
-                        </Link>
+                        <BackButton to="/dashboard" />
                         
                         <button 
                             onClick={syncAllPlatforms}

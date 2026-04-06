@@ -1,6 +1,7 @@
 // src/pages/AdminSettings.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import BackButton from '../components/BackButton';
 
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
@@ -247,6 +248,7 @@ const AdminSettings = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
+        <BackButton className="mb-6" />
         
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Configurações Gerais</h1>

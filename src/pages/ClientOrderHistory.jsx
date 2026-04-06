@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import BackButton from '../components/BackButton';
+
 import { collection, query, where, orderBy, getDocs, doc, getDoc, collectionGroup } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -290,13 +292,7 @@ function ClientOrderHistory() {
       <div className="max-w-4xl mx-auto px-4">
         {/* HEADER */}
         <div className="flex items-center justify-between mb-8">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center space-x-2 px-4 py-2 bg-white text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition duration-300 shadow-sm border border-gray-200"
-          >
-            <IoArrowBack className="text-lg" />
-            <span>Voltar</span>
-          </button>
+          <BackButton />
           
           <h1 className="text-3xl font-bold text-gray-900 flex items-center space-x-3">
             <IoReceipt className="text-red-600" />
