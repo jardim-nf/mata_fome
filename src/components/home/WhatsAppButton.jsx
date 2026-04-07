@@ -6,7 +6,7 @@ import { MessageCircle, X } from 'lucide-react';
 const WhatsAppButton = () => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(true);
 
-  const phoneNumber = '55229998102575';
+  const phoneNumber = '5522998102575';
   const message = 'Olá! Vi o IdeaFood e gostaria de saber mais sobre a plataforma.';
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 

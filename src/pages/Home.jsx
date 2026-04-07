@@ -138,7 +138,7 @@ function Home() {
   // Função simplificada: o useEffect acima já vai cuidar de mandar a pessoa pro lugar certo
   const handleLoginSucesso = useCallback(() => {
     closeLoginModal();
-    toast.suc229998102575cess('Login realizado com sucesso!');
+    toast.success('Login realizado com sucesso!');
   }, [closeLoginModal]);
 
   return (
