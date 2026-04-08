@@ -103,26 +103,26 @@ export default function ControleSalao() {
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
 
     useEffect(() => {
-        if (!isGarcom) {
-            setActions(
-                <div className="flex gap-2">
-                    <button onClick={salaoData.abrirHistoricoVendas} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                        <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
-                    </button>
-                    <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Mesas Antigas</span>
-                    </button>
-                    <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                        <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
-                    </button>
-                    <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                        <IoAdd className="text-lg" /> <span className="hidden sm:inline">Nova Mesa</span>
-                    </button>
-                </div>
-            );
-        } else {
-            setActions(<div/>);
-        }
+        setActions(
+            <div className="flex gap-2">
+                {!isGarcom && (
+                    <>
+                        <button onClick={salaoData.abrirHistoricoVendas} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                            <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
+                        </button>
+                        <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                            <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Mesas Antigas</span>
+                        </button>
+                        <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                            <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
+                        </button>
+                    </>
+                )}
+                <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                    <IoAdd className="text-lg" /> <span className="hidden sm:inline">Nova Mesa</span>
+                </button>
+            </div>
+        );
         return () => clearActions();
     }, [setActions, clearActions, isGarcom, salaoData.abrirHistoricoVendas]);
 
@@ -265,7 +265,7 @@ export default function ControleSalao() {
                     <div className="flex flex-col items-center justify-center py-32 text-center text-gray-400 w-full">
                         <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><IoRestaurant className="text-3xl text-gray-300" /></div>
                         <p className="text-base font-bold text-gray-500">Nenhuma mesa encontrada.</p>
-                        {salaoData.mesas.length === 0 && !isGarcom && (
+                        {salaoData.mesas.length === 0 && (
                             <button onClick={() => setIsModalOpen(true)} className="mt-4 text-blue-600 font-bold hover:underline text-sm">+ Adicionar Mesas</button>
                         )}
                     </div>
