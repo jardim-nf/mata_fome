@@ -2,8 +2,8 @@ import React from 'react';
 import {
     IoClose, IoChevronBack, IoChevronForward, IoCash, IoCard,
     IoPhonePortrait, IoAdd, IoRemove, IoCheckmark, IoPerson,
-    IoPeople, IoWallet, IoPrint, IoCheckbox, IoSquareOutline,
-    IoTime, IoReceiptOutline
+    IoPerson, IoPeople, IoWallet, IoPrint, IoCheckbox, IoSquareOutline,
+    IoTime, IoReceiptOutline, IoShieldCheckmark
 } from 'react-icons/io5';
 import { useModalPagamentoData } from '../hooks/useModalPagamentoData';
 
@@ -27,6 +27,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         adicionarPessoa, removerPessoa,
         handleImprimirConferencia, handleFinalizar
     } = useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucesso);
+
+    const { userData } = useAuth();
+    const rawRole = String(userData?.role || userData?.cargo || 'admin').toLowerCase().trim();
+    const isGarcom = rawRole.includes('garcom') || rawRole.includes('garçom') || rawRole.includes('atendente');
 
     // --- UI RENDERIZADORES ---
     const renderHistoricoPagamentos = () => {
@@ -89,60 +93,71 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 </div>
             </div>
 
-            <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-between">
-                <div>
-                    <h4 className="font-bold text-gray-900">Taxa de Serviço (10%)</h4>
-                    <p className="text-xs text-gray-500">Adicionar 10% na conta</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                        type="checkbox" 
-                        value="" 
-                        className="sr-only peer" 
-                        checked={incluirTaxa}
-                        onChange={(e) => setIncluirTaxa(e.target.checked)}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-            </div>
+            {!isGarcom && (
+                <>
+                    <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-between">
+                        <div>
+                            <h4 className="font-bold text-gray-900">Taxa de Serviço (10%)</h4>
+                            <p className="text-xs text-gray-500">Adicionar 10% na conta</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                value="" 
+                                className="sr-only peer" 
+                                checked={incluirTaxa}
+                                onChange={(e) => setIncluirTaxa(e.target.checked)}
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
 
-            <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h4 className="font-bold text-gray-900">Desconto</h4>
-                        <p className="text-xs text-gray-500">Aplicar desconto no total</p>
+                    <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 className="font-bold text-gray-900">Desconto</h4>
+                                <p className="text-xs text-gray-500">Aplicar desconto no total</p>
+                            </div>
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <button onClick={() => setTipoDesconto('reais')} className={`px-3 py-1 text-xs font-bold rounded-md ${tipoDesconto === 'reais' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}>R$</button>
+                                <button onClick={() => setTipoDesconto('porcentagem')} className={`px-3 py-1 text-xs font-bold rounded-md ${tipoDesconto === 'porcentagem' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}>%</button>
+                            </div>
+                        </div>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{tipoDesconto === 'reais' ? 'R$' : '%'}</span>
+                            <input 
+                                type="number" 
+                                value={valorDescontoInput} 
+                                onChange={(e) => setValorDescontoInput(e.target.value)} 
+                                placeholder="0.00" 
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500" 
+                            />
+                        </div>
                     </div>
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button onClick={() => setTipoDesconto('reais')} className={`px-3 py-1 text-xs font-bold rounded-md ${tipoDesconto === 'reais' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}>R$</button>
-                        <button onClick={() => setTipoDesconto('porcentagem')} className={`px-3 py-1 text-xs font-bold rounded-md ${tipoDesconto === 'porcentagem' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}>%</button>
-                    </div>
-                </div>
-                <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{tipoDesconto === 'reais' ? 'R$' : '%'}</span>
-                    <input 
-                        type="number" 
-                        value={valorDescontoInput} 
-                        onChange={(e) => setValorDescontoInput(e.target.value)} 
-                        placeholder="0.00" 
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500" 
-                    />
-                </div>
-            </div>
+                </>
+            )}
 
             {renderHistoricoPagamentos()}
 
-            <div className="space-y-3 mt-2">
-                <button onClick={() => { setTipoPagamento('unico'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50/30 flex items-center gap-4 text-left transition-all">
-                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600"><IoPerson size={24} /></div>
-                    <div className="flex-1"><h4 className="font-bold text-gray-900">Quitar Restante</h4><p className="text-xs text-gray-500">Pagar todo o valor pendente</p></div>
-                    <IoChevronForward className="text-gray-300" />
-                </button>
-                <button onClick={() => { setTipoPagamento('individual'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:bg-green-50/30 flex items-center gap-4 text-left transition-all">
-                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600"><IoPeople size={24} /></div>
-                    <div className="flex-1"><h4 className="font-bold text-gray-900">Pagamento Parcial / Dividir</h4><p className="text-xs text-gray-500">Abater valor ou dividir entre pessoas</p></div>
-                    <IoChevronForward className="text-gray-300" />
-                </button>
-            </div>
+            {!isGarcom ? (
+                <div className="space-y-3 mt-2">
+                    <button onClick={() => { setTipoPagamento('unico'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50/30 flex items-center gap-4 text-left transition-all">
+                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600"><IoPerson size={24} /></div>
+                        <div className="flex-1"><h4 className="font-bold text-gray-900">Quitar Restante</h4><p className="text-xs text-gray-500">Pagar todo o valor pendente</p></div>
+                        <IoChevronForward className="text-gray-300" />
+                    </button>
+                    <button onClick={() => { setTipoPagamento('individual'); setEtapa(2); }} className="w-full bg-white p-4 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:bg-green-50/30 flex items-center gap-4 text-left transition-all">
+                        <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600"><IoPeople size={24} /></div>
+                        <div className="flex-1"><h4 className="font-bold text-gray-900">Pagamento Parcial / Dividir</h4><p className="text-xs text-gray-500">Abater valor ou dividir entre pessoas</p></div>
+                        <IoChevronForward className="text-gray-300" />
+                    </button>
+                </div>
+            ) : (
+                <div className="bg-orange-50 text-orange-700 p-4 rounded-2xl mt-4 text-sm font-bold border border-orange-200 text-center flex flex-col items-center">
+                    <IoShieldCheckmark className="text-3xl mb-1 opacity-80" />
+                    Apenas o Caixa ou Gerente pode confirmar pagamento e fechar a conta.
+                </div>
+            )}
         </div>
     );
 
