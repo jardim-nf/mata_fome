@@ -26,7 +26,8 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             const gerarBusinessKey = (item) => {
                 const mesa = item.mesaNumero || item.mesaId || '';
                 const total = (item.totalFinal || 0).toFixed(2);
-                const dia = item.data ? `${item.data.getFullYear()}-${String(item.data.getMonth()+1).padStart(2,'0')}-${String(item.data.getDate()).padStart(2,'0')}` : '';
+                const horaMin = item.data ? `_${String(item.data.getHours()).padStart(2,'0')}${String(item.data.getMinutes()).padStart(2,'0')}` : '';
+                const dia = item.data ? `${item.data.getFullYear()}-${String(item.data.getMonth()+1).padStart(2,'0')}-${String(item.data.getDate()).padStart(2,'0')}${horaMin}` : '';
                 
                 if (mesa) return `mesa_${mesa}_${total}_${dia}`;
                 
@@ -75,14 +76,20 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             } catch (e) { console.error(e); }
 
             try {
-                const qGlobVendas = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
-                const snapGlobVendas = await getDocs(qGlobVendas);
-                snapGlobVendas.docs.forEach(d => {
-                    const data = d.data();
-                    const tipo = data.origem === 'pdv_web' ? 'pdv' : 'mesa';
-                    addData(d, tipo);
+                const qMesa = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('criadoEm', '>=', startTs), where('criadoEm', '<=', endTs));
+                const snapMesa = await getDocs(qMesa);
+                snapMesa.docs.forEach(d => {
+                    addData(d, 'mesa');
                 });
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error('Erro vendas mesa:', e); }
+
+            try {
+                const qPdv = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('origem', '==', 'pdv_web'), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
+                const snapPdv = await getDocs(qPdv);
+                snapPdv.docs.forEach(d => {
+                    addData(d, 'pdv');
+                });
+            } catch (e) { console.error('Erro vendas pdv:', e); }
 
             let allData = Array.from(allDataMap.values());
 
