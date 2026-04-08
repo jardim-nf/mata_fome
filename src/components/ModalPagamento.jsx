@@ -2,7 +2,7 @@ import React from 'react';
 import {
     IoClose, IoChevronBack, IoChevronForward, IoCash, IoCard,
     IoPhonePortrait, IoAdd, IoRemove, IoCheckmark, IoPerson,
-    IoPerson, IoPeople, IoWallet, IoPrint, IoCheckbox, IoSquareOutline,
+    IoPeople, IoWallet, IoPrint, IoCheckbox, IoSquareOutline,
     IoTime, IoReceiptOutline, IoShieldCheckmark
 } from 'react-icons/io5';
 import { useModalPagamentoData } from '../hooks/useModalPagamentoData';
