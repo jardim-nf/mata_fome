@@ -25,7 +25,7 @@ function WhatsAppConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const webhookUrl = `https://us-central1-matafome-98455.cloudfunctions.net/webhookWhatsApp`;
+  const webhookUrl = `https://us-central1-matafome-98455.cloudfunctions.net/webhookBotPedidos?estabId=${estabId || 'SEU_ID'}`;
 
   useEffect(() => {
     if (!estabId) return;
