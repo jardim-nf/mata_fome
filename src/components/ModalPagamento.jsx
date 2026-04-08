@@ -6,6 +6,7 @@ import {
     IoTime, IoReceiptOutline, IoShieldCheckmark
 } from 'react-icons/io5';
 import { useModalPagamentoData } from '../hooks/useModalPagamentoData';
+import { useAuth } from '../context/AuthContext';
 
 const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const {
