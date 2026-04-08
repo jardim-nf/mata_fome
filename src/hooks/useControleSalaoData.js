@@ -192,6 +192,23 @@ export function useControleSalaoData(userData, user, currentUser) {
         catch (error) { toast.error("Erro."); }
     };
 
+    const handleExcluirMesasLivres = async () => {
+        const livres = mesas.filter(m => m.status === 'livre');
+        if (livres.length === 0) {
+            toast.info("Não há mesas livres para excluir.");
+            return;
+        }
+        if (!window.confirm(`Tem certeza que deseja excluir as ${livres.length} mesas livres permanentemente?`)) return;
+
+        try {
+            const promessas = livres.map(m => deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', m.id)));
+            await Promise.all(promessas);
+            toast.success(`${livres.length} mesas livres excluídas com sucesso.`);
+        } catch (error) {
+            toast.error("Erro ao excluir algumas mesas.");
+        }
+    };
+
     const handleMesaClick = (mesa) => {
         if (mesa.status !== 'livre') { navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`); return; }
         if (!usuarioLogado || !usuarioLogado.uid) { toast.error("Erro de autenticação. Recarregue a página."); return; }
@@ -362,7 +379,7 @@ export function useControleSalaoData(userData, user, currentUser) {
         // Impressão
         filaImpressao,
         // Ações Mesas
-        handleAdicionarMesa, handleExcluirMesa, handleMesaClick,
+        handleAdicionarMesa, handleExcluirMesa, handleExcluirMesasLivres, handleMesaClick,
         isModalAbrirMesaOpen, setIsModalAbrirMesaOpen, mesaParaAbrir, isOpeningTable,
         handleCancelarAbertura, handleConfirmarAbertura, handlePagamentoConcluido,
         // Fiscais & Histórico

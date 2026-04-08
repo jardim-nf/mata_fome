@@ -1,5 +1,5 @@
 import BackButton from '../components/BackButton';
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useHeader } from '../context/HeaderContext';
@@ -16,7 +16,7 @@ import { ModalRecibo, ModalHistorico } from "../components/pdv-modals";
 import {
     IoArrowBack, IoAdd, IoGrid, IoPeople, IoWalletOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTimeOutline, IoReceiptOutline, IoChevronDown, IoChevronUp
+    IoTimeOutline, IoReceiptOutline, IoChevronDown, IoChevronUp, IoTrash
 } from "react-icons/io5";
 
 const formatarReal = (valor) => {
@@ -93,6 +93,12 @@ export default function ControleSalao() {
 
     // Injeção do Custom Hook
     const salaoData = useControleSalaoData(userData, user, currentUser);
+    
+    // Evitar render loop com stale-closures no useEffect
+    const salaoDataRef = useRef(salaoData);
+    useEffect(() => {
+        salaoDataRef.current = salaoData;
+    });
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);
@@ -103,28 +109,9 @@ export default function ControleSalao() {
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
 
     useEffect(() => {
-        setActions(
-            <div className="flex gap-2">
-                {!isGarcom && (
-                    <>
-                        <button onClick={salaoData.abrirHistoricoVendas} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                            <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
-                        </button>
-                        <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                            <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Mesas Antigas</span>
-                        </button>
-                        <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                            <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
-                        </button>
-                    </>
-                )}
-                <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                    <IoAdd className="text-lg" /> <span className="hidden sm:inline">Nova Mesa</span>
-                </button>
-            </div>
-        );
+        setActions(null);
         return () => clearActions();
-    }, [setActions, clearActions, isGarcom, salaoData.abrirHistoricoVendas]);
+    }, [setActions, clearActions, isGarcom]);
 
     if (!salaoData.estabelecimentoId && !salaoData.loading) return <div className="p-10 text-center"><IoAlertCircle className="mx-auto text-4xl text-red-500 mb-2" />Sem acesso.</div>;
 
@@ -193,42 +180,62 @@ export default function ControleSalao() {
                 onCancelarNfce={salaoData.handleCancelarNfce}
             />
 
-            <div className="sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-xl z-30 pb-4 pt-2 mb-2 w-full">
-                <div className="flex flex-col xl:flex-row justify-between gap-4 w-full">
-                    <div className="flex flex-col gap-1 shrink-0">
-                        {!isGarcom && (
-                            <BackButton />
-                        )}
-                        <div className="flex items-center gap-3 mt-1">
-                            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Salão</h1>
-                            <span className="bg-gray-900 text-white text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider shadow-sm">
-                                {salaoData.mesasFiltradas.length} Mesas
-                            </span>
+            <div className="sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-xl z-30 pb-4 pt-2 mb-2 w-full flex flex-col gap-2">
+                {!isGarcom && (
+                    <div className="mb-2">
+                        <BackButton />
+                    </div>
+                )}
+                <div className="flex flex-col gap-4 w-full">
+                    {/* Linha 1: Status e Botões de Ação */}
+                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 w-full">
+                        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
+                            <StatCard icon={IoGrid} label="Ocupação" colorClass="text-blue-600" bgClass="bg-blue-50">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden min-w-[50px] sm:min-w-[60px]">
+                                        <div 
+                                            className={`h-full rounded-full transition-all duration-500 ${
+                                                salaoData.stats.ocupacaoPercent >= 80 ? 'bg-red-500' : 
+                                                salaoData.stats.ocupacaoPercent >= 50 ? 'bg-amber-400' : 'bg-emerald-500'
+                                            }`}
+                                            style={{ width: `${salaoData.stats.ocupacaoPercent}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-xs sm:text-sm font-black text-gray-900">{salaoData.stats.ocupacaoPercent}%</span>
+                                </div>
+                            </StatCard>
+                            <StatCard icon={IoPeople} label="Pessoas" value={salaoData.stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
+                            {!isGarcom && (
+                                <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(salaoData.stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
+                            )}
+                        </div>
+
+                        {/* Botões de Ação */}
+                        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
+                            <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                                <IoAdd className="text-lg" /> <span>Nova Mesa</span>
+                            </button>
+                            {!isGarcom && (
+                                <>
+                                    <button onClick={() => salaoDataRef.current.abrirHistoricoVendas()} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                                        <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
+                                    </button>
+                                    <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Mesas Antigas</span>
+                                    </button>
+                                    <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                                        <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
+                                    </button>
+                                    <button onClick={() => salaoDataRef.current.handleExcluirMesasLivres()} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title="Limpar Mesas Livres">
+                                        <IoTrash className="text-lg" /> <span className="hidden sm:inline">Limpar Livres</span>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
 
-                    <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto xl:justify-center">
-                        <StatCard icon={IoGrid} label="Ocupação" colorClass="text-blue-600" bgClass="bg-blue-50">
-                            <div className="flex items-center gap-2">
-                                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden min-w-[50px] sm:min-w-[60px]">
-                                    <div 
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                            salaoData.stats.ocupacaoPercent >= 80 ? 'bg-red-500' : 
-                                            salaoData.stats.ocupacaoPercent >= 50 ? 'bg-amber-400' : 'bg-emerald-500'
-                                        }`}
-                                        style={{ width: `${salaoData.stats.ocupacaoPercent}%` }}
-                                    />
-                                </div>
-                                <span className="text-xs sm:text-sm font-black text-gray-900">{salaoData.stats.ocupacaoPercent}%</span>
-                            </div>
-                        </StatCard>
-                        <StatCard icon={IoPeople} label="Pessoas" value={salaoData.stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
-                        {!isGarcom && (
-                            <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(salaoData.stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
-                        )}
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full xl:w-auto shrink-0">
+                    {/* Linha 2: Busca e Filtros */}
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
                         <div className="relative w-full sm:w-48 md:w-64">
                             <IoSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input type="text" className="w-full pl-10 pr-9 py-3 bg-white border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={salaoData.buscaMesa} onChange={(e) => salaoData.setBuscaMesa(e.target.value)} />

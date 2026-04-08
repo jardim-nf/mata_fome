@@ -8,7 +8,8 @@ const rotasSemLayout = [
     '/login', 
     '/register',
     '/pdv',
-    '/master-dashboard'
+    '/master-dashboard',
+    '/estabelecimento'
     // Podes adicionar aqui outras rotas que devem ocupar o ecrã todo sem header
 ]; 
 

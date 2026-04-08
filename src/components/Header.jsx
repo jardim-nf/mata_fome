@@ -96,7 +96,7 @@ function Header() {
     };
 
     return (
-        <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 w-full transition-all">
+        <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 w-full transition-all" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
             {/* 🔥 AQUI ESTAVA A TRAVA (max-w-7xl mx-auto). AGORA É w-full 🔥 */}
             <div className="w-full px-4 lg:px-8">
                 <div className="flex items-center justify-between h-16 md:h-20">

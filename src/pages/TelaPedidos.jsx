@@ -5,12 +5,15 @@ import {
     IoCart, IoSearch, IoAdd,
     IoRemove, IoRestaurant, IoClose,
     IoPerson, IoPencil, IoAddCircle, 
-    IoPersonAdd, IoTrash, IoCheckmarkDoneCircle, IoPrint
+    IoPersonAdd, IoTrash, IoCheckmarkDoneCircle, IoPrint,
+    IoSwapHorizontal
 } from 'react-icons/io5';
 import BackButton from '../components/BackButton';
 
 import VariacoesModal from '../components/VariacoesModal';
+import ModalTransferenciaMesa from '../components/ModalTransferenciaMesa';
 import { useTelaPedidosData } from '../hooks/useTelaPedidosData';
+import { useTransferenciaMesa } from '../hooks/useTransferenciaMesa';
 
 const getSetorItem = (categoria) => {
     const c = (categoria || '').toLowerCase();
@@ -88,7 +91,12 @@ const TelaPedidos = () => {
         confirmarExclusao, ajustarQuantidade, dispararImpressao, salvarAlteracoes
     } = useTelaPedidosData(estabelecimentoId, mesaId, userData, user);
 
+    const { executarTransferencia } = useTransferenciaMesa(estabelecimentoId);
+
     const [showOrderSummary, setShowOrderSummary] = useState(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    const [isTransferindo, setIsTransferindo] = useState(false);
+
     const [isAddingPerson, setIsAddingPerson] = useState(false);
     const [editandoNomeIndex, setEditandoNomeIndex] = useState(null);
     const [novoNomeTemp, setNovoNomeTemp] = useState('');
@@ -133,11 +141,21 @@ const TelaPedidos = () => {
         }
     };
 
+    const onConfirmaTransferencia = async (mesaDestino) => {
+        setIsTransferindo(true);
+        const success = await executarTransferencia(mesa, mesaDestino);
+        setIsTransferindo(false);
+        if (success) {
+            setIsTransferModalOpen(false);
+            navigate(`/controle-salao`);
+        }
+    };
+
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-10 w-10 border-b-4" style={{borderColor: coresEstabelecimento.destaque}}></div></div>;
 
     return (
         <div className="fixed inset-0 bg-gray-50 z-50 overflow-hidden flex flex-col w-full">
-            <header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full">
+            <header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}>
                 <div className="flex items-center justify-between w-full px-4">
                     <div className="flex items-center gap-3">
                         <BackButton to="/controle-salao" className="!p-2 border-none shadow-none bg-transparent hover:bg-gray-100 rounded-full !w-auto" label="" />
@@ -148,10 +166,22 @@ const TelaPedidos = () => {
                             </p>
                         </div>
                     </div>
-                    <button onClick={() => setShowOrderSummary(true)} className="relative p-3 rounded-2xl text-white shadow-lg active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
-                        <IoCart className="text-xl" />
-                        {totalItens > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-white">{totalItens}</span>}
-                    </button>
+                    
+                    <div className="flex items-center gap-2">
+                        {/* Botão de Transferir Mesa */}
+                        <button 
+                            onClick={() => setIsTransferModalOpen(true)}
+                            className="bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-600 p-3 rounded-2xl transition-all shadow-sm active:scale-95 border border-transparent hover:border-blue-200 focus:outline-none"
+                            title="Transferir / Juntar Mesa"
+                        >
+                            <IoSwapHorizontal className="text-xl" />
+                        </button>
+
+                        <button onClick={() => setShowOrderSummary(true)} className="relative p-3 rounded-2xl text-white shadow-lg active:scale-95 transition-all" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+                            <IoCart className="text-xl" />
+                            {totalItens > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-white">{totalItens}</span>}
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="flex items-center gap-2 flex-wrap py-3 px-4 w-full">
@@ -385,6 +415,15 @@ const TelaPedidos = () => {
             )}
 
             {produtoEmSelecao && (<VariacoesModal item={produtoEmSelecao} onConfirm={(item) => { confirmarAdicaoAoCarrinho(item); setProdutoEmSelecao(null); }} onClose={() => setProdutoEmSelecao(null)} coresEstabelecimento={coresEstabelecimento} estabelecimentoId={estabelecimentoId} />)}
+            
+            <ModalTransferenciaMesa 
+                isOpen={isTransferModalOpen} 
+                onClose={() => setIsTransferModalOpen(false)} 
+                estabelecimentoId={estabelecimentoId}
+                mesaAtual={mesa} 
+                onConfirmar={onConfirmaTransferencia} 
+            />
+
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } } .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }`}</style>
         </div>
     );
