@@ -152,7 +152,10 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         const mergeAndSetPedidos = () => {
             const mergedMap = new Map();
             dadosSubcollection.forEach(d => mergedMap.set(d.id, d));
-            dadosVendasRaiz.forEach(d => { if (!mergedMap.has(d.id)) mergedMap.set(d.id, d); });
+            dadosVendasRaiz.forEach(d => { 
+                if (d.mesaId || d.mesaNumero) return; 
+                if (!mergedMap.has(d.id)) mergedMap.set(d.id, d); 
+            });
 
             const listaTodos = Array.from(mergedMap.values()).map(d => processarDadosPedido(d)).filter(p => {
                 if (p === null) return false;

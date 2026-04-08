@@ -254,7 +254,6 @@ export function useMenuCheckout({
                 status: 'recebido',
                 source: 'menu',
                 dataPedido: serverTimestamp(),
-                loteHorario: getLoteHorario(),
                 pagamento: {
                     formaPagamento,
                     metodoPagamento: formaPagamento,
