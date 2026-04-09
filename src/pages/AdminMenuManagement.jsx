@@ -265,186 +265,230 @@ function AdminMenuManagement() {
         {paginatedItems.length > 0 && <div className="mt-8"><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} /></div>}
 
         {menuParams.showItemForm && (
-          <div className="fixed inset-0 z-[9999] bg-white flex flex-col animate-fade-in">
-            <div className="flex-none h-20 sm:h-24 border-b border-gray-200 px-4 sm:px-8 flex items-center justify-between bg-white shadow-sm z-20">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{menuParams.editingItem ? 'Editar Produto' : 'Novo Produto'}</h2>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">Gestão de Cardápio & Estoque</p>
-              </div>
-              <button type="button" onClick={menuParams.closeItemForm} className="px-4 py-2 sm:px-6 sm:py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold transition-all flex items-center gap-2">
-                <span className="hidden sm:block">Voltar</span>
-                <IoClose size={20} className="sm:hidden" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => menuParams.handleSaveItem(e)} className="flex-1 overflow-hidden flex flex-col bg-gray-50">
-              <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 sm:py-10 pb-32 w-full custom-scrollbar">
-                <div className="max-w-5xl mx-auto space-y-6 sm:space-y-10">
-                    <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200 space-y-6">
-                        <h3 className="text-lg font-bold text-gray-800">Dados Gerais</h3>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-semibold mb-2 text-gray-700">Nome do Produto *</label>
-                                <input type="text" name="nome" value={menuParams.formData.nome} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" required autoComplete="off" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2 text-gray-700">Categoria *</label>
-                                    <input type="text" name="categoria" value={menuParams.formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" required autoComplete="off" />
-                                    <datalist id="cat-list">{menuParams.categories.map(c => (<option key={c.id} value={c.nome} />))}</datalist>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2 text-gray-700">Cód. Barras</label>
-                                    <input type="text" name="codigoBarras" value={menuParams.formData.codigoBarras} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-mono" autoComplete="off" />
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold mb-2 text-gray-700">Descrição</label>
-                            <textarea name="descricao" value={menuParams.formData.descricao} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none transition-all min-h-[100px] resize-none" />
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-200 space-y-6">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-4">
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><IoCash className="text-blue-600"/> Preços & Estoque</h3>
-                            <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
-                                <button type="button" onClick={() => menuParams.setVariacoes([{id: `v-unique`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }])} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all ${menuParams.variacoes.length === 1 && menuParams.variacoes[0].nome === 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>Preço Único</button>
-                                <button type="button" onClick={() => { if(menuParams.variacoes.length===1 && menuParams.variacoes[0].nome==='Padrão') menuParams.setVariacoes([{id: `v-multi`, nome: 'Médio', preco: '', ativo: true, estoque: 0, custo: 0}]); }} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all ${menuParams.variacoes.length > 1 || menuParams.variacoes[0].nome !== 'Padrão' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>Vários Tamanhos</button>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            {menuParams.variacoes.map((v) => (
-                                <div key={v.id} className="bg-gray-50 p-5 rounded-2xl border border-gray-200 relative group">
-                                    {menuParams.variacoes.length > 1 && (
-                                        <button type="button" onClick={() => menuParams.removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full shadow-md"><IoClose size={18}/></button>
-                                    )}
-                                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-5">
-                                        {(menuParams.variacoes.length > 1 || v.nome !== 'Padrão') && (
-                                            <div className="sm:col-span-4">
-                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Nome da Variação</label>
-                                                <input type="text" value={v.nome} onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold" />
-                                            </div>
-                                        )}
-                                        <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 ${menuParams.variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
-                                            <div>
-                                                <label className="text-xs font-bold text-emerald-600 mb-2 block uppercase">Venda (R$)</label>
-                                                <input type="number" step="0.01" value={v.preco} onChange={e => menuParams.atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-800" />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Custo (R$)</label>
-                                                <input type="number" step="0.01" value={v.custo} onChange={e => menuParams.atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Estoque</label>
-                                                <input type="number" value={v.estoque} onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm" />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Status</label>
-                                                <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded-xl border border-gray-200">
-                                                    <input type="checkbox" checked={v.ativo !== false} onChange={e => menuParams.atualizarVariacao(v.id, 'ativo', e.target.checked)} className="w-4 h-4 text-blue-600" />
-                                                    <span className="text-[10px] font-bold">ATIVO</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        {isModoMultiplasVariacoes && (
-                            <button type="button" onClick={menuParams.adicionarVariacao} className="w-full py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold flex items-center justify-center gap-2 rounded-2xl mt-4 border border-dashed border-blue-200">
-                                <IoAddCircleOutline className="text-2xl"/> Adicionar Variação
-                            </button>
-                        )}
-                    </div>
-
-                    <div className="bg-emerald-50/40 p-5 sm:p-8 rounded-3xl border border-emerald-100 shadow-sm space-y-6">
-                        <h3 className="text-lg font-bold text-emerald-800 flex items-center gap-2">🏢 Emissão de Nota (NFC-e)</h3>
-                        
-                        <div className="mb-4">
-                            <label className="block text-sm font-semibold text-emerald-800 mb-2">Departamento Fiscal (Preenchimento Automático)</label>
-                            <select 
-                                value={menuParams.formData.fiscal?.departamentoId || ''} 
-                                onChange={handleDepartamentoChange} 
-                                className="w-full p-4 bg-white border border-emerald-300 rounded-2xl outline-none font-bold text-emerald-900 shadow-sm"
-                            >
-                                <option value="">-- Personalizado (Preencher Manualmente) --</option>
-                                {menuParams.departamentosFiscais?.map(d => (
-                                    <option key={d.id} value={d.id}>{d.nome} (CFOP: {d.cfop} / NCM: {d.ncm})</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-emerald-600 mt-2">Ao escolher um departamento, as regras fiscais abaixo serão preenchidas automaticamente.</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                            <div className="relative">
-                                <label className="block text-sm font-semibold text-emerald-800 mb-2">NCM (Busca BrasilAPI)</label>
-                                <input type="text" name="ncm" value={menuParams.termoNcm} onChange={(e) => menuParams.buscarNcm(e.target.value, handleFiscalChange)} className={`w-full p-4 bg-white border border-emerald-200 rounded-2xl outline-none ${menuParams.formData.fiscal?.departamentoId ? 'opacity-70 bg-gray-50' : ''}`} autoComplete="off" />
-                                {menuParams.pesquisandoNcm && <span className="absolute right-4 top-12 text-[10px] animate-pulse">Buscando...</span>}
-                                {menuParams.ncmResultados.length > 0 && (
-                                    <div className="absolute z-50 w-full mt-2 bg-white border border-emerald-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {menuParams.ncmResultados.map((item) => (
-                                            <div key={item.codigo} onClick={() => { menuParams.setTermoNcm(item.codigo); handleFiscalChange({ target: { name: 'ncm', value: item.codigo } }); menuParams.setNcmResultados([]); }} className="p-3 border-b hover:bg-emerald-50 cursor-pointer">
-                                                <p className="font-bold text-emerald-800 text-xs">{item.codigo}</p>
-                                                <p className="text-[10px] text-gray-500 line-clamp-1">{item.descricao}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-emerald-800 mb-2">CFOP</label>
-                                <select disabled={!!menuParams.formData.fiscal?.departamentoId} name="cfop" value={menuParams.formData.fiscal?.cfop} onChange={handleFiscalChange} className={`w-full p-4 bg-white border border-emerald-200 rounded-2xl ${menuParams.formData.fiscal?.departamentoId ? 'opacity-70 bg-gray-50 cursor-not-allowed' : ''}`}>
-                                    <option value="5102">5102 - Venda Normal</option>
-                                    <option value="5405">5405 - Subs. Tributária</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-emerald-800 mb-2">Unidade</label>
-                                <select name="unidade" value={menuParams.formData.fiscal?.unidade} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200 rounded-2xl">
-                                    <option value="UN">UN - Unidade</option>
-                                    <option value="KG">KG - Quilograma</option>
-                                    <option value="LT">LT - Litro</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm flex items-center gap-4">
-                            <div className="w-24 h-24 bg-gray-50 rounded-2xl border flex items-center justify-center overflow-hidden shrink-0">
-                                {menuParams.imagePreview ? <img src={menuParams.imagePreview} className="w-full h-full object-cover" /> : <IoImageOutline className="text-4xl text-gray-300"/>}
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-base font-bold text-gray-800 mb-2">Foto</label>
-                                <input type="file" accept="image/*" onChange={handleFormChange} className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-100 file:text-blue-700 font-bold" />
-                            </div>
-                        </div>
-
-                        <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-center">
-                            <label htmlFor="ativoMain" className="flex items-center gap-4 cursor-pointer">
-                                <div className={`w-14 h-7 rounded-full p-1 transition-colors ${menuParams.formData.ativo ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                                    <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform ${menuParams.formData.ativo ? 'translate-x-7' : 'translate-x-0'}`}></div>
-                                </div>
-                                <input type="checkbox" id="ativoMain" name="ativo" checked={menuParams.formData.ativo} onChange={handleFormChange} className="hidden" />
-                                <div>
-                                    <p className="font-bold text-gray-800">Visível no Cardápio?</p>
-                                    <p className="text-xs text-gray-500">{menuParams.formData.ativo ? 'Os clientes podem pedir' : 'Produto pausado'}</p>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
+          <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 animate-fade-in">
+            <div className="bg-[#f8fafc] w-full h-full md:h-[95vh] md:max-w-6xl md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-slate-200/60 relative">
+              
+              {/* Header Premium */}
+              <div className="flex-none h-24 px-6 md:px-10 flex items-center justify-between bg-white border-b border-slate-100 shadow-sm z-20">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                      {menuParams.editingItem ? 'Editar Produto' : 'Novo Produto'}
+                  </h2>
+                  <p className="text-sm text-slate-500 font-medium mt-1">Gestão de Cardápio & Estoque</p>
                 </div>
+                <button type="button" onClick={menuParams.closeItemForm} className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-red-500 rounded-full transition-all hover:rotate-90">
+                  <IoClose size={26} />
+                </button>
               </div>
 
-              <div className="flex-none bg-white border-t px-4 sm:px-8 py-5 flex justify-end gap-4 shadow-inner z-20 pb-10 sm:pb-5">
-                  <button type="button" onClick={menuParams.closeItemForm} className="hidden sm:block px-8 py-4 rounded-xl border font-bold text-gray-600 hover:bg-gray-50 transition-all text-lg">Cancelar</button>
-                  <button type="submit" disabled={menuParams.formLoading} className="w-full sm:w-auto px-10 py-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-xl transition-all transform hover:scale-[1.02] text-lg flex items-center justify-center gap-2">
-                      {menuParams.formLoading ? 'Processando...' : <><IoCheckmarkCircle size={24}/> Salvar Produto</>}
-                  </button>
-              </div>
-            </form>
+              <form onSubmit={(e) => menuParams.handleSaveItem(e)} className="flex-1 overflow-hidden flex flex-col relative">
+                <div className="flex-1 overflow-y-auto px-4 md:px-10 py-8 custom-scrollbar">
+                  <div className="max-w-5xl mx-auto space-y-8 pb-32">
+                      
+                      {/* Dados Gerais */}
+                      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/50 space-y-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
+                          <div className="flex items-center gap-3 border-b border-slate-50 pb-4">
+                              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><IoCube size={20}/></div>
+                              <h3 className="text-xl font-bold text-slate-800">Dados Gerais</h3>
+                          </div>
+                          
+                          <div className="grid md:grid-cols-2 gap-6">
+                              <div>
+                                  <label className="block text-sm font-bold mb-2 text-slate-700">Nome do Produto <span className="text-red-500">*</span></label>
+                                  <input type="text" name="nome" value={menuParams.formData.nome} onChange={handleFormChange} className="w-full p-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white text-slate-800 font-medium outline-none transition-all" required autoComplete="off" placeholder="Ex: Hambúrguer Clássico" />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="block text-sm font-bold mb-2 text-slate-700">Categoria <span className="text-red-500">*</span></label>
+                                      <input type="text" name="categoria" value={menuParams.formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white text-slate-800 font-medium outline-none transition-all" required autoComplete="off" placeholder="Selecione ou digite..." />
+                                      <datalist id="cat-list">{menuParams.categories.map(c => (<option key={c.id} value={c.nome} />))}</datalist>
+                                  </div>
+                                  <div>
+                                      <label className="block text-sm font-bold mb-2 text-slate-700">Cód. Barras</label>
+                                      <input type="text" name="codigoBarras" value={menuParams.formData.codigoBarras} onChange={handleFormChange} className="w-full p-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white text-slate-600 outline-none transition-all font-mono" autoComplete="off" placeholder="000000000000" />
+                                  </div>
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-bold mb-2 text-slate-700">Descrição</label>
+                              <textarea name="descricao" value={menuParams.formData.descricao} onChange={handleFormChange} placeholder="Do que é feito? Quais os diferenciais?" className="w-full p-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white text-slate-600 outline-none transition-all min-h-[120px] resize-none" />
+                          </div>
+                      </div>
+
+                      {/* Preços e Estoque */}
+                      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/50 space-y-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-50 pb-4 gap-4">
+                              <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600"><IoCash size={20}/></div>
+                                  <h3 className="text-xl font-bold text-slate-800">Preços & Estoque</h3>
+                              </div>
+                              <div className="flex bg-slate-100/80 p-1.5 rounded-2xl w-full sm:w-auto overflow-hidden">
+                                  <button type="button" onClick={() => menuParams.setVariacoes([{id: `v-unique`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }])} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${menuParams.variacoes.length === 1 && menuParams.variacoes[0].nome === 'Padrão' ? 'bg-white text-slate-800 shadow-[0_2px_10px_rgba(0,0,0,0.06)]' : 'text-slate-500 hover:text-slate-700'}`}>Preço Único</button>
+                                  <button type="button" onClick={() => { if(menuParams.variacoes.length===1 && menuParams.variacoes[0].nome==='Padrão') menuParams.setVariacoes([{id: `v-multi`, nome: 'Médio', preco: '', ativo: true, estoque: 0, custo: 0}]); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${menuParams.variacoes.length > 1 || menuParams.variacoes[0].nome !== 'Padrão' ? 'bg-white text-slate-800 shadow-[0_2px_10px_rgba(0,0,0,0.06)]' : 'text-slate-500 hover:text-slate-700'}`}>Vários Tamanhos</button>
+                              </div>
+                          </div>
+
+                          <div className="space-y-4">
+                              {menuParams.variacoes.map((v) => (
+                                  <div key={v.id} className="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 relative group transition-all hover:bg-slate-50">
+                                      {menuParams.variacoes.length > 1 && (
+                                          <button type="button" onClick={() => menuParams.removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-white border border-red-100 text-red-500 p-2.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:-translate-y-1"><IoClose size={18}/></button>
+                                      )}
+                                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-6">
+                                          {(menuParams.variacoes.length > 1 || v.nome !== 'Padrão') && (
+                                              <div className="sm:col-span-4">
+                                                  <label className="text-[11px] font-extrabold text-slate-400 mb-2 block uppercase tracking-wider">Nome da Variação</label>
+                                                  <input type="text" value={v.nome} onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none" placeholder="Ex: Grande, Combo..." />
+                                              </div>
+                                          )}
+                                          <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 ${menuParams.variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
+                                              <div>
+                                                  <label className="text-[11px] font-extrabold text-emerald-600 mb-2 block uppercase tracking-wider">Venda (R$)</label>
+                                                  <input type="number" step="0.01" value={v.preco} onChange={e => menuParams.atualizarVariacao(v.id, 'preco', e.target.value)} className="w-full p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl text-sm font-extrabold text-emerald-800 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none placeholder-emerald-300" placeholder="0.00" />
+                                              </div>
+                                              <div>
+                                                  <label className="text-[11px] font-extrabold text-slate-400 mb-2 block uppercase tracking-wider">Custo (R$)</label>
+                                                  <input type="number" step="0.01" value={v.custo} onChange={e => menuParams.atualizarVariacao(v.id, 'custo', e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none" placeholder="0.00" />
+                                              </div>
+                                              <div>
+                                                  <label className="text-[11px] font-extrabold text-slate-400 mb-2 block uppercase tracking-wider">Qtd Estoque</label>
+                                                  <input type="number" value={v.estoque} onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none" placeholder="0" />
+                                              </div>
+                                              <div>
+                                                  <label className="text-[11px] font-extrabold text-slate-400 mb-2 block uppercase tracking-wider">Status</label>
+                                                  <label className={`flex flex-col justify-center items-center h-[54px] cursor-pointer rounded-xl border transition-all ${v.ativo !== false ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
+                                                      <input type="checkbox" checked={v.ativo !== false} onChange={e => menuParams.atualizarVariacao(v.id, 'ativo', e.target.checked)} className="hidden" />
+                                                      <span className={`text-xs font-bold ${v.ativo !== false ? 'text-blue-700' : 'text-slate-400'}`}>{v.ativo !== false ? '✅ ATIVO' : 'PAUSADO'}</span>
+                                                  </label>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                          {isModoMultiplasVariacoes && (
+                              <button type="button" onClick={menuParams.adicionarVariacao} className="w-full py-5 bg-gradient-to-b from-blue-50/50 to-blue-50/20 hover:from-blue-50 hover:to-blue-100 text-blue-600 font-bold flex items-center justify-center gap-2 rounded-2xl mt-4 border-2 border-dashed border-blue-200 transition-all hover:scale-[1.01]">
+                                  <IoAddCircleOutline className="text-2xl"/> <span>Adicionar Nova Variação</span>
+                              </button>
+                          )}
+                      </div>
+
+                      {/* Fiscal e Outros (Grid) */}
+                      <div className="grid lg:grid-cols-2 gap-8">
+                          
+                          {/* Emissão NFC-e */}
+                          <div className="bg-gradient-to-br from-emerald-50/50 to-teal-50/30 p-6 md:p-8 rounded-3xl border border-emerald-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] space-y-6">
+                              <div className="flex items-center gap-3 border-b border-emerald-100/50 pb-4">
+                                  <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700"><IoBarcodeOutline size={20}/></div>
+                                  <h3 className="text-xl font-bold text-emerald-900">Fiscal (NFC-e)</h3>
+                              </div>
+                              
+                              <div className="mb-4">
+                                  <label className="block text-sm font-bold text-emerald-800 mb-2">Preenchimento Automático</label>
+                                  <select 
+                                      value={menuParams.formData.fiscal?.departamentoId || ''} 
+                                      onChange={handleDepartamentoChange} 
+                                      className="w-full p-4 bg-white border border-emerald-200/80 rounded-2xl outline-none font-bold text-emerald-900 shadow-sm focus:ring-4 focus:ring-emerald-500/10 cursor-pointer"
+                                  >
+                                      <option value="">-- Usar Regras Manuais --</option>
+                                      {menuParams.departamentosFiscais?.map(d => (
+                                          <option key={d.id} value={d.id}>{d.nome} (CFOP: {d.cfop} / NCM: {d.ncm})</option>
+                                      ))}
+                                  </select>
+                                  <p className="text-[11px] font-medium text-emerald-600/70 mt-2 ml-1">Ao selecionar, os campos abaixo serão bloqueados e preenchidos sozinhos.</p>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div className="relative col-span-2 sm:col-span-1">
+                                      <label className="block text-[11px] font-extrabold text-emerald-700 mb-2 uppercase tracking-wider">NCM <span className="font-medium lowercase text-emerald-500">(Busca automát.)</span></label>
+                                      <input type="text" name="ncm" value={menuParams.termoNcm} onChange={(e) => menuParams.buscarNcm(e.target.value, handleFiscalChange)} className={`w-full p-4 bg-white border border-emerald-200/80 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 ${menuParams.formData.fiscal?.departamentoId ? 'opacity-60 bg-emerald-50/50' : ''}`} autoComplete="off" placeholder="Ex: 22021000" />
+                                      {menuParams.pesquisandoNcm && <span className="absolute right-4 top-[50px] text-[10px] text-emerald-500 animate-pulse font-bold">Buscando...</span>}
+                                      {menuParams.ncmResultados.length > 0 && (
+                                          <div className="absolute z-50 w-full mt-2 bg-white border border-emerald-200 rounded-2xl shadow-2xl max-h-48 overflow-y-auto">
+                                              {menuParams.ncmResultados.map((item) => (
+                                                  <div key={item.codigo} onClick={() => { menuParams.setTermoNcm(item.codigo); handleFiscalChange({ target: { name: 'ncm', value: item.codigo } }); menuParams.setNcmResultados([]); }} className="p-3 border-b border-emerald-50 hover:bg-emerald-50 cursor-pointer transition-colors">
+                                                      <p className="font-bold text-emerald-800 text-sm">{item.codigo}</p>
+                                                      <p className="text-[11px] text-slate-500 line-clamp-1">{item.descricao}</p>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      )}
+                                  </div>
+                                  <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-4">
+                                      <div>
+                                          <label className="block text-[11px] font-extrabold text-emerald-700 mb-2 uppercase tracking-wider">CFOP</label>
+                                          <select disabled={!!menuParams.formData.fiscal?.departamentoId} name="cfop" value={menuParams.formData.fiscal?.cfop} onChange={handleFiscalChange} className={`w-full p-4 bg-white border border-emerald-200/80 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 outline-none ${menuParams.formData.fiscal?.departamentoId ? 'opacity-60 bg-emerald-50/50 cursor-not-allowed' : ''}`}>
+                                              <option value="5102">5102</option>
+                                              <option value="5405">5405</option>
+                                          </select>
+                                      </div>
+                                      <div>
+                                          <label className="block text-[11px] font-extrabold text-emerald-700 mb-2 uppercase tracking-wider">Un.</label>
+                                          <select name="unidade" value={menuParams.formData.fiscal?.unidade} onChange={handleFiscalChange} className="w-full p-4 bg-white border border-emerald-200/80 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 outline-none">
+                                              <option value="UN">UN</option>
+                                              <option value="KG">KG</option>
+                                              <option value="LT">LT</option>
+                                          </select>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          {/* Foto e Visibilidade */}
+                          <div className="space-y-6 flex flex-col justify-between">
+                              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all flex items-center gap-6">
+                                  <div className="w-28 h-28 bg-slate-50 rounded-[1.25rem] border-2 border-slate-100 flex items-center justify-center overflow-hidden shrink-0 group relative">
+                                      {menuParams.imagePreview ? <img src={menuParams.imagePreview} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" /> : <IoImageOutline className="text-4xl text-slate-300"/>}
+                                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                          <IoAddCircleOutline className="text-white text-3xl"/>
+                                      </div>
+                                  </div>
+                                  <div className="flex-1">
+                                      <label className="block text-lg font-bold text-slate-800 mb-1">Foto do Produto</label>
+                                      <p className="text-[11px] text-slate-500 mb-3">Recomendado: 800x800px. Fundo branco ou transparente.</p>
+                                      <label className="cursor-pointer inline-flex items-center justify-center px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-sm rounded-xl transition-colors">
+                                          <span>Escolher Imagem</span>
+                                          <input type="file" accept="image/*" onChange={handleFormChange} className="hidden" />
+                                      </label>
+                                  </div>
+                              </div>
+
+                              <div className={`p-8 rounded-3xl border transition-all h-full flex flex-col justify-center items-center text-center cursor-pointer ${menuParams.formData.ativo ? 'bg-gradient-to-br from-blue-600 to-indigo-600 border-transparent shadow-xl shadow-blue-500/20' : 'bg-slate-50 border-slate-200'}`}>
+                                  <label htmlFor="ativoMain" className="cursor-pointer w-full flex flex-col items-center gap-3">
+                                      <div className={`w-16 h-8 rounded-full p-1 transition-all duration-300 shadow-inner ${menuParams.formData.ativo ? 'bg-white/30 backdrop-blur-sm' : 'bg-slate-300'}`}>
+                                          <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${menuParams.formData.ativo ? 'translate-x-8' : 'translate-x-0'}`}></div>
+                                      </div>
+                                      <input type="checkbox" id="ativoMain" name="ativo" checked={menuParams.formData.ativo} onChange={handleFormChange} className="hidden" />
+                                      <div>
+                                          <p className={`text-xl font-extrabold ${menuParams.formData.ativo ? 'text-white' : 'text-slate-600'}`}>
+                                              {menuParams.formData.ativo ? 'Produto Visível' : 'Produto Oculto (Pausado)'}
+                                          </p>
+                                          <p className={`text-sm mt-1 font-medium ${menuParams.formData.ativo ? 'text-blue-100' : 'text-slate-400'}`}>
+                                              {menuParams.formData.ativo ? 'Disponível no catálogo para os clientes.' : 'Não será exibido para pedidos.'}
+                                          </p>
+                                      </div>
+                                  </label>
+                              </div>
+                          </div>
+                      </div>
+
+                  </div>
+                </div>
+
+                <div className="absolute bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 sm:px-10 py-5 flex justify-end gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
+                    <button type="button" onClick={menuParams.closeItemForm} className="hidden sm:block px-8 py-3.5 rounded-2xl border font-bold text-slate-600 hover:bg-slate-100 transition-all text-base shadow-sm">
+                        Cancelar
+                    </button>
+                    <button type="submit" disabled={menuParams.formLoading} className="w-full sm:w-auto px-10 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold hover:from-blue-700 hover:to-indigo-700 shadow-xl shadow-blue-500/30 transition-all transform hover:-translate-y-0.5 text-base flex items-center justify-center gap-2">
+                        {menuParams.formLoading ? (
+                            <><span className="animate-spin text-xl border-2 border-white/30 border-t-white rounded-full w-5 h-5"></span> Salvando...</>
+                        ) : (
+                            <><IoCheckmarkCircle size={22}/> Salvar Produto</>
+                        )}
+                    </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
