@@ -184,18 +184,20 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 if (editingItem?.imageUrl) await deleteFileByUrl(editingItem.imageUrl).catch(() => null);
             }
 
-            const catDoc = categories.find(c => c.nome === currentFormData.categoria.toUpperCase());
+            const catNomeDigitadoBusca = currentFormData.categoria.trim().toUpperCase();
+            const catDoc = categories.find(c => (c.nome || '').trim().toUpperCase() === catNomeDigitadoBusca);
             let catId = catDoc?.id;
 
             if (!catId) {
-                const newCat = await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio'), { nome: currentFormData.categoria.toUpperCase(), ordem: 99, ativo: true });
+                const novoNome = currentFormData.categoria.trim(); // Or could uppercase it, let's keep user input case
+                const newCat = await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio'), { nome: novoNome, ordem: 99, ativo: true });
                 catId = newCat.id;
             }
 
             const itemData = {
                 ...currentFormData,
                 nome: currentFormData.nome.trim(),
-                categoria: currentFormData.categoria.toUpperCase(),
+                categoria: novoNome,
                 imageUrl,
                 variacoes: currentVariacoes.map(v => ({ ...v, preco: Number(v.preco), estoque: Number(v.estoque), custo: Number(v.custo) })),
                 estoque: currentVariacoes.reduce((acc, v) => acc + Number(v.estoque), 0),
