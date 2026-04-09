@@ -17,10 +17,10 @@ import BackButton from '../components/BackButton';
 const SkeletonLoader = () => (
   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
     {[...Array(6)].map((_, i) => (
-      <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 animate-pulse">
-        <div className="w-full h-48 bg-gray-200 rounded-xl mb-4"></div>
-        <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      <div key={i} className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-5 animate-pulse">
+        <div className="w-full h-48 bg-slate-100 rounded-2xl mb-4"></div>
+        <div className="h-6 bg-slate-100 rounded-lg w-3/4 mb-3"></div>
+        <div className="h-4 bg-slate-100 rounded-lg w-1/2"></div>
       </div>
     ))}
   </div>
@@ -36,67 +36,68 @@ const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D
     esgotado: { color: 'bg-red-100 text-red-800 border-red-200', icon: IoClose, label: 'Esgotado' }
   };
   const { color, icon: Icon, label } = stockConfig[stockStatus] || stockConfig.normal;
-  const getProfitColor = (margin) => margin >= 50 ? 'bg-emerald-500' : (margin >= 30 ? 'bg-blue-500' : 'bg-amber-500');
+  const getProfitColor = (margin) => margin >= 50 ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' : (margin >= 30 ? 'bg-gradient-to-r from-blue-400 to-blue-500' : 'bg-gradient-to-r from-amber-400 to-amber-500');
 
   const mostrarPrecosVariacoes = () => {
-    if (!produto.variacoes || produto.variacoes.length === 0) return <p className="text-2xl font-bold text-gray-800">R$ {(Number(produto.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    if (!produto.variacoes || produto.variacoes.length === 0) return <p className="text-2xl font-black text-slate-800">R$ {(Number(produto.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
     const variacoesAtivas = produto.variacoes.filter(v => v.ativo !== false && v.preco && !isNaN(Number(v.preco)) && Number(v.preco) > 0);
-    if (variacoesAtivas.length === 0) return <p className="text-2xl font-bold text-gray-400">--</p>;
-    if (variacoesAtivas.length === 1) return <p className="text-2xl font-bold text-gray-800">R$ {Number(variacoesAtivas[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    if (variacoesAtivas.length === 0) return <p className="text-2xl font-black text-slate-300">--</p>;
+    if (variacoesAtivas.length === 1) return <p className="text-2xl font-black text-slate-800">R$ {Number(variacoesAtivas[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
     const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
     return (
       <div className="flex flex-col">
-        <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">A partir de</span>
-        <span className="text-xl font-bold text-gray-800">R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mb-0.5">A partir de</span>
+        <span className="text-2xl font-black text-slate-800 tracking-tight">R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
       </div>
     );
   };
 
   return (
-    <div className="group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl hover:border-blue-100 transition-all duration-300 flex flex-col h-full overflow-hidden relative">
-      <div className="relative h-48 overflow-hidden bg-gray-50">
+    <div className="group bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:border-blue-100/80 transition-all duration-300 flex flex-col h-full overflow-hidden relative">
+      <div className="relative h-56 overflow-hidden bg-slate-50">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-transparent z-10 pointer-events-none"></div>
         {produto.imageUrl ? (
-          <img src={produto.imageUrl} alt={produto.nome} className="w-full h-full object-contain p-4 mix-blend-multiply transition-transform duration-500 group-hover:scale-110"/>
+          <img src={produto.imageUrl} alt={produto.nome} className="w-full h-full object-contain p-6 mix-blend-multiply transition-transform duration-700 group-hover:scale-110"/>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-300"><IoImageOutline className="text-5xl" /></div>
+          <div className="w-full h-full flex items-center justify-center text-slate-300"><IoImageOutline className="text-6xl drop-shadow-sm" /></div>
         )}
-        <div className="absolute top-3 left-3 flex flex-col gap-2">
-            {produto.ativo === false && <span className="bg-gray-900/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><IoEyeOff /> Inativo</span>}
-            <span className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 shadow-sm ${color}`}><Icon /> {label}</span>
+        <div className="absolute top-4 left-4 flex flex-col gap-2 z-20">
+            {produto.ativo === false && <span className="bg-slate-900/80 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg border border-slate-700"><IoEyeOff /> Oculto</span>}
+            <span className={`px-3.5 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 shadow-lg backdrop-blur-md ${color.replace('bg-', 'bg-').replace('100', '100/90')} `}><Icon /> {label}</span>
         </div>
-        {profitMargin > 0 && <div className={`absolute top-3 right-3 text-white px-3 py-1 rounded-full text-xs font-bold shadow-md ${getProfitColor(profitMargin)}`}>{profitMargin.toFixed(0)}% Lucro</div>}
+        {profitMargin > 0 && <div className={`absolute top-4 right-4 text-white px-3.5 py-1.5 rounded-full text-xs font-extrabold shadow-lg z-20 ${getProfitColor(profitMargin)}`}>{profitMargin.toFixed(0)}% Lucro</div>}
       </div>
 
-      <div className="p-5 flex flex-col flex-1">
-        <div className="mb-1 flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">{produto.categoria}</span>
-            {produto.codigoBarras && <span className="text-[10px] text-gray-400 font-mono flex items-center gap-1" title="Código de Barras"><IoBarcodeOutline /> {produto.codigoBarras}</span>}
+      <div className="p-6 flex flex-col flex-1 relative z-10 bg-white">
+        <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-600 bg-blue-50/80 border border-blue-100 px-2.5 py-1 rounded-lg">{produto.categoria}</span>
+            {produto.codigoBarras && <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100" title="Código de Barras"><IoBarcodeOutline /> {produto.codigoBarras}</span>}
         </div>
-        <h3 className="font-bold text-gray-800 text-lg leading-tight mb-2 line-clamp-1" title={produto.nome}>{produto.nome}</h3>
-        {produto.descricao && <p className="text-gray-500 text-sm line-clamp-2 mb-4 h-10 leading-snug">{produto.descricao}</p>}
+        <h3 className="font-extrabold text-slate-800 text-xl leading-tight mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors" title={produto.nome}>{produto.nome}</h3>
+        {produto.descricao && <p className="text-slate-500 text-sm line-clamp-2 mb-5 h-10 leading-relaxed font-medium">{produto.descricao}</p>}
 
-        <div className="mt-auto border-t border-gray-100 pt-4">
-            <div className="flex justify-between items-end mb-4">
+        <div className="mt-auto border-t border-slate-50 pt-5">
+            <div className="flex justify-between items-end mb-5">
                 <div>{mostrarPrecosVariacoes()}</div>
-                <div className="text-right">
-                    <p className="text-xs text-gray-400 font-medium uppercase">Estoque</p>
-                    <p className={`text-lg font-bold ${Number(produto.estoque) <= 0 ? 'text-red-500' : 'text-gray-700'}`}>{produto.estoque}</p>
+                <div className="text-right bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider mb-0.5">Estoque</p>
+                    <p className={`text-lg font-black leading-none ${Number(produto.estoque) <= 0 ? 'text-red-500' : 'text-slate-700'}`}>{produto.estoque}</p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
                 <input ref={fileInput3DRef} type="file" accept=".glb,.gltf" className="hidden" 
                   onChange={(e) => { const f = e.target.files?.[0]; if(f) onUpload3D(produto, f); e.target.value = ''; }} />
                 <button onClick={produto.modelo3dUrl ? undefined : () => fileInput3DRef.current?.click()} disabled={!!produto.modelo3dUrl || uploading3D}
-                  className={`col-span-2 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${produto.modelo3dUrl ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default' : uploading3D ? 'bg-violet-50 text-violet-400 border border-violet-200 cursor-wait' : 'bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200'}`}>
-                  <IoCube size={14} />{produto.modelo3dUrl ? '✓ 3D Pronto' : uploading3D ? 'Enviando...' : 'Enviar 3D (.glb)'}
+                  className={`col-span-2 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shadow-sm ${produto.modelo3dUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-200 cursor-default' : uploading3D ? 'bg-violet-50 text-violet-400 border-violet-200 cursor-wait' : 'bg-white text-violet-600 hover:bg-violet-50 border-violet-200 hover:border-violet-300'}`}>
+                  <IoCube size={16} />{produto.modelo3dUrl ? '✓ Modelo 3D Pronto' : uploading3D ? 'Enviando...' : 'Fazer Upload de Modelo 3D'}
                 </button>
-                <button onClick={onToggleStatus} className={`py-2 rounded-xl text-xs font-bold transition-colors ${produto.ativo !== false ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>
-                    {produto.ativo !== false ? 'Pausar' : 'Ativar'}
+                <button onClick={onToggleStatus} className={`py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm border ${produto.ativo !== false ? 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300' : 'bg-emerald-500 text-white border-emerald-500 shadow-emerald-500/20 hover:bg-emerald-600'}`}>
+                    {produto.ativo !== false ? 'Pausar' : 'Reativar'}
                 </button>
                 <div className="flex gap-2">
-                    <button onClick={onEdit} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-blue-200 shadow-lg">Editar</button>
-                    <button onClick={onDelete} className="w-10 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-colors border border-red-100"><IoClose size={16} /></button>
+                    <button onClick={onEdit} className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/30 transform hover:-translate-y-0.5">Editar</button>
+                    <button onClick={onDelete} className="w-12 flex items-center justify-center bg-white hover:bg-red-50 text-red-500 rounded-xl transition-all border border-slate-200 hover:border-red-200 shadow-sm"><IoClose size={18} /></button>
                 </div>
             </div>
         </div>
@@ -106,13 +107,14 @@ const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D
 };
 
 const StatsCard = ({ title, value, icon: Icon, colorClass, bgClass }) => (
-    <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center justify-between hover:translate-y-[-2px] transition-transform duration-300">
-      <div>
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{title}</p>
-        <p className={`text-2xl font-extrabold ${colorClass}`}>{value}</p>
+    <div className="group bg-white rounded-[2rem] p-6 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex items-center justify-between hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl transform translate-x-12 -translate-y-10 group-hover:scale-150 transition-transform duration-700 ${bgClass.replace('bg-', 'bg-').replace('50', '200')} opacity-40`}></div>
+      <div className="relative z-10">
+        <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">{title}</p>
+        <p className={`text-3xl font-black tracking-tight ${colorClass} drop-shadow-sm`}>{value}</p>
       </div>
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${bgClass}`}>
-        <Icon className={`text-xl ${colorClass}`} />
+      <div className={`relative z-10 w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${bgClass}`}>
+        <Icon className={`text-2xl ${colorClass}`} />
       </div>
     </div>
 );
@@ -132,13 +134,13 @@ function AdminMenuManagement() {
 
   useEffect(() => {
     const actions = (
-        <div className="flex items-center space-x-2">
-            <div className="hidden md:flex bg-white rounded-xl border border-gray-200 p-1">
-                <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}><IoGrid/></button>
-                <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400'}`}><IoMenu/></button>
+        <div className="flex items-center space-x-3">
+            <div className="hidden md:flex bg-white rounded-xl border border-slate-200/60 p-1 shadow-sm">
+                <button onClick={() => setViewMode('grid')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-slate-100/80 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}><IoGrid size={18}/></button>
+                <button onClick={() => setViewMode('list')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-slate-100/80 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}><IoMenu size={18}/></button>
             </div>
-            <button onClick={() => menuParams.openItemForm()} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl shadow-lg text-sm transition-all transform hover:scale-105">
-                <IoAddCircleOutline className="text-xl"/> <span className="hidden sm:inline">Novo Item</span>
+            <button onClick={() => menuParams.openItemForm()} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-[0_4px_15px_rgba(37,99,235,0.3)] text-sm transition-all transform hover:scale-[1.02] active:scale-[0.98]">
+                <IoAddCircleOutline className="text-xl"/> <span className="hidden sm:inline">Adicionar Produto</span>
             </button>
         </div>
     );
@@ -185,46 +187,46 @@ function AdminMenuManagement() {
       }
   };
 
-  if (menuParams.loading) return <div className="p-6 max-w-7xl mx-auto"><SkeletonLoader /></div>;
+  if (menuParams.loading) return <div className="p-6 md:p-8 max-w-7xl mx-auto"><div className="mb-6 h-8 w-48 bg-slate-200 rounded-lg animate-pulse"></div><SkeletonLoader /></div>;
 
   const isModoMultiplasVariacoes = menuParams.variacoes.length > 1 || (menuParams.variacoes.length === 1 && menuParams.variacoes[0]?.nome !== 'Padrão');
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] p-4 md:p-6 font-sans pb-24">
+    <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8 font-sans pb-32">
       <div className="max-w-7xl mx-auto">
-        <BackButton className="mb-6" />
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-10">
             <StatsCard title="Total Itens" value={menuParams.stockStatistics.totalItems} icon={IoList} colorClass="text-blue-600" bgClass="bg-blue-50" />
-            <StatsCard title="Ativos" value={menuParams.stockStatistics.activeItems} icon={IoCheckmarkCircle} colorClass="text-emerald-600" bgClass="bg-emerald-50" />
-            <StatsCard title="Crítico" value={menuParams.stockStatistics.criticalStock} icon={IoAlertCircle} colorClass="text-orange-600" bgClass="bg-orange-50" />
-            <StatsCard title="Esgotados" value={menuParams.stockStatistics.outOfStock} icon={IoClose} colorClass="text-red-600" bgClass="bg-red-50" />
-            <div className="col-span-2">
-                <StatsCard title="Valor Estoque" value={`R$ ${menuParams.stockStatistics.totalInventoryValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={IoCash} colorClass="text-indigo-600" bgClass="bg-indigo-50" />
+            <StatsCard title="Ativos" value={menuParams.stockStatistics.activeItems} icon={IoCheckmarkCircle} colorClass="text-emerald-500" bgClass="bg-emerald-50" />
+            <StatsCard title="Crítico" value={menuParams.stockStatistics.criticalStock} icon={IoAlertCircle} colorClass="text-amber-500" bgClass="bg-amber-50" />
+            <StatsCard title="Esgotados" value={menuParams.stockStatistics.outOfStock} icon={IoClose} colorClass="text-red-500" bgClass="bg-red-50" />
+            <div className="col-span-2 md:col-span-3 xl:col-span-2">
+                <StatsCard title="Valor em Estoque" value={`R$ ${menuParams.stockStatistics.totalInventoryValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={IoCash} colorClass="text-indigo-600" bgClass="bg-indigo-50" />
             </div>
         </div>
 
-        <div className="sticky top-2 z-30 bg-white/90 backdrop-blur-md rounded-2xl shadow-sm border border-gray-200 p-2 mb-8 flex flex-col md:flex-row gap-2 md:items-center">
+        <div className="sticky top-4 z-30 bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-white/50 p-3 mb-10 flex flex-col md:flex-row gap-3 md:items-center">
             <div className="relative flex-1">
-                <IoSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input type="text" placeholder="Buscar por nome, ingrediente ou código..." value={menuParams.searchTerm} onChange={e => menuParams.setSearchTerm(e.target.value)} 
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none" />
+                <IoSearch className="absolute left-5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xl" />
+                <input type="text" placeholder="Buscar por produto, código ou material..." value={menuParams.searchTerm} onChange={e => menuParams.setSearchTerm(e.target.value)} 
+                    className="w-full pl-14 pr-6 py-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 rounded-3xl transition-all outline-none font-medium text-slate-700 placeholder-slate-400 shadow-inner" />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-                <select value={menuParams.selectedCategory} onChange={e => menuParams.setSelectedCategory(e.target.value)} className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm font-medium outline-none cursor-pointer">
+            <div className="flex gap-3 overflow-x-auto pb-2 md:pb-0 px-1 md:px-0 scrollbar-hide">
+                <select value={menuParams.selectedCategory} onChange={e => menuParams.setSelectedCategory(e.target.value)} className="px-6 py-4 bg-white border border-slate-100 hover:bg-slate-50 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer transition-all shadow-sm min-w-[160px] appearance-none" style={{backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em'}}>
                     {['Todos', ...new Set(menuParams.categories.map(c => c.nome))].map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <select value={menuParams.stockFilter} onChange={e => menuParams.setStockFilter(e.target.value)} className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm font-medium outline-none cursor-pointer">
-                    <option value="todos">Estoque (Todos)</option>
-                    <option value="critico">⚠️ Crítico</option>
-                    <option value="esgotado">🚫 Esgotado</option>
-                    <option value="normal">✅ Normal</option>
+                <select value={menuParams.stockFilter} onChange={e => menuParams.setStockFilter(e.target.value)} className="px-6 py-4 bg-white border border-slate-100 hover:bg-slate-50 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer transition-all shadow-sm min-w-[180px] appearance-none" style={{backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em'}}>
+                    <option value="todos">Status: Tudo</option>
+                    <option value="critico">⚠️ Estoque Crítico</option>
+                    <option value="esgotado">🚫 Esgotados</option>
+                    <option value="normal">✅ Estoque Normal</option>
                 </select>
             </div>
         </div>
 
         <div className="min-h-[400px]">
             {paginatedItems.length > 0 ? (
-                <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" : "space-y-3"}>
+                <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" : "space-y-4"}>
                     {paginatedItems.map(item => (
                         viewMode === 'grid' ? (
                             <ProductGridCard key={item.id} produto={item} onEdit={() => menuParams.openItemForm(item)} onDelete={() => menuParams.handleDeleteItem(item)}
@@ -232,32 +234,40 @@ function AdminMenuManagement() {
                                 stockStatus={item.estoque <= 0 ? 'esgotado' : (item.estoque <= item.estoqueMinimo ? 'critico' : 'normal')}
                                 profitMargin={((item.preco - item.custo) / item.preco) * 100} />
                         ) : (
-                            <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between hover:border-blue-200 transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-                                        {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-contain p-1 mix-blend-multiply"/> : <IoImageOutline className="text-gray-300"/>}
+                            <div key={item.id} className="group bg-white p-5 rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 flex items-center justify-between hover:border-blue-200 transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+                                <div className="flex items-center gap-5">
+                                    <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center p-2 relative">
+                                        {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500"/> : <IoImageOutline className="text-slate-300 text-2xl"/>}
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-gray-800">{item.nome}</h3>
-                                        <p className="text-xs text-gray-500">{item.categoria} • {item.ativo !== false ? <span className="text-green-600">Ativo</span> : <span className="text-red-500">Inativo</span>}</p>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-[10px] uppercase font-extrabold tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">{item.categoria}</span>
+                                            {item.ativo !== false ? <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> : <span className="text-[10px] text-red-500 font-bold">Oculto</span>}
+                                        </div>
+                                        <h3 className="font-extrabold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{item.nome}</h3>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-6">
                                     <div className="text-right hidden sm:block">
-                                        <p className="font-bold">R$ {Number(item.preco).toFixed(2)}</p>
-                                        <p className="text-xs text-gray-400">Estoque: {item.estoque}</p>
+                                        <p className="font-black text-slate-800 text-xl">R$ {Number(item.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                        <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider mt-0.5">Estoque: <span className={item.estoque <= 0 ? 'text-red-500' : 'text-slate-600'}>{item.estoque}</span></p>
                                     </div>
-                                    <button onClick={() => menuParams.openItemForm(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><IoPricetag/></button>
+                                    <button onClick={() => menuParams.openItemForm(item)} className="p-3 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-2xl transition-all shadow-sm"><IoPricetag size={20}/></button>
                                 </div>
                             </div>
                         )
                     ))}
                 </div>
             ) : (
-                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-gray-300">
-                    <IoCube className="text-4xl text-gray-300 mb-4" />
-                    <h3 className="text-xl font-bold text-gray-600">Nenhum item encontrado</h3>
-                    <p className="text-gray-400">Tente mudar o termo de busca ou filtros.</p>
+                <div className="flex flex-col items-center justify-center py-24 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 shadow-sm relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-30 pointer-events-none"></div>
+                    <div className="relative z-10 flex flex-col items-center">
+                        <div className="w-24 h-24 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                            <IoCube className="text-5xl" />
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-700 mb-2">Puxa, nenhum item encontrado</h3>
+                        <p className="text-slate-400 font-medium text-center max-w-sm">Tente buscar por outro termo ou ajuste os filtros acima para encontrar o que precisa.</p>
+                    </div>
                 </div>
             )}
         </div>
@@ -265,16 +275,15 @@ function AdminMenuManagement() {
         {paginatedItems.length > 0 && <div className="mt-8"><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} /></div>}
 
         {menuParams.showItemForm && (
-          <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 animate-fade-in">
+          <div className="fixed inset-0 z-[99999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 animate-fade-in">
             <div className="bg-[#f8fafc] w-full h-full md:h-[95vh] md:max-w-6xl md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-slate-200/60 relative">
               
               {/* Header Premium */}
-              <div className="flex-none h-24 px-6 md:px-10 flex items-center justify-between bg-white border-b border-slate-100 shadow-sm z-20">
+              <div className="flex-none h-20 px-6 md:px-10 flex items-center justify-between bg-white border-b border-slate-100 shadow-sm z-20">
                 <div>
                   <h2 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                       {menuParams.editingItem ? 'Editar Produto' : 'Novo Produto'}
                   </h2>
-                  <p className="text-sm text-slate-500 font-medium mt-1">Gestão de Cardápio & Estoque</p>
                 </div>
                 <button type="button" onClick={menuParams.closeItemForm} className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-red-500 rounded-full transition-all hover:rotate-90">
                   <IoClose size={26} />
