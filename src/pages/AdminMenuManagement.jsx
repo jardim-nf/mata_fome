@@ -285,17 +285,17 @@ function AdminMenuManagement() {
                         <div className="grid md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-sm font-semibold mb-2 text-gray-700">Nome do Produto *</label>
-                                <input type="text" name="nome" value={menuParams.formData.nome} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" required />
+                                <input type="text" name="nome" value={menuParams.formData.nome} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" required autoComplete="off" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-semibold mb-2 text-gray-700">Categoria *</label>
-                                    <input type="text" name="categoria" value={menuParams.formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" required />
+                                    <input type="text" name="categoria" value={menuParams.formData.categoria} onChange={handleFormChange} list="cat-list" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all" required autoComplete="off" />
                                     <datalist id="cat-list">{menuParams.categories.map(c => (<option key={c.id} value={c.nome} />))}</datalist>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold mb-2 text-gray-700">Cód. Barras</label>
-                                    <input type="text" name="codigoBarras" value={menuParams.formData.codigoBarras} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-mono" />
+                                    <input type="text" name="codigoBarras" value={menuParams.formData.codigoBarras} onChange={handleFormChange} className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-mono" autoComplete="off" />
                                 </div>
                             </div>
                         </div>
