@@ -13,75 +13,17 @@ import HistoricoMesasModal from "../components/HistoricoMesasModal";
 import RelatorioGarcomModal from "../components/RelatorioGarcomModal";
 import PromptDialog from "../components/ui/PromptDialog";
 import { ModalRecibo, ModalHistorico } from "../components/pdv-modals";
+import StatCard from "../components/StatCard";
+import ModalAbrirMesa from "../components/ModalAbrirMesa";
+import LegendaCores from "../components/LegendaCores";
 import {
     IoArrowBack, IoAdd, IoGrid, IoPeople, IoWalletOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTimeOutline, IoReceiptOutline, IoChevronDown, IoChevronUp, IoTrash
+    IoTimeOutline, IoReceiptOutline, IoChevronDown, IoChevronUp, IoTrash, IoExpand, IoContract, IoCloudOffline, IoEye, IoEyeOff
 } from "react-icons/io5";
 
 const formatarReal = (valor) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
-};
-
-const StatCard = ({ icon: Icon, label, value, colorClass, bgClass, children }) => (
-    <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[120px] sm:min-w-[140px] flex-1 lg:flex-none gap-2">
-        <div className="min-w-0">
-            <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
-            {children || <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight truncate">{value}</h3>}
-        </div>
-        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-lg sm:text-xl shrink-0 ${bgClass} ${colorClass}`}>
-            <Icon />
-        </div>
-    </div>
-);
-
-const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) => {
-    const [quantidade, setQuantidade] = useState(1);
-    const [nome, setNome] = useState('');
-    useEffect(() => { if (isOpen) { setQuantidade(1); setNome(''); } }, [isOpen]);
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 bg-black/60 flex items-start sm:items-center justify-center p-4 pt-[10vh] sm:pt-4 z-50 backdrop-blur-sm overflow-y-auto">
-            <div className="bg-white rounded-[2rem] shadow-2xl p-6 w-full max-w-sm border border-gray-100 transform transition-all mb-auto sm:mb-0">
-                <h3 className="text-2xl font-black text-gray-900 text-center mb-1">Mesa {mesaNumero}</h3>
-                <p className="text-center text-gray-500 mb-6 text-sm font-medium">Abrir nova comanda</p>
-                <div className="mb-5">
-                    <label className="block text-[10px] font-black text-gray-400 mb-2 ml-1 tracking-widest uppercase">NOME DO CLIENTE (OPCIONAL)</label>
-                    <input type="text" placeholder="Ex: João Silva" value={nome} onChange={(e) => setNome(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3.5 text-gray-900 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-bold" autoFocus />
-                </div>
-                <div className="mb-8">
-                    <label className="block text-[10px] font-black text-gray-400 mb-2 ml-1 tracking-widest uppercase">QUANTAS PESSOAS?</label>
-                    <div className="flex items-center justify-between bg-gray-50 rounded-2xl p-2 border-2 border-gray-100">
-                        <button type="button" onClick={() => setQuantidade(q => Math.max(1, q - 1))} className="w-12 h-12 rounded-xl bg-white shadow-sm border border-gray-200 text-2xl font-black active:scale-95 text-gray-600 hover:bg-gray-100 transition-all">-</button>
-                        <span className="text-3xl font-black text-gray-900">{quantidade}</span>
-                        <button type="button" onClick={() => setQuantidade(q => q + 1)} className="w-12 h-12 rounded-xl bg-blue-600 shadow-md text-white text-2xl font-black active:scale-95 hover:bg-blue-700 transition-all">+</button>
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onPointerDown={(e) => { e.preventDefault(); if(!isOpening) onClose(); }} onClick={() => { if(!isOpening) onClose(); }} disabled={isOpening} className="py-4 bg-gray-100 rounded-2xl font-bold text-gray-600 active:scale-95 disabled:opacity-50 transition-all hover:bg-gray-200">Cancelar</button>
-                    <button type="button" onPointerDown={(e) => { e.preventDefault(); if(!isOpening) onConfirm(quantidade, nome); }} onClick={() => { if(!isOpening) onConfirm(quantidade, nome); }} disabled={isOpening} className="py-4 bg-green-500 text-white rounded-2xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2 hover:bg-green-600">{isOpening ? 'Abrindo...' : 'Abrir'}</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const LegendaCores = () => {
-    const [aberta, setAberta] = useState(false);
-    return (
-        <div className="mb-3">
-            <button onClick={() => setAberta(!aberta)} className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors px-1 py-1">{aberta ? <IoChevronUp size={14} /> : <IoChevronDown size={14} />}Legenda de cores</button>
-            {aberta && (
-                <div className="flex flex-wrap items-center gap-3 sm:gap-4 bg-white p-2.5 sm:p-3 rounded-2xl shadow-sm border border-gray-200 mt-1.5 text-xs font-bold text-gray-700 animate-[fadeIn_0.2s_ease-out]">
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-white border-2 border-gray-300"></div> Livre</div>
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-600 shadow-sm"></div> Ocupada</div>
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm"></div> Com Pedido</div>
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-yellow-400 shadow-sm"></div> Pagamento</div>
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm animate-pulse"></div> Ociosa</div>
-                </div>
-            )}
-        </div>
-    );
 };
 
 export default function ControleSalao() {
@@ -107,6 +49,46 @@ export default function ControleSalao() {
     const [isRelatorioOpen, setIsRelatorioOpen] = useState(false);
     const [isHistoricoMesasOpen, setIsHistoricoMesasOpen] = useState(false);
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
+
+    // Online/Offline e Tela Cheia Status
+    const [isOffline, setIsOffline] = useState(!navigator.onLine);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // Ocultar valores (privacidade)
+    const [isValorOculto, setIsValorOculto] = useState(() => {
+        return localStorage.getItem('ocultarValoresSalao') === 'true';
+    });
+
+    const toggleValorOculto = () => {
+        const val = !isValorOculto;
+        setIsValorOculto(val);
+        localStorage.setItem('ocultarValoresSalao', String(val));
+    };
+
+    useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
+    const toggleFullScreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        } else if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+        }
+    };
 
     useEffect(() => {
         setActions(null);
@@ -138,6 +120,13 @@ export default function ControleSalao() {
                 onConfirm={salaoData.executarEnvioWhatsApp}
                 onCancel={() => salaoData.setPromptWhatsApp({ open: false, venda: null, defaultTel: '' })}
             />
+
+            {isOffline && (
+                <div className="bg-red-500 text-white p-3 rounded-2xl mb-4 shadow-lg flex items-center justify-center gap-2 font-bold animate-[pulse_2s_ease-in-out_infinite]">
+                    <IoCloudOffline size={20} />
+                    Você está offline! Sincronizando dados assim que a conexão voltar...
+                </div>
+            )}
 
             <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (num) => { const res = await salaoData.handleAdicionarMesa(num); if(res.success) setIsModalOpen(false); }} mesasExistentes={salaoData.mesas} />
             <ModalAbrirMesa isOpen={salaoData.isModalAbrirMesaOpen} onClose={salaoData.handleCancelarAbertura} onConfirm={salaoData.handleConfirmarAbertura} mesaNumero={salaoData.mesaParaAbrir?.numero} isOpening={salaoData.isOpeningTable} />
@@ -206,7 +195,16 @@ export default function ControleSalao() {
                             </StatCard>
                             <StatCard icon={IoPeople} label="Pessoas" value={salaoData.stats.pessoas} bgClass="bg-emerald-50" colorClass="text-emerald-600" />
                             {!isGarcom && (
-                                <StatCard icon={IoWalletOutline} label="Aberto" value={formatarReal(salaoData.stats.vendas)} bgClass="bg-purple-50" colorClass="text-purple-600" />
+                                <StatCard icon={IoWalletOutline} label="Aberto" bgClass="bg-purple-50" colorClass="text-purple-600">
+                                    <div className="flex items-center justify-between gap-1 mt-0.5">
+                                        <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight truncate">
+                                            {isValorOculto ? 'R$ •••••' : formatarReal(salaoData.stats.vendas)}
+                                        </h3>
+                                        <button onClick={toggleValorOculto} className="text-purple-400 hover:text-purple-600 active:scale-95 transition-all outline-none" title={isValorOculto ? "Mostrar valores" : "Ocultar valores"}>
+                                            {isValorOculto ? <IoEyeOff size={18} /> : <IoEye size={18} />}
+                                        </button>
+                                    </div>
+                                </StatCard>
                             )}
                         </div>
 
@@ -226,6 +224,10 @@ export default function ControleSalao() {
                                     <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
                                         <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
                                     </button>
+                                    <button onClick={toggleFullScreen} className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}>
+                                        {isFullscreen ? <IoContract className="text-lg" /> : <IoExpand className="text-lg" />} 
+                                        <span className="hidden sm:inline">{isFullscreen ? 'Sair Tela Cheia' : 'Tela Cheia'}</span>
+                                    </button>
                                     <button onClick={() => salaoDataRef.current.handleExcluirMesasLivres()} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title="Limpar Mesas Livres">
                                         <IoTrash className="text-lg" /> <span className="hidden sm:inline">Limpar Livres</span>
                                     </button>
@@ -241,11 +243,25 @@ export default function ControleSalao() {
                             <input type="text" className="w-full pl-10 pr-9 py-3 bg-white border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={salaoData.buscaMesa} onChange={(e) => salaoData.setBuscaMesa(e.target.value)} />
                             {salaoData.buscaMesa && <button onClick={() => salaoData.setBuscaMesa('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose size={18}/></button>}
                         </div>
-
-                        <div className="flex bg-gray-200/60 p-1 rounded-2xl overflow-x-auto">
-                            {['todos', 'livres', 'ocupadas'].map(t => (
-                                <button key={t} onClick={() => salaoData.setFiltro(t)} className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black capitalize transition-all whitespace-nowrap ${salaoData.filtro === t ? 'bg-white text-gray-900 shadow-md' : 'text-gray-500 hover:text-gray-800'}`}>{t}</button>
-                            ))}
+                        <div className="flex bg-gray-200/60 p-1 rounded-2xl overflow-x-auto gap-1">
+                            {['todos', 'livres', 'ocupadas'].map(t => {
+                                const qtsLivres = salaoData.mesas.filter(m => m.status === 'livre').length;
+                                const qtsOcupadas = salaoData.mesas.filter(m => m.status !== 'livre').length;
+                                const qtd = t === 'todos' ? salaoData.mesas.length : t === 'livres' ? qtsLivres : qtsOcupadas;
+                                const isSelected = salaoData.filtro === t;
+                                const dotColor = t === 'livres' ? 'bg-gray-400' : t === 'ocupadas' ? 'bg-red-500' : 'bg-gray-800';
+                                
+                                return (
+                                    <button 
+                                        key={t} 
+                                        onClick={() => salaoData.setFiltro(t)} 
+                                        className={`flex items-center gap-1.5 flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black capitalize transition-all whitespace-nowrap ${isSelected ? 'bg-white text-gray-900 shadow-md transform scale-105 my-0.5' : 'text-gray-500 hover:text-gray-800 hover:bg-white/50 my-0.5'}`}
+                                    >
+                                        {t !== 'todos' && <div className={`w-2 h-2 rounded-full ${isSelected ? dotColor : 'bg-gray-300 transition-colors'}`}></div>}
+                                        {t} <span className={`ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] ${isSelected ? 'bg-gray-100 text-gray-800' : 'bg-gray-200 text-gray-500'}`}>{qtd}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -253,7 +269,7 @@ export default function ControleSalao() {
 
             <LegendaCores />
 
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-gray-100 shadow-sm min-h-[70vh] w-full">
+            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-gray-100 shadow-sm min-h-[70vh] w-full relative">
                 {salaoData.mesasFiltradas.length > 0 ? (
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4 w-full">
                         {salaoData.mesasFiltradas.map(mesa => (
@@ -265,6 +281,8 @@ export default function ControleSalao() {
                                 onClick={() => salaoData.handleMesaClick(mesa)}
                                 onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
                                 onExcluir={() => salaoData.handleExcluirMesa(mesa.id)}
+                                onLimparAlerta={salaoData.limparAlertaMesa}
+                                isValorOculto={isValorOculto}
                             />
                         ))}
                     </div>

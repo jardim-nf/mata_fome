@@ -41,6 +41,7 @@
     "react-router-dom": "^7.6.3",
     "react-to-print": "^3.2.0",
     "react-toastify": "^11.0.5",
+    "socket.io-client": "^4.8.3",
     "three": "^0.182.0",
     "uuid": "^13.0.0",
     "yup": "^1.7.1"

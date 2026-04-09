@@ -21,6 +21,7 @@ import {
   IoShareSocialOutline
 } from 'react-icons/io5'; 
 import { SiMercadopago } from 'react-icons/si';
+import { useLocalSync } from '../context/LocalSyncContext';
 
 const diasDaSemana = [
   { key: 'segunda', label: 'Segunda-feira' },
@@ -38,6 +39,9 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [vinculando, setVinculando] = useState(false);
+
+  const { localServerIp, saveIp, isConnected } = useLocalSync();
+  const [localIpInput, setLocalIpInput] = useState(localServerIp || '');
 
   // Estados do Formulário Gerais
   const [senhaMaster, setSenhaMaster] = useState('');
@@ -233,6 +237,10 @@ const AdminSettings = () => {
       toast.error("Erro ao salvar configurações.");
     } finally {
       setSaving(false);
+    }
+
+    if (localIpInput !== localServerIp) {
+      saveIp(localIpInput);
     }
   };
 
@@ -541,6 +549,37 @@ const AdminSettings = () => {
             </div>
           </div>
 
+          {/* BLOCO: Servidor Local (Offline Sync) */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-4 border-b pb-4">
+              <div className={`p-2 rounded-lg ${isConnected ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
+                <IoPrintOutline size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">Servidor Local (Sync Offline)</h2>
+                <p className="text-sm text-gray-500">Comunicação direta sem depender de internet para o Salão</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">IP do Computador Caixa</label>
+                <input
+                  type="text"
+                  value={localIpInput}
+                  onChange={(e) => setLocalIpInput(e.target.value)}
+                  placeholder="Ex: 192.168.1.100"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 transition-all"
+                />
+                <p className="mt-2 text-xs text-gray-500">Coloque o IP exibido na tela preta do servidor local para celulares se conectarem diretamente.</p>
+                {isConnected ? (
+                  <p className="mt-2 text-xs text-green-600 font-bold">🟢 Conectado ao Servidor Local.</p>
+                ) : localIpInput ? (
+                  <p className="mt-2 text-xs text-red-600 font-bold">🔴 Desconectado (verifique se servidor está rodando no IP).</p>
+                ) : null}
+              </div>
+            </div>
+          </div>
 
           {/* BOTÃO FINALIZAR */}
           <div className="flex justify-end pt-4 pb-10">

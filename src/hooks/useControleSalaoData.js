@@ -2,12 +2,15 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, onSnapshot, query, orderBy, where, doc, getDoc, updateDoc, deleteDoc, addDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 import { vendaService } from '../services/vendaService';
+import { tocarCampainha } from '../utils/audioUtils';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+import { useLocalSync } from '../context/LocalSyncContext';
 
 export function useControleSalaoData(userData, user, currentUser) {
     const navigate = useNavigate();
     const usuarioLogado = user || currentUser;
+    const { socket, isConnected } = useLocalSync();
 
     const estabelecimentoId = useMemo(() => {
         return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
@@ -68,20 +71,93 @@ export function useControleSalaoData(userData, user, currentUser) {
         const q = query(collection(db, 'estabelecimentos', estabelecimentoId, 'mesas'), orderBy('numero'));
         const unsubscribe = onSnapshot(q,
             (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'modified') {
+                        const oldData = change.oldIndex !== -1 ? snapshot.docs[change.oldIndex]?.data() : null; // we actually can't get old data easily from snapshot, better to just check the new doc
+                        // A simple way to alert only when boolean turns true is handled by local state or assuming if the field is present, it was just updated (since it will be cleared after).
+                        const data = change.doc.data();
+                        // Se o campo acabou de vir true, tocar campainha. (Isso pode tocar duplicado se outra coisa alterar, mas garçom limpa o campo na tela)
+                        // Para precisão: melhor apenas checar se possui o campo true na listagem abaixo
+                    }
+                });
+
                 const mesasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Verifica chamados de garçom recem acionados pegando as mesas que estao chamando:
+                // Para evitar loop no first load, tocamos independente se já carregou antes:
+                // Mas pera, para evitar spam no refresh, ideal não tocar na montagem.
+                
                 mesasData.sort((a, b) => {
                     const numA = parseFloat(a.numero);
                     const numB = parseFloat(b.numero);
                     if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
                     return String(a.numero).localeCompare(String(b.numero), undefined, { numeric: true });
                 });
+                
+                // Checagem de sons apenas em MODIFIED:
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === 'modified') {
+                        const data = change.doc.data();
+                        if (data.chamandoGarcom || data.pedindoConta) {
+                            tocarCampainha();
+                            if (data.chamandoGarcom) toast.warning(`🛎️ Mesa ${data.numero} está chamando!`);
+                            if (data.pedindoConta) toast.success(`💲 Mesa ${data.numero} pediu a conta!`);
+                        }
+                    }
+                });
+
                 setMesas(mesasData);
                 setLoading(false);
             },
             (error) => { console.error("Erro mesas:", error); setLoading(false); }
         );
+        );
         return () => unsubscribe();
     }, [estabelecimentoId, userData]);
+
+    // Listener do Servidor Local para Sincronização em Tempo Real (Offline)
+    useEffect(() => {
+        if (!socket || !isConnected) return;
+
+        const handleSyncExata = (payload) => {
+            setMesas(prev => {
+                const isExisting = prev.find(m => m.id === payload.id);
+                if (isExisting) {
+                    return prev.map(m => m.id === payload.id ? { ...m, ...payload } : m);
+                } else {
+                    return [...prev, payload];
+                }
+            });
+        };
+
+        socket.on('SYNC_MESA_ABERTA', handleSyncExata);
+        socket.on('SYNC_MESA', handleSyncExata);
+        socket.on('SYNC_ALERTA', (payload) => {
+             if (payload.chamandoGarcom) {
+                tocarCampainha();
+                toast.warning(`🛎️ Mesa ${payload.numero} está chamando! (Via REDE LOCAL)`);
+             }
+             handleSyncExata(payload);
+        });
+
+        return () => {
+            socket.off('SYNC_MESA_ABERTA');
+            socket.off('SYNC_MESA');
+            socket.off('SYNC_ALERTA');
+        };
+    }, [socket, isConnected]);
+
+    const limparAlertaMesa = async (mesaId) => {
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
+                chamandoGarcom: false,
+                pedindoConta: false
+            });
+            toast.info("Alerta da mesa removido.");
+        } catch(e) {
+            console.error(e);
+        }
+    };
 
     // 4. Listener Impressão Invisível (Fila)
     useEffect(() => {
@@ -252,6 +328,12 @@ export function useControleSalaoData(userData, user, currentUser) {
                 status: 'ocupada', pessoas: qtd, nome: nomeCliente || '', tipo: 'mesa',
                 updatedAt: serverTimestamp(), bloqueadoPor: null, bloqueadoPorNome: null, bloqueadoEm: null
             });
+            
+            // Atira evento na rede local! (se houver sem internet, todos saberão imediatamente)
+            if (socket && isConnected) {
+                socket.emit('MESA_ABERTA', { id: mesaParaAbrir.id, status: 'ocupada', pessoas: qtd, nome: nomeCliente || '' });
+            }
+
             setIsModalAbrirMesaOpen(false);
             navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
         } catch (error) { toast.error("Erro ao sincronizar com o servidor."); } 
@@ -379,7 +461,7 @@ export function useControleSalaoData(userData, user, currentUser) {
         // Impressão
         filaImpressao,
         // Ações Mesas
-        handleAdicionarMesa, handleExcluirMesa, handleExcluirMesasLivres, handleMesaClick,
+        handleAdicionarMesa, handleExcluirMesa, handleExcluirMesasLivres, handleMesaClick, limparAlertaMesa,
         isModalAbrirMesaOpen, setIsModalAbrirMesaOpen, mesaParaAbrir, isOpeningTable,
         handleCancelarAbertura, handleConfirmarAbertura, handlePagamentoConcluido,
         // Fiscais & Histórico

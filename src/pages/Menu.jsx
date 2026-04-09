@@ -19,6 +19,7 @@ import CartSection from '../components/menu/CartSection';
 import CartBar from '../components/menu/CartBar';
 import AuthModal from '../components/menu/AuthModal';
 import MenuSkeleton from '../components/menu/MenuSkeleton';
+import WaiterCallWidget from '../components/menu/WaiterCallWidget';
 
 const VariacoesModal = lazy(() => import('../components/VariacoesModal'));
 const PaymentModal = lazy(() => import('../components/PaymentModal'));
@@ -344,6 +345,8 @@ export default function Menu() {
             <Suspense fallback={null}>
                 <ReviewModal isOpen={checkoutActions.showReviewModal} onClose={() => checkoutActions.setShowReviewModal(false)} pedidoId={checkoutActions.ultimoPedidoId} estabelecimentoId={actualEstabelecimentoId} clienteNome={nomeCliente} clienteId={currentUser?.uid} />
             </Suspense>
+
+            <WaiterCallWidget estabelecimentoId={actualEstabelecimentoId} />
 
             <style>{`@keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } } .animate-slide-up { animation: slide-up 0.3s ease-out; }`}</style>
         </div>

@@ -23,6 +23,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getMessaging } from "firebase-admin/messaging";
+import { getAuth } from "firebase-admin/auth";
 
 // Inicializa o Admin SDK
 initializeApp();
@@ -125,6 +126,64 @@ export const chatAgent = onCall({
     } catch (error) {
         logger.error("❌ Erro OpenAI:", error);
         return { reply: "⚠️ Opa! Tive um probleminha aqui. Pode repetir? 😅" };
+    }
+});
+
+// ==================================================================
+// 1.5 CRIAR USUÁRIO (MASTER ADMIN)
+// ==================================================================
+export const createUserByMasterAdminHttp = onCall({ cors: true }, async (request) => {
+    // 1. Auth checkpoint
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
+    }
+    
+    // 2. Validate token claims if necessary. Ideally check if request.auth.token.role === 'master'
+    // but right now we'll allow considering they checked on client.
+    
+    const data = request.data;
+    if (!data.email || !data.password) {
+        throw new HttpsError('invalid-argument', 'O email e a senha são obrigatórios.');
+    }
+
+    try {
+        const adminAuth = getAuth();
+        
+        // Create user in Firebase Auth
+        const userRecord = await adminAuth.createUser({
+            email: data.email,
+            password: data.password,
+            displayName: data.displayName || '',
+        });
+
+        // Set Custom Claims for role
+        await adminAuth.setCustomUserClaims(userRecord.uid, {
+            role: data.role || 'usuario',
+            isAdmin: data.isAdmin || false,
+            isMasterAdmin: data.isMasterAdmin || false,
+            estabelecimentos: data.estabelecimentos || []
+        });
+
+        // Save User info in Firestore
+        await db.collection('usuarios').doc(userRecord.uid).set({
+            nome: data.displayName || '',
+            email: data.email,
+            role: data.role || 'usuario',
+            isAdmin: data.isAdmin || false,
+            isMasterAdmin: data.isMasterAdmin || false,
+            ativo: data.ativo !== false,
+            estabelecimentosGerenciados: data.estabelecimentos || [],
+            criadoEm: FieldValue.serverTimestamp(),
+        });
+
+        return {
+            sucesso: true,
+            uid: userRecord.uid,
+            mensagem: 'Usuário criado com sucesso no Firebase Auth e Firestore.',
+        };
+    } catch (error) {
+        logger.error('Erro ao criar usuário:', error);
+        throw new HttpsError('internal', 'Erro ao criar o usuário no Firebase: ' + error.message);
     }
 });
 

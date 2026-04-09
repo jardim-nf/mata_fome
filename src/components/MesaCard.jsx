@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { IoTime, IoPerson, IoCashOutline, IoPersonCircle, IoTrash } from 'react-icons/io5';
+import { IoTime, IoPerson, IoCashOutline, IoPersonCircle, IoTrash, IoNotifications, IoReceipt } from 'react-icons/io5';
 
 // Helper de formatação interna
 const formatarDinheiro = (val) => {
@@ -9,7 +9,7 @@ const formatarDinheiro = (val) => {
     }).format(val || 0);
 };
 
-const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
+const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta, isValorOculto }) => {
     
     // Cores do STATUS: Tons suaves no fundo, texto forte e borda dupla elegante
     const cardStyle = useMemo(() => {
@@ -17,8 +17,8 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
 
         switch (mesa.status) {
             case 'livre': return 'bg-white border-gray-200 text-gray-400 hover:border-blue-300 hover:shadow-md';
-            case 'ocupada': return 'bg-red-50 border-red-300 text-red-800 shadow-sm';
-            case 'com_pedido': return 'bg-blue-50 border-blue-300 text-blue-800 shadow-sm'; 
+            case 'ocupada': return mesa.chamandoGarcom || mesa.pedindoConta ? 'bg-red-50 border-yellow-400 text-red-800 shadow-lg ring-2 ring-yellow-400/50' : 'bg-red-50 border-red-300 text-red-800 shadow-sm';
+            case 'com_pedido': return mesa.chamandoGarcom || mesa.pedindoConta ? 'bg-blue-50 border-yellow-400 text-blue-800 shadow-lg ring-2 ring-yellow-400/50' : 'bg-blue-50 border-blue-300 text-blue-800 shadow-sm'; 
             case 'pagamento': return 'bg-yellow-50 border-yellow-400 text-yellow-900 shadow-sm';
             default: return 'bg-white border-gray-200 text-gray-500';
         }
@@ -57,24 +57,35 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
                     <span className="text-4xl font-black leading-none tracking-tighter opacity-90 drop-shadow-sm">
                         {mesa.numero}
                     </span>
-                    
-                    {isOciosa ? (
-                        <span className="text-[9px] font-black bg-orange-500 text-white px-2 py-1 rounded-md flex items-center gap-1 shadow-sm animate-pulse uppercase tracking-wider">
-                            <IoTime size={12}/> Ociosa
-                        </span>
-                    ) : mesa.status !== 'livre' && (() => {
-                        // Cor dinâmica baseada no tempo
-                        const data = mesa.updatedAt?.toDate ? mesa.updatedAt.toDate() : (mesa.updatedAt ? new Date(mesa.updatedAt) : null);
-                        const mins = data ? Math.floor((new Date() - data) / 60000) : 0;
-                        const timeColor = mins >= 30 ? 'bg-red-100 text-red-700 border-red-200' 
-                            : mins >= 15 ? 'bg-amber-100 text-amber-700 border-amber-200' 
-                            : 'bg-white/70 text-gray-600 border-black/5';
-                        return (
-                            <span className={`text-[10px] font-bold backdrop-blur-sm border px-2 py-1 rounded-md flex items-center gap-1 shadow-sm ${timeColor}`}>
-                                <IoTime size={11}/> {tempoDecorrido}
+                    <div className="flex flex-col items-end gap-1">
+                        {(mesa.chamandoGarcom || mesa.pedindoConta) && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); if(onLimparAlerta) onLimparAlerta(mesa.id); }}
+                                className="animate-bounce bg-yellow-400 text-yellow-900 text-[10px] font-black px-2 py-1 rounded shadow-md flex items-center gap-1 active:scale-95 hover:bg-yellow-500 transition-all uppercase"
+                                title="Limpar alerta"
+                            >
+                                {mesa.pedindoConta ? <><IoReceipt size={12}/> Conta</> : <><IoNotifications size={12}/> Garçom</>}
+                            </button>
+                        )}
+                        
+                        {isOciosa ? (
+                            <span className="text-[9px] font-black bg-orange-500 text-white px-2 py-1 rounded-md flex items-center gap-1 shadow-sm animate-pulse uppercase tracking-wider">
+                                <IoTime size={12}/> Ociosa
                             </span>
-                        );
-                    })()}
+                        ) : mesa.status !== 'livre' && (() => {
+                            // Cor dinâmica baseada no tempo
+                            const data = mesa.updatedAt?.toDate ? mesa.updatedAt.toDate() : (mesa.updatedAt ? new Date(mesa.updatedAt) : null);
+                            const mins = data ? Math.floor((new Date() - data) / 60000) : 0;
+                            const timeColor = mins >= 30 ? 'bg-red-100 text-red-700 border-red-200' 
+                                : mins >= 15 ? 'bg-amber-100 text-amber-700 border-amber-200' 
+                                : 'bg-white/70 text-gray-600 border-black/5';
+                            return (
+                                <span className={`text-[10px] font-bold backdrop-blur-sm border px-2 py-1 rounded-md flex items-center gap-1 shadow-sm ${timeColor}`}>
+                                    <IoTime size={11}/> {tempoDecorrido}
+                                </span>
+                            );
+                        })()}
+                    </div>
                 </div>
 
                 {/* Corpo: Livre ou Pessoas/Nome */}
@@ -106,7 +117,7 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir }) => {
                 <div className="bg-white/60 backdrop-blur-md border-t border-black/5 flex flex-col">
                     <div onClick={onClick} className="py-1.5 px-3 text-center border-b border-black/5 hover:bg-white/50 transition-colors">
                         <span className="text-[17px] font-black text-gray-900 tracking-tight">
-                            {formatarDinheiro(mesa.total)}
+                            {isValorOculto ? 'R$ •••••' : formatarDinheiro(mesa.total)}
                         </span>
                     </div>
 

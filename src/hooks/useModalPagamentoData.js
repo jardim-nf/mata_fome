@@ -188,6 +188,36 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
         });
     }, [pagamentos]);
 
+    const dividirIgualmente = useCallback((qtd) => {
+        const numPagantes = parseInt(qtd, 10);
+        if (isNaN(numPagantes) || numPagantes <= 1 || restanteMesa <= 0) return;
+        
+        const valorPorPessoa = parseFloat((restanteMesa / numPagantes).toFixed(2));
+        let valores = Array(numPagantes).fill(valorPorPessoa);
+        
+        const soma = valores.reduce((a, b) => a + b, 0);
+        const dif = parseFloat((restanteMesa - soma).toFixed(2));
+        if (Math.abs(dif) > 0) {
+            valores[0] = parseFloat((valores[0] + dif).toFixed(2));
+        }
+
+        const novosPagamentos = {};
+        const novosSelecionados = {};
+        
+        for (let i = 0; i < numPagantes; i++) {
+            const nome = `Rateio \u{1F464} ${i + 1}`;
+            novosPagamentos[nome] = {
+                valor: valores[i],
+                formaPagamento: 'dinheiro',
+                itens: []
+            };
+            novosSelecionados[nome] = true;
+        }
+        
+        setPagamentos(novosPagamentos);
+        setSelecionados(novosSelecionados);
+    }, [restanteMesa]);
+
     // --- IMPRESSÃO E SCRIPT LITERAL COM WINDOW ---
     const handleImprimirConferencia = async () => {
         if (!estabelecimentoId || !mesa?.id) {
@@ -415,6 +445,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
         editarValorPagamento,
         adicionarPessoa,
         removerPessoa,
+        dividirIgualmente,
         handleImprimirConferencia,
         handleFinalizar
     };

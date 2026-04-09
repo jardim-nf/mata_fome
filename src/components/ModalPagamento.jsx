@@ -25,7 +25,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         agruparItensPorPessoa,
         
         toggleSelecao, editarFormaPagamento, editarValorPagamento,
-        adicionarPessoa, removerPessoa,
+        adicionarPessoa, removerPessoa, dividirIgualmente,
         handleImprimirConferencia, handleFinalizar
     } = useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucesso);
 
@@ -248,9 +248,26 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                 </div>
 
                 {tipoPagamento === 'individual' && (
-                    <button onClick={adicionarPessoa} className="mt-4 w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all">
-                        <IoAdd /> Adicionar Pagante Manual
-                    </button>
+                    <div className="mt-4 flex gap-2">
+                        <button onClick={adicionarPessoa} className="flex-1 py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all">
+                            <IoAdd /> Manual
+                        </button>
+                        <div className="flex-1 flex items-center border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-400 focus-within:border-blue-500 transition-all bg-white overflow-hidden">
+                            <span className="text-gray-400 font-bold text-[10px] uppercase tracking-widest pl-3 flex-shrink-0">Divisão<br/>Igual:</span>
+                            <input 
+                                type="number" 
+                                min="2"
+                                placeholder="Qtd"
+                                className="w-full h-full py-3 bg-transparent text-gray-800 font-black outline-none text-center"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') dividirIgualmente(e.target.value);
+                                }}
+                                onBlur={(e) => {
+                                    if (e.target.value > 1) dividirIgualmente(e.target.value);
+                                }}
+                            />
+                        </div>
+                    </div>
                 )}
 
                 <button onClick={() => setEtapa(3)} className="mt-4 w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">

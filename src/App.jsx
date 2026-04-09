@@ -2,6 +2,8 @@ import React, { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, PrivateRoute } from './context/AuthContext';
 import { HeaderProvider } from './context/HeaderContext';
+import { LocalSyncProvider } from './context/LocalSyncContext';
+import { LocalSyncProvider } from './context/LocalSyncContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Layout from "./components/Layout";
@@ -111,8 +113,9 @@ function App() {
       <ScrollToTop />
       <AuthProvider>
         <HeaderProvider>
-          <div className="min-h-screen bg-gray-50">
-            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" /></div>}>
+          <LocalSyncProvider>
+            <div className="min-h-screen bg-gray-50">
+              <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" /></div>}>
               <Routes>
                 {/* Rotas públicas — SEM providers pesados */}
                 <Route path="/" element={<Home />} />
@@ -207,6 +210,7 @@ function App() {
             <IosInstallPrompt />
             <ToastContainer position="bottom-right" autoClose={5000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
           </div>
+          </LocalSyncProvider>
         </HeaderProvider>
       </AuthProvider>
     </Router>
