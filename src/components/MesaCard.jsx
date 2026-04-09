@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { IoTime, IoPerson, IoCashOutline, IoPersonCircle, IoTrash, IoNotifications, IoReceipt } from 'react-icons/io5';
+import { cn } from '../utils/cn'; // Utilitário de formatação de classes Tailwind
 
 // Helper de formatação interna
 const formatarDinheiro = (val) => {
@@ -12,17 +13,28 @@ const formatarDinheiro = (val) => {
 const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta, isValorOculto }) => {
     
     // Cores do STATUS: Tons suaves no fundo, texto forte e borda dupla elegante
+    const baseCardStyle = 'relative rounded-2xl border-2 flex flex-col justify-between overflow-hidden transition-all duration-200 active:scale-95 cursor-pointer min-h-[145px]';
+    
     const cardStyle = useMemo(() => {
         if (isOciosa) return 'bg-orange-50 border-orange-400 text-orange-900 shadow-md scale-[1.02] ring-2 ring-orange-400/20';
 
         switch (mesa.status) {
-            case 'livre': return 'bg-white border-gray-200 text-gray-400 hover:border-blue-300 hover:shadow-md';
-            case 'ocupada': return mesa.chamandoGarcom || mesa.pedindoConta ? 'bg-red-50 border-yellow-400 text-red-800 shadow-lg ring-2 ring-yellow-400/50' : 'bg-red-50 border-red-300 text-red-800 shadow-sm';
-            case 'com_pedido': return mesa.chamandoGarcom || mesa.pedindoConta ? 'bg-blue-50 border-yellow-400 text-blue-800 shadow-lg ring-2 ring-yellow-400/50' : 'bg-blue-50 border-blue-300 text-blue-800 shadow-sm'; 
-            case 'pagamento': return 'bg-yellow-50 border-yellow-400 text-yellow-900 shadow-sm';
-            default: return 'bg-white border-gray-200 text-gray-500';
+            case 'livre': 
+                return 'bg-white border-gray-200 text-gray-400 hover:border-blue-300 hover:shadow-md';
+            case 'ocupada': 
+                return mesa.chamandoGarcom || mesa.pedindoConta 
+                    ? 'bg-red-50 border-yellow-400 text-red-800 shadow-lg ring-2 ring-yellow-400/50' 
+                    : 'bg-red-50 border-red-300 text-red-800 shadow-sm';
+            case 'com_pedido': 
+                return mesa.chamandoGarcom || mesa.pedindoConta 
+                    ? 'bg-blue-50 border-yellow-400 text-blue-800 shadow-lg ring-2 ring-yellow-400/50' 
+                    : 'bg-blue-50 border-blue-300 text-blue-800 shadow-sm'; 
+            case 'pagamento': 
+                return 'bg-yellow-50 border-yellow-400 text-yellow-900 shadow-sm';
+            default: 
+                return 'bg-white border-gray-200 text-gray-500';
         }
-    }, [mesa.status, isOciosa]);
+    }, [mesa.status, mesa.chamandoGarcom, mesa.pedindoConta, isOciosa]);
 
     const tempoDecorrido = useMemo(() => {
         if (!mesa.updatedAt || mesa.status === 'livre') return '';
@@ -47,7 +59,7 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta,
     }, [mesa.nomesOcupantes, mesa.nome]);
 
     return (
-        <div className={`relative rounded-2xl border-2 flex flex-col justify-between overflow-hidden transition-all duration-200 active:scale-95 cursor-pointer min-h-[145px] ${cardStyle}`}>
+        <div className={cn(baseCardStyle, cardStyle)}>
             
             {/* --- ÁREA PRINCIPAL --- */}
             <div onClick={onClick} className="flex-1 p-3 flex flex-col relative z-10">
@@ -61,7 +73,10 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta,
                         {(mesa.chamandoGarcom || mesa.pedindoConta) && (
                             <button 
                                 onClick={(e) => { e.stopPropagation(); if(onLimparAlerta) onLimparAlerta(mesa.id); }}
-                                className="animate-bounce bg-yellow-400 text-yellow-900 text-[10px] font-black px-2 py-1 rounded shadow-md flex items-center gap-1 active:scale-95 hover:bg-yellow-500 transition-all uppercase"
+                                className={cn(
+                                    "text-[10px] font-black px-2 py-1 rounded shadow-md flex items-center gap-1 active:scale-95 transition-all uppercase",
+                                    "bg-yellow-400 text-yellow-900 hover:bg-yellow-500 animate-bounce"
+                                )}
                                 title="Limpar alerta"
                             >
                                 {mesa.pedindoConta ? <><IoReceipt size={12}/> Conta</> : <><IoNotifications size={12}/> Garçom</>}
@@ -76,11 +91,14 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta,
                             // Cor dinâmica baseada no tempo
                             const data = mesa.updatedAt?.toDate ? mesa.updatedAt.toDate() : (mesa.updatedAt ? new Date(mesa.updatedAt) : null);
                             const mins = data ? Math.floor((new Date() - data) / 60000) : 0;
-                            const timeColor = mins >= 30 ? 'bg-red-100 text-red-700 border-red-200' 
-                                : mins >= 15 ? 'bg-amber-100 text-amber-700 border-amber-200' 
-                                : 'bg-white/70 text-gray-600 border-black/5';
+                            
                             return (
-                                <span className={`text-[10px] font-bold backdrop-blur-sm border px-2 py-1 rounded-md flex items-center gap-1 shadow-sm ${timeColor}`}>
+                                <span className={cn(
+                                    "text-[10px] font-bold backdrop-blur-sm border px-2 py-1 rounded-md flex items-center gap-1 shadow-sm",
+                                    mins >= 30 ? 'bg-red-100 text-red-700 border-red-200' :
+                                    mins >= 15 ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                    'bg-white/70 text-gray-600 border-black/5'
+                                )}>
                                     <IoTime size={11}/> {tempoDecorrido}
                                 </span>
                             );
@@ -123,11 +141,12 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta,
 
                     <div 
                         onClick={(e) => { e.stopPropagation(); onPagar(); }}
-                        className={`py-2 px-2 flex items-center justify-center gap-1.5 transition-colors font-black text-[11px] uppercase tracking-wider
-                            ${mesa.status === 'pagamento' 
+                        className={cn(
+                            "py-2 px-2 flex items-center justify-center gap-1.5 transition-colors font-black text-[11px] uppercase tracking-wider",
+                            mesa.status === 'pagamento' 
                                 ? 'bg-yellow-400 hover:bg-yellow-500 text-yellow-900' 
                                 : 'bg-green-600 hover:bg-green-700 text-white shadow-inner'
-                            }`}
+                        )}
                     >
                         <IoCashOutline size={16} /> Pagar Conta
                     </div>

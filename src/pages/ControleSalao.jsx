@@ -35,12 +35,6 @@ export default function ControleSalao() {
 
     // Injeção do Custom Hook
     const salaoData = useControleSalaoData(userData, user, currentUser);
-    
-    // Evitar render loop com stale-closures no useEffect
-    const salaoDataRef = useRef(salaoData);
-    useEffect(() => {
-        salaoDataRef.current = salaoData;
-    });
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);
@@ -215,7 +209,7 @@ export default function ControleSalao() {
                             </button>
                             {!isGarcom && (
                                 <>
-                                    <button onClick={() => salaoDataRef.current.abrirHistoricoVendas()} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                                    <button onClick={() => salaoData.abrirHistoricoVendas()} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
                                         <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
                                     </button>
                                     <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
@@ -228,7 +222,7 @@ export default function ControleSalao() {
                                         {isFullscreen ? <IoContract className="text-lg" /> : <IoExpand className="text-lg" />} 
                                         <span className="hidden sm:inline">{isFullscreen ? 'Sair Tela Cheia' : 'Tela Cheia'}</span>
                                     </button>
-                                    <button onClick={() => salaoDataRef.current.handleExcluirMesasLivres()} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title="Limpar Mesas Livres">
+                                    <button onClick={() => salaoData.handleExcluirMesasLivres()} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title="Limpar Mesas Livres">
                                         <IoTrash className="text-lg" /> <span className="hidden sm:inline">Limpar Livres</span>
                                     </button>
                                 </>
