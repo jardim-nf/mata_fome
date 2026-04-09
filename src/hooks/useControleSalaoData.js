@@ -111,7 +111,6 @@ export function useControleSalaoData(userData, user, currentUser) {
             },
             (error) => { console.error("Erro mesas:", error); setLoading(false); }
         );
-        );
         return () => unsubscribe();
     }, [estabelecimentoId, userData]);
 

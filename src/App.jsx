@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider, PrivateRoute } from './context/AuthContext';
 import { HeaderProvider } from './context/HeaderContext';
 import { LocalSyncProvider } from './context/LocalSyncContext';
-import { LocalSyncProvider } from './context/LocalSyncContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Layout from "./components/Layout";
