@@ -187,17 +187,17 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             const catNomeDigitadoBusca = currentFormData.categoria.trim().toUpperCase();
             const catDoc = categories.find(c => (c.nome || '').trim().toUpperCase() === catNomeDigitadoBusca);
             let catId = catDoc?.id;
+            let finalCategoryName = currentFormData.categoria.trim();
 
             if (!catId) {
-                const novoNome = currentFormData.categoria.trim(); // Or could uppercase it, let's keep user input case
-                const newCat = await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio'), { nome: novoNome, ordem: 99, ativo: true });
+                const newCat = await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio'), { nome: finalCategoryName, ordem: 99, ativo: true });
                 catId = newCat.id;
             }
 
             const itemData = {
                 ...currentFormData,
                 nome: currentFormData.nome.trim(),
-                categoria: novoNome,
+                categoria: finalCategoryName,
                 imageUrl,
                 variacoes: currentVariacoes.map(v => ({ ...v, preco: Number(v.preco), estoque: Number(v.estoque), custo: Number(v.custo) })),
                 estoque: currentVariacoes.reduce((acc, v) => acc + Number(v.estoque), 0),
