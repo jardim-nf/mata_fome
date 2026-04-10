@@ -166,7 +166,7 @@ export default function ControleSalao() {
             <div className="sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-xl z-30 pb-4 pt-2 mb-2 w-full flex flex-col gap-2">
                 {!isGarcom && (
                     <div className="mb-2">
-                        <BackButton />
+                        <BackButton to="/dashboard" />
                     </div>
                 )}
                 <div className="flex flex-col gap-4 w-full">
