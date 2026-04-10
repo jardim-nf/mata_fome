@@ -97,6 +97,10 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/firebase-storage/, ''),
         },
+        '/api/ncm': {
+          target: 'https://brasilapi.com.br',
+          changeOrigin: true,
+        },
       },
     },
     build: {

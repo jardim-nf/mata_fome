@@ -130,7 +130,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
         if (termo.length < 3) return setNcmResultados([]);
         setPesquisandoNcm(true);
         try {
-            const res = await fetch(`https://brasilapi.com.br/api/ncm/v1?search=${termo}`);
+            const res = await fetch(`/api/ncm/v1?search=${termo}`);
             if (res.ok) {
                 const data = await res.json();
                 setNcmResultados(Array.isArray(data) ? data.slice(0, 10) : []);
