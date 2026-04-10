@@ -347,7 +347,8 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
             const docRef = await addDoc(collection(db, 'vendas'), dadosVenda);
 
             if (modo === 'total' || vaiQuitar) {
-                const itensParaBaixaEstoque = itensValidos.filter(i => !i._estoqueBaixado);
+                const todosAtivos = todosItensMesa.filter(i => i.status !== 'cancelado');
+                const itensParaBaixaEstoque = todosAtivos.filter(i => !i._estoqueBaixado);
                 if (itensParaBaixaEstoque.length > 0) await estoqueService.darBaixaEstoque(estabelecimentoId, itensParaBaixaEstoque);
             }
 
