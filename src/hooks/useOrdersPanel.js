@@ -223,11 +223,6 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                     
                     if (deveTocarCampainha) {
                         tocarCampainha();
-                        if (realmenteNovos.length === 1) {
-                            falarNovaComanda(mensagemParaFalar);
-                        } else {
-                            falarNovaComanda(`${realmenteNovos.length} novos pedidos chegaram.`);
-                        }
                     }
                 }
                 setTimeout(() => setNewOrderIds(prev => { const next = new Set(prev); novosIds.forEach(id => next.delete(id)); return next; }), 15000);
