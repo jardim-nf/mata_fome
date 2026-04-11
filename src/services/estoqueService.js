@@ -70,42 +70,43 @@ export const estoqueService = {
           const dados = itemAt.data;
           const updates = {};
 
-          // --- Campo `estoqueAtual` (legado com flag controlaEstoque) ---
-          if (dados.controlaEstoque === true && typeof dados.estoqueAtual === 'number') {
-            let novoEstoque = dados.estoqueAtual - itemAt.quantidadeComprada;
-            updates.estoqueAtual = novoEstoque;
-
-            if (novoEstoque <= (dados.estoqueMinimo || 3)) {
-              alertas.push({ nome: itemAt.nome, estoque: novoEstoque, minimo: dados.estoqueMinimo || 3 });
-            }
-          }
-
-          // --- Campo `estoque` (novo padrão do AdminMenuManagement) ---
-          if (typeof dados.estoque === 'number') {
-            let novoEstoque = dados.estoque - itemAt.quantidadeComprada;
-            updates.estoque = novoEstoque;
-
-            if (novoEstoque <= (dados.estoqueMinimo || 3)) {
-              alertas.push({ nome: itemAt.nome, estoque: novoEstoque, minimo: dados.estoqueMinimo || 3 });
-            }
-          }
-
-          // --- Atualiza variações (se existem) ---
-          console.log("🛠️ checkando variações...", { isArray: Array.isArray(dados.variacoes), variacaoIdItem: itemAt.variacaoId, variacoesCadastradas: dados.variacoes });
+          // 1. Calcula estoque geral
+          let estoqueAtualGeral = typeof dados.estoque === 'number' ? dados.estoque : (typeof dados.estoqueAtual === 'number' ? dados.estoqueAtual : 0);
+          let novoEstoqueGeral = estoqueAtualGeral - itemAt.quantidadeComprada;
           
-          if (Array.isArray(dados.variacoes) && itemAt.variacaoId) {
+          updates.estoque = novoEstoqueGeral;
+          // Atualiza também o legado para garantir compatibilidade
+          if (dados.estoqueAtual !== undefined) {
+             updates.estoqueAtual = novoEstoqueGeral;
+          }
+
+          if (novoEstoqueGeral <= (dados.estoqueMinimo || 3)) {
+            alertas.push({ nome: itemAt.nome, estoque: novoEstoqueGeral, minimo: dados.estoqueMinimo || 3 });
+          }
+
+          // 2. Atualiza variações (se aplicável)
+          let atualizouVariacao = false;
+          if (Array.isArray(dados.variacoes)) {
             const variacoes = dados.variacoes.map(v => {
-              if (v.id === itemAt.variacaoId) {
-                let novoEstoque = (Number(v.estoque) || 0) - itemAt.quantidadeComprada;
-                console.log(`🛠️ variação ${v.id} bateu! antigo: ${v.estoque}, novo: ${novoEstoque}`);
-                return { ...v, estoque: novoEstoque };
+              // Se tivermos o variacaoId, abatemos nele.
+              // Se não tivermos (foi vendido 'Padrão' mas não passou variacaoId), tentamos achar a variação filha "Padrão" / ID 'v-unique' ou apenas debitamos geral se não achar.
+              if ((itemAt.variacaoId && v.id === itemAt.variacaoId) || (!itemAt.variacaoId && v.nome === 'Padrão' && dados.variacoes.length === 1)) {
+                atualizouVariacao = true;
+                let novoEstoqueVar = (Number(v.estoque) || 0) - itemAt.quantidadeComprada;
+                return { ...v, estoque: novoEstoqueVar };
               }
               return v;
             });
-            updates.variacoes = variacoes;
-            // Recalcula estoque total baseado nas variações
-            updates.estoque = variacoes.reduce((acc, v) => acc + (Number(v.estoque) || 0), 0);
-            console.log("🛠️ novas variacoes:", updates.variacoes, "estoque somado:", updates.estoque);
+
+            if (atualizouVariacao) {
+              updates.variacoes = variacoes;
+              // Recalcula estoque total somando as variações já que mexemos em uma
+              const somaVariacoes = variacoes.reduce((acc, v) => acc + (Number(v.estoque) || 0), 0);
+              updates.estoque = somaVariacoes;
+              if (dados.estoqueAtual !== undefined) {
+                 updates.estoqueAtual = somaVariacoes;
+              }
+            }
           }
 
           if (Object.keys(updates).length > 0) {
