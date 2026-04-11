@@ -36,8 +36,23 @@ export const estoqueService = {
              continue;
           }
 
-          const itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens', produtoId);
-          const itemDoc = await transaction.get(itemRef);
+          let itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, 'itens', produtoId);
+          if (item.tipoColecao) {
+            itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, item.tipoColecao, produtoId);
+          }
+          
+          let itemDoc = await transaction.get(itemRef);
+          
+          // Fallback: se não achar na subcoleção definida/padrão, tenta na outra
+          if (!itemDoc.exists()) {
+            const outraColecao = (item.tipoColecao === 'produtos' || (!item.tipoColecao && itemRef.path.includes('/itens/'))) ? 'produtos' : 'itens';
+            const fallbackRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', categoriaId, outraColecao, produtoId);
+            const fallbackDoc = await transaction.get(fallbackRef);
+            if (fallbackDoc.exists()) {
+              itemRef = fallbackRef;
+              itemDoc = fallbackDoc;
+            }
+          }
           
           if (itemDoc.exists()) {
             itensParaAtualizar.push({
