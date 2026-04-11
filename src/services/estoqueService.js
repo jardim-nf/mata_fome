@@ -58,9 +58,7 @@ export const estoqueService = {
           // --- Campo `estoqueAtual` (legado com flag controlaEstoque) ---
           if (dados.controlaEstoque === true && typeof dados.estoqueAtual === 'number') {
             let novoEstoque = dados.estoqueAtual - itemAt.quantidadeComprada;
-            if (novoEstoque < 0) novoEstoque = 0;
             updates.estoqueAtual = novoEstoque;
-            if (novoEstoque === 0) updates.disponivel = false;
 
             if (novoEstoque <= (dados.estoqueMinimo || 3)) {
               alertas.push({ nome: itemAt.nome, estoque: novoEstoque, minimo: dados.estoqueMinimo || 3 });
@@ -70,10 +68,7 @@ export const estoqueService = {
           // --- Campo `estoque` (novo padrão do AdminMenuManagement) ---
           if (typeof dados.estoque === 'number') {
             let novoEstoque = dados.estoque - itemAt.quantidadeComprada;
-            if (novoEstoque < 0) novoEstoque = 0;
             updates.estoque = novoEstoque;
-            
-            if (novoEstoque === 0) updates.ativo = false; // Pausa o produto se zerou
 
             if (novoEstoque <= (dados.estoqueMinimo || 3)) {
               alertas.push({ nome: itemAt.nome, estoque: novoEstoque, minimo: dados.estoqueMinimo || 3 });
@@ -87,7 +82,6 @@ export const estoqueService = {
             const variacoes = dados.variacoes.map(v => {
               if (v.id === itemAt.variacaoId) {
                 let novoEstoque = (Number(v.estoque) || 0) - itemAt.quantidadeComprada;
-                if (novoEstoque < 0) novoEstoque = 0;
                 console.log(`🛠️ variação ${v.id} bateu! antigo: ${v.estoque}, novo: ${novoEstoque}`);
                 return { ...v, estoque: novoEstoque };
               }
