@@ -263,6 +263,26 @@ export default function Menu() {
                 )}
                 
                 <EstablishmentHeader estabelecimentoInfo={estabelecimentoInfo} coresEstabelecimento={coresEstabelecimento} isLojaAberta={isLojaAberta} currentTime={currentTime} currentUser={currentUser} onLogout={authActions.handleLogout} saldoCarteira={checkoutActions.saldoCarteira} onViewHistory={() => navigate('/historico-pedidos')} />
+                
+                {/* 💳 BANNER DE FIDELIDADE (CASHBACK) - Apenas aparece se cliente logado tem saldo */}
+                {checkoutActions.saldoCarteira > 0 && (
+                    <div className="bg-gradient-to-r from-[#00E6A4] to-emerald-500 rounded-2xl p-5 shadow-2xl shadow-emerald-200/50 mb-8 mx-0 overflow-hidden relative cursor-pointer group hover:scale-[1.01] transition-transform animate-fade-in" onClick={scrollToResumo}>
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-white/20 rounded-full blur-3xl -mr-10 -mt-10 animate-pulse"></div>
+                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-600/30 rounded-full blur-3xl -ml-10 -mb-10"></div>
+                        
+                        <div className="relative z-10 flex justify-between items-center">
+                            <div>
+                                <p className="text-white/90 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center gap-1">💳 Carteira Digital</p>
+                                <div className="text-white text-3xl font-black drop-shadow-sm">R$ {checkoutActions.saldoCarteira.toFixed(2).replace('.', ',')}</div>
+                                <p className="text-white/90 text-xs mt-1 font-bold bg-white/20 inline-block px-2 py-0.5 rounded-lg">Você possui saldo para abater no pedido!</p>
+                            </div>
+                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-emerald-500 text-3xl shadow-lg border border-emerald-100 group-hover:scale-110 transition-transform">
+                                💸
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <CategoryFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} categorias={categoriasOrdenadas} selectedCategory={selectedCategory} onCategoryClick={handleCategoryClick} coresEstabelecimento={coresEstabelecimento} />
 
                 {carrinho.length > 0 && <SugestoesCardapio carrinho={carrinho} allProdutos={allProdutos} handleAbrirModalProduto={(it) => handleClickItemModal(it, false)} />}
@@ -343,7 +363,7 @@ export default function Menu() {
             />
             
             <Suspense fallback={null}>
-                <ReviewModal isOpen={checkoutActions.showReviewModal} onClose={() => checkoutActions.setShowReviewModal(false)} pedidoId={checkoutActions.ultimoPedidoId} estabelecimentoId={actualEstabelecimentoId} clienteNome={nomeCliente} clienteId={currentUser?.uid} />
+                <ReviewModal isOpen={checkoutActions.showReviewModal} onClose={() => checkoutActions.setShowReviewModal(false)} pedidoId={checkoutActions.ultimoPedidoId} estabelecimentoId={actualEstabelecimentoId} clienteNome={nomeCliente} clienteId={currentUser?.uid} whatsappLoja={estabelecimentoInfo?.telefone} />
             </Suspense>
 
             <WaiterCallWidget estabelecimentoId={actualEstabelecimentoId} />

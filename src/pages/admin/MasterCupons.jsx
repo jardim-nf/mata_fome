@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collectionGroup, collection, getDocs, query } from 'firebase/firestore';
-import { FaArrowLeft, FaTags, FaBoxOpen, FaPercentage, FaStore } from 'react-icons/fa';
+import { FaArrowLeft, FaTags, FaBoxOpen, FaPercentage, FaStore, FaBolt } from 'react-icons/fa';
+import { IoLogOutOutline } from 'react-icons/io5';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 function MasterCupons() {
   const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
+  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
   const [cupons, setCupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [estabMap, setEstabMap] = useState({});
@@ -33,11 +36,12 @@ function MasterCupons() {
         const snap = await getDocs(query(collectionGroup(db, 'cupons')));
         let data = snap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
         
-        // Sorting by creation or active state
+        // Sorting by active state then alphanumeric
         data.sort((a, b) => {
-          const statusA = a.ativo ? 1 : 0;
-          const statusB = b.ativo ? 1 : 0;
-          return statusB - statusA;
+          const statusA = a.ativo !== false ? 1 : 0;
+          const statusB = b.ativo !== false ? 1 : 0;
+          if (statusB !== statusA) return statusB - statusA;
+          return (a.codigo || a.id).localeCompare(b.codigo || b.id);
         });
 
         setCupons(data);
@@ -50,8 +54,8 @@ function MasterCupons() {
     fetchCupons();
   }, [currentUser, isMasterAdmin]);
 
-  if (authLoading) return <div className="p-10 text-center">Carregando...</div>;
-  if (!isMasterAdmin) return <div className="p-10 text-center text-red-500">Acesso Negado</div>;
+  if (authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
+  if (!isMasterAdmin) return <div className="p-10 text-center text-[#FF3B30] min-h-screen bg-[#F5F5F7]">Acesso Negado</div>;
 
   const cuponsFiltrados = cupons.filter(cupom => {
     if (filterEstab !== 'todos') {
@@ -67,41 +71,66 @@ function MasterCupons() {
   });
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 min-h-screen font-sans p-6">
-      <div className="max-w-7xl mx-auto">
-        <button onClick={() => navigate('/master-dashboard')} className="text-slate-400 hover:text-amber-600 flex items-center gap-2 mb-6 text-sm font-bold transition-colors">
-          <FaArrowLeft /> Voltar ao Master
-        </button>
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md">
-            <FaTags className="text-white text-xl" />
+    <div className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
+      
+      {/* ─── FLOATING PILL NAVBAR ─── */}
+      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
+            <FaArrowLeft className="text-[#86868B] text-sm" />
+          </button>
+          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
+            <h1 className="font-semibold text-sm tracking-tight text-black">Hub de Promoções</h1>
+            <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
           </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
+          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
+            <IoLogOutOutline className="text-red-500" size={16} />
+          </button>
+        </div>
+      </nav>
+
+      <main className="max-w-[1400px] mx-auto mt-8">
+        
+        {/* HEADER DA PÁGINA */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Rede: Cupons Gerados</h1>
-            <p className="text-slate-500 text-sm mt-1">Gestão de ofertas em todas as franquias (<span className="font-bold">{cuponsFiltrados.length}</span>)</p>
+            <div className="flex items-center gap-3 mb-2">
+                <span className="bg-[#F5F5F7] border border-[#E5E5EA] text-[#86868B] text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full">Inteligência de Vendas</span>
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight text-[#1D1D1F]">Cupons da Rede</h1>
+            <p className="text-[#86868B] text-sm mt-1 font-medium">Gestão consolidada de todas as ofertas ativas na plataforma (<span className="text-black font-black">{cuponsFiltrados.length}</span> rastreados).</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-6 flex flex-col sm:flex-row items-center gap-4 relative z-10 w-full sm:w-fit">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-             <FaStore className="text-slate-400" />
-             <select 
-               className="w-full sm:w-64 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
-               value={filterEstab}
-               onChange={e => setFilterEstab(e.target.value)}
-             >
-                <option value="todos">Todas as Franquias</option>
-                {estabList.map(e => (
-                    <option key={e.id} value={e.id}>{e.nome}</option>
-                ))}
-             </select>
-          </div>
+        {/* --- FILTROS PILL-STYLE --- */}
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 px-2">
+            <div className="relative w-full sm:w-auto bg-white border border-[#E5E5EA] rounded-full px-5 py-3 flex items-center shadow-sm hover:border-[#86868B] transition-colors">
+                <FaStore className="text-[#86868B] shrink-0" size={14} />
+                <select 
+                    className="bg-transparent border-none outline-none text-xs ml-3 w-full sm:min-w-[240px] font-bold text-[#1D1D1F] cursor-pointer appearance-none"
+                    value={filterEstab}
+                    onChange={e => setFilterEstab(e.target.value)}
+                >
+                    <option value="todos">Varrer Todas as Franquias</option>
+                    {estabList.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                </select>
+                <div className="pointer-events-none absolute right-5 text-[#86868B] text-[10px]">▼</div>
+            </div>
         </div>
 
+        {/* CONTENT GRID */}
         {loading ? (
-          <div className="py-20 text-center text-slate-400">Varrendo promoções da rede...</div>
+          <div className="flex justify-center p-20">
+            <div className="flex items-center gap-3 text-[#86868B] font-bold text-sm">
+                <div className="w-8 h-8 border-4 border-[#E5E5EA] border-t-black rounded-full animate-spin"></div>
+                Varrendo data centers...
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {cuponsFiltrados.length > 0 ? cuponsFiltrados.map(cupom => {
               let estabId = 'desconhecido';
               if (cupom._path) {
@@ -110,37 +139,63 @@ function MasterCupons() {
                 if (idx >= 0) estabId = parts[idx+1];
               }
               const realNome = estabMap[estabId] || estabId;
+              const isAtivo = cupom.ativo !== false;
               
               return (
-                <div key={cupom.id} className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm relative overflow-hidden">
-                  <div className={`absolute top-0 left-0 w-1 h-full ${cupom.ativo !== false ? 'bg-emerald-400' : 'bg-slate-300'}`} />
-                  <div className="flex justify-between items-start mb-3 pl-1">
-                    <span className="text-sm font-black text-slate-800 uppercase tracking-widest">{cupom.codigo || cupom.id}</span>
-                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${cupom.ativo !== false ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'}`}>
-                      {cupom.ativo !== false ? 'ATIVO' : 'INATIVO'}
+                <div key={cupom.id} className="bg-white border border-[#E5E5EA] p-6 rounded-[2rem] shadow-sm hover:shadow-md hover:border-black/20 transition-all duration-300 relative group">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-[1rem] bg-[#F5F5F7] border border-[#E5E5EA] flex items-center justify-center text-[#1D1D1F] shadow-sm">
+                            <FaPercentage size={16} />
+                        </div>
+                    </div>
+                    {isAtivo ? (
+                        <span className="bg-[#E5F1FF] text-[#007AFF] px-3 py-1.5 rounded-full text-[10px] font-bold border border-[#CCE3FF] uppercase tracking-widest flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-[#007AFF] rounded-full animate-pulse"></span> Válido
+                        </span>
+                    ) : (
+                        <span className="bg-[#F5F5F7] text-[#86868B] px-3 py-1.5 rounded-full text-[10px] font-bold border border-[#E5E5EA] uppercase tracking-widest flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-[#86868B] rounded-full"></span> Espirado
+                        </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-xl font-black text-[#1D1D1F] mb-1 truncate" title={cupom.codigo || cupom.id}>
+                    {(cupom.codigo || cupom.id).toUpperCase()}
+                  </h3>
+                  
+                  <div className="flex items-baseline gap-1 mb-6">
+                    <span className="text-sm font-semibold text-[#86868B]">Desconto de</span>
+                    <span className="text-xl font-black text-[#1D1D1F]">
+                        {cupom.tipo === 'porcentagem' || cupom.tipoDesconto === 'percentual' ? `${cupom.valor}%` : `R$ ${cupom.valor || 0}`}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 mb-4 pl-1">
-                    <FaPercentage className="text-amber-400" size={12}/>
-                    <span className="font-semibold text-slate-700 text-sm">
-                      {cupom.tipo === 'porcentagem' || cupom.tipoDesconto === 'percentual' ? `${cupom.valor}% OFF` : `R$ ${cupom.valor || 0} OFF`}
-                    </span>
-                  </div>
-                  <div className="pt-3 border-t border-slate-50 flex items-center gap-2 pl-1">
-                    <span className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Loja:</span>
-                    <span className="text-[11px] font-bold text-slate-600 truncate bg-slate-50 px-2 py-0.5 rounded" title={realNome}>{realNome}</span>
+
+                  <div className="pt-5 border-t border-[#F5F5F7]">
+                    <p className="text-[10px] uppercase font-bold text-[#86868B] tracking-widest mb-2">Loja Vinculada</p>
+                    <p className="text-xs font-bold text-[#1D1D1F] bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl px-3 py-2 truncate transition-colors group-hover:bg-[#E5E5EA]" title={realNome}>
+                        {realNome}
+                    </p>
                   </div>
                 </div>
               );
             }) : (
-               <div className="col-span-full py-10 text-center border border-dashed rounded-xl border-slate-200">
-                 <FaBoxOpen className="mx-auto text-3xl text-slate-300 mb-2" />
-                 <p className="text-slate-500 font-medium">Nenhum cupom listado na rede.</p>
+               <div className="col-span-full py-20 text-center bg-white rounded-[2rem] border border-[#E5E5EA] shadow-sm">
+                 <div className="w-16 h-16 bg-[#F5F5F7] border border-[#E5E5EA] rounded-full mx-auto flex items-center justify-center mb-4">
+                    <FaBoxOpen className="text-2xl text-[#86868B]" />
+                 </div>
+                 <h3 className="text-lg font-bold text-[#1D1D1F] tracking-tight">Acervo de Códigos Vazio</h3>
+                 <p className="text-[#86868B] font-medium text-sm mt-1">Nenhuma oferta foi rastreada pela central.</p>
                </div>
             )}
           </div>
         )}
-      </div>
+      </main>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+      `}</style>
     </div>
   );
 }

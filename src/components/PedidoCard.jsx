@@ -649,6 +649,21 @@ const PedidoCard = ({
                     </div>
                 )}
                 
+                {/* 📷 FOTO COMPROVANTE (LOGÍSTICA) */}
+                {item.fotoComprovanteUrl && (
+                    <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                        <p className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
+                             📷 Comprovante de Entrega
+                        </p>
+                        <img 
+                            src={item.fotoComprovanteUrl} 
+                            alt="Comprovante de Entrega" 
+                            className="w-full h-32 object-cover rounded-lg cursor-pointer border border-gray-300" 
+                            onClick={() => window.open(item.fotoComprovanteUrl, '_blank')} 
+                        />
+                    </div>
+                )}
+                
                 {item.observacoes && (
                     <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
                         <span className="font-bold">Observações:</span> {item.observacoes}

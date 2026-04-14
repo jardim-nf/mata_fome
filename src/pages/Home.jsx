@@ -110,7 +110,7 @@ function Home() {
       const meusCargos = cargosNormalizados.filter(c => cargosDeFuncionario.includes(c));
 
       if (userData.isMasterAdmin) {
-        navigate('/master/estabelecimentos', { replace: true });
+        navigate('/master-dashboard', { replace: true });
         
       } else if (userData.isAdmin) {
         navigate('/admin/dashboard', { replace: true });

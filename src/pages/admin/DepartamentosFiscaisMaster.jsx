@@ -2,48 +2,49 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { FaArrowLeft, FaBolt, FaCrown, FaSignOutAlt } from 'react-icons/fa';
+import { IoLogOutOutline } from 'react-icons/io5';
 import { AdminDepartamentosFiscais } from '../../components/admin/AdminDepartamentosFiscais';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 function DepartamentosFiscaisMaster() {
   const navigate = useNavigate();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
-  const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Admin';
-
-  if (authLoading) return <div className="flex h-screen items-center justify-center bg-slate-50"><div className="w-12 h-12 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin"></div></div>;
+  
+  if (authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 min-h-screen font-sans">
-      {/* NAVBAR */}
-      <nav className="sticky top-0 z-50 h-16 border-b border-slate-100 bg-white/80 backdrop-blur-xl shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25 group-hover:scale-105 transition-transform">
-              <FaBolt className="text-white text-xs" />
-            </div>
-            <span className="text-slate-900 font-black text-lg tracking-tight">Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-amber-500">Food</span></span>
+    <div className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
+      
+      {/* ─── FLOATING PILL NAVBAR ─── */}
+      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
+            <FaArrowLeft className="text-[#86868B] text-sm" />
+          </button>
+          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
+            <h1 className="font-semibold text-sm tracking-tight text-black">Matrizes de Impostos</h1>
+            <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-center"><FaCrown className="text-yellow-600 text-[10px]" /></div>
-              <span className="text-sm font-bold text-slate-700">{userName}</span>
-            </div>
-            <button onClick={async () => { await logout(); navigate('/'); }} className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all"><FaSignOutAlt size={14} /></button>
-          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
+          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
+            <IoLogOutOutline className="text-red-500" size={16} />
+          </button>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-16">
+      <main className="max-w-[1400px] mx-auto mt-8">
+        
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
           <div>
-            <button onClick={() => navigate('/master-dashboard')} className="text-slate-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group">
-              <span className="bg-white p-1.5 rounded-lg shadow-sm border border-slate-100 group-hover:border-yellow-200 transition-colors"><FaArrowLeft /></span> Voltar ao Dashboard
-            </button>
             <div className="flex items-center gap-3 mb-2">
-              <span className="bg-purple-100 text-purple-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-purple-200">Global Master</span>
+              <span className="bg-[#E5F1FF] text-[#007AFF] text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#CCE3FF]">Global Master</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Departamentos Fiscais Globais</h1>
-            <p className="text-slate-500 text-sm mt-1 font-medium">Crie grupos tributários pré-definidos que ficarão disponíveis para TODAS as lojas do sistema.</p>
+            <h1 className="text-4xl font-bold tracking-tight text-[#1D1D1F]">Departamentos Fiscais Globais</h1>
+            <p className="text-[#86868B] text-sm mt-1 font-medium">Grupos tributários injetáveis que vigoram para as lojas conectadas à rede.</p>
           </div>
         </div>
 
@@ -51,6 +52,11 @@ function DepartamentosFiscaisMaster() {
         <AdminDepartamentosFiscais forceEstabId="GLOBAL" />
 
       </main>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+      `}</style>
     </div>
   );
 }

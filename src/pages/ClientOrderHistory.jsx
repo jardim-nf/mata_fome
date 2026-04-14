@@ -24,7 +24,9 @@ import {
   IoCard,
   IoPricetag,
   IoStorefront,
-  IoWalletOutline
+  IoWalletOutline,
+  IoCopyOutline,
+  IoCameraOutline
 } from 'react-icons/io5';
 
 function ClientOrderHistory() {
@@ -541,6 +543,35 @@ function ClientOrderHistory() {
                         )}
                       </div>
                     </div>
+
+                    {/* FOTOS E GORJETAS (LOGÍSTICA PREMIUM) */}
+                    {(order.status === 'em_entrega' || order.status === 'finalizado') && (order.motoboyNome || order.fotoComprovanteUrl) && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                           {order.motoboyChavePix && (
+                               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-3">
+                                   <div className="flex items-center gap-3">
+                                       <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0">
+                                            <IoBicycle size={20} />
+                                       </div>
+                                       <div className="flex-1">
+                                           <p className="text-sm font-bold text-gray-900">Gorjeta para {order.motoboyNome}</p>
+                                           <p className="text-xs text-gray-600 leading-tight mt-0.5">Gostou da entrega? Envie um valor pro motoboy no PIX!</p>
+                                        </div>
+                                   </div>
+                                   <button onClick={() => { navigator.clipboard.writeText(order.motoboyChavePix); toast.success('Chave copiada!'); }} className="mt-3 w-full flex items-center justify-center gap-2 bg-white border border-emerald-300 text-emerald-700 py-2 rounded-lg text-sm font-bold hover:bg-emerald-50 transition-colors">
+                                        <IoCopyOutline size={18} /> Copiar Chave ({order.motoboyChavePix})
+                                   </button>
+                               </div>
+                           )}
+                           
+                           {order.fotoComprovanteUrl && (
+                               <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                                   <p className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1"><IoCameraOutline /> Comprovante de Entrega na Porta</p>
+                                   <img src={order.fotoComprovanteUrl} alt="Comprovante" className="w-full h-32 object-cover rounded-lg cursor-pointer" onClick={() => window.open(order.fotoComprovanteUrl, '_blank')} />
+                               </div>
+                           )}
+                        </div>
+                    )}
                   </div>
 
                   {/* AÇÕES */}

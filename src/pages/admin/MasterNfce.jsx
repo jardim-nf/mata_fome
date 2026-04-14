@@ -2,20 +2,38 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
-import { collectionGroup, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { FaArrowLeft, FaClipboardList, FaFileInvoice, FaExternalLinkAlt, FaBoxOpen, FaStore, FaFilePdf, FaSyncAlt } from 'react-icons/fa';
+import { collectionGroup, collection, getDocs, query } from 'firebase/firestore';
+import { FaArrowLeft, FaFileInvoice, FaBoxOpen, FaStore, FaFilePdf, FaSyncAlt, FaBolt, FaCrown, FaCheckCircle } from 'react-icons/fa';
+import { IoLogOutOutline, IoSearchOutline } from 'react-icons/io5';
 import DateRangeFilter, { getPresetRange } from '../../components/DateRangeFilter';
 import { vendaService } from '../../services/vendaService';
 import { toast } from 'react-toastify';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+// ─── Skeleton Loader (Bento Style) ───
+const SkeletonRow = () => (
+  <div className="p-6 flex flex-col sm:flex-row sm:items-center gap-4 animate-pulse border-b border-[#E5E5EA]">
+    <div className="w-12 h-12 bg-slate-100 rounded-2xl shrink-0"></div>
+    <div className="flex-1 space-y-2">
+      <div className="h-4 bg-slate-100 rounded-lg w-40"></div>
+      <div className="h-3 bg-slate-50 rounded-lg w-24"></div>
+    </div>
+    <div className="h-6 bg-slate-100 rounded-lg w-20"></div>
+    <div className="h-8 bg-slate-100 rounded-full w-24"></div>
+  </div>
+);
 
 function MasterNfce() {
   const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading } = useAuth();
+  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
+  
   const [nfces, setNfces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [estabMap, setEstabMap] = useState({});
   const [estabList, setEstabList] = useState([]);
   const [filterEstab, setFilterEstab] = useState('todos');
+  const [searchTerm, setSearchTerm] = useState('');
   const [loadingAcao, setLoadingAcao] = useState(null);
 
   const [datePreset, setDatePreset] = useState('30d');
@@ -116,6 +134,9 @@ function MasterNfce() {
       const eId = getEstabId(nota);
       if (eId !== filterEstab) return false;
     }
+    const txtMatch = (nota.id || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                     (nota.cliente?.nome || nota.clienteNome || '').toLowerCase().includes(searchTerm.toLowerCase());
+    if (!txtMatch) return false;
     return true;
   });
 
@@ -129,120 +150,164 @@ function MasterNfce() {
     try {
       const res = await vendaService.baixarPdfNfce(idPlugNotas, nota.fiscal?.pdf);
       if (res && res.success) {
-        // Success handled silently as the window opens automatically in the service or here
+         // Silently handled as window opens
       } else {
         toast.warning(res.error || 'Falha ao baixar o PDF.');
       }
     } catch (err) {
-      console.error(err);
       toast.error('Erro ao baixar PDF da NFC-e');
     } finally {
       setLoadingAcao(null);
     }
   };
 
-  if (authLoading) return <div className="p-10 text-center">Carregando...</div>;
-  if (!isMasterAdmin) return <div className="p-10 text-center text-red-500">Acesso Negado</div>;
+  if (authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
+  if (!isMasterAdmin) return <div className="p-10 text-center text-[#D0021B] bg-[#F5F5F7] min-h-screen">Acesso Negado</div>;
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-white to-emerald-50/20 min-h-screen font-sans p-6">
-      <div className="max-w-7xl mx-auto">
-        <button onClick={() => navigate('/master-dashboard')} className="text-slate-400 hover:text-emerald-600 flex items-center gap-2 mb-6 text-sm font-bold transition-colors">
-          <FaArrowLeft /> Voltar ao Master
-        </button>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
-            <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md">
-                    <FaClipboardList className="text-white text-xl" />
-                </div>
-                <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Rede: NFC-e Emitidas</h1>
-                    <p className="text-slate-500 text-sm mt-1">Gestão de notas fiscais autorizadas (<span className="font-bold">{nfcesFiltradas.length}</span>)</p>
-                </div>
-            </div>
-            <DateRangeFilter
-                activePreset={datePreset}
-                dateRange={dateRange}
-                onPresetChange={handleDatePresetChange}
-                onRangeChange={handleDateRangeChange}
-                onClear={handleDateClear}
-            />
+    <div className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
+      
+      {/* ─── FLOATING PILL NAVBAR ─── */}
+      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
+            <FaArrowLeft className="text-[#86868B] text-sm" />
+          </button>
+          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
+            <h1 className="font-semibold text-sm tracking-tight text-black">Monitoramento Fiscal</h1>
+            <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
+          </div>
         </div>
+        <div className="flex items-center gap-4">
+          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
+          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
+            <IoLogOutOutline className="text-red-500" size={16} />
+          </button>
+        </div>
+      </nav>
+
+      <main className="max-w-[1400px] mx-auto mt-8">
         
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-6 flex flex-col sm:flex-row items-center gap-4 relative z-10">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-             <FaStore className="text-slate-400" />
-             <select 
-               className="w-full sm:w-64 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400"
-               value={filterEstab}
-               onChange={e => setFilterEstab(e.target.value)}
-             >
-                <option value="todos">Todas as Franquias</option>
-                {estabList.map(e => (
-                    <option key={e.id} value={e.id}>{e.nome}</option>
-                ))}
-             </select>
+        {/* HEADER */}
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6 px-2">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight text-[#1D1D1F]">Declarações Fiscais Embutidas</h1>
+            <p className="text-[#86868B] text-sm mt-1 font-medium">Extração de notas fiscais confirmadas (<span className="text-black font-black">{nfcesFiltradas.length}</span> faturas processadas).</p>
+          </div>
+          <div className="bg-white border border-[#E5E5EA] rounded-full px-4 py-2 shadow-sm flex items-center">
+            <DateRangeFilter
+              datePreset={datePreset}
+              dateRange={dateRange}
+              onPresetChange={handleDatePresetChange}
+              onRangeChange={handleDateRangeChange}
+              onClear={handleDateClear}
+            />
           </div>
         </div>
 
-        {loading ? (
-          <div className="py-20 text-center text-slate-400">Verificando dados fiscais...</div>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-             {nfcesFiltradas.length > 0 ? (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100 uppercase text-[10px] tracking-widest text-slate-400 font-black">
-                        <th className="p-4">Pedido ID</th>
-                        <th className="p-4">Data</th>
-                        <th className="p-4">Cliente / Valor</th>
-                        <th className="p-4">Loja Orix.</th>
-                        <th className="p-4 text-center">Ações Fiscais</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {nfcesFiltradas.map((nota, i) => {
-                            const data = nota._dataCalculada ? nota._dataCalculada.toLocaleString('pt-BR') : '';
-                            const estabId = getEstabId(nota);
-                            const realNome = estabMap[estabId] || estabId.toUpperCase();
-                            const valNum = getTotal(nota);
-                            const valorStr = `R$ ${valNum.toFixed(2)}`;
-                            
-                            return (
-                                <tr key={nota.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/20'}`}>
-                                <td className="p-4 font-bold text-slate-700 text-sm">#{nota.id.substring(0,6)}</td>
-                                <td className="p-4 text-xs font-semibold text-slate-500">{data}</td>
-                                <td className="p-4">
-                                    <div className="text-sm font-bold text-slate-800">{nota.cliente?.nome || nota.clienteNome || 'Anônimo'}</div>
-                                    <div className="text-xs text-slate-400">{valorStr}</div>
-                                </td>
-                                <td className="p-4"><span className="text-[10px] uppercase font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded truncate max-w-[120px] inline-block" title={realNome}>{realNome}</span></td>
-                                <td className="p-4 text-center">
+        {/* ─── FILTROS PILL-STYLE ─── */}
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-6 px-2">
+            
+            {/* Store Filter */}
+            <div className="relative w-full sm:w-auto bg-white border border-[#E5E5EA] rounded-full px-5 py-3 flex items-center shadow-sm hover:border-[#86868B] transition-colors">
+                <FaStore className="text-[#86868B] shrink-0" size={14} />
+                <select 
+                    className="bg-transparent border-none outline-none text-xs ml-3 w-full sm:min-w-[200px] font-bold text-[#1D1D1F] cursor-pointer appearance-none"
+                    value={filterEstab}
+                    onChange={e => setFilterEstab(e.target.value)}
+                >
+                    <option value="todos">Varrer Todas as Franquias</option>
+                    {estabList.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                </select>
+                <div className="pointer-events-none absolute right-4 text-[#86868B] text-[10px]">▼</div>
+            </div>
+
+            {/* General Search */}
+            <div className="relative w-full sm:w-96 bg-white border border-[#E5E5EA] rounded-full px-5 py-3 flex items-center shadow-sm">
+                <IoSearchOutline className="text-[#86868B] shrink-0" size={16} />
+                <input 
+                    type="text" 
+                    placeholder="Buscar Código da Venda ou Cliente..." 
+                    className="bg-transparent border-none outline-none text-xs ml-3 w-full font-medium placeholder-[#86868B] text-[#1D1D1F]"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                />
+            </div>
+        </div>
+
+        {/* ─── LISTA FISCAL BENTO STYLE ─── */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-[#E5E5EA] overflow-hidden">
+            {loading ? (
+                <div className="divide-y divide-[#E5E5EA]">
+                    {[1,2,3,4,5,6].map(i => <SkeletonRow key={i} />)}
+                </div>
+            ) : nfcesFiltradas.length === 0 ? (
+                <div className="p-20 text-center">
+                    <div className="w-16 h-16 bg-[#F5F5F7] rounded-3xl mx-auto flex items-center justify-center mb-6">
+                        <FaFileInvoice className="text-2xl text-[#86868B]" />
+                    </div>
+                    <h3 className="text-xl font-bold text-[#1D1D1F] mb-2">Nenhum Registro Fiscal</h3>
+                    <p className="text-sm font-medium text-[#86868B]">Não constam faturas para a pesquisa ou período informados.</p>
+                </div>
+            ) : (
+                <div className="divide-y divide-[#E5E5EA]">
+                    {nfcesFiltradas.map((nota, i) => {
+                        const dataCad = nota._dataCalculada ? nota._dataCalculada.toLocaleString('pt-BR') : '';
+                        const estabId = getEstabId(nota);
+                        const realNome = estabMap[estabId] || estabId.toUpperCase();
+                        const valNum = getTotal(nota);
+                        const valorStr = `R$ ${valNum.toFixed(2)}`;
+                        
+                        return (
+                            <div key={nota.id} className="p-6 flex flex-col lg:flex-row lg:items-center gap-6 hover:bg-[#F5F5F7]/30 transition-colors">
+                                {/* Identifier */}
+                                <div className="flex items-center gap-4 flex-[1.5] min-w-[200px]">
+                                    <div className="w-14 h-14 rounded-[1.25rem] bg-[#F2FCDA] border border-[#D0F2A8] flex flex-col items-center justify-center shrink-0">
+                                        <FaCheckCircle className="text-[#1D7446] text-sm mb-1" />
+                                        <span className="text-[9px] font-black text-[#1D7446]">AUT</span>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-sm text-[#1D1D1F] tracking-tight">#{nota.id.substring(0,8).toUpperCase()}</p>
+                                        <p className="text-[11px] font-semibold text-[#86868B] mt-1">{dataCad}</p>
+                                    </div>
+                                </div>
+
+                                {/* Cliente & Valor */}
+                                <div className="flex-1 min-w-[150px]">
+                                    <p className="text-sm font-bold text-[#1D1D1F]">{nota.cliente?.nome || nota.clienteNome || 'Consumidor Não Identificado'}</p>
+                                    <p className="text-[11px] font-bold text-[#86868B] mt-1 uppercase tracking-widest">{valorStr}</p>
+                                </div>
+
+                                {/* Franquia Emissora */}
+                                <div className="flex-1 min-w-[150px]">
+                                    <span className="text-[10px] uppercase font-bold bg-[#F5F5F7] border border-[#E5E5EA] text-[#86868B] px-2.5 py-1.5 rounded-full inline-block truncate max-w-[150px]" title={realNome}>
+                                        {realNome}
+                                    </span>
+                                </div>
+
+                                {/* Ações */}
+                                <div className="flex-[0.5] min-w-[150px] lg:text-right mt-2 lg:mt-0">
                                     <button 
                                         onClick={() => handleBaixarPdf(nota)}
                                         disabled={loadingAcao === nota.id}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#1D1D1F] text-white hover:bg-black rounded-full text-[11px] font-bold transition-all disabled:opacity-50 w-full md:w-auto active:scale-95 shadow-sm"
                                     >
-                                        {loadingAcao === nota.id ? <FaSyncAlt className="animate-spin" /> : <FaFilePdf />}
-                                        {loadingAcao === nota.id ? 'Baixando...' : 'PDF DANFE'}
+                                        {loadingAcao === nota.id ? <FaSyncAlt className="animate-spin text-sm" /> : <FaFilePdf className="text-sm" />}
+                                        {loadingAcao === nota.id ? 'Baixando...' : 'Obter DANFE'}
                                     </button>
-                                </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                    </table>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
-             ) : (
-               <div className="py-20 text-center">
-                 <FaBoxOpen className="mx-auto text-4xl text-slate-200 mb-3" />
-                 <p className="text-slate-500 font-medium">Nenhuma nota fiscal encontrada no período selecionado e/ou na franquia filtrada.</p>
-               </div>
-             )}
-          </div>
-        )}
-      </div>
+            )}
+        </div>
+      </main>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+      `}</style>
     </div>
   );
 }

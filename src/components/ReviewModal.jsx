@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import { IoStarOutline, IoStar, IoClose, IoSendOutline } from 'react-icons/io5';
 
-export default function ReviewModal({ isOpen, onClose, pedidoId, estabelecimentoId, clienteNome, clienteId }) {
+export default function ReviewModal({ isOpen, onClose, pedidoId, estabelecimentoId, clienteNome, clienteId, whatsappLoja = '' }) {
   const [rating, setRating] = useState(0);
   const [hoveredStar, setHoveredStar] = useState(0);
   const [comentario, setComentario] = useState('');
@@ -24,12 +24,17 @@ export default function ReviewModal({ isOpen, onClose, pedidoId, estabelecimento
         avaliacao: { estrelas: rating, comentario: comentario.trim(), clienteNome: clienteNome || 'Anônimo', clienteId: clienteId || null, criadoEm: new Date() }
       }, { merge: true });
       setEnviado(true);
-      toast.success('Obrigado pela avaliação! ⭐');
     } catch (e) {
       console.error(e);
       toast.error('Erro ao enviar avaliação');
     }
     setEnviando(false);
+  };
+
+  const handleClickWhatsApp = () => {
+    const zap = whatsappLoja ? whatsappLoja.replace(/\D/g, '') : '';
+    const link = `https://wa.me/55${zap}?text=${encodeURIComponent(`Olá, sou o(a) ${clienteNome || 'cliente'} e tive um problema com o meu pedido no app. Podemos resolver?`)}`;
+    window.open(link, '_blank');
   };
 
   const ratingLabels = ['', 'Péssimo', 'Ruim', 'Regular', 'Bom', 'Excelente!'];
@@ -40,19 +45,41 @@ export default function ReviewModal({ isOpen, onClose, pedidoId, estabelecimento
       <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden animate-slide-up">
         
         {enviado ? (
-          /* THANK YOU */
-          <div className="p-8 text-center">
-            <div className="text-6xl mb-4">🎉</div>
-            <h2 className="text-2xl font-black text-gray-800 mb-2">Obrigado!</h2>
-            <p className="text-gray-500 text-sm mb-6">Sua avaliação ajuda a melhorar nosso serviço</p>
-            <div className="flex justify-center gap-1 mb-6">
-              {[1,2,3,4,5].map(s => (
-                <IoStar key={s} className={`text-3xl ${s <= rating ? 'text-amber-400' : 'text-gray-200'}`} />
-              ))}
-            </div>
-            <button onClick={onClose} className="w-full py-3 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all">
-              Fechar
-            </button>
+          /* PÓS-AVALIAÇÃO ESTRATÉGICO */
+          <div className="p-8 text-center animate-fade-in text-gray-800">
+            {rating <= 3 ? (
+              <>
+                <div className="text-6xl mb-4">⚠️</div>
+                <h2 className="text-2xl font-black mb-2 text-rose-600">Poxa, pedimos desculpas!</h2>
+                <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                  Não queremos que você tenha essa péssima experiência.<br/><strong>Nosso gerente quer resolver isso agora.</strong>
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={handleClickWhatsApp} className="w-full py-3 bg-[#25D366] text-white rounded-2xl font-bold hover:bg-[#1ebd5a] transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-200">
+                    Chamar Gerente no WhatsApp
+                  </button>
+                  <button onClick={onClose} className="w-full py-3 bg-gray-100 text-gray-500 rounded-2xl font-bold hover:bg-gray-200 transition-all">
+                    Fechar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-6xl mb-4 text-emerald-500 drop-shadow-md">🎉</div>
+                <h2 className="text-2xl font-black mb-2 text-emerald-600">Incrível!</h2>
+                <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                  Ficamos muito felizes que tenha gostado!<br/>Seu feedback é muito importante para nós.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => window.open('https://search.google.com/local/writereview', '_blank')} className="w-full py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+                    Nos recomende no Google
+                  </button>
+                  <button onClick={onClose} className="w-full py-3 border-2 border-emerald-500 text-emerald-600 rounded-2xl font-bold hover:bg-emerald-50 transition-all">
+                    Concluir
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           /* REVIEW FORM */

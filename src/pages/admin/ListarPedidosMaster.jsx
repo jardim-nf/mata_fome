@@ -8,8 +8,10 @@ import {
   FaChevronUp, FaArrowLeft, FaReceipt, FaSync,
   FaBolt, FaCrown
 } from 'react-icons/fa';
-import { IoSearchOutline } from 'react-icons/io5';
+import { IoSearchOutline, IoLogOutOutline } from 'react-icons/io5';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Importa todas as constantes e inteligência do Hook Refatorado
 import { 
@@ -23,35 +25,15 @@ import {
 
 // --- CONFIGURAÇÃO DE STATUS VISUAL ---
 export const STATUS_CONFIG = {
-  recebido: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', icon: FaClock, label: 'Novo / Recebido' },
-  preparo: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', icon: FaStore, label: 'Em Preparo', pulse: true },
-  em_entrega: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', icon: FaMotorcycle, label: 'Em Entrega', pulse: true },
-  finalizado: { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200', icon: FaCheckCircle, label: 'Finalizado' },
-  cancelado: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', icon: FaTimesCircle, label: 'Cancelado' },
-  default: { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200', icon: FaBoxOpen, label: 'Desconhecido' }
+  recebido: { bg: 'bg-[#F5F5F7]', text: 'text-[#86868B]', border: 'border-[#E5E5EA]', icon: FaClock, label: 'Novo / Recebido' },
+  preparo: { bg: 'bg-[#F2FCDA]', text: 'text-[#1D7446]', border: 'border-[#D0F2A8]', icon: FaStore, label: 'Em Preparo', pulse: true },
+  em_entrega: { bg: 'bg-[#E5F1FF]', text: 'text-[#007AFF]', border: 'border-[#CCE3FF]', icon: FaMotorcycle, label: 'Em Entrega', pulse: true },
+  finalizado: { bg: 'bg-[#E5E5EA]', text: 'text-[#1D1D1F]', border: 'border-[#D1D1D6]', icon: FaCheckCircle, label: 'Finalizado' },
+  cancelado: { bg: 'bg-[#FFE6E6]', text: 'text-[#D0021B]', border: 'border-[#FFB3B3]', icon: FaTimesCircle, label: 'Cancelado' },
+  default: { bg: 'bg-[#F5F5F7]', text: 'text-[#86868B]', border: 'border-[#E5E5EA]', icon: FaBoxOpen, label: 'Desconhecido' }
 };
 
 // --- COMPONENTES VISUAIS PREMIUM ---
-
-const IdeaFoodNavbar = ({ navigate, logout, userName }) => (
-  <nav className="sticky top-0 z-50 h-16 border-b border-slate-100 bg-white/80 backdrop-blur-xl shadow-sm">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
-      <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25 group-hover:scale-105 transition-transform">
-          <FaBolt className="text-white text-xs" />
-        </div>
-        <span className="text-slate-900 font-black text-lg tracking-tight">Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-amber-500">Food</span></span>
-      </div>
-      <div className="flex items-center gap-3">
-        <div className="hidden sm:flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-center"><FaCrown className="text-yellow-600 text-[10px]" /></div>
-          <span className="text-sm font-bold text-slate-700">{userName || 'Admin'}</span>
-        </div>
-        <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all"><FaSignOutAlt size={14} /></button>
-      </div>
-    </div>
-  </nav>
-);
 
 const StatusBadge = ({ statusRaw, statusLabel }) => {
   let statusKey = 'default';
@@ -66,7 +48,7 @@ const StatusBadge = ({ statusRaw, statusLabel }) => {
   const Icon = config.icon;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 ${config.bg} ${config.text} px-3 py-1 rounded-lg text-xs font-bold border ${config.border} shadow-sm ${config.pulse ? 'animate-pulse' : ''}`}>
+    <span className={`inline-flex items-center gap-1.5 ${config.bg} ${config.text} px-3 py-1.5 rounded-full text-[11px] font-bold border ${config.border} ${config.pulse ? 'animate-pulse' : ''}`}>
       <Icon /> {statusLabel || config.label}
     </span>
   );
@@ -79,61 +61,61 @@ const OrderCard = ({ item, onViewDetails }) => {
   const formattedValue = formatCurrency(item.valorFinal);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-100 hover:-translate-y-0.5 transition-all duration-300 group flex flex-col relative overflow-hidden">
-      <div className={`h-1.5 w-full ${item.tipoExibicao === 'SALÃO' ? 'bg-gradient-to-r from-blue-400 to-indigo-400' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`} />
+    <div className="bg-white rounded-[2rem] border border-[#E5E5EA] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden">
+      <div className={`h-1.5 w-full ${item.tipoExibicao === 'SALÃO' ? 'bg-[#007AFF]' : 'bg-[#1D1D1F]'}`} />
 
-      <div className="p-6 flex flex-col h-full">
-          <div className="flex justify-between items-start mb-5">
+      <div className="p-8 flex flex-col h-full">
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-2xl text-gray-900 tracking-tight">{formattedId}</span>
-                <span className={`text-[9px] px-2 py-1 rounded-md font-black uppercase tracking-widest ${
+              <div className="flex items-center gap-3">
+                <span className="font-black text-2xl text-[#1D1D1F] tracking-tight">{formattedId}</span>
+                <span className={`text-[10px] px-2.5 py-1 rounded-md font-black uppercase tracking-widest ${
                     item.tipoExibicao === 'SALÃO' 
-                      ? 'bg-blue-50 text-blue-600 border border-blue-100' 
-                      : 'bg-orange-50 text-orange-600 border border-orange-100'
+                      ? 'bg-[#E5F1FF] text-[#007AFF] border border-[#CCE3FF]' 
+                      : 'bg-[#F5F5F7] text-[#1D1D1F] border border-[#E5E5EA]'
                   }`}
                 >
                   {item.tipoExibicao}
                 </span>
               </div>
-              <span className="text-xs text-gray-400 font-medium mt-1 flex items-center gap-1">
-                <FaClock className="text-gray-300" /> {formattedDate}
+              <span className="text-[11px] text-[#86868B] font-medium mt-1 flex items-center gap-1.5">
+                <FaClock /> {formattedDate}
               </span>
             </div>
             <StatusBadge statusRaw={item.statusRaw} statusLabel={item.status} />
           </div>
           
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100/50 flex flex-col justify-center">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
-                <FaStore className="text-gray-400" /> Loja
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="bg-[#F5F5F7] p-4 rounded-3xl border border-[#E5E5EA] flex flex-col justify-center">
+              <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                <FaStore /> Operação
               </span>
-              <span className="block font-bold text-gray-800 text-sm truncate" title={item.estabelecimentoNomeFinal}>
+              <span className="block font-bold text-[#1D1D1F] text-sm truncate" title={item.estabelecimentoNomeFinal}>
                 {item.estabelecimentoNomeFinal}
               </span>
             </div>
-            <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100/50 flex flex-col justify-center">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
-                <FaUser className="text-gray-400" /> Cliente/Mesa
+            <div className="bg-[#F5F5F7] p-4 rounded-3xl border border-[#E5E5EA] flex flex-col justify-center">
+              <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                <FaUser /> Consumidor
               </span>
-              <span className="block font-bold text-gray-800 text-sm truncate" title={item.clienteNomeFinal}>
+              <span className="block font-bold text-[#1D1D1F] text-sm truncate" title={item.clienteNomeFinal}>
                 {item.clienteNomeFinal}
               </span>
             </div>
           </div>
 
-          <div className="mt-auto flex justify-between items-center pt-4 border-t border-gray-50">
+          <div className="mt-auto flex justify-between items-center pt-6 border-t border-[#F5F5F7]">
             <div>
-              <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mr-2">Valor Total</span>
-              <span className="font-black text-2xl text-gray-900 tracking-tighter">
+              <span className="text-[10px] text-[#86868B] font-bold uppercase tracking-widest block mb-1">Fechamento</span>
+              <span className="font-black text-2xl text-[#1D1D1F] tracking-tighter">
                 {formattedValue}
               </span>
             </div>
             <button 
               onClick={() => onViewDetails(item.id)} 
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-yellow-400/30 transition-all active:scale-95"
+              className="flex items-center gap-2 px-6 py-3 bg-[#1D1D1F] text-white rounded-full text-sm font-bold hover:bg-black transition-colors active:scale-95"
             >
-              <FaReceipt /> Detalhes
+              <FaReceipt /> Resumo
             </button>
           </div>
       </div>
@@ -145,30 +127,31 @@ const FilterBar = ({
   searchTerm, onSearchChange, filterEstabelecimento, onEstabelecimentoChange, estabelecimentosList, filterStatus, onStatusChange, totalItems, displayedItems
 }) => {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6 flex flex-col xl:flex-row gap-3 relative z-10">
+    <div className="bg-white rounded-full shadow-sm border border-[#E5E5EA] p-3 mb-8 flex flex-col xl:flex-row gap-3 relative z-10 w-full">
       <div className="flex-1 relative">
-        <IoSearchOutline className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <IoSearchOutline className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868B] text-lg" />
         <input 
           type="text" 
-          placeholder="Buscar Pedido (ID, Cliente ou Loja)..." 
-          className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all font-semibold text-slate-700 text-sm"
+          placeholder="Buscar Ticket (Código, Cliente ou Franquia)..." 
+          className="w-full pl-12 pr-4 py-3 bg-transparent border-none rounded-full outline-none text-[#1D1D1F] placeholder-[#86868B] font-medium text-sm"
           value={searchTerm} 
           onChange={e => onSearchChange(e.target.value)}
         />
       </div>
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="w-px bg-[#E5E5EA] hidden xl:block mx-2"></div>
+      <div className="flex flex-col sm:flex-row gap-3 xl:w-auto w-full px-2">
         <select 
-          className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] font-bold text-slate-600 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 appearance-none cursor-pointer min-w-[180px]" 
+          className="bg-[#F5F5F7] border border-[#E5E5EA] rounded-full px-4 py-2.5 text-xs font-bold text-[#1D1D1F] outline-none hover:border-[#86868B] appearance-none cursor-pointer flex-1 xl:min-w-[200px]" 
           value={filterEstabelecimento} 
           onChange={e => onEstabelecimentoChange(e.target.value)}
         >
-          <option value="todos">Todas as Lojas</option>
+          <option value="todos">Varrer Todas as Lojas</option>
           {estabelecimentosList.map(e => (
             <option key={e.id} value={e.id}>{e.nome}</option>
           ))}
         </select>
         <select 
-          className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] font-bold text-slate-600 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 appearance-none cursor-pointer min-w-[160px]" 
+          className="bg-[#F5F5F7] border border-[#E5E5EA] rounded-full px-4 py-2.5 text-xs font-bold text-[#1D1D1F] outline-none hover:border-[#86868B] appearance-none cursor-pointer flex-1 xl:min-w-[180px]" 
           value={filterStatus} 
           onChange={e => onStatusChange(e.target.value)}
         >
@@ -176,9 +159,9 @@ const FilterBar = ({
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
-      </div>
-      <div className="flex items-center px-3 py-2 bg-slate-50 rounded-xl text-[11px] font-bold text-slate-400 border border-slate-100">
-        <span>{displayedItems} de {totalItems}</span>
+        <div className="flex items-center justify-center px-4 py-2.5 bg-[#F5F5F7] rounded-full text-xs font-bold text-[#86868B] border border-[#E5E5EA] whitespace-nowrap">
+          {displayedItems} de {totalItems}
+        </div>
       </div>
     </div>
   );
@@ -186,21 +169,21 @@ const FilterBar = ({
 
 const LoadingSpinner = () => (
   <div className="text-center py-24 flex flex-col items-center justify-center">
-    <div className="w-14 h-14 border-4 border-gray-200 border-t-yellow-400 rounded-full animate-spin mb-4 shadow-lg"></div>
-    <p className="text-gray-500 font-bold">Monitorizando rede...</p>
+    <div className="w-12 h-12 border-4 border-[#E5E5EA] border-t-[#1D1D1F] rounded-full animate-spin mb-4 shadow-sm"></div>
+    <p className="text-[#86868B] font-bold text-sm">Monitorizando rede...</p>
   </div>
 );
 
 const EmptyState = ({ onClearFilters }) => (
-  <div className="col-span-1 xl:col-span-2 text-center py-24 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center">
-    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-5 shadow-inner">
-        <FaBoxOpen className="text-4xl text-gray-300" />
+  <div className="col-span-1 xl:col-span-2 text-center py-24 bg-white rounded-[2rem] border border-[#E5E5EA] flex flex-col items-center justify-center shadow-sm">
+    <div className="w-20 h-20 bg-[#F5F5F7] rounded-full flex items-center justify-center mb-5">
+        <FaBoxOpen className="text-4xl text-[#86868B]" />
     </div>
-    <h3 className="text-xl font-black text-gray-800 tracking-tight">Nenhum pedido listado</h3>
-    <p className="text-gray-400 text-sm mt-2 font-medium">Nenhum pedido encontrado para os filtros atuais.</p>
+    <h3 className="text-xl font-black text-[#1D1D1F] tracking-tight">Oceano Azul</h3>
+    <p className="text-[#86868B] text-sm mt-2 font-medium">Não há faturamento processado para este filtro.</p>
     <button 
       onClick={onClearFilters} 
-      className="mt-6 px-6 py-2.5 bg-yellow-50 text-yellow-700 font-bold rounded-xl hover:bg-yellow-400 hover:text-black transition-colors"
+      className="mt-6 px-6 py-2.5 bg-[#F5F5F7] text-[#1D1D1F] border border-[#E5E5EA] font-bold rounded-full hover:bg-[#E5E5EA] transition-colors"
     >
       Limpar todos os filtros
     </button>
@@ -281,22 +264,19 @@ function ListarPedidosMaster() {
     containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // View States
-  const masterUserName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Admin';
-
   if (authLoading) {
-    return <div className="flex h-screen items-center justify-center bg-slate-50"><div className="w-12 h-12 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin"></div></div>;
+    return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
   }
 
   if (!currentUser || !isMasterAdmin) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50/20 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-sm p-10 max-w-md text-center border border-slate-100">
-          <FaExclamationTriangle className="mx-auto text-4xl text-red-400 mb-5 animate-pulse" />
-          <h2 className="text-xl font-black text-slate-900 mb-2">Acesso Negado</h2>
-          <p className="text-slate-500 mb-8 font-medium text-sm">Você não tem os privilégios necessários.</p>
-          <button onClick={() => navigate('/')} className="w-full py-3.5 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl font-black hover:shadow-lg hover:shadow-yellow-400/30 transition-all active:scale-95">
-            Voltar ao Início
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4">
+        <div className="bg-white rounded-[2rem] shadow-sm p-10 max-w-md text-center border border-[#E5E5EA]">
+          <FaExclamationTriangle className="mx-auto text-4xl text-[#D0021B] mb-5" />
+          <h2 className="text-xl font-bold text-[#1D1D1F] mb-2">Acesso Negado</h2>
+          <p className="text-[#86868B] mb-8 font-medium text-sm">Privilégios administrativos insuficientes.</p>
+          <button onClick={() => navigate('/')} className="w-full py-3.5 bg-black text-white rounded-full font-bold hover:bg-gray-800 transition-colors active:scale-95">
+            Módulo Inicial
           </button>
         </div>
       </div>
@@ -308,38 +288,47 @@ function ListarPedidosMaster() {
   return (
     <div 
       ref={containerRef}
-      className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 min-h-screen font-sans overflow-auto"
+      className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] overflow-auto pb-24 pt-4 px-4 sm:px-8"
     >
-      <IdeaFoodNavbar navigate={navigate} logout={async () => { await logout(); navigate('/'); }} userName={masterUserName} />
+      {/* ─── FLOATING PILL NAVBAR ─── */}
+      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
+            <FaArrowLeft className="text-[#86868B] text-sm" />
+          </button>
+          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
+            <h1 className="font-semibold text-sm tracking-tight text-black">Monitoramento Logístico</h1>
+            <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-2">
+            {ordersLoading && <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full uppercase tracking-widest animate-pulse border border-emerald-100"><FaSync className="animate-spin" /> Escaneando</span>}
+          </div>
+          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
+          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
+            <IoLogOutOutline className="text-red-500" size={16} />
+          </button>
+        </div>
+      </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
+      <div className="max-w-[1400px] mx-auto mt-8">
         
         {/* HEADER DA PÁGINA */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 pt-8">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6 px-2">
           <div>
-            <button 
-              onClick={() => navigate('/master-dashboard')} 
-              className="text-slate-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group"
-            >
-              <span className="bg-white p-1.5 rounded-lg shadow-sm border border-slate-100 group-hover:border-yellow-200 transition-colors">
-                <FaArrowLeft />
-              </span> 
-              Voltar ao Dashboard
-            </button>
-            <div className="flex items-center gap-3 mb-2">
-                <span className="bg-yellow-50 text-yellow-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-yellow-200">Central de Despacho</span>
-                {ordersLoading && <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase tracking-widest"><FaSync className="animate-spin" /> Live</span>}
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Monitor de Pedidos</h1>
-            <p className="text-slate-500 text-sm mt-1 font-medium">Acompanhamento centralizado — Delivery e Salão.</p>
+            <h1 className="text-4xl font-bold tracking-tight text-[#1D1D1F]">Tickets Abertos (Geral)</h1>
+            <p className="text-[#86868B] text-sm mt-1 font-medium">Comutação global de recebimento — Delivery e Salão.</p>
           </div>
-          <DateRangeFilter
-            activePreset={datePreset}
-            dateRange={dateRange}
-            onPresetChange={handleDatePresetChange}
-            onRangeChange={handleDateRangeChange}
-            onClear={handleDateClear}
-          />
+          <div className="bg-white border border-[#E5E5EA] rounded-full px-4 py-2 shadow-sm flex items-center">
+            <DateRangeFilter
+              datePreset={datePreset}
+              dateRange={dateRange}
+              onPresetChange={handleDatePresetChange}
+              onRangeChange={handleDateRangeChange}
+              onClear={handleDateClear}
+            />
+          </div>
         </div>
         
         {/* BARRA DE FILTROS */}
@@ -357,9 +346,9 @@ function ListarPedidosMaster() {
 
         {/* ERROR STATE */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-sm font-bold flex items-center gap-2">
+          <div className="mb-6 bg-[#FFE6E6] border border-[#FFB3B3] text-[#D0021B] p-4 rounded-3xl text-sm font-bold flex items-center gap-2">
             <FaExclamationTriangle /> {error}
-            <button onClick={() => window.location.reload()} className="ml-auto text-red-500 hover:text-red-700 font-bold text-xs underline">Recarregar</button>
+            <button onClick={() => window.location.reload()} className="ml-auto underline decoration-[#FFB3B3] hover:text-black">Forçar Recarregamento</button>
           </div>
         )}
 
@@ -368,7 +357,7 @@ function ListarPedidosMaster() {
           <LoadingSpinner />
         ) : (
           <>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-12">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 md:gap-8 pb-12">
               {displayedPaginated.length > 0 ? (
                 displayedPaginated.map(item => (
                   <OrderCard 
@@ -387,9 +376,9 @@ function ListarPedidosMaster() {
               <div className="flex justify-center pb-8">
                 <button
                   onClick={handleLoadMore}
-                  className="px-8 py-4 bg-white border-2 border-gray-100 rounded-2xl font-bold text-gray-700 hover:border-yellow-400 hover:text-yellow-600 transition-all shadow-sm active:scale-95"
+                  className="px-8 py-4 bg-white border border-[#E5E5EA] rounded-full font-bold text-[#1D1D1F] hover:bg-[#F5F5F7] transition-all shadow-sm active:scale-95"
                 >
-                  Carregar mais {Math.min(LOAD_MORE_ITEMS, displayed.length - displayedPaginated.length)} pedidos
+                  Continuar listagem ({Math.min(LOAD_MORE_ITEMS, displayed.length - displayedPaginated.length)} tickets)
                 </button>
               </div>
             )}
@@ -400,13 +389,18 @@ function ListarPedidosMaster() {
         {showScrollTop && (
           <button
             onClick={scrollToTop}
-            className="fixed bottom-8 right-8 bg-gradient-to-r from-yellow-400 to-amber-500 text-white p-4 rounded-full shadow-xl shadow-yellow-400/30 hover:scale-110 transition-all focus:outline-none z-50 group"
+            className="fixed bottom-8 right-8 bg-black text-white p-4 rounded-full shadow-lg hover:bg-gray-800 transition-all focus:outline-none z-50 flex items-center justify-center w-14 h-14"
             aria-label="Voltar ao topo"
           >
-            <FaChevronUp className="group-hover:-translate-y-1 transition-transform" />
+            <FaChevronUp />
           </button>
         )}
       </div>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+      `}</style>
     </div>
   );
 }

@@ -61,7 +61,7 @@ export default function LoginPage() {
 
       // 4. Roteamento Padrão (A ordem aqui define a prioridade se ele tiver 2 cargos)
       if (userData.isMasterAdmin) {
-        navigate('/master/estabelecimentos', { replace: true });
+        navigate('/master-dashboard', { replace: true });
         
       } else if (userData.isAdmin) {
         navigate('/admin/dashboard', { replace: true });

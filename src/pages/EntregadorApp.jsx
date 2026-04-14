@@ -4,8 +4,9 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { IoLocationOutline, IoNavigateCircle, IoBicycle, IoCheckmarkCircle, IoWarningOutline, IoSettingsOutline, IoLogOutOutline, IoClose, IoWalletOutline, IoMapOutline, IoCloseCircleOutline, IoReceiptOutline, IoMenu } from 'react-icons/io5';
+import { IoLocationOutline, IoNavigateCircle, IoBicycle, IoCheckmarkCircle, IoWarningOutline, IoSettingsOutline, IoLogOutOutline, IoClose, IoWalletOutline, IoMapOutline, IoCloseCircleOutline, IoReceiptOutline, IoMenu, IoCameraOutline, IoLogoWhatsapp } from 'react-icons/io5';
 import { tocarCampainha } from '../utils/audioUtils';
+import { uploadFile } from '../utils/firebaseStorageService';
 
 // Constants
 const RADIO_LIMITE_KM = 5; // Só recebe pedidos num raio de 5km
@@ -43,6 +44,10 @@ export default function EntregadorApp() {
     const [rejeitadas, setRejeitadas] = useState(new Set());
     const [showCarteira, setShowCarteira] = useState(false);
     const [historicoHoje, setHistoricoHoje] = useState([]);
+    
+    // Novas dependências Logística Premium
+    const [comprovanteInfo, setComprovanteInfo] = useState({ file: null, preview: null });
+    const [isUploading, setIsUploading] = useState(false);
 
     const { logout } = useAuth(); // Assume AuthContext provides logout
 
@@ -213,6 +218,7 @@ export default function EntregadorApp() {
                 horarioAceiteLogistica: serverTimestamp()
             });
 
+            setComprovanteInfo({ file: null, preview: null }); // Reseta a foto anterior se existir
             toast.success("✅ Corrida aceita! Acelera lá!");
             if (window.navigator?.vibrate) window.navigator.vibrate(200);
 
@@ -224,18 +230,56 @@ export default function EntregadorApp() {
 
     const finalizarCorrida = async (corridaLocal) => {
         try {
+            setIsUploading(true);
+            let fotoUrl = null;
+            if (comprovanteInfo.file) {
+                const path = `estabelecimentos/${corridaLocal.estabelecimentoId || 'geral'}/comprovantes/${corridaLocal.id}`;
+                fotoUrl = await uploadFile(comprovanteInfo.file, path);
+            }
+
             await updateDoc(corridaLocal.ref, {
                 statusLogistica: 'concluida',
                 status: 'finalizado', // Põe como concluído
+                fotoComprovanteUrl: fotoUrl || null,
                 horarioConclusaoLogistica: serverTimestamp(),
                 dataFinalizado: serverTimestamp()
             });
             setMinhaCorridaAtual(null); // Clear optimistic
+            setComprovanteInfo({ file: null, preview: null });
             toast.success("🏁 Entrega finalizada com sucesso! Parabéns!");
         } catch (e) {
+            console.error(e);
             toast.error("Erro ao finalizar corrida.");
+        } finally {
+            setIsUploading(false);
         }
     }
+
+    const avisarCheguei = () => {
+        if (!minhaCorridaAtual) return;
+        let t = minhaCorridaAtual.cliente?.telefone || minhaCorridaAtual.clienteTelefone || '';
+        let tf = t.replace(/\\D/g, '');
+        
+        if (!tf) {
+            toast.error('Telefone do cliente não disponível nesta corrida.');
+            return;
+        }
+
+        const nome = userData?.nome || 'Entregador Parceiro';
+        let msg = `Olá! Sou o ${nome}, seu entregador. Estou na porta com o seu pedido! 🛵 Pode vir receber.`;
+        const url = `https://wa.me/55${tf}?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setComprovanteInfo({
+                file: file,
+                preview: URL.createObjectURL(file)
+            });
+        }
+    };
 
     const rejeitarCorridaLocamente = (corridaId) => {
         setRejeitadas(prev => {
@@ -419,9 +463,46 @@ export default function EntregadorApp() {
                         </div>
 
                         <button 
+                            onClick={avisarCheguei}
+                            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all mb-4 flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20">
+                            <IoLogoWhatsapp size={20} /> Estou na Porta (Avisar)
+                        </button>
+
+                        <div className="bg-slate-900/60 rounded-xl p-4 mb-6 border border-slate-700 border-dashed text-center relative overflow-hidden">
+                            {!comprovanteInfo.preview ? (
+                                <>
+                                    <IoCameraOutline className="text-3xl text-slate-400 mx-auto mb-2" />
+                                    <p className="text-xs text-slate-300 font-bold mb-2">Comprovante de Entrega</p>
+                                    <p className="text-[10px] text-slate-500 mb-3">Tire uma foto do pacote no local para garantir sua entrega.</p>
+                                    <label className="bg-blue-600/20 text-blue-300 hover:text-white hover:bg-blue-600 border border-blue-500/30 px-4 py-2 rounded-lg text-xs font-bold uppercase cursor-pointer transition-colors inline-flex items-center gap-2">
+                                        <IoCameraOutline size={16}/> Tirar Foto
+                                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} disabled={isUploading}/>
+                                    </label>
+                                </>
+                            ) : (
+                                <div className="relative">
+                                    <img src={comprovanteInfo.preview} alt="Comprovante" className="w-full h-32 object-cover rounded-lg mb-2 opacity-80" />
+                                    <button 
+                                        onClick={() => setComprovanteInfo({ file: null, preview: null })} 
+                                        disabled={isUploading}
+                                        className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-md hover:bg-red-600"
+                                    >
+                                        <IoClose size={18}/>
+                                    </button>
+                                    <p className="text-xs text-emerald-400 font-bold uppercase mt-2"><IoCheckmarkCircle className="inline" /> Foto Anexada</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <button 
                           onClick={() => finalizarCorrida(minhaCorridaAtual)}
-                          className="w-full py-4 bg-white hover:bg-slate-100 text-blue-700 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-xl flex justify-center items-center gap-2">
-                          <IoCheckmarkCircle size={22} /> Entrega Encerrada (Concluir)
+                          disabled={isUploading}
+                          className="w-full py-4 bg-white hover:bg-slate-100 disabled:opacity-50 text-blue-700 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-xl flex justify-center items-center gap-2">
+                          {isUploading ? (
+                              <>Enviando comprovante...</>
+                          ) : (
+                              <><IoCheckmarkCircle size={22} /> Entrega Encerrada (Concluir)</>
+                          )}
                         </button>
                      </div>
                 ) : (

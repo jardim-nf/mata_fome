@@ -42,7 +42,13 @@ function RelatorioLucro() {
 
     // Mapa de custos
     const custoPorNome = {};
-    produtos.forEach(p => { custoPorNome[p.nome] = Number(p.custo || p.custoUnitario || 0); });
+    produtos.forEach(p => { 
+        let custoPadrao = Number(p.custo_estimado || p.custo || p.custoUnitario || 0);
+        if (custoPadrao === 0 && p.variacoes && p.variacoes.length > 0) {
+            custoPadrao = Number(p.variacoes[0].custo || 0);
+        }
+        custoPorNome[p.nome] = custoPadrao; 
+    });
 
     let receitaTotal = 0;
     let custoTotal = 0;

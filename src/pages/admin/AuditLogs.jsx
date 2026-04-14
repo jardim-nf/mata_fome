@@ -9,7 +9,6 @@ import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   FaStore, 
-  FaSignOutAlt, 
   FaSearch, 
   FaFilter, 
   FaHistory, 
@@ -26,60 +25,29 @@ import {
   FaCode,
   FaFileCsv,
   FaCalendarAlt,
-  FaExternalLinkAlt
+  FaExternalLinkAlt,
+  FaShieldAlt,
+  FaBolt
 } from 'react-icons/fa';
+import { IoLogOutOutline } from 'react-icons/io5';
 
 const ITEMS_PER_PAGE = 20;
 
-// --- Header Minimalista ---
-const DashboardHeader = ({ navigate, logout, currentUser }) => {
-  const userEmailPrefix = currentUser?.email ? currentUser.email.split('@')[0] : 'Admin';
-  return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 h-16 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-           <div className="flex items-center gap-1">
-              <div className="bg-yellow-400 text-black font-bold p-1 rounded-sm transform -skew-x-12">
-                  <FaStore />
-              </div>
-              <span className="text-gray-900 font-extrabold text-xl tracking-tight">
-Idea<span className="text-yellow-500">Food</span>
-              </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-6">
-            <div className="hidden md:flex flex-col items-end">
-              <span className="text-sm font-semibold text-gray-800">{userEmailPrefix}</span>
-              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Master Admin</span>
-            </div>
-            <button 
-                onClick={logout} 
-                className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
-                title="Sair"
-            >
-              <FaSignOutAlt />
-            </button>
-          </div>
-      </div>
-    </header>
-  );
-};
-
 // --- Visualizador de Detalhes JSON ---
 const DetailViewer = ({ data }) => {
-    if (!data) return <span className="text-gray-400 text-xs italic">Nenhum detalhe técnico registrado.</span>;
+    if (!data) return <span className="text-[#86868B] text-xs italic font-medium">Nenhum detalhe técnico registrado.</span>;
     let parsedData = data;
     if (typeof data === 'string') {
         try { parsedData = JSON.parse(data); } catch (e) { console.error(e); }
     }
     if (typeof parsedData === 'object' && Object.keys(parsedData).length === 0) {
-        return <span className="text-gray-400 text-xs italic">Detalhes vazios.</span>;
+        return <span className="text-[#86868B] text-xs italic font-medium">Detalhes vazios.</span>;
     }
     return (
-        <div className="bg-gray-900 rounded-lg p-4 text-xs font-mono text-green-400 overflow-x-auto border border-gray-800 shadow-inner">
+        <div className="bg-[#1D1D1F] rounded-2xl p-5 text-sm font-mono text-emerald-400 overflow-x-auto shadow-inner border border-black/20">
             {Object.entries(parsedData).map(([key, value]) => (
-                <div key={key} className="mb-1 last:mb-0">
-                    <span className="text-blue-300">{key}:</span>{' '}
+                <div key={key} className="mb-1.5 last:mb-0">
+                    <span className="text-blue-300 font-bold">{key}:</span>{' '}
                     <span className="text-gray-300 break-all whitespace-pre-wrap">
                         {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
                     </span>
@@ -93,7 +61,6 @@ const DetailViewer = ({ data }) => {
 const LogItem = ({ log }) => {
     const [expanded, setExpanded] = useState(false);
 
-    // Gera o link correto baseado no tipo do alvo
     const getTargetLink = () => {
         if (!log.target?.id) return null;
         switch(log.target.type) {
@@ -109,89 +76,86 @@ const LogItem = ({ log }) => {
     const getIconAndColor = (type) => {
         const t = (type || '').toUpperCase();
         if (t.includes('CRIADO') || t.includes('ADICIONADO') || t.includes('ATIVADO') || t.includes('IMPORTADO')) 
-            return { icon: <FaPlus />, color: 'bg-green-100 text-green-700', border: 'border-green-200' };
+            return { icon: <FaPlus />, color: 'bg-emerald-50 text-emerald-600', border: 'border-emerald-100' };
         if (t.includes('ATUALIZADO') || t.includes('EDITADO')) 
-            return { icon: <FaEdit />, color: 'bg-blue-100 text-blue-700', border: 'border-blue-200' };
+            return { icon: <FaEdit />, color: 'bg-blue-50 text-blue-600', border: 'border-blue-100' };
         if (t.includes('DELETADO') || t.includes('REMOVIDO') || t.includes('DESATIVADO')) 
-            return { icon: <FaTrash />, color: 'bg-red-100 text-red-700', border: 'border-red-200' };
-        return { icon: <FaHistory />, color: 'bg-gray-100 text-gray-700', border: 'border-gray-200' };
+            return { icon: <FaTrash />, color: 'bg-red-50 text-red-600', border: 'border-red-100' };
+        return { icon: <FaHistory />, color: 'bg-[#F5F5F7] text-[#86868B]', border: 'border-[#E5E5EA]' };
     };
 
     const style = getIconAndColor(log.actionType);
 
     return (
-        <div className={`border-b border-gray-100 last:border-0 transition-colors ${expanded ? 'bg-gray-50' : 'bg-white'}`}>
-            <div className="flex items-center justify-between p-5 hover:bg-gray-50/80 transition-all group">
+        <div className={`border-[1px] border-b-0 border-[#E5E5EA] last:border-b transition-colors ${expanded ? 'bg-[#F5F5F7]' : 'bg-white hover:bg-[#F5F5F7]/50'}`}>
+            <div className="flex items-center justify-between p-5 transition-all group">
                 
                 {/* Clique Principal para Expandir */}
                 <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${style.color} border ${style.border} shrink-0 shadow-sm`}>
+                    <div className={`w-12 h-12 rounded-[1rem] flex items-center justify-center ${style.color} border ${style.border} shrink-0 shadow-sm transition-transform group-hover:scale-105`}>
                         {style.icon}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate" title={log.actionType}>
+                        <p className="text-base font-black text-[#1D1D1F] tracking-tight truncate" title={log.actionType}>
                             {log.actionType?.replace(/_/g, ' ')}
                         </p>
-                        <p className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
-                            <FaUserShield className="text-gray-400" /> 
+                        <p className="text-xs font-semibold text-[#86868B] flex items-center gap-2 mt-1">
+                            <FaUserShield className="text-[#86868B]" size={10} /> 
                             <span className="truncate">{log.actor?.email || 'Sistema / Desconhecido'}</span>
                         </p>
                     </div>
                 </div>
 
                 {/* Metadata e Link Rápido */}
-                <div className="flex items-center gap-4 ml-4">
-                    <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-5 ml-4">
+                    <div className="flex flex-col items-end gap-1.5">
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-200/50 px-2 py-0.5 rounded">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-[#86868B] bg-[#F5F5F7] border border-[#E5E5EA] px-2.5 py-1 rounded-md shadow-sm">
                                 {log.target?.type || 'Geral'}
                             </span>
-                            {/* Link Direto para o Objeto (se existir) */}
                             {targetLink && (
                                 <Link 
                                     to={targetLink}
-                                    className="text-gray-400 hover:text-blue-600 transition-colors p-1"
+                                    className="text-[#86868B] hover:text-[#1D1D1F] transition-colors p-1"
                                     title={`Ir para ${log.target.type}`}
                                 >
-                                    <FaExternalLinkAlt size={10} />
+                                    <FaExternalLinkAlt size={12} />
                                 </Link>
                             )}
                         </div>
-                        <span className="text-xs text-gray-400 font-medium">
+                        <span className="text-xs text-[#86868B] font-bold">
                             {log.timestamp ? format(log.timestamp.toDate(), "dd/MM HH:mm", { locale: ptBR }) : '--/--'}
                         </span>
                     </div>
                     
-                    <button onClick={() => setExpanded(!expanded)} className="text-gray-300 hover:text-gray-500 p-2">
-                        {expanded ? <FaChevronUp /> : <FaChevronDown />}
+                    <button onClick={() => setExpanded(!expanded)} className="w-8 h-8 rounded-full bg-white border border-[#E5E5EA] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:border-[#1D1D1F] transition-colors shadow-sm">
+                        {expanded ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
                     </button>
                 </div>
             </div>
 
             {/* Detalhes Expandidos */}
             {expanded && (
-                <div className="p-5 pl-[4.5rem] border-t border-gray-200/50 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                        <div className="space-y-1">
-                            <p className="text-[10px] uppercase font-bold text-gray-400">ID do Alvo</p>
-                            <div className="flex items-center gap-2">
-                                <p className="text-xs font-mono bg-white p-2 border border-gray-200 rounded select-all text-gray-600 flex-1">
-                                    {log.target?.id || 'N/A'}
-                                </p>
-                            </div>
+                <div className="p-6 pl-[5.5rem] border-t border-[#E5E5EA] animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div className="space-y-2">
+                            <p className="text-[10px] uppercase font-black tracking-widest text-[#86868B]">ID do Alvo</p>
+                            <p className="text-sm font-mono bg-white p-3 border border-[#E5E5EA] rounded-xl select-all text-[#1D1D1F] shadow-sm">
+                                {log.target?.id || 'N/A'}
+                            </p>
                         </div>
                         {log.target?.name && (
-                            <div className="space-y-1">
-                                <p className="text-[10px] uppercase font-bold text-gray-400">Nome do Alvo</p>
-                                <p className="text-sm font-bold text-gray-800">{log.target.name}</p>
+                            <div className="space-y-2">
+                                <p className="text-[10px] uppercase font-black tracking-widest text-[#86868B]">Nome do Alvo</p>
+                                <p className="text-base font-bold text-[#1D1D1F] bg-white p-3 border border-[#E5E5EA] rounded-xl shadow-sm">{log.target.name}</p>
                             </div>
                         )}
                     </div>
                     
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2 mb-1">
-                            <FaCode className="text-gray-400 text-xs" />
-                            <p className="text-[10px] uppercase font-bold text-gray-400">Payload Técnico</p>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <FaCode className="text-[#86868B] text-xs" />
+                            <p className="text-[10px] uppercase font-black tracking-widest text-[#86868B]">Payload Técnico</p>
                         </div>
                         <DetailViewer data={log.details} />
                     </div>
@@ -221,7 +185,6 @@ function AuditLogs() {
   const [firstVisible, setFirstVisible] = useState(null);
   const [page, setPage] = useState(1);
 
-  // 1. Verificar Permissão
   useEffect(() => {
     if (!authLoading) {
       if (!currentUser || !isMasterAdmin) {
@@ -230,7 +193,6 @@ function AuditLogs() {
     }
   }, [currentUser, isMasterAdmin, authLoading, navigate]);
 
-  // 2. Buscar Logs (Server-Side)
   const fetchLogs = useCallback(async (direction = 'initial') => {
     if (!isMasterAdmin) return;
     setLoadingLogs(true);
@@ -241,8 +203,6 @@ function AuditLogs() {
         let q = collection(db, 'auditLogs');
         let constraints = [orderBy('timestamp', 'desc')];
 
-        // --- FILTROS SERVER-SIDE ---
-        // Se usar Data, o Firebase exige que seja a primeira ordenação ou índice composto
         if (dateStart) constraints.push(where('timestamp', '>=', startOfDay(parseISO(dateStart))));
         if (dateEnd) constraints.push(where('timestamp', '<=', endOfDay(parseISO(dateEnd))));
 
@@ -250,11 +210,9 @@ function AuditLogs() {
             constraints.push(where('actionType', '==', filterType));
         }
 
-        // --- PAGINAÇÃO ---
         if (direction === 'next' && lastVisible) {
             constraints.push(startAfter(lastVisible));
         } else if (direction === 'prev' && firstVisible) {
-            // Estratégia simples de voltar: reset para evitar complexidade de cursor reverso
             if (page <= 2) direction = 'initial'; 
         }
 
@@ -264,8 +222,6 @@ function AuditLogs() {
              constraints.push(limit(ITEMS_PER_PAGE));
         }
 
-        // Monta Query
-        // Nota: O Firestore ordena automaticamente os where() filters
         const finalQuery = query(q, ...constraints);
         const snapshot = await getDocs(finalQuery);
 
@@ -293,18 +249,16 @@ function AuditLogs() {
     }
   }, [isMasterAdmin, filterType, dateStart, dateEnd, lastVisible, page]);
 
-  // Trigger de Busca
   useEffect(() => {
     setPage(1);
     setLastVisible(null);
     setFirstVisible(null);
     fetchLogs('initial');
-  }, [filterType, dateStart, dateEnd, isMasterAdmin]); // Removemos fetchLogs para evitar loop
+  }, [filterType, dateStart, dateEnd, isMasterAdmin]); 
 
   const handleNext = () => { setPage(p => p + 1); fetchLogs('next'); };
   const handlePrev = () => { if (page > 1) { setPage(p => p - 1); if (page === 2) fetchLogs('initial'); } };
 
-  // --- EXPORTAR CSV ---
   const handleExportCSV = () => {
     if (logs.length === 0) return toast.warn("Sem dados para exportar.");
     
@@ -319,7 +273,7 @@ function AuditLogs() {
             log.actor?.email || "Sistema",
             log.target?.type || "N/A",
             log.target?.id || "N/A",
-            `"${log.target?.name || ''}"` // Aspas para nomes com vírgula
+            `"${log.target?.name || ''}"` 
         ];
     });
 
@@ -332,10 +286,9 @@ function AuditLogs() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success("Relatório CSV gerado!");
+    toast.success("Relatório CSV gerado com sucesso!");
   };
 
-  // Filtragem Client-Side (Busca Texto)
   const displayedLogs = logs.filter(log => {
       const term = searchTerm.toLowerCase();
       return !term || 
@@ -344,67 +297,84 @@ function AuditLogs() {
              (log.target?.name && log.target.name.toLowerCase().includes(term));
   });
 
-  if (authLoading) return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
 
   return (
-    <div className="bg-gray-50 min-h-screen pt-20 pb-12 px-4 sm:px-6 font-sans text-gray-900">
-      <DashboardHeader navigate={navigate} logout={logout} currentUser={currentUser} />
+    <div className="bg-[#F5F5F7] min-h-screen pt-4 pb-24 px-4 sm:px-8 font-sans text-[#1D1D1F]">
+      
+      {/* ─── FLOATING PILL NAVBAR ─── */}
+      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
+            <FaArrowLeft className="text-[#86868B] text-sm" />
+          </button>
+          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
+            <h1 className="font-semibold text-sm tracking-tight text-black">Terminal de Auditoria</h1>
+            <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
+          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
+            <IoLogOutOutline className="text-red-500" size={16} />
+          </button>
+        </div>
+      </nav>
 
-      <div className="max-w-6xl mx-auto">
-        
+      <main className="max-w-6xl mx-auto mt-12 pb-12">
         {/* Header da Página */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4 px-2">
             <div>
-                <button onClick={() => navigate('/master-dashboard')} className="text-gray-400 hover:text-gray-600 flex items-center gap-2 mb-2 text-sm font-medium transition-colors">
-                    <FaArrowLeft /> Voltar ao Dashboard
-                </button>
-                <h1 className="text-3xl font-bold tracking-tight text-gray-900">Auditoria & Segurança</h1>
-                <p className="text-gray-500 text-sm mt-1">Rastreamento detalhado de todas as operações do sistema.</p>
+                <div className="flex items-center gap-3 mb-2">
+                    <span className="bg-[#1D1D1F] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full inline-flex items-center gap-2"><FaShieldAlt className="text-yellow-400" /> Watchdog Server</span>
+                </div>
+                <h1 className="text-4xl font-bold tracking-tight text-[#1D1D1F]">Logs de Auditoria</h1>
+                <p className="text-[#86868B] text-sm mt-2 font-medium">Rastreamento profundo e histórico de modificações críticas no ecossistema.</p>
             </div>
             
             <button 
                 onClick={handleExportCSV}
-                className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl hover:bg-green-700 transition-all shadow-lg font-bold text-sm"
+                className="flex items-center gap-2 bg-[#1D1D1F] text-white px-6 py-4 rounded-full hover:bg-black transition-all shadow-sm font-bold text-sm hover:scale-[1.02] active:scale-95"
             >
-                <FaFileCsv size={16} /> Exportar Relatório
+                <FaFileCsv size={16} /> Gravar Extrato CSV
             </button>
         </div>
 
         {/* --- AVISO CRÍTICO DE ÍNDICE --- */}
         {indexLink && (
-            <div className="mb-6 p-5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-4 shadow-sm animate-pulse">
-                <div className="bg-red-100 p-2 rounded-full text-red-600">
-                    <FaExclamationTriangle className="text-xl" />
+            <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-[2rem] flex items-start gap-5 shadow-sm">
+                <div className="bg-red-100 w-12 h-12 rounded-[1rem] flex items-center justify-center text-red-500 shrink-0">
+                    <FaExclamationTriangle size={18} />
                 </div>
                 <div className="flex-1">
-                    <h3 className="font-bold text-red-800 text-lg">Configuração Necessária (Índice Firestore)</h3>
-                    <p className="text-sm text-red-700 mt-1 mb-3">
-                        Para combinar o filtro de <strong>Data</strong> com <strong>Tipo de Ação</strong>, o Firebase exige um índice composto.
+                    <h3 className="font-bold text-red-800 text-lg mb-1 tracking-tight">Requirement de Build (Índice Firestore)</h3>
+                    <p className="text-sm text-red-700 font-medium mb-4 leading-relaxed">
+                        Para combinar a navegação dimensional de <strong>Data</strong> cruzada com o <strong>Tipo de Ação</strong>, a arquitetura do Firebase exige a criação de um Composite Index.
                     </p>
                     <a 
                         href={indexLink} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        className="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors shadow-lg"
+                        className="inline-flex items-center gap-2 bg-red-600 text-white px-5 py-3 rounded-xl text-xs font-bold hover:bg-red-700 transition-colors shadow-sm"
                     >
-                        🛠️ Criar Índice Agora
+                        🛠️ Construir Índice no Console
                     </a>
                 </div>
             </div>
         )}
 
-        {/* Barra de Filtros */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Barra de Filtros (Bento Style) */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-[#E5E5EA] p-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
                 {/* Data Inicio */}
                 <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Data Inicial</label>
+                    <label className="block text-[10px] font-black tracking-widest text-[#86868B] uppercase mb-2">Retroceder Até</label>
                     <div className="relative">
-                        <FaCalendarAlt className="absolute left-4 top-3.5 text-gray-300" />
+                        <FaCalendarAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868B]" />
                         <input 
                             type="date" 
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                            className="w-full pl-12 pr-4 py-3.5 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl focus:border-[#1D1D1F] outline-none text-sm font-bold text-[#1D1D1F] transition-all"
                             value={dateStart}
                             onChange={(e) => setDateStart(e.target.value)}
                         />
@@ -413,12 +383,12 @@ function AuditLogs() {
 
                 {/* Data Fim */}
                 <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Data Final</label>
+                    <label className="block text-[10px] font-black tracking-widest text-[#86868B] uppercase mb-2">Limitar No Dia</label>
                     <div className="relative">
-                        <FaCalendarAlt className="absolute left-4 top-3.5 text-gray-300" />
+                        <FaCalendarAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868B]" />
                         <input 
                             type="date" 
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                            className="w-full pl-12 pr-4 py-3.5 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl focus:border-[#1D1D1F] outline-none text-sm font-bold text-[#1D1D1F] transition-all"
                             value={dateEnd}
                             onChange={(e) => setDateEnd(e.target.value)}
                         />
@@ -427,34 +397,33 @@ function AuditLogs() {
 
                 {/* Tipo de Ação */}
                 <div className="relative">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Tipo de Ação</label>
+                    <label className="block text-[10px] font-black tracking-widest text-[#86868B] uppercase mb-2">Assinatura de Risco</label>
                     <div className="relative">
-                        <FaFilter className="absolute left-4 top-3.5 text-gray-300" />
+                        <FaFilter className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868B]" />
                         <select 
-                            className="w-full pl-10 pr-8 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm appearance-none cursor-pointer"
+                            className="w-full pl-12 pr-10 py-3.5 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl focus:border-[#1D1D1F] outline-none text-sm font-bold text-[#1D1D1F] transition-all appearance-none cursor-pointer"
                             value={filterType}
                             onChange={(e) => setFilterType(e.target.value)}
                         >
-                            <option value="todos">Todos</option>
-                            <option value="ESTABELECIMENTO_ATUALIZADO">Estabelecimento Atualizado</option>
-                            <option value="ESTABELECIMENTO_CRIADO">Estabelecimento Criado</option>
-                            <option value="USUARIO_CRIADO">Usuário Criado</option>
-                            <option value="CARDAPIO_IMPORTADO">Cardápio Importado</option>
-                            {/* Adicione outros conforme necessário */}
+                            <option value="todos">Qualquer Assinatura</option>
+                            <option value="ESTABELECIMENTO_ATUALIZADO">Alteração de Loja</option>
+                            <option value="ESTABELECIMENTO_CRIADO">Criação de Loja</option>
+                            <option value="USUARIO_CRIADO">Novo Usuário / Acesso</option>
+                            <option value="CARDAPIO_IMPORTADO">Cardápio Sobrescrito</option>
                         </select>
-                        <FaChevronDown className="absolute right-4 top-4 text-gray-300 text-xs pointer-events-none" />
+                        <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#86868B] font-bold text-[10px]">▼</div>
                     </div>
                 </div>
 
                 {/* Busca Texto (Client-Side) */}
                 <div className="relative">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Busca Rápida (Tela)</label>
+                    <label className="block text-[10px] font-black tracking-widest text-[#86868B] uppercase mb-2">Busca Superficial (DOM)</label>
                     <div className="relative">
-                        <FaSearch className="absolute left-4 top-3.5 text-gray-300" />
+                        <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868B]" />
                         <input 
                             type="text" 
-                            placeholder="Email, ID..." 
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                            placeholder="Pesquisar ID ou User..." 
+                            className="w-full pl-12 pr-4 py-3.5 bg-[#F5F5F7] border border-[#E5E5EA] rounded-xl focus:border-[#1D1D1F] outline-none text-sm font-bold text-[#1D1D1F] transition-all placeholder:text-[#86868B]"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -464,22 +433,23 @@ function AuditLogs() {
         </div>
 
         {/* Lista de Logs */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-[2rem] shadow-sm border border-[#E5E5EA] overflow-hidden">
             {loadingLogs ? (
-                <div className="p-16 text-center text-gray-400">
-                    <div className="w-10 h-10 border-4 border-gray-100 border-t-yellow-400 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="font-medium text-sm">Buscando registros...</p>
+                <div className="p-20 text-center flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-full border-[3px] border-[#F5F5F7] border-t-[#1D1D1F] animate-spin mb-4"></div>
+                    <p className="font-bold text-[#1D1D1F] text-lg">Inspecionando Registros...</p>
+                    <p className="text-[#86868B] font-medium text-sm mt-1">Navegando no banco auditório.</p>
                 </div>
             ) : displayedLogs.length === 0 ? (
-                <div className="p-16 text-center">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300 text-2xl">
-                        <FaCube />
+                <div className="p-20 text-center flex flex-col items-center">
+                    <div className="w-20 h-20 bg-[#F5F5F7] rounded-[1.5rem] border border-[#E5E5EA] flex items-center justify-center mb-6 shadow-sm">
+                        <FaCube className="text-[#86868B] text-3xl" />
                     </div>
-                    <h3 className="text-gray-900 font-bold mb-1">Nenhum registro encontrado</h3>
-                    <p className="text-gray-500 text-sm">Não há logs com esses critérios.</p>
+                    <h3 className="text-xl font-bold text-[#1D1D1F] mb-2 tracking-tight">Nenhum rastro detectado</h3>
+                    <p className="text-[#86868B] text-sm font-medium">As restrições do filtro selecionado não condizem com registros atuais.</p>
                 </div>
             ) : (
-                <div>
+                <div className="flex flex-col">
                     {displayedLogs.map(log => (
                         <LogItem key={log.id} log={log} />
                     ))}
@@ -488,31 +458,36 @@ function AuditLogs() {
 
             {/* Paginação */}
             {displayedLogs.length > 0 && (
-                <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                <div className="p-5 border-t border-[#E5E5EA] bg-[#F5F5F7] flex justify-between items-center">
                     <button 
                         onClick={handlePrev} 
                         disabled={page === 1 || loadingLogs}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-2 px-5 py-3 bg-white border border-[#E5E5EA] rounded-full text-sm font-bold text-[#1D1D1F] hover:bg-[#E5E5EA] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
                     >
-                        <FaArrowLeft /> Anterior
+                        <FaArrowLeft size={12} /> Lote Anterior
                     </button>
                     
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    <span className="text-[10px] font-black text-[#86868B] uppercase tracking-widest bg-white px-4 py-2 rounded-full border border-[#E5E5EA] shadow-sm">
                         Página {page}
                     </span>
                     
                     <button 
                         onClick={handleNext} 
                         disabled={displayedLogs.length < ITEMS_PER_PAGE || loadingLogs}
-                        className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg text-sm font-bold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+                        className="flex items-center gap-2 px-5 py-3 bg-[#1D1D1F] text-white rounded-full text-sm font-bold hover:bg-black disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
                     >
-                        Próxima <FaArrowRight />
+                        Avançar Lote <FaArrowRight size={12} />
                     </button>
                 </div>
             )}
         </div>
 
-      </div>
+      </main>
+      
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+      `}</style>
     </div>
   );
 }

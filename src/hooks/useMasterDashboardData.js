@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { collection, query, onSnapshot, getDocs, collectionGroup, where, Timestamp, getCountFromServer } from 'firebase/firestore'; 
+import { collection, query, onSnapshot, getDocs, collectionGroup, where, Timestamp, getCountFromServer, limit } from 'firebase/firestore'; 
 import { db } from '../firebase'; 
 import { startOfDay, subDays } from 'date-fns';
 import { toast } from 'react-toastify';
@@ -16,6 +16,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
 
   const [stats, setStats] = useState({ totalEstabelecimentos: 0, estabelecimentosAtivos: 0, totalUsuarios: 0 });
   const [estabelecimentosMap, setEstabelecimentosMap] = useState({});
+  const [contatosEstabelecimentos, setContatosEstabelecimentos] = useState([]);
   const [dadosBrutos, setDadosBrutos] = useState({ pedidos: [], vendas: [] });
   const [alertas, setAlertas] = useState({ certVencidos: [], certVencendo: [], mensalidadeAtrasada: [], mensalidadeVencendo: [] });
   const historicosCarregados = useRef(false);
@@ -64,8 +65,20 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
       ]);
       const estabs = estabSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const mapEstabs = {};
-      estabs.forEach(e => { mapEstabs[e.id] = e.nome || e.name || e.razaoSocial; });
+      const contatos = [];
+      estabs.forEach(e => { 
+        mapEstabs[e.id] = e.nome || e.name || e.razaoSocial; 
+        const _possiblePhones = [e.informacoes_contato?.telefone_whatsapp, e['informacoes_contato.telefone_whatsapp'], e.whatsapp, e.telefone, e.phone];
+        const _validPhone = _possiblePhones.find(p => p && String(p).replace(/\D/g, '').length >= 8);
+
+        contatos.push({
+          id: e.id,
+          nome: e.nome || e.name || e.razaoSocial || 'Sem Nome',
+          telefone: _validPhone || ''
+        });
+      });
       setEstabelecimentosMap(mapEstabs);
+      setContatosEstabelecimentos(contatos);
       setStats({
         totalEstabelecimentos: estabSnap.size,
         estabelecimentosAtivos: estabs.filter(e => e.ativo).length,
@@ -147,7 +160,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
         rankingMap[estabId].total += getTotal(item);
         rankingMap[estabId].pedidos += 1;
       });
-      const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 5);
+      const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 20);
 
       const rankingOntemMap = {};
       doOntem.forEach(item => {
@@ -207,9 +220,11 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
 
     const carregarHistorico = async () => {
       try {
-        const [pedSnap, venSnap] = await Promise.all([
-          getDocs(query(collectionGroup(db, 'pedidos'))),
-          getDocs(query(collectionGroup(db, 'vendas')))
+        const [pedSnap, venSnap, countPed, countVen] = await Promise.all([
+          getDocs(query(collectionGroup(db, 'pedidos'), limit(3000))),
+          getDocs(query(collectionGroup(db, 'vendas'), limit(3000))),
+          getCountFromServer(query(collectionGroup(db, 'pedidos'))).catch(() => ({ data: () => ({ count: 0 }) })),
+          getCountFromServer(query(collectionGroup(db, 'vendas'))).catch(() => ({ data: () => ({ count: 0 }) }))
         ]);
         const pedidosDocs = pedSnap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
         const vendasDocs = venSnap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
@@ -222,7 +237,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
         
         const allDocs = [...pedidosDelivery, ...vendasFinais];
         const totalHist = allDocs.reduce((acc, item) => acc + getTotal(item), 0);
-        const qtdTotal = allDocs.length;
+        const qtdTotal = countPed.data().count + countVen.data().count;
         
         // Contar NFCes emitidas em memória (fiscal status autorizado ou que possua URL da nota)
         const qtdNfce = allDocs.filter(d => d.fiscal?.status === 'autorizado' || !!d.url_danfe).length;
@@ -273,7 +288,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
       rankingMap[estabId].total += getTotal(item);
       rankingMap[estabId].pedidos += 1;
     });
-    const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 5);
+    const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 20);
     
     // Filtro NFC-e no período
     const qtdNfce = doPeriodo.filter(d => d.fiscal?.status === 'autorizado' || !!d.url_danfe).length;
@@ -304,6 +319,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     handleDatePresetChange,
     handleDateRangeChange,
     handleDateClear,
+    contatosEstabelecimentos,
     fetchHistoricalData,
     financeiroFiltrado,
     crescimento,

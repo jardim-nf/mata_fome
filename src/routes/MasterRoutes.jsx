@@ -12,6 +12,7 @@ const ListarPedidosMaster = lazy(() => import('../pages/admin/ListarPedidosMaste
 const ListarUsuariosMaster = lazy(() => import('../pages/admin/ListarUsuariosMaster'));
 const EditarEstabelecimentoMaster = lazy(() => import('../pages/admin/EditarEstabelecimentoMaster'));
 const ImportarCardapioMaster = lazy(() => import('../pages/admin/ImportarCardapioMaster'));
+const MigradorUniversalMaster = lazy(() => import('../pages/admin/MigradorUniversalMaster'));
 const EditarUsuarioMaster = lazy(() => import("../pages/admin/EditarUsuarioMaster"));
 const AdminPlansManagement = lazy(() => import('../pages/admin/AdminPlansManagement'));
 const PedidoDetalhesMaster = lazy(() => import('../pages/admin/PedidoDetalhesMaster'));
@@ -34,6 +35,7 @@ export const masterRoutes = [
     <Route key="master-usuarios" path="/master/usuarios" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><ListarUsuariosMaster /></PrivateRoute>} />,
     <Route key="master-estabelecimentos-id-editar" path="/master/estabelecimentos/:id/editar" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><EditarEstabelecimentoMaster /></PrivateRoute>} />,
     <Route key="master-importar-cardapio" path="/master/importar-cardapio" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><ImportarCardapioMaster /></PrivateRoute>} />,
+    <Route key="master-migrador-universal" path="/master/migrador-universal" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><MigradorUniversalMaster /></PrivateRoute>} />,
     <Route key="master-usuarios-id-editar" path="/master/usuarios/:id/editar" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><EditarUsuarioMaster /></PrivateRoute>} />,
     <Route key="master-plans" path="/master/plans" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AdminPlansManagement /></PrivateRoute>} />,
     <Route key="master-pedidos-id" path="/master/pedidos/:id" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><PedidoDetalhesMaster /></PrivateRoute>} />,

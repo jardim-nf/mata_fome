@@ -41,6 +41,7 @@ const MarketingConfig = lazy(() => import('../pages/admin/MarketingConfig'));
 const CashbackConfig = lazy(() => import('../pages/admin/CashbackConfig'));
 const ConfigFiscalScreen = lazy(() => import('../pages/admin/ConfigFiscalScreen'));
 const RelatorioNfce = lazy(() => import('../pages/admin/RelatorioNfce'));
+const ContasPagar = lazy(() => import('../pages/admin/ContasPagar'));
 
 export const adminRoutes = [
     <Route key="planos" path="/planos" element={<Planos />} />,
@@ -82,5 +83,6 @@ export const adminRoutes = [
     <Route key="admin-marketing" path="/admin/marketing" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarketingConfig /></PrivateRoute>} />,
     <Route key="admin-cashback" path="/admin/cashback" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CashbackConfig /></PrivateRoute>} />,
     <Route key="admin-config-fiscal" path="/admin/config-fiscal" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ConfigFiscalScreen /></PrivateRoute>} />,
-    <Route key="admin-relatorio-nfce" path="/admin/relatorio-nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioNfce /></PrivateRoute>} />
+    <Route key="admin-relatorio-nfce" path="/admin/relatorio-nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioNfce /></PrivateRoute>} />,
+    <Route key="admin-contas-pagar" path="/admin/contas-pagar" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><ContasPagar /></PrivateRoute>} />
 ];

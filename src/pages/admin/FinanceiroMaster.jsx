@@ -1,4 +1,3 @@
-// src/pages/admin/FinanceiroMaster.jsx — Premium Light v2
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -8,22 +7,24 @@ import {
   FaCheck, FaTimes, FaPlus, FaUndo, FaArrowLeft, FaMoneyBillWave, 
   FaExclamationCircle, FaCheckCircle, FaCalendarAlt, FaWallet,
   FaHandHoldingUsd, FaFileInvoiceDollar, FaSearch, FaSignOutAlt,
-  FaBolt, FaCrown, FaExclamationTriangle, FaPercentage, FaStore,
+  FaBolt, FaExclamationTriangle, FaPercentage, FaStore,
   FaWhatsapp, FaLayerGroup
 } from 'react-icons/fa';
-import { IoSearchOutline } from 'react-icons/io5';
+import { IoSearchOutline, IoLogOutOutline } from 'react-icons/io5';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-// ─── Skeleton Loader ───
+// ─── Skeleton Loader (Bento Mosaico) ───
 const SkeletonRow = () => (
-  <div className="p-5 flex items-center gap-4 animate-pulse">
-    <div className="w-10 h-10 bg-slate-100 rounded-xl"></div>
+  <div className="p-5 flex flex-col md:flex-row md:items-center gap-4 animate-pulse border-b border-[#E5E5EA]">
+    <div className="w-12 h-12 bg-slate-100 rounded-2xl"></div>
     <div className="flex-1 space-y-2">
       <div className="h-4 bg-slate-100 rounded-lg w-40"></div>
       <div className="h-3 bg-slate-50 rounded-lg w-24"></div>
     </div>
     <div className="h-4 bg-slate-100 rounded-lg w-20"></div>
-    <div className="h-6 bg-slate-100 rounded-lg w-24"></div>
-    <div className="h-8 bg-slate-100 rounded-lg w-20"></div>
+    <div className="h-6 bg-slate-100 rounded-lg w-24 md:w-32"></div>
+    <div className="h-8 bg-slate-100 rounded-full w-20"></div>
   </div>
 );
 
@@ -31,7 +32,7 @@ function FinanceiroMaster() {
   const navigate = useNavigate();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
   
-  // Utilizando o Hook para gerenciar as rotinas brutais de cálculo 
+  // Hook logic is strictly maintained to touch NO DATA RULES
   const {
     faturasFiltradas, estabs, loading, 
     filtroStatus, setFiltroStatus,
@@ -49,10 +50,10 @@ function FinanceiroMaster() {
   const getStatusBadge = (fatura) => {
     const status = getVencimentoStatus(fatura);
     const styles = {
-      pago: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      atrasado: 'bg-red-50 text-red-700 border-red-200',
-      vencendo: 'bg-orange-50 text-orange-700 border-orange-200',
-      pendente: 'bg-amber-50 text-amber-700 border-amber-200',
+      pago: 'bg-[#F2FCDA] text-[#1D7446] border-[#D0F2A8]',
+      atrasado: 'bg-[#FFE6E6] text-[#D0021B] border-[#FFB3B3]',
+      vencendo: 'bg-[#FFF2E6] text-[#FF8C00] border-[#FFD9B3]',
+      pendente: 'bg-[#F5F5F7] text-[#86868B] border-[#E5E5EA]',
     };
     const icons = {
       pago: <FaCheckCircle />, atrasado: <FaExclamationCircle />,
@@ -61,7 +62,7 @@ function FinanceiroMaster() {
     const labels = { pago: 'PAGO', atrasado: 'ATRASADO', vencendo: 'VENCE LOGO', pendente: 'PENDENTE' };
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${styles[status]} ${status === 'atrasado' ? 'animate-pulse' : ''}`}>
+      <span className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full uppercase tracking-widest border ${styles[status]} ${status === 'atrasado' ? 'animate-pulse' : ''}`}>
         {icons[status]} {labels[status]}
       </span>
     );
@@ -71,392 +72,285 @@ function FinanceiroMaster() {
   const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Admin';
 
   if (authLoading) return (
-    <div className="flex h-screen items-center justify-center bg-slate-50">
-      <div className="w-12 h-12 border-4 border-slate-200 border-t-yellow-400 rounded-full animate-spin"></div>
+    <div className="flex h-screen items-center justify-center bg-[#F5F5F7]">
+      <FaBolt className="text-[#86868B] text-4xl animate-pulse" />
     </div>
   );
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 min-h-screen font-sans">
+    <div className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
       
-      {/* ─── NAVBAR ─── */}
-      <nav className="sticky top-0 z-50 h-16 border-b border-slate-100 bg-white/80 backdrop-blur-xl shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25 group-hover:scale-105 transition-transform">
-              <FaBolt className="text-white text-xs" />
-            </div>
-            <span className="text-slate-900 font-black text-lg tracking-tight">Idea<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-amber-500">Food</span></span>
+      {/* ─── FLOATING PILL NAVBAR ─── */}
+      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
+            <FaArrowLeft className="text-[#86868B] text-sm" />
+          </button>
+          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
+            <h1 className="font-semibold text-sm tracking-tight text-black">Módulo Financeiro</h1>
+            <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-center"><FaCrown className="text-yellow-600 text-[10px]" /></div>
-              <span className="text-sm font-bold text-slate-700">{userName}</span>
-            </div>
-            <button onClick={async () => { await logout(); navigate('/'); }} className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all"><FaSignOutAlt size={14} /></button>
-          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
+          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
+            <IoLogOutOutline className="text-red-500" size={16} />
+          </button>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-16">
+      <main className="max-w-[1400px] mx-auto mt-8">
         
         {/* ─── HEADER ─── */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
           <div>
-            <button onClick={() => navigate('/master-dashboard')} className="text-slate-400 hover:text-yellow-600 flex items-center gap-2 mb-4 text-sm font-bold transition-colors group">
-              <span className="bg-white p-1.5 rounded-lg shadow-sm border border-slate-100 group-hover:border-yellow-200 transition-colors"><FaArrowLeft /></span>
-              Voltar ao Dashboard
-            </button>
-            <div className="flex items-center gap-3 mb-2">
-              <span className="bg-yellow-50 text-yellow-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-yellow-200">Módulo Financeiro</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Recebíveis</h1>
-            <p className="text-slate-500 text-sm mt-1 font-medium">Gestão de mensalidades e faturamento da rede.</p>
+            <h1 className="text-4xl font-bold text-[#1D1D1F] tracking-tight">Recebíveis</h1>
+            <p className="text-[#86868B] text-sm mt-1 font-medium">Gestão de mensalidades e faturamento da rede.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setModalOpen(true)} 
-              className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-white px-5 py-3 rounded-xl hover:shadow-xl hover:shadow-yellow-400/30 transition-all shadow-lg shadow-yellow-400/20 font-black text-sm active:scale-95">
+              className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-full hover:scale-105 shadow-md font-bold text-sm transition-all active:scale-95">
               <FaPlus /> Nova Cobrança
             </button>
             <button onClick={() => setModalMassa(true)}
-              className="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 font-black text-sm active:scale-95">
+              className="flex items-center gap-2 bg-white border border-[#E5E5EA] text-[#1D1D1F] px-6 py-3 rounded-full hover:bg-[#F5F5F7] shadow-sm font-bold text-sm transition-all active:scale-95">
               <FaLayerGroup /> Em Massa
             </button>
           </div>
         </div>
 
         {/* ─── QUICK STATS BAR ─── */}
-        <div className="flex flex-wrap items-center gap-3 mb-6 text-[11px] font-bold text-slate-400">
-          <span className="bg-white rounded-lg px-3 py-1.5 border border-slate-100 shadow-sm">
-            📊 {resumo.totalFaturas} lançamentos
+        <div className="flex flex-wrap items-center gap-3 mb-6 px-2">
+          <span className="bg-white rounded-full px-4 py-2 border border-[#E5E5EA] shadow-sm text-xs font-bold text-[#1D1D1F] flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500"></span> {resumo.totalFaturas} lançamentos processados
           </span>
           {resumo.vencendoHoje > 0 && (
-            <span className="bg-orange-50 text-orange-600 rounded-lg px-3 py-1.5 border border-orange-200 animate-pulse">
-              ⏰ {resumo.vencendoHoje} vencendo hoje
+            <span className="bg-[#FFF2E6] text-[#FF8C00] rounded-full px-4 py-2 border border-[#FFD9B3] text-xs font-bold flex items-center gap-2 animate-pulse">
+              ⏰ {resumo.vencendoHoje} faturas vencendo hoje
             </span>
           )}
-          {resumo.atrasados > 0 && (
-            <span className="bg-red-50 text-red-600 rounded-lg px-3 py-1.5 border border-red-200">
-              🚨 {resumo.atrasados} em atraso
-            </span>
-          )}
-          <span className="bg-emerald-50 text-emerald-600 rounded-lg px-3 py-1.5 border border-emerald-200">
-            ✅ {resumo.pagosCount} pagos
-          </span>
         </div>
 
-        {/* ─── STAT CARDS ─── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* ─── STAT CARDS (BENTO) ─── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
           
-          {/* A Receber */}
-          <div className="group relative overflow-hidden rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50/50 p-6 hover:shadow-lg hover:shadow-amber-100/50 transition-all duration-300">
-            <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-amber-100/40 group-hover:scale-150 transition-transform duration-500" />
-            <div className="relative">
-              <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-sm mb-4 group-hover:scale-110 transition-transform">
-                <FaFileInvoiceDollar className="text-amber-500" />
-              </div>
-              <p className="text-[10px] text-amber-600 font-black uppercase tracking-widest mb-1">A Receber</p>
-              <p className="text-2xl font-black text-slate-900 tracking-tight">R$ {fmt(resumo.pendente)}</p>
-              <p className="text-[10px] text-amber-500 mt-1 font-medium">{resumo.pendentesCount} cobranças em aberto</p>
+          {/* Caixa Recebido (Success Tile) */}
+          <div className="bg-white rounded-[2rem] border border-[#E5E5EA] p-8 shadow-sm flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-6">
+               <div className="w-14 h-14 bg-[#F2FCDA] rounded-full flex items-center justify-center text-[#1D7446]"><FaHandHoldingUsd size={24} /></div>
+               <p className="text-[#1D7446] bg-[#F2FCDA]/50 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">{resumo.pagosCount} pagam.</p>
+            </div>
+            <div>
+               <p className="text-sm font-semibold text-[#86868B] uppercase tracking-widest mb-1">Caixa Recebido</p>
+               <p className="text-4xl font-bold tracking-tight text-[#1D1D1F]">R$ {fmt(resumo.pago)}</p>
             </div>
           </div>
 
-          {/* Recebido */}
-          <div className="group relative overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50/50 p-6 hover:shadow-lg hover:shadow-emerald-100/50 transition-all duration-300">
-            <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-emerald-100/40 group-hover:scale-150 transition-transform duration-500" />
-            <div className="relative">
-              <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-sm mb-4 group-hover:scale-110 transition-transform">
-                <FaHandHoldingUsd className="text-emerald-500" />
-              </div>
-              <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest mb-1">Caixa Recebido</p>
-              <p className="text-2xl font-black text-slate-900 tracking-tight">R$ {fmt(resumo.pago)}</p>
-              <p className="text-[10px] text-emerald-500 mt-1 font-medium">{resumo.pagosCount} pagamentos confirmados</p>
+          {/* A Receber (Pending Tile) */}
+          <div className="bg-white rounded-[2rem] border border-[#E5E5EA] p-8 shadow-sm flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-6">
+               <div className="w-14 h-14 bg-[#F5F5F7] rounded-full flex items-center justify-center text-[#86868B]"><FaFileInvoiceDollar size={24} /></div>
+               <p className="text-[#86868B] bg-[#F5F5F7] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">{resumo.pendentesCount} em aberto</p>
+            </div>
+            <div>
+               <p className="text-sm font-semibold text-[#86868B] uppercase tracking-widest mb-1">A Receber</p>
+               <p className="text-4xl font-bold tracking-tight text-[#1D1D1F]">R$ {fmt(resumo.pendente)}</p>
             </div>
           </div>
 
-          {/* Atrasados */}
-          <div className={`group relative overflow-hidden rounded-2xl border p-6 transition-all duration-300 ${
-            resumo.atrasados > 0 
-              ? 'border-red-200 bg-gradient-to-br from-red-50 to-rose-50/50 hover:shadow-lg hover:shadow-red-100/50' 
-              : 'border-slate-100 bg-white hover:shadow-lg'
-          }`}>
-            <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-red-100/30 group-hover:scale-150 transition-transform duration-500" />
-            <div className="relative">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-sm mb-4 group-hover:scale-110 transition-transform ${resumo.atrasados > 0 ? 'bg-red-500 text-white' : 'bg-slate-50 text-slate-300'}`}>
-                <FaExclamationCircle />
-              </div>
-              <p className="text-[10px] text-red-600 font-black uppercase tracking-widest mb-1">Atrasados</p>
-              <p className="text-2xl font-black text-slate-900 tracking-tight">R$ {fmt(resumo.valorAtrasado)}</p>
-              <p className="text-[10px] text-red-400 mt-1 font-medium">
-                {resumo.atrasados > 0 ? `${resumo.atrasados} cobranças vencidas` : 'Nenhuma cobrança atrasada 🎉'}
-              </p>
+          {/* Atrasados (Danger Tile) */}
+          <div className={`rounded-[2rem] p-8 shadow-md flex flex-col justify-between relative overflow-hidden group border ${resumo.atrasados > 0 ? 'bg-[#FFE6E6] border-[#FFB3B3]' : 'bg-white border-[#E5E5EA]'}`}>
+            {resumo.atrasados > 0 && <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl group-hover:bg-red-500/20 transition-all duration-1000"></div>}
+            <div className="relative z-10 flex justify-between items-start mb-6">
+               <div className={`w-14 h-14 rounded-full flex items-center justify-center ${resumo.atrasados > 0 ? 'bg-red-500 text-white' : 'bg-[#F5F5F7] text-[#E5E5EA]'}`}><FaExclamationCircle size={24} /></div>
+               <p className={`${resumo.atrasados > 0 ? 'text-[#D0021B]' : 'text-[#86868B]'} ${resumo.atrasados > 0 ? 'bg-red-100' : 'bg-[#F5F5F7]'} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest`}>
+                 {resumo.atrasados > 0 ? `${resumo.atrasados} ocorrências` : 'Limpo 🎉'}
+               </p>
+            </div>
+            <div className="relative z-10">
+               <p className={`text-sm font-semibold ${resumo.atrasados > 0 ? 'text-[#D0021B]' : 'text-[#86868B]'} uppercase tracking-widest mb-1`}>Em Atraso</p>
+               <p className={`text-4xl font-bold tracking-tight ${resumo.atrasados > 0 ? 'text-[#D0021B]' : 'text-[#86868B]'}`}>R$ {fmt(resumo.valorAtrasado)}</p>
             </div>
           </div>
 
-          {/* Total + Inadimplência */}
-          <div className="group relative overflow-hidden rounded-2xl border border-yellow-200 bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50/30 p-6 hover:shadow-lg hover:shadow-yellow-100/50 transition-all duration-300">
-            <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-yellow-100/40 group-hover:scale-150 transition-transform duration-500" />
-            <div className="relative">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-md shadow-yellow-400/25 mb-4 group-hover:scale-110 transition-transform">
-                <FaWallet className="text-white text-sm" />
-              </div>
-              <p className="text-[10px] text-yellow-700 font-black uppercase tracking-widest mb-1">Total Faturado</p>
-              <p className="text-2xl font-black text-slate-900 tracking-tight">R$ {fmt(resumo.total)}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-700" style={{ width: `${resumo.total > 0 ? (resumo.pago / resumo.total * 100) : 0}%` }} />
-                </div>
-                <span className="text-[10px] font-black text-slate-500">
-                  {resumo.total > 0 ? (resumo.pago / resumo.total * 100).toFixed(0) : 0}% 
-                </span>
-              </div>
-              {resumo.inadimplencia > 0 && (
-                <p className="text-[10px] text-red-500 mt-1 font-bold flex items-center gap-1">
-                  <FaPercentage className="text-[8px]" /> {resumo.inadimplencia.toFixed(1)}% inadimplência
-                </p>
-              )}
+          {/* Total Overview (Dark Tile) */}
+          <div className="bg-[#1D1D1F] rounded-[2rem] border border-[#1D1D1F] p-8 shadow-md flex flex-col justify-between relative overflow-hidden group">
+            <div className="absolute -left-10 -bottom-10 w-24 h-24 bg-yellow-500/20 rounded-full blur-2xl group-hover:bg-yellow-500/40 transition-colors duration-1000"></div>
+            <div className="relative z-10 flex justify-between items-start mb-6">
+               <div className="w-14 h-14 bg-white/10 rounded-full flex items-center justify-center text-white"><FaWallet size={24} /></div>
             </div>
+            <div className="relative z-10">
+               <p className="text-sm font-semibold text-zinc-400 uppercase tracking-widest mb-1">Total Movimentado</p>
+               <p className="text-4xl font-bold tracking-tight text-white mb-2">R$ {fmt(resumo.total)}</p>
+               <div className="w-full bg-white/10 rounded-full h-1 overflow-hidden">
+                 <div className="bg-emerald-500 h-1" style={{width: `${resumo.total > 0 ? (resumo.pago / resumo.total * 100) : 0}%`}}></div>
+               </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ─── FILTROS PILL-STYLE ─── */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
+          {/* Status Filters */}
+          <div className="flex overflow-x-auto hide-scrollbar gap-2 w-full sm:w-auto">
+            {[
+              { id: 'todos', label: 'Histórico Completo', count: resumo.totalFaturas },
+              { id: 'pendente', label: 'Pendentes', count: resumo.pendentesCount },
+              { id: 'atrasado', label: 'Atrasados', count: resumo.atrasados },
+              { id: 'pago', label: 'Caixa Efetuado', count: resumo.pagosCount },
+            ].map(s => (
+              <button key={s.id} onClick={() => setFiltroStatus(s.id)}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap 
+                  ${filtroStatus === s.id ? 'bg-black text-white shadow-md' : 'bg-white border border-[#E5E5EA] text-[#86868B] hover:text-black hover:border-gray-300'}`}>
+                {s.label}
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${filtroStatus === s.id ? 'bg-white text-black' : 'bg-[#F5F5F7] text-[#86868B]'}`}>{s.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Search Pill */}
+          <div className="relative w-full sm:w-64 bg-white border border-[#E5E5EA] rounded-full px-4 py-3 flex items-center shadow-sm">
+            <IoSearchOutline className="text-[#86868B]" size={16} />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              className="bg-transparent border-none outline-none text-xs ml-2 w-full font-medium placeholder-[#86868B]"
+              placeholder="Buscar por loja..." />
           </div>
         </div>
 
-        {/* ─── FILTROS + TABELA ─── */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          
-          {/* Filter Bar */}
-          <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/30">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-                <FaMoneyBillWave className="text-yellow-500" /> Histórico de Lançamentos
-              </h3>
-              
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-                {/* Search */}
-                <div className="relative flex-1 sm:flex-none">
-                  <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full sm:w-56 bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm font-semibold text-slate-700 placeholder-slate-400 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 transition-all"
-                    placeholder="Buscar loja..." />
-                </div>
-
-                {/* Status Filters */}
-                <div className="flex overflow-x-auto hide-scrollbar bg-slate-100 p-1 rounded-xl gap-1 w-full sm:w-auto scroll-smooth">
-                  {[
-                    { id: 'todos', label: 'Todos', count: resumo.totalFaturas },
-                    { id: 'pendente', label: 'Pendentes', count: resumo.pendentesCount },
-                    { id: 'atrasado', label: 'Atrasados', count: resumo.atrasados },
-                    { id: 'pago', label: 'Pagos', count: resumo.pagosCount },
-                  ].map(s => (
-                    <button key={s.id} onClick={() => setFiltroStatus(s.id)}
-                      className={`px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                        filtroStatus === s.id 
-                          ? 'bg-white text-slate-900 shadow-sm' 
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}>
-                      {s.label}
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
-                        filtroStatus === s.id ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-200/50 text-slate-400'
-                      }`}>{s.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ─── TABLE (desktop) / CARDS (mobile) ─── */}
+        {/* ─── LIST VIEW (Minimalist Table Bento Format) ─── */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-[#E5E5EA] overflow-hidden">
           {loading ? (
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-[#E5E5EA]">
                {[1,2,3,4,5].map(i => <SkeletonRow key={i} />)}
             </div>
           ) : faturasFiltradas.length === 0 ? (
-            <div className="p-16 text-center">
-              <div className="flex flex-col items-center justify-center">
-                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center mb-4">
-                  <FaSearch className="text-2xl text-slate-200" />
-                </div>
-                <p className="font-black text-slate-500 text-sm">Nenhum lançamento encontrado</p>
-                <p className="text-[11px] text-slate-400 mt-1">Altere o filtro ou crie uma nova cobrança.</p>
+            <div className="p-20 text-center">
+              <div className="w-16 h-16 bg-[#F5F5F7] rounded-3xl mx-auto flex items-center justify-center mb-6">
+                <FaSearch className="text-2xl text-[#86868B]" />
               </div>
+              <h3 className="text-xl font-bold text-[#1D1D1F] mb-2">Sem fatos contábeis</h3>
+              <p className="text-sm font-medium text-[#86868B]">Sua busca não encontrou nenhuma fatura registrada.</p>
             </div>
           ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-white border-b border-slate-100">
-                    <tr>
-                      <th className="p-5 text-[10px] uppercase tracking-widest text-slate-400 font-black">Cliente / Loja</th>
-                      <th className="p-5 text-[10px] uppercase tracking-widest text-slate-400 font-black">Vencimento</th>
-                      <th className="p-5 text-[10px] uppercase tracking-widest text-slate-400 font-black">Valor</th>
-                      <th className="p-5 text-[10px] uppercase tracking-widest text-slate-400 font-black">Status</th>
-                      <th className="p-5 text-[10px] uppercase tracking-widest text-slate-400 font-black text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {faturasFiltradas.map(fatura => (
-                      <tr key={fatura.id} className="hover:bg-yellow-50/20 transition-colors group">
-                        <td className="p-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
-                              <FaStore className="text-xs" />
-                            </div>
-                            <div>
-                               <div className="font-black text-slate-800 text-sm tracking-tight">{fatura.estabelecimentoNome}</div>
-                              <div className="text-[11px] font-medium text-slate-400 mt-0.5">{fatura.descricao}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-5">
-                          <span className="text-sm font-bold text-slate-600">{formatData(fatura.vencimento)}</span>
-                          {getVencimentoStatus(fatura) === 'atrasado' && (
-                            <p className="text-[10px] text-red-500 font-bold mt-0.5">
-                              {differenceInDays(new Date(), parseDate(fatura.vencimento))} dias de atraso
-                            </p>
-                          )}
-                        </td>
-                        <td className="p-5">
-                          <span className="font-black text-slate-900 text-base tabular-nums">R$ {fmt(fatura.valor)}</span>
-                        </td>
-                        <td className="p-5">{getStatusBadge(fatura)}</td>
-                        <td className="p-5 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                             {getVencimentoStatus(fatura) === 'atrasado' && (
-                               <button onClick={() => handleLembreteWhatsApp(fatura)}
-                                className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 flex items-center justify-center transition-all active:scale-95"
-                                title="Enviar lembrete via WhatsApp">
-                                <FaWhatsapp size={14} />
-                              </button>
-                             )}
-                            {fatura.status === 'pago' ? (
-                               <button onClick={() => handleBaixa(fatura.id, 'pago')}
-                                className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all">
-                                <FaUndo /> Estornar
-                              </button>
-                            ) : (
-                               <button onClick={() => handleBaixa(fatura.id, 'pendente')}
-                                className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95">
-                                <FaCheck /> Confirmar
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              
-              {/* Mobile Cards */}
-              <div className="md:hidden divide-y divide-slate-50">
-                 {faturasFiltradas.map(fatura => (
-                  <div key={fatura.id} className="p-4 hover:bg-yellow-50/20 transition-colors">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
-                          <FaStore className="text-sm" />
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-800 text-sm">{fatura.estabelecimentoNome}</p>
-                          <p className="text-[11px] text-slate-400 font-medium">{fatura.descricao}</p>
-                        </div>
-                      </div>
-                      {getStatusBadge(fatura)}
-                    </div>
+            <div className="divide-y divide-[#E5E5EA]">
+               {faturasFiltradas.map(fatura => (
+                 <div key={fatura.id} className="p-6 md:p-8 flex flex-col lg:flex-row lg:items-center gap-6 hover:bg-[#F5F5F7]/50 transition-colors group">
                     
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
-                      <div className="flex items-center gap-4">
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-black uppercase">Valor</p>
-                          <p className="font-black text-slate-900 tabular-nums">R$ {fmt(fatura.valor)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-black uppercase">Vence</p>
-                          <p className="text-sm font-bold text-slate-600">{formatData(fatura.vencimento)}</p>
-                        </div>
+                    {/* Block: Identity */}
+                    <div className="flex items-center gap-4 flex-[2] min-w-[200px]">
+                      <div className="w-12 h-12 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] flex items-center justify-center text-[#86868B] shrink-0">
+                        <FaStore className="text-lg" />
                       </div>
-                      {fatura.status === 'pago' ? (
-                          <button onClick={() => handleBaixa(fatura.id, 'pago')}
-                            className="text-slate-400 hover:text-red-600 p-2 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all">
-                            <FaUndo /> Estornar
-                          </button>
-                        ) : (
-                          <button onClick={() => handleBaixa(fatura.id, 'pendente')}
-                            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 active:scale-95">
-                            <FaCheck /> Pagar
-                          </button>
-                        )}
+                      <div>
+                        <p className="font-bold text-base text-[#1D1D1F] line-clamp-1">{fatura.estabelecimentoNome}</p>
+                        <p className="text-xs font-semibold text-[#86868B] mt-0.5">{fatura.descricao}</p>
+                      </div>
                     </div>
 
-                    {getVencimentoStatus(fatura) === 'atrasado' && (
-                        <p className="text-[10px] text-red-500 font-bold mt-2 bg-red-50 px-2 py-1 rounded-lg inline-block">
-                          ⚠️ {differenceInDays(new Date(), parseDate(fatura.vencimento))} dias de atraso
-                        </p>
-                    )}
-                  </div>
-                 ))}
-              </div>
-            </>
+                    {/* Block: Date and Amount */}
+                    <div className="flex flex-row justify-between lg:flex-col lg:justify-center flex-1 gap-1">
+                       <p className="text-sm font-semibold text-[#86868B]">{formatData(fatura.vencimento)}</p>
+                       <p className="font-bold text-xl tabular-nums text-[#1D1D1F]">R$ {fmt(fatura.valor)}</p>
+                    </div>
+
+                    {/* Block: Status Badge */}
+                    <div className="flex-[1.5] w-full lg:w-auto">
+                       {getStatusBadge(fatura)}
+                       {getVencimentoStatus(fatura) === 'atrasado' && (
+                          <div className="text-[11px] font-bold text-[#D0021B] mt-2 ml-2">
+                             (+{differenceInDays(new Date(), parseDate(fatura.vencimento))} dias)
+                          </div>
+                       )}
+                    </div>
+
+                    {/* Block: Actions */}
+                    <div className="flex flex-row items-center gap-2 justify-end flex-1 mt-4 lg:mt-0 pt-4 lg:pt-0 border-t border-[#E5E5EA] lg:border-0">
+                      {getVencimentoStatus(fatura) === 'atrasado' && (
+                         <button onClick={() => handleLembreteWhatsApp(fatura)}
+                          className="w-12 h-12 bg-white border border-[#E5E5EA] rounded-full flex items-center justify-center text-[#1D7446] hover:bg-[#F2FCDA] hover:border-[#F2FCDA] transition-all shadow-sm active:scale-95"
+                          title="Lembrete (WhatsApp)">
+                          <FaWhatsapp size={18} />
+                         </button>
+                      )}
+                      
+                      {fatura.status === 'pago' ? (
+                          <button onClick={() => handleBaixa(fatura.id, 'pago')}
+                            className="bg-white border border-[#E5E5EA] px-6 py-3 rounded-full text-xs font-bold text-[#D0021B] hover:bg-[#FFE6E6] hover:border-[#FFE6E6] transition-all shadow-sm active:scale-95 flex items-center gap-2">
+                            <FaUndo /> Estornar Dinheiro
+                          </button>
+                      ) : (
+                          <button onClick={() => handleBaixa(fatura.id, 'pendente')}
+                            className="bg-black border border-black px-6 py-3 rounded-full text-xs font-bold text-white hover:bg-gray-800 transition-all shadow-sm active:scale-95 flex items-center gap-2">
+                            <FaCheck /> Confirmar Baixa
+                          </button>
+                      )}
+                    </div>
+
+                 </div>
+               ))}
+            </div>
           )}
         </div>
 
-        {/* ─── MODAL NOVA COBRANÇA ─── */}
+        {/* ─── MODAL: NOVA COBRANÇA (BENTO) ─── */}
         {modalOpen && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setModalOpen(false)}>
-            <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100">
+          <div className="fixed inset-0 bg-[#1D1D1F]/40 backdrop-blur-sm flex items-center justify-center z-[100] px-4" onClick={(e) => e.target === e.currentTarget && setModalOpen(false)}>
+            <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border border-white">
               
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight">Nova Cobrança</h2>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Gerar lançamento para faturamento.</p>
+                  <h2 className="text-2xl font-bold tracking-tight text-[#1D1D1F]">Cobrador Automático</h2>
+                  <p className="text-xs font-semibold text-[#86868B] mt-1">Insira a quantia e defina a data-base para recebimento.</p>
                 </div>
-                <button onClick={() => setModalOpen(false)} className="bg-slate-50 text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-2.5 rounded-xl transition-colors"><FaTimes /></button>
+                <button onClick={() => setModalOpen(false)} className="w-10 h-10 bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA] rounded-full transition-colors flex items-center justify-center"><FaTimes /></button>
               </div>
               
-              <form onSubmit={handleCriarFatura} className="space-y-5">
+              <form onSubmit={handleCriarFatura} className="space-y-6">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Cliente / Loja</label>
-                  <select className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-semibold text-slate-700"
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2">Selecione o Recebedor</label>
+                  <select className="w-full bg-[#F5F5F7] border border-[#E5E5EA] px-5 py-4 rounded-3xl outline-none focus:border-black focus:bg-white transition-all text-sm font-semibold text-[#1D1D1F] appearance-none"
                     value={novaFatura.estabelecimentoId}
                     onChange={e => setNovaFatura({...novaFatura, estabelecimentoId: e.target.value})}>
-                    <option value="">Selecione o estabelecimento...</option>
+                    <option value="">Buscar loja no diretório...</option>
                     {estabs.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
                   </select>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2">Valor Base</label>
                     <div className="relative">
-                      <span className="absolute left-4 top-3.5 text-slate-400 text-sm font-bold">R$</span>
+                      <span className="absolute left-5 top-[18px] text-[#86868B] text-sm font-bold">R$</span>
                       <input type="number" step="0.01" placeholder="0.00"
-                        className="w-full border border-slate-200 bg-slate-50 p-3.5 pl-10 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all font-black text-slate-900 text-lg tabular-nums" 
+                        className="w-full bg-[#F5F5F7] border border-[#E5E5EA] pl-12 pr-5 py-4 rounded-3xl outline-none focus:border-black focus:bg-white transition-all font-bold text-[#1D1D1F] text-lg tabular-nums" 
                         value={novaFatura.valor}
                         onChange={e => setNovaFatura({...novaFatura, valor: e.target.value})} />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vencimento</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2">Compensação</label>
                     <input type="date" 
-                      className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-bold text-slate-700" 
+                      className="w-full bg-[#F5F5F7] border border-[#E5E5EA] px-5 py-4 rounded-3xl outline-none focus:border-black focus:bg-white transition-all text-sm font-semibold text-[#1D1D1F]" 
                       value={novaFatura.vencimento}
                       onChange={e => setNovaFatura({...novaFatura, vencimento: e.target.value})} />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Referência / Descrição</label>
-                  <input type="text" placeholder="Ex: Mensalidade Janeiro 2026"
-                    className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-semibold text-slate-700" 
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2">Identificador de Transação</label>
+                  <input type="text" placeholder="Ex: Mensalidade - Cloud Setembro"
+                    className="w-full bg-[#F5F5F7] border border-[#E5E5EA] px-5 py-4 rounded-3xl outline-none focus:border-black focus:bg-white transition-all text-sm font-semibold text-[#1D1D1F]" 
                     value={novaFatura.descricao}
                     onChange={e => setNovaFatura({...novaFatura, descricao: e.target.value})} />
                 </div>
 
-                <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-                  <button type="button" onClick={() => setModalOpen(false)} className="flex-1 py-3.5 text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-xl font-bold text-sm transition-colors border border-slate-200">
-                    Cancelar
+                <div className="flex gap-4 mt-8 pt-6 border-t border-[#E5E5EA]">
+                  <button type="button" onClick={() => setModalOpen(false)} className="flex-[0.5] py-4 bg-white border border-[#E5E5EA] text-[#1D1D1F] hover:bg-[#F5F5F7] rounded-full font-bold text-sm transition-colors">
+                    Descartar
                   </button>
-                  <button type="submit" className="flex-1 py-3.5 bg-gradient-to-r from-yellow-400 to-amber-500 text-white rounded-xl font-black text-sm hover:shadow-lg hover:shadow-yellow-400/30 transition-all active:scale-95 flex items-center justify-center gap-2">
-                    <FaCheckCircle /> Gerar Boleto
+                  <button type="submit" className="flex-1 py-4 bg-black text-white rounded-full font-bold text-sm shadow-md hover:bg-gray-800 transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <FaCheckCircle /> Imprimir Recebível
                   </button>
                 </div>
               </form>
@@ -464,65 +358,70 @@ function FinanceiroMaster() {
           </div>
         )}
 
-        {/* ─── MODAL COBRANÇAS EM MASSA ─── */}
+        {/* ─── MODAL: COBRANÇAS EM MASSA (BENTO) ─── */}
         {modalMassa && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={(e) => e.target === e.currentTarget && setModalMassa(false)}>
-            <div className="bg-white rounded-2xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-slate-100">
+          <div className="fixed inset-0 bg-[#1D1D1F]/40 backdrop-blur-sm flex items-center justify-center z-[100] px-4" onClick={(e) => e.target === e.currentTarget && setModalMassa(false)}>
+            <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border border-white">
               
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    <FaLayerGroup className="text-yellow-500" /> Cobranças em Massa
+                  <h2 className="text-2xl font-bold tracking-tight text-[#1D1D1F] flex items-center gap-2">
+                    Faturamento em Lote
                   </h2>
-                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">Gerar cobrança para TODAS as lojas ativas.</p>
+                  <p className="text-xs font-semibold text-[#86868B] mt-1">Dispare a mensalidade base para todas as operações.</p>
                 </div>
-                <button onClick={() => setModalMassa(false)} className="bg-slate-50 text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-2.5 rounded-xl transition-colors"><FaTimes /></button>
+                <button onClick={() => setModalMassa(false)} className="w-10 h-10 bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA] rounded-full transition-colors flex items-center justify-center"><FaTimes /></button>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 flex items-start gap-2">
-                <FaExclamationTriangle className="text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-[11px] font-bold text-amber-700">
-                  Atenção: Serão criadas cobranças para todos os <span className="text-amber-900">{estabs.length} estabelecimentos ativos</span>. Esta ação não pode ser desfeita de uma vez.
-                </p>
+              <div className="bg-[#FFF2E6] border border-[#FFD9B3] rounded-3xl p-5 mb-8 flex items-start gap-4">
+                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0 text-[#FF8C00]">
+                  <FaExclamationTriangle />
+                </div>
+                <div>
+                  <p className="font-bold text-[#1D1D1F] text-sm mb-1">Ação Definitiva e Global</p>
+                  <p className="text-xs font-medium text-[#FF8C00]">
+                    Iremos emitir boletos/faturas simultâneas para os <span className="font-black text-black">{estabs.length} clientes</span>. Confira o valor cuidadosamente antes do envio.
+                  </p>
+                </div>
               </div>
               
-              <form onSubmit={handleCobrancaEmMassa} className="space-y-5">
+              <form onSubmit={handleCobrancaEmMassa} className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor Unitário</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2">Ticket Médio Fixo</label>
                     <div className="relative">
-                      <span className="absolute left-4 top-3.5 text-slate-400 text-sm font-bold">R$</span>
+                      <span className="absolute left-5 top-[18px] text-[#86868B] text-sm font-bold">R$</span>
                       <input type="number" step="0.01" placeholder="0.00"
-                        className="w-full border border-slate-200 bg-slate-50 p-3.5 pl-10 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all font-black text-slate-900 text-lg tabular-nums" 
+                        className="w-full bg-[#F5F5F7] border border-[#E5E5EA] pl-12 pr-5 py-4 rounded-3xl outline-none focus:border-black focus:bg-white transition-all font-bold text-[#1D1D1F] text-lg tabular-nums" 
                         value={massaConfig.valor}
                         onChange={e => setMassaConfig({...massaConfig, valor: e.target.value})} />
                     </div>
                   </div>
                   <div>
-                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vencimento</label>
+                     <label className="block text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2">Compen. Global</label>
                     <input type="date" 
-                      className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-bold text-slate-700" 
+                      className="w-full bg-[#F5F5F7] border border-[#E5E5EA] px-5 py-4 rounded-3xl outline-none focus:border-black focus:bg-white transition-all text-sm font-semibold text-[#1D1D1F]" 
                       value={massaConfig.vencimento}
                       onChange={e => setMassaConfig({...massaConfig, vencimento: e.target.value})} />
                   </div>
                 </div>
 
                  <div>
-                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
-                  <input type="text" placeholder="Ex: Mensalidade Abril 2026"
-                    className="w-full border border-slate-200 bg-slate-50 p-3.5 rounded-xl outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 focus:bg-white transition-all text-sm font-semibold text-slate-700" 
+                   <label className="block text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2">Identificador (Exibe pra todos)</label>
+                  <input type="text" placeholder="Tarifa Única: Setembro"
+                    className="w-full bg-[#F5F5F7] border border-[#E5E5EA] px-5 py-4 rounded-3xl outline-none focus:border-black focus:bg-white transition-all text-sm font-semibold text-[#1D1D1F]" 
                     value={massaConfig.descricao}
                     onChange={e => setMassaConfig({...massaConfig, descricao: e.target.value})} />
                 </div>
 
-                <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-                  <button type="button" onClick={() => setModalMassa(false)} className="flex-1 py-3.5 text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-xl font-bold text-sm transition-colors border border-slate-200">
-                    Cancelar
+                <div className="flex gap-4 mt-8 pt-6 border-t border-[#E5E5EA]">
+                  <button type="button" onClick={() => setModalMassa(false)} className="flex-[0.5] py-4 bg-white border border-[#E5E5EA] text-[#1D1D1F] hover:bg-[#F5F5F7] rounded-full font-bold text-sm transition-colors">
+                    Abortar
                   </button>
                   <button type="submit" disabled={loadingMassa}
-                    className="flex-1 py-3.5 bg-slate-900 text-white rounded-xl font-black text-sm hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50">
-                    {loadingMassa ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div> : <FaLayerGroup />}
-                    {loadingMassa ? 'Gerando...' : 'Gerar Para Todos'}
+                    className="flex-1 py-4 bg-[#1D1D1F] text-white rounded-full font-bold text-sm shadow-md hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50">
+                    {loadingMassa ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div> : <FaLayerGroup />}
+                    {loadingMassa ? 'Disparando Lotes...' : 'Processar para Rede Inteira'}
                   </button>
                 </div>
               </form>
@@ -533,6 +432,8 @@ function FinanceiroMaster() {
       </main>
 
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
         .tabular-nums { font-variant-numeric: tabular-nums; }
       `}</style>
     </div>

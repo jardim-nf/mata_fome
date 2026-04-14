@@ -87,6 +87,7 @@ const AdminDashboard = () => {
         { path: '/painel', title: 'Monitor de Pedidos', sub: 'Delivery e Salão em tempo real', icon: <IoStorefront />, cor: 'blue', perm: 'painel' },
         { path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' },
         { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', perm: 'pdv' },
+        { path: `/totem/${currentUser?.estabelecimentoId || 'loja'}`, title: '🚀 Lançar Totem', sub: 'Abre o app de Autoatendimento', icon: <IoDesktopOutline />, cor: 'yellow', adminOnly: true },
       ]
     },
     {
@@ -106,6 +107,7 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo', adminOnly: true },
         { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber', adminOnly: true },
+        { path: '/admin/heatmap', title: 'Mapa de Calor (Inteligência)', sub: 'Zonas de maior venda', icon: <FaMapMarkedAlt />, cor: 'orange', adminOnly: true },
       ]
     },
     {
@@ -116,6 +118,7 @@ const AdminDashboard = () => {
         { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
         { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
+        { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, garçons, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
         { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
       ]
     },

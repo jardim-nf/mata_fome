@@ -11,6 +11,7 @@ import LoginMotoboy from './pages/LoginMotoboy';
 import { ROLE_GROUPS, ROLES } from './constants/roles';
 import IosInstallPrompt from "./components/IosInstallPrompt";
 import ScrollToTop from "./components/ScrollToTop";
+import GlobalOfflineBanner from "./components/common/GlobalOfflineBanner";
 
 // Modulos importados
 import { adminRoutes } from './routes/AdminRoutes';
@@ -33,6 +34,7 @@ const CheckoutPage = lazy(() => import('./pages/CheckoutPage'));
 const ImpressaoIsolada = lazy(() => import("./pages/ImpressaoIsolada"));
 const Divulgacao = lazy(() => import('./pages/Divulgacao'));
 const EntregadorApp = lazy(() => import('./pages/EntregadorApp'));
+const TotemScreen = lazy(() => import('./pages/TotemScreen'));
 
 // Wrapper que carrega providers pesados apenas para rotas autenticadas
 function AuthenticatedProviders({ children }) {
@@ -53,6 +55,7 @@ function App() {
   return (
     <ErrorBoundary>
     <Router>
+      <GlobalOfflineBanner />
       <ScrollToTop />
       <AuthProvider>
         <HeaderProvider>
@@ -77,6 +80,9 @@ function App() {
 
                 {/* App do Motoboy (Uberização) - Renderiza full screen fora do Layout master */}
                 <Route path="/entregador" element={<PrivateRoute allowedRoles={[ROLES.ENTREGADOR, 'admin', 'masterAdmin']}><EntregadorApp /></PrivateRoute>} />
+
+                {/* Totem de Autoatendimento - Full Screen Público / Semi-Público */}
+                <Route path="/totem/:estabelecimentoSlug" element={<TotemScreen />} />
 
                 {/* Rotas autenticadas — COM providers pesados (AI, Payment, Notification) */}
                 <Route element={<AuthenticatedProviders><Layout /></AuthenticatedProviders>}>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, getDocFromCache, serverTimestamp, where, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDocs, doc, updateDoc, deleteDoc, getDoc, getDocFromCache, serverTimestamp, where, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import { isItemCozinha } from '../utils/painelUtils';
@@ -179,14 +179,30 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         const tsEnd = Timestamp.fromDate(endOfDay);
 
         const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), where('createdAt', '>=', tsStart), where('createdAt', '<=', tsEnd), orderBy('createdAt', 'asc'));
-        unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
-            if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
-            dadosSubcollection = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            mergeAndSetPedidos(); isFirstRun = false;
-        }));
-
         const qVendasRaiz = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoAtivo), where('criadoEm', '>=', tsStart), where('criadoEm', '<=', tsEnd));
-        unsubscribers.push(onSnapshot(qVendasRaiz, (snapshot) => { dadosVendasRaiz = snapshot.docs.map(d => ({ id: d.id, ...d.data() })); mergeAndSetPedidos(); }));
+
+        if (visualizandoHoje) {
+            unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
+                if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
+                dadosSubcollection = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                mergeAndSetPedidos(); isFirstRun = false;
+            }));
+
+            unsubscribers.push(onSnapshot(qVendasRaiz, (snapshot) => { 
+                dadosVendasRaiz = snapshot.docs.map(d => ({ id: d.id, ...d.data() })); 
+                mergeAndSetPedidos(); 
+            }));
+        } else {
+            Promise.all([getDocs(qPedidos), getDocs(qVendasRaiz)]).then(([snapPedidos, snapVendasRaiz]) => {
+                dadosSubcollection = snapPedidos.docs.map(d => ({ id: d.id, ...d.data() }));
+                dadosVendasRaiz = snapVendasRaiz.docs.map(d => ({ id: d.id, ...d.data() }));
+                mergeAndSetPedidos();
+                isFirstRun = false;
+            }).catch(e => {
+                console.error("Erro ao carregar histórico de pedidos:", e);
+                setLoading(false);
+            });
+        }
 
         return () => unsubscribers.forEach(u => u());
     }, [estabelecimentoAtivo, authLoading, processarDadosPedido, dataSelecionada]);

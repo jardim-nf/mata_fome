@@ -276,7 +276,7 @@ export default function ControleSalao() {
                                 onPagar={() => { setMesaParaPagamento(mesa); setIsModalPagamentoOpen(true); }}
                                 onExcluir={() => salaoData.handleExcluirMesa(mesa.id)}
                                 onLimparAlerta={salaoData.limparAlertaMesa}
-                                isValorOculto={isValorOculto}
+                                isValorOculto={isGarcom || isValorOculto}
                             />
                         ))}
                     </div>

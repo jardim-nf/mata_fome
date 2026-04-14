@@ -194,6 +194,9 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 catId = newCat.id;
             }
 
+            const maiorCusto = Math.max(...currentVariacoes.map(v => Number(v.custo) || 0));
+            const custoPadrao = currentVariacoes.length === 1 ? (Number(currentVariacoes[0].custo) || 0) : maiorCusto;
+
             const itemData = {
                 ...currentFormData,
                 nome: currentFormData.nome.trim(),
@@ -202,6 +205,8 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 variacoes: currentVariacoes.map(v => ({ ...v, preco: Number(v.preco), estoque: Number(v.estoque), custo: Number(v.custo) })),
                 estoque: currentVariacoes.reduce((acc, v) => acc + Number(v.estoque), 0),
                 preco: Math.min(...currentVariacoes.map(v => Number(v.preco))),
+                custo: custoPadrao,
+                custo_estimado: custoPadrao,
                 atualizadoEm: new Date()
             };
 
