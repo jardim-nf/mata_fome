@@ -124,11 +124,17 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
 
     const toggleAdicional = (adic) => {
         setAdicionaisSelecionados(prev => {
-            // Compara por ID ou por Nome para garantir que encontre o item certo
-            const exists = prev.find(a => (a.id && a.id === adic.id) || a.nome === adic.nome);
+            // Compara primeiro por ID, depois por Grupo+Nome, e por fim por Nome
+            const match = (a, b) => {
+                if (a.id && b.id) return a.id === b.id;
+                if (a.grupo && b.grupo) return a.nome === b.nome && a.grupo === b.grupo;
+                return a.nome === b.nome;
+            };
+
+            const exists = prev.find(a => match(a, adic));
             
             if (exists) {
-                return prev.filter(a => !((a.id && a.id === adic.id) || a.nome === adic.nome));
+                return prev.filter(a => !match(a, adic));
             } else {
                 return [...prev, { ...adic, quantidade: 1 }];
             }
@@ -168,7 +174,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
                             </h3>
                             <div className="space-y-3 mb-6">
                                 {item.variacoes.map((v, i) => {
-                                    const isSel = selectedOption?.nome === v.nome;
+                                    const isSel = (selectedOption?.id && v.id) ? selectedOption.id === v.id : selectedOption?.nome === v.nome;
                                     return (
                                         <div key={i} onClick={() => setSelectedOption(v)}
                                              className={`flex justify-between items-center p-4 rounded-xl cursor-pointer border-2 transition-all ${isSel ? 'bg-white shadow-md' : 'bg-white border-transparent hover:border-gray-200'}`}
@@ -213,7 +219,12 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
                             <div className="space-y-2">
                                 {adicionaisDisponiveis.map((adic, idx) => {
                                     // Verificação segura de seleção
-                                    const isSel = adicionaisSelecionados.some(a => (a.id && a.id === adic.id) || a.nome === adic.nome);
+                                    const match = (a, b) => {
+                                        if (a.id && b.id) return a.id === b.id;
+                                        if (a.grupo && b.grupo) return a.nome === b.nome && a.grupo === b.grupo;
+                                        return a.nome === b.nome;
+                                    };
+                                    const isSel = adicionaisSelecionados.some(a => match(a, adic));
                                     
                                     let precoAdic = adic.preco !== undefined ? adic.preco : adic.valor;
                                     if(typeof precoAdic === 'string') precoAdic = parseFloat(precoAdic.replace(',', '.'));
