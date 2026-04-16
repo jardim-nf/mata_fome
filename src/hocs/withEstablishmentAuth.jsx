@@ -5,15 +5,15 @@ import { FaSpinner } from "react-icons/fa";
 
 const withEstablishmentAuth = (WrappedComponent) => {
   return (props) => {
-    const { currentUser, userData, authLoading } = useAuth();
+    const { currentUser, userData, authLoading , estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [shouldRedirect, setShouldRedirect] = useState(false);
     const [redirectPath, setRedirectPath] = useState("");
 
     // Usar estabelecimentos ou estabelecimentosGerenciados
-    const estabelecimentoPrincipal = userData?.estabelecimentos?.[0] || 
-                                   userData?.estabelecimentosGerenciados?.[0] || 
+    const estabelecimentoPrincipal = estabelecimentoIdPrincipal || 
+                                   estabelecimentoIdPrincipal || 
                                    null;
 
     useEffect(() => {

@@ -51,7 +51,23 @@ export function AuthProvider({ children }) {
     const [currentClientData, setCurrentClientData] = useState(null); 
     const [loading, setLoading] = useState(true);
     const [authChecked, setAuthChecked] = useState(false);
+    
+    // Novo estado para controlar o estabelecimento selecionado na sessão
+    const [selectedEstabelecimentoId, setSelectedEstabelecimentoId] = useState(() => {
+        return localStorage.getItem('selectedEstabelecimentoId') || null;
+    });
+
     const isProcessingAuth = useRef(false); 
+
+    const setEstabelecimentoAtual = (id) => {
+        if (id) {
+            localStorage.setItem('selectedEstabelecimentoId', id);
+            setSelectedEstabelecimentoId(id);
+        } else {
+            localStorage.removeItem('selectedEstabelecimentoId');
+            setSelectedEstabelecimentoId(null);
+        }
+    };
 
     const logout = async () => {
         try {
@@ -63,6 +79,7 @@ export function AuthProvider({ children }) {
             setUserData(null);
             setCurrentUser(null);
             setCurrentClientData(null); 
+            setEstabelecimentoAtual(null); // Limpa a seleção ao deslogar
         }
     };
 
@@ -140,9 +157,13 @@ export function AuthProvider({ children }) {
         return unsubscribe;
     }, []);
     
-    const activeEstab = userData?.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 0 
-        ? userData.estabelecimentosGerenciados[0] 
-        : null;
+    // Se tiver um selecionado e for válido na lista de gerenciados, usamos ele. 
+    // Caso contrário, fallback para o primeiro.
+    const activeEstab = selectedEstabelecimentoId && userData?.estabelecimentosGerenciados?.includes(selectedEstabelecimentoId)
+        ? selectedEstabelecimentoId
+        : (userData?.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 0 
+            ? userData.estabelecimentosGerenciados[0] 
+            : null);
 
     const value = {
         currentUser, userData, currentClientData, loading, authChecked,
@@ -151,6 +172,8 @@ export function AuthProvider({ children }) {
         estabelecimentosGerenciados: userData?.estabelecimentosGerenciados || [],
         primeiroEstabelecimento: activeEstab, 
         estabelecimentoIdPrincipal: activeEstab, 
+        selectedEstabelecimentoId,
+        setEstabelecimentoAtual,
         
         signup: async (email, password, additionalData = {}) => {
             const uc = await createUserWithEmailAndPassword(auth, email, password);
@@ -268,7 +291,7 @@ export function usePermissions() {
 }
 
 export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecimento = null }) {
-    const { currentUser, loading, authChecked } = useAuth();
+    const { currentUser, loading, authChecked, userData, selectedEstabelecimentoId } = useAuth();
     const { canAccess, canManageEstabelecimento } = usePermissions();
     const location = useLocation();
 
@@ -279,6 +302,15 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
             return <Navigate to="/login-admin" state={{ from: location }} replace />;
         }
         return <Navigate to="/" replace />;
+    }
+
+    // Trava global: Nunca deixar o usuário passar sem escolher a loja (se tiver mais de 1)
+    if (
+        userData?.estabelecimentosGerenciados?.length > 1 && 
+        !selectedEstabelecimentoId && 
+        location.pathname !== '/selecionar-estabelecimento'
+    ) {
+        return <Navigate to="/selecionar-estabelecimento" replace />;
     }
 
     const accessGranted = canAccess(allowedRoles);

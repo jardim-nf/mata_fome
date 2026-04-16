@@ -10,7 +10,7 @@ import { useAdminMenuData } from '../hooks/useAdminMenuData';
 import {
     IoAddCircleOutline, IoSearch, IoClose, IoImageOutline, IoCheckmarkCircle,
     IoAlertCircle, IoCube, IoCash, IoPricetag, IoList, IoEyeOff, IoGrid, IoMenu, IoBarcodeOutline,
-    IoFlask, IoTrashOutline
+    IoFlask, IoTrashOutline, IoChevronUp, IoChevronDown
 } from 'react-icons/io5';
 import BackButton from '../components/BackButton';
 
@@ -121,9 +121,9 @@ const StatsCard = ({ title, value, icon: Icon, colorClass, bgClass }) => (
 );
 
 function AdminMenuManagement() {
-  const { userData } = useAuth();
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
   const { setActions, clearActions } = useHeader();
-  const primeiroEstabelecimento = userData?.estabelecimentosGerenciados?.[0];
+  const primeiroEstabelecimento = estabelecimentoIdPrincipal;
   const menuParams = useAdminMenuData(primeiroEstabelecimento);
   
   const [viewMode, setViewMode] = useState('grid');
@@ -339,10 +339,24 @@ function AdminMenuManagement() {
                           </div>
 
                           <div className="space-y-4">
-                              {menuParams.variacoes.map((v) => (
+                              {menuParams.variacoes.map((v, index) => (
                                   <div key={v.id} className="bg-slate-50/50 p-6 rounded-2xl border border-slate-200 relative group transition-all hover:bg-slate-50">
                                       {menuParams.variacoes.length > 1 && (
-                                          <button type="button" onClick={() => menuParams.removerVariacao(v.id)} className="absolute -top-3 -right-3 bg-white border border-red-100 text-red-500 p-2.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:-translate-y-1"><IoClose size={18}/></button>
+                                          <div className="absolute -top-3 -right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                              {index > 0 && (
+                                                  <button type="button" onClick={() => menuParams.reordenarVariacao(index, -1)} className="bg-white border border-blue-100 text-blue-500 p-2 rounded-full shadow-lg transition-transform hover:bg-blue-50 hover:-translate-y-1" title="Mover para Cima">
+                                                      <IoChevronUp size={16}/>
+                                                  </button>
+                                              )}
+                                              {index < menuParams.variacoes.length - 1 && (
+                                                  <button type="button" onClick={() => menuParams.reordenarVariacao(index, 1)} className="bg-white border border-blue-100 text-blue-500 p-2 rounded-full shadow-lg transition-transform hover:bg-blue-50 hover:-translate-y-1" title="Mover para Baixo">
+                                                      <IoChevronDown size={16}/>
+                                                  </button>
+                                              )}
+                                              <button type="button" onClick={() => menuParams.removerVariacao(v.id)} className="bg-white border border-red-100 text-red-500 p-2 rounded-full shadow-lg transition-transform hover:bg-red-50 hover:-translate-y-1" title="Excluir">
+                                                  <IoClose size={18}/>
+                                              </button>
+                                          </div>
                                       )}
                                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-6">
                                           {(menuParams.variacoes.length > 1 || v.nome !== 'Padrão') && (

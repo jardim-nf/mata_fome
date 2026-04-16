@@ -154,9 +154,9 @@ const InsumoCard = ({ insumo, onEdit, onDelete, onToggle, onAjustarEstoque }) =>
 };
 
 function GestaoInsumos() {
-    const { userData } = useAuth();
+    const { userData , estabelecimentoIdPrincipal } = useAuth();
     const { setActions, clearActions } = useHeader();
-    const estabelecimentoId = userData?.estabelecimentosGerenciados?.[0];
+    const estabelecimentoId = estabelecimentoIdPrincipal;
     const data = useGestaoInsumosData(estabelecimentoId);
 
     useEffect(() => {

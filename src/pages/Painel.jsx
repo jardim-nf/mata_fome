@@ -18,8 +18,8 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 function Painel() {
     const navigate = useNavigate();
-    const { loading: authLoading, estabelecimentosGerenciados } = useAuth();
-    const estabelecimentoAtivo = useMemo(() => estabelecimentosGerenciados?.[0] || null, [estabelecimentosGerenciados]);
+    const { loading: authLoading, estabelecimentosGerenciados , estabelecimentoIdPrincipal } = useAuth();
+    const estabelecimentoAtivo = useMemo(() => estabelecimentoIdPrincipal || null, [estabelecimentosGerenciados]);
 
     const {
         dataSelecionada, setDataSelecionada,

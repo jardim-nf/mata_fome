@@ -14,7 +14,7 @@ import {
 import jsPDF from 'jspdf';
 
 function AuditoriaMesas() {
-  const { userData, currentUser } = useAuth();
+  const { userData, currentUser , estabelecimentoIdPrincipal } = useAuth();
   const isMaster = currentUser?.isMasterAdmin === true;
   const [vendas, setVendas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ function AuditoriaMesas() {
   const [estabelecimentos, setEstabelecimentos] = useState([]);
   const [filtroEstab, setFiltroEstab] = useState('');
 
-  const estabIdDefault = userData?.estabelecimentosGerenciados?.[0];
+  const estabIdDefault = estabelecimentoIdPrincipal;
 
   // Busca lista de estabelecimentos se for master
   useEffect(() => {

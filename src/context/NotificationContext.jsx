@@ -19,7 +19,7 @@ const SOM_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.m
 const LOGO_URL = "https://cdn-icons-png.flaticon.com/512/754/754862.png";
 
 export const NotificationProvider = ({ children }) => {
-  const { userData } = useAuth();
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
   const navigate = useNavigate();
 
   const audioRef = useRef(null);
@@ -71,7 +71,7 @@ export const NotificationProvider = ({ children }) => {
     if (!cargosPermitidos.some(c => role.includes(c))) return;
 
     const estabelecimentoId =
-      userData.estabelecimentosGerenciados?.[0] ||
+      userData.estabelecimentoIdPrincipal ||
       userData.estabelecimentoId ||
       userData.idEstabelecimento;
 

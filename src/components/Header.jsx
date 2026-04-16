@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useHeader } from '../context/HeaderContext.jsx';
+import { useEstablishment } from '../hooks/useEstablishment.js';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import { toast } from 'react-toastify';
@@ -17,8 +18,10 @@ import {
 function Header() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { currentUser, isAdmin, isMasterAdmin, logout } = useAuth();
+    const { currentUser, isAdmin, isMasterAdmin, logout, primeiroEstabelecimento } = useAuth();
     const { headerActions, headerTitle, headerSubtitle } = useHeader();
+    const { estabelecimentoInfo } = useEstablishment(primeiroEstabelecimento);
+    const isVarejo = estabelecimentoInfo?.tipoNegocio === 'varejo';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     // --- 1. LÓGICA DE PERMISSÃO ---
@@ -52,8 +55,8 @@ function Header() {
             let label = path;
             switch(path) {
                 case 'admin': label = 'Admin'; break;
-                case 'menu': label = 'Cardápio'; break;
-                case 'gerenciar-cardapio': label = 'Cardápio'; break;
+                case 'menu': label = isVarejo ? 'Catálogo' : 'Cardápio'; break;
+                case 'gerenciar-cardapio': label = isVarejo ? 'Catálogo' : 'Cardápio'; break;
                 case 'controle-salao': label = 'Salão'; break;
                 case 'painel': label = 'Painel'; break;
                 case 'dashboard': label = 'Dashboard'; break;
@@ -87,12 +90,12 @@ function Header() {
 
     const getDynamicTitle = () => {
         if (headerTitle) return headerTitle;
-        return getPageTitle(location.pathname);
+        return getPageTitle(location.pathname, isVarejo);
     };
 
     const getDynamicSubtitle = () => {
         if (headerSubtitle) return headerSubtitle;
-        return getPageSubtitle(location.pathname);
+        return getPageSubtitle(location.pathname, isVarejo);
     };
 
     return (
@@ -189,7 +192,7 @@ function Header() {
                             </Link>
                         )}
 
-                        {temPermissao('Controle de Salão') && (
+                        {temPermissao('Controle de Salão') && !isVarejo && (
                             <Link 
                                 to="/controle-salao" 
                                 className="flex items-center gap-3 py-3 px-3 text-gray-700 font-bold hover:bg-gray-50 rounded-xl transition-colors"
@@ -234,11 +237,11 @@ function Header() {
     );
 }
 
-const getPageTitle = (pathname) => {
+const getPageTitle = (pathname, isVarejo = false) => {
     const titles = {
-        '/admin/gerenciar-cardapio': 'Cardápio',
+        '/admin/gerenciar-cardapio': isVarejo ? 'Catálogo' : 'Cardápio',
         '/controle-salao': 'Mapa de Mesas',
-        '/painel': 'Pedidos',
+        '/painel': isVarejo ? 'Vendas' : 'Pedidos',
         '/dashboard': 'Dashboard',
         '/master-dashboard': 'Admin Master',
         '/admin/taxas-de-entrega': 'Taxas de Entrega',
@@ -253,9 +256,9 @@ const getPageTitle = (pathname) => {
     return titles[pathname] || 'IdeaFood';
 };
 
-const getPageSubtitle = (pathname) => {
+const getPageSubtitle = (pathname, isVarejo = false) => {
     const subtitles = {
-        '/admin/gerenciar-cardapio': 'Gerenciamento de produtos',
+        '/admin/gerenciar-cardapio': 'Gerenciamento de produtos e itens',
         '/controle-salao': 'Visão geral do salão',
         '/painel': 'Fila de produção em tempo real',
         '/admin/reports': 'Extrato financeiro e balanço',

@@ -591,8 +591,10 @@ function ClientOrderHistory() {
                           }));
                           localStorage.setItem('ideafood_repetir_pedido', JSON.stringify(itensParaRepetir));
                           const slug = estabelecimentos[order.estabelecimentoId]?.slug || order.estabelecimentoId;
+                          const tipoNegocio = estabelecimentos[order.estabelecimentoId]?.tipoNegocio;
+                          const routePrefix = tipoNegocio === 'varejo' ? 'catalogo' : 'cardapio';
                           toast.info('🔁 Preparando seu carrinho...');
-                          navigate(`/cardapio/${slug}`);
+                          navigate(`/${routePrefix}/${slug}`);
                         }}
                         className="flex items-center justify-center space-x-2 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-medium transition flex-1"
                       >

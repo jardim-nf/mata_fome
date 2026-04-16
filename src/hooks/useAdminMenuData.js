@@ -137,6 +137,15 @@ export function useAdminMenuData(primeiroEstabelecimento) {
     const adicionarVariacao = () => { setVariacoes([...variacoes, { id: `var-${Date.now()}`, nome: '', preco: '', descricao: '', ativo: true, estoque: 0, estoqueMinimo: 0, custo: 0 }]); };
     const atualizarVariacao = (id, field, value) => { setVariacoes(variacoes.map(v => v.id === id ? { ...v, [field]: value } : v)); };
     const removerVariacao = (id) => { if (variacoes.length <= 1) return toast.error('Mínimo 1 variação.'); setVariacoes(variacoes.filter(v => v.id !== id)); };
+    const reordenarVariacao = (index, direcao) => {
+        if (index === 0 && direcao === -1) return;
+        if (index === variacoes.length - 1 && direcao === 1) return;
+        const novasVariacoes = [...variacoes];
+        const item = novasVariacoes[index];
+        novasVariacoes.splice(index, 1);
+        novasVariacoes.splice(index + direcao, 0, item);
+        setVariacoes(novasVariacoes);
+    };
 
     // NCM LOGIC
     const buscarNcm = async (termo, handleFiscalChange) => {
@@ -340,7 +349,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
         itemImage, setItemImage, imagePreview, setImagePreview, formLoading,
         ncmResultados, setNcmResultados, pesquisandoNcm, setPesquisandoNcm, termoNcm, setTermoNcm, 
         variacoes, setVariacoes, uploading3DItemId,
-        adicionarVariacao, atualizarVariacao, removerVariacao, buscarNcm,
+        adicionarVariacao, atualizarVariacao, removerVariacao, reordenarVariacao, buscarNcm,
         openItemForm, closeItemForm, handleSaveItem, handleDeleteItem, toggleItemStatus, handleUpload3D,
         adicionarInsumoFicha, removerInsumoFicha, atualizarQuantidadeFicha, custoFichaTecnica
     };

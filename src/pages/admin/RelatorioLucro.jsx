@@ -54,8 +54,8 @@ const StatCard = ({ title, value, subtitle, icon, color = 'emerald' }) => {
 
 /* ── Main Component ─────────────────────────────────────────── */
 function RelatorioLucro() {
-  const { userData } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal;
   const [pedidos, setPedidos] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);

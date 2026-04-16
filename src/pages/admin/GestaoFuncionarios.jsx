@@ -7,8 +7,8 @@ import { ModalFuncionario } from "../../components/ModalFuncionario";
 import BackButton from "../../components/BackButton";
 
 const GestaoFuncionarios = () => {
-    const { userData } = useAuth();
-    const estabelecimentoId = userData?.estabelecimentos?.[0] || userData?.estabelecimentosGerenciados?.[0] || null;
+    const { userData , estabelecimentoIdPrincipal } = useAuth();
+    const estabelecimentoId = estabelecimentoIdPrincipal || estabelecimentoIdPrincipal || null;
 
     const {
         funcionarios, loading, CARGOS, PERMISSOES_DISPONIVEIS,

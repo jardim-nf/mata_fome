@@ -28,8 +28,8 @@ const SkeletonRow = () => (
 
 function ContasPagar() {
   const navigate = useNavigate();
-  const { userData, currentUser } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0] || currentUser?.estabelecimentoId;
+  const { userData, currentUser , estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal || currentUser?.estabelecimentoId;
   
   const { contas, loading, resumo, addConta, updateConta, deleteConta, togglePago } = useContasPagarData(estabId);
 

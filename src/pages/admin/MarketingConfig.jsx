@@ -12,8 +12,8 @@ import { toast } from 'react-toastify';
 import { IoArrowBack, IoMegaphoneOutline, IoCheckmarkCircle, IoAlertCircle, IoPeopleOutline, IoCalendarOutline } from 'react-icons/io5';
 
 function MarketingConfig() {
-  const { userData } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal;
 
   const [config, setConfig] = useState({ ativo: false, diasInativo: 7, mensagem: '', limiteDiario: 20, aniversario: false, aniversarioDesconto: 15, aniversarioMsg: '' });
   const [campanhas, setCampanhas] = useState([]);

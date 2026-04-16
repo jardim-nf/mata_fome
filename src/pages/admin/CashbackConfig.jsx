@@ -11,8 +11,8 @@ import { toast } from 'react-toastify';
 import { IoArrowBack, IoWalletOutline, IoCheckmarkCircle, IoAlertCircle } from 'react-icons/io5';
 
 function CashbackConfig() {
-  const { userData } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal;
 
   const [config, setConfig] = useState({ ativo: false, porcentagem: 5 });
   const [loading, setLoading] = useState(true);

@@ -9,7 +9,7 @@ import { AdminDepartamentosFiscais } from '../../components/admin/AdminDepartame
 import BackButton from '../../components/BackButton';
 
 const ConfigFiscalScreen = () => {
-  const { userData, currentUser } = useAuth();
+  const { userData, currentUser , estabelecimentoIdPrincipal } = useAuth();
   const [loading, setLoading] = useState(false);
   const [estabelecimentoId, setEstabelecimentoId] = useState(null);
   const [activeTab, setActiveTab] = useState('BASICO');
@@ -43,7 +43,7 @@ const ConfigFiscalScreen = () => {
       if (!userData || !currentUser) return;
       
       // Assume que estamos configurando o primeiro estabelecimento do usuário ou o próprio usuário
-      const id = userData.estabelecimentosGerenciados?.[0] || currentUser.uid;
+      const id = userData.estabelecimentoIdPrincipal || currentUser.uid;
       setEstabelecimentoId(id);
 
       try {

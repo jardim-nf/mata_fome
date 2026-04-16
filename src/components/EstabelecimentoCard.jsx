@@ -11,9 +11,8 @@ function EstabelecimentoCard({ estabelecimento }) {
   const defaultImageUrl = '/images/placeholder-restaurant.jpg'; 
 
   return (
-    // CORREÇÃO AQUI: USANDO '/cardapio/' (ou '/cardapios/', dependendo da sua rota em App.jsx)
     <Link 
-      to={`/cardapio/${estabelecimento.slug}`} // <-- MUDANÇA AQUI: de /loja/ para /cardapio/
+      to={`/${estabelecimento.tipoNegocio === 'varejo' ? 'catalogo' : 'cardapio'}/${estabelecimento.slug}`} 
       className="bg-white rounded-lg shadow-md hover:shadow-xl transition duration-300 transform hover:scale-105 flex flex-col overflow-hidden border border-gray-100"
     >
       <div className="w-full h-40 overflow-hidden">

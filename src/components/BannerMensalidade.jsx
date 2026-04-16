@@ -11,7 +11,7 @@ import {
 } from 'react-icons/fa';
 
 const BannerMensalidade = () => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData , estabelecimentoIdPrincipal } = useAuth();
   const [status, setStatus] = useState(null); // 'ok' | 'vencendo' | 'atrasado' | 'bloqueado'
   const [info, setInfo] = useState(null);
   const [certInfo, setCertInfo] = useState(null);
@@ -22,7 +22,7 @@ const BannerMensalidade = () => {
 
     const checkMensalidade = async () => {
       try {
-        const estabId = userData.estabelecimentosGerenciados?.[0];
+        const estabId = userData.estabelecimentoIdPrincipal;
         if (!estabId) return;
 
         // Buscar dados do estabelecimento (nextBillingDate, currentPlanId)

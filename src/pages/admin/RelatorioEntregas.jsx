@@ -10,8 +10,8 @@ import {
 import { toast } from 'react-toastify';
 
 const RelatorioEntregas = () => {
-    const { estabelecimentosGerenciados } = useAuth();
-    const estabelecimentoId = estabelecimentosGerenciados?.[0];
+    const { estabelecimentosGerenciados , estabelecimentoIdPrincipal } = useAuth();
+    const estabelecimentoId = estabelecimentoIdPrincipal;
 
     const [loading, setLoading] = useState(true);
     const [dataFiltro, setDataFiltro] = useState(new Date().toISOString().split('T')[0]); // Hoje YYYY-MM-DD

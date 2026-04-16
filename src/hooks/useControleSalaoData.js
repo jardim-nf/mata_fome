@@ -14,7 +14,7 @@ export function useControleSalaoData(userData, user, currentUser) {
     const usuarioLogado = user || currentUser;
 
     const estabelecimentoId = useMemo(() => {
-        return userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
+        return estabelecimentoIdPrincipal || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
     }, [userData]);
 
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");

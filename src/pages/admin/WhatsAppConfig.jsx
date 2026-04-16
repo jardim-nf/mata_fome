@@ -12,8 +12,8 @@ import { IoArrowBack, IoLogoWhatsapp, IoCheckmarkCircle, IoAlertCircle, IoCopyOu
 
 
 function WhatsAppConfig() {
-  const { userData } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal;
 
   // Configuração inicial adaptada para Uazapi
   const [config, setConfig] = useState({ 

@@ -20,9 +20,10 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
   const navigate = useNavigate();
 
   const handleCardClick = useCallback(
-    (slug, nome) => {
-      navigate(`/cardapio/${slug}`);
-      toast.info(`Carregando cardápio de ${nome}...`);
+    (slug, nome, tipoNegocio) => {
+      const routePrefix = tipoNegocio === 'varejo' ? 'catalogo' : 'cardapio';
+      navigate(`/${routePrefix}/${slug}`);
+      toast.info(`Carregando ${routePrefix} de ${nome}...`);
     },
     [navigate]
   );
@@ -87,7 +88,7 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
               viewport={{ once: true }}
               whileHover={{ y: -6 }}
               className="group bg-white rounded-3xl shadow-lg overflow-hidden cursor-pointer flex flex-col border border-gray-100 hover:border-yellow-400 transition-colors duration-300"
-              onClick={() => handleCardClick(est.slug, est.nome)}
+              onClick={() => handleCardClick(est.slug, est.nome, est.tipoNegocio)}
             >
               {/* Image */}
               {est.imageUrl ? (
@@ -149,11 +150,11 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleCardClick(est.slug, est.nome);
+                    handleCardClick(est.slug, est.nome, est.tipoNegocio);
                   }}
                   className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3 rounded-xl transition-all shadow-md hover:shadow-lg"
                 >
-                  🍽️ Ver Cardápio
+                  <span className="mr-2">🍽️</span> Ver {est.tipoNegocio === 'varejo' ? 'Catálogo' : 'Cardápio'}
                 </button>
               </div>
             </motion.div>

@@ -14,8 +14,8 @@ import { IoArrowBack, IoTrendingUpOutline, IoFlameOutline, IoCalendarOutline, Io
 const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 function PrevisaoDemanda() {
-  const { userData } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal;
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
 

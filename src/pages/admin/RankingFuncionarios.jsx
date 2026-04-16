@@ -28,14 +28,14 @@ const MedalBadge = ({ position }) => {
 };
 
 function RankingFuncionarios() {
-  const { userData } = useAuth();
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
   const [pedidos, setPedidos] = useState([]);
   const [vendas, setVendas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState('7');
   const [tab, setTab] = useState('garcons');
 
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const estabId = estabelecimentoIdPrincipal;
 
   useEffect(() => {
     if (!estabId) return;

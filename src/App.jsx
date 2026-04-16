@@ -35,6 +35,7 @@ const ImpressaoIsolada = lazy(() => import("./pages/ImpressaoIsolada"));
 const Divulgacao = lazy(() => import('./pages/Divulgacao'));
 const EntregadorApp = lazy(() => import('./pages/EntregadorApp'));
 const TotemScreen = lazy(() => import('./pages/TotemScreen'));
+const SelectEstabelecimento = lazy(() => import('./pages/SelectEstabelecimento'));
 
 // Wrapper que carrega providers pesados apenas para rotas autenticadas
 function AuthenticatedProviders({ children }) {
@@ -74,7 +75,9 @@ function App() {
                 <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
                 <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
                 <Route path="/cardapio" element={<ListaEstabelecimentos />} />
+                <Route path="/catalogo" element={<ListaEstabelecimentos />} />
                 <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />
+                <Route path="/catalogo/:estabelecimentoSlug" element={<Menu />} />
                 <Route path="/divulgacao" element={<Divulgacao />} />
                 <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
 
@@ -83,6 +86,9 @@ function App() {
 
                 {/* Totem de Autoatendimento - Full Screen Público / Semi-Público */}
                 <Route path="/totem/:estabelecimentoSlug" element={<TotemScreen />} />
+
+                {/* Tela de Seleção de Estabelecimentos (gateway) */}
+                <Route path="/selecionar-estabelecimento" element={<PrivateRoute><SelectEstabelecimento /></PrivateRoute>} />
 
                 {/* Rotas autenticadas — COM providers pesados (AI, Payment, Notification) */}
                 <Route element={<AuthenticatedProviders><Layout /></AuthenticatedProviders>}>

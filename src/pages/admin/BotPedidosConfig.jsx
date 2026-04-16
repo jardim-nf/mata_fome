@@ -16,8 +16,8 @@ import {
 import { Link } from 'react-router-dom';
 
 function BotPedidosConfig() {
-  const { userData } = useAuth();
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
+  const estabId = estabelecimentoIdPrincipal;
 
   const [botAtivo, setBotAtivo] = useState(false);
   const [mensagemBoasVindas, setMensagemBoasVindas] = useState('Olá! 👋 Bem-vindo! Digite *CARDÁPIO* para ver nossos produtos ou me diga o que deseja pedir! 😊');

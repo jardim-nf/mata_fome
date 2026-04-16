@@ -150,14 +150,14 @@ const KDSCard = ({ pedido, estabId, now }) => {
 
 // ─── MAIN COMPONENT ───
 function KitchenDisplay() {
-  const { userData } = useAuth();
+  const { userData , estabelecimentoIdPrincipal } = useAuth();
   const now = useTimer();
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('ativos');
 
-  const estabId = userData?.estabelecimentosGerenciados?.[0];
+  const estabId = estabelecimentoIdPrincipal;
 
   useEffect(() => {
     if (!estabId) return;

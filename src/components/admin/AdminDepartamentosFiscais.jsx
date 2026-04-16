@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { FaPlus, FaTrash, FaEdit, FaSave, FaClipboardList } from 'react-icons/fa';
 
 export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
-    const { userData, currentUser } = useAuth();
+    const { userData, currentUser , estabelecimentoIdPrincipal } = useAuth();
     const [estabelecimentoId, setEstabelecimentoId] = useState(null);
     const [departamentos, setDepartamentos] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +32,7 @@ export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
         }
 
         if (!userData || !currentUser) return;
-        const id = userData.estabelecimentosGerenciados?.[0] || currentUser.uid;
+        const id = userData.estabelecimentoIdPrincipal || currentUser.uid;
         setEstabelecimentoId(id);
         carregarDepartamentos(id);
     }, [userData, currentUser, forceEstabId]);

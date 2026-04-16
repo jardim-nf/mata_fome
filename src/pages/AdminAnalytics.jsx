@@ -86,9 +86,9 @@ const HBar = ({ label, valor, maxValor, formatado, cor = 'bg-blue-500', sub }) =
 
 // ══════════════ COMPONENTE PRINCIPAL ══════════════
 function AdminAnalytics() {
-    const { userData } = useAuth();
+    const { userData , estabelecimentoIdPrincipal } = useAuth();
     const estabId = useMemo(() =>
-        userData?.estabelecimentosGerenciados?.[0] || userData?.estabelecimentos?.[0] || userData?.estabelecimentoId || null
+        estabelecimentoIdPrincipal || estabelecimentoIdPrincipal || userData?.estabelecimentoId || null
     , [userData]);
 
     const {

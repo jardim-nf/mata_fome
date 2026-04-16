@@ -88,8 +88,8 @@ const ListaEstabelecimentos = () => {
     const handleEstabelecimentoClick = (estabelecimento) => {
         console.log('🎯 Clicou no estabelecimento:', estabelecimento);
         
-        // SEMPRE vai para o cardápio público, independente do role
-        navigate(`/cardapio/${estabelecimento.id}`);
+        const routePrefix = estabelecimento.tipoNegocio === 'varejo' ? 'catalogo' : 'cardapio';
+        navigate(`/${routePrefix}/${estabelecimento.id}`);
     };
 
     const handleCriarEstabelecimento = () => {

@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
 import BannerMensalidade from "../components/BannerMensalidade";
 import { useAuth } from "../context/AuthContext";
+import { useEstablishment } from "../hooks/useEstablishment";
 
 
 import { 
@@ -49,7 +50,9 @@ const ActionButton = ({ title, subtitle, icon, themeColor }) => {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, loading, logout } = useAuth();
+  const { currentUser, loading, logout, estabelecimentoIdPrincipal } = useAuth();
+  const { estabelecimentoInfo } = useEstablishment(estabelecimentoIdPrincipal);
+  const isVarejo = estabelecimentoInfo?.tipoNegocio === 'varejo';
   const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
@@ -85,19 +88,19 @@ const AdminDashboard = () => {
       title: "⚡ Operação",
       description: "Telas de acompanhamento e vendas",
       items: [
-        { path: '/painel', title: 'Monitor de Pedidos', sub: 'Delivery e Salão em tempo real', icon: <IoStorefront />, cor: 'blue', perm: 'painel' },
-        { path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' },
+        { path: '/painel', title: isVarejo ? 'Monitor de Vendas' : 'Monitor de Pedidos', sub: isVarejo ? 'Vendas em tempo real' : 'Delivery e Salão em tempo real', icon: <IoStorefront />, cor: 'blue', perm: 'painel' },
+        ...(isVarejo ? [] : [{ path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' }]),
         { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', perm: 'pdv' },
-        { path: `/totem/${currentUser?.estabelecimentoId || 'loja'}`, title: '🚀 Lançar Totem', sub: 'Abre o app de Autoatendimento', icon: <IoDesktopOutline />, cor: 'yellow', adminOnly: true },
+        { path: `/totem/${estabelecimentoIdPrincipal || 'loja'}`, title: '🚀 Lançar Totem', sub: 'Abre o app de Autoatendimento', icon: <IoDesktopOutline />, cor: 'yellow', adminOnly: true },
       ]
     },
     {
       id: "cardapio",
-      title: "🍔 Cardápio & Estoque",
+      title: isVarejo ? "🛒 Catálogo & Estoque" : "🍔 Cardápio & Estoque",
       description: "Gestão do que você vende",
       items: [
-        { path: '/admin/gerenciar-cardapio', title: 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true },
-        { path: '/admin/ordenar-categorias', title: 'Categorias', sub: 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true },
+        { path: '/admin/gerenciar-cardapio', title: isVarejo ? 'Catálogo Digital' : 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true },
+        { path: '/admin/ordenar-categorias', title: 'Categorias', sub: isVarejo ? 'Ordem de exibição do catálogo' : 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true },
         { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e e atualize', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true },
         { path: '/admin/insumos', title: 'Gestão de Insumos', sub: 'Matérias-primas e ficha técnica', icon: <IoFlaskOutline />, cor: 'purple', adminOnly: true },
       ]
@@ -119,8 +122,8 @@ const AdminDashboard = () => {
         { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
         { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
-        { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, garçons, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
-        { path: '/admin/auditoria-mesas', title: 'Auditoria de Mesas', sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true },
+        { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, salários, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
+        ...(isVarejo ? [] : [{ path: '/admin/auditoria-mesas', title: 'Auditoria de Mesas', sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true }]),
         { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
       ]
     },
@@ -129,8 +132,8 @@ const AdminDashboard = () => {
       title: "👤 Equipe e Atendimento",
       description: "Tudo sobre quem trabalha com você",
       items: [
-        { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: 'Gerencie garçons e permissões', icon: <FaUsers />, cor: 'indigo', adminOnly: true },
-        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: 'Performance de garçons', icon: <IoStatsChart />, cor: 'amber', perm: 'relatorios' },
+        { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: isVarejo ? 'Gerencie vendedores e permissões' : 'Gerencie garçons e permissões', icon: <FaUsers />, cor: 'indigo', adminOnly: true },
+        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: isVarejo ? 'Performance de vendedores' : 'Performance de garçons', icon: <IoStatsChart />, cor: 'amber', perm: 'relatorios' },
         { path: '/admin/avaliacoes', title: 'Avaliações', sub: 'Responder reviews dos clientes', icon: <IoStatsChart />, cor: 'yellow', adminOnly: true },
       ]
     },
@@ -150,8 +153,8 @@ const AdminDashboard = () => {
       title: "🤖 Robôs",
       description: "Peça ajuda à inteligência",
       items: [
-        { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: 'Pedido automático no Zap', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
-        { path: '/admin/bot-pedidos', title: 'Copilot IA', sub: 'Assistente IA fecha pedidos', icon: <IoMegaphoneOutline />, cor: 'teal', adminOnly: true },
+        { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: isVarejo ? 'Venda automática no Zap' : 'Pedido automático no Zap', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
+        { path: '/admin/bot-pedidos', title: 'Copilot IA', sub: isVarejo ? 'Assistente IA fecha vendas' : 'Assistente IA fecha pedidos', icon: <IoMegaphoneOutline />, cor: 'teal', adminOnly: true },
       ]
     },
     {

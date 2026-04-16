@@ -91,8 +91,8 @@ const EntregadorCard = ({ entregador, onEdit, onDelete, onToggleStatus }) => (
 );
 
 function AdminEntregadores() {
-  const { estabelecimentosGerenciados } = useAuth();
-  const estabelecimentoId = estabelecimentosGerenciados?.[0];
+  const { estabelecimentosGerenciados , estabelecimentoIdPrincipal } = useAuth();
+  const estabelecimentoId = estabelecimentoIdPrincipal;
 
   const [entregadores, setEntregadores] = useState([]);
   const [loading, setLoading] = useState(true);

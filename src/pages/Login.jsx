@@ -8,7 +8,7 @@ import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase'; 
 
 export default function LoginPage() {
-  const { currentUser, userData, authChecked } = useAuth();
+  const { currentUser, userData, authChecked, selectedEstabelecimentoId } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const auth = getAuth();
@@ -59,6 +59,12 @@ export default function LoginPage() {
         return;
       }
 
+      // Redireciona para tela de seleção SE tiver mais de 1 estabelecimento e não tiver escolhido nenhum
+      if (userData.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 1 && !selectedEstabelecimentoId) {
+          navigate('/selecionar-estabelecimento', { replace: true });
+          return;
+      }
+
       // 4. Roteamento Padrão (A ordem aqui define a prioridade se ele tiver 2 cargos)
       if (userData.isMasterAdmin) {
         navigate('/master-dashboard', { replace: true });
@@ -80,7 +86,7 @@ export default function LoginPage() {
       }
       // Se não for nenhum (cliente comum), fica na Home.
     }
-  }, [authChecked, userData, navigate]);
+  }, [authChecked, userData, navigate, selectedEstabelecimentoId]);
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoadingLocal(true);

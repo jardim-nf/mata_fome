@@ -9,7 +9,7 @@ import { FaArrowLeft, FaWhatsapp, FaEnvelopeOpenText, FaUsers, FaCheckCircle, Fa
 import { toast } from 'react-toastify';
 
 function ClientManagement() {
-    const { currentUser, userClaims } = useAuth();
+    const { currentUser, userClaims , estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate();
 
     const [message, setMessage] = useState('');
@@ -62,15 +62,12 @@ function ClientManagement() {
         }
     }, [estabelecimentoId]);
 
-    // 🔧 EXTRAIR ESTABELECIMENTO DO TOKEN
+    // 🔧 EXTRAIR ESTABELECIMENTO
     const extractEstabelecimentoFromToken = useCallback(async () => {
         if (!currentUser) return null;
 
         try {
-            const tokenResult = await currentUser.getIdTokenResult(true);
-            const claims = tokenResult.claims;
-            
-            const estabelecimentoId = claims.estabelecimentosGerenciados?.[0];
+            const estabelecimentoId = estabelecimentoIdPrincipal;
             const estabelecimentoNome = currentUser?.estabelecimentoNome || 'Seu Estabelecimento';
             
             console.log('🏪 Estabelecimento extraído:', estabelecimentoId);
@@ -80,7 +77,7 @@ function ClientManagement() {
             console.error('❌ Erro ao extrair token:', error);
             return null;
         }
-    }, [currentUser]);
+    }, [currentUser, estabelecimentoIdPrincipal]);
 
     // 🎯 INICIALIZAR ESTABELECIMENTO
     const initializeEstabelecimento = useCallback(async () => {

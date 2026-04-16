@@ -215,6 +215,25 @@ function AdminEstabelecimentoCadastro() {
                             </svg>
                         }
                     >
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6 border-b border-gray-100 mb-6">
+                            <div className="space-y-2">
+                                <label htmlFor="tipoNegocio" className="block text-sm font-semibold text-gray-700">
+                                    Tipo de Negócio <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    id="tipoNegocio" 
+                                    name="tipoNegocio" 
+                                    value={formData.tipoNegocio || 'restaurante'} 
+                                    onChange={handleInputChange}
+                                    className="w-full rounded-xl border-gray-300 bg-gray-50 px-4 py-3 text-gray-800 transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 focus:shadow-lg border-0"
+                                >
+                                    <option value="restaurante">Restaurante / Delivery de Comida</option>
+                                    <option value="varejo">Varejo / Loja de Material (Multiprojetos)</option>
+                                </select>
+                                <p className="text-xs text-gray-500">Define quais módulos serão ativados (ex: Oculta Salão para Varejo)</p>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <label htmlFor="adminUID" className="block text-sm font-semibold text-gray-700">

@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 function AuthRedirector({ children }) {
     // Esses hooks AGORA estão dentro do contexto do Router
-    const { currentUser, userData, loading } = useAuth();
+    const { currentUser, userData, loading , estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate(); 
     const location = useLocation(); 
 
@@ -21,7 +21,7 @@ function AuthRedirector({ children }) {
                 console.log("REDIR HOOK: Redirecionando para Master Dashboard.");
                 navigate('/master-dashboard', { replace: true }); 
             } else if (userData.isAdmin) {
-                const estabId = userData.estabelecimentosGerenciados?.[0]; // Pega o primeiro ID
+                const estabId = userData.estabelecimentoIdPrincipal; // Pega o primeiro ID
                 
                 if (estabId) {
                     console.log(`REDIR HOOK: Redirecionando para Cardápio de Estabelecimento: ${estabId}`);
