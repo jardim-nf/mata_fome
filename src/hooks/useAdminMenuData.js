@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { uploadFile, deleteFileByUrl } from '../utils/firebaseStorageService';
 import { departamentoFiscalService } from '../services/departamentoFiscalService';
 
-const normalizeText = (text) => 
+const normalizeText = (text) =>  
     text?.toString()
       .toLowerCase()
       .trim()
@@ -19,6 +19,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
     const [menuItems, setMenuItems] = useState([]);
     const [categories, setCategories] = useState([]);
     const [departamentosFiscais, setDepartamentosFiscais] = useState([]);
+    const [insumosDisponiveis, setInsumosDisponiveis] = useState([]);
     const [loading, setLoading] = useState(true);
     
     // UI state that belongs in data layer for search/filter and form
@@ -31,7 +32,8 @@ export function useAdminMenuData(primeiroEstabelecimento) {
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({
         nome: '', descricao: '', categoria: '', codigoBarras: '', 
-        imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' }
+        imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
+        fichaTecnica: []
     });
     const [itemImage, setItemImage] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
@@ -86,6 +88,19 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 
                 setDepartamentosFiscais(dFs);
                 setMenuItems(resultadosItens.flat());
+
+                // Buscar Insumos
+                let insumosData = [];
+                try {
+                    const insumosRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'insumos');
+                    const insumosSnap = await getDocs(query(insumosRef));
+                    insumosData = insumosSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.ativo !== false);
+                } catch (e) {
+                    console.error("Erro ao carregar insumos:", e);
+                }
+
+                if (!isMounted) return;
+                setInsumosDisponiveis(insumosData);
                 setLoading(false);
             } catch (error) {
                 console.error("Erro ao carregar menu gerencial:", error);
@@ -146,14 +161,15 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             setFormData({
                 nome: item.nome || '', descricao: item.descricao || '', categoria: item.categoria || '',
                 codigoBarras: item.codigoBarras || '', imageUrl: item.imageUrl || '',
-                ativo: item.ativo !== false, fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' } 
+                ativo: item.ativo !== false, fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
+                fichaTecnica: Array.isArray(item.fichaTecnica) ? item.fichaTecnica : []
             });
             setTermoNcm(item.fiscal?.ncm || '');
             setVariacoes(item.variacoes?.length ? item.variacoes.map(v => ({...v, preco: v.preco.toString()})) : [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: item.preco.toString(), ativo: true, estoque: item.estoque || 0, custo: item.custo || 0 }]);
             setImagePreview(item.imageUrl || '');
         } else {
             setEditingItem(null);
-            setFormData({ nome: '', descricao: '', categoria: '', codigoBarras: '', imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' } });
+            setFormData({ nome: '', descricao: '', categoria: '', codigoBarras: '', imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' }, fichaTecnica: [] });
             setVariacoes([{ id: `v-${Date.now()}`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }]);
             setImagePreview(''); setTermoNcm('');
         }
@@ -207,6 +223,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 preco: Math.min(...currentVariacoes.map(v => Number(v.preco))),
                 custo: custoPadrao,
                 custo_estimado: custoPadrao,
+                fichaTecnica: currentFormData.fichaTecnica || [],
                 atualizadoEm: new Date()
             };
 
@@ -275,14 +292,56 @@ export function useAdminMenuData(primeiroEstabelecimento) {
         };
     }, [menuItems]);
 
+    // FICHA TÉCNICA helpers
+    const adicionarInsumoFicha = (insumoId) => {
+        const insumo = insumosDisponiveis.find(i => i.id === insumoId);
+        if (!insumo) return;
+        // Verificar se já existe
+        if (formData.fichaTecnica.some(f => f.insumoId === insumoId)) {
+            toast.warning('Este insumo já está na ficha técnica.');
+            return;
+        }
+        setFormData(prev => ({
+            ...prev,
+            fichaTecnica: [...prev.fichaTecnica, {
+                insumoId: insumo.id,
+                nomeInsumo: insumo.nome,
+                unidade: insumo.unidade,
+                custoUnitario: Number(insumo.custoUnitario) || 0,
+                quantidade: 0
+            }]
+        }));
+    };
+
+    const removerInsumoFicha = (insumoId) => {
+        setFormData(prev => ({
+            ...prev,
+            fichaTecnica: prev.fichaTecnica.filter(f => f.insumoId !== insumoId)
+        }));
+    };
+
+    const atualizarQuantidadeFicha = (insumoId, quantidade) => {
+        setFormData(prev => ({
+            ...prev,
+            fichaTecnica: prev.fichaTecnica.map(f =>
+                f.insumoId === insumoId ? { ...f, quantidade: Number(quantidade) || 0 } : f
+            )
+        }));
+    };
+
+    const custoFichaTecnica = useMemo(() => {
+        return formData.fichaTecnica.reduce((acc, f) => acc + (f.quantidade * f.custoUnitario), 0);
+    }, [formData.fichaTecnica]);
+
     return {
-        menuItems, categories, departamentosFiscais, loading, filteredAndSortedItems, stockStatistics,
+        menuItems, categories, departamentosFiscais, insumosDisponiveis, loading, filteredAndSortedItems, stockStatistics,
         searchTerm, setSearchTerm, selectedCategory, setSelectedCategory, stockFilter, setStockFilter,
         showItemForm, setShowItemForm, editingItem, setEditingItem, formData, setFormData,
         itemImage, setItemImage, imagePreview, setImagePreview, formLoading,
         ncmResultados, setNcmResultados, pesquisandoNcm, setPesquisandoNcm, termoNcm, setTermoNcm, 
         variacoes, setVariacoes, uploading3DItemId,
         adicionarVariacao, atualizarVariacao, removerVariacao, buscarNcm,
-        openItemForm, closeItemForm, handleSaveItem, handleDeleteItem, toggleItemStatus, handleUpload3D
+        openItemForm, closeItemForm, handleSaveItem, handleDeleteItem, toggleItemStatus, handleUpload3D,
+        adicionarInsumoFicha, removerInsumoFicha, atualizarQuantidadeFicha, custoFichaTecnica
     };
 }

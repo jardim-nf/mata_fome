@@ -30,6 +30,7 @@ const MedalBadge = ({ position }) => {
 function RankingFuncionarios() {
   const { userData } = useAuth();
   const [pedidos, setPedidos] = useState([]);
+  const [vendas, setVendas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState('7');
   const [tab, setTab] = useState('garcons');
@@ -42,12 +43,25 @@ function RankingFuncionarios() {
       setLoading(true);
       try {
         const daysAgo = subDays(new Date(), parseInt(periodo));
+        
+        // Busca pedidos (delivery, balcão, etc)
         const pedidosSnap = await getDocs(collection(db, 'estabelecimentos', estabId, 'pedidos'));
-        const lista = pedidosSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => {
+        const listaPedidos = pedidosSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => {
           const dt = p.createdAt?.toDate?.() || (p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000) : null);
           return dt && dt >= daysAgo && p.status !== 'cancelado';
         });
-        setPedidos(lista);
+        setPedidos(listaPedidos);
+
+        // Busca vendas (fechamento de mesa no salão)
+        const vendasSnap = await getDocs(collection(db, 'vendas'));
+        const listaVendas = vendasSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(v => {
+          if (v.estabelecimentoId !== estabId) return false;
+          const dt = v.criadoEm?.toDate?.() || v.createdAt?.toDate?.() || 
+                     (v.criadoEm?.seconds ? new Date(v.criadoEm.seconds * 1000) : null) ||
+                     (v.createdAt?.seconds ? new Date(v.createdAt.seconds * 1000) : null);
+          return dt && dt >= daysAgo && v.status !== 'cancelado';
+        });
+        setVendas(listaVendas);
       } catch (e) {
         console.error(e);
       }
@@ -56,20 +70,43 @@ function RankingFuncionarios() {
     fetchData();
   }, [estabId, periodo]);
 
-  // GARÇONS RANKING
+  // GARÇONS RANKING — busca em todos os campos possíveis
   const garconRanking = useMemo(() => {
     const map = {};
     pedidos.forEach(p => {
-      const garcom = p.garcomNome || p.atendente || p.funcionario;
-      if (!garcom) return;
+      // 1) Campo direto no pedido
+      const garcomPedido = p.garcomNome || p.atendente || p.funcionario || p.responsavel || null;
+      
+      if (garcomPedido && garcomPedido !== 'Garçom') {
+        if (!map[garcomPedido]) map[garcomPedido] = { nome: garcomPedido, pedidos: 0, faturamento: 0, ticketMedio: 0 };
+        map[garcomPedido].pedidos++;
+        map[garcomPedido].faturamento += Number(p.totalFinal || p.total) || 0;
+      } else {
+        // 2) Busca dentro dos itens (adicionadoPor) — campo usado no Salão
+        const itens = p.itens || p.pedidos || [];
+        const garcomDoItem = itens.find(i => i.adicionadoPorNome || i.adicionadoPor);
+        const nomeGarcom = garcomDoItem?.adicionadoPorNome || garcomDoItem?.adicionadoPor;
+        if (nomeGarcom && nomeGarcom !== 'Garçom') {
+          if (!map[nomeGarcom]) map[nomeGarcom] = { nome: nomeGarcom, pedidos: 0, faturamento: 0, ticketMedio: 0 };
+          map[nomeGarcom].pedidos++;
+          map[nomeGarcom].faturamento += Number(p.totalFinal || p.total) || 0;
+        }
+      }
+    });
+
+    // Também processa vendas (fechamentos de mesa do salão)
+    vendas.forEach(v => {
+      const garcom = v.funcionario || v.responsavel || v.criadoPorNome || null;
+      if (!garcom || garcom === 'Garçom') return;
       if (!map[garcom]) map[garcom] = { nome: garcom, pedidos: 0, faturamento: 0, ticketMedio: 0 };
       map[garcom].pedidos++;
-      map[garcom].faturamento += Number(p.totalFinal) || 0;
+      map[garcom].faturamento += Number(v.total || v.totalFinal) || 0;
     });
+
     return Object.values(map)
       .map(g => ({ ...g, ticketMedio: g.pedidos > 0 ? g.faturamento / g.pedidos : 0 }))
       .sort((a, b) => b.faturamento - a.faturamento);
-  }, [pedidos]);
+  }, [pedidos, vendas]);
 
   // MOTOBOYS RANKING
   const motoboyRanking = useMemo(() => {
@@ -86,13 +123,21 @@ function RankingFuncionarios() {
       .sort((a, b) => b.entregas - a.entregas);
   }, [pedidos]);
 
-  // STATS
-  const stats = useMemo(() => ({
-    totalPedidos: pedidos.length,
-    totalFaturamento: pedidos.reduce((s, p) => s + (Number(p.totalFinal) || 0), 0),
-    totalGarcons: garconRanking.length,
-    totalMotoboys: motoboyRanking.length,
-  }), [pedidos, garconRanking, motoboyRanking]);
+  // STATS — derivados dos rankings para garantir consistência
+  const stats = useMemo(() => {
+    const garconPedidos = garconRanking.reduce((s, g) => s + g.pedidos, 0);
+    const garconFat = garconRanking.reduce((s, g) => s + g.faturamento, 0);
+    const motoboyEntregas = motoboyRanking.reduce((s, m) => s + m.entregas, 0);
+    const motoboyTaxas = motoboyRanking.reduce((s, m) => s + m.taxasTotal, 0);
+    return {
+      garconPedidos,
+      garconFat,
+      motoboyEntregas,
+      motoboyTaxas,
+      totalGarcons: garconRanking.length,
+      totalMotoboys: motoboyRanking.length,
+    };
+  }, [garconRanking, motoboyRanking]);
 
   const activeRanking = tab === 'garcons' ? garconRanking : motoboyRanking;
 
@@ -124,22 +169,24 @@ function RankingFuncionarios() {
         </div>
 
         {/* STATS */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Pedidos</p>
-            <p className="text-2xl font-black text-gray-900">{stats.totalPedidos}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-blue-500 border border-gray-100 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Garçons Pedidos</p>
+            <p className="text-2xl font-black text-blue-600">{stats.garconPedidos}</p>
+            <p className="text-[10px] text-gray-400 font-medium mt-1">{stats.totalGarcons} garçon(s)</p>
           </div>
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Faturamento</p>
-            <p className="text-2xl font-black text-emerald-600">R$ {stats.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-emerald-500 border border-gray-100 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Garçons Faturamento</p>
+            <p className="text-2xl font-black text-emerald-600">R$ {stats.garconFat.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
           </div>
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Garçons</p>
-            <p className="text-2xl font-black text-blue-600">{stats.totalGarcons}</p>
+          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-purple-500 border border-gray-100 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Motoboys Entregas</p>
+            <p className="text-2xl font-black text-purple-600">{stats.motoboyEntregas}</p>
+            <p className="text-[10px] text-gray-400 font-medium mt-1">{stats.totalMotoboys} motoboy(s)</p>
           </div>
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Motoboys</p>
-            <p className="text-2xl font-black text-purple-600">{stats.totalMotoboys}</p>
+          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-amber-500 border border-gray-100 shadow-sm">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Motoboys Taxas</p>
+            <p className="text-2xl font-black text-amber-600">R$ {stats.motoboyTaxas.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
           </div>
         </div>
 

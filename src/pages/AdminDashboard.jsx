@@ -11,7 +11,8 @@ import {
   IoStorefront, IoRestaurant, IoDesktopOutline, IoTicketOutline,
   IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
-  IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline
+  IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
+  IoFlaskOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt } from 'react-icons/fa'; 
 
@@ -98,6 +99,7 @@ const AdminDashboard = () => {
         { path: '/admin/gerenciar-cardapio', title: 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true },
         { path: '/admin/ordenar-categorias', title: 'Categorias', sub: 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true },
         { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e e atualize', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/insumos', title: 'Gestão de Insumos', sub: 'Matérias-primas e ficha técnica', icon: <IoFlaskOutline />, cor: 'purple', adminOnly: true },
       ]
     },
     {
@@ -107,7 +109,6 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo', adminOnly: true },
         { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber', adminOnly: true },
-        { path: '/admin/heatmap', title: 'Mapa de Calor (Inteligência)', sub: 'Zonas de maior venda', icon: <FaMapMarkedAlt />, cor: 'orange', adminOnly: true },
       ]
     },
     {
@@ -119,6 +120,7 @@ const AdminDashboard = () => {
         { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
         { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, garçons, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
+        { path: '/admin/auditoria-mesas', title: 'Auditoria de Mesas', sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true },
         { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
       ]
     },
@@ -184,20 +186,41 @@ const AdminDashboard = () => {
 
         {/* TOP BAR — compacto */}
         <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-black text-slate-800 tracking-tight">{saudacao}, {nomeUsuario} 👋</h1>
-            <p className="text-xs text-slate-400 font-medium">
-              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                {saudacao}, {nomeUsuario} 👋
+                {currentUser?.isMasterAdmin && (
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
+                    ⚡ MASTER
+                  </span>
+                )}
+              </h1>
+              <p className="text-xs text-slate-400 font-medium">
+                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => { logout(); navigate('/'); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 font-bold text-sm transition-all duration-200 shrink-0"
-            title="Sair"
-          >
-            <IoLogOutOutline className="text-lg" />
-            <span className="hidden sm:inline">Sair</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {currentUser?.isMasterAdmin && (
+              <button
+                onClick={() => navigate('/master')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100 font-bold text-sm transition-all duration-200 shrink-0"
+                title="Painel Master"
+              >
+                <IoStatsChart className="text-lg" />
+                <span className="hidden sm:inline">Painel Master</span>
+              </button>
+            )}
+            <button
+              onClick={() => { logout(); navigate('/'); }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 font-bold text-sm transition-all duration-200 shrink-0"
+              title="Sair"
+            >
+              <IoLogOutOutline className="text-lg" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          </div>
         </div>
 
         {/* AVISO DE MENSALIDADE E CERTIFICADO */}

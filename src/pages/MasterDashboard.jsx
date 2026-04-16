@@ -86,6 +86,7 @@ function MasterDashboard() {
       badgeColor: 'bg-zinc-800',
       modulos: [
         { to: '/master/usuarios', title: 'Usuários Ativos', icon: <FaUsers />, colorStyle: 'text-blue-600 bg-blue-50 border-blue-100 group-hover:bg-blue-500 group-hover:text-white' },
+        { to: '/admin/auditoria-mesas', title: 'Auditoria Mesas', icon: <FaShieldAlt />, colorStyle: 'text-indigo-600 bg-indigo-50 border-indigo-100 group-hover:bg-indigo-500 group-hover:text-white' },
         { to: '/master/importar-cardapio', title: 'ImportCardápio', icon: <FaFileUpload />, colorStyle: 'text-teal-600 bg-teal-50 border-teal-100 group-hover:bg-teal-500 group-hover:text-white' },
         { to: '/master/migrador-universal', title: 'Migrador Dados', icon: <FaSync />, colorStyle: 'text-lime-600 bg-lime-50 border-lime-100 group-hover:bg-lime-500 group-hover:text-white' },
         { to: '/master/associar-imagens', title: 'Banco Imagens', icon: <FaImages />, colorStyle: 'text-yellow-600 bg-yellow-50 border-yellow-100 group-hover:bg-yellow-500 group-hover:text-white' },

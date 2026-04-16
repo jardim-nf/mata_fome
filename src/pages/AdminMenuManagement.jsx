@@ -9,7 +9,8 @@ import Pagination from '../components/Pagination';
 import { useAdminMenuData } from '../hooks/useAdminMenuData';
 import {
     IoAddCircleOutline, IoSearch, IoClose, IoImageOutline, IoCheckmarkCircle,
-    IoAlertCircle, IoCube, IoCash, IoPricetag, IoList, IoEyeOff, IoGrid, IoMenu, IoBarcodeOutline
+    IoAlertCircle, IoCube, IoCash, IoPricetag, IoList, IoEyeOff, IoGrid, IoMenu, IoBarcodeOutline,
+    IoFlask, IoTrashOutline
 } from 'react-icons/io5';
 import BackButton from '../components/BackButton';
 
@@ -381,6 +382,97 @@ function AdminMenuManagement() {
                               </button>
                           )}
                       </div>
+
+                      {/* Ficha Técnica (Insumos) */}
+                      {menuParams.insumosDisponiveis.length > 0 && (
+                      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/50 space-y-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-50 pb-4 gap-4">
+                              <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600"><IoFlask size={20}/></div>
+                                  <div>
+                                      <h3 className="text-xl font-bold text-slate-800">Ficha Técnica</h3>
+                                      <p className="text-xs text-slate-400">Insumos consumidos a cada venda deste produto</p>
+                                  </div>
+                              </div>
+                              {menuParams.formData.fichaTecnica.length > 0 && (
+                                  <div className="bg-violet-50 px-4 py-2 rounded-xl border border-violet-100">
+                                      <p className="text-[10px] font-extrabold text-violet-500 uppercase tracking-wider">Custo pela ficha</p>
+                                      <p className="text-lg font-black text-violet-700">R$ {menuParams.custoFichaTecnica.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                  </div>
+                              )}
+                          </div>
+
+                          {/* Seletor de insumo */}
+                          <div className="flex items-end gap-3">
+                              <div className="flex-1">
+                                  <label className="text-[11px] font-extrabold text-violet-600 mb-2 block uppercase tracking-wider">Adicionar Insumo</label>
+                                  <select
+                                      id="seletor-insumo-ficha"
+                                      defaultValue=""
+                                      className="w-full p-4 bg-violet-50/50 border border-violet-200 rounded-xl text-sm font-bold text-violet-800 outline-none focus:ring-4 focus:ring-violet-500/10 cursor-pointer"
+                                  >
+                                      <option value="" disabled>Selecione um insumo...</option>
+                                      {menuParams.insumosDisponiveis
+                                          .filter(i => !menuParams.formData.fichaTecnica.some(f => f.insumoId === i.id))
+                                          .map(i => <option key={i.id} value={i.id}>{i.nome} ({i.unidade})</option>)
+                                      }
+                                  </select>
+                              </div>
+                              <button
+                                  type="button"
+                                  onClick={() => {
+                                      const select = document.getElementById('seletor-insumo-ficha');
+                                      if (select.value) {
+                                          menuParams.adicionarInsumoFicha(select.value);
+                                          select.value = '';
+                                      }
+                                  }}
+                                  className="p-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-all shadow-lg shadow-violet-500/20"
+                              >
+                                  <IoAddCircleOutline size={20} />
+                              </button>
+                          </div>
+
+                          {/* Lista de insumos na ficha */}
+                          {menuParams.formData.fichaTecnica.length > 0 ? (
+                              <div className="space-y-3">
+                                  {menuParams.formData.fichaTecnica.map((ficha) => (
+                                      <div key={ficha.insumoId} className="bg-slate-50/50 p-4 rounded-2xl border border-slate-200 relative group transition-all hover:bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                          <button type="button" onClick={() => menuParams.removerInsumoFicha(ficha.insumoId)}
+                                              className="absolute -top-2 -right-2 bg-white border border-red-100 text-red-500 p-1.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 z-10">
+                                              <IoTrashOutline size={14}/>
+                                          </button>
+                                          <div className="flex-1 min-w-0">
+                                              <p className="font-bold text-slate-800 text-sm truncate">{ficha.nomeInsumo}</p>
+                                              <p className="text-[10px] text-slate-400">Custo: R$ {ficha.custoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}/{ficha.unidade}</p>
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                              <div>
+                                                  <label className="text-[10px] font-extrabold text-slate-400 mb-1 block uppercase tracking-wider">Qtd por venda</label>
+                                                  <div className="flex items-center gap-1">
+                                                      <input type="number" step="0.01" min="0" value={ficha.quantidade}
+                                                          onChange={e => menuParams.atualizarQuantidadeFicha(ficha.insumoId, e.target.value)}
+                                                          className="w-24 p-3 bg-white border border-violet-200 rounded-xl text-sm font-bold text-violet-800 outline-none focus:ring-2 focus:ring-violet-500/20 text-center" />
+                                                      <span className="text-xs font-bold text-slate-500">{ficha.unidade}</span>
+                                                  </div>
+                                              </div>
+                                              <div className="text-right">
+                                                  <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Subtotal</p>
+                                                  <p className="text-sm font-black text-slate-700">R$ {(ficha.quantidade * ficha.custoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          ) : (
+                              <div className="text-center py-8 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
+                                  <IoFlask className="text-4xl text-slate-300 mx-auto mb-2" />
+                                  <p className="text-sm text-slate-400 font-medium">Nenhum insumo vinculado.</p>
+                                  <p className="text-xs text-slate-300">A baixa de estoque será 1:1 no produto.</p>
+                              </div>
+                          )}
+                      </div>
+                      )}
 
                       {/* Fiscal e Outros (Grid) */}
                       <div className="grid lg:grid-cols-2 gap-8">

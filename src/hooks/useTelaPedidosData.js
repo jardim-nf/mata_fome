@@ -445,19 +445,24 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
 
     const dispararImpressao = async (setor, onSucesso = () => {}) => {
         const toastId = toast.loading("Enviando sinal para o Caixa...");
+        const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
         try {
             if (pedidoRecemEnviadoId) {
                 await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', pedidoRecemEnviadoId), {
                     solicitarImpressao: true,
-                    setorImpressao: setor || 'tudo'
+                    setorImpressao: setor || 'tudo',
+                    impressaoSolicitadaPor: nomeGarcom,
+                    impressaoSolicitadaEm: serverTimestamp()
                 });
             } else {
                 await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
                     solicitarImpressaoConferencia: true,
-                    setorImpressao: setor || 'tudo'
+                    setorImpressao: setor || 'tudo',
+                    impressaoSolicitadaPor: nomeGarcom,
+                    impressaoSolicitadaEm: serverTimestamp()
                 });
             }
-            toast.update(toastId, { render: `Impressão enviada com sucesso! ${setor ? `(${setor})` : ''}`, type: "success", isLoading: false, autoClose: 2000 });
+            toast.update(toastId, { render: `Impressão enviada com sucesso! ${setor ? `(${setor})` : ''} — ${nomeGarcom}`, type: "success", isLoading: false, autoClose: 2000 });
             onSucesso();
         } catch (error) {
             toast.update(toastId, { render: "Erro ao comunicar com o Caixa.", type: "error", isLoading: false, autoClose: 3000 });
@@ -479,6 +484,8 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 idPedidoGerado = `pedido_${mesaId}_${Date.now()}`;
                 const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoGerado);
                 
+                const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
+                
                 batch.set(pedidoRef, {
                     id: idPedidoGerado, 
                     mesaId: mesaId, 
@@ -490,7 +497,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                     total: itensNovos.reduce((a,i) => a + (i.preco * i.quantidade), 0), 
                     dataPedido: serverTimestamp(), 
                     createdAt: serverTimestamp(), 
-                    source: 'salao'
+                    source: 'salao',
+                    funcionario: nomeGarcom,
+                    enviadoPor: nomeGarcom
                 });
 
                 const todosItensAtualizados = resumoPedido.map(i => {

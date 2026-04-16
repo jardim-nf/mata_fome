@@ -190,18 +190,27 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     };
 
     const formatarPagamento = (p) => {
-        const metodo = typeof p === 'string' ? p : (p.formaPagamento || p.metodoPagamento || p.paymentMethod || '');
+        const metodo = typeof p === 'string' 
+            ? p 
+            : (
+                p.formaPagamento || 
+                p.metodoPagamento || 
+                p.pagamento?.formaPagamento || 
+                p.pagamento?.metodoPagamento || 
+                p.paymentMethod || 
+                ''
+              );
         const metodoString = String(metodo).toLowerCase().trim();
 
         switch (metodoString) {
             case 'dinheiro': case 'cash': case '4': return 'DINHEIRO';
-            case 'pix': case '1': return 'PIX';
+            case 'pix': case 'pix_manual': case '1': return 'PIX';
             case 'cartao': case 'card': return 'CARTÃO (MÁQUINA)';
             case 'credit_card': case 'credito': case 'cartao_credito': case '2': return 'CRÉDITO (MÁQUINA)';
             case 'debit_card': case 'debito': case 'cartao_debito': case '3': return 'DÉBITO (MÁQUINA)';
             case 'online': return 'PAGO ONLINE';
             case 'vr': case 'vale_refeicao': case 'voucher': return 'VALE REFEIÇÃO';
-            default: return metodoString ? metodoString.toUpperCase() : 'A COMBINAR';
+            default: return metodoString ? metodoString.toUpperCase().replace('_', ' ') : 'A COMBINAR';
         }
     };
 
