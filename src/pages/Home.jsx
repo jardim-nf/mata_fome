@@ -10,6 +10,7 @@ import {
   HeroSection,
   HowItWorks,
   BenefitsSection,
+  FeaturesCarousel,
   LoginModal,
   EstabelecimentosGrid,
   Footer,
@@ -153,6 +154,9 @@ function Home() {
 
       {/* Como Funciona */}
       <HowItWorks />
+
+      {/* 16+ Funcionalidades Diferenciais */}
+      <FeaturesCarousel />
 
       {/* Benefícios */}
       <BenefitsSection />

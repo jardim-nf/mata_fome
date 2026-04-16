@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, LayoutDashboard, DollarSign, CheckCircle2 } from 'lucide-react';
 import AnimatedSection from './AnimatedSection';
 
@@ -50,6 +50,13 @@ const commissionData = [
 
 const BenefitsSection = () => {
   const [activeTab, setActiveTab] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveTab((prev) => (prev + 1) % benefits.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
   const activeBenefit = benefits[activeTab];
 
   return (
