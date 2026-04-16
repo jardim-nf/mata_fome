@@ -27,14 +27,14 @@ const formatarReal = (valor) => {
 };
 
 export default function ControleSalao() {
-    const { userData, user, currentUser } = useAuth();
+    const { userData, user, currentUser, estabelecimentoIdPrincipal } = useAuth();
     const rawRole = String(userData?.role || userData?.cargo || 'admin').toLowerCase().trim();
     const isGarcom = rawRole.includes('garcom') || rawRole.includes('garçom') || rawRole.includes('atendente');
     const { setActions, clearActions } = useHeader();
     const navigate = useNavigate();
 
     // Injeção do Custom Hook
-    const salaoData = useControleSalaoData(userData, user, currentUser);
+    const salaoData = useControleSalaoData(userData, user, currentUser, estabelecimentoIdPrincipal);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);

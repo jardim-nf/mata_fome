@@ -9,13 +9,13 @@ import { useNavigate } from 'react-router-dom';
 import { useSalaoSync } from './useSalaoSync';
 import { useSalaoNfce } from './useSalaoNfce';
 
-export function useControleSalaoData(userData, user, currentUser) {
+export function useControleSalaoData(userData, user, currentUser, estabelecimentoIdPrincipal) {
     const navigate = useNavigate();
     const usuarioLogado = user || currentUser;
 
     const estabelecimentoId = useMemo(() => {
-        return userData?.estabelecimentoIdPrincipal || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
-    }, [userData]);
+        return estabelecimentoIdPrincipal || userData?.estabelecimentoIdPrincipal || userData?.estabelecimentoId || userData?.idEstabelecimento || null;
+    }, [estabelecimentoIdPrincipal, userData]);
 
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
     const [mesas, setMesas] = useState([]);
