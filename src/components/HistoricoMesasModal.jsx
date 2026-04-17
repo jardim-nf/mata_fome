@@ -130,8 +130,8 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
                     <div className="flex items-center gap-3">
                         <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><IoRestaurant size={24} /></div>
@@ -164,8 +164,8 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
                             <p className="font-medium text-lg">Nenhum pagamento encontrado.</p>
                         </div>
                     ) : (
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                            <table className="w-full text-left border-collapse">
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+                            <table className="w-full text-left border-collapse min-w-[600px]">
                                 <thead>
                                     <tr className="bg-gray-100/80 text-gray-500 text-xs uppercase tracking-wider">
                                         <th className="p-4 font-bold border-b border-gray-200">Mesa</th>
