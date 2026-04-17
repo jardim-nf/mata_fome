@@ -174,8 +174,8 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-100 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-100 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 
                 {/* CABEÇALHO */}
                 <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50/50 rounded-t-2xl">

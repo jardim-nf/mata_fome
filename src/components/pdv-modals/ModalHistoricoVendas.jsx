@@ -47,8 +47,8 @@ export const ModalHistoricoVendas = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200 no-print">
-            <div className="bg-slate-50 w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200 no-print" onClick={onClose}>
+            <div className="bg-slate-50 w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 
                 {/* HEADER & FILTROS */}
                 <div className="bg-white p-4 sm:p-6 border-b border-slate-200 flex flex-col gap-4 shrink-0">
