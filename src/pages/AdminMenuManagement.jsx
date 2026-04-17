@@ -41,14 +41,17 @@ const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D
 
   const mostrarPrecosVariacoes = () => {
     if (!produto.variacoes || produto.variacoes.length === 0) return <p className="text-2xl font-black text-slate-800">R$ {(Number(produto.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
-    const variacoesAtivas = produto.variacoes.filter(v => v.ativo !== false && v.preco && !isNaN(Number(v.preco)) && Number(v.preco) > 0);
+    const variacoesAtivas = produto.variacoes.filter(v => v.ativo !== false && v.preco !== '' && !isNaN(Number(v.preco)) && Number(v.preco) > 0);
     if (variacoesAtivas.length === 0) return <p className="text-2xl font-black text-slate-300">--</p>;
-    if (variacoesAtivas.length === 1) return <p className="text-2xl font-black text-slate-800">R$ {Number(variacoesAtivas[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    if (variacoesAtivas.length === 1 && variacoesAtivas[0].nome === 'Padrão') return <p className="text-2xl font-black text-slate-800">R$ {Number(variacoesAtivas[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
     const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
     return (
       <div className="flex flex-col">
-        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mb-0.5">A partir de</span>
-        <span className="text-2xl font-black text-slate-800 tracking-tight">R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+          <span className="text-[10px] text-red-500 font-extrabold uppercase tracking-widest">A partir de</span>
+        </div>
+        <span className="text-2xl font-black text-slate-800 tracking-tight hover:text-red-600 transition-colors">R$ {menorPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
       </div>
     );
   };
@@ -195,6 +198,9 @@ function AdminMenuManagement() {
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8 font-sans pb-32">
       <div className="max-w-7xl mx-auto">
+        <div className="mb-6">
+          <BackButton to="/dashboard" />
+        </div>
         
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-10">
             <StatsCard title="Total Itens" value={menuParams.stockStatistics.totalItems} icon={IoList} colorClass="text-blue-600" bgClass="bg-blue-50" />

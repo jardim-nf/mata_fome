@@ -39,7 +39,7 @@ function Layout() {
                 ? 'w-full px-4 sm:px-6 lg:px-8 py-6 md:py-8 transition-all duration-300' 
                 : ''
             }`}> 
-                <div className="flex-1 w-full animate-fadeIn">
+                <div className="flex-1 w-full">
                     <Outlet />
                 </div>
             </main>
