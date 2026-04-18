@@ -10,7 +10,7 @@ import { IoColorPalette, IoBrush, IoText, IoArrowBack, IoSaveOutline } from 'rea
 import { useNavigate } from 'react-router-dom';
 
 const AdminColorSettings = () => {
-  const { userData } = useAuth();
+  const { userData, estabelecimentoIdPrincipal } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,7 +35,7 @@ const AdminColorSettings = () => {
     return userData?.estabelecimentosGerenciados || [];
   }, [userData]);
 
-  const primeiroEstabelecimento = estabelecimentosGerenciados[0];
+  const primeiroEstabelecimento = estabelecimentoIdPrincipal || userData?.estabelecimentoId || estabelecimentosGerenciados[0];
 
   // Carregar Cores Atuais
   useEffect(() => {

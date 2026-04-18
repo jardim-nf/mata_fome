@@ -112,7 +112,7 @@ const OrderCard = ({ item, onViewDetails }) => {
               </span>
             </div>
             <button 
-              onClick={() => onViewDetails(item.id)} 
+              onClick={() => onViewDetails(item.id, item._path)} 
               className="flex items-center gap-2 px-6 py-3 bg-[#1D1D1F] text-white rounded-full text-sm font-bold hover:bg-black transition-colors active:scale-95"
             >
               <FaReceipt /> Resumo
@@ -216,8 +216,8 @@ function ListarPedidosMaster() {
   } = useListarPedidosMasterData({ currentUser, isMasterAdmin });
 
   // Handlers
-  const handleViewDetails = useCallback((orderId) => {
-    navigate(`/master/pedidos/${orderId}`);
+  const handleViewDetails = useCallback((orderId, docPath) => {
+    navigate(`/master/pedidos/${orderId}?p=${encodeURIComponent(docPath || '')}`);
   }, [navigate]);
 
   // DateRangeFilter handlers formatados para a lib Component DateRange

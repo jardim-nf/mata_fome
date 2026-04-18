@@ -29,7 +29,7 @@ export const getDate = (data) => {
   return new Date(t);
 };
 
-export function usePedidoDetalhesMasterData(id, isMasterAdmin, currentUser) {
+export function usePedidoDetalhesMasterData(id, isMasterAdmin, currentUser, docPath) {
     const [pedido, setPedido] = useState(null);
     const [loadingPedido, setLoadingPedido] = useState(true);
     const [updating, setUpdating] = useState(false); 
@@ -46,10 +46,20 @@ export function usePedidoDetalhesMasterData(id, isMasterAdmin, currentUser) {
             let foundEstabId = null;
             let path = null;
 
-            let docSnap = await getDoc(doc(db, 'pedidos', id));
-            if (docSnap.exists()) {
-                foundData = { id: docSnap.id, ...docSnap.data() };
-                path = docSnap.ref;
+            if (docPath) {
+                let snap = await getDoc(doc(db, docPath));
+                if (snap.exists()) {
+                    foundData = { id: snap.id, ...snap.data() };
+                    path = snap.ref;
+                }
+            }
+
+            if (!foundData) {
+                let docSnap = await getDoc(doc(db, 'pedidos', id));
+                if (docSnap.exists()) {
+                    foundData = { id: docSnap.id, ...docSnap.data() };
+                    path = docSnap.ref;
+                }
             }
 
             if (!foundData) {
@@ -94,7 +104,7 @@ export function usePedidoDetalhesMasterData(id, isMasterAdmin, currentUser) {
     useEffect(() => {
         if (!isMasterAdmin || !id) return;
         fetchPedido();
-    }, [id, isMasterAdmin, fetchPedido]);
+    }, [id, isMasterAdmin, fetchPedido, docPath]);
 
     const handleStatusChange = async (newStatus) => {
         if (!window.confirm(`Tem certeza que deseja mudar o status para "${newStatus.toUpperCase()}"?`)) return;

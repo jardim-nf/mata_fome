@@ -1,9 +1,10 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import PromptDialog from '../../components/ui/PromptDialog';
+import ComandaParaImpressao from '../../components/ComandaParaImpressao';
 import { usePedidoDetalhesMasterData, formatId, getDate } from '../../hooks/usePedidoDetalhesMasterData';
 import { 
   FaStore, 
@@ -25,8 +26,16 @@ import {
 const DashboardHeader = ({ navigate, logout }) => (
   <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 h-16 transition-all duration-300">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
-      <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-         <div className="flex items-center gap-1">
+      <div className="flex items-center gap-4">
+        <button 
+           onClick={() => navigate('/master/pedidos')} 
+           className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+           title="Voltar para Monitor"
+        >
+          <FaArrowLeft className="text-gray-600 text-sm" />
+        </button>
+        <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
+        <div className="flex items-center gap-1 cursor-pointer group" onClick={() => navigate('/')}>
             <div className="bg-yellow-400 text-black font-bold p-1 rounded-sm transform -skew-x-12">
                 <FaStore />
             </div>
@@ -49,7 +58,10 @@ const DashboardHeader = ({ navigate, logout }) => (
 function PedidoDetalhesMaster() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
+  
+  const docPath = new URLSearchParams(location.search).get('p');
   
   const {
       pedido,
@@ -66,7 +78,7 @@ function PedidoDetalhesMaster() {
       handleCancelarNfce,
       executarCancelamentoNfce,
       handleVerXmlCancelamento
-  } = usePedidoDetalhesMasterData(id, isMasterAdmin, currentUser);
+  } = usePedidoDetalhesMasterData(id, isMasterAdmin, currentUser, docPath);
 
   const renderStatusBadge = (status) => {
       const s = (status || '').toLowerCase();
@@ -335,6 +347,11 @@ function PedidoDetalhesMaster() {
             </div>
 
         </div>
+      </div>
+      
+      {/* Container invisível na tela normal, mas essencial para gerar o cupom em @media print */}
+      <div className="hidden print:block">
+          <ComandaParaImpressao pedido={pedido} />
       </div>
     </div>
   );

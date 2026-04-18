@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
-import { collectionGroup, collection, getDocs, query, limit } from 'firebase/firestore';
-import { FaArrowLeft, FaUsers, FaBoxOpen, FaPhoneAlt, FaStore, FaClock, FaBolt, FaCrown, FaSignOutAlt, FaSearch } from 'react-icons/fa';
+import { collectionGroup, collection, getDocs, query, limit, doc, updateDoc } from 'firebase/firestore';
+import { FaArrowLeft, FaUsers, FaBoxOpen, FaPhoneAlt, FaStore, FaClock, FaBolt, FaCrown, FaSignOutAlt, FaSearch, FaEnvelope } from 'react-icons/fa';
 import { IoLogOutOutline, IoSearchOutline } from 'react-icons/io5';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'react-toastify';
 
 // ─── Skeleton Loader (Bento Style) ───
 const SkeletonRow = () => (
@@ -32,6 +33,11 @@ function MasterClientes() {
   const [estabList, setEstabList] = useState([]);
   const [filterEstab, setFilterEstab] = useState('todos');
 
+  // Controle do Modal de Permissões
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [adminTargetUser, setAdminTargetUser] = useState(null);
+  const [adminSelectedStores, setAdminSelectedStores] = useState([]);
+
   useEffect(() => {
     if (!currentUser || !isMasterAdmin) return;
     
@@ -49,20 +55,50 @@ function MasterClientes() {
         setEstabList(elist.sort((a,b) => a.nome.localeCompare(b.nome)));
 
         // Query pedidos directly
-        const qPed = query(collectionGroup(db, 'pedidos'), limit(3500));
-        const snap = await getDocs(qPed);
-        let data = snap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
+        // Limite reduzido de 3500 para 500 para evitar sobrecarga excessiva de dados no frontend.
+        const qPed = query(collectionGroup(db, 'pedidos'), limit(1000));
+        const [usersSnap, snap] = await Promise.all([
+           getDocs(collection(db, 'usuarios')),
+           getDocs(qPed)
+        ]);
 
         const mapByPhone = {};
+
+        // 1. Popular com usuários registrados (inclui administradores/donos)
+        usersSnap.docs.forEach(d => {
+           const u = d.data();
+           const rawPhone = u.telefone || '';
+           const phone = rawPhone.replace(/\D/g, '') || d.id; // fallback para UID se não tiver telefone
+
+           mapByPhone[phone] = {
+             userId: d.id,
+             nome: u.nome || u.displayName || 'Não Registrado',
+             whatsapp: rawPhone || 'Sem número',
+             email: u.email || '',
+             lojas: new Set(['App Geral (Web)']),
+             pedidosAcumulados: 0,
+             dataCadastro: u.createdAt?.toDate ? u.createdAt.toDate() : (u.createdAt ? new Date(u.createdAt) : new Date()),
+             isAdmin: !!(u.isAdmin || u.isMasterAdmin),
+             estabelecimentosAdmin: u.estabelecimentosGerenciados || [],
+             isRegistered: true
+           };
+        });
+
+        // 2. Popular/Atualizar com base nos pedidos
+        let data = snap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
+
         data.forEach(p => {
           const cli = p.cliente || {};
-          const phone = cli.telefone || p.clienteTelefone || p.telefone || 'Sem número';
+          const rawPhone = cli.telefone || p.clienteTelefone || p.telefone || '';
+          const phone = rawPhone.replace(/\D/g, '') || 'Sem número';
           
           if (!mapByPhone[phone]) {
             mapByPhone[phone] = {
               nome: cli.nome || p.nome || 'Não Registrado',
-              whatsapp: phone,
+              whatsapp: rawPhone || 'Sem número',
+              email: cli.email || p.email || '',
               lojas: new Set(),
+              estabelecimentosAdmin: [],
               pedidosAcumulados: 0,
               dataCadastro: null
             };
@@ -82,6 +118,10 @@ function MasterClientes() {
           
           if (!mapByPhone[phone].nome || mapByPhone[phone].nome === 'Não Registrado') {
              if (cli.nome || p.nome) mapByPhone[phone].nome = cli.nome || p.nome;
+          }
+
+          if (!mapByPhone[phone].email) {
+             if (cli.email || p.email) mapByPhone[phone].email = cli.email || p.email;
           }
 
           const rawDate = p.createdAt || p.dataPedido || null;
@@ -107,7 +147,12 @@ function MasterClientes() {
           return { ...c, lojasArray: lojasArr };
         });
 
-        merged.sort((a, b) => b.pedidosAcumulados - a.pedidosAcumulados);
+        merged.sort((a, b) => {
+           // Promove admins primeiro, depois ordena por engajamento
+           if (a.isAdmin && !b.isAdmin) return -1;
+           if (!a.isAdmin && b.isAdmin) return 1;
+           return b.pedidosAcumulados - a.pedidosAcumulados;
+        });
         setClientes(merged);
       } catch (err) {
         console.error('Erro ao buscar clientes globais', err);
@@ -118,11 +163,42 @@ function MasterClientes() {
     fetchClientes();
   }, [currentUser, isMasterAdmin]);
 
+  const openAdminModal = (cli) => {
+    setAdminTargetUser(cli);
+    setAdminSelectedStores(cli.estabelecimentosAdmin || []);
+    setAdminModalOpen(true);
+  };
+
+  const handleSaveAdminAccess = async () => {
+    if (!adminTargetUser) return;
+    try {
+      const hasAccess = adminSelectedStores.length > 0;
+      await updateDoc(doc(db, 'usuarios', adminTargetUser.userId), {
+          isAdmin: hasAccess,
+          estabelecimentosGerenciados: adminSelectedStores
+      });
+      
+      setClientes(prev => prev.map(c => {
+         if (c.userId === adminTargetUser.userId) {
+            return { ...c, isAdmin: hasAccess, estabelecimentosAdmin: adminSelectedStores };
+         }
+         return c;
+      }));
+      
+      toast.success('Permissões atualizadas com sucesso!');
+      setAdminModalOpen(false);
+    } catch(err) {
+      console.error(err);
+      toast.error('Erro ao salvar permissões.');
+    }
+  };
+
   if (authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
   if (!isMasterAdmin) return <div className="p-10 text-center text-red-500 bg-[#F5F5F7] min-h-screen">Acesso Negado</div>;
 
   const filt_clientes = clientes.filter(c => {
     const textMatch = (c.nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                      (c.email || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                       (c.whatsapp || c.telefone || '').includes(searchTerm);
     if (!textMatch) return false;
     if (filterEstab !== 'todos' && !c.lojas.has(filterEstab)) return false;
@@ -223,19 +299,37 @@ function MasterClientes() {
                                         {cli.nome ? cli.nome.charAt(0).toUpperCase() : '?'}
                                     </div>
                                     <div>
-                                        <p className="font-bold text-base text-[#1D1D1F]">{cli.nome || 'Não Registrado'}</p>
+                                        <div className="font-bold text-base text-[#1D1D1F] flex items-center gap-2">
+                                            {cli.nome || 'Não Registrado'}
+                                            {cli.isAdmin && <FaCrown className="text-amber-500 text-xs" title="Administrador" />}
+                                            {cli.isRegistered && cli.userId && (
+                                                <button 
+                                                    onClick={() => openAdminModal(cli)}
+                                                    className={`ml-2 text-[10px] uppercase tracking-wider font-black px-2 py-1 rounded-full border transition-all ${cli.isAdmin ? 'border-red-200 text-red-500 hover:bg-red-50' : 'border-[#E5E5EA] text-[#86868B] hover:bg-[#F5F5F7] hover:text-black hover:border-black'}`}
+                                                    title="Governar Acessos de Franquia"
+                                                >
+                                                    {cli.isAdmin ? 'Configurar Acessos' : '+ Tornar Admin'}
+                                                </button>
+                                            )}
+                                        </div>
                                         <p className="text-xs font-semibold text-[#86868B] flex items-center gap-1.5 mt-1">
                                             <FaClock className="text-[10px]"/> Membro desde {dataCad}
                                         </p>
                                     </div>
                                 </div>
 
-                                {/* Phone Info */}
-                                <div className="flex-1 min-w-[150px]">
+                                {/* Phone & Email Info */}
+                                <div className="flex-1 min-w-[200px] flex flex-col gap-2 items-start">
                                     <div className="inline-flex items-center gap-2 bg-[#F5F5F7] text-[#1D1D1F] text-[11px] font-bold px-3 py-1.5 rounded-full border border-[#E5E5EA]">
                                         <FaPhoneAlt className="text-[#86868B] text-[10px]" />
                                         {cli.whatsapp || cli.telefone || 'Sem Telefone'}
                                     </div>
+                                    {cli.email && (
+                                        <div className="inline-flex items-center gap-2 bg-[#F5F5F7] text-[#1D1D1F] text-[11px] font-medium px-3 py-1.5 rounded-full border border-[#E5E5EA] overflow-hidden truncate max-w-full">
+                                            <FaEnvelope className="text-[#86868B] text-[10px] shrink-0" />
+                                            <span className="truncate">{cli.email}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Order Stats */}
@@ -270,6 +364,41 @@ function MasterClientes() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
       `}</style>
+
+      {/* ─── MODAL DE CONFIGURAÇÃO DE ADMIN ─── */}
+      {adminModalOpen && adminTargetUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+           <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
+              <h2 className="text-2xl font-black text-[#1D1D1F] mb-2 leading-tight">Painel de Controle</h2>
+              <p className="text-sm text-[#86868B] mb-6 font-medium">
+                  Selecione quais franquias <strong>{adminTargetUser.nome}</strong> tem autorização para gerenciar.
+              </p>
+              
+              <div className="max-h-60 overflow-y-auto space-y-2 mb-6 custom-scrollbar pr-2">
+                 {estabList.map(e => (
+                    <label key={e.id} className={`flex items-center gap-3 p-4 rounded-xl border ${adminSelectedStores.includes(e.id) ? 'border-red-500 bg-red-50' : 'border-[#E5E5EA] bg-white'} hover:border-red-300 cursor-pointer transition-colors shadow-sm`}>
+                       <input 
+                          type="checkbox" 
+                          className="w-5 h-5 rounded text-red-500 focus:ring-red-500 border-gray-300"
+                          checked={adminSelectedStores.includes(e.id)}
+                          onChange={(ev) => {
+                             if(ev.target.checked) setAdminSelectedStores(prev => [...prev, e.id]);
+                             else setAdminSelectedStores(prev => prev.filter(id => id !== e.id));
+                          }}
+                       />
+                       <span className={`font-semibold text-sm ${adminSelectedStores.includes(e.id) ? 'text-red-700' : 'text-[#1D1D1F]'}`}>{e.nome}</span>
+                    </label>
+                 ))}
+                 {estabList.length === 0 && <p className="text-sm text-gray-500 text-center font-bold">Nenhuma franquia no sistema.</p>}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                 <button onClick={() => setAdminModalOpen(false)} className="flex-1 py-3.5 rounded-xl font-bold text-[#86868B] bg-[#F5F5F7] hover:bg-[#E5E5EA] transition-colors focus:outline-none">Cancelar</button>
+                 <button onClick={handleSaveAdminAccess} className="flex-1 py-3.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors shadow-md focus:outline-none">Salvar Acessos</button>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

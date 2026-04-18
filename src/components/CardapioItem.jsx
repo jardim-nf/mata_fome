@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { IoAdd, IoOptions, IoCart } from 'react-icons/io5';
@@ -9,6 +10,7 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
   const [displayImageUrl, setDisplayImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   if (!item) return null;
 
@@ -66,6 +68,13 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
       if (onAddItem) onAddItem(safeItem);
   };
 
+  const handleImageClick = (e) => {
+    e.stopPropagation();
+    if (displayImageUrl && !imageError) {
+      setShowImageModal(true);
+    }
+  };
+
   const mostrarPreco = () => {
     const stylePreco = { color: cores.destaque, fontSize: '1.1rem', fontWeight: 'bold' };
     if (!hasVariations) return <p style={stylePreco}>R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
@@ -109,7 +118,8 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
                 src={displayImageUrl}
                 alt={safeItem.nome}
                 loading="lazy"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                onClick={handleImageClick}
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 cursor-zoom-in relative z-10"
                 onError={() => setImageError(true)}
                 onLoad={() => setImageLoading(false)}
               />
@@ -149,6 +159,31 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
           </div>
         </div>
       </div>
+
+      {/* Lightbox Modal (Portal to body to prevent overflow issues) */}
+      {showImageModal && createPortal(
+        <div 
+            className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center p-4 cursor-zoom-out"
+            onClick={(e) => { e.stopPropagation(); setShowImageModal(false); }}
+        >
+            <div className="w-full max-w-2xl flex justify-end mb-2">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setShowImageModal(false); }}
+                    className="text-white hover:text-gray-300 bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors cursor-pointer"
+                >
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <img 
+                src={displayImageUrl} 
+                alt={safeItem.nome} 
+                className="w-auto h-auto max-w-full md:max-w-4xl lg:max-w-5xl max-h-[85vh] object-contain rounded-xl shadow-2xl relative z-10"
+            />
+            <h3 className="text-white text-xl font-bold mt-4 text-center max-w-2xl leading-tight">{safeItem.nome}</h3>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 }

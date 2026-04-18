@@ -177,7 +177,13 @@ export default function Menu() {
     }, [carrinho, triggerCheckout, scrollToResumo]);
 
     useEffect(() => {
-        setProdutosFiltrados(searchTerm ? allProdutos.filter(prod => prod.nome.toLowerCase().includes(searchTerm.toLowerCase())) : [...allProdutos]);
+        setProdutosFiltrados(searchTerm ? allProdutos.filter(prod => {
+            const term = searchTerm.toLowerCase();
+            const matchNome = prod.nome?.toLowerCase().includes(term);
+            const matchDesc = prod.descricao?.toLowerCase().includes(term);
+            const matchVar = Array.isArray(prod.variacoes) && prod.variacoes.some(v => v.nome?.toLowerCase().includes(term));
+            return matchNome || matchDesc || matchVar;
+        }) : [...allProdutos]);
     }, [allProdutos, searchTerm]);
 
     useEffect(() => { setValorGatilhoRaspadinha(estabelecimentoInfo?.valorMinimoRaspadinha ? parseFloat(estabelecimentoInfo.valorMinimoRaspadinha) : 100); }, [estabelecimentoInfo]);
@@ -262,7 +268,7 @@ export default function Menu() {
                     </div>
                 )}
                 
-                <EstablishmentHeader estabelecimentoInfo={estabelecimentoInfo} coresEstabelecimento={coresEstabelecimento} isLojaAberta={isLojaAberta} currentTime={currentTime} currentUser={currentUser} onLogout={authActions.handleLogout} saldoCarteira={checkoutActions.saldoCarteira} onViewHistory={() => navigate('/historico-pedidos')} />
+                <EstablishmentHeader estabelecimentoInfo={estabelecimentoInfo} coresEstabelecimento={coresEstabelecimento} isLojaAberta={isLojaAberta} currentTime={currentTime} currentUser={currentUser} onLogout={authActions.handleLogout} saldoCarteira={checkoutActions.saldoCarteira} onViewHistory={() => navigate(actualEstabelecimentoId ? `/historico-pedidos?lojaId=${actualEstabelecimentoId}` : '/historico-pedidos')} />
                 
                 {/* 💳 BANNER DE FIDELIDADE (CASHBACK) - Apenas aparece se cliente logado tem saldo */}
                 {checkoutActions.saldoCarteira > 0 && (
@@ -344,7 +350,7 @@ export default function Menu() {
                         <h2 className="text-3xl font-bold">Pedido Enviado!</h2>
                         {checkoutActions.ultimoPedidoId && <p className="text-xs bg-gray-50 py-2 px-3 mt-2 rounded">#{checkoutActions.ultimoPedidoId.slice(-6).toUpperCase()}</p>}
                         <div className="space-y-3 mt-4">
-                            <button onClick={() => { checkoutActions.setShowOrderConfirmationModal(false); navigate('/historico-pedidos'); }} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">📋 Acompanhar Meu Pedido</button>
+                            <button onClick={() => { checkoutActions.setShowOrderConfirmationModal(false); navigate(actualEstabelecimentoId ? `/historico-pedidos?lojaId=${actualEstabelecimentoId}` : '/historico-pedidos'); }} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">📋 Acompanhar Meu Pedido</button>
                             <button onClick={() => { checkoutActions.setShowOrderConfirmationModal(false); setTimeout(() => checkoutActions.setShowReviewModal(true), 500); }} className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold">⭐ Avaliar Pedido</button>
                             <button onClick={() => checkoutActions.setShowOrderConfirmationModal(false)} className="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-bold">Continuar</button>
                         </div>

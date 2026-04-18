@@ -124,7 +124,16 @@ export function useEstablishment(estabelecimentoSlug) {
         if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
 
         if (data.cores) {
-          const cores = { ...data.cores };
+          const coresDB = data.cores;
+          const cores = {
+            ...CORES_PADRAO,
+            ...coresDB,
+            texto: {
+              ...CORES_PADRAO.texto,
+              ...(coresDB.texto || {})
+            }
+          };
+          
           if (cores.primaria?.toLowerCase() === '#ffffff') {
             cores.primaria = '#EA1D2C';
             cores.texto = { ...cores.texto, principal: '#111827' };

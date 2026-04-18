@@ -120,8 +120,8 @@ function MasterDashboard() {
       {/* ─── PILL NAVBAR (NORMAL) ─── */}
       <nav className="w-full max-w-[1400px] mx-auto bg-white border border-[#E5E5EA] shadow-sm rounded-full h-16 flex items-center justify-between px-6 mb-6">
         <div className="flex items-center gap-4">
-          <div className="w-9 h-9 bg-black rounded-full flex items-center justify-center shadow-md cursor-pointer" onClick={() => navigate('/')}>
-            <FaBolt className="text-white text-sm" />
+          <div className="w-9 h-9 bg-black rounded-full flex items-center justify-center shadow-md cursor-pointer font-bold text-white text-sm" onClick={() => navigate('/')}>
+            {userName.charAt(0).toUpperCase()}
           </div>
           <div className="hidden sm:block">
             <h1 className="font-semibold text-sm tracking-tight text-black">{saudacao}, {userName}</h1>

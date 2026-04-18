@@ -14,8 +14,8 @@ const ModalAbrirMesa = ({ isOpen, onClose, onConfirm, mesaNumero, isOpening }) =
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-start sm:items-center justify-center p-4 pt-[10vh] sm:pt-4 z-50 backdrop-blur-sm overflow-y-auto">
-            <div className="bg-white rounded-[2rem] shadow-2xl p-6 w-full max-w-sm border border-gray-100 transform transition-all mb-auto sm:mb-0">
+        <div className="fixed inset-0 bg-black/70 flex items-start sm:items-center justify-center p-4 pt-[10vh] sm:pt-4 z-50 overflow-y-auto">
+            <div className="bg-white rounded-[2rem] shadow-2xl p-6 w-full max-w-sm border border-gray-100 transform transition-none mb-auto sm:mb-0">
                 <h3 className="text-2xl font-black text-gray-900 text-center mb-1">Mesa {mesaNumero}</h3>
                 <p className="text-center text-gray-500 mb-6 text-sm font-medium">Abrir nova comanda</p>
                 <div className="mb-5">

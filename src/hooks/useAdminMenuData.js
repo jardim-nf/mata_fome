@@ -117,7 +117,10 @@ export function useAdminMenuData(primeiroEstabelecimento) {
         const searchNormalized = normalizeText(searchTerm);
         let filtered = menuItems.filter(item => {
             const matchCategory = selectedCategory === 'Todos' || item.categoria === selectedCategory;
-            const matchSearch = normalizeText(item.nome).includes(searchNormalized) || normalizeText(item.descricao).includes(searchNormalized) || normalizeText(item.codigoBarras).includes(searchNormalized);
+            const matchSearch = normalizeText(item.nome).includes(searchNormalized) || 
+                                normalizeText(item.descricao).includes(searchNormalized) || 
+                                normalizeText(item.codigoBarras).includes(searchNormalized) ||
+                                (Array.isArray(item.variacoes) && item.variacoes.some(v => normalizeText(v.nome).includes(searchNormalized)));
             const getS = (i) => {
                 const e = Number(i.estoque) || 0;
                 const m = Number(i.estoqueMinimo) || 0;

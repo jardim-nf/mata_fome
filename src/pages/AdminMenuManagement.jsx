@@ -1,5 +1,5 @@
 // src/pages/AdminMenuManagement.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useHeader } from '../context/HeaderContext';
@@ -10,8 +10,11 @@ import { useAdminMenuData } from '../hooks/useAdminMenuData';
 import {
     IoAddCircleOutline, IoSearch, IoClose, IoImageOutline, IoCheckmarkCircle,
     IoAlertCircle, IoCube, IoCash, IoPricetag, IoList, IoEyeOff, IoGrid, IoMenu, IoBarcodeOutline,
-    IoFlask, IoTrashOutline, IoChevronUp, IoChevronDown
+    IoFlask, IoTrashOutline, IoChevronUp, IoChevronDown, IoDownloadOutline
 } from 'react-icons/io5';
+import { toast } from 'react-toastify';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import BackButton from '../components/BackButton';
 
 // Skeleton Loader
@@ -43,7 +46,7 @@ const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D
     if (!produto.variacoes || produto.variacoes.length === 0) return <p className="text-2xl font-black text-slate-800">R$ {(Number(produto.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
     const variacoesAtivas = produto.variacoes.filter(v => v.ativo !== false && v.preco !== '' && !isNaN(Number(v.preco)) && Number(v.preco) > 0);
     if (variacoesAtivas.length === 0) return <p className="text-2xl font-black text-slate-300">--</p>;
-    if (variacoesAtivas.length === 1 && variacoesAtivas[0].nome === 'Padrão') return <p className="text-2xl font-black text-slate-800">R$ {Number(variacoesAtivas[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    if (variacoesAtivas.length === 1) return <p className="text-2xl font-black text-slate-800">R$ {Number(variacoesAtivas[0].preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
     const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
     return (
       <div className="flex flex-col">
@@ -126,7 +129,7 @@ const StatsCard = ({ title, value, icon: Icon, colorClass, bgClass }) => (
 function AdminMenuManagement() {
   const { userData , estabelecimentoIdPrincipal } = useAuth();
   const { setActions, clearActions } = useHeader();
-  const primeiroEstabelecimento = estabelecimentoIdPrincipal;
+  const primeiroEstabelecimento = estabelecimentoIdPrincipal || userData?.estabelecimentoId || (userData?.estabelecimentosGerenciados && userData.estabelecimentosGerenciados[0]);
   const menuParams = useAdminMenuData(primeiroEstabelecimento);
   
   const [viewMode, setViewMode] = useState('grid');
@@ -136,9 +139,125 @@ function AdminMenuManagement() {
 
   useEffect(() => { goToPage(1); }, [menuParams.searchTerm, menuParams.selectedCategory, menuParams.stockFilter, goToPage]);
 
+  const handleExportProducts = useCallback(() => {
+    if (!menuParams.menuItems || menuParams.menuItems.length === 0) {
+        toast.warn("Sem produtos para exportar.");
+        return;
+    }
+    const headers = ['Categoria', 'Nome do Produto', 'Variacao', 'Preco', 'Custo', 'Estoque', 'Status'];
+    const rows = [];
+    const getStatusText = (itemAtivo, varAtivo, estoque) => {
+        if (itemAtivo === false || varAtivo === false) return 'Pausado';
+        if (Number(estoque) <= 0) return 'Esgotado';
+        return 'Ativo';
+    };
+
+    menuParams.menuItems.forEach(item => {
+        if (item.variacoes && item.variacoes.length > 0) {
+            item.variacoes.forEach(v => {
+                rows.push([
+                    item.categoria || '',
+                    item.nome || '',
+                    v.nome === 'Padrão' ? '-' : (v.nome || ''),
+                    Number(v.preco || 0).toFixed(2).replace('.', ','),
+                    Number(v.custo || 0).toFixed(2).replace('.', ','),
+                    v.estoque || 0,
+                    getStatusText(item.ativo, v.ativo, v.estoque)
+                ]);
+            });
+        } else {
+             rows.push([
+                item.categoria || '',
+                item.nome || '',
+                '-',
+                Number(item.preco || 0).toFixed(2).replace('.', ','),
+                Number(item.custo || 0).toFixed(2).replace('.', ','),
+                item.estoque || 0,
+                getStatusText(item.ativo, item.ativo, item.estoque)
+            ]);
+        }
+    });
+
+    const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio_produtos_cadastrados.csv`;
+    link.click();
+  }, [menuParams.menuItems]);
+
+  const handleExportPDF = useCallback(() => {
+    if (!menuParams.menuItems || menuParams.menuItems.length === 0) {
+        toast.warn("Sem produtos para exportar.");
+        return;
+    }
+
+    const doc = new jsPDF();
+    
+    doc.setFontSize(16);
+    doc.text("Relatorio de Produtos Cadastrados", 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} as ${new Date().toLocaleTimeString('pt-BR')}`, 14, 22);
+
+    const tableColumn = ["Categoria", "Produto", "Variacao", "Preco", "Custo", "Estoque", "Status"];
+    const tableRows = [];
+
+    const getStatusText = (itemAtivo, varAtivo, estoque) => {
+        if (itemAtivo === false || varAtivo === false) return 'Pausado';
+        if (Number(estoque) <= 0) return 'Esgotado';
+        return 'Ativo';
+    };
+
+    menuParams.menuItems.forEach(item => {
+        if (item.variacoes && item.variacoes.length > 0) {
+            item.variacoes.forEach(v => {
+                tableRows.push([
+                    item.categoria || '',
+                    item.nome || '',
+                    v.nome === 'Padrão' ? '-' : (v.nome || ''),
+                    `R$ ${Number(v.preco || 0).toFixed(2).replace('.', ',')}`,
+                    `R$ ${Number(v.custo || 0).toFixed(2).replace('.', ',')}`,
+                    v.estoque || 0,
+                    getStatusText(item.ativo, v.ativo, v.estoque)
+                ]);
+            });
+        } else {
+             tableRows.push([
+                item.categoria || '',
+                item.nome || '',
+                '-',
+                `R$ ${Number(item.preco || 0).toFixed(2).replace('.', ',')}`,
+                `R$ ${Number(item.custo || 0).toFixed(2).replace('.', ',')}`,
+                item.estoque || 0,
+                getStatusText(item.ativo, item.ativo, item.estoque)
+            ]);
+        }
+    });
+
+    autoTable(doc, {
+        startY: 26,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [37, 99, 235] },
+        styles: { fontSize: 8 },
+    });
+
+    doc.save(`relatorio_produtos_cadastrados.pdf`);
+  }, [menuParams.menuItems]);
+
   useEffect(() => {
     const actions = (
         <div className="flex items-center space-x-3">
+            <div className="flex bg-white rounded-xl border border-slate-200/60 p-1 shadow-sm">
+                <button onClick={handleExportProducts} className="flex items-center gap-1.5 hover:bg-emerald-50 text-emerald-600 font-bold py-2 px-3 rounded-lg text-xs transition-all" title="Exportar CSV">
+                    <IoDownloadOutline className="text-lg"/> CSV
+                </button>
+                <div className="w-px h-6 bg-slate-200 self-center mx-1"></div>
+                <button onClick={handleExportPDF} className="flex items-center gap-1.5 hover:bg-blue-50 text-blue-600 font-bold py-2 px-3 rounded-lg text-xs transition-all" title="Exportar PDF">
+                    <IoDownloadOutline className="text-lg"/> PDF
+                </button>
+            </div>
             <div className="hidden md:flex bg-white rounded-xl border border-slate-200/60 p-1 shadow-sm">
                 <button onClick={() => setViewMode('grid')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-slate-100/80 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}><IoGrid size={18}/></button>
                 <button onClick={() => setViewMode('list')} className={`p-2.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-slate-100/80 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}><IoMenu size={18}/></button>
@@ -150,7 +269,7 @@ function AdminMenuManagement() {
     );
     setActions(actions);
     return () => clearActions();
-  }, [viewMode, setActions, clearActions, menuParams.openItemForm]);
+  }, [viewMode, setActions, clearActions, menuParams.openItemForm, menuParams.menuItems, handleExportProducts, handleExportPDF]);
 
   const handleFormChange = (e) => {
     const { name, value, type, checked, files } = e.target;

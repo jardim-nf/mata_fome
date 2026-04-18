@@ -59,8 +59,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Redireciona para tela de seleção SE tiver mais de 1 estabelecimento e não tiver escolhido nenhum
-      if (userData.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 1 && !selectedEstabelecimentoId) {
+      // Redireciona para tela de seleção SE tiver mais de 1 estabelecimento, não tiver escolhido nenhum, e não for Master Admin
+      if (!userData.isMasterAdmin && userData.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 1 && !selectedEstabelecimentoId) {
           navigate('/selecionar-estabelecimento', { replace: true });
           return;
       }

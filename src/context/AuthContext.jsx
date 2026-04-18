@@ -304,8 +304,9 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
         return <Navigate to="/" replace />;
     }
 
-    // Trava global: Nunca deixar o usuário passar sem escolher a loja (se tiver mais de 1)
+    // Trava global: Nunca deixar o usuário passar sem escolher a loja, exceto o Master Admin
     if (
+        !userData?.isMasterAdmin &&
         userData?.estabelecimentosGerenciados?.length > 1 && 
         !selectedEstabelecimentoId && 
         location.pathname !== '/selecionar-estabelecimento'

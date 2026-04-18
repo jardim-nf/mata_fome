@@ -242,12 +242,8 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
             return; 
         }
 
-        const dadosBase = (etapa > 1 && Object.keys(pagamentos).length > 0) ? pagamentos : agruparItensPorPessoa;
-        const dadosParaImpressao = etapa > 1 ? 
-            Object.fromEntries(Object.entries(dadosBase).filter(([k]) => selecionados[k])) : 
-            dadosBase;
-
-        const dadosFinais = Object.keys(dadosParaImpressao).length > 0 ? dadosParaImpressao : agruparItensPorPessoa;
+        const listaItens = mesa?.itens || mesa?.pedidos || [];
+        const todosItensAtivos = listaItens.filter(i => i.status !== 'cancelado');
 
         const conteudo = `
             <html>
@@ -273,20 +269,19 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                     <p style="font-size: 10px;">${new Date().toLocaleString('pt-BR')}</p>
                 </div>
 
-                ${Object.entries(dadosFinais).map(([pessoa, dados]) => `
-                    <div class="pagante-block">
-                        <div class="pagante-header">
-                            <span>${pessoa.substring(0, 15)}</span>
-                            <span>R$ ${(dados.valor !== undefined ? dados.valor : dados.total).toFixed(2)}</span>
-                        </div>
-                        ${dados.itens?.filter(i => i.preco > 0).map(item => `
-                            <div class="item-row">
-                                <span>${item.quantidade || 1}x ${item.nome.substring(0,20)}</span>
-                                <span>${((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</span>
-                            </div>
-                        `).join('') || '<div class="item-row"><i>Valor Manual</i></div>'}
+                <div class="pagante-block">
+                    <div class="pagante-header">
+                        <span>CONSUMO DA MESA</span>
+                        <span>R$ ${totalConsumo.toFixed(2)}</span>
                     </div>
-                `).join('')}
+                    ${todosItensAtivos.filter(i => i.preco > 0).map(item => `
+                        <div class="item-row">
+                            <span>${item.quantidade || item.qtd || 1}x ${(item.nome || '').substring(0,25)}</span>
+                            <span>${((item.preco || 0) * (item.quantidade || item.qtd || 1)).toFixed(2)}</span>
+                        </div>
+                    `).join('')}
+                    ${todosItensAtivos.length === 0 ? '<div class="item-row"><i>Nenhum item lançado</i></div>' : ''}
+                </div>
 
                 <div class="resumo-box">
                     <div class="linha-resumo"><span>TOTAL CONSUMO:</span><span>R$ ${totalConsumo.toFixed(2)}</span></div>

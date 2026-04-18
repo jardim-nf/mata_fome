@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton';
 import { collection, query, where, orderBy, getDocs, doc, getDoc, collectionGroup } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'react-toastify';
@@ -32,6 +32,8 @@ import {
 function ClientOrderHistory() {
   const { currentUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const lojaId = searchParams.get('lojaId');
 
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -127,7 +129,9 @@ function ClientOrderHistory() {
           criadoEm: doc.data().dataFechamento || doc.data().criadoEm || doc.data().createdAt || new Date()
         }));
       } catch (vendasError) {
-        console.log("Vendas de mesa não disponíveis:", vendasError);
+        if (vendasError.code !== 'permission-denied') {
+            console.log("Vendas de mesa não sincronizadas para este usuário:", vendasError.message);
+        }
       }
 
       const allOrders = [...fetchedOrders, ...vendasOrders]
@@ -198,8 +202,9 @@ function ClientOrderHistory() {
     }
   };
 
-  // 🔥 FILTRAR PEDIDOS POR STATUS
+  // 🔥 FILTRAR PEDIDOS POR STATUS E LOJA
   const filteredOrders = orders.filter(order => {
+    if (lojaId && order.estabelecimentoId !== lojaId) return false;
     if (filterStatus === 'todos') return true;
     return order.status === filterStatus;
   });

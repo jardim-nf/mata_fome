@@ -60,9 +60,18 @@ const AdminDashboard = () => {
       const userRole = currentUser?.role || currentUser?.cargo;
       if (userRole === 'garcom' || userRole === 'garçom') {
         navigate('/controle-salao', { replace: true });
+        return;
+      }
+      
+      if (!estabelecimentoIdPrincipal) {
+        if (currentUser.isMasterAdmin) {
+          navigate('/master-dashboard', { replace: true });
+        } else {
+          navigate('/selecionar-estabelecimento', { replace: true });
+        }
       }
     }
-  }, [currentUser, loading, navigate]);
+  }, [currentUser, loading, navigate, estabelecimentoIdPrincipal]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
