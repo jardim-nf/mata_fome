@@ -177,7 +177,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 fichaTecnica: Array.isArray(item.fichaTecnica) ? item.fichaTecnica : []
             });
             setTermoNcm(item.fiscal?.ncm || '');
-            setVariacoes(item.variacoes?.length ? item.variacoes.map(v => ({...v, preco: v.preco.toString()})) : [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: item.preco.toString(), ativo: true, estoque: item.estoque || 0, custo: item.custo || 0 }]);
+            setVariacoes(item.variacoes?.length ? item.variacoes.map((v, idx) => ({...v, id: `var-${Date.now()}-${idx}`, preco: v.preco !== undefined ? v.preco.toString() : ''})) : [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: item.preco !== undefined ? item.preco.toString() : '', ativo: true, estoque: item.estoque || 0, custo: item.custo || 0 }]);
             setImagePreview(item.imageUrl || '');
         } else {
             setEditingItem(null);
