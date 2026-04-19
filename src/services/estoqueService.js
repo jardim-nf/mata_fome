@@ -23,7 +23,7 @@ export const estoqueService = {
 
     try {
       await runTransaction(db, async (transaction) => {
-        const itensParaAtualizar = [];
+        const produtosParaAtualizar = {}; // { path: { ref, data, nome, totalBaixa, variacoesBaixa } }
         // Mapa de insumos que precisam ser atualizados (agrega se vários produtos usam o mesmo insumo)
         const insumosParaBaixar = {}; // { insumoId: { ref, data, totalBaixa, nome, unidade } }
 
@@ -82,14 +82,22 @@ export const estoqueService = {
                 insumosParaBaixar[ficha.insumoId].totalBaixa += baixaTotal;
               }
             } else {
-              // 🔄 COMPORTAMENTO LEGADO: baixa 1:1 no produto/variação
-              itensParaAtualizar.push({
-                ref: itemRef,
-                data: produtoData,
-                nome: item.nome || produtoData.nome || 'Produto',
-                quantidadeComprada,
-                variacaoId: extratoVariacaoId
-              });
+              // 🔄 COMPORTAMENTO LEGADO: baixa 1:1 no produto/variação agrupada para não sobrescrever em concorrência na transação
+              if (!produtosParaAtualizar[itemRef.path]) {
+                produtosParaAtualizar[itemRef.path] = {
+                  ref: itemRef,
+                  data: produtoData,
+                  nome: item.nome || produtoData.nome || 'Produto',
+                  totalBaixa: 0,
+                  variacoesBaixa: {}
+                };
+              }
+              produtosParaAtualizar[itemRef.path].totalBaixa += quantidadeComprada;
+              if (extratoVariacaoId) {
+                produtosParaAtualizar[itemRef.path].variacoesBaixa[extratoVariacaoId] = (produtosParaAtualizar[itemRef.path].variacoesBaixa[extratoVariacaoId] || 0) + quantidadeComprada;
+              } else {
+                produtosParaAtualizar[itemRef.path].variacoesBaixa['padrao_fallback'] = (produtosParaAtualizar[itemRef.path].variacoesBaixa['padrao_fallback'] || 0) + quantidadeComprada;
+              }
             }
           }
         }
@@ -134,13 +142,14 @@ export const estoqueService = {
         }
 
         // 4. APLICAR BAIXA LEGADA NOS PRODUTOS (sem ficha técnica)
-        for (const itemAt of itensParaAtualizar) {
-          const dados = itemAt.data;
+        for (const path of Object.keys(produtosParaAtualizar)) {
+          const info = produtosParaAtualizar[path];
+          const dados = info.data;
           const updates = {};
 
           // Calcula estoque geral
           let estoqueAtualGeral = typeof dados.estoque === 'number' ? dados.estoque : (typeof dados.estoqueAtual === 'number' ? dados.estoqueAtual : 0);
-          let novoEstoqueGeral = estoqueAtualGeral - itemAt.quantidadeComprada;
+          let novoEstoqueGeral = estoqueAtualGeral - info.totalBaixa;
           
           updates.estoque = novoEstoqueGeral;
           // Atualiza também o legado para garantir compatibilidade
@@ -149,18 +158,22 @@ export const estoqueService = {
           }
 
           if (novoEstoqueGeral <= (dados.estoqueMinimo || 3)) {
-            alertas.push({ nome: itemAt.nome, estoque: novoEstoqueGeral, minimo: dados.estoqueMinimo || 3 });
+            alertas.push({ nome: info.nome, estoque: novoEstoqueGeral, minimo: dados.estoqueMinimo || 3 });
           }
 
           // Atualiza variações (se aplicável)
           let atualizouVariacao = false;
           if (Array.isArray(dados.variacoes)) {
             const variacoes = dados.variacoes.map(v => {
-              // Se tivermos o variacaoId, abatemos nele.
-              // Se não tivermos (foi vendido 'Padrão' mas não passou variacaoId), tentamos achar a variação filha "Padrão" / ID 'v-unique' ou apenas debitamos geral se não achar.
-              if ((itemAt.variacaoId && v.id === itemAt.variacaoId) || (!itemAt.variacaoId && v.nome === 'Padrão' && dados.variacoes.length === 1)) {
+              let qtyToDeduct = info.variacoesBaixa[v.id] || 0;
+              // Fallback se comprou variação Padrão mas não passou id da variacao corretamente no cart
+              if (info.variacoesBaixa['padrao_fallback'] && v.nome === 'Padrão' && dados.variacoes.length === 1) {
+                qtyToDeduct += info.variacoesBaixa['padrao_fallback'];
+              }
+
+              if (qtyToDeduct > 0) {
                 atualizouVariacao = true;
-                let novoEstoqueVar = (Number(v.estoque) || 0) - itemAt.quantidadeComprada;
+                let novoEstoqueVar = (Number(v.estoque) || 0) - qtyToDeduct;
                 return { ...v, estoque: novoEstoqueVar };
               }
               return v;
@@ -179,7 +192,7 @@ export const estoqueService = {
 
           if (Object.keys(updates).length > 0) {
             updates.ultimaBaixa = new Date();
-            transaction.update(itemAt.ref, updates);
+            transaction.update(info.ref, updates);
           }
         }
       });
