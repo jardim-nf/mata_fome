@@ -20,6 +20,61 @@ import {
 import { IoLogOutOutline } from 'react-icons/io5';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { FaWandMagicSparkles } from 'react-icons/fa6'; // New Icon
+
+// --- LÓGICA DE NEGÓCIO (Inteligência Artificial Mock e Conversões) ---
+function textToMenuParser(rawText) {
+  const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const categorias = [];
+  let currentCategoria = null;
+  let currentItem = null;
+
+  const getPrice = (t) => {
+    const match = t.match(/(?:R\$)?\s*(\d+[.,]\d{2})/i);
+    return match ? parseFloat(match[1].replace(',', '.')) : null;
+  };
+
+  lines.forEach(line => {
+    const price = getPrice(line);
+    if (price !== null) {
+      if (!currentCategoria) {
+        currentCategoria = { nome: "Menu Importado", ordem: 0, observacao: "", itens: [] };
+        categorias.push(currentCategoria);
+      }
+      let name = line.replace(/(?:R\$)?\s*\d+[.,]\d{2}/i, '').replace(/[-•—:]/g, '').trim();
+      if (!name) name = "Item Sem Nome";
+      currentItem = {
+        nome: name,
+        descricao: "",
+        preco: price,
+        variacoes: [],
+        ativo: true,
+        estoque: 0,
+        estoqueMinimo: 0,
+        custo: 0
+      };
+      currentCategoria.itens.push(currentItem);
+    } else {
+      if (line.length > 30 || line.toLowerCase().includes('ingredientes') || line.toLowerCase().includes('acompanha')) {
+        if (currentItem) {
+          currentItem.descricao = currentItem.descricao ? currentItem.descricao + ' ' + line : line;
+        } else {
+             if (!currentCategoria) {
+                currentCategoria = { nome: "Menu Importado", ordem: 0, observacao: "", itens: [] };
+                categorias.push(currentCategoria);
+             }
+             currentCategoria.observacao = line;
+        }
+      } else {
+        currentCategoria = { nome: line, ordem: categorias.length, observacao: "", itens: [] };
+        categorias.push(currentCategoria);
+        currentItem = null;
+      }
+    }
+  });
+
+  return { categorias: categorias.filter(c => c.itens.length > 0) };
+}
 
 // --- LÓGICA DE NEGÓCIO (Mantida Intacta) ---
 function converterJSONParaSistema(seuJSON) {
@@ -74,6 +129,9 @@ function ImportarCardapioMaster() {
   const [estabelecimentosList, setEstabelecimentosList] = useState([]);
   const [selectedEstabelecimentoId, setSelectedEstabelecimentoId] = useState('');
   const [file, setFile] = useState(null);
+  const [importMode, setImportMode] = useState('json'); // 'json' or 'text'
+  const [rawText, setRawText] = useState('');
+  const [modoSubstituicao, setModoSubstituicao] = useState('substituir');
   const [importing, setImporting] = useState(false);
   const [importStats, setImportStats] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -95,7 +153,7 @@ function ImportarCardapioMaster() {
         const q = query(collection(db, 'estabelecimentos'), orderBy('nome'));
         const querySnapshot = await getDocs(q);
         setEstabelecimentosList(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (error) {
+      } catch (_error) {
         toast.error('Erro ao carregar estabelecimentos.');
       }
     };
@@ -132,40 +190,53 @@ function ImportarCardapioMaster() {
 
   const handleImport = async (e) => {
     e.preventDefault();
-    if (!selectedEstabelecimentoId || !file) return toast.warn('Preencha todos os campos.');
+    if (!selectedEstabelecimentoId) return toast.warn('Selecione a loja alvo.');
+    if (importMode === 'json' && !file) return toast.warn('Anexe o arquivo JSON.');
+    if (importMode === 'text' && !rawText.trim()) return toast.warn('Cole o cardápio em texto.');
 
     setImporting(true);
     setImportStats(null);
 
     try {
-      const fileContent = await file.text();
-      const dataToImport = JSON.parse(fileContent); 
-      let dadosParaImportar = dataToImport;
-      
-      // Detecção de formato antigo e conversão
-      if (dataToImport.categorias && dataToImport.categorias[0]?.itens?.[0]?.variacoes?.[0]?.tipo) {
-        dadosParaImportar = converterJSONParaSistema(dataToImport);
+      let dataToImport;
+      let dadosParaImportar;
+
+      if (importMode === 'json') {
+          const fileContent = await file.text();
+          dataToImport = JSON.parse(fileContent); 
+          dadosParaImportar = dataToImport;
+          
+          // Detecção de formato antigo e conversão
+          if (dataToImport.categorias && dataToImport.categorias[0]?.itens?.[0]?.variacoes?.[0]?.tipo) {
+            dadosParaImportar = converterJSONParaSistema(dataToImport);
+          }
+      } else {
+          // Motor de Inteligência Analítica Mock (Smart Text Parser)
+          dadosParaImportar = textToMenuParser(rawText);
+          dataToImport = dadosParaImportar;
       }
 
       if (!dadosParaImportar || !Array.isArray(dadosParaImportar.categorias)) {
-        throw new Error('JSON inválido. Estrutura "categorias" não encontrada.');
+        throw new Error('Nenhuma categoria extraída. Revise o formato de origem.');
       }
 
       const batch = writeBatch(db);
       const estabelecimentoDocRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId);
       const categoriasCollectionRef = collection(estabelecimentoDocRef, 'cardapio');
 
-      // 1. Limpeza (Deletar antigo)
+      // 1. Limpeza (Deletar antigo caso modo = substituir)
       const oldCategoriesSnapshot = await getDocs(query(categoriasCollectionRef));
       let deletedItemsCount = 0;
       
-      for (const categoryDoc of oldCategoriesSnapshot.docs) {
-        const itemsSnapshot = await getDocs(query(collection(categoriasCollectionRef, categoryDoc.id, 'itens')));
-        itemsSnapshot.docs.forEach(itemDoc => {
-            batch.delete(itemDoc.ref);
-            deletedItemsCount++;
-        });
-        batch.delete(categoryDoc.ref);
+      if (modoSubstituicao === 'substituir') {
+        for (const categoryDoc of oldCategoriesSnapshot.docs) {
+          const itemsSnapshot = await getDocs(query(collection(categoriasCollectionRef, categoryDoc.id, 'itens')));
+          itemsSnapshot.docs.forEach(itemDoc => {
+              batch.delete(itemDoc.ref);
+              deletedItemsCount++;
+          });
+          batch.delete(categoryDoc.ref);
+        }
       }
 
       // 2. Inserção (Novos dados)
@@ -202,8 +273,8 @@ function ImportarCardapioMaster() {
         produtosAdicionados: addedItemsCount,
         produtosRemovidos: deletedItemsCount,
         categoriasProcessadas: dadosParaImportar.categorias.length,
-        fileName: file.name,
-        conversaoEfetuada: dataToImport !== dadosParaImportar
+        fileName: importMode === 'json' ? file.name : 'Importação via IA Textual',
+        conversaoEfetuada: dataToImport !== dadosParaImportar && importMode === 'json'
       };
 
       await auditLogger('CARDAPIO_IMPORTADO', 
@@ -285,35 +356,89 @@ function ImportarCardapioMaster() {
                         </div>
                     </div>
 
-                    {/* Área de Drag & Drop */}
+                    {/* Tipo de Inserção (Substituir vs Adicionar) */}
                     <div>
-                        <label className="block text-[11px] font-black text-[#86868B] uppercase tracking-widest mb-3">Arquivo JSON de Origem</label>
-                        <div
-                            className={`relative border-2 border-dashed rounded-[2rem] p-12 text-center transition-all duration-300 cursor-pointer group ${
-                                dragActive 
-                                ? 'border-[#1D1D1F] bg-black/5' 
-                                : 'border-[#E5E5EA] bg-[#F5F5F7] hover:bg-white hover:border-[#1D1D1F]'
-                            }`}
-                            onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-                        >
-                            <input type="file" accept=".json" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" id="file-upload" />
-                            
-                            <div className="flex flex-col items-center pointer-events-none">
-                                <div className={`w-20 h-20 rounded-[1.5rem] flex items-center justify-center mb-6 transition-colors shadow-sm ${dragActive ? 'bg-[#1D1D1F] text-white' : 'bg-white border border-[#E5E5EA] text-[#1D1D1F] group-hover:scale-110'}`}>
-                                    {file ? <FaFileCode className="text-3xl" /> : <FaCloudUploadAlt className="text-3xl text-[#86868B]" />}
-                                </div>
-                                <p className="text-xl font-bold text-[#1D1D1F] transition-colors tracking-tight">
-                                    {file ? file.name : 'Arraste o arquivo ou clique aqui'}
-                                </p>
-                                <p className="text-sm font-semibold text-[#86868B] mt-2">
-                                    {file ? `${(file.size / 1024).toFixed(2)} KB` : 'Suporta apenas arquivos no formato JSON'}
-                                </p>
-                            </div>
+                        <label className="block text-[11px] font-black text-[#86868B] uppercase tracking-widest mb-3">Ação na Base de Dados</label>
+                        <div className="flex bg-[#F5F5F7] p-1 rounded-[1.5rem] border border-[#E5E5EA]">
+                            <button
+                                type="button"
+                                onClick={() => setModoSubstituicao('substituir')}
+                                className={`flex-1 py-3 px-4 rounded-[1.25rem] text-sm font-bold transition-all flex items-center justify-center gap-2 ${modoSubstituicao === 'substituir' ? 'bg-white text-red-600 shadow-sm border border-red-100' : 'text-[#86868B] hover:text-red-500'}`}
+                            >
+                                <FaTrash /> Substituir Tudo
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setModoSubstituicao('adicionar')}
+                                className={`flex-1 py-3 px-4 rounded-[1.25rem] text-sm font-bold transition-all flex items-center justify-center gap-2 ${modoSubstituicao === 'adicionar' ? 'bg-white text-emerald-600 shadow-sm border border-emerald-100' : 'text-[#86868B] hover:text-emerald-500'}`}
+                            >
+                                <FaPlusCircle /> Apenas Adicionar
+                            </button>
                         </div>
                     </div>
 
+                    {/* Sub-Navegação (Abas) */}
+                    <div className="flex bg-[#F5F5F7] p-1 rounded-[1.5rem] border border-[#E5E5EA]">
+                        <button
+                            type="button"
+                            onClick={() => { setImportMode('json'); setImportStats(null); }}
+                            className={`flex-1 py-3 px-6 rounded-[1.25rem] text-sm font-bold transition-all flex items-center justify-center gap-2 ${importMode === 'json' ? 'bg-white text-black shadow-sm' : 'text-[#86868B] hover:text-black'}`}
+                        >
+                            <FaFileCode /> Arquivo Estruturado (JSON)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setImportMode('text'); setImportStats(null); }}
+                            className={`flex-1 py-3 px-6 rounded-[1.25rem] text-sm font-bold transition-all flex items-center justify-center gap-2 ${importMode === 'text' ? 'bg-[#1D1D1F] text-white shadow-sm' : 'text-[#86868B] hover:text-black'}`}
+                        >
+                            <FaWandMagicSparkles /> Motor IA / Texto Livre
+                        </button>
+                    </div>
+
+                    {importMode === 'json' ? (
+                        <div>
+                            <label className="block text-[11px] font-black text-[#86868B] uppercase tracking-widest mb-3">Arquivo JSON de Origem</label>
+                            <div
+                                className={`relative border-2 border-dashed rounded-[2rem] p-12 text-center transition-all duration-300 cursor-pointer group ${
+                                    dragActive 
+                                    ? 'border-[#1D1D1F] bg-black/5' 
+                                    : 'border-[#E5E5EA] bg-[#F5F5F7] hover:bg-white hover:border-[#1D1D1F]'
+                                }`}
+                                onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                            >
+                                <input type="file" accept=".json" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" id="file-upload" />
+                                
+                                <div className="flex flex-col items-center pointer-events-none">
+                                    <div className={`w-20 h-20 rounded-[1.5rem] flex items-center justify-center mb-6 transition-colors shadow-sm ${dragActive ? 'bg-[#1D1D1F] text-white' : 'bg-white border border-[#E5E5EA] text-[#1D1D1F] group-hover:scale-110'}`}>
+                                        {file ? <FaFileCode className="text-3xl" /> : <FaCloudUploadAlt className="text-3xl text-[#86868B]" />}
+                                    </div>
+                                    <p className="text-xl font-bold text-[#1D1D1F] transition-colors tracking-tight">
+                                        {file ? file.name : 'Arraste o arquivo ou clique aqui'}
+                                    </p>
+                                    <p className="text-sm font-semibold text-[#86868B] mt-2">
+                                        {file ? `${(file.size / 1024).toFixed(2)} KB` : 'Suporta apenas arquivos no formato JSON'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-[11px] font-black text-[#86868B] uppercase tracking-widest mb-3 flex justify-between items-center">
+                                Cardápio em Texto / PDF Bruto
+                                <span className="text-[9px] bg-yellow-100 text-yellow-800 px-2 py-1 rounded">BETA</span>
+                            </label>
+                            <textarea
+                                value={rawText}
+                                onChange={(e) => setRawText(e.target.value)}
+                                placeholder={`Cole aqui o cardápio.\nExemplo:\n\nHamburguers\nX-Salada R$ 25,00\nPão, carne, queijo e salada\n\nX-Bacon R$ 30,00`}
+                                className="w-full h-64 bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] p-5 rounded-2xl text-sm transition-all focus:bg-white focus:border-black resize-none"
+                            />
+                            <p className="text-xs text-[#86868B] mt-2 font-medium">O motor inteligente processará linhas com preços (R$ X,XX) como produtos, e as demais como categorias e descrições.</p>
+                        </div>
+                    )}
+
                     {/* Aviso e Botão */}
-                    {selectedEstabelecimento && (
+                    {selectedEstabelecimento && modoSubstituicao === 'substituir' && (
                         <div className="bg-red-50 border border-red-100 rounded-2xl p-5 flex gap-4 items-start">
                             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0">
                                 <FaExclamationTriangle size={16} />
@@ -324,11 +449,23 @@ function ImportarCardapioMaster() {
                             </div>
                         </div>
                     )}
+                    
+                    {selectedEstabelecimento && modoSubstituicao === 'adicionar' && (
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex gap-4 items-start">
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500 shrink-0">
+                                <FaPlusCircle size={16} />
+                            </div>
+                            <div className="text-sm text-emerald-800 leading-relaxed font-medium">
+                                <span className="font-bold block text-emerald-900 mb-1">Modo Mesclagem</span>
+                                Os itens antigos de <strong className="text-black bg-white px-1.5 py-0.5 rounded shadow-sm mx-1">{selectedEstabelecimento.nome}</strong> serão mantidos. As novas categorias e produtos serão somados ao cardápio atual.
+                            </div>
+                        </div>
+                    )}
 
                     <button
                         type="submit"
-                        disabled={!selectedEstabelecimentoId || !file || importing}
-                        className="w-full py-5 bg-[#1D1D1F] text-white rounded-[1.5rem] font-bold text-lg hover:bg-black hover:scale-[1.01] transition-all shadow-sm disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-95"
+                        disabled={!selectedEstabelecimentoId || (importMode === 'json' ? !file : !rawText) || importing}
+                        className={`w-full py-5 text-white rounded-[1.5rem] font-bold text-lg hover:bg-black hover:scale-[1.01] transition-all shadow-sm disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-95 ${importMode === 'text' ? 'bg-[#1D1D1F]' : 'bg-[#1D1D1F]'}`}
                     >
                         {importing ? (
                             <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Injetando Dados...</>

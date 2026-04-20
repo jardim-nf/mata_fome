@@ -5,7 +5,8 @@ import DashBoardSummary from "../components/DashBoardSummary";
 import BannerMensalidade from "../components/BannerMensalidade";
 import { useAuth } from "../context/AuthContext";
 import { useEstablishment } from "../hooks/useEstablishment";
-
+import { db } from "../firebase";
+import { collection, query, orderBy, limit, getDocs, where } from "firebase/firestore";
 
 import { 
   IoStatsChart, IoShareSocial, IoColorPalette, IoSettings, IoTrashBin,
@@ -15,7 +16,7 @@ import {
   IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
   IoFlaskOutline
 } from "react-icons/io5"; 
-import { FaUsers, FaMotorcycle, FaMapMarkedAlt } from 'react-icons/fa'; 
+import { FaUsers, FaMotorcycle, FaMapMarkedAlt, FaBullhorn, FaTimes } from 'react-icons/fa'; 
 
 const ActionButton = ({ title, subtitle, icon, themeColor }) => {
   const themes = {
@@ -54,6 +55,48 @@ const AdminDashboard = () => {
   const { estabelecimentoInfo } = useEstablishment(estabelecimentoIdPrincipal);
   const isVarejo = estabelecimentoInfo?.tipoNegocio === 'varejo';
   const [showSummary, setShowSummary] = useState(false);
+  
+  // Megafone State
+  const [globalAviso, setGlobalAviso] = useState(null);
+
+  useEffect(() => {
+    const fetchAvisoGlobal = async () => {
+      try {
+        const q = query(collection(db, 'avisos_gerais'), where('ativo', '==', true), orderBy('createdAt', 'desc'), limit(10));
+        const snap = await getDocs(q);
+        
+        let avisoAchado = null;
+        for (const doc of snap.docs) {
+           const data = doc.data();
+           const alvo = data.alvo || 'todos';
+           
+           if (alvo === 'todos' || alvo === estabelecimentoIdPrincipal) {
+               const isLido = localStorage.getItem(`aviso_lido_${doc.id}`);
+               if (!isLido) {
+                   avisoAchado = { id: doc.id, ...data };
+                   break;
+               }
+           }
+        }
+        
+        if (avisoAchado) {
+           setGlobalAviso(avisoAchado);
+        }
+      } catch (err) {
+        console.error("Erro ao ler broadcast", err);
+      }
+    };
+    if (currentUser && estabelecimentoIdPrincipal) {
+      fetchAvisoGlobal();
+    }
+  }, [currentUser, estabelecimentoIdPrincipal]);
+
+  const dispensarAvisoGlobal = () => {
+    if (globalAviso) {
+      localStorage.setItem(`aviso_lido_${globalAviso.id}`, 'true');
+      setGlobalAviso(null);
+    }
+  };
 
   useEffect(() => {
     if (currentUser && !loading) {
@@ -194,6 +237,48 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 font-sans pb-20">
+      
+      {/* GLOBAL MEGAFONE BANNER */}
+      {globalAviso && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className={`bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border-2 ${
+             globalAviso.tipo === 'urgente' ? 'border-red-500' :
+             globalAviso.tipo === 'dica' ? 'border-yellow-400' :
+             'border-blue-500'
+           }`}>
+              <div className={`px-6 py-4 flex justify-between items-center ${
+                globalAviso.tipo === 'urgente' ? 'bg-red-50 text-red-700' :
+                globalAviso.tipo === 'dica' ? 'bg-yellow-50 text-yellow-800' :
+                'bg-blue-50 text-blue-800'
+              }`}>
+                 <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
+                      globalAviso.tipo === 'urgente' ? 'bg-red-500' :
+                      globalAviso.tipo === 'dica' ? 'bg-yellow-400' :
+                      'bg-blue-500'
+                    }`}>
+                      <FaBullhorn />
+                    </div>
+                    <span className="font-extrabold uppercase tracking-widest text-[10px]">Mensagem da Matafome Corporativo</span>
+                 </div>
+                 <button onClick={dispensarAvisoGlobal} className="hover:scale-110 active:scale-95 transition-transform"><FaTimes size={18}/></button>
+              </div>
+              
+              <div className="p-8 text-center flex flex-col items-center">
+                 <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-4">{globalAviso.titulo}</h2>
+                 <p className="text-slate-600 font-medium whitespace-pre-wrap leading-relaxed">{globalAviso.mensagem}</p>
+                 
+                 <button 
+                   onClick={dispensarAvisoGlobal} 
+                   className="mt-8 bg-slate-900 text-white px-8 py-4 rounded-xl font-bold w-full sm:w-auto hover:bg-slate-800 active:scale-95 transition-all shadow-md"
+                 >
+                   Ciente, Entendi
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
       <div className="w-full space-y-8">
 
         {/* TOP BAR — compacto */}

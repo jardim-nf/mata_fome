@@ -18,8 +18,15 @@ const io = new Server(server, {
 
 const PORT = 4000;
 
-app.get('/', (req, res) => {
-  res.send('Servidor Local IdeaFood Operacional 🚀');
+const path = require('path');
+
+// Permite servir a interface gerada do React (Build final) na mesma porta 4000
+const distPath = path.join(__dirname, '../dist');
+app.use(express.static(distPath));
+
+// Direciona qualquer rota (como /pdv, /master-dashboard) para o React lidar internamente
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 io.on('connection', (socket) => {

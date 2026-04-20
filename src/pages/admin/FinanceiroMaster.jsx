@@ -275,12 +275,12 @@ function FinanceiroMaster() {
                       )}
                       
                       {fatura.status === 'pago' ? (
-                          <button onClick={() => handleBaixa(fatura.id, 'pago')}
+                          <button onClick={() => handleBaixa(fatura)}
                             className="bg-white border border-[#E5E5EA] px-6 py-3 rounded-full text-xs font-bold text-[#D0021B] hover:bg-[#FFE6E6] hover:border-[#FFE6E6] transition-all shadow-sm active:scale-95 flex items-center gap-2">
                             <FaUndo /> Estornar Dinheiro
                           </button>
                       ) : (
-                          <button onClick={() => handleBaixa(fatura.id, 'pendente')}
+                          <button onClick={() => handleBaixa(fatura)}
                             className="bg-black border border-black px-6 py-3 rounded-full text-xs font-bold text-white hover:bg-gray-800 transition-all shadow-sm active:scale-95 flex items-center gap-2">
                             <FaCheck /> Confirmar Baixa
                           </button>

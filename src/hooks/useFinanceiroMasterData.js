@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { financeiroService } from '../services/financeiroService';
 import { toast } from 'react-toastify';
@@ -150,17 +150,47 @@ export function useFinanceiroMasterData() {
     } catch (error) { toast.error("Erro ao gerar cobrança."); }
   };
 
-  const handleBaixa = async (id, statusAtual) => {
+  const handleBaixa = async (fatura) => {
     try {
-      if (statusAtual === 'pago') {
+      if (!fatura || typeof fatura !== 'object') return;
+      if (fatura.status === 'pago') {
         if (window.confirm("Deseja estornar este pagamento?")) { 
-          await financeiroService.reabrirFatura(id); 
+          await financeiroService.reabrirFatura(fatura.id); 
           toast.info("Pagamento estornado."); 
         }
       } else {
         if (window.confirm("Confirmar o recebimento?")) { 
-          await financeiroService.marcarComoPago(id); 
-          toast.success("Pagamento confirmado!"); 
+          await financeiroService.marcarComoPago(fatura.id); 
+          
+          if (fatura.descricao && fatura.descricao.toLowerCase().includes('mensalidade')) {
+            if (window.confirm("Esta é uma mensalidade! Deseja renovar a licença e gerar a cobrança do mês que vem automaticamente?")) {
+              const vencAtual = parseDate(fatura.vencimento) || new Date();
+              const novoVenc = new Date(vencAtual);
+              novoVenc.setMonth(novoVenc.getMonth() + 1);
+              const strData = format(novoVenc, 'yyyy-MM-dd');
+              
+              await financeiroService.criarFatura({
+                estabelecimentoId: fatura.estabelecimentoId,
+                estabelecimentoNome: fatura.estabelecimentoNome || '',
+                valor: parseFloat(fatura.valor || 0),
+                vencimento: strData,
+                descricao: fatura.descricao
+              });
+              
+              if (fatura.estabelecimentoId) {
+                const estabRef = doc(db, 'estabelecimentos', fatura.estabelecimentoId);
+                await updateDoc(estabRef, {
+                  licencaAte: strData,
+                  ativo: true
+                }).catch(e => console.error("Erro ao renovar licenca", e));
+              }
+              toast.success("Mensalidade gerada e licença renovada!");
+            } else {
+               toast.success("Pagamento confirmado!");
+            }
+          } else {
+             toast.success("Pagamento confirmado!"); 
+          }
         }
       }
       carregarDados();

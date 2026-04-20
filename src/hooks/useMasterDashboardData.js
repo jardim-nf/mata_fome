@@ -156,9 +156,10 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
         let estabId = item.estabelecimentoId;
         if (!estabId && item._path) { const parts = item._path.split('/'); const idx = parts.indexOf('estabelecimentos'); if (idx >= 0 && parts.length > idx + 1) estabId = parts[idx + 1]; }
         if (!estabId) estabId = 'desconhecido';
-        if (!rankingMap[estabId]) rankingMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0 };
+        if (!rankingMap[estabId]) rankingMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0, itens: [] };
         rankingMap[estabId].total += getTotal(item);
         rankingMap[estabId].pedidos += 1;
+        rankingMap[estabId].itens.push(item);
       });
       const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 20);
 
@@ -167,9 +168,10 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
         let estabId = item.estabelecimentoId;
         if (!estabId && item._path) { const parts = item._path.split('/'); const idx = parts.indexOf('estabelecimentos'); if (idx >= 0 && parts.length > idx + 1) estabId = parts[idx + 1]; }
         if (!estabId) estabId = 'desconhecido';
-        if (!rankingOntemMap[estabId]) rankingOntemMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0 };
+        if (!rankingOntemMap[estabId]) rankingOntemMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0, itens: [] };
         rankingOntemMap[estabId].total += getTotal(item);
         rankingOntemMap[estabId].pedidos += 1;
+        rankingOntemMap[estabId].itens.push(item);
       });
       const topLojasOntem = Object.values(rankingOntemMap).sort((a, b) => b.total - a.total).slice(0, 5);
 
@@ -284,9 +286,10 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
       let estabId = item.estabelecimentoId;
       if (!estabId && item._path) { const parts = item._path.split('/'); const idx = parts.indexOf('estabelecimentos'); if (idx >= 0 && parts.length > idx + 1) estabId = parts[idx + 1]; }
       if (!estabId) estabId = 'desconhecido';
-      if (!rankingMap[estabId]) rankingMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0 };
+      if (!rankingMap[estabId]) rankingMap[estabId] = { id: estabId, nomeSalvoNoPedido: item.estabelecimentoNome || '', total: 0, pedidos: 0, itens: [] };
       rankingMap[estabId].total += getTotal(item);
       rankingMap[estabId].pedidos += 1;
+      rankingMap[estabId].itens.push(item);
     });
     const topLojas = Object.values(rankingMap).sort((a, b) => b.total - a.total).slice(0, 20);
     

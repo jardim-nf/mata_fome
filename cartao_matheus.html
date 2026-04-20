@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matheus Jardim | Cartão de Visita</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        idea: {
+                            orange: '#f37521', // Laranja Idea Food
+                            dark: '#0f172a',    // Azul Escuro Grupo Idea
+                            blue: '#0ea5e9'     // Azul Inteligência Artificial
+                        }
+                    },
+                    animation: {
+                        'blob': 'blob 7s infinite',
+                        'fade-in': 'fadeIn 1s ease-out',
+                        'slide-up': 'slideUp 0.8s ease-out'
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #0f172a; /* Fundo escuro premium */
+            color: white;
+            overflow-x: hidden;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        .text-gradient {
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* Efeito de hover nos botões */
+        .hover-lift {
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .hover-lift:hover {
+            transform: translateY(-5px) scale(1.02);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 relative antialiased z-0">
+
+    <!-- Efeitos de Fundo (Blobs) -->
+    <div class="absolute top-0 -left-4 w-72 h-72 bg-idea-orange rounded-full mix-blend-multiply filter blur-3xl opacity-20 animation-blob z-[-1]"></div>
+    <div class="absolute top-0 -right-4 w-72 h-72 bg-idea-blue rounded-full mix-blend-multiply filter blur-3xl opacity-20 animation-blob animation-delay-2000 z-[-1]"></div>
+    <div class="absolute -bottom-8 left-20 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animation-blob animation-delay-4000 z-[-1]"></div>
+
+    <!-- Container do Cartão -->
+    <div class="glass-card w-full max-w-sm rounded-[2.5rem] p-8 flex flex-col items-center relative overflow-hidden animate-fade-in group">
+        
+        <!-- Detalhe superior -->
+        <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-idea-orange via-idea-blue to-purple-600"></div>
+
+        <!-- Perfil / Logo Principal -->
+        <!-- Substitua o link do src pela logo que você fez upload, se tiver o link direto -->
+        <div class="w-32 h-32 rounded-full bg-white flex items-center justify-center p-3 mb-6 shadow-2xl border-4 border-slate-800 animate-slide-up hover:scale-105 transition-transform duration-500 cursor-pointer">
+            <!-- Coloquei um ícone de placeholder, mas você pode usar <img> -->
+            <h1 class="text-idea-orange font-heading font-bold text-4xl mt-1">IDEA</h1>
+        </div>
+
+        <!-- Nome e Título -->
+        <div class="text-center mb-8 animate-slide-up" style="animation-delay: 0.1s;">
+            <h2 class="text-3xl font-heading font-extrabold tracking-tight mb-2 text-white">Matheus Jardim</h2>
+            <p class="text-sm font-sans font-medium text-slate-300 uppercase letter-tracking-widest flex items-center justify-center gap-2">
+                <span class="w-8 h-[1px] bg-idea-orange"></span>
+                Idea Sistema
+                <span class="w-8 h-[1px] bg-idea-orange"></span>
+            </p>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="w-full space-y-4 animate-slide-up" style="animation-delay: 0.2s;">
+            
+            <!-- WhatsApp -->
+            <a href="https://wa.me/5522998102575" target="_blank" class="hover-lift flex items-center justify-between w-full p-4 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/5 transition-all group/btn">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 group-hover/btn:bg-green-500 group-hover/btn:text-white transition-colors">
+                        <i class="fab fa-whatsapp text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-xs text-slate-400 font-medium">WhatsApp</p>
+                        <p class="text-sm font-semibold text-white">(22) 99810-2575</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-slate-500 group-hover/btn:text-white transition-colors"></i>
+            </a>
+
+            <!-- Site -->
+            <a href="https://ideasistema.online" target="_blank" class="hover-lift flex items-center justify-between w-full p-4 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/5 transition-all group/btn">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-idea-orange/20 flex items-center justify-center text-idea-orange group-hover/btn:bg-idea-orange group-hover/btn:text-white transition-colors">
+                        <i class="fas fa-globe text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-xs text-slate-400 font-medium">Website</p>
+                        <p class="text-sm font-semibold text-white">ideasistema.online</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-slate-500 group-hover/btn:text-white transition-colors"></i>
+            </a>
+
+        </div>
+
+        <!-- Área do QR Code -->
+        <div class="mt-8 animate-slide-up flex flex-col items-center" style="animation-delay: 0.3s;">
+            <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-widest">Escaneie o QR Code</p>
+            <div class="w-24 h-24 bg-white rounded-xl p-2 flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform duration-300">
+                <!-- Se quiser, substitua o ícone por <img src="qr-code.png"> -->
+                <i class="fas fa-qrcode text-5xl text-idea-orange"></i>
+            </div>
+        </div>
+
+        <!-- Footer Logo (Grupo Idea) -->
+        <div class="mt-10 opacity-50 flex items-center justify-center gap-2">
+            <span class="text-xs font-semibold tracking-wider">GRUPO IDEA</span>
+        </div>
+
+    </div>
+
+</body>
+</html>

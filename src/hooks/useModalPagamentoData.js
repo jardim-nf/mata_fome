@@ -245,6 +245,21 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         const todosItensAtivos = listaItens.filter(i => i.status !== 'cancelado');
 
+        // 🔥 NOVO: Agrupa os itens para mostrar o nome de cada pagante/comanda na impressão!
+        const gruposDisplay = {};
+        todosItensAtivos.forEach(item => {
+            let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
+            if ((!pessoa || pessoa === 'Mesa') && mesa?.nomesOcupantes?.length > 0) {
+                if (!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0];
+            }
+            if (!pessoa) pessoa = 'Mesa';
+            
+            if (!gruposDisplay[pessoa]) gruposDisplay[pessoa] = { itens: [], total: 0 };
+            const qtd = item.quantidade || item.qtd || 1;
+            gruposDisplay[pessoa].itens.push(item);
+            gruposDisplay[pessoa].total += (item.preco * qtd);
+        });
+
         const conteudo = `
             <html>
             <head>
@@ -257,6 +272,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                     .pagante-block { margin-bottom: 8px; }
                     .pagante-header { display: flex; justify-content: space-between; font-weight: 900; border-bottom: 1px solid #000; margin-bottom: 2px; text-transform: uppercase; }
                     .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 11px; margin-bottom: 1px; }
+                    .obs-row { font-size: 10px; padding-left: 10px; display: block; }
                     .resumo-box { border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px; }
                     .linha-resumo { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px; }
                     .linha-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
@@ -269,19 +285,27 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                     <p style="font-size: 10px;">${new Date().toLocaleString('pt-BR')}</p>
                 </div>
 
-                <div class="pagante-block">
-                    <div class="pagante-header">
-                        <span>CONSUMO DA MESA</span>
-                        <span>R$ ${totalConsumo.toFixed(2)}</span>
-                    </div>
-                    ${todosItensAtivos.filter(i => i.preco > 0).map(item => `
-                        <div class="item-row">
-                            <span>${item.quantidade || item.qtd || 1}x ${(item.nome || '').substring(0,25)}</span>
-                            <span>${((item.preco || 0) * (item.quantidade || item.qtd || 1)).toFixed(2)}</span>
+                ${Object.entries(gruposDisplay).map(([pessoa, dados]) => `
+                    <div class="pagante-block">
+                        <div class="pagante-header">
+                            <span>${pessoa === 'Mesa' ? 'CONSUMO GERAL MESA' : `👤 ${pessoa}`}</span>
+                            <span>R$ ${dados.total.toFixed(2)}</span>
                         </div>
-                    `).join('')}
-                    ${todosItensAtivos.length === 0 ? '<div class="item-row"><i>Nenhum item lançado</i></div>' : ''}
-                </div>
+                        ${dados.itens.filter(i => i.preco > 0).map(item => {
+                            let formatado = `<div class="item-row">
+                                <span>${item.quantidade || item.qtd || 1}x ${(item.nome || '').substring(0,25)}</span>
+                                <span>${((item.preco || 0) * (item.quantidade || item.qtd || 1)).toFixed(2)}</span>
+                            </div>`;
+
+                            if (item.variacao || item.variacaoSelecionada) {
+                                formatado += `<span class="obs-row">- ${item.variacao?.nome || item.variacaoSelecionada?.nome}</span>`;
+                            }
+                            return formatado;
+                        }).join('')}
+                    </div>
+                `).join('')}
+
+                ${todosItensAtivos.length === 0 ? '<div class="item-row"><i>Nenhum item lançado</i></div>' : ''}
 
                 <div class="resumo-box">
                     <div class="linha-resumo"><span>TOTAL CONSUMO:</span><span>R$ ${totalConsumo.toFixed(2)}</span></div>
