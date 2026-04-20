@@ -55,7 +55,7 @@ const AdminColorSettings = () => {
                 ...(docSnap.data().cores.texto || {})
               }
             }));
-          }
+          } else { setCores({ primaria: '#DC2626', secundaria: '#991B1B', destaque: '#059669', background: '#000000', texto: { principal: '#FFFFFF', secundario: '#9CA3AF', placeholder: '#6B7280', destaque: '#FBBF24', erro: '#EF4444', sucesso: '#10B981' } }); }
         } catch (error) {
           console.error("Erro ao buscar cores:", error);
           toast.error("Erro ao carregar configurações de cores.");
