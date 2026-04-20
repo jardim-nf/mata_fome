@@ -134,10 +134,6 @@ export function useEstablishment(estabelecimentoSlug) {
             }
           };
           
-          if (cores.primaria?.toLowerCase() === '#ffffff') {
-            cores.primaria = '#EA1D2C';
-            cores.texto = { ...cores.texto, principal: '#111827' };
-          }
           setCoresEstabelecimento(cores);
         }
 
