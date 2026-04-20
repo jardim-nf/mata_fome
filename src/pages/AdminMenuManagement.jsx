@@ -501,7 +501,7 @@ function AdminMenuManagement() {
                                               </div>
                                               <div>
                                                   <label className="text-[11px] font-extrabold text-slate-400 mb-2 block uppercase tracking-wider">Qtd Estoque</label>
-                                                  <input type="number" min="0" value={v.estoque} onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none" placeholder="0" />
+                                                  <input type="number" value={v.estoque} onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none" placeholder="0" />
                                               </div>
                                               <div>
                                                   <label className="text-[11px] font-extrabold text-slate-400 mb-2 block uppercase tracking-wider">Status</label>
