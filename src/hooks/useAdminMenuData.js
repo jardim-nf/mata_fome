@@ -230,9 +230,14 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 nome: currentFormData.nome.trim(),
                 categoria: finalCategoryName,
                 imageUrl,
-                variacoes: currentVariacoes.map(v => ({ ...v, preco: Number(v.preco), estoque: Number(v.estoque), custo: Number(v.custo) })),
-                estoque: currentVariacoes.reduce((acc, v) => acc + Number(v.estoque), 0),
-                preco: Math.min(...currentVariacoes.map(v => Number(v.preco))),
+                variacoes: currentVariacoes.map(v => ({ 
+                    ...v, 
+                    preco: Number(v.preco) || 0, 
+                    estoque: isNaN(Number(v.estoque)) ? 0 : Number(v.estoque), 
+                    custo: Number(v.custo) || 0 
+                })),
+                estoque: currentVariacoes.reduce((acc, v) => acc + (isNaN(Number(v.estoque)) ? 0 : Number(v.estoque)), 0),
+                preco: Math.min(...currentVariacoes.map(v => Number(v.preco) || 0)),
                 custo: custoPadrao,
                 custo_estimado: custoPadrao,
                 fichaTecnica: currentFormData.fichaTecnica || [],
