@@ -247,6 +247,15 @@ function AdminMenuManagement() {
   }, [menuParams.menuItems]);
 
   useEffect(() => {
+    if (menuParams.showItemForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [menuParams.showItemForm]);
+
+  useEffect(() => {
     const actions = (
         <div className="flex items-center space-x-3">
             <div className="flex bg-white rounded-xl border border-slate-200/60 p-1 shadow-sm">
