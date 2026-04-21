@@ -1,5 +1,6 @@
-// src/hooks/usePlatformWebhooks.js
+import { useEffect } from 'react';
 import { onSnapshot, collection, query, where } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 
 export const usePlatformWebhooks = () => {
   useEffect(() => {

@@ -198,7 +198,7 @@ function MasterDashboard() {
             </div>
             
             <div className="flex flex-col flex-1 justify-center mt-2">
-              <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-[-0.04em] text-slate-800 break-words drop-shadow-sm mb-4">
+              <h2 className="text-4xl sm:text-5xl xl:text-6xl font-black tracking-[-0.04em] text-slate-800 drop-shadow-sm mb-4 truncate" title={fmt(financeiroFiltrado ? financeiroFiltrado.faturamento : financeiro.faturamentoHoje)}>
                 {fmt(financeiroFiltrado ? financeiroFiltrado.faturamento : financeiro.faturamentoHoje)}
               </h2>
               <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 sm:mt-4">
@@ -234,7 +234,7 @@ function MasterDashboard() {
                       <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-white mb-4 line-clamp-2">{estabelecimentosMap[top1.id] || top1.nomeSalvoNoPedido || 'Desconhecido'}</h2>
                       
                       <div className="mt-auto">
-                        <p className="text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 tracking-tight drop-shadow-sm mb-4">{fmt(top1.total)}</p>
+                        <p className="text-3xl xl:text-4xl 2xl:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 tracking-tight drop-shadow-sm mb-4 truncate" title={fmt(top1.total)}>{fmt(top1.total)}</p>
                         
                         {/* Mini-Relatório com Badges */}
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -294,13 +294,32 @@ function MasterDashboard() {
                 if (outros.length === 0) return <div className="bg-white/60 border border-slate-200 rounded-2xl p-6 w-full text-center text-slate-400 text-sm font-medium shadow-sm">Rankings secundários sendo processados.</div>;
 
                 return outros.map((loja, idx) => (
-                  <div key={loja.id} className="min-w-[260px] bg-white border border-slate-100 rounded-3xl p-6 shadow-sm snap-start hover:shadow-md hover:-translate-y-1 transition-all cursor-default">
-                    <div className="flex justify-between items-center mb-5">
-                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl uppercase tracking-widest">RANK #{idx + 2}</span>
-                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl uppercase">{loja.pedidos} Vendas</span>
+                  <div 
+                    key={loja.id} 
+                    onClick={() => setLojaAberta(loja)}
+                    className="min-w-[240px] sm:min-w-[280px] flex-1 bg-white border border-slate-100 rounded-3xl p-5 sm:p-6 shadow-sm snap-start hover:shadow-md hover:border-indigo-200 hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex justify-between items-center mb-4 sm:mb-5">
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 sm:px-3 py-1.5 rounded-xl uppercase tracking-widest">RANK #{idx + 2}</span>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 sm:px-3 py-1.5 rounded-xl uppercase group-hover:bg-indigo-100 transition-colors">
+                          <FaShoppingCart size={10} />
+                          {loja.pedidos} Vendas
+                        </div>
+                      </div>
+                      <h3 className="font-bold text-slate-800 line-clamp-2 text-sm sm:text-base mb-1" title={estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || 'Desconhecido'}>
+                         {estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || 'Desconhecido'}
+                      </h3>
+                      <p className="text-[10px] sm:text-xs text-slate-500 font-medium mb-3">
+                         Tk Médio: {fmt(loja.total / loja.pedidos)}
+                      </p>
                     </div>
-                    <h3 className="font-bold text-slate-800 truncate text-base mb-2">{estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || 'Desconhecido'}</h3>
-                    <p className="text-2xl font-black tracking-tight text-slate-800">{fmt(loja.total)}</p>
+                    <div className="flex justify-between items-end mt-2">
+                      <p className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800 group-hover:text-indigo-600 transition-colors">{fmt(loja.total)}</p>
+                      <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-indigo-50 flex items-center justify-center transition-colors">
+                        <span className="text-slate-400 group-hover:text-indigo-500 text-sm font-bold">⤢</span>
+                      </div>
+                    </div>
                   </div>
                 ));
               })()}
@@ -449,7 +468,7 @@ function MasterDashboard() {
                 picosHora[label].qtd += 1;
                 picosHora[label].total += totalVenda;
               }
-            } catch(e){}
+            } catch(e){ /* ignora erro de parse de data */ }
           });
         }
 
@@ -513,7 +532,7 @@ function MasterDashboard() {
                         else if (venda.dataPedido && venda.dataPedido.seconds) extracted = new Date(venda.dataPedido.seconds * 1000);
                         
                         if(extracted) dataVendaStr = format(extracted, "dd/MM 'às' HH:mm");
-                      } catch(e){}
+                      } catch(e){ /* date parse fallback */ }
                       
                       return (
                         <div key={venda.id || idx} className="flex items-center justify-between p-4 border border-slate-100 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow group">

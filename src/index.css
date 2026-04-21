@@ -26,6 +26,35 @@
   border-radius: 0.5rem;
 }
 
+/* 🚀 Elimina o delay de 300ms em taps mobile — NASA-level responsividade */
+* {
+  touch-action: manipulation;
+}
+
+/* 🚀 Animação de entrada suave para cards do cardápio */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+/* 🚀 Bounce no CartBar quando um item é adicionado */
+@keyframes cartBounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+  60% { transform: translateY(-2px); }
+}
+.cart-bounce {
+  animation: cartBounce 0.5s ease-out;
+}
+
+/* 🚀 GPU acceleration para elementos animados */
+.animate-slide-up, .cart-bounce, .animate-fade-in {
+  will-change: transform;
+}
+
 @layer base {
   body {
     font-family: 'Poppins', sans-serif;

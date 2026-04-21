@@ -16,7 +16,7 @@ const HistoricoCliente = () => {
             if (!currentUser) {
                 setLoading(false);
                 return;
-            };
+            }
 
             try {
                 const q = query(

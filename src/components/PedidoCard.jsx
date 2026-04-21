@@ -172,10 +172,11 @@ const PedidoCard = ({
                     frasePrincipal = `Seu pedido *#${idCurto}* foi recebido! ✅\n\nEm instantes você receberá atualizações sobre o preparo. 🍔`;
                 }
                 break;
-            case 'em_entrega': 
+            case 'em_entrega': {
                 const infoMoto = item.motoboyNome ? ` com o entregador *${item.motoboyNome}*` : '';
                 frasePrincipal = `Saiu para entrega! 🛵💨\nSeu pedido *#${idCurto}* está a caminho${infoMoto}.`; 
                 break;
+            }
             case 'pronto_para_servir': frasePrincipal = `Seu pedido *#${idCurto}* está pronto! ✅\nJá pode vir retirar.`; break;
             case 'finalizado': 
                 frasePrincipal = `Pedido *#${idCurto}* entregue com sucesso! ⭐\nObrigado pela preferência! 🍔❤️`; 

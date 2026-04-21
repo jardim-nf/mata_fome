@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IdeaFood Logo Animation</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0b0f19;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            perspective: 1000px;
+        }
+
+        .container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Aura brilhante no fundo */
+        .glow {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(239, 131, 48, 0.4) 0%, rgba(239, 131, 48, 0) 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: pulseGlow 4s infinite alternate ease-in-out;
+            opacity: 0;
+            animation-delay: 1.5s;
+        }
+
+        .logo {
+            position: relative;
+            z-index: 10;
+            max-width: 400px;
+            width: 80%;
+            /* Filtro de brilho sutil */
+            filter: drop-shadow(0px 10px 20px rgba(0,0,0,0.5)) drop-shadow(0px 0px 5px rgba(239, 131, 48, 0.2));
+            /* Animação de entrada */
+            animation: logoEntrance 2s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+                       logoFloat 6s ease-in-out 2s infinite;
+            opacity: 0;
+            transform: translateY(50px) scale(0.8) rotateX(10deg);
+        }
+
+        /* Efeito de flash/luz passando (Shine effect mask) */
+        .shine-container {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            mask-image: url('logo-idea-solucoes-transp.png');
+            -webkit-mask-image: url('logo-idea-solucoes-transp.png');
+            mask-size: contain;
+            -webkit-mask-size: contain;
+            mask-repeat: no-repeat;
+            -webkit-mask-repeat: no-repeat;
+            mask-position: center;
+            -webkit-mask-position: center;
+            pointer-events: none;
+        }
+
+        .shine {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent);
+            transform: skewX(-20deg);
+            animation: sweep 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            animation-delay: 2s;
+        }
+
+        @keyframes logoEntrance {
+            0% {
+                opacity: 0;
+                transform: translateY(100px) scale(0.85) rotateX(20deg);
+                filter: blur(10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1) rotateX(0deg);
+                filter: blur(0px) drop-shadow(0px 10px 20px rgba(0,0,0,0.5));
+            }
+        }
+
+        @keyframes logoFloat {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        @keyframes sweep {
+            0% { left: -100%; }
+            20% { left: 200%; }
+            100% { left: 200%; }
+        }
+
+        @keyframes pulseGlow {
+            0% { transform: scale(1); opacity: 0.2; }
+            100% { transform: scale(1.5); opacity: 0.8; }
+        }
+
+        /* Partículas de fundo para um ar mais premium tech */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            background-color: rgba(239, 131, 48, 0.5);
+            border-radius: 50%;
+            animation: floatParticle 8s infinite linear;
+        }
+
+        @keyframes floatParticle {
+            0% { transform: translateY(100vh) scale(0); opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="particles" id="particles"></div>
+
+    <div class="container">
+        <div class="glow"></div>
+        <img src="logo-idea-solucoes-transp.png" alt="IdeaFood Logo" class="logo" id="main-logo" onerror="this.src='logo-ideafood.png'" />
+        
+        <div class="shine-container">
+            <div class="shine"></div>
+        </div>
+    </div>
+
+    <script>
+        // Criar pequenas partículas tech no fundo
+        const particleContainer = document.getElementById('particles');
+        for (let i = 0; i < 20; i++) {
+            const p = document.createElement('div');
+            p.classList.add('particle');
+            const size = Math.random() * 4 + 2;
+            p.style.width = size + 'px';
+            p.style.height = size + 'px';
+            p.style.left = Math.random() * 100 + 'vw';
+            p.style.animationDelay = Math.random() * 5 + 's';
+            p.style.animationDuration = (Math.random() * 5 + 5) + 's';
+            particleContainer.appendChild(p);
+        }
+    </script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/pages/admin/RankingFuncionarios.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import BackButton from '../../components/BackButton';

@@ -21,7 +21,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                 if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
-                const matches = buffer.match(/\d+\.\d+|\d+\,\d+/g);
+                const matches = buffer.match(/\d+\.\d+|\d+,\d+/g);
                 if (matches) {
                     const pesoLido = matches[matches.length - 1].replace(',', '.');
                     if (parseFloat(pesoLido) > 0) {

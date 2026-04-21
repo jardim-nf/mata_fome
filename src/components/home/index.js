@@ -8,3 +8,4 @@ export { default as LoginModal } from './LoginModal';
 export { default as EstabelecimentosGrid } from './EstabelecimentosGrid';
 export { default as Footer } from './Footer';
 export { default as WhatsAppButton } from './WhatsAppButton';
+export { default as ROICalculator } from './ROICalculator';

@@ -93,7 +93,6 @@ export default function Menu() {
     // Setup Local
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
-    const [produtosFiltrados, setProdutosFiltrados] = useState([]);
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [triggerCheckout, setTriggerCheckout] = useState(false);
     const [valorGatilhoRaspadinha, setValorGatilhoRaspadinha] = useState(9999);
@@ -176,14 +175,16 @@ export default function Menu() {
         if (triggerCheckout && carrinho.length > 0) { setTriggerCheckout(false); setTimeout(() => { scrollToResumo(); toast.info('👇 Confira seu pedido e finalize aqui!'); }, 200); }
     }, [carrinho, triggerCheckout, scrollToResumo]);
 
-    useEffect(() => {
-        setProdutosFiltrados(searchTerm ? allProdutos.filter(prod => {
-            const term = searchTerm.toLowerCase();
+    // 🚀 useMemo em vez de useEffect+setState — elimina 1 ciclo de render extra
+    const produtosFiltrados = useMemo(() => {
+        if (!searchTerm) return [...allProdutos];
+        const term = searchTerm.toLowerCase();
+        return allProdutos.filter(prod => {
             const matchNome = prod.nome?.toLowerCase().includes(term);
             const matchDesc = prod.descricao?.toLowerCase().includes(term);
             const matchVar = Array.isArray(prod.variacoes) && prod.variacoes.some(v => v.nome?.toLowerCase().includes(term));
             return matchNome || matchDesc || matchVar;
-        }) : [...allProdutos]);
+        });
     }, [allProdutos, searchTerm]);
 
     useEffect(() => { setValorGatilhoRaspadinha(estabelecimentoInfo?.valorMinimoRaspadinha ? parseFloat(estabelecimentoInfo.valorMinimoRaspadinha) : 100); }, [estabelecimentoInfo]);

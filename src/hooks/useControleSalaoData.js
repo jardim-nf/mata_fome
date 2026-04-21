@@ -137,7 +137,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                         const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
                         setFilaImpressao(prev => [...prev, urlImpressao]);
                         setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000); 
-                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) {}
+                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) { console.error(err); }
                     }
                 }
             });
@@ -155,7 +155,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                         const urlImpressao = `/impressao-isolada?estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
                         setFilaImpressao(prev => [...prev, urlImpressao]);
                         setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000);
-                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "pedidos", docPedido.id), { solicitarImpressao: false, setorImpressao: null }); } catch (err) {}
+                        try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "pedidos", docPedido.id), { solicitarImpressao: false, setorImpressao: null }); } catch (err) { console.error(err); }
                     }
                 }
             });
@@ -252,7 +252,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
         if (mesaParaAbrir) {
             try { 
                 await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaParaAbrir.id), { bloqueadoPor: null, bloqueadoPorNome: null, bloqueadoEm: null }); 
-            } catch (error) {}
+            } catch (error) { console.error(error); }
             setMesaParaAbrir(null);
         }
     }, [mesaParaAbrir, estabelecimentoId]);

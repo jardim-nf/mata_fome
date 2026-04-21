@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/pages/admin/ResponderAvaliacoes.jsx — Admin responde avaliações dos clientes
 import React, { useState, useEffect } from 'react';
 import BackButton from '../../components/BackButton';

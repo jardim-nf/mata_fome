@@ -28,7 +28,7 @@ export default function EstablishmentHeader({ estabelecimentoInfo, coresEstabele
         {currentUser && (
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
-			  {!askedPush && 'Notification' in window && Notification.permission === 'default' && (
+              {!askedPush && 'Notification' in window && Notification.permission === 'default' && (
                 <button onClick={async () => { setAskedPush(true); await requestPushPermission(); }} className="flex items-center gap-1 text-sm font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200 shadow-sm hover:bg-indigo-100 transition-colors animate-pulse">
                   <IoNotificationsOutline size={16} /><span className="hidden sm:inline">Avisos</span>
                 </button>

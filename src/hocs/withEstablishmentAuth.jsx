@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { FaSpinner } from "react-icons/fa";
 
 const withEstablishmentAuth = (WrappedComponent) => {
-  return (props) => {
+  const WithEstablishmentAuthComponent = (props) => {
     const { currentUser, userData, authLoading , estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
@@ -51,6 +51,9 @@ const withEstablishmentAuth = (WrappedComponent) => {
 
     return <WrappedComponent {...props} estabelecimentoPrincipal={estabelecimentoPrincipal} />;
   };
+
+  WithEstablishmentAuthComponent.displayName = `withEstablishmentAuth(${WrappedComponent.displayName || WrappedComponent.name || 'Component'})`;
+  return WithEstablishmentAuthComponent;
 };
 
 export default withEstablishmentAuth;

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/pages/admin/RelatorioLucro.jsx — Relatório de Lucro Real (Receita − Custo)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import BackButton from '../../components/BackButton';

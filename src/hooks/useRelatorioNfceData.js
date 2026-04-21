@@ -342,7 +342,7 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
             Canceladas: <span>${stats.canceladas}</span> &nbsp;|&nbsp;
             Valor Total: <span>${formatarMoeda(stats.valorTotal)}</span>
         </div>
-        <script>window.onload=function(){window.print();}<\/script>
+        <script>window.onload=function(){window.print();}<` + `/script>
         </body></html>`;
 
         const blob = new Blob([html], { type: 'text/html;charset=utf-8' });

@@ -5,7 +5,7 @@ export async function emitirNfceMock(vendaId, cpfCliente, cloudFunctionMock) {
   if (!vendaId) return { success: false, error: 'Venda ID obrigatório' };
 
   // Validação de CPF (11 dígitos, sem letras)
-  if (cpfCliente && !/^\d{11}$/.test(cpfCliente.replace(/[.\-]/g, ''))) {
+  if (cpfCliente && !/^\d{11}$/.test(cpfCliente.replace(/[.-]/g, ''))) {
     return { success: false, error: 'CPF do consumidor inválido.' };
   }
 

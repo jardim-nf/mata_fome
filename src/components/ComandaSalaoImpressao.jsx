@@ -3,10 +3,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref) => {
-  if (!pedido) return <div ref={ref}>Carregando...</div>;
-
   // 1. Agrupar itens por cliente (com fallback para garantir que acha a lista)
   const itensPorPessoa = useMemo(() => {
+    if (!pedido) return {};
     // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos' para evitar que venha vazio
     const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
     
@@ -21,7 +20,9 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
     }, {});
   }, [pedido]);
 
-  const dataPedido = pedido.createdAt?.toDate ? pedido.createdAt.toDate() : new Date();
+  const dataPedido = pedido?.createdAt?.toDate ? pedido.createdAt.toDate() : new Date();
+
+  if (!pedido) return <div ref={ref}>Carregando...</div>;
 
   return (
     <div ref={ref} className="print-container">

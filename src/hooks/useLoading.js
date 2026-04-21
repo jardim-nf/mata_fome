@@ -41,18 +41,6 @@ export const useLoading = (initialState = false) => {
   };
 };
 
-// Uso em componentes:
-const MyComponent = () => {
-  const { loading, error, executeWithLoading } = useLoading();
-
-  const loadRestaurants = async () => {
-    try {
-      const data = await executeWithLoading(() => 
-        fetchRestaurants()
-      );
-      // Dados carregados com sucesso
-    } catch (err) {
-      // Erro já tratado pelo hook
-    }
-  };
-};
+// Exemplo de uso:
+// const { loading, error, executeWithLoading } = useLoading();
+// executeWithLoading(() => fetchSomething());

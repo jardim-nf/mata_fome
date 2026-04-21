@@ -281,10 +281,13 @@ function AdminMenuManagement() {
   }, [viewMode, setActions, clearActions, menuParams.openItemForm, menuParams.menuItems, handleExportProducts, handleExportPDF]);
 
   const handleFormChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
+    let { name, value, type, checked, files } = e.target;
     if (type === 'file') {
         if (files[0]) { menuParams.setItemImage(files[0]); menuParams.setImagePreview(URL.createObjectURL(files[0])); }
     } else {
+        if (typeof value === 'string' && (name === 'nome' || name === 'descricao')) {
+            value = value.toUpperCase();
+        }
         menuParams.setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     }
   };
@@ -496,7 +499,7 @@ function AdminMenuManagement() {
                                           {(menuParams.variacoes.length > 1 || v.nome !== 'Padrão') && (
                                               <div className="sm:col-span-4">
                                                   <label className="text-[11px] font-extrabold text-slate-400 mb-2 block uppercase tracking-wider">Nome da Variação</label>
-                                                  <input type="text" value={v.nome} onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none" placeholder="Ex: Grande, Combo..." />
+                                                  <input type="text" value={v.nome} onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value.toUpperCase())} className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none" placeholder="Ex: Grande, Combo..." />
                                               </div>
                                           )}
                                           <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 ${menuParams.variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>

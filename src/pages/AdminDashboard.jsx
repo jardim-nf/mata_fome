@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
 import BannerMensalidade from "../components/BannerMensalidade";
+import StockAlertWidget from "../components/StockAlertWidget";
 import { useAuth } from "../context/AuthContext";
 import { useEstablishment } from "../hooks/useEstablishment";
 import { db } from "../firebase";
@@ -322,6 +323,11 @@ const AdminDashboard = () => {
 
         {/* AVISO DE MENSALIDADE E CERTIFICADO */}
         <BannerMensalidade />
+
+        {/* ALERTA DE ESTOQUE (WIDGET GLOBAL) */}
+        {(isRealAdmin || temPermissao('painel') || temPermissao('pdv')) && (
+          <StockAlertWidget estabelecimentoId={estabelecimentoIdPrincipal} />
+        )}
 
         {/* FATURAMENTO */}
         {(isRealAdmin || temPermissao('financeiro')) && (

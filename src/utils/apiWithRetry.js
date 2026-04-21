@@ -21,9 +21,4 @@ export const apiWithRetry = async (apiCall, maxRetries = 3) => {
   
   throw lastError;
 };
-
-// Uso:
-const restaurants = await apiWithRetry(
-  () => fetchRestaurants(), 
-  3
-);
+

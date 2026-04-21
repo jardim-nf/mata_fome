@@ -1,20 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { IoAdd, IoOptions, IoCart } from 'react-icons/io5';
 import ModelViewer3D from './ModelViewer3D';
 
-function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
+// 🚀 React.memo evita re-render quando o carrinho muda mas este item não
+const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
   const cores = coresEstabelecimento || { primaria: '#EA1D2C', destaque: '#059669', background: '#FFFFFF' };
   const [displayImageUrl, setDisplayImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
 
-  if (!item) return null;
-
-  const safeItem = {
+  const safeItem = item ? {
     nome: item.nome || 'Item sem nome',
     descricao: item.descricao || '',
     preco: typeof item.preco === 'number' ? item.preco : 0,
@@ -25,9 +24,10 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
     disponivel: item.disponivel !== false,
     adicionais: Array.isArray(item.adicionais) ? item.adicionais : [],
     variacoes: Array.isArray(item.variacoes) ? item.variacoes : []
-  };
+  } : {};
 
   useEffect(() => {
+    if (!item) return;
     let isMounted = true;
     const loadImageSafely = async () => {
       if (!safeItem.imageUrl) { setImageLoading(false); setImageError(true); return; }
@@ -55,10 +55,16 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
   const isAvailable = safeItem.ativo && safeItem.disponivel;
   const hasVariations = safeItem.variacoes && safeItem.variacoes.length > 0;
 
+  // 🚀 Feedback háptico em mobile
+  const hapticFeedback = () => {
+    if (navigator.vibrate) navigator.vibrate(50);
+  };
+
   // Ação do botão de carrinho flutuante (Compra Rápida)
   const handleMainAction = (e) => {
     e.stopPropagation(); // Impede que abra o modal normal ao clicar no carrinho
     if (!isAvailable) return;
+    hapticFeedback();
     if (onPurchase) onPurchase(safeItem);
   };
 
@@ -91,6 +97,8 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
     );
   };
 
+  if (!item) return null;
+
   return (
     <div 
         onClick={handleCardClick} // 🔥 TORNA O CARD INTEIRO CLICÁVEL
@@ -118,6 +126,9 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
                 src={displayImageUrl}
                 alt={safeItem.nome}
                 loading="lazy"
+                decoding="async"
+                width={112}
+                height={112}
                 onClick={handleImageClick}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 cursor-zoom-in relative z-10"
                 onError={() => setImageError(true)}
@@ -148,7 +159,7 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
             
             {/* O botão também chama a mesma ação, com stopPropagation por segurança visual */}
             <button 
-                onClick={(e) => { e.stopPropagation(); onAddItem(safeItem); }} 
+                onClick={(e) => { e.stopPropagation(); hapticFeedback(); onAddItem(safeItem); }} 
                 disabled={!isAvailable} 
                 style={{ backgroundColor: !isAvailable ? '#E5E7EB' : cores.primaria, color: '#FFF' }} 
                 className="px-4 py-2 rounded-lg font-bold text-sm shadow-md transition-transform active:scale-95 flex items-center gap-1 hover:brightness-110"
@@ -186,5 +197,5 @@ function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
 
     </div>
   );
-}
+});
 export default CardapioItem;

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/pages/admin/WhatsAppConfig.jsx — Configuração do Bot WhatsApp (UAZAPI)
 import React, { useState, useEffect } from 'react';
 import BackButton from '../../components/BackButton';

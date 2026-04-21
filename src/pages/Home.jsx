@@ -15,6 +15,7 @@ import {
   EstabelecimentosGrid,
   Footer,
   WhatsAppButton,
+  ROICalculator,
 } from '../components/home';
 
 /* ------------------------------------------------------------------ */
@@ -160,6 +161,9 @@ function Home() {
 
       {/* Benefícios */}
       <BenefitsSection />
+
+      {/* ROICalculator */}
+      <ROICalculator />
 
       {/* Estabelecimentos */}
       {loading ? (
