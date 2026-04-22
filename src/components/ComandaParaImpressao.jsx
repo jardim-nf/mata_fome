@@ -94,7 +94,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const listaItensGlobais = pedido?.itens || pedido?.carrinho || pedido?.produtos || [];
 
     const totais = useMemo(() => {
-        if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, totalGeral: 0 };
+        if (!pedido) return { consumo: 0, jaPago: 0, restante: 0, taxa: 0, desconto: 0, cashback: 0, totalGeral: 0 };
 
         const itens = Array.isArray(listaItensGlobais) ? listaItensGlobais : [];
 
@@ -105,21 +105,23 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }, 0);
 
         const taxa = Number(pedido.taxaEntrega || pedido.frete || pedido.valorFrete || pedido.valorEntrega || 0);
-        let desconto = Number(pedido.desconto) || 0;
+        let desconto = Number(pedido.desconto) || Number(pedido.pagamento?.desconto) || 0;
+        let cashback = Number(pedido.cashbackResgatado) || 0;
 
         const totalNoBanco = Number(pedido.totalFinal || pedido.total) || 0;
-        if (desconto === 0 && totalNoBanco > 0 && totalNoBanco < (consumo + taxa)) {
-            desconto = (consumo + taxa) - totalNoBanco;
+        const subtotalCalculado = consumo + taxa;
+        if (desconto === 0 && cashback === 0 && totalNoBanco > 0 && totalNoBanco < subtotalCalculado) {
+            desconto = subtotalCalculado - totalNoBanco;
         }
 
-        const totalGeral = consumo + taxa - Math.abs(desconto);
+        const totalGeral = consumo + taxa - Math.abs(desconto) - Math.abs(cashback);
 
         const pagamentos = Array.isArray(pedido.pagamentosParciais) ? pedido.pagamentosParciais : [];
         const jaPago = pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
 
         const restante = Math.max(0, totalGeral - jaPago);
 
-        return { consumo, taxa, desconto: Math.abs(desconto), totalGeral, jaPago, restante };
+        return { consumo, taxa, desconto: Math.abs(desconto), cashback: Math.abs(cashback), totalGeral, jaPago, restante };
     }, [pedido, listaItensGlobais]);
 
     // --- 4. AGRUPAMENTO DE ITENS E FILTRO POR SETOR ---
@@ -379,9 +381,10 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
                         {totais.taxa > 0 && <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
 
-                        {totais.desconto > 0 && <div className="flex justify-between text-sm font-black uppercase border-y border-dashed border-black py-1 my-1"><span>Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
+                        {totais.desconto > 0 && <div className="flex justify-between text-[13px] font-black uppercase mt-1"><span>(-) Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
+                        {totais.cashback > 0 && <div className="flex justify-between text-[13px] font-black uppercase mt-1"><span>(-) Cashback Usado:</span><span>- {formatMoney(totais.cashback)}</span></div>}
 
-                        <div className="flex justify-between text-[15px] font-black mt-1 border-t border-dashed border-black pt-1 uppercase">
+                        <div className="flex justify-between text-[15px] font-black mt-2 border-t border-dashed border-black pt-1 uppercase">
                             <span>TOTAL:</span>
                             <span>{formatMoney(totais.totalGeral)}</span>
                         </div>

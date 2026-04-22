@@ -346,10 +346,10 @@ export default function Menu() {
 
             {checkoutActions.showOrderConfirmationModal && (
                 <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-2xl text-center max-w-sm w-full shadow-2xl">
+                    <div className="bg-white p-8 rounded-2xl text-center max-w-sm w-full shadow-2xl text-gray-900">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex mx-auto mb-4 items-center justify-center text-4xl">✅</div>
                         <h2 className="text-3xl font-bold">Pedido Enviado!</h2>
-                        {checkoutActions.ultimoPedidoId && <p className="text-xs bg-gray-50 py-2 px-3 mt-2 rounded">#{checkoutActions.ultimoPedidoId.slice(-6).toUpperCase()}</p>}
+                        {checkoutActions.ultimoPedidoId && <p className="text-xs bg-gray-100 py-2 px-3 mt-2 rounded text-gray-600">#{checkoutActions.ultimoPedidoId.slice(-6).toUpperCase()}</p>}
                         <div className="space-y-3 mt-4">
                             <button onClick={() => { checkoutActions.setShowOrderConfirmationModal(false); navigate(actualEstabelecimentoId ? `/historico-pedidos?lojaId=${actualEstabelecimentoId}` : '/historico-pedidos'); }} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">📋 Acompanhar Meu Pedido</button>
                             <button onClick={() => { checkoutActions.setShowOrderConfirmationModal(false); setTimeout(() => checkoutActions.setShowReviewModal(true), 500); }} className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold">⭐ Avaliar Pedido</button>
