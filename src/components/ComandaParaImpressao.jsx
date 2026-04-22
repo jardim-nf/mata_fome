@@ -366,6 +366,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                                 </div>
                                             )}
                                             {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block break-words whitespace-normal">OBS: {item.observacao}</div>}
+                                            {item.adicionadoPor && <div className="mt-1 text-[10px] font-bold uppercase italic border-t border-dashed border-gray-400 pt-0.5">ATENDENTE: {item.adicionadoPor}</div>}
                                         </div>
                                     );
                                 })}

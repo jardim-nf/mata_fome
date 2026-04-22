@@ -7,7 +7,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "prepare": "husky"
   },
   "dependencies": {
     "@google/model-viewer": "^4.2.0",
@@ -59,8 +60,10 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.0.1",
     "jszip": "^3.10.1",
+    "lint-staged": "^16.4.0",
     "postcss": "^8.4.21",
     "pptxgenjs": "^4.0.1",
     "sharp": "^0.34.5",

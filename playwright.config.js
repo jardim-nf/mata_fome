@@ -22,9 +22,9 @@ export default defineConfig({
     // Removendo Safari/Firefox pro QA local ficar mais ágil
   ],
   // Serve the local app automatically before running
-  /* webServer: {
+  webServer: {
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
-  }, */
+  },
 });

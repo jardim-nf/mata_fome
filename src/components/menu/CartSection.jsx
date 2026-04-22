@@ -79,9 +79,15 @@ export default function CartSection({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center border border-gray-200 rounded-lg">
-                    <button onClick={() => alterarQuantidade(item.cartItemId, -1)} className="px-2 py-1 text-red-500 hover:bg-gray-100 rounded-l-lg"><IoRemove /></button>
+                    <button 
+                      onClick={() => alterarQuantidade(item.cartItemId, -1)} 
+                      disabled={item.qtd <= 1}
+                      className={`px-2 py-1 rounded-l-lg transition-colors ${item.qtd <= 1 ? 'text-gray-300 bg-gray-50 cursor-not-allowed' : 'text-red-500 hover:bg-gray-100 cursor-pointer'}`}
+                    >
+                      <IoRemove />
+                    </button>
                     <span className="px-2 text-sm font-bold">{item.qtd}</span>
-                    <button onClick={() => alterarQuantidade(item.cartItemId, 1)} className="px-2 py-1 text-green-600 hover:bg-gray-100 rounded-r-lg"><IoAdd /></button>
+                    <button onClick={() => alterarQuantidade(item.cartItemId, 1)} className="px-2 py-1 text-green-600 hover:bg-gray-100 rounded-r-lg cursor-pointer"><IoAdd /></button>
                   </div>
                   <button onClick={() => removerItem(item.cartItemId)} className="text-red-500 p-1.5 hover:bg-red-50 rounded"><IoTrash /></button>
                 </div>

@@ -118,27 +118,40 @@ export const falarNovaComanda = (mensagem) => {
         locucao.pitch = 1.0; // Pitch 1.0 é OBRIGATÓRIO para soar humano. Anteriormente 1.1 deixava a voz fina/robótica.
         locucao.volume = 1.0;
         
-        // Buscar vozes e tentar pegar as de maior qualidade (Vozes neurais/naturais)
-        const vozesAtuais = window.speechSynthesis.getVoices();
+        // Bug do Chrome: getVoices() volta vazio nos primeiros milissegundos
+        let vozesAtuais = window.speechSynthesis.getVoices();
         
-        // 1. Edge Neural/Online (Qualidade mais natural e humana disponível grátis no Windows)
-        // 2. Google pt-BR
-        // 3. Qualquer Microsoft Padrão
-        // 4. Qualquer pt-BR encontrada
-        const vozBrasileira = vozesAtuais.find(v => v.lang.includes('pt-BR') && (v.name.includes('Natural') || v.name.includes('Online'))) 
-                           || vozesAtuais.find(v => v.lang.includes('pt-BR') && v.name.includes('Google')) 
-                           || vozesAtuais.find(v => v.lang.includes('pt-BR') && v.name.includes('Microsoft'))
-                           || vozesAtuais.find(v => v.lang.includes('pt-BR'));
-        
-        if (vozBrasileira) {
-            locucao.voice = vozBrasileira;
+        const executarFala = () => {
+            vozesAtuais = window.speechSynthesis.getVoices();
+            const vozesPT = vozesAtuais.filter(v => v.lang.includes('pt') || v.lang.includes('BR'));
+            
+            // 1. Edge Neural Online / Natural FEMININA (Procurar Francisca)
+            let vozIdeal = vozesPT.find(v => (v.name.toLowerCase().includes('online') || v.name.toLowerCase().includes('natural')) && !v.name.toLowerCase().includes('antonio'));
+            // 2. Google Nativo 
+            if (!vozIdeal) vozIdeal = vozesPT.find(v => v.name.toLowerCase().includes('google'));
+            // 3. Qualquer Edge nativa Neural 
+            if (!vozIdeal) vozIdeal = vozesPT.find(v => v.name.toLowerCase().includes('online') || v.name.toLowerCase().includes('natural'));
+            // 4. Último caso Edge Nativa que nao seja a Desktop
+            if (!vozIdeal) vozIdeal = vozesPT.find(v => !v.name.toLowerCase().includes('desktop'));
+            // 5. O que vier
+            if (!vozIdeal && vozesPT.length > 0) vozIdeal = vozesPT[0];
+            
+            console.log("Vozes mapeadas do navegador:", vozesPT.map(v => v.name));
+            console.log("Voz Selecionada:", vozIdeal ? vozIdeal.name : "Nenhuma (usa padrão do OS)");
+            
+            if (vozIdeal) locucao.voice = vozIdeal;
+            
+            setTimeout(() => {
+                window.speechSynthesis.speak(locucao);
+            }, 800);
+        };
+
+        if (vozesAtuais.length === 0) {
+            console.log("Aguardando carregamento de vozes do navegador...");
+            window.speechSynthesis.onvoiceschanged = executarFala;
+        } else {
+            executarFala();
         }
-        
-        // O Atraso de 800ms existe para dar tempo certinho do "Ding-dong" (que leva ~0.6s)
-        // terminar de tocar antes do "Google" começar a ler o nome do cliente em cima.
-        setTimeout(() => {
-            window.speechSynthesis.speak(locucao);
-        }, 800);
         
     } catch (e) {
         console.warn('Erro na simulação de voz:', e);

@@ -152,6 +152,12 @@ function ClientOrderHistory() {
           const tf = t.replace(/\D/g, '');
           if (tf) telefonesCliente.add(tf);
       });
+      
+      const telefonesExpandidos = new Set(telefonesCliente);
+      for (const tel of telefonesCliente) {
+          if (tel.length === 10 || tel.length === 11) telefonesExpandidos.add(`55${tel}`);
+          if (tel.startsWith('55') && (tel.length === 12 || tel.length === 13)) telefonesExpandidos.add(tel.substring(2));
+      }
 
       let totalSaldoCarteira = 0;
       
@@ -162,6 +168,7 @@ function ClientOrderHistory() {
             estabelecimentosMap[estabelecimentoId] = estabelecimentoDoc.data();
             
             // BUSCAR SALDO DA CARTEIRA DIGITAL NESTE ESTABELECIMENTO
+            let achouSaldoPorDDI = false;
             let saldoLocal = 0;
             
             // 1. Tenta buscar pelo UID 
@@ -169,17 +176,24 @@ function ClientOrderHistory() {
             const clienteDocId = await getDoc(clienteRefId);
             if (clienteDocId.exists()) {
                saldoLocal += (Number(clienteDocId.data().saldoCashback) || Number(clienteDocId.data().saldoCarteira) || 0);
+               if (saldoLocal > 0) achouSaldoPorDDI = true;
             }
 
             // 2. Busca pelos Telefones Únicos (já que o bot e o backend criam pelo telefone)
-            for (const tel of telefonesCliente) {
-               if (tel !== currentUser.uid) {
-                 const clienteRefTel = doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', tel);
-                 const clienteDocTel = await getDoc(clienteRefTel);
-                 if (clienteDocTel.exists()) {
-                     saldoLocal += (Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0);
-                 }
-               }
+            if (!achouSaldoPorDDI) {
+                for (const tel of telefonesExpandidos) {
+                   if (tel !== currentUser.uid) {
+                     const clienteRefTel = doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', tel);
+                     const clienteDocTel = await getDoc(clienteRefTel);
+                     if (clienteDocTel.exists()) {
+                         const saldoE = (Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0);
+                         if (saldoE > 0) {
+                             saldoLocal += saldoE;
+                             break; // Protege contra somar a versão com 55 e sem 55 ao mesmo tempo
+                         }
+                     }
+                   }
+                }
             }
 
             totalSaldoCarteira += saldoLocal;

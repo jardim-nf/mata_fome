@@ -79,22 +79,38 @@ export function useMenuCheckout({
                 }
 
                 const t = telefoneCliente || currentUser?.phoneNumber || '';
-                const telefoneFormatado = t.replace(/\D/g, '');
-                if (telefoneFormatado && telefoneFormatado !== currentUser.uid) {
-                   const clienteRefTel = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'clientes', telefoneFormatado);
-                   const clienteDocTel = await getDoc(clienteRefTel);
-                   if (clienteDocTel.exists()) {
-                       const st = Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0;
-                       if (st > 0) {
-                         saldoEncontrado += st;
-                         if (!docParaDescontar) docParaDescontar = clienteRefTel;
+                let telefoneFormatado = t.replace(/\D/g, '');
+                
+                const telefonesParaTestar = new Set();
+                if (telefoneFormatado) telefonesParaTestar.add(telefoneFormatado);
+                if (telefoneFormatado.length === 10 || telefoneFormatado.length === 11) telefonesParaTestar.add(`55${telefoneFormatado}`);
+                if (telefoneFormatado.startsWith('55') && (telefoneFormatado.length === 12 || telefoneFormatado.length === 13)) telefonesParaTestar.add(telefoneFormatado.substring(2));
+
+                console.log("[Cashback Debug] UID:", currentUser.uid, "| Telefone State:", telefoneCliente, "| Telefones a testar:", Array.from(telefonesParaTestar));
+
+                for (const tTeste of telefonesParaTestar) {
+                    if (tTeste && tTeste !== currentUser.uid) {
+                       const clienteRefTel = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'clientes', tTeste);
+                       const clienteDocTel = await getDoc(clienteRefTel);
+                       if (clienteDocTel.exists()) {
+                           const st = Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0;
+                           if (st > 0) {
+                             saldoEncontrado += st;
+                             if (!docParaDescontar) docParaDescontar = clienteRefTel;
+                             break; // Interrompe para não somar duas vezes caso existam docs espelhados
+                           }
                        }
-                   }
+                    }
                 }
+                
                 setSaldoCarteira(saldoEncontrado);
                 setClienteDocRefIdUtilizado(docParaDescontar);
             } catch (e) {
                 console.error("Erro ao buscar cashback:", e);
+                // Exibe o erro na tela para o usuário ver se é bloqueio de Firestore Rules
+                if (e.message?.includes('permission')) {
+                    alert('Erro de Permissão Firebase: As regras do banco impediram a leitura do saldo do telefone.');
+                }
             }
         };
         fetchCashback();

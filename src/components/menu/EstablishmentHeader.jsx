@@ -40,10 +40,15 @@ export default function EstablishmentHeader({ estabelecimentoInfo, coresEstabele
                 <IoLogOutOutline size={18} /><span>Sair</span>
               </button>
             </div>
-            {saldoCarteira > 0 && (
+            {saldoCarteira > 0 ? (
               <div className="bg-[#00E6A4] text-gray-900 px-3 py-1.5 rounded-xl border-2 border-white shadow-md flex flex-col items-end animate-bounce-short">
                 <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Seu Cashback</span>
-                <span className="text-sm font-black">R$ {saldoCarteira.toFixed(2)}</span>
+                <span className="text-sm font-black">R$ {parseFloat(saldoCarteira || 0).toFixed(2)}</span>
+              </div>
+            ) : (
+              <div className="bg-white/10 backdrop-blur-md text-white px-3 py-1.5 rounded-xl border border-white/20 shadow-sm flex flex-col items-end">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Seu Cashback</span>
+                <span className="text-sm font-black">R$ 0,00</span>
               </div>
             )}
           </div>
