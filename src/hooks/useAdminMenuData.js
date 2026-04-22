@@ -161,8 +161,13 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             if (res.ok) {
                 const data = await res.json();
                 setNcmResultados(Array.isArray(data) ? data.slice(0, 10) : []);
+            } else {
+                toast.error(`Erro BrasilAPI: ${res.status}`);
             }
-        } catch(e) { console.error(e); }
+        } catch(e) { 
+            console.error(e); 
+            toast.error(`Erro de conexão NCM: ${e.message}`);
+        }
         finally { setPesquisandoNcm(false); }
     };
 
