@@ -4,7 +4,7 @@ import { IoClose, IoCheckmarkCircle, IoSquareOutline, IoCheckbox, IoLockClosed }
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
-const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabelecimentoId }) => {
+const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabelecimentoId, isCatalog = false }) => {
     const cores = coresEstabelecimento || {
         primaria: '#0b0b0b', destaque: '#059669', background: '#111827',
         texto: { principal: '#ffffff', secundario: '#9ca3af' }
@@ -181,11 +181,18 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
                                              style={{ borderColor: isSel ? cores.destaque : 'transparent' }}>
                                             
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors`}
+                                                <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors`}
                                                      style={{ borderColor: isSel ? cores.destaque : '#d1d5db', backgroundColor: isSel ? cores.destaque : 'transparent' }}>
                                                     {isSel && <div className="w-2 h-2 bg-white rounded-full" />}
                                                 </div>
-                                                <span className={`font-medium ${isSel ? 'text-gray-900' : 'text-gray-500'}`}>{v.nome}</span>
+                                                <div className="flex flex-col gap-1">
+                                                    <span className={`font-medium ${isSel ? 'text-gray-900' : 'text-gray-500'}`}>{v.nome}</span>
+                                                    {isCatalog && v.estoque !== undefined && v.estoque !== null && (
+                                                        <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100 font-bold self-start">
+                                                            📦 Estoque: {v.estoque}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                             <span className="font-bold text-sm text-gray-900">{formatarMoeda(v.preco)}</span>
                                         </div>

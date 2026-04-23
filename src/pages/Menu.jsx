@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
 import { useAuth } from '../context/AuthContext';
@@ -48,6 +48,8 @@ function LoadMoreSentinel({ category, onLoadMore }) {
 export default function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const lastOpenedProdutoId = useRef(null);
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
     const { isWidgetOpen } = useAI();
 
@@ -245,16 +247,59 @@ export default function Menu() {
     }, [allProdutos]);
 
     const handleAdicionarItem = (itemConfigurado) => {
-        adicionarItem({ ...itemConfigurado, precoFinal: Number(itemConfigurado.precoFinal || 0) }); setItemParaVariacoes(null); if (itemConfigurado.isBuyNow) setTriggerCheckout(true);
+        adicionarItem({ ...itemConfigurado, precoFinal: Number(itemConfigurado.precoFinal || 0) }); 
+        setItemParaVariacoes(null); 
+        setSearchParams(params => { params.delete('produto'); return params; }, { replace: true });
+        if (itemConfigurado.isBuyNow) setTriggerCheckout(true);
     };
 
     const handleClickItemModal = useCallback((item, isBuyNow = false) => {
         if (!isLojaAberta) return toast.error('A loja está fechada!');
         if (!currentUser) return authActions.handleAbrirLogin();
         const itemComAds = enrichWithGlobalAdicionais({ ...item, observacao: '', isBuyNow });
-        if (itemComAds.variacoes?.length > 0 || itemComAds.adicionais?.length > 0) setItemParaVariacoes(itemComAds);
-        else handleAdicionarItem(itemComAds);
-    }, [isLojaAberta, currentUser, authActions, enrichWithGlobalAdicionais]);
+        if (itemComAds.variacoes?.length > 0 || itemComAds.adicionais?.length > 0) {
+            setItemParaVariacoes(itemComAds);
+            lastOpenedProdutoId.current = itemComAds.id;
+            setSearchParams(params => { params.set('produto', itemComAds.id); return params; }, { replace: true });
+        } else {
+            handleAdicionarItem(itemComAds);
+        }
+    }, [isLojaAberta, currentUser, authActions, enrichWithGlobalAdicionais, setSearchParams]);
+
+    // Deep Linking: Abrir Produto Específico via URL (?produto=id)
+    useEffect(() => {
+        if (loading || authLoading || allProdutos.length === 0) return;
+        
+        const produtoId = searchParams.get('produto');
+        
+        // Limpa o ref quando a URL não tem mais o produto
+        if (!produtoId) {
+            lastOpenedProdutoId.current = null;
+            return;
+        }
+
+        // Se já lidamos com esse ID recentemente, ignora
+        if (produtoId && lastOpenedProdutoId.current !== produtoId) {
+            lastOpenedProdutoId.current = produtoId; // Marca como lidado imediatamente
+            const produtoEncontrado = allProdutos.find(p => p.id === produtoId);
+            
+            if (produtoEncontrado) {
+                if (!isLojaAberta) {
+                    toast.error('A loja está fechada! Não é possível pedir no momento.');
+                    setSearchParams(params => { params.delete('produto'); return params; }, { replace: true });
+                } else if (!currentUser) {
+                    authActions.handleAbrirLogin();
+                } else {
+                    handleClickItemModal(produtoEncontrado);
+                }
+            } else {
+                setSearchParams(params => { params.delete('produto'); return params; }, { replace: true });
+            }
+        }
+    }, [loading, authLoading, allProdutos, searchParams, setSearchParams, handleClickItemModal, isLojaAberta, currentUser, authActions]);
+
+    // Sincronização foi removida do useEffect para evitar race-condition (piscar o modal).
+    // Agora fazemos a alteração da URL direto nos handlers (onClose, handleAdicionarItem, handleClickItemModal).
 
     if (loading || authLoading) return <MenuSkeleton />;
     const isAdminPreview = currentUser && (isAdmin || isMasterAdmin);
@@ -303,7 +348,7 @@ export default function Menu() {
                             <div className="grid gap-4 md:grid-cols-2">
                                 {items.slice(0, visible).map(item => (
                                     <div key={item.id} className={`bg-white rounded-xl shadow-sm border border-gray-100 p-2 overflow-hidden ${!isLojaAberta ? 'opacity-75 grayscale-[0.3]' : ''}`}>
-                                        <CardapioItem item={item} onAddItem={() => handleClickItemModal(item, false)} onPurchase={() => handleClickItemModal(item, true)} coresEstabelecimento={coresEstabelecimento} />
+                                        <CardapioItem item={item} onAddItem={() => handleClickItemModal(item, false)} onPurchase={() => handleClickItemModal(item, true)} coresEstabelecimento={coresEstabelecimento} isCatalog={window.location.pathname.startsWith('/catalogo')} />
                                     </div>
                                 ))}
                             </div>
@@ -337,7 +382,7 @@ export default function Menu() {
             <CartBar carrinho={carrinho} finalOrderTotal={checkoutActions.finalOrderTotal} isWidgetOpen={isWidgetOpen} coresEstabelecimento={coresEstabelecimento} onScrollToResumo={scrollToResumo} />
 
             <Suspense fallback={null}>
-                {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleAdicionarItem} onClose={() => setItemParaVariacoes(null)} coresEstabelecimento={coresEstabelecimento} />}
+                {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleAdicionarItem} onClose={() => { setItemParaVariacoes(null); setSearchParams(params => { params.delete('produto'); return params; }, { replace: true }); }} coresEstabelecimento={coresEstabelecimento} isCatalog={window.location.pathname.startsWith('/catalogo')} />}
                 {checkoutActions.showPaymentModal && checkoutActions.pedidoParaPagamento && <PaymentModal isOpen={checkoutActions.showPaymentModal} onClose={() => checkoutActions.setShowPaymentModal(false)} amount={checkoutActions.finalOrderTotal} orderId={checkoutActions.pedidoParaPagamento.vendaId} cartItems={carrinho} onSuccess={checkoutActions.handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} estabelecimentoId={actualEstabelecimentoId} hasMercadoPago={!!estabelecimentoInfo?.tokenMercadoPago} />}
                 {checkoutActions.showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => checkoutActions.setShowRaspadinha?.(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
                 {estabelecimentoInfo && (authActions.showAICenter || isWidgetOpen) && <AIChatAssistant estabelecimento={estabelecimentoInfo} produtos={allProdutos} carrinho={carrinho} clienteNome={nomeCliente} taxaEntrega={checkoutActions.taxaEntregaCalculada} enderecoAtual={{ rua, numero, bairro, cidade }} isRetirada={isRetirada} onAddDirect={() => 'ADDED'} onCheckout={() => checkoutActions.prepararParaPagamento(isLojaAberta)} onClose={() => authActions.setShowAICenter(false)} onRequestLogin={() => { authActions.setShowAICenter(false); authActions.setDeveReabrirChat(true); authActions.handleAbrirLogin(); }} onSetDeliveryMode={(m) => setIsRetirada(m === 'retirada')} onUpdateAddress={(d) => { if (d.rua) setRua(d.rua); if (d.numero) setNumero(d.numero); if (d.bairro) setBairro(d.bairro); if (d.cidade) setCidade(d.cidade); if (d.referencia) setComplemento(d.referencia); }} />}

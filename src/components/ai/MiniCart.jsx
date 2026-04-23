@@ -19,9 +19,14 @@ export default function MiniCart({ itens, onClose, onCheckout }) {
           <div key={item.cartItemId} className="flex justify-between items-start bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <div>
               <span className="font-bold text-gray-900 block">{item.nome}</span>
-              {item.variacaoSelecionada && (
+              {item.variacaoSelecionada && typeof item.variacaoSelecionada === 'string' && !item.variacaoSelecionada.toLowerCase().includes('padrão') && !item.variacaoSelecionada.toLowerCase().includes('padrao') && (
                 <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-mono mr-2">
-                  {typeof item.variacaoSelecionada === 'string' ? item.variacaoSelecionada : item.variacaoSelecionada.nome}
+                  {item.variacaoSelecionada}
+                </span>
+              )}
+              {item.variacaoSelecionada && typeof item.variacaoSelecionada !== 'string' && item.variacaoSelecionada.nome && !item.variacaoSelecionada.nome.toLowerCase().includes('padrão') && !item.variacaoSelecionada.nome.toLowerCase().includes('padrao') && (
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md font-mono mr-2">
+                  {item.variacaoSelecionada.nome}
                 </span>
               )}
               {item.adicionaisSelecionados?.length > 0 && (

@@ -6,7 +6,7 @@ import { IoAdd, IoOptions, IoCart } from 'react-icons/io5';
 import ModelViewer3D from './ModelViewer3D';
 
 // 🚀 React.memo evita re-render quando o carrinho muda mas este item não
-const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento }) {
+const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, coresEstabelecimento, isCatalog = false }) {
   const cores = coresEstabelecimento || { primaria: '#EA1D2C', destaque: '#059669', background: '#FFFFFF' };
   const [displayImageUrl, setDisplayImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
@@ -22,6 +22,7 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
     categoria: item.categoria || '',
     ativo: item.ativo !== false,
     disponivel: item.disponivel !== false,
+    estoque: item.estoque,
     adicionais: Array.isArray(item.adicionais) ? item.adicionais : [],
     variacoes: Array.isArray(item.variacoes) ? item.variacoes : []
   } : {};
@@ -85,8 +86,12 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
     const stylePreco = { color: cores.destaque, fontSize: '1.1rem', fontWeight: 'bold' };
     if (!hasVariations) return <p style={stylePreco}>R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
     
-    const variacoesAtivas = safeItem.variacoes.filter(v => v.ativo);
+    const variacoesAtivas = safeItem.variacoes.filter(v => v.ativo !== false);
     if (variacoesAtivas.length === 0) return <p style={stylePreco}>R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    
+    if (variacoesAtivas.length === 1) {
+        return <p style={stylePreco}>R$ {(Number(variacoesAtivas[0].preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    }
     
     const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
     return (
@@ -153,6 +158,11 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
           <div>
             <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1 transition-colors group-hover:text-red-600">{safeItem.nome}</h3>
             {safeItem.descricao && <p className="text-gray-500 text-sm leading-relaxed mb-2">{safeItem.descricao}</p>}
+            {isCatalog && safeItem.estoque !== undefined && safeItem.estoque !== null && (
+                <div className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md text-xs font-bold mb-2 border border-blue-100">
+                    📦 Estoque: {safeItem.estoque}
+                </div>
+            )}
           </div>
           <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-100">
             <div>{mostrarPreco()}</div>

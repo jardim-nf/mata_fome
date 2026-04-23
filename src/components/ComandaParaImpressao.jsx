@@ -354,7 +354,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             <div className="flex justify-between items-start">
                                                 <span className="font-black text-[13px] flex-1 pr-2 uppercase">{qtdProduto}X {nomeProduto}</span>
                                                 {(setor !== 'cozinha' || isDelivery) && <span className="font-bold whitespace-nowrap text-[13px]">{formatMoney(valor * qtdProduto)}</span>}                                            </div>
-                                            {item.variacaoSelecionada && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
+                                            {item.variacaoSelecionada && !item.variacaoSelecionada.nome.toLowerCase().includes('padrão') && !item.variacaoSelecionada.nome.toLowerCase().includes('padrao') && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
                                             
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">

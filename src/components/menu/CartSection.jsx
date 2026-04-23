@@ -6,7 +6,7 @@ import { formatarMoeda } from '../../utils/formatCurrency';
 
 const formatarItemCarrinho = (item) => {
   let nome = item.nome;
-  if (item.variacaoSelecionada?.nome) nome += ` - ${item.variacaoSelecionada.nome}`;
+  if (item.variacaoSelecionada?.nome && !item.variacaoSelecionada.nome.toLowerCase().includes('padrão') && !item.variacaoSelecionada.nome.toLowerCase().includes('padrao')) nome += ` - ${item.variacaoSelecionada.nome}`;
   if (item.adicionaisSelecionados?.length > 0)
     nome += ` (+ ${item.adicionaisSelecionados.map(a => a.nome).join(', ')})`;
   if (item.observacao) nome += ` (Obs: ${item.observacao})`;
