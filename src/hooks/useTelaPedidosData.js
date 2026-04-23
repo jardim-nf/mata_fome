@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../firebase';
 import { 
     doc, getDoc, collection, getDocs, onSnapshot, updateDoc, 
@@ -12,6 +12,32 @@ const normalizarTexto = (texto) => {
     if (!texto) return '';
     return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 };
+
+const CACHE_KEY = 'mf_pdv_cardapio_cache_';
+const CACHE_TTL = 5 * 60 * 1000;
+
+function getCachedData(id) {
+    try {
+        const raw = localStorage.getItem(CACHE_KEY + id);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch { return null; }
+}
+
+function setCachedData(id, data) {
+    try {
+        localStorage.setItem(CACHE_KEY + id, JSON.stringify({
+            ...data,
+            _cachedAt: Date.now()
+        }));
+    } catch (e) {
+        try {
+            Object.keys(localStorage)
+                .filter(k => k.startsWith(CACHE_KEY))
+                .forEach(k => localStorage.removeItem(k));
+        } catch { /* ignore */ }
+    }
+}
 
 export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     const navigate = useNavigate();
@@ -37,21 +63,49 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     const [salvando, setSalvando] = useState(false);
     const [pedidoRecemEnviadoId, setPedidoRecemEnviadoId] = useState(null);
 
+    const hasHydratedFromCache = useRef(false);
+
     // Carga Pesada Principal: Cardápio
     useEffect(() => {
         if (!estabelecimentoId) return;
+        let isMounted = true;
+
+        const cached = getCachedData(estabelecimentoId);
+        if (cached && !hasHydratedFromCache.current) {
+            hasHydratedFromCache.current = true;
+            if (cached.cores) setCoresEstabelecimento(prev => ({ ...prev, ...cached.cores }));
+            if (cached.ordemCategorias) setOrdemCategorias(cached.ordemCategorias);
+            if (cached.senhaMaster) setSenhaMasterEstabelecimento(cached.senhaMaster);
+            if (cached.cardapio) setCardapio(cached.cardapio);
+            if (cached.categorias) setCategorias(cached.categorias);
+            setLoading(false);
+
+            if (Date.now() - (cached._cachedAt || 0) < CACHE_TTL) {
+                return; // Cache fresco
+            }
+        }
 
         const carregarConfigECardapio = async () => {
-            setLoading(true);
+            if (!cached) setLoading(true);
             try {
                 const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
                 const estabSnap = await getDoc(estabRef);
+                
+                let coresUpdate = null;
+                let ordemUpdate = null;
+                let senhaUpdate = null;
+
                 if (estabSnap.exists()) {
                     const dados = estabSnap.data();
-                    if (dados.cores) setCoresEstabelecimento(prev => ({ ...prev, ...dados.cores }));
-                    if (dados.ordemCategorias) setOrdemCategorias(dados.ordemCategorias);
-                    if (dados.senhaMaster) setSenhaMasterEstabelecimento(String(dados.senhaMaster));
+                    if (dados.cores) coresUpdate = dados.cores;
+                    if (dados.ordemCategorias) ordemUpdate = dados.ordemCategorias;
+                    if (dados.senhaMaster) senhaUpdate = String(dados.senhaMaster);
                 }
+
+                if (!isMounted) return;
+                if (coresUpdate) setCoresEstabelecimento(prev => ({ ...prev, ...coresUpdate }));
+                if (ordemUpdate) setOrdemCategorias(ordemUpdate);
+                if (senhaUpdate) setSenhaMasterEstabelecimento(senhaUpdate);
 
                 const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
                 const categoriasSnap = await getDocs(categoriasRef);
@@ -66,41 +120,49 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                     }
                 });
 
-                const promessasItens = catsAtivas.map(cat => {
-                    const p1 = getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens')).then(s => ({snap: s, tipo: 'itens', cat}));
-                    const p2 = getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'produtos')).then(s => ({snap: s, tipo: 'produtos', cat}));
-                    return [p1, p2];
-                }).flat();
-
-                const resultadosBuscas = await Promise.all(promessasItens);
-                let produtosFinaisBrutos = [];
-
-                for (const res of resultadosBuscas) {
-                    for (const docItem of res.snap.docs) {
-                        const dados = docItem.data();
-                        if (dados.ativo === false) continue;
-
-                        produtosFinaisBrutos.push({
-                            ...dados,
+                const categoryPromises = catsAtivas.map(async (cat) => {
+                    const [itensSnap, produtosSnap] = await Promise.all([
+                        getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'itens')),
+                        getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', cat.id, 'produtos'))
+                    ]);
+                    
+                    return [...itensSnap.docs, ...produtosSnap.docs]
+                        .filter(d => d.data().ativo !== false)
+                        .map(docItem => ({
+                            ...docItem.data(),
                             id: docItem.id,
-                            categoria: res.cat.nome,
-                            categoriaId: res.cat.id,
-                            tipoColecao: res.tipo 
-                        });
-                    }
-                }
+                            categoria: cat.nome,
+                            categoriaId: cat.id,
+                            tipoColecao: itensSnap.docs.some(i => i.id === docItem.id) ? 'itens' : 'produtos'
+                        }));
+                });
 
+                const results = await Promise.all(categoryPromises);
+                const produtosFinaisBrutos = results.flat();
+                const catsFinais = [...new Set(listaCats)];
+
+                if (!isMounted) return;
                 setCardapio(produtosFinaisBrutos);
-                setCategorias([...new Set(listaCats)]);
+                setCategorias(catsFinais);
+
+                setCachedData(estabelecimentoId, {
+                    cores: coresUpdate,
+                    ordemCategorias: ordemUpdate,
+                    senhaMaster: senhaUpdate,
+                    cardapio: produtosFinaisBrutos,
+                    categorias: catsFinais
+                });
 
             } catch (error) {
                 console.error("Erro ao carregar cardápio:", error);
             } finally {
-                setLoading(false);
+                if (isMounted) setLoading(false);
             }
         };
 
         carregarConfigECardapio();
+        
+        return () => { isMounted = false; };
     }, [estabelecimentoId]);
 
     // Listener de Tempo Real: Mesa
