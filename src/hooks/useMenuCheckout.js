@@ -15,13 +15,13 @@ function cleanData(obj) {
         if (value === undefined) {
             acc[key] = null;
         } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            if (value instanceof Date || value.seconds !== undefined || ('_methodName' in value)) {
+            if (value instanceof Date || typeof value?.toDate === 'function' || value.seconds !== undefined || ('_methodName' in value) || (value.isEqual && typeof value.isEqual === 'function')) {
                 acc[key] = value;
             } else {
                 acc[key] = cleanData(value);
             }
         } else if (Array.isArray(value)) {
-            acc[key] = value.map(item => (typeof item === 'object' ? cleanData(item) : item));
+            acc[key] = value.map(item => (typeof item === 'object' && item !== null ? cleanData(item) : (item === undefined ? null : item)));
         } else {
             acc[key] = value;
         }
