@@ -129,9 +129,14 @@ export function useMenuCheckout({
                 let matchExato = null;
                 let matchParcial = null;
                 taxasSnap.forEach(doc => {
-                    const nomeNorm = normalizarTexto(doc.data().nomeBairro || '');
-                    if (nomeNorm === bairroNorm) matchExato = Number(doc.data().valorTaxa);
-                    else if (!matchParcial && nomeNorm.includes(bairroNorm)) matchParcial = Number(doc.data().valorTaxa);
+                    const data = doc.data();
+                    const nomeNorm = normalizarTexto(data.nomeBairro || '');
+                    let rawVal = data.valorTaxa;
+                    if (typeof rawVal === 'string') rawVal = rawVal.replace(',', '.');
+                    const numVal = parseFloat(rawVal) || 0;
+                    
+                    if (nomeNorm === bairroNorm) matchExato = numVal;
+                    else if (!matchParcial && nomeNorm.includes(bairroNorm)) matchParcial = numVal;
                 });
                 taxa = matchExato ?? matchParcial ?? 0;
                 setTaxaEntregaCalculada(taxa);
