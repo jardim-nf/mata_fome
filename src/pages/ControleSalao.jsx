@@ -292,9 +292,9 @@ export default function ControleSalao() {
             </div>
 
             <div style={{ position: 'absolute', width: '0px', height: '0px', overflow: 'hidden', left: '-9999px' }}>
-                {salaoData.filaImpressao.map((url, index) => (
-                    <iframe key={url + index} src={url} title={`print-${index}`} />
-                ))}
+                {salaoData.imprimindoAtualmente && (
+                    <iframe key={salaoData.imprimindoAtualmente} src={salaoData.imprimindoAtualmente} title="print-ativo" />
+                )}
             </div>
         </div>
     );

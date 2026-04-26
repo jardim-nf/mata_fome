@@ -36,30 +36,32 @@ const PlatformConfigModal = ({ platform, onClose, onSave, initialConfig }) => {
                 
                 <div className="p-6">
                     <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                API Key
-                            </label>
-                            <input 
-                                type="password" 
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Insira sua chave de API"
-                                value={configData.apiKey}
-                                onChange={(e) => setConfigData(prev => ({
-                                    ...prev,
-                                    apiKey: e.target.value
-                                }))}
-                            />
-                        </div>
+                        {platform.id !== 'ifood' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    API Key
+                                </label>
+                                <input 
+                                    type="password" 
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Insira sua chave de API"
+                                    value={configData.apiKey}
+                                    onChange={(e) => setConfigData(prev => ({
+                                        ...prev,
+                                        apiKey: e.target.value
+                                    }))}
+                                />
+                            </div>
+                        )}
                         
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Store ID
+                                {platform.id === 'ifood' ? 'Merchant ID (ID da Loja no iFood)' : 'Store ID'}
                             </label>
                             <input 
                                 type="text" 
                                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="ID da sua loja"
+                                placeholder={platform.id === 'ifood' ? "Ex: 12345678-1234-1234-1234-123456789012" : "ID da sua loja"}
                                 value={configData.storeId}
                                 onChange={(e) => setConfigData(prev => ({
                                     ...prev,

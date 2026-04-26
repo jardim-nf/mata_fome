@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
-import { collectionGroup, collection, getDocs, query, addDoc, Timestamp } from 'firebase/firestore';
+import { collectionGroup, collection, getDocs, query, addDoc, Timestamp, deleteDoc, doc } from 'firebase/firestore';
 import { FaArrowLeft, FaRocket, FaBoxOpen, FaBolt, FaBullhorn, FaTimes } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { IoLogOutOutline } from 'react-icons/io5';
@@ -86,6 +86,20 @@ function MasterMensagens() {
     }
   };
 
+  const handleExcluirMensagem = async (id, isAvisoGeral) => {
+    if (!isAvisoGeral) return toast.info("Só é possível excluir avisos globais por aqui.");
+    if (!window.confirm("Tem certeza que deseja excluir este aviso para todos?")) return;
+    
+    try {
+      await deleteDoc(doc(db, 'avisos_gerais', id));
+      toast.success("Aviso excluído com sucesso!");
+      fetchMensagens();
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao excluir o aviso.");
+    }
+  };
+
   if (authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
   if (!isMasterAdmin) return <div className="p-10 text-center text-[#FF3B30] min-h-screen bg-[#F5F5F7]">Acesso Negado</div>;
 
@@ -163,9 +177,20 @@ function MasterMensagens() {
                     <div className="w-12 h-12 rounded-[1rem] bg-[#F5F5F7] border border-[#E5E5EA] flex items-center justify-center text-[#1D1D1F] shadow-sm mb-2 shrink-0 group-hover:scale-105 transition-transform">
                         <FaRocket size={16} />
                     </div>
-                    <span className="text-[10px] bg-[#F5F5F7] text-[#86868B] font-bold px-3 py-1.5 rounded-full border border-[#E5E5EA]">
-                        {dDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] bg-[#F5F5F7] text-[#86868B] font-bold px-3 py-1.5 rounded-full border border-[#E5E5EA]">
+                          {dDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                      {msg.isAvisoGeral && (
+                        <button 
+                          onClick={() => handleExcluirMensagem(msg.id, msg.isAvisoGeral)} 
+                          className="text-red-400 hover:text-red-600 bg-red-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                          title="Excluir aviso"
+                        >
+                          <FaTimes size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <h3 className="text-sm font-black text-[#1D1D1F] uppercase tracking-widest mb-3 line-clamp-1" title={formattedType}>

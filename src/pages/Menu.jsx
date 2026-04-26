@@ -93,7 +93,7 @@ export default function Menu() {
     const checkoutActions = useMenuCheckout(checkoutParams);
 
     // Setup Local
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(searchParams.get('busca') || '');
     const [selectedCategory, setSelectedCategory] = useState('Todos');
     const [itemParaVariacoes, setItemParaVariacoes] = useState(null);
     const [triggerCheckout, setTriggerCheckout] = useState(false);

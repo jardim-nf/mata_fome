@@ -14,6 +14,11 @@ const TERMOS_BOMBONIERE = [
     'bomboniere', 'doce', 'sobremesa', 'chiclete', 'bala', 'chocolate', 'halls', 'mentos', 'sorvete'
 ];
 
+const matchTermos = (texto, termos) => {
+    const textoLimpo = ' ' + String(texto || '').replace(/[^a-záàâãéèêíïóôõöúçñ0-9]+/gi, ' ').toLowerCase() + ' ';
+    return termos.some(termo => textoLimpo.includes(` ${termo.toLowerCase()} `));
+};
+
 let ultimoPedidoImpresso = null;
 
 const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
@@ -135,8 +140,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
                 const textoCompleto = `${nome} ${categoria}`;
 
-                const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
-                const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
+                const isBebida = matchTermos(textoCompleto, TERMOS_BEBIDA);
+                const isBomboniere = matchTermos(textoCompleto, TERMOS_BOMBONIERE);
 
                 return !isBebida && !isBomboniere; 
             });
@@ -146,8 +151,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 const categoria = String(item.categoria || item.produto?.categoria || '').toLowerCase();
                 const textoCompleto = `${nome} ${categoria}`;
 
-                const isBebida = TERMOS_BEBIDA.some(termo => textoCompleto.includes(termo));
-                const isBomboniere = TERMOS_BOMBONIERE.some(termo => textoCompleto.includes(termo));
+                const isBebida = matchTermos(textoCompleto, TERMOS_BEBIDA);
+                const isBomboniere = matchTermos(textoCompleto, TERMOS_BOMBONIERE);
 
                 return isBebida || isBomboniere; 
             });

@@ -23,17 +23,22 @@ export const isItemCozinha = (item) => {
             return true;
         }
         
+        const textoLimpo = ' ' + textoCompleto.replace(/[^a-záàâãéèêíïóôõöúçñ0-9]+/gi, ' ') + ' ';
+        const matchTermos = (termos) => termos.some(termo => textoLimpo.includes(` ${termo.toLowerCase()} `));
+
         const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];
-        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => categoria.includes(cat));
+        // Para categorias, verificamos também na string `categoria` limpa para ser mais preciso
+        const categoriaLimpa = ' ' + categoria.replace(/[^a-záàâãéèêíïóôõöúçñ0-9]+/gi, ' ') + ' ';
+        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => categoriaLimpa.includes(` ${cat.toLowerCase()} `));
         if (temCategoriaBloqueada) return false;
 
         const palavrasBloqueadas = [
             'refrigerante', 'suco', 'cerveja', 'long neck', 'drink', 'vinho', 
-            'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral',
-            'sorvete', 'bala ', 'chiclete', 'chocolate', 'pirulito', 'halls', 'mentos'
+            'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral', 'agua', 'água',
+            'sorvete', 'bala', 'chiclete', 'chocolate', 'pirulito', 'halls', 'mentos'
         ];
         
-        const temNomeBloqueado = palavrasBloqueadas.some(palavra => textoCompleto.includes(palavra));
+        const temNomeBloqueado = matchTermos(palavrasBloqueadas);
         if (temNomeBloqueado) return false;
         
         return true; 

@@ -26,8 +26,23 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     const [filtro, setFiltro] = useState('todos');
     const [buscaMesa, setBuscaMesa] = useState('');
 
-    // Fila Impressão
-    const [filaImpressao, setFilaImpressao] = useState([]);
+    // Fila Impressão Sequencial
+    const [filaEsperaImpressao, setFilaEsperaImpressao] = useState([]);
+    const [imprimindoAtualmente, setImprimindoAtualmente] = useState(null);
+
+    useEffect(() => {
+        if (imprimindoAtualmente || filaEsperaImpressao.length === 0) return;
+
+        const proximo = filaEsperaImpressao[0];
+        setImprimindoAtualmente(proximo);
+        setFilaEsperaImpressao(prev => prev.slice(1));
+
+        const timer = setTimeout(() => {
+            setImprimindoAtualmente(null);
+        }, 8000); // 8 segundos por impressão
+
+        return () => clearTimeout(timer);
+    }, [filaEsperaImpressao, imprimindoAtualmente]);
 
     // Modais e Ações de Mesas
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
@@ -135,8 +150,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                         const setorMesa = dadosMesa.setorImpressao || ''; 
                         toast.info(`🖨️ Imprimindo Mesa ${dadosMesa.numero}...`);
                         const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
-                        setFilaImpressao(prev => [...prev, urlImpressao]);
-                        setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000); 
+                        setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
                         try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) { console.error(err); }
                     }
                 }
@@ -153,8 +167,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                         const setor = dadosPedido.setorImpressao || '';
                         toast.info(`🖨️ Imprimindo pedido da Mesa ${dadosPedido.mesaNumero}...`);
                         const urlImpressao = `/impressao-isolada?estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
-                        setFilaImpressao(prev => [...prev, urlImpressao]);
-                        setTimeout(() => { setFilaImpressao(prev => prev.filter(url => url !== urlImpressao)); }, 15000);
+                        setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
                         try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "pedidos", docPedido.id), { solicitarImpressao: false, setorImpressao: null }); } catch (err) { console.error(err); }
                     }
                 }
@@ -316,7 +329,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
         // Listagem
         filtro, setFiltro, buscaMesa, setBuscaMesa, mesasFiltradas, stats, verificarMesaOciosa,
         // Impressão
-        filaImpressao,
+        imprimindoAtualmente,
         // Ações Mesas
         handleAdicionarMesa, handleExcluirMesa, handleExcluirMesasLivres, handleMesaClick, limparAlertaMesa,
         isModalAbrirMesaOpen, setIsModalAbrirMesaOpen, mesaParaAbrir, isOpeningTable,

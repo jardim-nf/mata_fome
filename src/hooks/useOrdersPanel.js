@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, getDocs, doc, updateDoc, deleteDoc, getDoc, getDocFromCache, serverTimestamp, where, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 import { toast } from 'react-toastify';
 import { isItemCozinha } from '../utils/painelUtils';
 import { rotearEImprimir } from '../services/printService';
@@ -147,11 +148,16 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
 
         let isFirstRun = true;
         let dadosSubcollection = [];
+        let dadosIfoodSubcollection = []; // Pedidos iFood (usam criadoEm em vez de createdAt)
         let dadosVendasRaiz = [];
 
         const mergeAndSetPedidos = () => {
             const mergedMap = new Map();
             dadosSubcollection.forEach(d => mergedMap.set(d.id, d));
+            // Merge pedidos iFood (que usam criadoEm) - sem sobrescrever se já existir
+            dadosIfoodSubcollection.forEach(d => {
+                if (!mergedMap.has(d.id)) mergedMap.set(d.id, d);
+            });
             dadosVendasRaiz.forEach(d => { 
                 if (d.mesaId || d.mesaNumero) return; 
                 if (!mergedMap.has(d.id)) mergedMap.set(d.id, d); 
@@ -178,7 +184,11 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         const tsStart = Timestamp.fromDate(startOfDay);
         const tsEnd = Timestamp.fromDate(endOfDay);
 
+        // Query principal (pedidos com createdAt - delivery, salão, etc)
         const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), where('createdAt', '>=', tsStart), where('createdAt', '<=', tsEnd), orderBy('createdAt', 'asc'));
+        // Query iFood - busca TODOS os pedidos com source='ifood' (sem filtro de data, filtra no JS)
+        // NOTA: As funções iFood reais estão no whatsapp.js (não ifood.js) e usam source='ifood'
+        const qPedidosIfood = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), where('origem', '==', 'ifood'));
         const qVendasRaiz = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoAtivo), where('criadoEm', '>=', tsStart), where('criadoEm', '<=', tsEnd));
 
         if (visualizandoHoje) {
@@ -186,15 +196,23 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                 if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
                 dadosSubcollection = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 mergeAndSetPedidos(); isFirstRun = false;
-            }));
+            }, (err) => console.error('❌ Erro query pedidos:', err)));
+
+            // Listener para pedidos do iFood (query simples por origem)
+            unsubscribers.push(onSnapshot(qPedidosIfood, (snapshot) => {
+                if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
+                dadosIfoodSubcollection = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                mergeAndSetPedidos();
+            }, (err) => console.error('❌ Erro query iFood:', err)));
 
             unsubscribers.push(onSnapshot(qVendasRaiz, (snapshot) => { 
                 dadosVendasRaiz = snapshot.docs.map(d => ({ id: d.id, ...d.data() })); 
                 mergeAndSetPedidos(); 
-            }));
+            }, (err) => console.error('❌ Erro query vendas:', err)));
         } else {
-            Promise.all([getDocs(qPedidos), getDocs(qVendasRaiz)]).then(([snapPedidos, snapVendasRaiz]) => {
+            Promise.all([getDocs(qPedidos), getDocs(qPedidosIfood), getDocs(qVendasRaiz)]).then(([snapPedidos, snapIfood, snapVendasRaiz]) => {
                 dadosSubcollection = snapPedidos.docs.map(d => ({ id: d.id, ...d.data() }));
+                dadosIfoodSubcollection = snapIfood.docs.map(d => ({ id: d.id, ...d.data() }));
                 dadosVendasRaiz = snapVendasRaiz.docs.map(d => ({ id: d.id, ...d.data() }));
                 mergeAndSetPedidos();
                 isFirstRun = false;
@@ -312,6 +330,40 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
     const handleUpdateFormaPagamento = useCallback(async (pedidoId, novaForma) => {
         try { await updateDoc(doc(db, `estabelecimentos/${estabelecimentoAtivo}/pedidos/${pedidoId}`), { formaPagamento: novaForma, atualizadoEm: serverTimestamp() }); toast.success('Forma de pagamento atualizada!'); } catch (error) { toast.error('Erro ao atualizar.'); }
     }, [estabelecimentoAtivo]);
+
+    // 🔄 iFood Auto-Polling Silencioso
+    // Chama a Cloud Function ifoodPolling a cada 30s.
+    // Quando ela salva novos pedidos no Firestore, o onSnapshot acima detecta automaticamente.
+    useEffect(() => {
+        if (!estabelecimentoAtivo || authLoading) return;
+
+        const ifoodPolling = httpsCallable(functions, 'ifoodPolling');
+        let isMounted = true;
+
+        const executarPolling = async () => {
+            if (!isMounted) return;
+            try {
+                const result = await ifoodPolling({ estabelecimentoId: estabelecimentoAtivo });
+                if (result.data?.pedidosNovos > 0) {
+                    console.log(`🟢 iFood: ${result.data.pedidosNovos} novo(s) pedido(s) sincronizado(s)`);
+                }
+            } catch (err) {
+                // Silencioso - não exibe toast para não incomodar o usuário
+                console.warn('⚠️ iFood polling silencioso falhou:', err.message);
+            }
+        };
+
+        // Executa imediatamente ao abrir a tela
+        executarPolling();
+
+        // Depois repete a cada 30 segundos
+        const intervalId = setInterval(executarPolling, 30000);
+
+        return () => {
+            isMounted = false;
+            clearInterval(intervalId);
+        };
+    }, [estabelecimentoAtivo, authLoading]);
 
     return {
         dataSelecionada, setDataSelecionada,

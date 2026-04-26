@@ -39,8 +39,9 @@ const extrairDadosDoItem = (rawItem) => {
 
 const getSetorItemRefinado = (itemFormatado) => {
     const textoBusca = `${itemFormatado.nomeCalculado} ${itemFormatado.categoriaCalculada}`.toLowerCase();
+    const textoLimpo = ' ' + textoBusca.replace(/[^a-záàâãéèêíïóôõöúçñ0-9]+/gi, ' ') + ' ';
     const termosBar = ['bebida', 'drink', 'suco', 'refriga', 'refrigerante', 'agua', 'água', 'cerveja', 'chopp', 'vinho', 'dose', 'caipirinha', 'coca', 'guarana', 'fanta', 'sprite'];
-    const ehBar = termosBar.some(t => textoBusca.includes(t));
+    const ehBar = termosBar.some(t => textoLimpo.includes(` ${t} `));
     return ehBar ? 'bar' : 'cozinha';
 };
 

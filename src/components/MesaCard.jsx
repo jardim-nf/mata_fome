@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { IoTime, IoPerson, IoCashOutline, IoPersonCircle, IoTrash, IoNotifications, IoReceipt } from 'react-icons/io5';
 import { cn } from '../utils/cn'; // Utilitário de formatação de classes Tailwind
 
@@ -10,7 +10,7 @@ const formatarDinheiro = (val) => {
     }).format(val || 0);
 };
 
-const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta, isValorOculto }) => {
+const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta, isValorOculto, currentTime }) => {
     
     // Cores do STATUS: Tons suaves no fundo, texto forte e borda dupla elegante
     const baseCardStyle = 'relative rounded-2xl border-2 flex flex-col justify-between overflow-hidden transition-all duration-200 active:scale-95 cursor-pointer min-h-[145px]';
@@ -39,11 +39,12 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta,
     const tempoDecorrido = useMemo(() => {
         if (!mesa.updatedAt || mesa.status === 'livre') return '';
         const data = mesa.updatedAt.toDate ? mesa.updatedAt.toDate() : new Date(mesa.updatedAt);
-        const diff = Math.floor((new Date() - data) / 60000);
+        const agora = currentTime ? new Date(currentTime) : new Date();
+        const diff = Math.floor((agora - data) / 60000);
         if (diff < 1) return 'Agora';
         if (diff > 60) return `${Math.floor(diff/60)}h`;
         return `${diff}m`;
-    }, [mesa.updatedAt, mesa.status]);
+    }, [mesa.updatedAt, mesa.status, currentTime]);
 
     // Trata o nome do cliente para caber no layout
     const nomeCliente = useMemo(() => {
@@ -90,7 +91,8 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta,
                         ) : mesa.status !== 'livre' && (() => {
                             // Cor dinâmica baseada no tempo
                             const data = mesa.updatedAt?.toDate ? mesa.updatedAt.toDate() : (mesa.updatedAt ? new Date(mesa.updatedAt) : null);
-                            const mins = data ? Math.floor((new Date() - data) / 60000) : 0;
+                            const agora = currentTime ? new Date(currentTime) : new Date();
+                            const mins = data ? Math.floor((agora - data) / 60000) : 0;
                             
                             return (
                                 <span className={cn(
@@ -165,6 +167,29 @@ const MesaCard = ({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta,
             )}
         </div>
     );
-};
+}, (prevProps, nextProps) => {
+    const m1 = prevProps.mesa;
+    const m2 = nextProps.mesa;
+    
+    // Comparação profunda dos atributos vitais da mesa para evitar renders desnecessários
+    const isMesaEqual = 
+        m1.id === m2.id &&
+        m1.status === m2.status &&
+        m1.pessoas === m2.pessoas &&
+        m1.total === m2.total &&
+        m1.chamandoGarcom === m2.chamandoGarcom &&
+        m1.pedindoConta === m2.pedindoConta &&
+        m1.nome === m2.nome &&
+        m1.bloqueadoPor === m2.bloqueadoPor &&
+        (m1.nomesOcupantes?.length || 0) === (m2.nomesOcupantes?.length || 0) &&
+        (m1.updatedAt?.seconds === m2.updatedAt?.seconds);
+
+    return (
+        isMesaEqual &&
+        prevProps.isOciosa === nextProps.isOciosa &&
+        prevProps.isValorOculto === nextProps.isValorOculto &&
+        prevProps.currentTime === nextProps.currentTime
+    );
+});
 
 export default MesaCard;

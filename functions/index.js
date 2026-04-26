@@ -51,3 +51,4 @@ export * from "./api/motoboys.js";
 
 export * from "./api/referral.js";
 
+export { ifoodTestarConexao, ifoodConfigurarWebhook, ifoodWebhook, ifoodPolling, ifoodAtualizarStatus } from "./api/ifood.js";

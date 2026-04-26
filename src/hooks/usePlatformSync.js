@@ -245,6 +245,38 @@ export const usePlatformSync = () => {
     }
   }, [platforms, syncPlatformOrders]);
 
+  // 🔄 Sincronização Silenciosa em Background (Auto-Polling)
+  const syncSilent = useCallback(async () => {
+    if (!estabelecimentoIdPrincipal) return;
+    try {
+      const connectedPlatforms = Object.keys(platforms).filter(
+        platformId => platforms[platformId]?.connected && platformId !== 'website'
+      );
+
+      for (const platformId of connectedPlatforms) {
+        // Busca os pedidos sem exibir toasts (já salva no DB na própria função ifoodPolling)
+        await fetchPlatformOrders(platformId, platforms[platformId], estabelecimentoIdPrincipal);
+      }
+    } catch (error) {
+      console.error('❌ Erro no auto-polling silencioso:', error);
+    }
+  }, [platforms, estabelecimentoIdPrincipal]);
+
+  // ⏱️ Iniciar o Loop de Auto-Polling
+  useEffect(() => {
+    if (!estabelecimentoIdPrincipal || !platforms?.ifood?.connected) return;
+
+    // Executa imediatamente a primeira vez (não espera o timer)
+    syncSilent();
+
+    // Roda a cada 15 segundos
+    const intervalId = setInterval(() => {
+      syncSilent();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [estabelecimentoIdPrincipal, platforms?.ifood?.connected, syncSilent]);
+
   // 🔄 Ouvir pedidos em tempo real
   useEffect(() => {
     if (!estabelecimentoIdPrincipal) return;
