@@ -371,7 +371,18 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                                 </div>
                                             )}
                                             {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block break-words whitespace-normal">OBS: {item.observacao}</div>}
-                                            {item.adicionadoPor && <div className="mt-1 text-[10px] font-bold uppercase italic border-t border-dashed border-gray-400 pt-0.5">ATENDENTE: {item.adicionadoPor}</div>}
+                                            {item.adicionadoPor && (
+                                                <div className="mt-1 flex justify-between text-[10px] font-bold uppercase italic border-t border-dashed border-gray-400 pt-0.5">
+                                                    <span>ATENDENTE: {item.adicionadoPor}</span>
+                                                    {item.adicionadoEm && (
+                                                        <span>
+                                                            {item.adicionadoEm?.toDate 
+                                                                ? item.adicionadoEm.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) 
+                                                                : new Date(item.adicionadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace('Invalid Date', '')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
