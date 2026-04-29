@@ -7,7 +7,7 @@ import StockAlertWidget from "../components/StockAlertWidget";
 import { useAuth } from "../context/AuthContext";
 import { useEstablishment } from "../hooks/useEstablishment";
 import { db } from "../firebase";
-import { collection, query, orderBy, limit, getDocs, where } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, where, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 
 import { 
   IoStatsChart, IoShareSocial, IoColorPalette, IoSettings, IoTrashBin,
@@ -63,18 +63,26 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchAvisoGlobal = async () => {
       try {
+        let avisosLidos = [];
+        if (currentUser?.uid) {
+            const userRef = doc(db, 'usuarios', currentUser.uid);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                avisosLidos = userSnap.data().avisosLidos || [];
+            }
+        }
+
         const q = query(collection(db, 'avisos_gerais'), where('ativo', '==', true), orderBy('createdAt', 'desc'), limit(10));
         const snap = await getDocs(q);
         
         let avisoAchado = null;
-        for (const doc of snap.docs) {
-           const data = doc.data();
+        for (const msgDoc of snap.docs) {
+           const data = msgDoc.data();
            const alvo = data.alvo || 'todos';
            
            if (alvo === 'todos' || alvo === estabelecimentoIdPrincipal) {
-               const isLido = localStorage.getItem(`aviso_lido_${doc.id}`);
-               if (!isLido) {
-                   avisoAchado = { id: doc.id, ...data };
+               if (!avisosLidos.includes(msgDoc.id)) {
+                   avisoAchado = { id: msgDoc.id, ...data };
                    break;
                }
            }
@@ -92,10 +100,20 @@ const AdminDashboard = () => {
     }
   }, [currentUser, estabelecimentoIdPrincipal]);
 
-  const dispensarAvisoGlobal = () => {
+  const dispensarAvisoGlobal = async () => {
     if (globalAviso) {
-      localStorage.setItem(`aviso_lido_${globalAviso.id}`, 'true');
+      const avisoId = globalAviso.id;
       setGlobalAviso(null);
+      if (currentUser?.uid) {
+        try {
+            const userRef = doc(db, 'usuarios', currentUser.uid);
+            await updateDoc(userRef, {
+                avisosLidos: arrayUnion(avisoId)
+            });
+        } catch (e) {
+            console.error("Erro ao salvar aviso lido:", e);
+        }
+      }
     }
   };
 
