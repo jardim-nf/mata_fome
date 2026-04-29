@@ -321,6 +321,17 @@ export default function ImpressaoIsolada() {
                                             )}
 
                                             {item.obsCalculada && <div style={{ fontSize: '11px', marginTop: '2px', fontWeight: 'bold' }}>* OBS: {item.obsCalculada}</div>}
+                                            
+                                            <div style={{ fontSize: '10px', marginTop: '3px', fontWeight: 'bold', fontStyle: 'italic', borderTop: '1px dashed #000', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>ATENDENTE: {item.adicionadoPor || pedido.atendente || pedido.funcionario || 'Caixa'}</span>
+                                                <span>
+                                                    {(item.adicionadoEm || pedido.createdAt || pedido.dataPedido) && (
+                                                        (item.adicionadoEm?.toDate || pedido.createdAt?.toDate || pedido.dataPedido?.toDate)
+                                                            ? (item.adicionadoEm?.toDate ? item.adicionadoEm.toDate() : (pedido.createdAt?.toDate ? pedido.createdAt.toDate() : pedido.dataPedido.toDate())).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                                                            : new Date(item.adicionadoEm || pedido.createdAt || pedido.dataPedido).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace('Invalid Date', '')
+                                                    )}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td style={{ width: '25%', textAlign: 'right', fontWeight: 'bold' }}>
                                             {formatarMoeda(item.precoCalculado * item.qtdCalculada)}
