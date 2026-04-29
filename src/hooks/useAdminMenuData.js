@@ -129,7 +129,16 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 return 'normal';
             };
             const status = getS(item);
-            const matchStock = stockFilter === 'todos' || stockFilter === status;
+            
+            let matchStock = true;
+            if (stockFilter === 'critico') matchStock = status === 'critico';
+            else if (stockFilter === 'esgotado') matchStock = status === 'esgotado';
+            else if (stockFilter === 'normal') matchStock = status === 'normal';
+            else if (stockFilter === 'sem_ncm') matchStock = !item.fiscal?.ncm || item.fiscal.ncm.trim() === '';
+            else if (stockFilter === 'zerado') matchStock = Number(item.preco) === 0 || (Array.isArray(item.variacoes) && item.variacoes.some(v => Number(v.preco) === 0));
+            else if (stockFilter === 'inativos') matchStock = item.ativo === false;
+            else if (stockFilter === 'sem_foto') matchStock = !item.imageUrl;
+
             return matchCategory && matchSearch && matchStock;
         });
         filtered.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));

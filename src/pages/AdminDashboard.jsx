@@ -15,7 +15,7 @@ import {
   IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
   IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
-  IoFlaskOutline
+  IoFlaskOutline, IoSwapHorizontal
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt, FaBullhorn, FaTimes } from 'react-icons/fa'; 
 
@@ -326,6 +326,16 @@ const AdminDashboard = () => {
               >
                 <IoStatsChart className="text-lg" />
                 <span className="hidden sm:inline">Painel Master</span>
+              </button>
+            )}
+            {!currentUser?.isMasterAdmin && currentUser?.estabelecimentosGerenciados?.length > 1 && (
+              <button
+                onClick={() => navigate('/selecionar-estabelecimento')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 font-bold text-sm transition-all duration-200 shrink-0"
+                title="Trocar Loja"
+              >
+                <IoSwapHorizontal className="text-lg" />
+                <span className="hidden sm:inline">Trocar Loja</span>
               </button>
             )}
             <button

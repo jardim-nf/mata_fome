@@ -354,10 +354,14 @@ function AdminMenuManagement() {
                     {['Todos', ...new Set(menuParams.categories.map(c => c.nome))].map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <select value={menuParams.stockFilter} onChange={e => menuParams.setStockFilter(e.target.value)} className="px-6 py-4 bg-white border border-slate-100 hover:bg-slate-50 focus:ring-4 focus:ring-blue-500/10 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer transition-all shadow-sm min-w-[180px] appearance-none" style={{backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1em'}}>
-                    <option value="todos">Status: Tudo</option>
+                    <option value="todos">Status: Todos os Itens</option>
                     <option value="critico">⚠️ Estoque Crítico</option>
                     <option value="esgotado">🚫 Esgotados</option>
                     <option value="normal">✅ Estoque Normal</option>
+                    <option value="sem_ncm">📄 Sem NCM (Fiscal)</option>
+                    <option value="zerado">💲 Preço Zerado</option>
+                    <option value="inativos">⏸️ Pausados/Ocultos</option>
+                    <option value="sem_foto">📸 Sem Foto</option>
                 </select>
             </div>
         </div>
