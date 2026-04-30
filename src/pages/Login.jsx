@@ -72,7 +72,7 @@ export default function LoginPage() {
       } else if (userData.isAdmin) {
         navigate('/admin/dashboard', { replace: true });
         
-      } else if (temCargo(['garcom', 'atendente'])) {
+      } else if (temCargo(['gerente', 'garcom', 'atendente'])) {
         navigate('/controle-salao', { replace: true });
         
       } else if (temCargo(['caixa'])) {
@@ -81,7 +81,7 @@ export default function LoginPage() {
       } else if (temCargo(['entregador'])) {
         navigate('/entregador', { replace: true });
         
-      } else if (temCargo(['gerente', 'cozinheiro', 'auxiliar'])) {
+      } else if (temCargo(['cozinheiro', 'auxiliar'])) {
         navigate('/painel', { replace: true });
       }
       // Se não for nenhum (cliente comum), fica na Home.
