@@ -122,7 +122,14 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
     const filteredPedidos = useMemo(() => {
         let currentPedidos = [...pedidos];
         
-        if (paymentMethodFilter !== 'todos') currentPedidos = currentPedidos.filter(i => i.formaPagamento === paymentMethodFilter);
+        if (paymentMethodFilter !== 'todos') {
+            currentPedidos = currentPedidos.filter(i => {
+                if (i.pagamentos && Object.keys(i.pagamentos).length > 0) {
+                    return Object.values(i.pagamentos).some(pgto => pgto.formaPagamento === paymentMethodFilter);
+                }
+                return i.formaPagamento === paymentMethodFilter;
+            });
+        }
         if (deliveryTypeFilter !== 'todos') currentPedidos = currentPedidos.filter(i => i.tipo === deliveryTypeFilter);
         if (motoboyFilter !== 'todos') currentPedidos = currentPedidos.filter(i => i.motoboyId === motoboyFilter);
 
@@ -203,8 +210,16 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             const hourKey = format(p.data, 'HH:00');
             byHour[hourKey] = (byHour[hourKey] || 0) + 1;
 
-            const payKey = traduzirPagamento(p.formaPagamento);
-            byPayment[payKey] = Math.round(((byPayment[payKey] || 0) + p.totalFinal) * 100) / 100;
+            if (p.pagamentos && Object.keys(p.pagamentos).length > 0) {
+                Object.values(p.pagamentos).forEach(pgto => {
+                    const payKey = traduzirPagamento(pgto.formaPagamento);
+                    const valor = Number(pgto.valor) || 0;
+                    byPayment[payKey] = Math.round(((byPayment[payKey] || 0) + valor) * 100) / 100;
+                });
+            } else {
+                const payKey = traduzirPagamento(p.formaPagamento);
+                byPayment[payKey] = Math.round(((byPayment[payKey] || 0) + p.totalFinal) * 100) / 100;
+            }
 
             const typeKey = p.tipo === 'mesa' ? 'Mesa' : 'Delivery';
             byType[typeKey] = (byType[typeKey] || 0) + 1;
