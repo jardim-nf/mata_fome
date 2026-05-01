@@ -1,25 +1,86 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { isPedidoCancelado, traduzirPagamento } from '../../../utils/reportUtils';
 import { format } from 'date-fns';
 import { FaMotorcycle } from "react-icons/fa";
+import { IoChevronUp, IoChevronDown } from "react-icons/io5";
 
 export default function DetailedTable({ filteredPedidos }) {
+    const [sortConfig, setSortConfig] = useState({ key: 'data', direction: 'desc' });
+
+    const handleSort = (key) => {
+        if (!key) return;
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const sortedPedidos = useMemo(() => {
+        let sortableItems = [...filteredPedidos];
+        if (sortConfig.key !== null) {
+            sortableItems.sort((a, b) => {
+                let aValue = a[sortConfig.key];
+                let bValue = b[sortConfig.key];
+
+                if (sortConfig.key === 'cliente_mesa') {
+                    aValue = a.tipo === 'mesa' ? `Mesa ${String(a.mesaNumero).padStart(4, '0')}` : (a.clienteNome || '').toLowerCase();
+                    bValue = b.tipo === 'mesa' ? `Mesa ${String(b.mesaNumero).padStart(4, '0')}` : (b.clienteNome || '').toLowerCase();
+                } else if (sortConfig.key === 'pagamento') {
+                    aValue = traduzirPagamento(a.formaPagamento).toLowerCase();
+                    bValue = traduzirPagamento(b.formaPagamento).toLowerCase();
+                } else if (sortConfig.key === 'valorLiquido') {
+                    aValue = a.totalFinal || 0;
+                    bValue = b.totalFinal || 0;
+                } else if (sortConfig.key === 'data') {
+                    aValue = a.data ? new Date(a.data).getTime() : 0;
+                    bValue = b.data ? new Date(b.data).getTime() : 0;
+                } else if (sortConfig.key === 'status') {
+                    aValue = (a.status || '').toLowerCase();
+                    bValue = (b.status || '').toLowerCase();
+                }
+
+                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [filteredPedidos, sortConfig]);
+
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) return <IoChevronDown className="inline-block ml-1 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
+        return sortConfig.direction === 'asc' ? <IoChevronUp className="inline-block ml-1 text-blue-600" /> : <IoChevronDown className="inline-block ml-1 text-blue-600" />;
+    };
+
+    const Th = ({ label, sortKey, className = "" }) => (
+        <th 
+            className={`px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100 transition-colors group select-none ${className}`}
+            onClick={() => handleSort(sortKey)}
+        >
+            <div className="flex items-center">
+                {label}
+                {sortKey && getSortIcon(sortKey)}
+            </div>
+        </th>
+    );
+
     return (
         <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                     <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente/Mesa</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entregador</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pagamento</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor Líquido</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <Th label="Data" sortKey="data" />
+                        <Th label="ID" sortKey={null} />
+                        <Th label="Cliente/Mesa" sortKey="cliente_mesa" />
+                        <Th label="Entregador" sortKey={null} />
+                        <Th label="Pagamento" sortKey="pagamento" />
+                        <Th label="Valor Líquido" sortKey="valorLiquido" />
+                        <Th label="Status" sortKey="status" />
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPedidos.map(p => {
+                    {sortedPedidos.map(p => {
                         const pedidoCancelado = isPedidoCancelado(p);
                         const teveItemCancelado = p.itens?.some(it => String(it.status).toLowerCase() === 'cancelado');
                         return (

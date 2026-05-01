@@ -29,7 +29,12 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
                 const horaMin = item.data ? `_${String(item.data.getHours()).padStart(2,'0')}${String(item.data.getMinutes()).padStart(2,'0')}` : '';
                 const dia = item.data ? `${item.data.getFullYear()}-${String(item.data.getMonth()+1).padStart(2,'0')}-${String(item.data.getDate()).padStart(2,'0')}${horaMin}` : '';
                 
-                if (mesa) return `mesa_${mesa}_${total}_${dia}`;
+                if (mesa) {
+                    // Mesas podem ter pagamentos parciais seguidos no mesmo minuto com o mesmo valor.
+                    // Não podemos usar a businessKey para dedup, pois vai ocultar pagamentos legítimos.
+                    // Retornar null faz com que a dedup aconteça apenas pelo ID do documento (que é único).
+                    return null;
+                }
                 
                 const cliente = (item.clienteNome || '').toLowerCase().trim();
                 const pagamento = (item.formaPagamento || '').toLowerCase().trim();

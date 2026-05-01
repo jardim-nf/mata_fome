@@ -26,6 +26,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     const [filtro, setFiltro] = useState('todos');
     const [buscaMesa, setBuscaMesa] = useState('');
 
+
     // Fila Impressão Sequencial
     const [filaEsperaImpressao, setFilaEsperaImpressao] = useState([]);
     const [imprimindoAtualmente, setImprimindoAtualmente] = useState(null);
@@ -309,6 +310,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
             const matchStatus = filtro === 'todos' ? true : filtro === 'livres' ? m.status === 'livre' : m.status !== 'livre';
             const termoBusca = buscaMesa.toLowerCase();
             const matchBusca = buscaMesa === '' ? true : (String(m.numero).includes(buscaMesa) || (m.nome && m.nome.toLowerCase().includes(termoBusca)));
+            
             return matchStatus && matchBusca;
         });
     }, [mesas, filtro, buscaMesa]);

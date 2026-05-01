@@ -232,10 +232,13 @@ export default function ControleSalao() {
 
                     {/* Linha 2: Busca e Filtros */}
                     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
-                        <div className="relative w-full sm:w-48 md:w-64">
-                            <IoSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input type="text" className="w-full pl-10 pr-9 py-3 bg-white border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={salaoData.buscaMesa} onChange={(e) => salaoData.setBuscaMesa(e.target.value)} />
-                            {salaoData.buscaMesa && <button onClick={() => salaoData.setBuscaMesa('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose size={18}/></button>}
+                        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                            <div className="relative w-full sm:w-48 md:w-64">
+                                <IoSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="text" className="w-full pl-10 pr-9 py-3 bg-white border border-gray-200 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={salaoData.buscaMesa} onChange={(e) => salaoData.setBuscaMesa(e.target.value)} />
+                                {salaoData.buscaMesa && <button onClick={() => salaoData.setBuscaMesa('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose size={18}/></button>}
+                            </div>
+
                         </div>
                         <div className="flex bg-gray-200/60 p-1 rounded-2xl overflow-x-auto gap-1">
                             {['todos', 'livres', 'ocupadas'].map(t => {
