@@ -134,7 +134,14 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                     localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
 
                     const pedidoParaImprimir = processarDadosPedido({ id: pedidoId, ...data });
-                    if (pedidoParaImprimir) setPrintQueue(prev => prev.some(p => p.id === pedidoId) ? prev : [...prev, pedidoParaImprimir]);
+                    if (pedidoParaImprimir) {
+                        if (configAtual === 'cozinha' && !isDelivery) {
+                            // Se o modo for KDS (cozinha), removemos as bebidas da impressão para não sair no balcão
+                            pedidoParaImprimir.itens = (pedidoParaImprimir.itens || []).filter(isItemCozinha);
+                            if (pedidoParaImprimir.itens.length === 0) return;
+                        }
+                        setPrintQueue(prev => prev.some(p => p.id === pedidoId) ? prev : [...prev, pedidoParaImprimir]);
+                    }
                 }
             }
         };
