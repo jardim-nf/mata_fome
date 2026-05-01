@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import qz from 'qz-tray';
+import { matchTermos, TERMOS_BEBIDA } from '../utils/categoriaUtils';
 
 // 🔥 O PENTE FINO DE DADOS 🔥 (Garante que o nome do produto nunca venha em branco)
 const extrairDadosDoItem = (rawItem) => {
@@ -38,10 +39,8 @@ const extrairDadosDoItem = (rawItem) => {
 };
 
 const getSetorItemRefinado = (itemFormatado) => {
-    const textoBusca = `${itemFormatado.nomeCalculado} ${itemFormatado.categoriaCalculada}`.toLowerCase();
-    const textoLimpo = ' ' + textoBusca.replace(/[^a-záàâãéèêíïóôõöúçñ0-9]+/gi, ' ') + ' ';
-    const termosBar = ['bebida', 'drink', 'suco', 'refriga', 'refrigerante', 'agua', 'água', 'cerveja', 'chopp', 'vinho', 'dose', 'caipirinha', 'coca', 'guarana', 'fanta', 'sprite'];
-    const ehBar = termosBar.some(t => textoLimpo.includes(` ${t} `));
+    const textoBusca = `${itemFormatado.nomeCalculado} ${itemFormatado.categoriaCalculada}`;
+    const ehBar = matchTermos(textoBusca, TERMOS_BEBIDA);
     return ehBar ? 'bar' : 'cozinha';
 };
 

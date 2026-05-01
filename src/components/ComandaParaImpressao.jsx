@@ -5,31 +5,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { IoPrint } from 'react-icons/io5';
 
-const TERMOS_BEBIDA = [
-    'bebida', 'bebidas', 'refrigerante', 'refri', 'suco', 'cerveja', 'agua', 'água',
-    'drink', 'vinho', 'dose', 'long neck', 'lata', 'garrafa', 'h2oh', 'coca', 'guarana',
-    'pepsi', 'fanta', 'sprite', 'schweppes', 'chopp', 'chope', 'energetico', 'ice',
-    'skol', 'brahma', 'heineken', 'amstel', 'corona', 'budweiser', 'antarctica', 'kuat'
-];
-
-const TERMOS_BOMBONIERE = [
-    'bomboniere', 'doce', 'sobremesa', 'chiclete', 'bala', 'chocolate', 'halls', 'mentos', 'sorvete', 'picole', 'picolé'
-];
-
-const removeAcentos = (str) => {
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-};
-
-const matchTermos = (texto, termos) => {
-    const textoNormalizado = removeAcentos(String(texto || '')).toLowerCase();
-    const textoLimpo = ' ' + textoNormalizado.replace(/[^a-z0-9]+/g, ' ') + ' ';
-    
-    return termos.some(termo => {
-        const termoNormalizado = removeAcentos(termo).toLowerCase();
-        return textoLimpo.includes(` ${termoNormalizado} `) || 
-               textoLimpo.includes(` ${termoNormalizado}s `);
-    });
-};
+import { matchTermos, TERMOS_BEBIDA, TERMOS_BOMBONIERE } from '../utils/categoriaUtils';
 
 let ultimoPedidoImpresso = null;
 

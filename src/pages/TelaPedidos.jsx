@@ -14,13 +14,10 @@ import VariacoesModal from '../components/VariacoesModal';
 import ModalTransferenciaMesa from '../components/ModalTransferenciaMesa';
 import { useTelaPedidosData } from '../hooks/useTelaPedidosData';
 import { useTransferenciaMesa } from '../hooks/useTransferenciaMesa';
+import { getSetorItemInfo } from '../utils/categoriaUtils';
 
-const getSetorItem = (categoria) => {
-    const c = (categoria || '').toLowerCase();
-    const isBebida = ['bebida', 'drink', 'suco', 'refrigerante', 'agua', 'cerveja'].some(t => c.includes(t));
-    return isBebida 
-        ? { nome: 'Bar', icon: '🍺', corTexto: 'text-blue-600', corBg: 'bg-blue-50', border: 'border-blue-200' }
-        : { nome: 'Cozinha', icon: '🍳', corTexto: 'text-orange-600', corBg: 'bg-orange-50', border: 'border-orange-200' };
+const getSetorItem = (categoria, nome) => {
+    return getSetorItemInfo(categoria, nome);
 };
 
 const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho }) => {
@@ -32,7 +29,7 @@ const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho
     }, [produto]);
 
     const precoExibicao = parseFloat(produto.preco || 0).toFixed(2);
-    const setor = getSetorItem(produto.categoria);
+    const setor = getSetorItem(produto.categoria, produto.nome);
 
     return (
         <div

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { IoTime, IoRestaurant } from "react-icons/io5";
 import PedidoCard from "../PedidoCard";
+import { matchTermos, TERMOS_BEBIDA } from '../../utils/categoriaUtils';
 
 const GrupoPedidosMesa = ({ 
     pedidos, 
@@ -18,8 +19,11 @@ const GrupoPedidosMesa = ({
             
             // Filtra os itens reais que vão para a cozinha (IGNORANDO itensCozinha que pode vir como [] vazio por bug de sínc)
             const itensCozinhaReais = (pedido.itens || []).filter(it => {
-                const c = (it.categoria || it.category || '').toLowerCase();
-                return !['bebida', 'drink', 'suco', 'refrigerante', 'agua', 'cerveja'].some(t => c.includes(t));
+                const nome = String(it.nome || it.produto?.nome || '').toLowerCase();
+                const categoria = String(it.categoria || it.produto?.categoria || '').toLowerCase();
+                const textoCompleto = `${nome} ${categoria}`;
+                const isBebida = matchTermos(textoCompleto, TERMOS_BEBIDA);
+                return !isBebida;
             });
             
             // Se o pedido não tiver NENHUM item aplicável à cozinha, ignoramos
