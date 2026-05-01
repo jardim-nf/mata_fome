@@ -18,7 +18,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 function Painel() {
     const navigate = useNavigate();
-    const { loading: authLoading, estabelecimentosGerenciados , estabelecimentoIdPrincipal } = useAuth();
+    const { loading: authLoading, estabelecimentosGerenciados , estabelecimentoIdPrincipal, userData } = useAuth();
     const estabelecimentoAtivo = useMemo(() => estabelecimentoIdPrincipal || null, [estabelecimentosGerenciados]);
 
     const {
@@ -74,7 +74,7 @@ function Painel() {
             <div className="flex flex-col md:flex-row justify-between items-center px-4 py-2 gap-4">
                 <div className="flex items-center gap-3">
                     <BackButton to="/admin" />
-                    <div className="hidden md:flex flex-col"><span className="text-sm font-semibold text-gray-800">Mata Fome</span><span className="text-xs text-gray-500">KDS (Painel de Pedidos)</span></div>
+                    <div className="hidden md:flex flex-col"><span className="text-sm font-semibold text-gray-800">{estabelecimentoInfo?.nome || userData?.nomeEstabelecimento || "Painel de Pedidos"}</span><span className="text-xs text-gray-500">KDS (Painel de Pedidos)</span></div>
                     <div className="h-8 w-px bg-gray-300 hidden md:block"></div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => { if (!userInteracted) setUserInteracted(true); setNotificationsEnabled(!notificationsEnabled); }} className={`p-2 rounded-full cursor-pointer transition-colors ${notificationsEnabled ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`} title={notificationsEnabled ? "Notificações ligadas" : "Ligar notificações sonoras"}>{notificationsEnabled ? <IoNotificationsOutline size={22} /> : <IoNotificationsOffOutline size={22} />}</button>
