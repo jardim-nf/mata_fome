@@ -354,6 +354,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                 valorDesconto: valorDesconto,
                 tipoDesconto: tipoDesconto,
                 valorDescontoInput: parseFloat(valorDescontoInput) || 0,
+                formaPagamento: formaPagamentoPredominante,
                 tipoPagamento: formaPagamentoPredominante,
                 metodoPagamento: formaPagamentoPredominante, 
                 status: vaiQuitar ? 'pago' : 'pago_parcial',

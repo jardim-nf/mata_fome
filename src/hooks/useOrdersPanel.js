@@ -253,6 +253,8 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                         // Constrói a mensagem dependendo do tipo do pedido
                         if (isMesa) {
                             mensagemParaFalar = `Novo Pedido. Mesa ${p.mesaNumero || 'Indefinida'}.`;
+                            // Se for pedido do Salão (Mesa) e só tem bebidas, a cozinha não deve tocar campainha
+                            if (!p.itensCozinha || p.itensCozinha.length === 0) return false;
                         } else {
                             const nome = p.cliente?.nome?.split(' ')[0] || 'Desconhecido';
                             mensagemParaFalar = `Novo Delivery de ${nome}.`;
