@@ -120,9 +120,17 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             if (configAtual === 'desligado') return;
 
             const isDelivery = data.source !== 'salao' && data.tipo !== 'mesa' && !data.mesaNumero;
+            const rawItens = Array.isArray(data.itens) ? data.itens : [];
+            const temItensCozinha = rawItens.some(isItemCozinha);
+
+            // 🔥 FIX: Se for pedido do Salão (Mesa), NUNCA dispara popup automático se for APENAS bebida.
+            // As bebidas do salão normalmente vão direto pro bar (o garçom avisa ou usa a via manual).
+            if (!isDelivery && !temItensCozinha) {
+                return;
+            }
+
             if (configAtual === 'cozinha' && !isDelivery) {
-                const rawItens = Array.isArray(data.itens) ? data.itens : [];
-                if (rawItens.filter(isItemCozinha).length === 0) return; 
+                if (!temItensCozinha) return; 
             }
 
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {

@@ -44,7 +44,7 @@ export default function LoginPage() {
 
       // 2. Normaliza todos os cargos da lista (tira acento, joga pra minúsculo)
       const cargosNormalizados = cargosDoUsuario.map(cargo => 
-        String(cargo).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        String(cargo).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
       );
 
       // 3. Função "detetive": verifica se o usuário possui pelo menos um dos cargos exigidos
@@ -69,11 +69,11 @@ export default function LoginPage() {
       if (userData.isMasterAdmin) {
         navigate('/master-dashboard', { replace: true });
         
-      } else if (userData.isAdmin) {
-        navigate('/admin/dashboard', { replace: true });
-        
       } else if (temCargo(['gerente', 'garcom', 'atendente'])) {
         navigate('/controle-salao', { replace: true });
+        
+      } else if (userData.isAdmin) {
+        navigate('/admin/dashboard', { replace: true });
         
       } else if (temCargo(['caixa'])) {
         navigate('/pdv', { replace: true });
