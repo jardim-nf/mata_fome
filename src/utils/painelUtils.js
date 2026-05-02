@@ -1,3 +1,5 @@
+import { matchTermos, TERMOS_BEBIDA, TERMOS_BOMBONIERE } from './categoriaUtils';
+
 /**
  * Filtra itens do pedido, verificando se devem ir para a tela de KDS / Cozinha.
  * Itens que são combos sempre vão para a cozinha. 
@@ -23,23 +25,13 @@ export const isItemCozinha = (item) => {
             return true;
         }
         
-        const textoLimpo = ' ' + textoCompleto.replace(/[^a-záàâãéèêíïóôõöúçñ0-9]+/gi, ' ') + ' ';
-        const matchTermos = (termos) => termos.some(termo => textoLimpo.includes(` ${termo.toLowerCase()} `));
+        // Usa a central de categorias para ser 100% igual ao resto do sistema
+        const isBebida = matchTermos(textoCompleto, TERMOS_BEBIDA);
+        const isBomboniere = matchTermos(textoCompleto, TERMOS_BOMBONIERE);
 
-        const categoriasBloqueadas = ['bebida', 'bomboniere', 'bar', 'sobremesa', 'doces', 'doce'];
-        // Para categorias, verificamos também na string `categoria` limpa para ser mais preciso
-        const categoriaLimpa = ' ' + categoria.replace(/[^a-záàâãéèêíïóôõöúçñ0-9]+/gi, ' ') + ' ';
-        const temCategoriaBloqueada = categoriasBloqueadas.some(cat => categoriaLimpa.includes(` ${cat.toLowerCase()} `));
-        if (temCategoriaBloqueada) return false;
-
-        const palavrasBloqueadas = [
-            'refrigerante', 'suco', 'cerveja', 'long neck', 'drink', 'vinho', 
-            'coca', 'guarana', 'pepsi', 'sprite', 'h2oh', 'agua mineral', 'água mineral', 'agua', 'água',
-            'sorvete', 'bala', 'chiclete', 'chocolate', 'pirulito', 'halls', 'mentos'
-        ];
-        
-        const temNomeBloqueado = matchTermos(palavrasBloqueadas);
-        if (temNomeBloqueado) return false;
+        if (isBebida || isBomboniere) {
+            return false;
+        }
         
         return true; 
     } catch (error) {
