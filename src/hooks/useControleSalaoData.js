@@ -152,9 +152,18 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                         
                         // Ignora popup de impressão se o garçom enviou apenas para o "Bar"
                         if (setorMesa !== 'bar') {
-                            toast.info(`🖨️ Imprimindo Mesa ${dadosMesa.numero}...`);
-                            const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
-                            setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
+                            const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
+                            const idMesaVirtual = 'mesa_' + docMesa.id; // Evitar conflito com IDs de pedidos
+                            
+                            if (!impressosLocal.includes(idMesaVirtual)) {
+                                impressosLocal.push(idMesaVirtual);
+                                if (impressosLocal.length > 50) impressosLocal.shift();
+                                localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
+
+                                toast.info(`🖨️ Imprimindo Mesa ${dadosMesa.numero}...`);
+                                const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
+                                setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
+                            }
                         }
                         
                         try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "mesas", docMesa.id), { solicitarImpressaoConferencia: false, setorImpressao: null }); } catch (err) { console.error(err); }
@@ -174,9 +183,17 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                         
                         // Ignora popup de impressão se o garçom enviou apenas para o "Bar" (bebidas)
                         if (setor !== 'bar') {
-                            toast.info(`🖨️ Imprimindo pedido da Mesa ${dadosPedido.mesaNumero}...`);
-                            const urlImpressao = `/impressao-isolada?estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
-                            setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
+                            const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
+                            
+                            if (!impressosLocal.includes(docPedido.id)) {
+                                impressosLocal.push(docPedido.id);
+                                if (impressosLocal.length > 50) impressosLocal.shift();
+                                localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
+
+                                toast.info(`🖨️ Imprimindo pedido da Mesa ${dadosPedido.mesaNumero}...`);
+                                const urlImpressao = `/impressao-isolada?estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
+                                setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
+                            }
                         }
                         
                         try { await updateDoc(doc(db, "estabelecimentos", estabelecimentoId, "pedidos", docPedido.id), { solicitarImpressao: false, setorImpressao: null }); } catch (err) { console.error(err); }
