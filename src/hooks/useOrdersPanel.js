@@ -134,8 +134,10 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             }
 
             if ((change.type === 'added' || change.type === 'modified') && status === 'recebido') {
-                const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
-                if (!pedidosJaImpressos.current.has(pedidoId) && !impressosLocal.includes(pedidoId)) {
+                const tentarImprimir = async () => {
+                    const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
+                    if (pedidosJaImpressos.current.has(pedidoId) || impressosLocal.includes(pedidoId)) return;
+
                     pedidosJaImpressos.current.add(pedidoId);
                     impressosLocal.push(pedidoId);
                     if (impressosLocal.length > 50) impressosLocal.shift();
@@ -144,12 +146,21 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                     const pedidoParaImprimir = processarDadosPedido({ id: pedidoId, ...data });
                     if (pedidoParaImprimir) {
                         if (configAtual === 'cozinha' && !isDelivery) {
-                            // Se o modo for KDS (cozinha), removemos as bebidas da impressão para não sair no balcão
                             pedidoParaImprimir.itens = (pedidoParaImprimir.itens || []).filter(isItemCozinha);
                             if (pedidoParaImprimir.itens.length === 0) return;
                         }
                         setPrintQueue(prev => prev.some(p => p.id === pedidoId) ? prev : [...prev, pedidoParaImprimir]);
                     }
+                };
+
+                // 🔥 PREVINE RACE CONDITION DE MÚLTIPLAS ABAS USANDO WEB LOCKS
+                if (window.navigator && window.navigator.locks) {
+                    window.navigator.locks.request(`print_auto_${pedidoId}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+                        if (!lock) return; // Outra aba já pegou o lock e está imprimindo
+                        await tentarImprimir();
+                    });
+                } else {
+                    tentarImprimir();
                 }
             }
         };
