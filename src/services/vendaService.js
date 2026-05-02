@@ -28,7 +28,8 @@ export const vendaService = {
         clienteCpf: vendaData.clienteCpf || null,
         status: vendaData.status || 'finalizada',
         createdAt: serverTimestamp(), 
-        origem: 'pdv_web'
+        origem: vendaData.origem || 'pdv_web',
+        tipo: vendaData.tipo || 'balcao'
       };
 
       const payloadFinal = JSON.parse(JSON.stringify(dadosLimpos));

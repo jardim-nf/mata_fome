@@ -358,10 +358,11 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                 tipoPagamento: formaPagamentoPredominante,
                 metodoPagamento: formaPagamentoPredominante, 
                 status: vaiQuitar ? 'pago' : 'pago_parcial',
-                criadoEm: serverTimestamp(),
                 createdAt: serverTimestamp(),
                 criadoPor: auth.currentUser?.uid,
-                funcionario: auth.currentUser?.displayName || 'Garçom'
+                funcionario: auth.currentUser?.displayName || 'Garçom',
+                origem: 'salao',
+                tipo: 'mesa'
             };
 
             const docRef = await addDoc(collection(db, 'vendas'), dadosVenda);
