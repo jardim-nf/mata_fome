@@ -81,20 +81,22 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             } catch (e) { console.error(e); }
 
             try {
-                const qMesa = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('criadoEm', '>=', startTs), where('criadoEm', '<=', endTs));
-                const snapMesa = await getDocs(qMesa);
-                snapMesa.docs.forEach(d => {
+                // Tenta buscar por createdAt (padrão atual do salão e pdv)
+                const qMesaNew = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
+                const snapMesaNew = await getDocs(qMesaNew);
+                snapMesaNew.docs.forEach(d => {
                     addData(d, 'mesa');
                 });
-            } catch (e) { console.error('Erro vendas mesa:', e); }
+            } catch (e) { console.error('Erro vendas mesa createdAt:', e); }
 
             try {
-                const qPdv = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('origem', '==', 'pdv_web'), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
-                const snapPdv = await getDocs(qPdv);
-                snapPdv.docs.forEach(d => {
-                    addData(d, 'pdv');
+                // Tenta buscar por criadoEm (legado)
+                const qMesaLegacy = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('criadoEm', '>=', startTs), where('criadoEm', '<=', endTs));
+                const snapMesaLegacy = await getDocs(qMesaLegacy);
+                snapMesaLegacy.docs.forEach(d => {
+                    addData(d, 'mesa');
                 });
-            } catch (e) { console.error('Erro vendas pdv:', e); }
+            } catch (e) { console.error('Erro vendas mesa criadoEm:', e); }
 
             let allData = Array.from(allDataMap.values());
 
