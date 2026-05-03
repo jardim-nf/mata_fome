@@ -56,9 +56,9 @@ export const ReportCharts = ({ metrics }) => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 5 Produtos Válidos</h3>
                     {metrics.topItems.map(([n, q], i) => (
-                        <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded mb-2">
-                            <span className="text-sm truncate max-w-[180px] font-medium">{n}</span>
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 rounded">{q}</span>
+                        <div key={i} className="flex justify-between items-start bg-gray-50 p-2.5 rounded mb-2 gap-3">
+                            <span className="text-sm flex-1 min-w-0 font-medium leading-tight" title={n}>{n}</span>
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded shrink-0 mt-0.5">{q}</span>
                         </div>
                     ))}
                 </div>

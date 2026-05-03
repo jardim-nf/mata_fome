@@ -15,35 +15,35 @@ export const ReportFilters = ({
     viewMode, setViewMode
 }) => {
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6" data-pdf-section="filtros">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6 no-print">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
                 <IoFilterOutline className="text-blue-600"/> 
                 Filtros
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm col-span-2 sm:col-span-1">
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[130px] flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
                     <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">De</span>
                     <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none w-full" />
                 </div>
-                <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm col-span-2 sm:col-span-1">
+                <div className="flex-1 min-w-[130px] flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
                     <span className="text-[10px] font-black text-gray-400 mr-2 uppercase">Até</span>
                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-xs font-bold text-gray-700 outline-none w-full" />
                 </div>
-                <select value={deliveryTypeFilter} onChange={e => setDeliveryTypeFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm col-span-2 sm:col-span-1">
+                <select value={deliveryTypeFilter} onChange={e => setDeliveryTypeFilter(e.target.value)} className="flex-1 min-w-[130px] p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm">
                     <option value="todos">Todos Tipos</option>
                     <option value="delivery">Delivery</option>
                     <option value="mesa">Mesas</option>
                 </select>
-                <select value={motoboyFilter} onChange={e => setMotoboyFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm col-span-2 sm:col-span-1">
+                <select value={motoboyFilter} onChange={e => setMotoboyFilter(e.target.value)} className="flex-1 min-w-[130px] p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm">
                     <option value="todos">Todos Motoboys</option>
                     {availableMotoboys.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                 </select>
-                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm col-span-2 sm:col-span-1">
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="flex-1 min-w-[130px] p-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-white shadow-sm">
                     <option value="valido">Apenas Válidos</option>
                     <option value="cancelado">Apenas Cancelados</option>
                     <option value="todos">Mostrar Tudo</option>
                 </select>
-                <button onClick={fetchData} disabled={loadingData} className="bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex justify-center items-center gap-2 text-xs font-bold transition-all shadow-sm no-print col-span-2 sm:col-span-1 p-2">
+                <button onClick={fetchData} disabled={loadingData} className="flex-1 min-w-[130px] bg-blue-600 text-white rounded-xl hover:bg-blue-700 flex justify-center items-center gap-2 text-xs font-bold transition-all shadow-sm no-print p-2 h-[34px]">
                     {loadingData ? '...' : <><IoRefreshOutline/> Filtrar</>}
                 </button>
             </div>

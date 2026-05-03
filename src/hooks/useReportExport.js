@@ -89,7 +89,12 @@ export function useReportExport(startDate, endDate) {
                 pdf.text('Relatório de Desempenho', margin, 9);
                 pdf.setFontSize(9);
                 pdf.setFont('helvetica', 'normal');
-                const dateText = `Período: ${startDate || '—'} a ${endDate || '—'}`;
+                const formatBR = (dt) => {
+                    if (!dt) return '—';
+                    const [y, m, d] = dt.split('-');
+                    return `${d}/${m}/${y}`;
+                };
+                const dateText = `Período: ${formatBR(startDate)} a ${formatBR(endDate)}`;
                 pdf.text(dateText, pageWidth - margin - pdf.getTextWidth(dateText), 9);
                 pdf.setTextColor(0, 0, 0);
             };

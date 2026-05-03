@@ -158,25 +158,25 @@ const AdminReports = () => {
                                     {metrics.topClients.length > 0 ? (
                                         metrics.topClients.map((client, index) => (
                                             <div key={index} className="flex justify-between items-center border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 flex-1 min-w-0">
                                                     <div className={`
-                                                        w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold
+                                                        w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0
                                                         ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 
                                                           index === 1 ? 'bg-gray-200 text-gray-700' :
                                                           index === 2 ? 'bg-orange-100 text-orange-800' : 'bg-purple-50 text-purple-600'}
                                                     `}>
                                                         {index + 1}º
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-gray-800 truncate w-[100px] sm:w-[120px]" title={client.nome}>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-bold text-gray-800 leading-tight" title={client.nome}>
                                                             {client.nome}
                                                         </p>
-                                                        <p className="text-[10px] text-gray-500">
-                                                            {client.count} ped. {client.bairro ? `• ${client.bairro.substring(0,10)}...` : ''}
+                                                        <p className="text-[10px] text-gray-500 leading-tight mt-0.5">
+                                                            {client.count} ped. {client.bairro ? `• ${client.bairro}` : ''}
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
+                                                <div className="text-right shrink-0 ml-2">
                                                     <p className="text-sm font-bold text-green-600">
                                                         {client.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                     </p>
