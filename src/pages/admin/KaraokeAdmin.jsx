@@ -133,13 +133,6 @@ export default function KaraokeAdmin() {
                     <p className="text-sm text-gray-500 font-medium mt-0.5">Gerencie a fila da TV</p>
                 </div>
             </div>
-            <button 
-                onClick={handleNext}
-                disabled={waitingList.length === 0 && singingList.length === 0}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl shadow-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all w-full sm:w-auto"
-            >
-                Próximo Cantor <FaStepForward />
-            </button>
         </div>
 
         {/* Adicionar */}
@@ -166,14 +159,14 @@ export default function KaraokeAdmin() {
 
         {/* Cantando Agora */}
         {singingList.length > 0 && (
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-                <h2 className="text-sm font-black opacity-90 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <FaPlay className="text-xs" /> Cantando Agora
-                </h2>
-                <div className="flex flex-wrap gap-4 relative z-10">
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-4 rounded-2xl shadow-md text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                    <FaPlay className="text-sm animate-pulse" />
+                    <h2 className="text-sm font-black opacity-90 uppercase tracking-widest">Cantando Agora</h2>
+                </div>
+                <div className="flex flex-wrap gap-2">
                 {singingList.map(singer => (
-                    <div key={singer.id} className="text-3xl md:text-5xl font-black drop-shadow-md bg-white/20 px-8 py-4 rounded-2xl border border-white/30 backdrop-blur-md">
+                    <div key={singer.id} className="text-xl md:text-2xl font-black drop-shadow-md bg-white/20 px-5 py-2 rounded-xl border border-white/30 backdrop-blur-md">
                         {singer.name}
                     </div>
                 ))}
@@ -236,6 +229,18 @@ export default function KaraokeAdmin() {
         </div>
 
       </div>
+
+      {/* Botão Flutuante de Próximo (sempre visível) */}
+      <div className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 z-50">
+          <button 
+              onClick={handleNext}
+              disabled={waitingList.length === 0 && singingList.length === 0}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-6 sm:px-8 py-4 sm:py-5 rounded-full shadow-[0_10px_40px_-10px_rgba(249,115,22,0.8)] font-black text-lg sm:text-xl flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
+          >
+              Chamar Próximo <FaStepForward />
+          </button>
+      </div>
+
     </div>
   );
 }
