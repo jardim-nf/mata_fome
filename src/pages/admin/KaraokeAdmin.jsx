@@ -120,102 +120,117 @@ export default function KaraokeAdmin() {
 
   return (
     <div className="p-4 sm:p-6 pb-24 bg-gray-50 min-h-screen">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-[1600px] w-full mx-auto space-y-6">
         
         {/* Header */}
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-4">
                 <BackButton />
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <h1 className="text-2xl font-black text-gray-800 flex items-center gap-2 tracking-tight">
                         <FaMicrophoneAlt className="text-orange-500" /> Karaokê Admin
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">Gerencie a fila da TV</p>
+                    <p className="text-sm text-gray-500 font-medium mt-0.5">Gerencie a fila da TV</p>
                 </div>
             </div>
             <button 
                 onClick={handleNext}
                 disabled={waitingList.length === 0 && singingList.length === 0}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg shadow-md font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl shadow-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all w-full sm:w-auto"
             >
-                Próximo <FaStepForward />
+                Próximo Cantor <FaStepForward />
             </button>
         </div>
 
         {/* Adicionar */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <form onSubmit={handleAdd} className="flex gap-2">
-                <input
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Nome do Cantor"
-                    className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
-                />
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 relative">
+                    <input
+                        type="text"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        placeholder="Nome do próximo cantor..."
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-5 py-4 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all font-semibold text-gray-700 placeholder-gray-400"
+                    />
+                </div>
                 <button
                     type="submit"
                     disabled={!newName.trim()}
-                    className="bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 text-white px-6 rounded-lg font-medium flex items-center justify-center transition-colors"
+                    className="bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md sm:w-auto w-full active:scale-95"
                 >
-                    <FaPlus />
+                    <FaPlus /> Adicionar
                 </button>
             </form>
         </div>
 
         {/* Cantando Agora */}
         {singingList.length > 0 && (
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-5 rounded-xl shadow-md text-white">
-                <h2 className="text-sm font-medium opacity-90 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+                <h2 className="text-sm font-black opacity-90 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <FaPlay className="text-xs" /> Cantando Agora
                 </h2>
+                <div className="flex flex-wrap gap-4 relative z-10">
                 {singingList.map(singer => (
-                    <div key={singer.id} className="text-2xl font-bold">
+                    <div key={singer.id} className="text-3xl md:text-5xl font-black drop-shadow-md bg-white/20 px-8 py-4 rounded-2xl border border-white/30 backdrop-blur-md">
                         {singer.name}
                     </div>
                 ))}
+                </div>
             </div>
         )}
 
         {/* Fila */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="bg-gray-50 border-b border-gray-100 p-4">
-                <h2 className="text-gray-700 font-semibold flex items-center gap-2">
-                    <FaListUl className="text-gray-400" /> Próximos da Fila ({waitingList.length})
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[50vh]">
+            <div className="bg-gray-50/80 border-b border-gray-100 p-5 px-6 flex items-center justify-between">
+                <h2 className="text-gray-800 font-black text-lg flex items-center gap-2 tracking-tight">
+                    <FaListUl className="text-orange-500" /> Próximos da Fila 
+                    <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-md text-sm">{waitingList.length}</span>
                 </h2>
             </div>
             
-            <div className="divide-y divide-gray-100">
+            <div className="p-5 sm:p-6">
                 {waitingList.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400">
-                        Ninguém na fila no momento.
+                    <div className="flex flex-col items-center justify-center py-24 text-center text-gray-400">
+                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                            <FaMicrophoneAlt className="text-4xl text-gray-300" />
+                        </div>
+                        <p className="text-lg font-bold text-gray-500">Ninguém na fila no momento.</p>
+                        <p className="text-sm text-gray-400 mt-1">Adicione o primeiro cantor acima.</p>
                     </div>
                 ) : (
-                    waitingList.map((item, index) => (
-                        <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center gap-4">
-                                <span className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-600 font-bold rounded-full text-sm">
-                                    {index + 1}
-                                </span>
-                                <span className="font-medium text-gray-800">{item.name}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+                        {waitingList.map((item, index) => (
+                            <div key={item.id} className="bg-white border-2 border-gray-100 rounded-2xl p-5 flex flex-col justify-between hover:border-orange-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative group">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-50 group-hover:from-orange-100 group-hover:to-orange-50 text-gray-600 group-hover:text-orange-600 font-black rounded-xl text-2xl shadow-sm border border-gray-200 group-hover:border-orange-200 transition-colors">
+                                        {index + 1}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-black text-gray-800 text-xl truncate tracking-tight" title={item.name}>{item.name}</h3>
+                                        <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Aguardando</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 mt-auto border-t border-gray-100 pt-4">
+                                    <button
+                                        onClick={() => handleDelete(item.id)}
+                                        className="p-3 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors active:scale-95"
+                                        title="Remover da fila"
+                                    >
+                                        <FaTrash />
+                                    </button>
+                                    <button
+                                        onClick={() => setAsSinging(item.id)}
+                                        className="flex-1 px-4 py-3 bg-gray-50 text-gray-700 hover:bg-orange-500 hover:text-white border border-gray-200 hover:border-orange-500 rounded-xl transition-all font-black text-sm flex items-center justify-center gap-2 active:scale-95 shadow-sm"
+                                        title="Chamar para cantar agora"
+                                    >
+                                        <FaPlay className="text-xs" /> Chamar
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setAsSinging(item.id)}
-                                    className="p-2 text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
-                                    title="Chamar agora (pular fila)"
-                                >
-                                    <FaPlay />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(item.id)}
-                                    className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Remover"
-                                >
-                                    <FaTrash />
-                                </button>
-                            </div>
-                        </div>
-                    ))
+                        ))}
+                    </div>
                 )}
             </div>
         </div>
