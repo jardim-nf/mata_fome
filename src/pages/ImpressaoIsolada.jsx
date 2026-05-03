@@ -155,13 +155,19 @@ export default function ImpressaoIsolada() {
         const valorFinalDoPedido = Number(pedido.totalFinal || pedido.total || totalConsumoCalculado);
         const restante = Math.max(0, valorFinalDoPedido - jaPago);
 
+        const tipoEntrega = (pedido.tipoEntrega || '').toLowerCase();
+        const isRetirada = tipoEntrega === 'retirada' || tipoEntrega === 'balcao';
+        const isDelivery = tipoEntrega === 'delivery' || (!pedido.isMesa && !isRetirada && !pedido.mesaNumero);
+
         return { 
             agrupados, 
             totalConsumo: valorFinalDoPedido > 0 ? valorFinalDoPedido : totalConsumoCalculado, 
             jaPago, 
             restante, 
-            numero: pedido.numero || pedido.mesaNumero || 'Balcão',
+            numero: pedido.numero || pedido.mesaNumero || (isDelivery ? 'Delivery' : isRetirada ? 'Retirada' : 'Balcão'),
             isMesa: pedido.isMesa,
+            isDelivery,
+            isRetirada,
             isVendaFinalizada: pedido.isVendaFinalizada, // Repassa a Flag!
             vazio: false
         };
@@ -272,7 +278,9 @@ export default function ImpressaoIsolada() {
 
             <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
                 <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{tituloImpressao}</div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '4px 0' }}>MESA {printData.numero}</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '4px 0', textTransform: 'uppercase' }}>
+                    {printData.isRetirada ? '📦 RETIRADA' : printData.isDelivery ? '🚀 DELIVERY' : `MESA ${printData.numero}`}
+                </div>
                 <div style={{ fontSize: '12px' }}>{new Date().toLocaleString('pt-BR')}</div>
             </div>
 
