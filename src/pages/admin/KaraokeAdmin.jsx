@@ -60,7 +60,10 @@ export default function KaraokeAdmin() {
 
     try {
       const updatePromises = currentSinging.map(c => 
-        updateDoc(doc(db, 'karaoke_queue', c.id), { status: 'done' })
+        updateDoc(doc(db, 'karaoke_queue', c.id), { 
+          status: 'waiting',
+          createdAt: serverTimestamp() 
+        })
       );
 
       if (nextWaiting) {
@@ -99,7 +102,10 @@ export default function KaraokeAdmin() {
     try {
         const currentSinging = queue.filter(q => q.status === 'singing');
         const updatePromises = currentSinging.map(c => 
-            updateDoc(doc(db, 'karaoke_queue', c.id), { status: 'waiting' }) // Volta pra waiting ou done? Vamos voltar pra waiting por precaução
+            updateDoc(doc(db, 'karaoke_queue', c.id), { 
+                status: 'waiting',
+                createdAt: serverTimestamp()
+            })
         );
         updatePromises.push(updateDoc(doc(db, 'karaoke_queue', id), { status: 'singing' }));
         await Promise.all(updatePromises);
