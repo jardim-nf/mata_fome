@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, addDoc, onSnapshot, query, where, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, doc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { FaPlay, FaTrash, FaPlus, FaMicrophoneAlt, FaListUl, FaStepForward } from 'react-icons/fa';
 import BackButton from '../../components/BackButton';
@@ -94,6 +94,24 @@ export default function KaraokeAdmin() {
         toast.info('Removido com sucesso.');
       } catch (err) {
         toast.error('Erro ao remover.');
+      }
+    }
+  };
+
+  const handleClearList = async () => {
+    if(queue.length === 0) return;
+    if(window.confirm('Tem certeza que deseja APAGAR TODOS os cantores da fila e quem está cantando agora? Isso não pode ser desfeito.')) {
+      try {
+        const batch = writeBatch(db);
+        queue.forEach(q => {
+          const docRef = doc(db, 'karaoke_queue', q.id);
+          batch.delete(docRef);
+        });
+        await batch.commit();
+        toast.success('Lista limpa com sucesso!');
+      } catch (err) {
+        console.error(err);
+        toast.error('Erro ao limpar a lista.');
       }
     }
   };
@@ -200,11 +218,19 @@ export default function KaraokeAdmin() {
 
         {/* Fila */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[50vh]">
-            <div className="bg-gray-50/80 border-b border-gray-100 p-5 px-6 flex items-center justify-between">
+            <div className="bg-gray-50/80 border-b border-gray-100 p-5 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h2 className="text-gray-800 font-black text-lg flex items-center gap-2 tracking-tight">
                     <FaListUl className="text-orange-500" /> Próximos da Fila 
                     <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-md text-sm">{waitingList.length}</span>
                 </h2>
+                {queue.length > 0 && (
+                    <button 
+                        onClick={handleClearList}
+                        className="text-red-500 hover:bg-red-50 hover:text-red-600 px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors border border-red-100 active:scale-95 shadow-sm"
+                    >
+                        <FaTrash /> Limpar Lista Completa
+                    </button>
+                )}
             </div>
             
             <div className="p-5 sm:p-6">
