@@ -157,22 +157,46 @@ export default function KaraokeAdmin() {
             </form>
         </div>
 
-        {/* Cantando Agora */}
-        {singingList.length > 0 && (
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-4 rounded-2xl shadow-md text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                    <FaPlay className="text-sm animate-pulse" />
-                    <h2 className="text-sm font-black opacity-90 uppercase tracking-widest">Cantando Agora</h2>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                {singingList.map(singer => (
-                    <div key={singer.id} className="text-xl md:text-2xl font-black drop-shadow-md bg-white/20 px-5 py-2 rounded-xl border border-white/30 backdrop-blur-md">
-                        {singer.name}
+        {/* Top Actions: Cantando Agora & Próximo */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Cantando Agora */}
+            {singingList.length > 0 ? (
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 rounded-2xl shadow-md text-white flex flex-col justify-center min-h-[120px]">
+                    <div className="flex items-center gap-2 mb-3">
+                        <FaPlay className="text-sm animate-pulse" />
+                        <h2 className="text-sm font-black opacity-90 uppercase tracking-widest">Cantando Agora</h2>
                     </div>
-                ))}
+                    <div className="flex flex-wrap gap-2">
+                    {singingList.map(singer => (
+                        <div key={singer.id} className="text-2xl md:text-3xl font-black drop-shadow-md bg-white/20 px-5 py-2 rounded-xl border border-white/30 backdrop-blur-md truncate">
+                            {singer.name}
+                        </div>
+                    ))}
+                    </div>
                 </div>
-            </div>
-        )}
+            ) : (
+                <div className="bg-white border-2 border-dashed border-gray-200 p-6 rounded-2xl text-gray-400 flex flex-col justify-center items-center min-h-[120px]">
+                    <FaMicrophoneAlt className="text-3xl mb-2 opacity-50" />
+                    <p className="font-medium text-sm uppercase tracking-wider">Ninguém cantando</p>
+                </div>
+            )}
+
+            {/* Próximo Button */}
+            <button 
+                onClick={handleNext}
+                disabled={waitingList.length === 0 && singingList.length === 0}
+                className="bg-orange-500 hover:bg-orange-600 text-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all min-h-[120px]"
+            >
+                <div className="flex items-center gap-3 font-black text-2xl">
+                    Chamar Próximo <FaStepForward />
+                </div>
+                {waitingList.length > 0 && (
+                    <span className="text-sm font-bold bg-white/20 px-4 py-1.5 rounded-full mt-1 border border-white/20">
+                        Será: {waitingList[0].name}
+                    </span>
+                )}
+            </button>
+        </div>
 
         {/* Fila */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[50vh]">
@@ -230,16 +254,7 @@ export default function KaraokeAdmin() {
 
       </div>
 
-      {/* Botão Flutuante de Próximo (sempre visível) */}
-      <div className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 z-50">
-          <button 
-              onClick={handleNext}
-              disabled={waitingList.length === 0 && singingList.length === 0}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-6 sm:px-8 py-4 sm:py-5 rounded-full shadow-[0_10px_40px_-10px_rgba(249,115,22,0.8)] font-black text-lg sm:text-xl flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
-          >
-              Chamar Próximo <FaStepForward />
-          </button>
-      </div>
+
 
     </div>
   );
