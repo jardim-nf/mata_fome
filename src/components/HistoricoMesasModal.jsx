@@ -122,9 +122,19 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
         setTimeout(() => { janelaImpressao.print(); janelaImpressao.close(); }, 800);
     };
 
+    const extrairNomesOcupantes = (pedido) => {
+        const nomesPagamentos = Object.keys(pedido.pagamentos || {}).filter(n => n.toLowerCase() !== 'mesa');
+        const nomesItens = (pedido.itens || []).map(i => i.cliente || i.clienteNome || i.destinatario || i.nomeOcupante).filter(Boolean).filter(n => n.toLowerCase() !== 'mesa');
+        const nomes = [...new Set([...nomesPagamentos, ...nomesItens])];
+        return nomes;
+    };
+
     const pedidosFiltrados = historicoPedidos.filter(p => {
         const termoBusca = busca.toLowerCase();
-        return String(p.mesaNumero || '').includes(termoBusca) || (p.funcionario || '').toLowerCase().includes(termoBusca);
+        const ocupantes = extrairNomesOcupantes(p).join(' ').toLowerCase();
+        return String(p.mesaNumero || '').includes(termoBusca) || 
+               (p.funcionario || '').toLowerCase().includes(termoBusca) ||
+               ocupantes.includes(termoBusca);
     });
 
     if (!isOpen) return null;
@@ -176,12 +186,19 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pedidosFiltrados.map((pedido) => (
+                                    {pedidosFiltrados.map((pedido) => {
+                                        const ocupantes = extrairNomesOcupantes(pedido);
+                                        return (
                                         <tr key={pedido.id} className="hover:bg-blue-50/50 border-b border-gray-100 last:border-none transition-colors">
                                             <td className="p-4">
                                                 <span className="bg-gray-900 text-white font-black px-3 py-1.5 text-sm rounded-lg shadow-sm">
                                                     Mesa {pedido.mesaNumero}
                                                 </span>
+                                                {ocupantes.length > 0 && (
+                                                    <div className="mt-1.5 text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                                                        👤 {ocupantes.join(', ')}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="p-4 text-sm font-medium text-gray-500">
                                                 {(pedido.criadoEm || pedido.createdAt)?.toDate ? (pedido.criadoEm || pedido.createdAt).toDate().toLocaleString('pt-BR') : '--'}
@@ -208,7 +225,8 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
