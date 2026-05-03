@@ -29,16 +29,28 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
 
             const q = query(
                 collection(db, 'vendas'),
-                where('estabelecimentoId', '==', estabelecimentoId),
-                where('criadoEm', '>=', startOfDay),
-                where('criadoEm', '<=', endOfDay),
-                orderBy('criadoEm', 'desc')
+                where('estabelecimentoId', '==', estabelecimentoId)
             );
             const snapshot = await getDocs(q);
-            const vendasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setHistoricoPedidos(vendasData.filter(v => v.mesaNumero));
+            
+            const startMillis = startOfDay.toMillis();
+            const endMillis = endOfDay.toMillis();
+
+            const vendasFiltradas = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(v => {
+                    const ts = v.createdAt?.toMillis?.() || v.criadoEm?.toMillis?.() || 0;
+                    return ts >= startMillis && ts <= endMillis && v.mesaNumero;
+                })
+                .sort((a, b) => {
+                    const tsA = b.createdAt?.toMillis?.() || b.criadoEm?.toMillis?.() || 0;
+                    const tsB = a.createdAt?.toMillis?.() || a.criadoEm?.toMillis?.() || 0;
+                    return tsA - tsB;
+                });
+
+            setHistoricoPedidos(vendasFiltradas);
         } catch (e) {
-            console.error(e);
+            console.error('Erro ao buscar histórico de mesas:', e);
             setHistoricoPedidos([]);
         } finally {
             setLoading(false);
@@ -123,8 +135,9 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
     };
 
     const extrairNomesOcupantes = (pedido) => {
-        const nomesPagamentos = Object.keys(pedido.pagamentos || {}).filter(n => n.toLowerCase() !== 'mesa');
-        const nomesItens = (pedido.itens || []).map(i => i.cliente || i.clienteNome || i.destinatario || i.nomeOcupante).filter(Boolean).filter(n => n.toLowerCase() !== 'mesa');
+        const ignorar = ['mesa', 'pagamento único', 'pagamento unico'];
+        const nomesPagamentos = Object.keys(pedido.pagamentos || {}).filter(n => !ignorar.includes(n.trim().toLowerCase()));
+        const nomesItens = (pedido.itens || []).map(i => i.cliente || i.clienteNome || i.destinatario || i.nomeOcupante).filter(Boolean).filter(n => !ignorar.includes(n.trim().toLowerCase()));
         const nomes = [...new Set([...nomesPagamentos, ...nomesItens])];
         return nomes;
     };

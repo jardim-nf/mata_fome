@@ -81,22 +81,13 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             } catch (e) { console.error(e); }
 
             try {
-                // Tenta buscar por createdAt (padrão atual do salão e pdv)
-                const qMesaNew = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
-                const snapMesaNew = await getDocs(qMesaNew);
-                snapMesaNew.docs.forEach(d => {
+                // Busca todas as vendas do estabelecimento e filtra a data na memória (evita erro de falta de índice composto no Firestore)
+                const qMesa = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
+                const snapMesa = await getDocs(qMesa);
+                snapMesa.docs.forEach(d => {
                     addData(d, 'mesa');
                 });
-            } catch (e) { console.error('Erro vendas mesa createdAt:', e); }
-
-            try {
-                // Tenta buscar por criadoEm (legado)
-                const qMesaLegacy = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('criadoEm', '>=', startTs), where('criadoEm', '<=', endTs));
-                const snapMesaLegacy = await getDocs(qMesaLegacy);
-                snapMesaLegacy.docs.forEach(d => {
-                    addData(d, 'mesa');
-                });
-            } catch (e) { console.error('Erro vendas mesa criadoEm:', e); }
+            } catch (e) { console.error('Erro vendas mesa (unificada):', e); }
 
             let allData = Array.from(allDataMap.values());
 
