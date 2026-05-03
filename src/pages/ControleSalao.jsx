@@ -207,9 +207,6 @@ export default function ControleSalao() {
                             <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
                                 <IoAdd className="text-lg" /> <span>Nova Mesa</span>
                             </button>
-                            <button onClick={() => navigate('/admin/karaoke')} className="bg-orange-500 hover:bg-orange-600 text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title="Painel do Karaokê">
-                                🎤 <span className="hidden sm:inline">Karaokê</span>
-                            </button>
                             {!isGarcom && (
                                 <>
                                     <button onClick={() => salaoData.abrirHistoricoVendas()} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">

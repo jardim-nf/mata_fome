@@ -163,7 +163,7 @@ const AdminDashboard = () => {
         ...(isVarejo ? [] : [{ path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' }]),
         { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', perm: 'pdv' },
         { path: `/totem/${estabelecimentoIdPrincipal || 'loja'}`, title: '🚀 Lançar Totem', sub: 'Abre o app de Autoatendimento', icon: <IoDesktopOutline />, cor: 'yellow', adminOnly: true },
-        ...(isVarejo ? [] : [{ path: '/admin/karaoke', title: 'Painel do Karaokê', sub: 'Gerencie a fila da TV', icon: <FaMicrophoneAlt />, cor: 'orange', perm: 'controle-salao' }]),
+        ...(isVarejo ? [] : [{ path: '/admin/karaoke', title: 'Painel do Karaokê', sub: 'Gerencie a fila da TV', icon: <FaMicrophoneAlt />, cor: 'orange', adminOnly: true }]),
       ]
     },
     {
