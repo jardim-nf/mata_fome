@@ -43,15 +43,26 @@ function ListarEstabelecimentos() {
   const [hasPrevious, setHasPrevious] = useState(false); 
   const [totalCount, setTotalCount] = useState({ total: 0, ativos: 0, inativos: 0 });
 
-  // Fetch counts
+  // Fetch counts usando Agregação do Firebase (Muito mais rápido e barato)
   useEffect(() => {
     if (!isMasterAdmin) return;
     const fetchCounts = async () => {
       try {
-        const all = await getDocs(query(collection(db, 'estabelecimentos')));
-        const docs = all.docs.map(d => d.data());
-        setTotalCount({ total: docs.length, ativos: docs.filter(d => d.ativo).length, inativos: docs.filter(d => !d.ativo).length });
-      } catch (e) { console.error(e); }
+        const estabsRef = collection(db, 'estabelecimentos');
+        
+        const [totalRes, ativosRes] = await Promise.all([
+          getCountFromServer(estabsRef),
+          getCountFromServer(query(estabsRef, where('ativo', '==', true)))
+        ]);
+
+        const total = totalRes.data().count;
+        const ativos = ativosRes.data().count;
+        const inativos = total - ativos;
+
+        setTotalCount({ total, ativos, inativos });
+      } catch (e) {
+        console.error("Erro ao buscar contadores:", e);
+      }
     };
     fetchCounts();
   }, [isMasterAdmin]);
@@ -134,35 +145,21 @@ function ListarEstabelecimentos() {
   return (
     <div className="min-h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
       
-      {/* ─── FLOATING PILL NAVBAR ─── */}
-      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
-            <FaArrowLeft className="text-[#86868B] text-sm" />
-          </button>
-          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
-            <h1 className="font-semibold text-sm tracking-tight text-black">Módulo de Concessionárias</h1>
+      {/* ─── SEARCH E FILTROS ─── */}
+      <div className="max-w-[1400px] mx-auto bg-white border border-[#E5E5EA] shadow-sm rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+        <div>
+            <h1 className="font-semibold text-sm tracking-tight text-black">Módulo de Lojas</h1>
             <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
-          </div>
         </div>
-
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center bg-[#F5F5F7] hover:bg-[#E5E5EA] transition-colors rounded-full px-4 py-2 w-56">
+        <div className="w-full md:w-auto flex items-center bg-[#F5F5F7] hover:bg-[#E5E5EA] transition-colors rounded-xl px-4 py-2 flex-1 md:max-w-md">
             <IoSearchOutline className="text-[#86868B]" size={16} />
             <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-transparent border-none outline-none text-xs ml-2 w-full placeholder-[#86868B] font-medium"
               placeholder="Buscar LOJA, slug..." />
-          </div>
-
-          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
-
-          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
-            <IoLogOutOutline className="text-red-500" size={16} />
-          </button>
         </div>
-      </nav>
+      </div>
 
-      <main className="max-w-[1400px] mx-auto mt-8">
+      <main className="max-w-[1400px] mx-auto">
         
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4 px-2">

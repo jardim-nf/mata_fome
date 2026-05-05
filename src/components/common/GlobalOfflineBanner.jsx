@@ -10,7 +10,7 @@ export default function GlobalOfflineBanner() {
   useEffect(() => {
     if (isOnline) {
       setShowOnlinePulse(true);
-      const timer = setTimeout(() => setShowOnlinePulse(false), 3500); // Esconde banner de "Voltou" dps de 3.5s
+      const timer = setTimeout(() => setShowOnlinePulse(false), 1500); // 1.5s rápido e discreto
       return () => clearTimeout(timer);
     }
   }, [isOnline]);
@@ -19,30 +19,30 @@ export default function GlobalOfflineBanner() {
     <AnimatePresence>
       {!isOnline && (
         <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -50, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="fixed top-0 left-0 w-full z-[9999] bg-yellow-500 text-black px-4 py-2 flex items-center justify-center gap-2 shadow-lg backdrop-blur-sm bg-opacity-90 border-b border-yellow-600"
+          initial={{ y: 50, opacity: 0, scale: 0.9 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 50, opacity: 0, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          className="fixed bottom-6 right-6 z-[9999] bg-amber-500 text-white px-5 py-3 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md bg-opacity-95 border border-amber-400"
         >
-          <WifiOff size={18} className="animate-pulse" />
-          <span className="text-sm font-semibold tracking-wide uppercase">
-            Sem conexão. Operando em Modo Offline (Cache Local).
+          <WifiOff size={20} className="animate-pulse" />
+          <span className="text-sm font-bold tracking-tight">
+            Modo Offline Ativado
           </span>
         </motion.div>
       )}
 
       {isOnline && showOnlinePulse && (
         <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -50, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          className="fixed top-0 left-0 w-full z-[9999] bg-emerald-500 text-white px-4 py-2 flex items-center justify-center gap-2 shadow-lg backdrop-blur-sm bg-opacity-90 border-b border-emerald-600"
+          initial={{ y: 50, opacity: 0, scale: 0.9 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 50, opacity: 0, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          className="fixed bottom-6 right-6 z-[9999] bg-emerald-500 text-white px-5 py-3 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md bg-opacity-95 border border-emerald-400"
         >
-          <Wifi size={18} />
-          <span className="text-sm font-semibold tracking-wide uppercase">
-            Conexão restaurada! Dados sincronizados.
+          <Wifi size={20} />
+          <span className="text-sm font-bold tracking-tight">
+            Conexão Restaurada
           </span>
         </motion.div>
       )}

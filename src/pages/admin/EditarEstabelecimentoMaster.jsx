@@ -10,7 +10,6 @@ import {
   FaArrowLeft, FaSave, FaCamera, FaBuilding, FaMapMarkerAlt, FaPhone, 
   FaCreditCard, FaSignOutAlt, FaBolt, FaCrown, FaTimes
 } from 'react-icons/fa';
-import { IoLogOutOutline } from 'react-icons/io5';
 
 // --- Componente de Input (Bento Style) ---
 function FormInput({ label, name, value, onChange, type = 'text', helpText = '', icon: Icon, ...props }) {
@@ -176,27 +175,7 @@ function EditarEstabelecimentoMaster() {
     return (
         <div className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
             
-            {/* ─── FLOATING PILL NAVBAR ─── */}
-            <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
-                <div className="flex items-center gap-4">
-                    <button type="button" onClick={() => navigate('/master/estabelecimentos')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
-                        <FaArrowLeft className="text-[#86868B] text-sm" />
-                    </button>
-                    <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
-                        <h1 className="font-semibold text-sm tracking-tight text-black">Modificar Operação</h1>
-                        <p className="text-[11px] text-[#86868B] font-medium truncate max-w-[200px]">{formData.nome}</p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                    <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
-                    <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
-                        <IoLogOutOutline className="text-red-500" size={16} />
-                    </button>
-                </div>
-            </nav>
-
-            <main className="max-w-[1400px] mx-auto mt-8">
+            <main className="max-w-[1400px] mx-auto mt-2">
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* ─── HEADER ─── */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 px-2">

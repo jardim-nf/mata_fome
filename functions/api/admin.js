@@ -4,7 +4,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { FieldValue } from 'firebase-admin/firestore';
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
-import { db } from '../firebaseCore.js';
+import { db, adminAuth } from '../firebaseCore.js';
 
 // ==================================================================
 // 1.5 CRIAR USUÁRIO (MASTER ADMIN)
@@ -24,8 +24,6 @@ export const createUserByMasterAdminHttp = onCall({ cors: true }, async (request
     }
 
     try {
-        const adminAuth = getAuth();
-        
         // Create user in Firebase Auth
         const userRecord = await adminAuth.createUser({
             email: data.email,
