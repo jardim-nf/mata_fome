@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { FaMicrophoneAlt, FaMusic } from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext';
 
 export default function KaraokeTV() {
+  const { estabelecimentoIdPrincipal } = useAuth();
   const [queue, setQueue] = useState([]);
 
   useEffect(() => {
@@ -15,13 +17,16 @@ export default function KaraokeTV() {
   }, []);
 
   useEffect(() => {
+    if (!estabelecimentoIdPrincipal) return;
+
     const q = query(
       collection(db, 'karaoke_queue'),
-      where('status', 'in', ['waiting', 'singing'])
+      where('estabelecimentoId', '==', estabelecimentoIdPrincipal)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      data = data.filter(d => d.status === 'waiting' || d.status === 'singing');
       
       data.sort((a, b) => {
         if (a.status === 'singing' && b.status !== 'singing') return -1;
@@ -74,8 +79,15 @@ export default function KaraokeTV() {
                 
                 {singing.length > 0 ? (
                     singing.map(s => (
-                        <div key={s.id} className="text-7xl md:text-9xl font-black text-white leading-tight break-words drop-shadow-[0_0_30px_rgba(249,115,22,0.5)]">
-                            {s.name}
+                        <div key={s.id} className="flex flex-col items-center w-full">
+                            <div className="text-7xl md:text-9xl font-black text-white leading-tight break-words drop-shadow-[0_0_30px_rgba(249,115,22,0.5)] text-center w-full px-4">
+                                {s.name}
+                            </div>
+                            {s.song && (
+                                <div className="mt-6 text-4xl md:text-5xl font-bold text-gray-300 flex items-center justify-center gap-4 text-center px-4">
+                                    <FaMusic className="text-orange-400 flex-shrink-0" /> <span className="break-words">{s.song}</span>
+                                </div>
+                            )}
                         </div>
                     ))
                 ) : (
@@ -108,9 +120,16 @@ export default function KaraokeTV() {
                             <span className={`text-4xl font-black ${idx === 0 ? 'text-orange-500' : 'text-gray-500'}`}>
                                 {idx + 1}
                             </span>
-                            <span className="text-3xl md:text-4xl font-bold text-gray-100 truncate">
-                                {item.name}
-                            </span>
+                            <div className="flex flex-col min-w-0 flex-1">
+                                <span className="text-3xl md:text-4xl font-bold text-gray-100 truncate">
+                                    {item.name}
+                                </span>
+                                {item.song && (
+                                    <span className="text-xl md:text-2xl text-gray-400 truncate mt-1">
+                                        🎵 {item.song}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     ))
                 )}
