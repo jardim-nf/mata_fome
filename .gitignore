@@ -25,3 +25,9 @@ dist-ssr
 *.sln
 *.sw?
 keys/
+# Arquivos grandes de video
+*.mp4
+*.MP4
+*.mov
+*.MOV
+public/images/Nova pasta/

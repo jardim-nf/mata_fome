@@ -137,8 +137,8 @@ export default function KaraokeAdmin() {
   const waitingList = queue.filter(q => q.status === 'waiting');
 
   return (
-    <div className="p-4 sm:p-6 pb-24 bg-gray-50 min-h-screen">
-      <div className="max-w-[1600px] w-full mx-auto space-y-6">
+    <div className="p-2 sm:p-4 pb-24 bg-gray-50 min-h-screen">
+      <div className="max-w-[1600px] w-full mx-auto space-y-3">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -179,8 +179,8 @@ export default function KaraokeAdmin() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Cantando Agora */}
             {singingList.length > 0 ? (
-                <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 rounded-2xl shadow-md text-white flex flex-col justify-center min-h-[120px]">
-                    <div className="flex items-center gap-2 mb-3">
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 p-3 sm:p-4 rounded-xl shadow-md text-white flex flex-col justify-center min-h-[80px]">
+                    <div className="flex items-center gap-2 mb-2">
                         <FaPlay className="text-sm animate-pulse" />
                         <h2 className="text-sm font-black opacity-90 uppercase tracking-widest">Cantando Agora</h2>
                     </div>
@@ -193,8 +193,8 @@ export default function KaraokeAdmin() {
                     </div>
                 </div>
             ) : (
-                <div className="bg-white border-2 border-dashed border-gray-200 p-6 rounded-2xl text-gray-400 flex flex-col justify-center items-center min-h-[120px]">
-                    <FaMicrophoneAlt className="text-3xl mb-2 opacity-50" />
+                <div className="bg-white border-2 border-dashed border-gray-200 p-3 sm:p-4 rounded-xl text-gray-400 flex flex-col justify-center items-center min-h-[80px]">
+                    <FaMicrophoneAlt className="text-2xl mb-1 opacity-50" />
                     <p className="font-medium text-sm uppercase tracking-wider">Ninguém cantando</p>
                 </div>
             )}
@@ -203,9 +203,9 @@ export default function KaraokeAdmin() {
             <button 
                 onClick={handleNext}
                 disabled={waitingList.length === 0 && singingList.length === 0}
-                className="bg-orange-500 hover:bg-orange-600 text-white p-6 rounded-2xl shadow-md flex flex-col items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all min-h-[120px]"
+                className="bg-orange-500 hover:bg-orange-600 text-white p-3 sm:p-4 rounded-xl shadow-md flex flex-col items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all min-h-[80px]"
             >
-                <div className="flex items-center gap-3 font-black text-2xl">
+                <div className="flex items-center gap-3 font-black text-xl">
                     Chamar Próximo <FaStepForward />
                 </div>
                 {waitingList.length > 0 && (
@@ -246,12 +246,12 @@ export default function KaraokeAdmin() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
                         {waitingList.map((item, index) => (
                             <div key={item.id} className="bg-white border-2 border-gray-100 rounded-2xl p-5 flex flex-col justify-between hover:border-orange-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative group">
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-50 group-hover:from-orange-100 group-hover:to-orange-50 text-gray-600 group-hover:text-orange-600 font-black rounded-xl text-2xl shadow-sm border border-gray-200 group-hover:border-orange-200 transition-colors">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-50 group-hover:from-orange-100 group-hover:to-orange-50 text-gray-600 group-hover:text-orange-600 font-black rounded-xl text-3xl shadow-sm border border-gray-200 group-hover:border-orange-200 transition-colors">
                                         {index + 1}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-black text-gray-800 text-xl truncate tracking-tight" title={item.name}>{item.name}</h3>
+                                        <h3 className="font-black text-gray-800 text-3xl truncate tracking-tight" title={item.name}>{item.name}</h3>
                                         <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Aguardando</p>
                                     </div>
                                 </div>
