@@ -79,15 +79,8 @@ export default function KaraokeTV() {
                 
                 {singing.length > 0 ? (
                     singing.map(s => (
-                        <div key={s.id} className="flex flex-col items-center w-full">
-                            <div className="text-7xl md:text-9xl font-black text-white leading-tight break-words drop-shadow-[0_0_30px_rgba(249,115,22,0.5)] text-center w-full px-4">
-                                {s.name}
-                            </div>
-                            {s.song && (
-                                <div className="mt-6 text-4xl md:text-5xl font-bold text-gray-300 flex items-center justify-center gap-4 text-center px-4">
-                                    <FaMusic className="text-orange-400 flex-shrink-0" /> <span className="break-words">{s.song}</span>
-                                </div>
-                            )}
+                        <div key={s.id} className="text-7xl md:text-9xl font-black text-white leading-tight break-words drop-shadow-[0_0_30px_rgba(249,115,22,0.5)]">
+                            {s.name}
                         </div>
                     ))
                 ) : (
@@ -120,16 +113,9 @@ export default function KaraokeTV() {
                             <span className={`text-4xl font-black ${idx === 0 ? 'text-orange-500' : 'text-gray-500'}`}>
                                 {idx + 1}
                             </span>
-                            <div className="flex flex-col min-w-0 flex-1">
-                                <span className="text-3xl md:text-4xl font-bold text-gray-100 truncate">
-                                    {item.name}
-                                </span>
-                                {item.song && (
-                                    <span className="text-xl md:text-2xl text-gray-400 truncate mt-1">
-                                        🎵 {item.song}
-                                    </span>
-                                )}
-                            </div>
+                            <span className="text-3xl md:text-4xl font-bold text-gray-100 truncate">
+                                {item.name}
+                            </span>
                         </div>
                     ))
                 )}

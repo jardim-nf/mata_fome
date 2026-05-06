@@ -10,7 +10,6 @@ export default function KaraokeAdmin() {
   const { estabelecimentoIdPrincipal } = useAuth();
   const [queue, setQueue] = useState([]);
   const [newName, setNewName] = useState('');
-  const [newSong, setNewSong] = useState('');
 
   useEffect(() => {
     if (!estabelecimentoIdPrincipal) return;
@@ -48,13 +47,11 @@ export default function KaraokeAdmin() {
     try {
       await addDoc(collection(db, 'karaoke_queue'), {
         name: newName.trim(),
-        song: newSong.trim(),
         status: 'waiting',
         estabelecimentoId: estabelecimentoIdPrincipal,
         createdAt: serverTimestamp()
       });
       setNewName('');
-      setNewSong('');
       toast.success('Cantor adicionado à fila!');
     } catch (err) {
       console.error(err);
@@ -163,20 +160,13 @@ export default function KaraokeAdmin() {
 
         {/* Adicionar */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            <form onSubmit={handleAdd} className="flex flex-col md:flex-row gap-3">
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 relative">
                     <input
                         type="text"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        placeholder="Nome do cantor..."
-                        className="w-full bg-white border-2 border-gray-200 rounded-xl px-5 py-4 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all font-bold text-gray-800 placeholder-gray-400"
-                    />
-                    <input
-                        type="text"
-                        value={newSong}
-                        onChange={(e) => setNewSong(e.target.value)}
-                        placeholder="Música (opcional)..."
+                        placeholder="Nome do próximo cantor..."
                         className="w-full bg-white border-2 border-gray-200 rounded-xl px-5 py-4 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all font-bold text-gray-800 placeholder-gray-400"
                     />
                 </div>
@@ -201,9 +191,8 @@ export default function KaraokeAdmin() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                     {singingList.map(singer => (
-                        <div key={singer.id} className="flex flex-col">
-                            <span className="text-xl md:text-2xl font-black drop-shadow-md truncate">{singer.name}</span>
-                            {singer.song && <span className="text-sm font-medium text-white/80 truncate">🎵 {singer.song}</span>}
+                        <div key={singer.id} className="text-xl md:text-2xl font-black drop-shadow-md truncate">
+                            {singer.name}
                         </div>
                     ))}
                     </div>
@@ -278,12 +267,8 @@ export default function KaraokeAdmin() {
                                         {index + 1}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-black text-gray-800 text-2xl sm:text-3xl truncate tracking-tight" title={item.name}>{item.name}</h3>
-                                        {item.song ? (
-                                            <p className="text-sm text-gray-500 font-medium truncate mt-0.5" title={item.song}>🎵 {item.song}</p>
-                                        ) : (
-                                            <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Aguardando</p>
-                                        )}
+                                        <h3 className="font-black text-gray-800 text-3xl truncate tracking-tight" title={item.name}>{item.name}</h3>
+                                        <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Aguardando</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 mt-auto border-t border-gray-100 pt-3">
