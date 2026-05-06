@@ -162,40 +162,57 @@ export default function KaraokeAdmin() {
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                         placeholder="Nome do próximo cantor..."
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-5 py-4 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all font-semibold text-gray-700 placeholder-gray-400"
+                        className="w-full bg-white border-2 border-gray-200 rounded-xl px-5 py-4 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all font-bold text-gray-800 placeholder-gray-400"
                     />
                 </div>
                 <button
                     type="submit"
                     disabled={!newName.trim()}
-                    className="bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md sm:w-auto w-full active:scale-95"
+                    className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md sm:w-auto w-full active:scale-95"
                 >
                     <FaPlus /> Adicionar
                 </button>
             </form>
         </div>
 
-        {/* Top Actions: Cantando Agora & Próximo */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Top Actions: Cantando Agora, Próximo da Fila & Botão Chamar */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Cantando Agora */}
             {singingList.length > 0 ? (
-                <div className="bg-gradient-to-r from-orange-500 to-red-500 p-3 sm:p-4 rounded-xl shadow-md text-white flex flex-col justify-center min-h-[80px]">
-                    <div className="flex items-center gap-2 mb-2">
-                        <FaPlay className="text-sm animate-pulse" />
-                        <h2 className="text-sm font-black opacity-90 uppercase tracking-widest">Cantando Agora</h2>
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 p-3 rounded-xl shadow-md text-white flex flex-col justify-center min-h-[60px]">
+                    <div className="flex items-center gap-1.5 mb-1">
+                        <FaPlay className="text-xs animate-pulse" />
+                        <h2 className="text-xs font-black opacity-90 uppercase tracking-widest">Cantando Agora</h2>
                     </div>
                     <div className="flex flex-wrap gap-2">
                     {singingList.map(singer => (
-                        <div key={singer.id} className="text-2xl md:text-3xl font-black drop-shadow-md bg-white/20 px-5 py-2 rounded-xl border border-white/30 backdrop-blur-md truncate">
+                        <div key={singer.id} className="text-xl md:text-2xl font-black drop-shadow-md truncate">
                             {singer.name}
                         </div>
                     ))}
                     </div>
                 </div>
             ) : (
-                <div className="bg-white border-2 border-dashed border-gray-200 p-3 sm:p-4 rounded-xl text-gray-400 flex flex-col justify-center items-center min-h-[80px]">
-                    <FaMicrophoneAlt className="text-2xl mb-1 opacity-50" />
-                    <p className="font-medium text-sm uppercase tracking-wider">Ninguém cantando</p>
+                <div className="bg-white border-2 border-dashed border-gray-200 p-3 rounded-xl text-gray-400 flex flex-col justify-center items-center min-h-[60px]">
+                    <FaMicrophoneAlt className="text-xl mb-1 opacity-50" />
+                    <p className="font-bold text-xs uppercase tracking-wider">Palco Livre</p>
+                </div>
+            )}
+
+            {/* Próximo da Fila */}
+            {waitingList.length > 0 ? (
+                <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-3 rounded-xl shadow-md text-white flex flex-col justify-center min-h-[60px]">
+                    <div className="flex items-center gap-1.5 mb-1">
+                        <FaMicrophoneAlt className="text-xs text-orange-400" />
+                        <h2 className="text-xs font-black text-gray-300 uppercase tracking-widest">Próximo da Fila</h2>
+                    </div>
+                    <div className="text-xl md:text-2xl font-black text-orange-400 truncate">
+                        {waitingList[0].name}
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-white border-2 border-dashed border-gray-200 p-3 rounded-xl text-gray-400 flex flex-col justify-center items-center min-h-[60px]">
+                    <p className="font-bold text-xs uppercase tracking-wider">Fila Vazia</p>
                 </div>
             )}
 
@@ -203,16 +220,10 @@ export default function KaraokeAdmin() {
             <button 
                 onClick={handleNext}
                 disabled={waitingList.length === 0 && singingList.length === 0}
-                className="bg-orange-500 hover:bg-orange-600 text-white p-3 sm:p-4 rounded-xl shadow-md flex flex-col items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all min-h-[80px]"
+                className="bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-xl shadow-md flex items-center justify-center gap-2 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed active:scale-95 transition-all min-h-[60px] border-2 border-orange-500 disabled:border-gray-200"
             >
-                <div className="flex items-center gap-3 font-black text-xl">
-                    Chamar Próximo <FaStepForward />
-                </div>
-                {waitingList.length > 0 && (
-                    <span className="text-sm font-bold bg-white/20 px-4 py-1.5 rounded-full mt-1 border border-white/20">
-                        Será: {waitingList[0].name}
-                    </span>
-                )}
+                <span className="font-black text-lg md:text-xl uppercase tracking-wide">Avançar Fila</span>
+                <FaStepForward className="text-lg" />
             </button>
         </div>
 
@@ -245,9 +256,9 @@ export default function KaraokeAdmin() {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
                         {waitingList.map((item, index) => (
-                            <div key={item.id} className="bg-white border-2 border-gray-100 rounded-2xl p-5 flex flex-col justify-between hover:border-orange-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative group">
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-50 group-hover:from-orange-100 group-hover:to-orange-50 text-gray-600 group-hover:text-orange-600 font-black rounded-xl text-3xl shadow-sm border border-gray-200 group-hover:border-orange-200 transition-colors">
+                            <div key={item.id} className="bg-white border-2 border-gray-100 rounded-2xl p-4 flex flex-col justify-between hover:border-orange-200 hover:shadow-lg transition-all duration-300 relative group">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-orange-50 text-orange-600 font-black rounded-xl text-2xl shadow-sm border border-orange-100 transition-colors">
                                         {index + 1}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -255,17 +266,17 @@ export default function KaraokeAdmin() {
                                         <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-wider">Aguardando</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between gap-3 mt-auto border-t border-gray-100 pt-4">
+                                <div className="flex items-center justify-between gap-2 mt-auto border-t border-gray-100 pt-3">
                                     <button
                                         onClick={() => handleDelete(item.id)}
-                                        className="p-3 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors active:scale-95"
+                                        className="p-2.5 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors active:scale-95"
                                         title="Remover da fila"
                                     >
                                         <FaTrash />
                                     </button>
                                     <button
                                         onClick={() => setAsSinging(item.id)}
-                                        className="flex-1 px-4 py-3 bg-gray-50 text-gray-700 hover:bg-orange-500 hover:text-white border border-gray-200 hover:border-orange-500 rounded-xl transition-all font-black text-sm flex items-center justify-center gap-2 active:scale-95 shadow-sm"
+                                        className="flex-1 px-3 py-2.5 bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white border border-orange-200 hover:border-orange-500 rounded-xl transition-all font-black text-sm flex items-center justify-center gap-2 active:scale-95 shadow-sm"
                                         title="Chamar para cantar agora"
                                     >
                                         <FaPlay className="text-xs" /> Chamar
