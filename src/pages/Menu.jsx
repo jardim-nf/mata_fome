@@ -346,8 +346,8 @@ export default function Menu() {
                         <div key={cat} id={`categoria-${cat}`} className="mb-8">
                             <h2 className="text-2xl font-bold mb-4">{cat}</h2>
                             <div className="grid gap-4 md:grid-cols-2">
-                                {items.slice(0, visible).map(item => (
-                                    <div key={item.id} className={`bg-white rounded-xl shadow-sm border border-gray-100 p-2 overflow-hidden ${!isLojaAberta ? 'opacity-75 grayscale-[0.3]' : ''}`}>
+                                {items.slice(0, visible).map((item, index) => (
+                                    <div key={`${cat}-${item.id}-${index}`} className={`bg-white rounded-xl shadow-sm border border-gray-100 p-2 overflow-hidden ${!isLojaAberta ? 'opacity-75 grayscale-[0.3]' : ''}`}>
                                         <CardapioItem item={item} onAddItem={() => handleClickItemModal(item, false)} onPurchase={() => handleClickItemModal(item, true)} coresEstabelecimento={coresEstabelecimento} isCatalog={window.location.pathname.startsWith('/catalogo')} />
                                     </div>
                                 ))}
@@ -452,8 +452,8 @@ function SugestoesCardapio({ carrinho, allProdutos, handleAbrirModalProduto }) {
         <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-4 border border-amber-100">
             <h3 className="text-base font-black text-gray-800 mb-3 flex items-center gap-2">💡 Vai bem com o que você pediu</h3>
             <div className="grid grid-cols-2 gap-2">
-                {sugestoes.map(item => (
-                    <button key={item.id} onClick={() => handleAbrirModalProduto(item)} className="bg-white rounded-xl p-3 border border-amber-100 flex items-center gap-3 hover:shadow-md hover:border-amber-200 transition-all text-left active:scale-[0.98]">
+                {sugestoes.map((item, index) => (
+                    <button key={`sugestao-${item.id}-${index}`} onClick={() => handleAbrirModalProduto(item)} className="bg-white rounded-xl p-3 border border-amber-100 flex items-center gap-3 hover:shadow-md hover:border-amber-200 transition-all text-left active:scale-[0.98]">
                         <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden shrink-0">{item.imageUrl && <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />}</div>
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-gray-800 truncate">{item.nome}</p>

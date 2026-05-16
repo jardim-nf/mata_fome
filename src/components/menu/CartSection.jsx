@@ -149,8 +149,8 @@ export default function CartSection({
             <div className="mt-6 mb-2">
               <h4 className="text-xs font-black uppercase text-gray-500 mb-3 tracking-wider">Aproveite também</h4>
               <div className="flex gap-3 overflow-x-auto pb-4 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none' }}>
-                {upsellItems.map(item => (
-                  <div key={item.id} className="min-w-[140px] max-w-[140px] bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col justify-between shrink-0 snap-center relative shadow-sm">
+                {upsellItems.map((item, index) => (
+                  <div key={`upsell-${item.id}-${index}`} className="min-w-[140px] max-w-[140px] bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col justify-between shrink-0 snap-center relative shadow-sm">
                     {item.imageUrl && (
                       <div className="w-full h-20 rounded-lg overflow-hidden mb-2 shadow-sm border border-gray-100">
                         <img src={item.imageUrl} alt={item.nome} className="w-full h-full object-cover" />

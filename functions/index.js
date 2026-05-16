@@ -14,7 +14,7 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 setGlobalOptions({
   maxInstances: 1, // Reduzido de 2 para 1 temporariamente para não estourar a cota de CPU global
   concurrency: 80, // allows single container to process 80 requests at the same time
-  memory: "256MiB" // Limits memory size
+  memory: "512MiB" // Aumentado para evitar lentidão (GC thrashing) com bibliotecas pesadas
 });
 
 // --- IMPORTS FIREBASE ADMIN ---
@@ -50,5 +50,7 @@ export * from "./api/estoque.js";
 export * from "./api/motoboys.js";
 
 export * from "./api/referral.js";
+
+export * from "./api/mesas.js";
 
 export { ifoodTestarConexao, ifoodConfigurarWebhook, ifoodWebhook, ifoodPolling, ifoodAtualizarStatus } from "./api/ifood.js";

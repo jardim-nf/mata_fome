@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion, writeBatch } from 'firebase/firestore';
+import { db, auth, functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 import { vendaService } from '../services/vendaService';
 import { estoqueService } from '../services/estoqueService';
 import { toast } from 'react-toastify';
@@ -342,88 +343,66 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
             const primeiraPessoaValida = Object.values(pagamentosValidos)[0];
             const formaPagamentoPredominante = primeiraPessoaValida ? primeiraPessoaValida.formaPagamento : 'dinheiro';
 
-            const dadosVenda = {
+            // ---- REFATORAÇÃO DE SEGURANÇA: ENVIAR PARA A CLOUD FUNCTION ----
+            const fecharMesaBackend = httpsCallable(functions, 'fecharMesaBackend');
+            
+            const reqData = {
+                estabelecimentoId,
                 mesaId: mesa.id,
-                mesaNumero: mesa.numero,
-                estabelecimentoId: estabelecimentoId,
-                itens: itensParaSalvar,
-                pagamentos: pagamentosValidos,
-                total: totalPagoAgora, 
-                valorOriginal: totalConsumo,
-                taxaServicoCobrada: incluirTaxa ? valorTaxa : 0,
-                valorDesconto: valorDesconto,
-                tipoDesconto: tipoDesconto,
+                pagamentosValidos,
+                incluirTaxa,
                 valorDescontoInput: parseFloat(valorDescontoInput) || 0,
-                formaPagamento: formaPagamentoPredominante,
-                tipoPagamento: formaPagamentoPredominante,
-                metodoPagamento: formaPagamentoPredominante, 
-                status: vaiQuitar ? 'pago' : 'pago_parcial',
-                createdAt: serverTimestamp(),
-                criadoPor: auth.currentUser?.uid,
-                funcionario: auth.currentUser?.displayName || 'Garçom',
-                origem: 'salao',
-                tipo: 'mesa'
+                tipoDesconto,
+                modo,
+                cpfNota,
+                emitirNota
             };
 
-            const docRef = await addDoc(collection(db, 'vendas'), dadosVenda);
-
-            if (modo === 'total' || vaiQuitar) {
-                const todosAtivos = todosItensMesa.filter(i => i.status !== 'cancelado');
-                const itensParaBaixaEstoque = todosAtivos.filter(i => !i._estoqueBaixado);
-                if (itensParaBaixaEstoque.length > 0) await estoqueService.darBaixaEstoque(estabelecimentoId, itensParaBaixaEstoque);
+            const response = await fecharMesaBackend(reqData);
+            
+            if (!response.data || !response.data.success) {
+                throw new Error(response.data?.message || 'Falha ao processar pagamento no servidor.');
             }
+
+            const docId = response.data.vendaId;
+            const quitouMesa = response.data.quitada;
+            const restanteApos = response.data.restanteFinal;
+            // ---------------------------------------------------------------
+            
+            let mensagemToast = "";
+            if (quitouMesa) {
+                mensagemToast = "Conta quitada! Mesa liberada.";
+            } else {
+                mensagemToast = `Recebido R$ ${totalPagoAgora.toFixed(2)}. Restam R$ ${restanteApos.toFixed(2)}`;
+            }
+
+            toast.success(mensagemToast);
 
             if (emitirNota) {
                 toast.info("Processando Cupom Fiscal...", { autoClose: 3000 });
-                const resultadoNfce = await vendaService.emitirNfce(docRef.id, cpfNota);
+                const resultadoNfce = await vendaService.emitirNfce(docId, cpfNota);
                 if (resultadoNfce.sucesso) toast.success("Nota enviada para a Sefaz!");
                 else toast.error("Venda salva, mas ocorreu erro na nota: " + resultadoNfce.error);
             }
 
-            if (mesa.id) {
-                if (modo === 'total' || vaiQuitar) {
-                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), {
-                        status: 'livre',
-                        clientes: [],
-                        nomesOcupantes: ["Mesa"],
-                        itens: [],
-                        pedidos: [],
-                        total: 0,
-                        pagamentos: {},
-                        pagamentosParciais: [],
-                        updatedAt: serverTimestamp()
-                    });
-                    toast.success("Conta quitada! Mesa liberada.");
-                } else {
-                    const pagantesArray = Object.keys(pagamentosValidos).filter(nome => !nome.includes('Mesa'));
-                    
-                    const novoPagamentoInfo = {
-                        id: docRef.id,
-                        valor: totalPagoAgora,
-                        data: new Date().toISOString(),
-                        responsavel: auth.currentUser?.displayName || 'Garçom',
-                        tipo: tipoPagamento,
-                        pagantes: pagantesArray.length > 0 ? pagantesArray.join(', ') : ''
-                    };
+            // Mock dadosVenda for onSucesso to avoid breaking UI that relies on it
+            const dadosVendaSimulados = {
+                id: docId,
+                vendaId: docId,
+                total: totalPagoAgora,
+                status: quitouMesa ? 'pago' : 'pago_parcial',
+                itens: itensParaSalvar,
+                createdAt: new Date(),
+                estabelecimentoId: estabelecimentoId
+            };
 
-                    const mesaUpdate = {
-                        status: 'ocupada',
-                        total: restanteFinal,
-                        pagamentosParciais: arrayUnion(novoPagamentoInfo),
-                        updatedAt: serverTimestamp()
-                    };
-                    
-                    if (pagantesArray.length > 0) {
-                        mesaUpdate.pessoasPagas = arrayUnion(...pagantesArray);
-                    }
-
-                    await updateDoc(doc(db, `estabelecimentos/${estabelecimentoId}/mesas/${mesa.id}`), mesaUpdate);
-                    toast.success(`Recebido R$ ${totalPagoAgora.toFixed(2)}. Restam R$ ${restanteFinal.toFixed(2)}`);
-                }
+            if (onSucesso) onSucesso({ ...dadosVendaSimulados, parcial: !quitouMesa });
+            
+            try {
+                if (typeof isMaquininha === 'undefined' || !isMaquininha) onClose();
+            } catch (e) {
+                onClose(); // Fallback
             }
-
-            if (onSucesso) onSucesso({ id: docRef.id, ...dadosVenda, parcial: !vaiQuitar });
-            onClose();
 
         } catch (error) {
             console.error('Erro:', error);

@@ -57,6 +57,12 @@ export function useFinanceiroMasterData() {
 
       const lista = await financeiroService.listarTodasFaturas();
       lista.sort((a, b) => {
+        const nomeA = (a.estabelecimentoNome || '').toLowerCase();
+        const nomeB = (b.estabelecimentoNome || '').toLowerCase();
+        
+        if (nomeA < nomeB) return -1;
+        if (nomeA > nomeB) return 1;
+        
         const dateA = a.vencimento?.toDate ? a.vencimento.toDate() : new Date(a.vencimento);
         const dateB = b.vencimento?.toDate ? b.vencimento.toDate() : new Date(b.vencimento);
         return dateB - dateA;

@@ -17,43 +17,27 @@ import { estoqueService } from './estoqueService';
 
 export const vendaService = {
   
-  // 1. Salvar venda DIRETO no Firestore
+  // 1. Salvar venda via Cloud Function (Atomicidade e Segurança)
   async salvarVenda(vendaData) {
     try {
-      console.log('🚨🚨🚨 [vendaService] SALVANDO VENDA!!! 🚨🚨🚨', JSON.stringify(vendaData, null, 2));
+      console.log('🚨🚨🚨 [vendaService] SALVANDO VENDA NO BACKEND!!! 🚨🚨🚨', { estabelecimentoId: vendaData.estabelecimentoId, origem: vendaData.origem });
 
-      const dadosLimpos = {
-        ...vendaData,
-        usuarioId: vendaData.usuarioId || null,
-        clienteCpf: vendaData.clienteCpf || null,
-        status: vendaData.status || 'finalizada',
-        createdAt: serverTimestamp(), 
-        origem: vendaData.origem || 'pdv_web',
-        tipo: vendaData.tipo || 'balcao'
-      };
-
-      const payloadFinal = JSON.parse(JSON.stringify(dadosLimpos));
-      payloadFinal.createdAt = serverTimestamp();
-
-      const vendasRef = collection(db, 'vendas');
-      const docRef = await addDoc(vendasRef, payloadFinal);
-
-      console.log('✅ Venda salva com sucesso! ID:', docRef.id);
+      const functions = getFunctions();
+      const salvarVendaBackend = httpsCallable(functions, 'salvarVendaBackend');
       
-      // 🔧 BAIXA DE ESTOQUE INTERNA (já faz aqui, NÃO chamar de novo fora)
-      let baixaResult = { success: true };
-      try {
-        baixaResult = await estoqueService.darBaixaEstoque(vendaData.estabelecimentoId, vendaData.itens);
-      } catch (e) {
-        console.warn('⚠️ Baixa de estoque falhou (venda já salva):', e);
-        baixaResult = { success: false, error: e };
+      const response = await salvarVendaBackend({ vendaData });
+      
+      if (!response.data || !response.data.success) {
+        throw new Error(response.data?.message || 'Falha ao salvar venda no servidor.');
       }
+
+      console.log('✅ Venda salva com sucesso via backend! ID:', response.data.vendaId);
 
       return {
         success: true,
-        vendaId: docRef.id,
-        total: vendaData.total,
-        _estoqueBaixado: baixaResult.success // 🔧 FLAG: informa que a baixa JÁ foi feita
+        vendaId: response.data.vendaId,
+        total: response.data.total,
+        _estoqueBaixado: response.data._estoqueBaixado
       };
 
     } catch (error) {

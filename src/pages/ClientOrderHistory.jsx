@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import BackButton from '../components/BackButton';
 
-import { collection, query, where, orderBy, getDocs, doc, getDoc, collectionGroup } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, doc, getDoc, collectionGroup, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
@@ -41,6 +41,12 @@ function ClientOrderHistory() {
   const [filterStatus, setFilterStatus] = useState('todos');
   const [estabelecimentos, setEstabelecimentos] = useState({});
   const [saldoTotal, setSaldoTotal] = useState(0);
+
+  // Estados para Avaliação do Pedido (NPS/Review)
+  const [orderToEvaluate, setOrderToEvaluate] = useState(null);
+  const [nota, setNota] = useState(0);
+  const [comentario, setComentario] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !currentUser) {
@@ -213,6 +219,52 @@ function ClientOrderHistory() {
       toast.error("Erro ao carregar histórico de pedidos. Tente novamente.");
     } finally {
       setLoadingOrders(false);
+    }
+  };
+
+  // 🔥 ENVIAR AVALIAÇÃO
+  const submitReview = async () => {
+    if (nota === 0) {
+        toast.error("Por favor, selecione uma nota de 1 a 5 estrelas!");
+        return;
+    }
+    if (!orderToEvaluate || !orderToEvaluate.estabelecimentoId) return;
+
+    setIsSubmittingReview(true);
+    try {
+        const avaliacao = {
+            pedidoId: orderToEvaluate.id,
+            clienteId: currentUser.uid,
+            clienteNome: orderToEvaluate.clienteNome || orderToEvaluate.cliente?.nome || 'Cliente',
+            nota: nota,
+            comentario: comentario,
+            data: new Date(),
+            statusAvaliacao: 'pendente_moderacao'
+        };
+        
+        // Salva na subcoleção de avaliações do estabelecimento
+        await addDoc(collection(db, 'estabelecimentos', orderToEvaluate.estabelecimentoId, 'avaliacoes'), avaliacao);
+        
+        // Atualiza o status do pedido para "avaliado"
+        if (orderToEvaluate.origem === 'pedidos') {
+           await updateDoc(doc(db, 'estabelecimentos', orderToEvaluate.estabelecimentoId, 'pedidos', orderToEvaluate.id), {
+               avaliado: true,
+               notaAvaliacao: nota
+           });
+        }
+
+        toast.success("Obrigado por avaliar! Sua opinião é muito importante.");
+        
+        // Atualiza estado local
+        setOrders(orders.map(o => o.id === orderToEvaluate.id ? { ...o, avaliado: true, notaAvaliacao: nota } : o));
+    } catch (err) {
+        console.error("Erro ao enviar avaliação:", err);
+        toast.error("Falha ao enviar avaliação. Tente novamente.");
+    } finally {
+        setIsSubmittingReview(false);
+        setOrderToEvaluate(null);
+        setNota(0);
+        setComentario('');
     }
   };
 
@@ -595,6 +647,19 @@ function ClientOrderHistory() {
 
                   {/* AÇÕES */}
                   <div className="flex lg:flex-col gap-2 lg:space-y-2 mt-4">
+                    {(order.status === 'finalizado' || order.status === 'entregue') && !order.avaliado && order.estabelecimentoId && (
+                        <button
+                          onClick={() => {
+                              setOrderToEvaluate(order);
+                              setNota(0);
+                              setComentario('');
+                          }}
+                          className="flex items-center justify-center space-x-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 px-4 py-2 rounded-lg font-bold transition flex-1"
+                        >
+                            <span>⭐ Avaliar Pedido</span>
+                        </button>
+                    )}
+
                     {order.status !== 'cancelado' && order.estabelecimentoId && (
                       <button
                         onClick={() => {
@@ -628,6 +693,51 @@ function ClientOrderHistory() {
           </div>
         )}
       </div>
+
+      {/* MODAL DE AVALIAÇÃO */}
+      {orderToEvaluate && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative animate-fadeIn">
+            <button 
+              onClick={() => { setOrderToEvaluate(null); setNota(0); setComentario(''); }} 
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
+            >
+              <IoCloseCircle size={28} />
+            </button>
+            <div className="bg-yellow-400 text-yellow-900 p-6 text-center">
+              <h2 className="text-2xl font-black">Como foi seu pedido?</h2>
+              <p className="font-medium mt-1 opacity-90">{getEstabelecimentoNome(orderToEvaluate.estabelecimentoId)}</p>
+            </div>
+            <div className="p-6">
+              <div className="flex justify-center gap-2 mb-6">
+                 {[1, 2, 3, 4, 5].map((star) => (
+                    <button 
+                      key={star} 
+                      onClick={() => setNota(star)}
+                      className={`text-4xl transition-transform hover:scale-110 ${nota >= star ? 'text-yellow-400' : 'text-gray-200'}`}
+                    >
+                      ★
+                    </button>
+                 ))}
+              </div>
+              <p className="text-sm font-bold text-gray-700 mb-2">Deixe um comentário (opcional):</p>
+              <textarea 
+                value={comentario}
+                onChange={(e) => setComentario(e.target.value)}
+                placeholder="O que achou da comida? Chegou rápido?"
+                className="w-full border rounded-xl p-3 text-sm focus:ring-yellow-400 focus:border-yellow-400 min-h-[100px] mb-6"
+              />
+              <button 
+                onClick={submitReview}
+                disabled={isSubmittingReview || nota === 0}
+                className="w-full bg-yellow-400 text-yellow-900 font-black text-lg py-3 rounded-xl hover:bg-yellow-500 disabled:opacity-50 transition-colors"
+              >
+                {isSubmittingReview ? 'Enviando...' : 'Enviar Avaliação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

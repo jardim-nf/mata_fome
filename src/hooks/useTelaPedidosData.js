@@ -4,6 +4,7 @@ import {
     doc, getDoc, collection, getDocs, onSnapshot, updateDoc, 
     serverTimestamp, writeBatch, addDoc 
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { estoqueService } from '../services/estoqueService';
@@ -416,7 +417,16 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         const novosOcupantes = [...ocupantes, novoNome];
         setOcupantes(novosOcupantes); 
         setClienteSelecionado(novoNome); 
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { nomesOcupantes: novosOcupantes });
+
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+                nomesOcupantes: novosOcupantes,
+                updatedAt: serverTimestamp()
+            });
+        } catch (e) {
+            console.error("Erro ao adicionar ocupante:", e);
+        }
+        
         return true;
     };
 
@@ -435,10 +445,16 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         const novosItens = resumoPedido.map(i => (i.cliente === nomeAntigo ? { ...i, cliente: novoNome } : i));
         setResumoPedido(novosItens);
         
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-            nomesOcupantes: novosOcupantes, 
-            itens: novosItens 
-        });
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+                nomesOcupantes: novosOcupantes,
+                itens: novosItens,
+                updatedAt: serverTimestamp()
+            });
+        } catch (e) {
+            console.error("Erro ao editar ocupante:", e);
+        }
+
         return true;
     };
 
@@ -448,48 +464,27 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             return false;
         }
         
-        const qtdAtual = itemParaExcluir.quantidade || 1;
-        const qtdRemover = Math.min(qtdExcluir, qtdAtual);
-        const cancelaInteiro = qtdRemover >= qtdAtual;
-
-        let novaLista;
-        if (cancelaInteiro) {
-            novaLista = resumoPedido.map(i => 
-                i.id === itemParaExcluir.id ? { ...i, status: 'cancelado' } : i
-            );
-        } else {
-            novaLista = resumoPedido.map(i => 
-                i.id === itemParaExcluir.id ? { ...i, quantidade: qtdAtual - qtdRemover } : i
-            );
-        }
-        
-        const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-        
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-            itens: novaLista, 
-            total: novoTotal 
-        });
-
-        // Grava Logo de Auditoria
         try {
-            const logsRef = collection(db, 'estabelecimentos', estabelecimentoId, 'auditLogs');
-            await addDoc(logsRef, {
-                tipo: 'cancelamento_item',
-                mesaNumero: mesa?.numero || 'N/A',
-                item: {
-                    nome: `${itemParaExcluir.nome || itemParaExcluir.name || 'Item'} – ${itemParaExcluir.variacao || itemParaExcluir.opcaoSelecionada || 'Único'}`,
-                    quantidade: qtdRemover,
-                    precoUnitario: itemParaExcluir.preco || 0,
-                    observacao: itemParaExcluir.observacao || null
-                },
-                valorTotalCancelado: (itemParaExcluir.preco || 0) * qtdRemover,
-                data: serverTimestamp()
+            const functions = getFunctions();
+            const cancelarItem = httpsCallable(functions, 'cancelarItemMesaBackend');
+            
+            const res = await cancelarItem({
+                estabelecimentoId,
+                mesaId,
+                itemParaExcluir,
+                qtdExcluir,
+                mesaNumero: mesa?.numero
             });
+
+            if (res.data?.success) {
+                toast.info(res.data.cancelaInteiro ? "Item cancelado com sucesso!" : `${res.data.qtdRemover}x removido(s) com sucesso!`);
+            }
         } catch (e) {
-            console.error('[AUDIT] Erro ao gravar log de cancelamento:', e);
+            console.error('[AUDIT] Erro ao cancelar item:', e);
+            toast.error("Erro ao cancelar o item.");
+            return false;
         }
         
-        toast.info(cancelaInteiro ? "Item cancelado com sucesso!" : `${qtdRemover}x removido(s) com sucesso!`);
         return true;
     };
 
@@ -499,31 +494,33 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         setResumoPedido(novaLista);
         
         const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-        await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-            itens: novaLista, 
-            total: novoTotal 
-        });
+        
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+                itens: novaLista,
+                total: novoTotal,
+                updatedAt: serverTimestamp()
+            });
+        } catch (e) {
+            console.error("Erro ao ajustar quantidade:", e);
+        }
     };
 
     const dispararImpressao = async (setor, onSucesso = () => {}) => {
         const toastId = toast.loading("Enviando sinal para o Caixa...");
         const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
         try {
-            if (pedidoRecemEnviadoId) {
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', pedidoRecemEnviadoId), {
-                    solicitarImpressao: true,
-                    setorImpressao: setor || 'tudo',
-                    impressaoSolicitadaPor: nomeGarcom,
-                    impressaoSolicitadaEm: serverTimestamp()
-                });
-            } else {
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), {
-                    solicitarImpressaoConferencia: true,
-                    setorImpressao: setor || 'tudo',
-                    impressaoSolicitadaPor: nomeGarcom,
-                    impressaoSolicitadaEm: serverTimestamp()
-                });
-            }
+            const functions = getFunctions();
+            const impressaoBackend = httpsCallable(functions, 'dispararImpressaoMesaBackend');
+            
+            await impressaoBackend({
+                estabelecimentoId,
+                mesaId,
+                pedidoRecemEnviadoId,
+                setor,
+                nomeGarcom
+            });
+            
             toast.update(toastId, { render: `Impressão enviada com sucesso! ${setor ? `(${setor})` : ''} — ${nomeGarcom}`, type: "success", isLoading: false, autoClose: 2000 });
             onSucesso();
         } catch (error) {
@@ -534,70 +531,41 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     const salvarAlteracoes = async () => {
         setSalvando(true);
         try {
-            const itensNovos = resumoPedido.filter(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
-            const novoTotalMesa = resumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+            const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
             
-            const batch = writeBatch(db);
-            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            const functions = getFunctions();
+            const salvarBackend = httpsCallable(functions, 'salvarPedidoMesaBackend');
             
-            let idPedidoGerado = null;
+            const payload = {
+                estabelecimentoId,
+                mesaId,
+                resumoPedido,
+                userDataNome: userData?.nome,
+                userDisplayName: user?.displayName
+            };
 
-            if(itensNovos.length > 0) {
-                idPedidoGerado = `pedido_${mesaId}_${Date.now()}`;
-                const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', idPedidoGerado);
-                
-                const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
-                
-                batch.set(pedidoRef, {
-                    id: idPedidoGerado, 
-                    mesaId: mesaId, 
-                    mesaNumero: mesa?.numero || 'Sem Número',
-                    clienteNome: `Mesa ${mesa?.numero}`,
-                    tipo: 'mesa',
-                    itens: itensNovos.map(i => ({...i, status: 'recebido'})), 
-                    status: 'recebido', 
-                    total: itensNovos.reduce((a,i) => a + (i.preco * i.quantidade), 0), 
-                    dataPedido: serverTimestamp(), 
-                    createdAt: serverTimestamp(), 
-                    source: 'salao',
-                    funcionario: nomeGarcom,
-                    enviadoPor: nomeGarcom
-                });
-
-                const todosItensAtualizados = resumoPedido.map(i => {
-                    if ((!i.status || i.status === 'pendente') && i.status !== 'cancelado') {
-                        return { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado, _estoqueBaixado: true };
+            const sanitizeNaNs = (obj) => {
+                if (obj === null || obj === undefined) return obj;
+                if (typeof obj === 'number' && Number.isNaN(obj)) return 0;
+                if (Array.isArray(obj)) return obj.map(sanitizeNaNs);
+                if (typeof obj === 'object') {
+                    const newObj = {};
+                    for (const key in obj) {
+                        newObj[key] = sanitizeNaNs(obj[key]);
                     }
-                    return i;
-                });
-                
-                batch.update(mesaRef, { 
-                    itens: todosItensAtualizados, 
-                    status: 'ocupada', 
-                    total: novoTotalMesa, 
-                    updatedAt: serverTimestamp() 
-                });
-                
-                // 🔧 BAIXA DE ESTOQUE: A mesa é considerada uma venda contínua, então damos baixa no estoque *na hora* de pedir.
-                try {
-                    await estoqueService.darBaixaEstoque(estabelecimentoId, itensNovos);
-                } catch (e) {
-                    console.error("Erro interno ao dar baixa de estoque na Mesa:", e);
+                    return newObj;
                 }
+                return obj;
+            };
 
-            } else {
-                batch.update(mesaRef, { 
-                    itens: resumoPedido, 
-                    total: novoTotalMesa, 
-                    updatedAt: serverTimestamp() 
-                });
-            }
+            const cleanPayload = sanitizeNaNs(payload);
 
-            await batch.commit();
+            const result = await salvarBackend(cleanPayload);
+
             toast.success("Pedido confirmado com sucesso!", { position: "top-center", autoClose: 2000, theme: "colored" });
             
-            if (idPedidoGerado) {
-                setPedidoRecemEnviadoId(idPedidoGerado);
+            if (result.data && result.data.idPedidoGerado) {
+                setPedidoRecemEnviadoId(result.data.idPedidoGerado);
             }
 
         } catch(error) { 

@@ -210,6 +210,14 @@ export const configurarIndicacao = onCall({ cors: true }, async (request) => {
   const { estabelecimentoId, config } = request.data || {};
   if (!estabelecimentoId || !config) throw new HttpsError('invalid-argument', 'Dados incompletos.');
 
+  const token = request.auth.token;
+  const isMaster = token.isMasterAdmin === true || token.role === 'master';
+  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+  if (!isMaster && !hasAccess) {
+      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
+  }
+
   try {
     await db.collection('estabelecimentos').doc(estabelecimentoId).update({
       indicacao: {
@@ -237,6 +245,14 @@ export const buscarRankingIndicadores = onCall({ cors: true }, async (request) =
 
   const { estabelecimentoId } = request.data || {};
   if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  const token = request.auth.token;
+  const isMaster = token.isMasterAdmin === true || token.role === 'master';
+  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+  if (!isMaster && !hasAccess) {
+      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
+  }
 
   try {
     const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 
@@ -90,21 +91,28 @@ export function useTaxasDeEntregaData({ currentUser, isAdmin, isMaster, estabele
 
         setFormLoading(true);
         try {
-            const taxasCollectionRef = collection(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega');
+            const functions = getFunctions();
+            const gerenciarTaxas = httpsCallable(functions, 'gerenciarTaxasBackend');
+
             if (editingId) {
-                const bairroDoc = doc(taxasCollectionRef, editingId);
-                await updateDoc(bairroDoc, { 
-                    nomeBairro: nomeBairro.trim(), 
-                    valorTaxa: valorNumerico,
-                    atualizadoEm: new Date()
+                await gerenciarTaxas({
+                    estabelecimentoId,
+                    action: 'UPDATE',
+                    taxaId: editingId,
+                    dados: {
+                        nomeBairro: nomeBairro.trim(),
+                        valorTaxa: valorNumerico
+                    }
                 });
                 toast.success("✅ Taxa atualizada com sucesso!");
             } else {
-                await addDoc(taxasCollectionRef, { 
-                    nomeBairro: nomeBairro.trim(), 
-                    valorTaxa: valorNumerico,
-                    criadoEm: new Date(),
-                    ativo: true
+                await gerenciarTaxas({
+                    estabelecimentoId,
+                    action: 'CREATE',
+                    dados: {
+                        nomeBairro: nomeBairro.trim(),
+                        valorTaxa: valorNumerico
+                    }
                 });
                 toast.success("✅ Nova taxa adicionada com sucesso!");
             }
@@ -133,8 +141,16 @@ export function useTaxasDeEntregaData({ currentUser, isAdmin, isMaster, estabele
 
         setFormLoading(true);
         try {
-            const bairroDoc = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', bairro.id);
-            await updateDoc(bairroDoc, { valorTaxa: valorNumerico, atualizadoEm: new Date() });
+            const functions = getFunctions();
+            const gerenciarTaxas = httpsCallable(functions, 'gerenciarTaxasBackend');
+
+            await gerenciarTaxas({
+                estabelecimentoId,
+                action: 'UPDATE',
+                taxaId: bairro.id,
+                dados: { valorTaxa: valorNumerico }
+            });
+
             toast.success(`✅ Taxa de ${bairro.nomeBairro} alterada.`);
             getTaxas();
         } catch (err) {
@@ -146,8 +162,14 @@ export function useTaxasDeEntregaData({ currentUser, isAdmin, isMaster, estabele
 
     const handleDelete = async (id, nome) => {
         try {
-            const taxaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', id);
-            await deleteDoc(taxaDocRef);
+            const functions = getFunctions();
+            const gerenciarTaxas = httpsCallable(functions, 'gerenciarTaxasBackend');
+
+            await gerenciarTaxas({
+                estabelecimentoId,
+                action: 'DELETE',
+                taxaId: id
+            });
             toast.success(`✅ Taxa "${nome}" excluída.`);
             getTaxas();
         } catch (err) {
@@ -181,21 +203,25 @@ export function useTaxasDeEntregaData({ currentUser, isAdmin, isMaster, estabele
         if (type === 'AUMENTAR_VALOR' || type === 'AUMENTAR_PERCENT') {
             setFormLoading(true);
             try {
-                const batch = writeBatch(db);
-                bairros.forEach(b => {
-                    const docRef = doc(db, 'estabelecimentos', estabelecimentoId, 'taxasDeEntrega', b.id);
+                const payloadBatch = bairros.map(b => {
                     let novoValorTaxa = b.valorTaxa;
-
                     if (type === 'AUMENTAR_VALOR') {
                         novoValorTaxa += inputNumber;
                     } else if (type === 'AUMENTAR_PERCENT') {
                         novoValorTaxa += (b.valorTaxa * (inputNumber / 100));
                     }
-                    
-                    batch.update(docRef, { valorTaxa: Number(novoValorTaxa.toFixed(2)), atualizadoEm: new Date() });
+                    return { id: b.id, novoValor: Number(novoValorTaxa.toFixed(2)) };
                 });
 
-                await batch.commit();
+                const functions = getFunctions();
+                const gerenciarTaxas = httpsCallable(functions, 'gerenciarTaxasBackend');
+
+                await gerenciarTaxas({
+                    estabelecimentoId,
+                    action: 'BATCH_UPDATE',
+                    payloadBatch
+                });
+
                 toast.success(`✅ ${bairros.length} taxas atualizadas com sucesso em Lote!`);
                 getTaxas();
             } catch (err) {

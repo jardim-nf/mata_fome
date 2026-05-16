@@ -1,12 +1,93 @@
 // src/services/printService.js
 import qz from 'qz-tray';
+import { KEYUTIL, KJUR } from 'jsrsasign';
+
+// --- CONFIGURAÇÃO DE SEGURANÇA DO QZ TRAY ---
+// Certificado e Chave gerados para bypass local (auto-assinado)
+const qzCertificate = `-----BEGIN CERTIFICATE-----
+MIIDQTCCAimgAwIBAgIBATANBgkqhkiG9w0BAQUFADBkMRIwEAYDVQQDEwlsb2Nh
+bGhvc3QxCzAJBgNVBAYTAkJSMQswCQYDVQQIEwJDRTESMBAGA1UEBxMJRm9ydGFs
+ZXphMREwDwYDVQQKEwhJZGVhRm9vZDENMAsGA1UECxMEVGVzdDAeFw0yNjA1MTQx
+MTU4NDlaFw0zNjA1MTQxMTU4NDlaMGQxEjAQBgNVBAMTCWxvY2FsaG9zdDELMAkG
+A1UEBhMCQlIxCzAJBgNVBAgTAkNFMRIwEAYDVQQHEwlGb3J0YWxlemExETAPBgNV
+BAoTCElkZWFGb29kMQ0wCwYDVQQLEwRUZXN0MIIBIjANBgkqhkiG9w0BAQEFAAOC
+AQ8AMIIBCgKCAQEAnpDkuV/Yze5GEAJ62UOPVosIAf5naUa4HA1/Fntt01cqtaqQ
+5PT2Xp5L1bFBVqUnOcF37YtpQFndZPEUZ4wOrf9u8QapS8nfbHvGtFqKyPeZemuT
+MZ5N0K8+c4ZdP1H2KHAr9RtNqFVf3j9EQ+1DRL/lu3wggYsPesu0cethV5xbJ9gq
+fcl7+SHHBR6Bi1qii3RQf2p909nZGKl6/FnUBmmtWU7wIyKkflxdMCm6ePqqdH8c
+J04rXUVEhWE1NpeNWiiytRouTaOQC6H+1rKnJX3AX2XS7od1ArTjtJy53bX3rLdn
++5p8Led4RPcfvTv24rh9g+5SRm2Ss5L7+8hj5wIDAQABMA0GCSqGSIb3DQEBBQUA
+A4IBAQAr/6j2ZofdoBMWcs8Rmq9c/75sPHNdRRqo+bQ2c2bFdWMg0sgy1L+6W82p
+Q6ZuJk55u7kOSYGn2OkHL6zf8xwN7fG0vfH4gB7DDy2h3/aC8L3Ka0l/KwwEhXSx
+bJEP2qlJrA0jkZ28Nj1BRDPVqIqbyqglEdlg5ODMRi9U2vtMms89EVnWjbZQhJ32
+34PWOJlEY77gmVkYWI8miEW1cVppAd0P8LW56EsrIcNPWw2XAjNBSbb5mhHWkxwD
+qu43/wUXyKp1DG4uHDD4fcKsBuMDtFgT6oxHiu25GLlROLDwb1HoEf5J6N0wOgD2
+kJWKKQIOTue0hg4txLMPAT3tC6IQ
+-----END CERTIFICATE-----`;
+
+const qzPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEAnpDkuV/Yze5GEAJ62UOPVosIAf5naUa4HA1/Fntt01cqtaqQ
+5PT2Xp5L1bFBVqUnOcF37YtpQFndZPEUZ4wOrf9u8QapS8nfbHvGtFqKyPeZemuT
+MZ5N0K8+c4ZdP1H2KHAr9RtNqFVf3j9EQ+1DRL/lu3wggYsPesu0cethV5xbJ9gq
+fcl7+SHHBR6Bi1qii3RQf2p909nZGKl6/FnUBmmtWU7wIyKkflxdMCm6ePqqdH8c
+J04rXUVEhWE1NpeNWiiytRouTaOQC6H+1rKnJX3AX2XS7od1ArTjtJy53bX3rLdn
++5p8Led4RPcfvTv24rh9g+5SRm2Ss5L7+8hj5wIDAQABAoIBAAOoz6AKQP7vqm4U
+unmlhlyqX2nLmq4HBKV7wkFHz2FWSlIjXUx/NpPLS6C+msjZyoMBeje8jhw75Gle
+J1avGIEoQWZXj5XNOsodqrD3z30ZXxRY2/rHK9UkDROuBzTjLn5KIlaGEJjW+8Cn
+f5u5tfQyCSytRMY1iJ0Ql2X5RPbi/n2+0fLMrKAySIFNZ/frN8zlmyOOrDsJFpsM
+edsXLwBr97jVUDpH+KbXH1oiLgw1TwPNCfbhqBmgGRiGkovvYaDdW/0BLG9xA17D
+hN8/Fv1Btmm2nE/dQKI1za3A3ELxmsst8wwHyf0uiQ8UR4TgXw81sZmHl1cvQs+/
+gdiCXvECgYEA3gJnOfUoYsxgLzbG9GaUpjU8+bnfG7a5jCzx353ZVhScE7spUuM7
+0GwcKrxPHSV9apqfrwzBGvrp2aSaUnF8lEpjePalj8n3N8Y+G5YjCMo5i5Mf0suv
+MaG9cjae/PUNuEF3CjjD1QlnTpSBJT1cch5wI9m8XYBvqnl1hrn/Co0CgYEAttfX
+/10pT94ItUNCK7uJDTojmiY7MMF0bStq0eEfb0L644VXKiAgwB9g2wwnQAXiWx2N
+E7+eTq4eiiArCNb+mF12WgTU7wJ8K49b46/Ts4s7t/dJDxyZePi98kS0352oa88y
+rKOeKl8aul23c/XwCUdWvL17hm4ugl83rFobZUMCgYEAoEc34x3dBEbsgemYBUYx
+tzTkSp4oNsfaeRrRnFFHYOAMNip/EPpAap5CT5AXxcEVJGtxMV2R5DqVra0qRK7t
+89koq2HV8VMsCbYzjJL9xBDLLrsO1I58cuaD8PsCGTmJqCaLHHQS3bCmRpLsEciU
+/0Z+S0OcvBxHgdmiQZvyRtkCgYEAsQpEEfZBxxylb+XFD5VReeY+jMbR7z6SHha5
+IqmJh3DifyUgJiDftUdswAx/gMVxzGnLrUCP530/At1s7e1GrX9p1nXxO9A7LO5t
+ugQIx0Ncup+NNT2q+PBY81lFjXQZnPIODg2LW1mlBqkxte1/02wo9y29iofrLr9F
+p/PDrQMCgYEAhbd50hqELdZ1wKyxYKIQavNPsPe4XRwXGzUMIForV6fltLnzaBCT
+3EXkdH/0OUKTW6TUSxHS7QxYofsCyKxjEqiQMN8XomS/TziDR2zArrtSQzUNN6vo
+RNfusU2VzJ1Nw3vmkrebcqj2DdZsn1Xp9pFp+KTkgw5V9Aq1I/BIyKY=
+-----END RSA PRIVATE KEY-----`;
+
+qz.security.setCertificatePromise((resolve, reject) => {
+    resolve(qzCertificate);
+});
+
+qz.security.setSignatureAlgorithm("SHA512");
+
+qz.security.setSignaturePromise((toSign) => {
+    return function(resolve, reject) {
+        try {
+            var pk = KEYUTIL.getKey(qzPrivateKey);
+            var sig = new KJUR.crypto.Signature({"alg": "SHA512withRSA"});
+            sig.init(pk); 
+            sig.updateString(toSign);
+            var hex = sig.sign();
+            
+            // Converte HEX para base64
+            var s = "";
+            for (var i = 0; i < hex.length; i += 2) {
+                s += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+            }
+            resolve(btoa(s));
+        } catch (err) {
+            console.error("Erro na assinatura QZ:", err);
+            reject(err);
+        }
+    };
+});
+// ------------------------------------------
 
 // Tenta conectar ao QZ Tray (que estará rodando no PC do lojista)
 export const conectarQZ = async () => {
     if (!qz.websocket.isActive()) {
         try {
             await qz.websocket.connect();
-            console.log("QZ Tray conectado com sucesso!");
+            console.log("QZ Tray conectado com sucesso e com assinatura digital!");
         } catch (error) {
             console.error("Erro ao conectar ao QZ Tray. Ele está aberto no computador?", error);
             throw new Error("Não foi possível conectar ao QZ Tray. Verifique se o aplicativo está rodando.");

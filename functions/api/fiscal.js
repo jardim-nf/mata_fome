@@ -70,6 +70,15 @@ export const emitirNfcePlugNotas = onCall({
         if (!vendaSnap.exists) throw new HttpsError('not-found', 'Venda não encontrada.');
         const venda = vendaSnap.data();
 
+        const token = request.auth.token;
+        const isMaster = token.isMasterAdmin === true || token.role === 'master';
+        const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(venda.estabelecimentoId);
+        const isClient = request.auth.uid === venda.userId;
+
+        if (!isMaster && !hasAccess && !isClient) {
+            throw new HttpsError('permission-denied', 'Acesso negado a esta venda.');
+        }
+
         const estabelecimentoRef = db.collection('estabelecimentos').doc(venda.estabelecimentoId);
         const estabelecimentoSnap = await estabelecimentoRef.get();
         const estabelecimento = estabelecimentoSnap.data();
@@ -331,6 +340,15 @@ export const cancelarNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApi
         const vendaSnap = await vendaRef.get();
         if (!vendaSnap.exists) throw new HttpsError('not-found', 'Venda não encontrada.');
         const venda = vendaSnap.data();
+        
+        const token = request.auth.token;
+        const isMaster = token.isMasterAdmin === true || token.role === 'master';
+        const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(venda.estabelecimentoId);
+
+        if (!isMaster && !hasAccess) {
+            throw new HttpsError('permission-denied', 'Acesso negado para cancelar.');
+        }
+
         const idPlugNotas = venda.fiscal?.idPlugNotas;
 
         if (!idPlugNotas) throw new HttpsError('failed-precondition', 'ID Plugnotas ausente.');
@@ -382,6 +400,14 @@ export const exportarXmlsContador = onCall({
     const { estabelecimentoId, ano, mes } = request.data;
     if (!estabelecimentoId || !ano || !mes) {
         throw new HttpsError('invalid-argument', 'estabelecimentoId, ano e mes são obrigatórios.');
+    }
+
+    const token = request.auth.token;
+    const isMaster = token.isMasterAdmin === true || token.role === 'master';
+    const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+    if (!isMaster && !hasAccess) {
+        throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
     }
 
     const mesStr = String(mes).padStart(2, '0');
@@ -441,6 +467,14 @@ export const enviarXmlsContadorEmail = onCall({
     const { estabelecimentoId, ano, mes, emailContador } = request.data;
     if (!estabelecimentoId || !ano || !mes || !emailContador) {
         throw new HttpsError('invalid-argument', 'estabelecimentoId, ano, mes e emailContador são obrigatórios.');
+    }
+
+    const token = request.auth.token;
+    const isMaster = token.isMasterAdmin === true || token.role === 'master';
+    const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+    if (!isMaster && !hasAccess) {
+        throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
     }
 
     const mesStr = String(mes).padStart(2, '0');

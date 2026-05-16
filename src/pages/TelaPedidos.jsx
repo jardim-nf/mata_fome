@@ -110,7 +110,9 @@ const TelaPedidos = () => {
         if (temOpcoes) {
             setProdutoEmSelecao(itemEnriquecido);
         } else {
-            confirmarAdicaoAoCarrinho({ ...itemEnriquecido, precoFinal: parseFloat(itemAtualizado.preco), quantidade: 1 });
+            const rawPreco = itemAtualizado.preco !== undefined ? itemAtualizado.preco : 0;
+            const precoSafe = typeof rawPreco === 'string' ? parseFloat(rawPreco.replace(',', '.')) : parseFloat(rawPreco);
+            confirmarAdicaoAoCarrinho({ ...itemEnriquecido, precoFinal: precoSafe || 0, quantidade: 1 });
         }
     };
 

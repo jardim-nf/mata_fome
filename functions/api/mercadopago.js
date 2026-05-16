@@ -11,7 +11,7 @@ const mpClientIdSecret = defineSecret('MP_CLIENT_ID');
 // ==================================================================
 // 13. GERAR PIX MERCADO PAGO
 // ==================================================================
-export const gerarPixMercadoPago = onCall({ region: 'us-central1', secrets: [mercadoPagoToken], maxInstances: 1 }, async (request) => {
+export const gerarPixMercadoPago = onCall({ region: 'us-central1', secrets: [mercadoPagoToken] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Faça login primeiro.');
     const { vendaId, valor, descricao, estabelecimentoId } = request.data || {};
     if (!vendaId || !valor || !estabelecimentoId) throw new HttpsError('invalid-argument', 'Dados ausentes.');
@@ -46,7 +46,7 @@ export const gerarPixMercadoPago = onCall({ region: 'us-central1', secrets: [mer
 // ==================================================================
 // 12. WEBHOOK MERCADO PAGO
 // ==================================================================
-export const webhookMercadoPago = onRequest({ secrets: [mercadoPagoToken], maxInstances: 1 }, async (req, res) => {
+export const webhookMercadoPago = onRequest({ secrets: [mercadoPagoToken] }, async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
     try {
         const paymentId = req.body?.data?.id;
@@ -72,8 +72,17 @@ export const webhookMercadoPago = onRequest({ secrets: [mercadoPagoToken], maxIn
 // 13. VINCULAR CONTA DO LOJISTA (OAuth)
 // ==================================================================
 export const vincularMercadoPago = onCall({ secrets: [mpClientSecret, mpClientIdSecret] }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Faça login primeiro.');
     const { code, estabelecimentoId } = request.data;
     if (!code || !estabelecimentoId) throw new HttpsError('invalid-argument', 'Faltam dados.');
+
+    const token = request.auth.token;
+    const isMaster = token.isMasterAdmin === true || token.role === 'master';
+    const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+    if (!isMaster && !hasAccess) {
+        throw new HttpsError('permission-denied', 'Você não tem permissão para vincular contas neste estabelecimento.');
+    }
 
     try {
         const response = await fetch('https://api.mercadopago.com/oauth/token', {

@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
-import { getFunctions } from 'firebase/functions';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
@@ -46,6 +46,8 @@ export const messaging = async () => {
 // Configuração para desenvolvimento (emulator)
 if (import.meta.env.DEV) {
   console.log('🔥 Firebase running in development mode');
+  // Se o emulador não estiver rodando localmente, deixe comentado:
+  // connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
 
 export default app;

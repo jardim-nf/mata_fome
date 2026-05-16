@@ -1,8 +1,9 @@
 // src/services/caixaService.js
 import { 
-  collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, limit, orderBy 
+  collection, query, where, getDocs, doc, limit, orderBy 
 } from 'firebase/firestore';
 import { db } from '../firebase'; 
+import { getFunctions, httpsCallable } from 'firebase/functions'; 
 
 export const caixaService = {
   // ... (Mantenha verificarCaixaAberto, abrirCaixa, fecharCaixa e listarTurnos IGUAIS) ...
@@ -11,10 +12,12 @@ export const caixaService = {
   // 🆕 1. Registrar Sangria ou Suprimento
   async adicionarMovimentacao(caixaId, dados) {
     try {
-      // Salva na subcoleção 'movimentacoes' dentro do caixa
-      await addDoc(collection(db, 'caixas', caixaId, 'movimentacoes'), {
-        ...dados,
-        createdAt: serverTimestamp()
+      const functions = getFunctions();
+      const addMovimentacao = httpsCallable(functions, 'adicionarMovimentacaoCaixaBackend');
+      await addMovimentacao({ 
+          estabelecimentoId: dados.estabelecimentoId, 
+          caixaId, 
+          dados 
       });
       return { success: true };
     } catch (error) {
@@ -56,7 +59,16 @@ export const caixaService = {
     } catch (e) { return null; }
   },
   async fecharCaixa(id, dados) {
-      try { await updateDoc(doc(db, 'caixas', id), { ...dados, status: 'fechado', dataFechamento: serverTimestamp() }); return { success: true }; } catch (e) { return { success: false, error: e.message }; }
+      try { 
+        const functions = getFunctions();
+        const fecharCaixa = httpsCallable(functions, 'fecharCaixaBackend');
+        await fecharCaixa({ 
+            estabelecimentoId: dados.estabelecimentoId, 
+            caixaId: id, 
+            dados 
+        });
+        return { success: true }; 
+      } catch (e) { return { success: false, error: e.message }; }
   },
   async listarTurnos(usuarioId, estabelecimentoId) {
     try {
@@ -67,26 +79,18 @@ export const caixaService = {
   },
   async abrirCaixa(dados) {
       try { 
-          const q = query(
-              collection(db, 'caixas'), 
-              where('usuarioId', '==', dados.usuarioId), 
-              where('estabelecimentoId', '==', dados.estabelecimentoId), 
-              where('status', '==', 'aberto'), 
-              limit(1)
-          );
-          const snapshot = await getDocs(q);
+          const functions = getFunctions();
+          const abrirCaixa = httpsCallable(functions, 'abrirCaixaBackend');
+          const result = await abrirCaixa({ 
+              estabelecimentoId: dados.estabelecimentoId, 
+              dados 
+          });
           
-          if (!snapshot.empty) {
-              return { success: false, error: 'Já existe um turno aberto. Feche-o antes de abrir um novo.' };
+          if (!result.data.success) {
+              return { success: false, error: result.data.error || 'Erro ao abrir caixa' };
           }
-
-          // Se não tem caixa aberto, prossegue com a criação
-          const ref = await addDoc(collection(db, 'caixas'), { 
-              ...dados, 
-              dataAbertura: serverTimestamp(), 
-              status: 'aberto' 
-          }); 
-          return { success: true, id: ref.id }; 
+          
+          return { success: true, id: result.data.id }; 
       } catch (e) { 
           return { success: false, error: e.message }; 
       }

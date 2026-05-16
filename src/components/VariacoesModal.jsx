@@ -91,18 +91,23 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
 
     // --- CÁLCULO DO TOTAL ---
     useEffect(() => {
+        const parsePreco = (val) => {
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') return parseFloat(val.replace(',', '.')) || 0;
+            return 0;
+        };
+
         let valorBase = 0;
         
         if (selectedOption) {
-            valorBase = Number(selectedOption.preco) || 0;
+            valorBase = parsePreco(selectedOption.preco);
         } else {
-            valorBase = Number(item.precoFinal || item.preco) || 0;
+            valorBase = parsePreco(item.precoFinal !== undefined ? item.precoFinal : item.preco);
         }
 
         const valorAdicionais = adicionaisSelecionados.reduce((acc, adic) => {
             let val = adic.preco !== undefined ? adic.preco : adic.valor;
-            if (typeof val === 'string') val = val.replace(',', '.');
-            return acc + (Number(val) || 0);
+            return acc + parsePreco(val);
         }, 0);
 
         setTotal(valorBase + valorAdicionais);

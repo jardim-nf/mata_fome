@@ -10,15 +10,19 @@ const GrupoPedidosMesa = ({
     newOrderIds, 
     estabelecimentoInfo, 
     onEmitirNfce, 
-    onUpdateFormaPagamento 
+    onUpdateFormaPagamento,
+    modoImpressao,
+    mostrarLabelLoja,
+    estabelecimentosInfo
 }) => {
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
         pedidos.forEach(pedido => {
             if (!pedido || !pedido.id) return;
             
-            // Filtra os itens reais que vão para a cozinha (IGNORANDO itensCozinha que pode vir como [] vazio por bug de sínc)
+            // Se modoImpressao for 'cozinha' (KDS), oculta as bebidas. Caso contrário, mostra tudo.
             const itensCozinhaReais = (pedido.itens || []).filter(it => {
+                if (modoImpressao !== 'cozinha') return true;
                 const nome = String(it.nome || it.produto?.nome || '').toLowerCase();
                 const categoria = String(it.categoria || it.produto?.categoria || '').toLowerCase();
                 const textoCompleto = `${nome} ${categoria}`;
@@ -26,7 +30,7 @@ const GrupoPedidosMesa = ({
                 return !isBebida;
             });
             
-            // Se o pedido não tiver NENHUM item aplicável à cozinha, ignoramos
+            // Se o pedido não tiver itens, ignoramos
             if (itensCozinhaReais.length === 0) return;
 
             const chave = `${pedido.mesaNumero || '0'}-${pedido.loteHorario || 'principal'}`;
@@ -38,7 +42,8 @@ const GrupoPedidosMesa = ({
                     pedidos: [],
                     totalItens: 0,
                     status: pedido.status || 'recebido',
-                    pessoas: pedido.pessoas || 1
+                    pessoas: pedido.pessoas || 1,
+                    estabelecimentoId: pedido.estabelecimentoId
                 };
             }
             // Clona o pedido para não afetar o objeto original e injeta os itens filtrados
@@ -48,7 +53,7 @@ const GrupoPedidosMesa = ({
             grupos[chave].totalItens += itensCozinhaReais.reduce((acc, it) => acc + (Number(it.quantidade) || 1), 0);
         });
         return Object.values(grupos);
-    }, [pedidos]);
+    }, [pedidos, modoImpressao]);
 
     if (pedidosAgrupados.length === 0) return (
         <div className="flex flex-col items-center justify-center py-12 text-slate-400 opacity-60">
@@ -75,9 +80,16 @@ const GrupoPedidosMesa = ({
                                 </span>
                             )}
                         </div>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200/60 shrink-0">
-                            {grupo.totalItens} itens
-                        </span>
+                        <div className="flex items-center gap-2">
+                            {mostrarLabelLoja && estabelecimentosInfo && (
+                                <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                                    {estabelecimentosInfo[grupo.estabelecimentoId]?.nome || 'Loja Desconhecida'}
+                                </span>
+                            )}
+                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200/60 shrink-0">
+                                {grupo.totalItens} itens
+                            </span>
+                        </div>
                     </div>
                     <div className="p-3 space-y-3 bg-white">
                         {grupo.pedidos.map(pedido => (
@@ -87,7 +99,7 @@ const GrupoPedidosMesa = ({
                                 onUpdateStatus={onUpdateStatus} 
                                 onExcluir={onExcluir} 
                                 newOrderIds={newOrderIds} 
-                                estabelecimentoInfo={estabelecimentoInfo} 
+                                estabelecimentoInfo={estabelecimentosInfo ? estabelecimentosInfo[pedido.estabelecimentoId] : estabelecimentoInfo} 
                                 showMesaInfo={false} 
                                 isAgrupado={true} 
                                 motoboysDisponiveis={[]} 

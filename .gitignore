@@ -24,10 +24,48 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+.env.*.local
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 keys/
 # Arquivos grandes de video
 *.mp4
 *.MP4
 *.mov
 *.MOV
-public/images/Nova pasta/
+private-key.pem
+digital-certificate.txt
+build_log.txt
+append_logs.txt
+pedidos_logs.txt
+found_code.json
+fix_mesas.js
+generate_cert.js
+recover_pedidos.js
+pedidos_extracted.js
+transferir_extracted.js
+functions/api/pedidos.js.bak
+public/images/Nova pasta/  

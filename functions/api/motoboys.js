@@ -22,6 +22,14 @@ export const gerarAcertoMotoboy = onCall({ cors: true }, async (request) => {
     throw new HttpsError('invalid-argument', 'estabelecimentoId, motoboyId, dataInicio e dataFim são obrigatórios.');
   }
 
+  const token = request.auth.token;
+  const isMaster = token.isMasterAdmin === true || token.role === 'master';
+  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+  if (!isMaster && !hasAccess) {
+      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
+  }
+
   try {
     const inicio = new Date(dataInicio);
     const fim = new Date(dataFim);
@@ -120,6 +128,14 @@ export const marcarAcertoPago = onCall({ cors: true }, async (request) => {
   const { estabelecimentoId, acertoId } = request.data || {};
   if (!estabelecimentoId || !acertoId) throw new HttpsError('invalid-argument', 'Dados incompletos.');
 
+  const token = request.auth.token;
+  const isMaster = token.isMasterAdmin === true || token.role === 'master';
+  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+  if (!isMaster && !hasAccess) {
+      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
+  }
+
   try {
     await db.collection('estabelecimentos').doc(estabelecimentoId)
       .collection('acertos').doc(acertoId).update({
@@ -145,6 +161,14 @@ export const listarAcertosMotoboy = onCall({ cors: true }, async (request) => {
 
   const { estabelecimentoId, motoboyId } = request.data || {};
   if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  const token = request.auth.token;
+  const isMaster = token.isMasterAdmin === true || token.role === 'master';
+  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
+
+  if (!isMaster && !hasAccess) {
+      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
+  }
 
   try {
     let q = db.collection('estabelecimentos').doc(estabelecimentoId)

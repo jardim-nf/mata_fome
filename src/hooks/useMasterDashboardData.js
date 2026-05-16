@@ -23,6 +23,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
 
   const [datePreset, setDatePreset] = useState(null);
   const [dateRange, setDateRange] = useState({ start: null, end: null });
+  const [selectedStore, setSelectedStore] = useState('');
 
   const handleDatePresetChange = useCallback((key) => setDatePreset(key), []);
   const handleDateRangeChange = useCallback((range) => setDateRange(range), []);
@@ -270,13 +271,27 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
   }, [currentUser, isMasterAdmin]);
 
   const financeiroFiltrado = useMemo(() => {
-    if (!dateRange.start || !dateRange.end) return null;
+    if ((!dateRange.start || !dateRange.end) && !selectedStore) return null;
     const pedidosFiltrados = dadosBrutos.pedidos.filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
     const vendasFiltradas = dadosBrutos.vendas.filter(d => !isPedidoCancelado(d));
     const tudo = [...pedidosFiltrados, ...vendasFiltradas];
+    
+    const hoje = startOfDay(new Date());
+
     const doPeriodo = tudo.filter(item => {
+      let estabId = item.estabelecimentoId;
+      if (!estabId && item._path) { const parts = item._path.split('/'); const idx = parts.indexOf('estabelecimentos'); if (idx >= 0 && parts.length > idx + 1) estabId = parts[idx + 1]; }
+      if (!estabId) estabId = 'desconhecido';
+
+      if (selectedStore && estabId !== selectedStore) return false;
+
       const d = getDate(item);
-      return d && d >= dateRange.start && d <= dateRange.end;
+      if (dateRange.start && dateRange.end) {
+        return d && d >= dateRange.start && d <= dateRange.end;
+      }
+
+      // se selecionou apenas loja, filtra os pedidos de hoje por padrão
+      return d && d >= hoje;
     });
     const totalPeriodo = doPeriodo.reduce((acc, item) => acc + getTotal(item), 0);
     const qtdPeriodo = doPeriodo.length;
@@ -297,7 +312,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     const qtdNfce = doPeriodo.filter(d => d.fiscal?.status === 'autorizado' || !!d.url_danfe).length;
 
     return { faturamento: totalPeriodo, qtd: qtdPeriodo, topLojas, ticketMedio: qtdPeriodo > 0 ? totalPeriodo / qtdPeriodo : 0, qtdNfce };
-  }, [dadosBrutos, dateRange]);
+  }, [dadosBrutos, dateRange, selectedStore]);
 
   const crescimento = useMemo(() => {
     if (financeiro.faturamentoOntem === 0) return financeiro.faturamentoHoje > 0 ? 100 : 0;
@@ -326,6 +341,8 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     fetchHistoricalData,
     financeiroFiltrado,
     crescimento,
-    ticketMedio
+    ticketMedio,
+    selectedStore,
+    setSelectedStore
   };
 }

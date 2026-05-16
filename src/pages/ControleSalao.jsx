@@ -1,21 +1,22 @@
 import BackButton from '../components/BackButton';
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, Suspense, lazy } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useHeader } from '../context/HeaderContext';
 import { useControleSalaoData } from "../hooks/useControleSalaoData";
 import MesaCard from "../components/MesaCard";
-import AdicionarMesaModal from "../components/AdicionarMesaModal";
-import ModalPagamento from "../components/ModalPagamento";
-import GeradorTickets from "../components/GeradorTickets";
-import RelatorioTicketsModal from "../components/RelatorioTicketsModal";
-import HistoricoMesasModal from "../components/HistoricoMesasModal";
-import RelatorioGarcomModal from "../components/RelatorioGarcomModal";
 import PromptDialog from "../components/ui/PromptDialog";
 import { ModalRecibo, ModalHistorico } from "../components/pdv-modals";
 import StatCard from "../components/StatCard";
-import ModalAbrirMesa from "../components/ModalAbrirMesa";
 import LegendaCores from "../components/LegendaCores";
+
+const AdicionarMesaModal = lazy(() => import("../components/AdicionarMesaModal"));
+const ModalPagamento = lazy(() => import("../components/ModalPagamento"));
+const GeradorTickets = lazy(() => import("../components/GeradorTickets"));
+const RelatorioTicketsModal = lazy(() => import("../components/RelatorioTicketsModal"));
+const HistoricoMesasModal = lazy(() => import("../components/HistoricoMesasModal"));
+const RelatorioGarcomModal = lazy(() => import("../components/RelatorioGarcomModal"));
+const ModalAbrirMesa = lazy(() => import("../components/ModalAbrirMesa"));
 import {
     IoArrowBack, IoAdd, IoGrid, IoPeople, IoWalletOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
@@ -122,14 +123,16 @@ export default function ControleSalao() {
                 </div>
             )}
 
-            <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (num) => { const res = await salaoData.handleAdicionarMesa(num); if(res.success) setIsModalOpen(false); }} mesasExistentes={salaoData.mesas} />
-            <ModalAbrirMesa isOpen={salaoData.isModalAbrirMesaOpen} onClose={salaoData.handleCancelarAbertura} onConfirm={salaoData.handleConfirmarAbertura} mesaNumero={salaoData.mesaParaAbrir?.numero} isOpening={salaoData.isOpeningTable} />
-            
-            {isModalPagamentoOpen && mesaParaPagamento && salaoData.estabelecimentoId && <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={salaoData.estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={(vd) => salaoData.handlePagamentoConcluido(vd, setMesaParaPagamento, setIsModalPagamentoOpen)} />}
-            {isModalTicketsOpen && <GeradorTickets onClose={() => setIsModalTicketsOpen(false)} estabelecimentoNome={salaoData.nomeEstabelecimento} estabelecimentoId={salaoData.estabelecimentoId} />}
-            {isRelatorioOpen && <RelatorioTicketsModal onClose={() => setIsRelatorioOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
-            {isHistoricoMesasOpen && <HistoricoMesasModal isOpen={isHistoricoMesasOpen} onClose={() => setIsHistoricoMesasOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
-            {isModalComissaoOpen && <RelatorioGarcomModal isOpen={isModalComissaoOpen} onClose={() => setIsModalComissaoOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
+            <Suspense fallback={null}>
+                {isModalOpen && <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (num) => { const res = await salaoData.handleAdicionarMesa(num); if(res.success) setIsModalOpen(false); }} mesasExistentes={salaoData.mesas} />}
+                {salaoData.isModalAbrirMesaOpen && <ModalAbrirMesa isOpen={salaoData.isModalAbrirMesaOpen} onClose={salaoData.handleCancelarAbertura} onConfirm={salaoData.handleConfirmarAbertura} mesaNumero={salaoData.mesaParaAbrir?.numero} isOpening={salaoData.isOpeningTable} />}
+                
+                {isModalPagamentoOpen && mesaParaPagamento && salaoData.estabelecimentoId && <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={salaoData.estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={(vd) => salaoData.handlePagamentoConcluido(vd, setMesaParaPagamento, setIsModalPagamentoOpen)} />}
+                {isModalTicketsOpen && <GeradorTickets onClose={() => setIsModalTicketsOpen(false)} estabelecimentoNome={salaoData.nomeEstabelecimento} estabelecimentoId={salaoData.estabelecimentoId} />}
+                {isRelatorioOpen && <RelatorioTicketsModal onClose={() => setIsRelatorioOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
+                {isHistoricoMesasOpen && <HistoricoMesasModal isOpen={isHistoricoMesasOpen} onClose={() => setIsHistoricoMesasOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
+                {isModalComissaoOpen && <RelatorioGarcomModal isOpen={isModalComissaoOpen} onClose={() => setIsModalComissaoOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
+            </Suspense>
             
             <ModalRecibo 
                 visivel={salaoData.mostrarRecibo} 

@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { toast } from 'react-toastify';
-import { startOfDay, endOfDay, format } from 'date-fns';
-import { processarDado, isPedidoCancelado, traduzirPagamento } from '../utils/reportUtils';
+import { format } from 'date-fns';
+import { isPedidoCancelado, traduzirPagamento } from '../utils/reportUtils';
 
 export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, statusFilter, paymentMethodFilter, deliveryTypeFilter, motoboyFilter, searchTerm, minValue, maxValue) => {
     const [loadingData, setLoadingData] = useState(false);
@@ -14,82 +13,24 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
         if (!estabelecimentoIdPrincipal) return;
         
         try {
-            setLoadingData(true);
-            const start = startOfDay(new Date(startDate + 'T00:00:00'));
-            const end = endOfDay(new Date(endDate + 'T23:59:59'));
-            const startTs = Timestamp.fromDate(start);
-            const endTs = Timestamp.fromDate(end);
-            
-            let allDataMap = new Map(); 
-            const businessKeySet = new Set();
+            const functions = getFunctions();
+            const relatorioBackend = httpsCallable(functions, 'gerarRelatorioBackend');
 
-            const gerarBusinessKey = (item) => {
-                const mesa = item.mesaNumero || item.mesaId || '';
-                const total = (item.totalFinal || 0).toFixed(2);
-                const horaMin = item.data ? `_${String(item.data.getHours()).padStart(2,'0')}${String(item.data.getMinutes()).padStart(2,'0')}` : '';
-                const dia = item.data ? `${item.data.getFullYear()}-${String(item.data.getMonth()+1).padStart(2,'0')}-${String(item.data.getDate()).padStart(2,'0')}${horaMin}` : '';
-                
-                if (mesa) {
-                    // Mesas podem ter pagamentos parciais seguidos no mesmo minuto com o mesmo valor.
-                    // Não podemos usar a businessKey para dedup, pois vai ocultar pagamentos legítimos.
-                    // Retornar null faz com que a dedup aconteça apenas pelo ID do documento (que é único).
-                    return null;
-                }
-                
-                const cliente = (item.clienteNome || '').toLowerCase().trim();
-                const pagamento = (item.formaPagamento || '').toLowerCase().trim();
-                if (cliente && total !== '0.00') return `delivery_${cliente}_${total}_${pagamento}_${dia}`;
-                
-                if (item.pedidoId) return `ref_${item.pedidoId}`;
-                
-                return null;
-            };
+            const response = await relatorioBackend({
+                estabelecimentoId: estabelecimentoIdPrincipal,
+                startDate,
+                endDate
+            });
 
-            const addData = (doc, origem) => {
-                const item = processarDado(doc, origem);
-                if (item.data >= start && item.data <= end) {
-                    if (allDataMap.has(item.id)) return;
-                    
-                    if (item.pedidoId && allDataMap.has(item.pedidoId)) return;
-                    for (const [, existing] of allDataMap) {
-                        if (existing.pedidoId === item.id) return;
-                    }
-                    
-                    const bk = gerarBusinessKey(item);
-                    if (bk && businessKeySet.has(bk)) return;
-                    
-                    allDataMap.set(item.id, item);
-                    if (bk) businessKeySet.add(bk);
-                }
-            };
+            if (!response.data.success) {
+                throw new Error("Erro do servidor ao gerar relatório");
+            }
 
-            const isMesaDoc = (d) => {
-                const data = d.data();
-                return data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
-            };
-
-            try {
-                const qSub = query(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'pedidos'), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
-                const snapSub = await getDocs(qSub);
-                snapSub.docs.forEach(d => { if (!isMesaDoc(d)) addData(d, 'delivery'); });
-            } catch (e) { console.error(e); }
-            
-            try {
-                const qGlob = query(collection(db, 'pedidos'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
-                const snapGlob = await getDocs(qGlob);
-                snapGlob.docs.forEach(d => { if (!isMesaDoc(d)) addData(d, 'delivery'); });
-            } catch (e) { console.error(e); }
-
-            try {
-                // Busca todas as vendas do estabelecimento e filtra a data na memória (evita erro de falta de índice composto no Firestore)
-                const qMesa = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoIdPrincipal));
-                const snapMesa = await getDocs(qMesa);
-                snapMesa.docs.forEach(d => {
-                    addData(d, 'mesa');
-                });
-            } catch (e) { console.error('Erro vendas mesa (unificada):', e); }
-
-            let allData = Array.from(allDataMap.values());
+            // Converter a dataStr de volta para objeto Date
+            let allData = response.data.pedidos.map(p => ({
+                ...p,
+                data: new Date(p.dataStr)
+            }));
 
             const uniqueMotoboys = [];
             const mapMotoboys = new Map();

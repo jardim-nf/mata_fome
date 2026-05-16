@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, setDoc, updateDoc, arrayUnion, increment, serverTimestamp, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 import { toast } from 'react-toastify';
 import { estoqueService } from '../services/estoqueService';
 
@@ -270,60 +271,39 @@ export function useMenuCheckout({
             else if (result.method === 'card') formaPagamento = result.details?.type || 'cartao';
             else if (result.method === 'cash') { formaPagamento = 'dinheiro'; trocoPara = result.details?.trocoPara || ''; }
 
-            const pedidoFinal = cleanData({
-                ...pedidoParaPagamento,
-                status: 'recebido',
-                source: 'menu',
-                dataPedido: serverTimestamp(),
+            // ---- REFATORAÇÃO DE SEGURANÇA: ENVIAR PARA A CLOUD FUNCTION ----
+            const finalizarPedidoBackend = httpsCallable(functions, 'finalizarCheckoutDelivery');
+            
+            const reqData = cleanData({
+                estabelecimentoId: actualEstabelecimentoId,
+                carrinho: carrinho,
+                clienteDados: {
+                    nome: nomeCliente,
+                    telefone: telefoneCliente,
+                    endereco: isRetirada ? null : { rua, numero, bairro, cidade, complemento, referencia: pontoReferencia },
+                },
+                tipoEntrega: isRetirada ? 'retirada' : 'delivery',
+                bairro: bairro,
+                cupom: appliedCoupon?._docId || appliedCoupon?.codigo || null,
+                usarCashback: usarCashback,
+                premioRaspadinha: premioRaspadinha || null,
                 pagamento: {
                     formaPagamento,
-                    metodoPagamento: formaPagamento,
-                    trocoPara: Number(trocoPara) || 0,
-                    desconto: discountAmount,
-                },
-                cashbackResgatado: cashbackAplicado,
-                totalFinal: finalOrderTotal,
-                tipoEntrega: isRetirada ? 'retirada' : 'delivery'
+                    trocoPara: Number(trocoPara) || 0
+                }
             });
 
-            const idPedido = result.vendaId || pedidoParaPagamento.vendaId;
-            await setDoc(doc(db, 'estabelecimentos', actualEstabelecimentoId, 'pedidos', idPedido), pedidoFinal);
-
-            // Subtrai cashback usado
-            if (cashbackAplicado > 0 && clienteDocRefIdUtilizado) {
-                try {
-                   const cDoc = await getDoc(clienteDocRefIdUtilizado);
-                   if (cDoc.exists()) {
-                      const saldoAtual = Number(cDoc.data().saldoCashback) || Number(cDoc.data().saldoCarteira) || 0;
-                      const novoSaldo = Math.max(0, saldoAtual - cashbackAplicado);
-                      await updateDoc(clienteDocRefIdUtilizado, {
-                          saldoCashback: novoSaldo
-                      });
-                   }
-                } catch (errCB) {
-                   console.error("Erro ao abater cashback", errCB);
-                }
+            const response = await finalizarPedidoBackend(reqData);
+            
+            if (!response.data || !response.data.success) {
+                throw new Error(response.data?.message || 'Falha ao processar pedido no servidor.');
             }
 
-            try { await estoqueService.darBaixaEstoque(actualEstabelecimentoId, carrinho); }
-            catch (e) { console.warn('Erro estoque:', e); }
-
-            if (appliedCoupon?._docId && currentUser) {
-                try {
-                    const cupomRef = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons', appliedCoupon._docId);
-                    const novoTotal = (appliedCoupon.usosAtuais || 0) + 1;
-                    const updateCupom = {
-                        usosAtuais: increment(1),
-                        totalDescontoGerado: increment(discountAmount),
-                        usuariosQueUsaram: arrayUnion(currentUser.uid)
-                    };
-                    if (appliedCoupon.usosMaximos && novoTotal >= appliedCoupon.usosMaximos) { updateCupom.ativo = false; }
-                    await updateDoc(cupomRef, updateCupom);
-                } catch (e) { console.warn('Erro ao dar baixa no cupom:', e); }
-            }
+            const idPedidoGerado = response.data.pedidoId;
+            // ---------------------------------------------------------------
 
             setShowOrderConfirmationModal(true);
-            setUltimoPedidoId(idPedido);
+            setUltimoPedidoId(idPedidoGerado);
             limparCarrinho();
             setShowPaymentModal(false);
             toast.success('Pedido enviado com sucesso!');

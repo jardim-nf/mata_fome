@@ -156,18 +156,22 @@ export default function ImpressaoIsolada() {
         const restante = Math.max(0, valorFinalDoPedido - jaPago);
 
         const tipoEntrega = (pedido.tipoEntrega || '').toLowerCase();
+        const origemDoPedido = (origem || pedido.origem || '').toLowerCase();
+        const isPDV = origemDoPedido === 'pdv' || origemDoPedido === 'salao';
+        
         const isRetirada = tipoEntrega === 'retirada' || tipoEntrega === 'balcao';
-        const isDelivery = tipoEntrega === 'delivery' || (!pedido.isMesa && !isRetirada && !pedido.mesaNumero);
+        const isDelivery = tipoEntrega === 'delivery' || (!pedido.isMesa && !isRetirada && !isPDV && !pedido.mesaNumero);
 
         return { 
             agrupados, 
             totalConsumo: valorFinalDoPedido > 0 ? valorFinalDoPedido : totalConsumoCalculado, 
             jaPago, 
             restante, 
-            numero: pedido.numero || pedido.mesaNumero || (isDelivery ? 'Delivery' : isRetirada ? 'Retirada' : 'Balcão'),
+            numero: pedido.numero || pedido.mesaNumero || (isDelivery ? 'Delivery' : isRetirada ? 'Retirada' : isPDV ? 'PDV' : 'Balcão'),
             isMesa: pedido.isMesa,
             isDelivery,
             isRetirada,
+            isPDV,
             isVendaFinalizada: pedido.isVendaFinalizada, // Repassa a Flag!
             vazio: false
         };
@@ -279,7 +283,7 @@ export default function ImpressaoIsolada() {
             <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
                 <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{tituloImpressao}</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '4px 0', textTransform: 'uppercase' }}>
-                    {printData.isRetirada ? '📦 RETIRADA' : printData.isDelivery ? '🚀 DELIVERY' : `MESA ${printData.numero}`}
+                    {printData.isRetirada ? '📦 RETIRADA' : printData.isDelivery ? '🚀 DELIVERY' : printData.isPDV ? '🏪 PDV/BALCÃO' : printData.isMesa ? `MESA ${printData.numero}` : 'BALCÃO'}
                 </div>
                 <div style={{ fontSize: '12px' }}>{new Date().toLocaleString('pt-BR')}</div>
             </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp, query, orderBy, where, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, Timestamp, query, orderBy, where, onSnapshot } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { toast } from 'react-toastify';
 
 export function useAdminCouponData(estabelecimentoIdPrincipal) {
@@ -110,8 +111,6 @@ export function useAdminCouponData(estabelecimentoIdPrincipal) {
 
         setFormLoading(true);
         try {
-            const cuponsCollectionRef = collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'cupons');
-            
             const valorDesc = tipoDesconto === 'freteGratis' ? 0 : Number(valorDesconto);
             const minPedido = minimoPedido ? Number(minimoPedido) : null;
             const usosMax = usosMaximos ? Number(usosMaximos) : null;
@@ -127,39 +126,38 @@ export function useAdminCouponData(estabelecimentoIdPrincipal) {
                 tipoDesconto,
                 valorDesconto: valorDesc,
                 minimoPedido: minPedido,
-                validadeInicio: Timestamp.fromDate(inicio),
-                validadeFim: Timestamp.fromDate(fim),
+                validadeInicio: inicio.toISOString(),
+                validadeFim: fim.toISOString(),
                 usosMaximos: usosMax,
                 usosAtuais: editingCouponId ? cupons.find(c => c.id === editingCouponId)?.usosAtuais || 0 : 0,
-                ativo,
-                estabelecimentoId: estabelecimentoIdPrincipal,
-                atualizadoEm: new Date()
+                ativo
             };
 
+            const functions = getFunctions();
+            const gerenciarCupom = httpsCallable(functions, 'gerenciarCupomBackend');
+
             if (editingCouponId) {
-                const couponRef = doc(cuponsCollectionRef, editingCouponId);
-                await updateDoc(couponRef, newCouponData);
+                await gerenciarCupom({
+                    estabelecimentoId: estabelecimentoIdPrincipal,
+                    action: 'UPDATE',
+                    cupomId: editingCouponId,
+                    dados: newCouponData
+                });
                 toast.success('✅ Cupom atualizado com sucesso!');
             } else {
-                const q = query(cuponsCollectionRef, where('codigo', '==', newCouponData.codigo));
-                const existingCoupons = await getDocs(q); 
-                
-                if (!existingCoupons.empty) {
-                    toast.error(`❌ Já existe um cupom com o código ${newCouponData.codigo} para este estabelecimento.`);
-                    setFormLoading(false);
-                    return;
-                }
-                
-                await addDoc(cuponsCollectionRef, { 
-                    ...newCouponData, 
-                    criadoEm: new Date() 
+                await gerenciarCupom({
+                    estabelecimentoId: estabelecimentoIdPrincipal,
+                    action: 'CREATE',
+                    dados: newCouponData
                 });
                 toast.success('✅ Cupom criado com sucesso!');
             }
             resetForm();
         } catch (err) {
             console.error("ERRO NO SALVAMENTO DO CUPOM:", err);
-            if (err.code === 'permission-denied') {
+            if (err.message?.includes('already-exists')) {
+                toast.error(`❌ Já existe um cupom com o código ${codigo} para este estabelecimento.`);
+            } else if (err.code === 'permission-denied') {
                 toast.error("🔒 Permissão negada! Verifique as Regras de Segurança do Firestore.");
             } else if (err.code === 'unavailable') {
                  toast.error("🌐 Erro de conexão. Tente novamente.");
@@ -195,7 +193,14 @@ export function useAdminCouponData(estabelecimentoIdPrincipal) {
     const performDeleteCoupon = async (id) => {
         if (!estabelecimentoIdPrincipal) return;
         try {
-            await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'cupons', id));
+            const functions = getFunctions();
+            const gerenciarCupom = httpsCallable(functions, 'gerenciarCupomBackend');
+            
+            await gerenciarCupom({
+                estabelecimentoId: estabelecimentoIdPrincipal,
+                action: 'DELETE',
+                cupomId: id
+            });
             toast.success('✅ Cupom excluído com sucesso!');
         } catch (err) {
             console.error("Erro ao excluir cupom:", err);

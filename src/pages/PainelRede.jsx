@@ -1,40 +1,34 @@
 import React, { useMemo } from 'react';
 import BackButton from '../components/BackButton';
-
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import PedidoCard from "../components/PedidoCard";
 import NovoPedidoDeliveryModal from '../components/NovoPedidoDeliveryModal';
 import PromptDialog from '../components/ui/PromptDialog';
-import { ModalRecibo, ModalHistorico } from '../components/pdv-modals';
 import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint, IoReceiptOutline, IoWalletOutline, IoCartOutline, IoAddCircleOutline } from "react-icons/io5";
 
-import { useOrdersPanel } from '../hooks/useOrdersPanel';
-import { useFiscalNfce } from '../hooks/useFiscalNfce';
+import { useNetworkOrdersPanel } from '../hooks/useNetworkOrdersPanel';
 import GrupoPedidosMesa from '../components/painel/GrupoPedidosMesa';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { matchTermos, TERMOS_BEBIDA } from '../utils/categoriaUtils';
-function Painel() {
+
+export default function PainelRede() {
     const navigate = useNavigate();
-    const { loading: authLoading, estabelecimentosGerenciados , estabelecimentoIdPrincipal, userData } = useAuth();
-    const estabelecimentoAtivo = useMemo(() => estabelecimentoIdPrincipal || null, [estabelecimentosGerenciados]);
+    const { loading: authLoading, estabelecimentosGerenciados, userData } = useAuth();
 
     const {
         dataSelecionada, setDataSelecionada,
         pedidos, loading, motoboys,
-        estabelecimentoInfo,
+        estabelecimentosInfo,
         abaAtiva, setAbaAtiva,
         colunaMobile, setColunaMobile,
         notificationsEnabled, setNotificationsEnabled, userInteracted, setUserInteracted,
         modoImpressao, alternarModoImpressao,
         handleAtribuirMotoboy, handleCancelarPedido, handleUpdateStatusAndNotify, handleUpdateFormaPagamento,
         newOrderIds
-    } = useOrdersPanel(estabelecimentoAtivo, authLoading);
-
-    const nfce = useFiscalNfce(estabelecimentoAtivo);
+    } = useNetworkOrdersPanel(estabelecimentosGerenciados, authLoading);
 
     const [showNovoPedidoModal, setShowNovoPedidoModal] = React.useState(false);
 
@@ -57,7 +51,6 @@ function Painel() {
                     if (!isMesa) return false;
                     
                     if (modoImpressao === 'cozinha') {
-                        // Se modoImpressao for 'cozinha', oculta pedidos que SÓ TÊM bebidas
                         const itensCozinhaReais = (p.itens || []).filter(it => {
                             const nome = String(it.nome || it.produto?.nome || '').toLowerCase();
                             const categoria = String(it.categoria || it.produto?.categoria || '').toLowerCase();
@@ -82,64 +75,52 @@ function Painel() {
         return { quantidade: todosPedidos.length, faturamento: total };
     }, [pedidosPorColuna, colunasAtivas]);
 
-    if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
-    if (!estabelecimentoAtivo) return <div className="p-10 text-center font-medium text-slate-500">Sem estabelecimento selecionado.</div>;
+    if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
 
     const navTop = (
         <div className="bg-white border-b border-gray-200">
             <div className="flex flex-col md:flex-row justify-between items-center px-4 py-2 gap-4">
                 <div className="flex items-center gap-3">
-                    <BackButton to="/admin" />
-                    <div className="hidden md:flex flex-col"><span className="text-sm font-semibold text-gray-800">{estabelecimentoInfo?.nome || userData?.nomeEstabelecimento || "Painel de Pedidos"}</span><span className="text-xs text-gray-500">KDS (Painel de Pedidos)</span></div>
+                    <BackButton to="/master-dashboard" />
+                    <div className="hidden md:flex flex-col"><span className="text-sm font-semibold text-gray-800">Monitor Unificado de Rede</span><span className="text-xs text-indigo-500 font-bold">Gerenciando {estabelecimentosGerenciados.length} lojas</span></div>
                     <div className="h-8 w-px bg-gray-300 hidden md:block"></div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => { if (!userInteracted) setUserInteracted(true); setNotificationsEnabled(!notificationsEnabled); }} className={`p-2 rounded-full cursor-pointer transition-colors ${notificationsEnabled ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`} title={notificationsEnabled ? "Notificações ligadas" : "Ligar notificações sonoras"}>{notificationsEnabled ? <IoNotificationsOutline size={22} /> : <IoNotificationsOffOutline size={22} />}</button>
                         <button onClick={alternarModoImpressao} className={`p-2 rounded-full flex gap-1 items-center font-bold text-xs cursor-pointer transition-colors ${modoImpressao === 'tudo' ? 'text-blue-600 bg-blue-50' : modoImpressao === 'cozinha' ? 'text-orange-600 bg-orange-50' : 'text-gray-400 hover:bg-gray-100'}`} title={`Modo Auto-Print: ${modoImpressao.toUpperCase()}`}><IoPrint size={20} />{modoImpressao === 'tudo' ? 'ALL' : modoImpressao === 'cozinha' ? 'KDS' : 'OFF'}</button>
-                        <button onClick={nfce.abrirHistoricoVendas} className="p-2 border-orange-200 border bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg flex items-center font-bold text-xs gap-1 ml-2 transition-colors"><IoReceiptOutline size={18} /> Histórico XML/PDF</button>
                     </div>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner w-full sm:w-auto">
-                        <button onClick={() => setAbaAtiva('delivery')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoBicycle size={18} /> Delivery</button>
+                        <button onClick={() => setAbaAtiva('delivery')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${abaAtiva === 'delivery' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoBicycle size={18} /> Delivery</button>
                         <button onClick={() => setAbaAtiva('cozinha')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${abaAtiva === 'cozinha' ? 'bg-white text-rose-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoRestaurant size={18} /> Salão</button>
                     </div>
                     <div className="flex items-center bg-white border border-gray-200 rounded-xl px-4 py-2 shadow-sm shrink-0"><IoCalendarOutline className="text-gray-400 mr-2" size={20} /><input type="date" value={dataSelecionada} onChange={(e) => setDataSelecionada(e.target.value)} className="bg-transparent text-sm font-bold text-gray-700 outline-none" /></div>
                 </div>
             </div>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2 border-b border-blue-100 flex justify-between items-center">
-                <div className="flex items-center gap-6"><div className="flex items-center gap-2 text-sm"><IoTime className="text-blue-500 flex-shrink-0" size={18}/><span className="text-gray-600">Mostrando Dia:</span><span className="font-bold text-blue-700">{dataSelecionada.split('-').reverse().join('/')}</span></div><div className="hidden md:flex items-center gap-2 text-sm border-l border-blue-200 pl-6"><IoCartOutline className="text-emerald-500" size={18}/><span className="text-gray-600">Total de Pedidos:</span><span className="font-black text-emerald-700">{statsDoDia.quantidade}</span></div><div className="hidden md:flex items-center gap-2 text-sm border-l border-blue-200 pl-6"><IoWalletOutline className="text-purple-500" size={18}/><span className="text-gray-600">Faturamento Realizado:</span><span className="font-black text-purple-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(statsDoDia.faturamento)}</span></div></div>
-                <button onClick={() => setShowNovoPedidoModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-bold text-sm shadow-sm transition-colors"><IoAddCircleOutline size={20} /> Novo Lançamento</button>
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-4 py-2 border-b border-indigo-100 flex justify-between items-center">
+                <div className="flex items-center gap-6"><div className="flex items-center gap-2 text-sm"><IoTime className="text-indigo-500 flex-shrink-0" size={18}/><span className="text-gray-600">Mostrando Dia:</span><span className="font-bold text-indigo-700">{dataSelecionada.split('-').reverse().join('/')}</span></div><div className="hidden md:flex items-center gap-2 text-sm border-l border-indigo-200 pl-6"><IoCartOutline className="text-emerald-500" size={18}/><span className="text-gray-600">Total de Pedidos:</span><span className="font-black text-emerald-700">{statsDoDia.quantidade}</span></div><div className="hidden md:flex items-center gap-2 text-sm border-l border-indigo-200 pl-6"><IoWalletOutline className="text-purple-500" size={18}/><span className="text-gray-600">Faturamento da Rede:</span><span className="font-black text-purple-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(statsDoDia.faturamento)}</span></div></div>
             </div>
         </div>
     );
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-            <PromptDialog open={nfce.promptCancelNfce.open} title="Cancelar NFC-e" message="Motivo do cancelamento:" confirmText="Cancelar Nota" cancelText="Voltar" onConfirm={nfce.executarCancelamentoNfce} onCancel={() => nfce.setPromptCancelNfce({ open: false, venda: null })} />
-            <PromptDialog open={nfce.promptWhatsApp.open} title="Enviar NFC-e por WhatsApp" message="📱 WhatsApp do cliente:" defaultValue={nfce.promptWhatsApp.defaultTel} confirmText="Enviar" cancelText="Cancelar" onConfirm={nfce.executarEnvioWhatsApp} onCancel={() => nfce.setPromptWhatsApp({ open: false, venda: null, defaultTel: '' })} />
-
-            <ModalRecibo visivel={nfce.mostrarRecibo} dados={nfce.dadosRecibo} onClose={() => nfce.setMostrarRecibo(false)} onNovaVenda={() => nfce.setMostrarRecibo(false)} onEmitirNfce={nfce.handleEmitirNfce} nfceStatus={nfce.nfceStatus} nfceUrl={nfce.nfceUrl} onBaixarXml={nfce.handleBaixarXml} onBaixarPdf={nfce.handleBaixarPdf} />
-            <ModalHistorico visivel={nfce.isHistoricoVendasOpen} vendas={nfce.vendasHistoricoExibicao} isCarregando={nfce.carregandoHistorico} onClose={() => nfce.setIsHistoricoVendasOpen(false)} onIrParaNovaVenda={() => nfce.setIsHistoricoVendasOpen(false)} onSelecionarVenda={nfce.selecionarVendaHistorico} consultarStatusNfce={nfce.handleConsultarStatus} cancelarNfce={nfce.handleCancelarNfce} handleEnviarWhatsApp={nfce.handleEnviarWhatsApp} />
-
-            {/* Navbar Menu */}
             <div className="sticky top-0 z-40 shadow-sm">{navTop}</div>
             
             <div className="flex-1 overflow-hidden flex flex-col pt-4">
                 <div className="flex flex-col sm:hidden px-4 mb-4">
-                    <select value={colunaMobile} onChange={(e) => setColunaMobile(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-bold shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <select value={colunaMobile} onChange={(e) => setColunaMobile(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-bold shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                         {colunasAtivas.map(status => <option key={status} value={status}>{STATUS_UI[status].title} ({pedidosPorColuna[status].length})</option>)}
                     </select>
                 </div>
                 <div className="flex-1 overflow-x-auto pb-4 px-2 sm:px-3">
-                    <div className="grid gap-2 sm:gap-3 h-full" style={{ gridTemplateColumns: `repeat(${colunasAtivas.length}, minmax(180px, 1fr))` }}>
+                    <div className="grid gap-2 sm:gap-3 h-full" style={{ gridTemplateColumns: `repeat(${colunasAtivas.length}, minmax(200px, 1fr))` }}>
                         {colunasAtivas.map((statusKey) => {
                             const isMobileActive = colunaMobile === statusKey;
                             const isMobile = window.innerWidth < 640;
                             if (isMobile && !isMobileActive) return null;
 
                             let listaRender = pedidosPorColuna[statusKey];
-
-                            // Removido o filtro restritivo de KDS para que bebidas também apareçam na tela de Salão.
 
                             return (
                                 <div key={statusKey} className={`flex flex-col h-full ${isMobile ? 'w-full' : ''} bg-white shadow-sm border border-gray-200 rounded-2xl overflow-hidden`}>
@@ -164,16 +145,41 @@ function Painel() {
                                                         <GrupoPedidosMesa 
                                                             pedidos={pedidosPorColuna[statusKey]} 
                                                             status={statusKey} 
-                                                            onUpdateStatus={handleUpdateStatusAndNotify} 
+                                                            onUpdateStatus={(pid, stat) => {
+                                                                const p = listaRender.find(x => x.id === pid);
+                                                                if(p) handleUpdateStatusAndNotify(pid, stat, p.estabelecimentoId);
+                                                            }} 
                                                             isNewOrder={(id) => newOrderIds.has(id)}
-                                                            onExcluir={handleCancelarPedido}
-                                                            onEmitirNfce={(p) => nfce.handleNfceDoPedido(p)}
+                                                            onExcluir={(pid) => {
+                                                                const p = listaRender.find(x => x.id === pid);
+                                                                if(p) handleCancelarPedido(pid, p.estabelecimentoId);
+                                                            }}
                                                             modoImpressao={modoImpressao}
+                                                            mostrarLabelLoja={true}
+                                                            estabelecimentosInfo={estabelecimentosInfo}
                                                         />
                                                     ) : (
                                                         listaRender.map(pedido => (
-                                                            <div key={pedido.id} className="relative group/card transform transition-all duration-200">
-                                                                <PedidoCard item={pedido} motoboysDisponiveis={motoboys} onUpdateStatus={handleUpdateStatusAndNotify} onAtribuirMotoboy={handleAtribuirMotoboy} onEmitirNfce={() => nfce.handleNfceDoPedido(pedido)} newOrderIds={newOrderIds} onExcluir={handleCancelarPedido} onUpdateFormaPagamento={handleUpdateFormaPagamento} estabelecimentoInfo={estabelecimentoInfo} />
+                                                            <div key={pedido.id} className="relative group/card transform transition-all duration-200 mb-2">
+                                                                {/* Label de Loja */}
+                                                                <div className="absolute -top-2 left-2 z-10">
+                                                                    <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                                                                        {estabelecimentosInfo[pedido.estabelecimentoId]?.nome || 'Loja Desconhecida'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="pt-2">
+                                                                    <PedidoCard 
+                                                                        item={pedido} 
+                                                                        motoboysDisponiveis={motoboys.filter(m => m.estabelecimentoId === pedido.estabelecimentoId)} 
+                                                                        onUpdateStatus={(pid, stat) => handleUpdateStatusAndNotify(pid, stat, pedido.estabelecimentoId)} 
+                                                                        onAtribuirMotoboy={(pid, mid, mnome) => handleAtribuirMotoboy(pid, mid, mnome, pedido.estabelecimentoId)} 
+                                                                        onEmitirNfce={() => {}} 
+                                                                        newOrderIds={newOrderIds} 
+                                                                        onExcluir={(pid) => handleCancelarPedido(pid, pedido.estabelecimentoId)} 
+                                                                        onUpdateFormaPagamento={(pid, nf) => handleUpdateFormaPagamento(pid, nf, pedido.estabelecimentoId)} 
+                                                                        estabelecimentoInfo={estabelecimentosInfo[pedido.estabelecimentoId]} 
+                                                                    />
+                                                                </div>
                                                             </div>
                                                         ))
                                                     )}
@@ -187,46 +193,6 @@ function Painel() {
                     </div>
                 </div>
             </div>
-            <NovoPedidoDeliveryModal 
-                isOpen={showNovoPedidoModal} 
-                onClose={() => setShowNovoPedidoModal(false)} 
-                estabelecimentoId={estabelecimentoAtivo}
-                onSave={async (pedidoData) => {
-                    if (!estabelecimentoAtivo) {
-                        toast.error('Estabelecimento não identificado!');
-                        return;
-                    }
-                    try {
-                        const novaId = await addDoc(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), {
-                            ...pedidoData,
-                            // Objeto `cliente` para compatibilidade com trigger de WhatsApp e PedidoCard
-                            cliente: {
-                                nome: pedidoData.nomeCliente || 'Cliente',
-                                telefone: pedidoData.telefoneCliente || '',
-                                endereco: {
-                                    rua: pedidoData.enderecoEntrega || '',
-                                    bairro: pedidoData.bairro || '',
-                                    referencia: pedidoData.pontoReferencia || ''
-                                }
-                            },
-                            clienteNome: pedidoData.nomeCliente || 'Cliente',
-                            clienteTelefone: pedidoData.telefoneCliente || '',
-                            totalFinal: pedidoData.total || 0,
-                            status: 'recebido',
-                            source: 'painel',
-                            tipo: 'delivery',
-                            createdAt: serverTimestamp(),
-                            dataPedido: serverTimestamp()
-                        });
-                        toast.success('✅ Pedido delivery adicionado com sucesso!');
-                    } catch (error) {
-                        console.error('Erro ao adicionar pedido manualmente:', error);
-                        toast.error('Erro ao salvar o pedido. Tente novamente.');
-                    }
-                }}
-            />
         </div>
     );
 }
-
-export default withEstablishmentAuth(Painel);

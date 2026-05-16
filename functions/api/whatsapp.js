@@ -339,6 +339,11 @@ export const enviarMensagemWhatsApp = onCall(async (request) => {
     const { telefone, mensagem, estabelecimentoId } = request.data;
     if (!telefone || !mensagem || !estabelecimentoId) throw new HttpsError('invalid-argument', 'Dados obrigatórios.');
 
+    const token = request.auth.token;
+    if (token.isMasterAdmin !== true && token.role !== 'master' && !(token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId))) {
+      throw new HttpsError('permission-denied', 'Sem permissão para este estabelecimento.');
+    }
+
     try {
       const estabDoc = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
       const wConfig = estabDoc.data()?.whatsapp || {};
@@ -487,9 +492,11 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
 
       logger.info(`📊 Processando ${nomeEstab} (${estabDoc.id}) | diasInativo=${diasInativo} | limite=${limiteDiario}`);
 
-      // 2. Buscar todos os pedidos para mapear clientes
+      // 2. Buscar todos os pedidos para mapear clientes (otimizado com select)
       const pedidosSnap = await db.collection('estabelecimentos').doc(estabDoc.id)
-        .collection('pedidos').get();
+        .collection('pedidos')
+        .select('cliente', 'clienteTelefone', 'clienteNome', 'criadoEm', 'createdAt', 'data')
+        .get();
 
       if (pedidosSnap.empty) {
         logger.info(`📭 ${nomeEstab}: nenhum pedido encontrado`);
@@ -667,6 +674,11 @@ export const configurarMarketing = onCall({ cors: true }, async (request) => {
   const { estabelecimentoId, config } = request.data || {};
   if (!estabelecimentoId || !config) throw new HttpsError('invalid-argument', 'Dados incompletos');
 
+  const token = request.auth.token;
+  if (token.isMasterAdmin !== true && token.role !== 'master' && !(token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId))) {
+    throw new HttpsError('permission-denied', 'Sem permissão para configurar marketing deste estabelecimento.');
+  }
+
   try {
     // Validar campos
     const configLimpa = {
@@ -703,6 +715,11 @@ export const countEstablishmentClientsCallable = onCall({ cors: true }, async (r
 
   const { estabelecimentoId } = request.data || {};
   if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório');
+
+  const token = request.auth.token;
+  if (token.isMasterAdmin !== true && token.role !== 'master' && !(token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId))) {
+    throw new HttpsError('permission-denied', 'Sem permissão para contar clientes deste estabelecimento.');
+  }
 
   try {
     // Usa select() para trazer APENAS os campos de telefone — muito mais rápido
@@ -743,6 +760,11 @@ export const sendEstablishmentMessageCallable = onCall({ cors: true, timeoutSeco
     throw new HttpsError('invalid-argument', 'estabelecimentoId e message são obrigatórios');
   }
 
+  const token = request.auth.token;
+  if (token.isMasterAdmin !== true && token.role !== 'master' && !(token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId))) {
+    throw new HttpsError('permission-denied', 'Sem permissão para enviar mensagens por este estabelecimento.');
+  }
+
   try {
     // 1. Buscar config do WhatsApp do estabelecimento
     const estabDoc = await db.collection('estabelecimentos').doc(estabelecimentoId).get();
@@ -756,9 +778,11 @@ export const sendEstablishmentMessageCallable = onCall({ cors: true, timeoutSeco
       throw new HttpsError('failed-precondition', 'WhatsApp Bot não está configurado. Configure em Configurações > WhatsApp Bot.');
     }
 
-    // 2. Buscar todos os pedidos e extrair telefones únicos com nomes
+    // 2. Buscar todos os pedidos e extrair telefones únicos com nomes (otimizado com select)
     const pedidosSnap = await db.collection('estabelecimentos').doc(estabelecimentoId)
-      .collection('pedidos').get();
+      .collection('pedidos')
+      .select('cliente', 'clienteTelefone', 'clienteNome')
+      .get();
 
     const clientesMap = new Map(); // telefone -> nome
     pedidosSnap.forEach(pedidoDoc => {
@@ -1065,468 +1089,6 @@ export const notificarPedidoNovo = onDocumentCreated(
     }
   }
 );
-
-// ==================================================================
-// iFood PARTNER API — INTEGRAÇÃO REAL
-// ==================================================================
-
-const IFOOD_BASE_URL = 'https://merchant-api.ifood.com.br';
-
-// ------------------------------------------------------------------
-// HELPER: Obter (ou renovar) token OAuth2 do iFood por estabelecimento
-// ------------------------------------------------------------------
-async function getIfoodToken(estabelecimentoId) {
-    const tokenRef = db.collection('estabelecimentos').doc(estabelecimentoId)
-        .collection('integracoes').doc('ifood_token');
-    const tokenSnap = await tokenRef.get();
-
-    if (tokenSnap.exists) {
-        const t = tokenSnap.data();
-        // Usa token em cache se ainda válido (com 60s de margem)
-        if (t.expiresAt && t.expiresAt.toMillis() > Date.now() + 60000) {
-            return t.accessToken;
-        }
-        // Tenta renovar com refresh_token
-        if (t.refreshToken) {
-            try {
-                const res = await fetch(`${IFOOD_BASE_URL}/authentication/v1.0/oauth/token`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        grantType: 'refresh_token',
-                        clientId: process.env.IFOOD_CLIENT_ID,
-                        clientSecret: process.env.IFOOD_CLIENT_SECRET,
-                        refreshToken: t.refreshToken
-                    }).toString()
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    const expiresAt = new Date(Date.now() + (data.expiresIn || 3600) * 1000);
-                    await tokenRef.set({
-                        accessToken: data.accessToken,
-                        refreshToken: data.refreshToken || t.refreshToken,
-                        expiresAt: FieldValue.serverTimestamp(),
-                        atualizadoEm: FieldValue.serverTimestamp()
-                    }, { merge: true });
-                    return data.accessToken;
-                }
-            } catch(e) {
-                logger.warn('iFood: falha ao renovar refresh_token, tentando client_credentials...', e.message);
-            }
-        }
-    }
-
-    // Fallback: client_credentials (acesso somente leitura/sandbox)
-    const res = await fetch(`${IFOOD_BASE_URL}/authentication/v1.0/oauth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grantType: 'client_credentials',
-            clientId: process.env.IFOOD_CLIENT_ID,
-            clientSecret: process.env.IFOOD_CLIENT_SECRET
-        }).toString()
-    });
-
-    if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`iFood auth falhou: ${res.status} - ${err}`);
-    }
-
-    const data = await res.json();
-    await tokenRef.set({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken || null,
-        expiresAt: new Date(Date.now() + (data.expiresIn || 3600) * 1000),
-        atualizadoEm: FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    return data.accessToken;
-}
-
-// ------------------------------------------------------------------
-// HELPER: Mapear pedido iFood → modelo interno Mata Fome
-// ------------------------------------------------------------------
-function mapearPedidoIfood(ifoodOrder, estabelecimentoId) {
-    const mapStatus = {
-        'PLACED': 'recebido',
-        'CONFIRMED': 'preparo',
-        'READY_TO_PICKUP': 'pronto_para_servir',
-        'DISPATCHED': 'em_entrega',
-        'CONCLUDED': 'finalizado',
-        'CANCELLED': 'cancelado'
-    };
-
-    const mapPagamento = {
-        'CREDIT': 'cartao_credito',
-        'DEBIT': 'cartao_debito',
-        'MEAL_VOUCHER': 'voucher',
-        'DIGITAL_WALLET': 'carteira_digital',
-        'PIX': 'pix',
-        'CASH': 'dinheiro'
-    };
-
-    const itens = (ifoodOrder.items || []).map(item => ({
-        id: item.externalCode || item.id,
-        nome: item.name,
-        quantidade: item.quantity,
-        preco: (item.unitPrice || 0) / 100,
-        precoFinal: (item.totalPrice || 0) / 100,
-        categoria: item.externalCode ? 'ifood' : 'outros',
-        observacao: item.observations || '',
-        adicionais: (item.subItems || []).map(sub => ({
-            nome: sub.name,
-            quantidade: sub.quantity,
-            preco: (sub.unitPrice || 0) / 100
-        }))
-    }));
-
-    const pagamento = ifoodOrder.payments?.methods?.[0];
-    const formaPagamento = pagamento ? (mapPagamento[pagamento.method] || pagamento.method.toLowerCase()) : 'outros';
-
-    const endereco = ifoodOrder.deliveryAddress ? {
-        rua: ifoodOrder.deliveryAddress.streetName || '',
-        numero: ifoodOrder.deliveryAddress.streetNumber || '',
-        bairro: ifoodOrder.deliveryAddress.neighborhood || '',
-        cidade: ifoodOrder.deliveryAddress.city || '',
-        estado: ifoodOrder.deliveryAddress.state || '',
-        cep: ifoodOrder.deliveryAddress.postalCode || '',
-        complemento: ifoodOrder.deliveryAddress.complement || '',
-        referencia: ifoodOrder.deliveryAddress.reference || ''
-    } : null;
-
-    return {
-        vendaId: `ifood_${ifoodOrder.id}`,
-        ifoodOrderId: ifoodOrder.id,
-        source: 'ifood',
-        tipo: ifoodOrder.orderType === 'TAKEOUT' ? 'retirada' : 'delivery',
-        tipoEntrega: ifoodOrder.orderType === 'TAKEOUT' ? 'retirada' : 'delivery',
-        status: mapStatus[ifoodOrder.status] || 'recebido',
-        estabelecimentoId,
-        cliente: {
-            nome: ifoodOrder.customer?.name || 'Cliente iFood',
-            telefone: ifoodOrder.customer?.phone || '',
-            userId: null
-        },
-        endereco,
-        itens,
-        totalFinal: (ifoodOrder.displayTotalPrice || ifoodOrder.totalPrice || 0) / 100,
-        taxaEntrega: (ifoodOrder.deliveryFee || 0) / 100,
-        formaPagamento,
-        metodoPagamento: formaPagamento,
-        observacoes: ifoodOrder.observations || '',
-        createdAt: FieldValue.serverTimestamp(),
-        atualizadoEm: FieldValue.serverTimestamp(),
-        dataPedido: FieldValue.serverTimestamp()
-    };
-}
-
-// ==================================================================
-// FUNÇÃO 1: Webhook — iFood envia pedidos em tempo real
-// ==================================================================
-export const ifoodWebhook = onRequest({
-    cors: false
-}, async (req, res) => {
-    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-
-    try {
-        const eventos = req.body;
-        logger.info('📦 iFood Webhook recebido:', JSON.stringify(eventos).slice(0, 500));
-
-        if (!Array.isArray(eventos) || eventos.length === 0) {
-            return res.status(200).send('OK');
-        }
-
-        for (const evento of eventos) {
-            const { code, orderId, merchantId, fullCode } = evento;
-
-            if (!orderId || !merchantId) continue;
-
-            // Buscar o estabelecimentoId no Firestore pelo merchantId do iFood
-            const estabSnap = await db.collection('estabelecimentos')
-                .where('ifoodMerchantId', '==', merchantId)
-                .limit(1).get();
-
-            if (estabSnap.empty) {
-                logger.warn(`iFood: merchantId ${merchantId} não encontrado no Firestore.`);
-                continue;
-            }
-
-            const estabelecimentoId = estabSnap.docs[0].id;
-
-            // Buscar detalhes do pedido na API
-            try {
-                const token = await getIfoodToken(estabelecimentoId);
-                const orderRes = await fetch(`${IFOOD_BASE_URL}/order/v1.0/orders/${orderId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!orderRes.ok) {
-                    logger.error(`iFood: falha ao buscar pedido ${orderId}: ${orderRes.status}`);
-                    continue;
-                }
-
-                const ifoodOrder = await orderRes.json();
-                const pedidoMapeado = mapearPedidoIfood(ifoodOrder, estabelecimentoId);
-
-                // Salvar/atualizar no Firestore
-                const pedidoRef = db.collection('estabelecimentos')
-                    .doc(estabelecimentoId)
-                    .collection('pedidos')
-                    .doc(pedidoMapeado.vendaId);
-
-                await pedidoRef.set(pedidoMapeado, { merge: true });
-
-                // Dar ACK para o iFood (confirmar recebimento do evento)
-                await fetch(`${IFOOD_BASE_URL}/order/v1.0/events/acknowledgment`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify([{ id: evento.id }])
-                });
-
-                logger.info(`✅ iFood: pedido ${orderId} salvo como ${pedidoMapeado.vendaId}`);
-
-            } catch (e) {
-                logger.error(`❌ iFood: erro ao processar evento ${orderId}:`, e.message);
-            }
-        }
-
-        res.status(200).send('OK');
-    } catch (error) {
-        logger.error('❌ iFood Webhook erro geral:', error);
-        res.status(200).send('OK'); // Sempre 200 para o iFood não retentar em loop
-    }
-});
-
-// ==================================================================
-// FUNÇÃO 2: Polling — buscar pedidos pendentes periodicamente
-// ==================================================================
-export const ifoodPolling = onCall({
-    cors: true
-}, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
-
-    const { estabelecimentoId } = request.data || {};
-    if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
-
-    try {
-        const token = await getIfoodToken(estabelecimentoId);
-
-        // Buscar eventos pendentes (pedidos não confirmados)
-        const eventsRes = await fetch(`${IFOOD_BASE_URL}/order/v1.0/events:polling`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!eventsRes.ok) {
-            const err = await eventsRes.text();
-            throw new HttpsError('internal', `iFood API erro: ${eventsRes.status} - ${err}`);
-        }
-
-        const eventos = await eventsRes.json();
-        logger.info(`📡 iFood Polling: ${eventos?.length || 0} eventos encontrados`);
-
-        if (!eventos || eventos.length === 0) {
-            return { sucesso: true, pedidosNovos: 0, mensagem: 'Nenhum pedido novo.' };
-        }
-
-        let pedidosNovos = 0;
-        const idsParaACK = [];
-
-        for (const evento of eventos) {
-            const { orderId } = evento;
-            if (!orderId) continue;
-
-            const orderRes = await fetch(`${IFOOD_BASE_URL}/order/v1.0/orders/${orderId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!orderRes.ok) continue;
-
-            const ifoodOrder = await orderRes.json();
-            const pedidoMapeado = mapearPedidoIfood(ifoodOrder, estabelecimentoId);
-
-            const pedidoRef = db.collection('estabelecimentos')
-                .doc(estabelecimentoId)
-                .collection('pedidos')
-                .doc(pedidoMapeado.vendaId);
-
-            const existe = await pedidoRef.get();
-            if (!existe.exists) {
-                await pedidoRef.set(pedidoMapeado);
-                pedidosNovos++;
-            }
-
-            if (evento.id) idsParaACK.push({ id: evento.id });
-        }
-
-        // Confirmar recebimento de todos os eventos
-        if (idsParaACK.length > 0) {
-            await fetch(`${IFOOD_BASE_URL}/order/v1.0/events/acknowledgment`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(idsParaACK)
-            });
-        }
-
-        return {
-            sucesso: true,
-            pedidosNovos,
-            mensagem: `${pedidosNovos} pedido(s) novos sincronizados do iFood.`
-        };
-
-    } catch (error) {
-        if (error instanceof HttpsError) throw error;
-        logger.error('❌ ifoodPolling erro:', error);
-        throw new HttpsError('internal', `Erro no polling iFood: ${error.message}`);
-    }
-});
-
-// ==================================================================
-// FUNÇÃO 3: Atualizar status do pedido no iFood
-// ==================================================================
-export const ifoodAtualizarStatus = onCall({
-    cors: true
-}, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
-
-    const { estabelecimentoId, ifoodOrderId, novoStatus } = request.data || {};
-    if (!estabelecimentoId || !ifoodOrderId || !novoStatus) {
-        throw new HttpsError('invalid-argument', 'estabelecimentoId, ifoodOrderId e novoStatus são obrigatórios.');
-    }
-
-    // Mapa de status interno → endpoint iFood
-    const endpointMap = {
-        'preparo':          `/order/v1.0/orders/${ifoodOrderId}/startPreparation`,
-        'pronto_para_servir': `/order/v1.0/orders/${ifoodOrderId}/readyToPickup`,
-        'em_entrega':       `/order/v1.0/orders/${ifoodOrderId}/dispatch`,
-        'finalizado':       `/order/v1.0/orders/${ifoodOrderId}/conclude`,
-        'cancelado':        `/order/v1.0/orders/${ifoodOrderId}/requestCancellation`
-    };
-
-    const endpoint = endpointMap[novoStatus];
-    if (!endpoint) {
-        return { sucesso: true, mensagem: 'Status não precisa ser sincronizado com o iFood.' };
-    }
-
-    try {
-        const token = await getIfoodToken(estabelecimentoId);
-
-        const res = await fetch(`${IFOOD_BASE_URL}${endpoint}`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (!res.ok) {
-            const errBody = await res.text();
-            logger.warn(`iFood status update falhou: ${res.status} - ${errBody}`);
-            // Não lança erro — o painel interno já atualizou, iFood é best-effort
-            return { sucesso: false, mensagem: `iFood retornou ${res.status}: ${errBody}` };
-        }
-
-        logger.info(`✅ iFood: pedido ${ifoodOrderId} → status "${novoStatus}" sincronizado.`);
-        return { sucesso: true, mensagem: `Status "${novoStatus}" enviado ao iFood com sucesso.` };
-
-    } catch (error) {
-        logger.error('❌ ifoodAtualizarStatus erro:', error);
-        throw new HttpsError('internal', `Erro ao atualizar status iFood: ${error.message}`);
-    }
-});
-
-// ==================================================================
-// FUNÇÃO 4: Testar autenticação OAuth2 do iFood (para a tela de config)
-// ==================================================================
-export const ifoodTestarConexao = onCall({
-    cors: true,
-    invoker: 'public'
-}, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
-
-    const { estabelecimentoId } = request.data || {};
-    if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
-
-    try {
-        const token = await getIfoodToken(estabelecimentoId);
-
-        // Tentar buscar merchants vinculados para confirmar que o token funciona
-        const res = await fetch(`${IFOOD_BASE_URL}/merchant/v1.0/merchants`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        let merchants = [];
-        if (res.ok) {
-            const data = await res.json();
-            merchants = Array.isArray(data) ? data : (data.merchants || []);
-        }
-
-        // Salvar merchantId no estabelecimento (se encontrado)
-        if (merchants.length > 0) {
-            await db.collection('estabelecimentos').doc(estabelecimentoId).update({
-                ifoodMerchantId: merchants[0].id,
-                ifoodMerchantName: merchants[0].name,
-                ifoodConectado: true,
-                ifoodTestadoEm: FieldValue.serverTimestamp()
-            });
-        }
-
-        logger.info(`✅ iFood conexão testada com sucesso para ${estabelecimentoId}`);
-        return {
-            sucesso: true,
-            merchants,
-            mensagem: merchants.length > 0
-                ? `Conectado! ${merchants.length} restaurante(s) encontrado(s).`
-                : 'Token válido. Nenhum merchant vinculado ainda (aguardando aprovação iFood).'
-        };
-
-    } catch (error) {
-        logger.error('❌ ifoodTestarConexao erro:', error);
-        throw new HttpsError('internal', `Falha na conexão com iFood: ${error.message}`);
-    }
-});
-
-// ==================================================================
-// FUNÇÃO 5: Configurar URL do webhook no iFood
-// ==================================================================
-export const ifoodConfigurarWebhook = onCall({
-    cors: true,
-    invoker: 'public'
-}, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
-
-    const { estabelecimentoId, merchantId } = request.data || {};
-    if (!estabelecimentoId || !merchantId) {
-        throw new HttpsError('invalid-argument', 'estabelecimentoId e merchantId são obrigatórios.');
-    }
-
-    try {
-        const token = await getIfoodToken(estabelecimentoId);
-        const webhookUrl = `https://us-central1-matafome-98455.cloudfunctions.net/ifoodWebhook`;
-
-        // The webhook URL must be pasted manually into the iFood dev portal.
-        // There is no API route to set it automatically for Partner/Merchant API v1.0.
-
-        await db.collection('estabelecimentos').doc(estabelecimentoId).update({
-            ifoodWebhookConfigurado: true,
-            ifoodWebhookUrl: webhookUrl,
-            ifoodWebhookConfigEm: FieldValue.serverTimestamp()
-        });
-
-        logger.info(`✅ iFood webhook configurado para ${merchantId}: ${webhookUrl}`);
-        return { sucesso: true, webhookUrl, mensagem: 'Webhook configurado com sucesso no iFood!' };
-
-    } catch (error) {
-        if (error instanceof HttpsError) throw error;
-        logger.error('❌ ifoodConfigurarWebhook erro:', error);
-        throw new HttpsError('internal', `Erro ao configurar webhook: ${error.message}`);
-    }
-});
 
 // ==================================================================
 // 20. OPT-OUT DE MARKETING

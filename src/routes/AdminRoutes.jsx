@@ -10,6 +10,7 @@ const ClientManagement = lazy(() => import('../pages/ClientManagement'));
 const ControleSalao = lazy(() => import("../pages/ControleSalao"));
 const TelaPedidos = lazy(() => import('../pages/TelaPedidos'));
 const Painel = lazy(() => import("../pages/Painel"));
+const PainelRede = lazy(() => import("../pages/PainelRede"));
 const AdminDashboard = lazy(() => import("../pages/AdminDashboard"));
 const AdminSettings = lazy(() => import('../pages/AdminSettings'));
 const AdminMenuManagement = lazy(() => import("../pages/AdminMenuManagement"));
@@ -54,6 +55,7 @@ export const adminRoutes = [
     <Route key="controle-salao" path="/controle-salao" element={<PrivateRoute allowedRoles={ROLE_GROUPS.SALAO}><ControleSalao /></PrivateRoute>} />,
     <Route key="mesa-id" path="/estabelecimento/:estabelecimentoId/mesa/:id" element={<PrivateRoute allowedRoles={ROLE_GROUPS.SALAO}><TelaPedidos /></PrivateRoute>} />,
     <Route key="painel" path="/painel" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><Painel /></PrivateRoute>} />,
+    <Route key="painel-rede" path="/master/painel-rede" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><PainelRede /></PrivateRoute>} />,
     <Route key="admin-dashboard-root" path="/admin-dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminDashboard /></PrivateRoute>} />,
     <Route key="admin-configuracoes" path="/admin/configuracoes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminSettings /></PrivateRoute>} />,
     <Route key="dashboard" path="/dashboard" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><AdminDashboard /></PrivateRoute>} />,

@@ -9,8 +9,9 @@ import { toast } from 'react-toastify';
 import { estoqueService } from '../services/estoqueService';
 // 🔥 IMPORTS DO FIREBASE
 import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase';
-import { collection, addDoc, Timestamp, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore'; 
+import { db, functions } from '../firebase';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore'; 
+import { httpsCallable } from 'firebase/functions';
 
 // Normaliza texto para comparação de bairros (igual ao Menu.jsx)
 function normalizarTexto(texto) {
@@ -32,6 +33,12 @@ const CheckoutPage = () => {
   const [taxaLoading, setTaxaLoading] = useState(false);
   const [descontoValor, setDescontoValor] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Cupons & Loja Fechada
+  const [isFechado, setIsFechado] = useState(false);
+  const [cupomInput, setCupomInput] = useState('');
+  const [cupomAplicado, setCupomAplicado] = useState(null);
+  const [descontoCupom, setDescontoCupom] = useState(0);
 
   // Cashback
   const [saldoCarteira, setSaldoCarteira] = useState(0);
@@ -73,24 +80,25 @@ const CheckoutPage = () => {
     if (carrinho.length > 0) buscarTaxaEntrega();
   }, [carrinho, currentClientData]);
 
-  // Busca a config da raspadinha separadamente
+  // Busca a config da loja (raspadinha e status de funcionamento)
   useEffect(() => {
-    const fetchConfigRaspadinha = async () => {
+    const fetchConfigLoja = async () => {
       const estabId = carrinho[0]?.estabelecimentoId;
       if (!estabId) return;
       try {
         const docSnap = await getDoc(doc(db, 'estabelecimentos', estabId));
         if (docSnap.exists()) {
-          const valorMinimo = docSnap.data().valorMinimoRaspadinha
-            ? parseFloat(docSnap.data().valorMinimoRaspadinha)
-            : 100;
+          const data = docSnap.data();
+          setIsFechado(!!data.forcadoFechado);
+          
+          const valorMinimo = data.valorMinimoRaspadinha ? parseFloat(data.valorMinimoRaspadinha) : 100;
           setValorGatilhoRaspadinha(valorMinimo);
         }
       } catch (error) {
-        console.error('Erro ao buscar config da raspadinha:', error);
+        console.error('Erro ao buscar config da loja:', error);
       }
     };
-    if (carrinho.length > 0) fetchConfigRaspadinha();
+    if (carrinho.length > 0) fetchConfigLoja();
   }, [carrinho]);
 
   // Busca saldo de Cashback do Cliente
@@ -164,7 +172,40 @@ const CheckoutPage = () => {
   };
 
 
-  const subtotalETaxas = subtotal + taxaEntrega - descontoValor;
+  const handleAplicarCupom = async () => {
+    if (!cupomInput) return;
+    const estabId = carrinho[0]?.estabelecimentoId;
+    try {
+        const codigo = cupomInput.trim().toUpperCase();
+        const cupomSnap = await getDoc(doc(db, 'estabelecimentos', estabId, 'cupons', codigo));
+        if (cupomSnap.exists()) {
+             const cData = cupomSnap.data();
+             if (cData.ativo !== false && subtotal >= (cData.valorMinimo || 0)) {
+                  if (!cData.limiteUso || (cData.usos || 0) < cData.limiteUso) {
+                       setCupomAplicado(codigo);
+                       let valorDesconto = 0;
+                       if (cData.tipo === 'porcentagem') {
+                           valorDesconto = subtotal * (cData.valor / 100);
+                       } else {
+                           valorDesconto = cData.valor;
+                       }
+                       setDescontoCupom(valorDesconto);
+                       toast.success('Cupom aplicado com sucesso!');
+                  } else {
+                       toast.error('Este cupom já atingiu o limite de usos.');
+                  }
+             } else {
+                  toast.error('Cupom inválido para o valor atual do carrinho.');
+             }
+        } else {
+            toast.error('Cupom não encontrado.');
+        }
+    } catch(e) {
+        toast.error('Erro ao validar cupom.');
+    }
+  };
+
+  const subtotalETaxas = subtotal + taxaEntrega - descontoValor - descontoCupom;
   const cashbackAplicado = usarCashback ? Math.min(saldoCarteira, subtotalETaxas) : 0;
   const totalFinal = Math.max(0, subtotalETaxas - cashbackAplicado);
 
@@ -187,63 +228,31 @@ const CheckoutPage = () => {
     setIsSaving(true);
 
     try {
-        const pedido = {
-            clienteId: currentUser.uid,
-            clienteNome: currentClientData?.nome || currentUser.displayName || 'Cliente App',
-            clienteTelefone: currentClientData?.telefone || '',
-            
-            endereco: currentClientData?.endereco || { 
-                rua: 'Endereço não cadastrado', 
-                numero: 'S/N', 
-                bairro: 'Verificar com cliente' 
+        const finalizarFn = httpsCallable(functions, 'finalizarCheckoutDelivery');
+        const payload = {
+            estabelecimentoId: estabelecimentoId,
+            carrinho: carrinho,
+            clienteDados: { 
+                ...currentClientData, 
+                telefone: currentClientData?.telefone || currentUser?.phoneNumber || '' 
             },
-            
-            itens: carrinho,
-            total: totalFinal,
-            
-            formaPagamento: selectedPayment || 'Não selecionado',
-            metodoPagamento: selectedPayment, 
-            
-            tipoEntrega: 'delivery',
-            status: 'recebido',
-            createdAt: Timestamp.now(),
-            dataPedido: Timestamp.now(),
-            
-            descontoAplicado: descontoValor,
-            cashbackResgatado: cashbackAplicado, // NEW: Salva quanto usou
-            premioRaspadinha: premioAplicado ? premioAplicado.type : null,
-            estabelecimentoId: estabelecimentoId
+            pagamento: selectedPayment,
+            cupom: cupomAplicado,
+            usarCashback: usarCashback,
+            premioRaspadinha: premioAplicado
         };
 
-        // Salva o pedido no Firestore
-        await addDoc(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'), pedido);
+        const result = await finalizarFn(payload);
 
-        // Subtrai cashback usado do cliente
-        if (cashbackAplicado > 0 && clienteDocRefIdUtilizado) {
-            try {
-               const cDoc = await getDoc(clienteDocRefIdUtilizado);
-               if (cDoc.exists()) {
-                  const saldoAtual = Number(cDoc.data().saldoCashback) || Number(cDoc.data().saldoCarteira) || 0;
-                  const novoSaldo = Math.max(0, saldoAtual - cashbackAplicado);
-                  await updateDoc(clienteDocRefIdUtilizado, {
-                      saldoCashback: novoSaldo
-                  });
-               }
-            } catch (errCB) {
-               console.error("Erro ao abater cashback", errCB);
-            }
+        if (result.data.success) {
+            toast.success('🎉 Pedido enviado com segurança!');
+            limparCarrinho();
+            setTimeout(() => { navigate('/historico-pedidos'); }, 2000);
         }
 
-        // 🔥 NOVA LINHA: CHAMA A BAIXA DE ESTOQUE APÓS SALVAR O PEDIDO
-        await estoqueService.darBaixaEstoque(estabelecimentoId, carrinho);
-
-        toast.success('🎉 Pedido enviado para a loja!');
-        limparCarrinho();
-        setTimeout(() => { navigate('/historico-pedidos'); }, 2000);
-
     } catch (error) {
-        console.error("Erro ao salvar pedido:", error);
-        toast.error("Erro ao processar pedido. Tente novamente.");
+        console.error("Erro ao salvar pedido via backend:", error);
+        toast.error(error.message || "Erro ao processar pedido. Tente novamente.");
     } finally {
         setIsSaving(false);
     }
@@ -306,6 +315,13 @@ const CheckoutPage = () => {
                     </div>
                 )}
                 
+                {descontoCupom > 0 && (
+                    <div className="flex justify-between py-2 border-b text-green-600 font-bold">
+                        <span>Cupom ({cupomAplicado})</span>
+                        <span>- R$ {descontoCupom.toFixed(2)}</span>
+                    </div>
+                )}
+
                 <div className="flex justify-between py-2 border-b">
                   <span>Taxa de Entrega</span>
                   {taxaEntrega === 0 ? (
@@ -346,13 +362,43 @@ const CheckoutPage = () => {
               </div>
             </div>
 
-            <PaymentSelector
-              amount={totalFinal}
-              metadata={{ 
-                  premioRaspadinha: premioAplicado ? premioAplicado.type : null 
-              }}
-              onPaymentSuccess={handlePaymentSuccess}
-            />
+            <div className="mt-6 mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <label className="block text-sm font-bold text-gray-700 mb-2">Cupom de Desconto</label>
+              <div className="flex space-x-2">
+                <input 
+                  type="text" 
+                  value={cupomInput}
+                  onChange={(e) => setCupomInput(e.target.value)}
+                  disabled={!!cupomAplicado}
+                  placeholder="Ex: QUERO10"
+                  className="flex-1 border rounded-lg px-3 py-2 uppercase text-sm focus:ring-[#FF6B35] focus:border-[#FF6B35]"
+                />
+                <button 
+                  onClick={handleAplicarCupom}
+                  disabled={!cupomInput || !!cupomAplicado}
+                  className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-gray-700"
+                >
+                  {cupomAplicado ? 'Aplicado' : 'Aplicar'}
+                </button>
+              </div>
+            </div>
+
+            {isFechado ? (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-6 rounded text-center">
+                    <span className="block text-3xl mb-2">🚫</span>
+                    <strong className="block text-lg">Restaurante Fechado</strong>
+                    <span className="block text-sm mt-1">No momento não estamos aceitando novos pedidos.</span>
+                </div>
+            ) : (
+                <PaymentSelector
+                  amount={totalFinal}
+                  metadata={{ 
+                      premioRaspadinha: premioAplicado ? premioAplicado.type : null,
+                      cupomAplicado: cupomAplicado 
+                  }}
+                  onPaymentSuccess={handlePaymentSuccess}
+                />
+            )}
           </div>
         </div>
       </div>

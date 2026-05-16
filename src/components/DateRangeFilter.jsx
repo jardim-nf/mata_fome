@@ -169,8 +169,8 @@ export default function DateRangeFilter({
       {open && (
         <div
           className="
-            absolute right-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl shadow-slate-200/60
-            border border-slate-100 p-4 w-[310px]
+            absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl shadow-slate-200/60
+            border border-slate-100 p-4 w-[290px] sm:w-[310px] max-w-[90vw]
             animate-in fade-in slide-in-from-top-1 duration-200
           "
           style={{ animation: 'fadeSlideIn .18s ease-out' }}

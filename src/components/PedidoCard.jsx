@@ -446,12 +446,7 @@ const PedidoCard = ({
                 {/* LISTA DE ITENS */}
                 <div className="space-y-3 mb-4">
                     {(() => {
-                        const listaReal = isAgrupado 
-                            ? (item.itens || []).filter(it => {
-                                const c = (it.categoria || it.category || '').toLowerCase();
-                                return !['bebida', 'drink', 'suco', 'refrigerante', 'agua', 'cerveja'].some(t => c.includes(t));
-                            })
-                            : (item.itens || []);
+                        const listaReal = (isAgrupado && item.itensCozinha) ? item.itensCozinha : (item.itens || []);
                             
                         return listaReal.slice(0, isExpanded ? undefined : 3).map((it, idx) => (
                             <div key={idx} className="flex gap-1 sm:gap-2 text-xs sm:text-sm border-b border-dashed border-gray-100 pb-2 last:border-0 last:pb-0 overflow-hidden">

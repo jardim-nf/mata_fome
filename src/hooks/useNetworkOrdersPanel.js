@@ -7,13 +7,15 @@ import { isItemCozinha } from '../utils/painelUtils';
 import { rotearEImprimir } from '../services/printService';
 import { tocarCampainha, falarNovaComanda } from '../utils/audioUtils';
 
-export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
+export const useNetworkOrdersPanel = (estabelecimentosAtivos = [], authLoading) => {
+    const estabs = Array.isArray(estabelecimentosAtivos) ? estabelecimentosAtivos : [estabelecimentosAtivos].filter(Boolean);
+
     const [dataSelecionada, setDataSelecionada] = useState(() => {
         const hj = new Date();
         return hj.getFullYear() + '-' + String(hj.getMonth() + 1).padStart(2, '0') + '-' + String(hj.getDate()).padStart(2, '0');
     });
 
-    const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
+    const [estabelecimentosInfo, setEstabelecimentosInfo] = useState({});
     const [pedidos, setPedidos] = useState({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
     const [loading, setLoading] = useState(true);
     const [motoboys, setMotoboys] = useState([]);
@@ -55,7 +57,7 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
-    const processarDadosPedido = useCallback((pedidoData) => {
+    const processarDadosPedido = useCallback((pedidoData, estabelecimentoId) => {
         if (!pedidoData || !pedidoData.id) return null;
         
         const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
@@ -72,23 +74,47 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         if (source === 'salao' || temMesa || tipo === 'mesa') { source = 'salao'; tipo = 'mesa'; } 
         else { if (!source) source = 'delivery'; if (!tipo) tipo = 'delivery'; }
 
-        return { ...pedidoData, id: pedidoData.id, cliente: clienteLimpo, endereco: endereco, source: source, tipo: tipo, status: pedidoData.status || 'recebido', itens: rawItens, itensCozinha: itensFiltradosParaCozinha, mesaNumero: pedidoData.mesaNumero || 0, loteHorario: pedidoData.loteHorario || '' };
+        return { 
+            ...pedidoData, 
+            id: pedidoData.id, 
+            cliente: clienteLimpo, 
+            endereco: endereco, 
+            source: source, 
+            tipo: tipo, 
+            status: pedidoData.status || 'recebido', 
+            itens: rawItens, 
+            itensCozinha: itensFiltradosParaCozinha, 
+            mesaNumero: pedidoData.mesaNumero || 0, 
+            loteHorario: pedidoData.loteHorario || '',
+            estabelecimentoId: estabelecimentoId // IMPORTANTE PARA A REDE
+        };
     }, [limparDadosCliente]);
 
     useEffect(() => {
         setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
-        setMotoboys([]); setNewOrderIds(new Set()); setPrintQueue([]); setEstabelecimentoInfo(null); setLoading(true);
-    }, [estabelecimentoAtivo, dataSelecionada]);
+        setMotoboys([]); setNewOrderIds(new Set()); setPrintQueue([]); setEstabelecimentosInfo({}); setLoading(true);
+    }, [estabs.join(','), dataSelecionada]);
 
     useEffect(() => {
-        if (!estabelecimentoAtivo) return;
-        const qMotoboys = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'entregadores'));
-        const unsubscribe = onSnapshot(qMotoboys, (snapshot) => { setMotoboys(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); });
-        return () => unsubscribe();
-    }, [estabelecimentoAtivo]);
+        if (estabs.length === 0) return;
+        const unsubscribers = [];
+        let allMotoboys = [];
+        
+        estabs.forEach(estabId => {
+            const qMotoboys = query(collection(db, 'estabelecimentos', estabId, 'entregadores'));
+            const unsubscribe = onSnapshot(qMotoboys, (snapshot) => { 
+                const boys = snapshot.docs.map(doc => ({ id: doc.id, estabelecimentoId: estabId, ...doc.data() })); 
+                allMotoboys = [...allMotoboys.filter(m => m.estabelecimentoId !== estabId), ...boys];
+                setMotoboys(allMotoboys);
+            });
+            unsubscribers.push(unsubscribe);
+        });
+
+        return () => unsubscribers.forEach(u => u());
+    }, [estabs.join(',')]);
 
     useEffect(() => {
-        if (authLoading || !estabelecimentoAtivo) return;
+        if (authLoading || estabs.length === 0) return;
         const [ano, mes, dia] = dataSelecionada.split('-').map(Number);
         const startOfDay = new Date(ano, mes - 1, dia, 0, 0, 0, 0);
         const endOfDay = new Date(ano, mes - 1, dia, 23, 59, 59, 999);
@@ -101,7 +127,7 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             return date >= startOfDay && date <= endOfDay;
         };
 
-        const checkAutoPrint = (change) => {
+        const checkAutoPrint = (change, estabId) => {
             if (!visualizandoHoje) return;
             const data = change.doc.data();
             let status = data.status || 'recebido';
@@ -123,11 +149,7 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             const rawItens = Array.isArray(data.itens) ? data.itens : [];
             const temItensCozinha = rawItens.some(isItemCozinha);
 
-            // 🔥 FIX: Se for pedido do Salão (Mesa), NUNCA dispara popup automático se for APENAS bebida.
-            // As bebidas do salão normalmente vão direto pro bar (o garçom avisa ou usa a via manual).
-            if (!isDelivery && !temItensCozinha) {
-                return;
-            }
+            if (!isDelivery && !temItensCozinha) return;
 
             if (configAtual === 'cozinha' && !isDelivery) {
                 if (!temItensCozinha) return; 
@@ -143,7 +165,7 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                     if (impressosLocal.length > 50) impressosLocal.shift();
                     localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
 
-                    const pedidoParaImprimir = processarDadosPedido({ id: pedidoId, ...data });
+                    const pedidoParaImprimir = processarDadosPedido({ id: pedidoId, ...data }, estabId);
                     if (pedidoParaImprimir) {
                         if (configAtual === 'cozinha' && !isDelivery) {
                             pedidoParaImprimir.itens = (pedidoParaImprimir.itens || []).filter(isItemCozinha);
@@ -153,10 +175,9 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                     }
                 };
 
-                // 🔥 PREVINE RACE CONDITION DE MÚLTIPLAS ABAS USANDO WEB LOCKS
                 if (window.navigator && window.navigator.locks) {
                     window.navigator.locks.request(`print_auto_${pedidoId}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
-                        if (!lock) return; // Outra aba já pegou o lock e está imprimindo
+                        if (!lock) return;
                         await tentarImprimir();
                     });
                 } else {
@@ -166,74 +187,76 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         };
 
         const unsubscribers = [];
-        // Tenta cache primeiro (offline-first), depois servidor
-        const estabRef = doc(db, 'estabelecimentos', estabelecimentoAtivo);
-        getDocFromCache(estabRef)
-            .then(snap => { if (snap.exists()) setEstabelecimentoInfo(snap.data()); })
-            .catch(() => getDoc(estabRef).then(snap => { if (snap.exists()) setEstabelecimentoInfo(snap.data()); }).catch(() => {}));
+        
+        // Fetch Estabelecimentos Info
+        estabs.forEach(estabId => {
+            const estabRef = doc(db, 'estabelecimentos', estabId);
+            getDocFromCache(estabRef)
+                .then(snap => { if (snap.exists()) setEstabelecimentosInfo(prev => ({...prev, [estabId]: snap.data()})); })
+                .catch(() => getDoc(estabRef).then(snap => { if (snap.exists()) setEstabelecimentosInfo(prev => ({...prev, [estabId]: snap.data()})); }).catch(() => {}));
+        });
 
-        let isFirstRun = true;
-        let dadosSubcollection = [];
-        let dadosVendasRaiz = [];
+        let dadosSubcollection = {};
+        let dadosVendasRaiz = {};
+        
+        const tsStart = Timestamp.fromDate(startOfDay);
+        const tsEnd = Timestamp.fromDate(endOfDay);
 
         const mergeAndSetPedidos = () => {
             const mergedMap = new Map();
-            dadosSubcollection.forEach(d => mergedMap.set(d.id, d));
-            dadosVendasRaiz.forEach(d => { 
+            Object.values(dadosSubcollection).flat().forEach(d => mergedMap.set(d.id, d));
+            Object.values(dadosVendasRaiz).flat().forEach(d => { 
                 if (d.mesaId || d.mesaNumero) return; 
                 if (!mergedMap.has(d.id)) mergedMap.set(d.id, d); 
             });
 
-            const listaTodos = Array.from(mergedMap.values()).map(d => processarDadosPedido(d)).filter(p => {
+            const listaTodos = Array.from(mergedMap.values()).map(d => processarDadosPedido(d, d.estabelecimentoId)).filter(p => {
                 if (p === null) return false;
                 const dateOk = isSelectedDate(p.dataPedido || p.createdAt || p.criadoEm || p.updatedAt);
                 return visualizandoHoje && !(p.dataPedido || p.createdAt || p.criadoEm || p.updatedAt) ? true : dateOk;
             });
             listaTodos.forEach(p => { if (['pendente', 'aguardando_pagamento', 'pago', 'paid', 'approved', 'success'].includes(p.status)) p.status = 'recebido'; });
 
-            setPedidos(prev => ({
-                ...prev,
+            setPedidos({
                 recebido: listaTodos.filter(p => p.status === 'recebido'),
                 preparo: listaTodos.filter(p => p.status === 'preparo'),
                 em_entrega: listaTodos.filter(p => p.status === 'em_entrega'),
                 pronto_para_servir: listaTodos.filter(p => p.status === 'pronto_para_servir'),
                 finalizado: listaTodos.filter(p => p.status === 'finalizado')
-            }));
+            });
             setLoading(false);
         };
 
-        const tsStart = Timestamp.fromDate(startOfDay);
-        const tsEnd = Timestamp.fromDate(endOfDay);
+        estabs.forEach(estabId => {
+            const qPedidos = query(collection(db, 'estabelecimentos', estabId, 'pedidos'), where('createdAt', '>=', tsStart), where('createdAt', '<=', tsEnd), orderBy('createdAt', 'asc'));
+            const qVendasRaiz = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabId), where('criadoEm', '>=', tsStart), where('criadoEm', '<=', tsEnd));
 
-        // Query principal (pedidos com createdAt - delivery, salão, etc)
-        const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos'), where('createdAt', '>=', tsStart), where('createdAt', '<=', tsEnd), orderBy('createdAt', 'asc'));
-        const qVendasRaiz = query(collection(db, 'vendas'), where('estabelecimentoId', '==', estabelecimentoAtivo), where('criadoEm', '>=', tsStart), where('criadoEm', '<=', tsEnd));
+            if (visualizandoHoje) {
+                let isFirstRun = true;
+                unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
+                    if (!isFirstRun) snapshot.docChanges().forEach(change => checkAutoPrint(change, estabId));
+                    dadosSubcollection[estabId] = snapshot.docs.map(d => ({ id: d.id, estabelecimentoId: estabId, ...d.data() }));
+                    mergeAndSetPedidos(); isFirstRun = false;
+                }));
 
-        if (visualizandoHoje) {
-            unsubscribers.push(onSnapshot(qPedidos, (snapshot) => {
-                if (!isFirstRun) snapshot.docChanges().forEach(checkAutoPrint);
-                dadosSubcollection = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                mergeAndSetPedidos(); isFirstRun = false;
-            }, (err) => console.error('❌ Erro query pedidos:', err)));
-
-            unsubscribers.push(onSnapshot(qVendasRaiz, (snapshot) => { 
-                dadosVendasRaiz = snapshot.docs.map(d => ({ id: d.id, ...d.data() })); 
-                mergeAndSetPedidos(); 
-            }, (err) => console.error('❌ Erro query vendas:', err)));
-        } else {
-            Promise.all([getDocs(qPedidos), getDocs(qVendasRaiz)]).then(([snapPedidos, snapVendasRaiz]) => {
-                dadosSubcollection = snapPedidos.docs.map(d => ({ id: d.id, ...d.data() }));
-                dadosVendasRaiz = snapVendasRaiz.docs.map(d => ({ id: d.id, ...d.data() }));
-                mergeAndSetPedidos();
-                isFirstRun = false;
-            }).catch(e => {
-                console.error("Erro ao carregar histórico de pedidos:", e);
-                setLoading(false);
-            });
-        }
+                unsubscribers.push(onSnapshot(qVendasRaiz, (snapshot) => { 
+                    dadosVendasRaiz[estabId] = snapshot.docs.map(d => ({ id: d.id, estabelecimentoId: estabId, ...d.data() })); 
+                    mergeAndSetPedidos(); 
+                }));
+            } else {
+                Promise.all([getDocs(qPedidos), getDocs(qVendasRaiz)]).then(([snapPedidos, snapVendasRaiz]) => {
+                    dadosSubcollection[estabId] = snapPedidos.docs.map(d => ({ id: d.id, estabelecimentoId: estabId, ...d.data() }));
+                    dadosVendasRaiz[estabId] = snapVendasRaiz.docs.map(d => ({ id: d.id, estabelecimentoId: estabId, ...d.data() }));
+                    mergeAndSetPedidos();
+                }).catch(e => {
+                    console.error("Erro ao carregar histórico da rede:", e);
+                    setLoading(false);
+                });
+            }
+        });
 
         return () => unsubscribers.forEach(u => u());
-    }, [estabelecimentoAtivo, authLoading, processarDadosPedido, dataSelecionada]);
+    }, [estabs.join(','), authLoading, processarDadosPedido, dataSelecionada]);
 
     useEffect(() => {
         const dataHojeStr = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
@@ -252,15 +275,14 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                     
                     const deveTocarCampainha = realmenteNovos.some(p => {
                         const isMesa = p.source === 'salao' || p.tipo === 'mesa';
+                        const estabNome = estabelecimentosInfo[p.estabelecimentoId]?.nome || 'a loja';
                         
-                        // Constrói a mensagem dependendo do tipo do pedido
                         if (isMesa) {
-                            mensagemParaFalar = `Novo Pedido. Mesa ${p.mesaNumero || 'Indefinida'}.`;
-                            // Se for pedido do Salão (Mesa) e só tem bebidas, a cozinha não deve tocar campainha
+                            mensagemParaFalar = `Novo Pedido na ${estabNome}. Mesa ${p.mesaNumero || 'Indefinida'}.`;
                             if (!p.itensCozinha || p.itensCozinha.length === 0) return false;
                         } else {
                             const nome = p.cliente?.nome?.split(' ')[0] || 'Desconhecido';
-                            mensagemParaFalar = `Novo Delivery de ${nome}.`;
+                            mensagemParaFalar = `Novo Delivery de ${nome} na ${estabNome}.`;
                         }
 
                         if (isMesa && modoImpressaoRef.current === 'cozinha') return p.itensCozinha && p.itensCozinha.length > 0;
@@ -278,23 +300,24 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             }
         }
         prevRecebidosRef.current = novosRecebidos;
-    }, [pedidos.recebido, notificationsEnabled, userInteracted, dataSelecionada]);
+    }, [pedidos.recebido, notificationsEnabled, userInteracted, dataSelecionada, estabelecimentosInfo]);
 
     useEffect(() => {
         const processarFilaDeImpressao = async () => {
-            if (!isPrinting && printQueue.length > 0 && estabelecimentoInfo) {
+            if (!isPrinting && printQueue.length > 0) {
                 setIsPrinting(true);
                 const pedidoParaImprimir = printQueue[0];
+                const estabInfo = estabelecimentosInfo[pedidoParaImprimir.estabelecimentoId];
                 try {
-                    const roteamento = estabelecimentoInfo.roteamentoImpressao || {};
-                    const impBalcao = estabelecimentoInfo.impressoraBalcao;
-                    const impCozinha = estabelecimentoInfo.impressoraCozinha;
+                    const roteamento = estabInfo?.roteamentoImpressao || {};
+                    const impBalcao = estabInfo?.impressoraBalcao;
+                    const impCozinha = estabInfo?.impressoraCozinha;
 
                     if (impBalcao || impCozinha) await rotearEImprimir(pedidoParaImprimir, roteamento, impBalcao, impCozinha);
                     else {
                         const isDelivery = pedidoParaImprimir.source !== 'salao' && pedidoParaImprimir.tipo !== 'mesa';
                         const setorQuery = (modoImpressao === 'cozinha' && !isDelivery) ? '&setor=cozinha' : '';
-                        const url = `/comanda/${pedidoParaImprimir.id}?estabId=${estabelecimentoAtivo}${setorQuery}`;
+                        const url = `/comanda/${pedidoParaImprimir.id}?estabId=${pedidoParaImprimir.estabelecimentoId}${setorQuery}`;
                         const width = 350; const height = 600;
                         const left = (window.screen.width - width) / 2; const top = (window.screen.height - height) / 2;
                         const printWindow = window.open(url, `AutoPrint_${pedidoParaImprimir.id}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`);
@@ -307,26 +330,22 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             }
         };
         processarFilaDeImpressao();
-    }, [printQueue, isPrinting, estabelecimentoInfo, modoImpressao, estabelecimentoAtivo]);
+    }, [printQueue, isPrinting, estabelecimentosInfo, modoImpressao]);
 
-    const handleAtribuirMotoboy = useCallback(async (pedidoId, motoboyId, motoboyNome) => {
-        if (!pedidoId || !motoboyId) return toast.error("Dados inválidos");
+    const handleAtribuirMotoboy = useCallback(async (pedidoId, motoboyId, motoboyNome, estabelecimentoId) => {
+        if (!pedidoId || !motoboyId || !estabelecimentoId) return toast.error("Dados inválidos");
         try {
             const atribuirMotoboyBackend = httpsCallable(functions, 'atribuirMotoboyBackend');
-            await atribuirMotoboyBackend({ estabelecimentoId: estabelecimentoAtivo, pedidoId, motoboyId, motoboyNome });
+            await atribuirMotoboyBackend({ estabelecimentoId: estabelecimentoId, pedidoId, motoboyId, motoboyNome });
             toast.success(`🚀 ${motoboyNome} atribuído!`);
         } catch (error) { toast.error("Falha na atribuição"); }
-    }, [estabelecimentoAtivo]);
+    }, []);
 
-    const handleCancelarPedido = async (pedidoId) => {
-        if (!window.confirm("Deseja realmente cancelar este pedido? O estoque e o cashback (se houver) serão estornados automaticamente.")) return;
-
+    const handleCancelarPedido = async (pedidoId, estabelecimentoId) => {
+        if (!window.confirm("Deseja cancelar este pedido?")) return;
         try {
             const cancelarBackend = httpsCallable(functions, 'cancelarPedidoBackend');
-            await cancelarBackend({
-                estabelecimentoId: estabelecimentoAtivo,
-                pedidoId: pedidoId
-            });
+            await cancelarBackend({ estabelecimentoId: estabelecimentoId, pedidoId: pedidoId });
             toast.success("Pedido cancelado com sucesso!");
         } catch (error) {
             console.error(error);
@@ -334,64 +353,53 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         }
     };
 
-    const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
+    const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus, estabelecimentoId) => {
         if (isUpdatingRef.current || bloqueioAtualizacao.has(pedidoId)) return;
         try {
             isUpdatingRef.current = true;
             setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
 
             const atualizarStatusBackend = httpsCallable(functions, 'atualizarStatusPedidoBackend');
-            await atualizarStatusBackend({ estabelecimentoId: estabelecimentoAtivo, pedidoId, newStatus });
+            await atualizarStatusBackend({ estabelecimentoId: estabelecimentoId, pedidoId, newStatus });
             toast.success(`Status atualizado!`);
         } catch (error) { toast.error("Erro ao mover pedido."); }
         finally { setTimeout(() => { isUpdatingRef.current = false; setBloqueioAtualizacao(prev => { const novo = new Set(prev); novo.delete(pedidoId); return novo; }); }, 500); }
-    }, [estabelecimentoAtivo, bloqueioAtualizacao]);
+    }, [bloqueioAtualizacao]);
 
-    const handleUpdateFormaPagamento = useCallback(async (pedidoId, novaForma) => {
+    const handleUpdateFormaPagamento = useCallback(async (pedidoId, novaForma, estabelecimentoId) => {
         try {
             const atualizarFormaPagamentoBackend = httpsCallable(functions, 'atualizarFormaPagamentoPedidoBackend');
-            await atualizarFormaPagamentoBackend({ estabelecimentoId: estabelecimentoAtivo, pedidoId, novaForma });
-            toast.success('Forma de pagamento atualizada!');
+            await atualizarFormaPagamentoBackend({ estabelecimentoId: estabelecimentoId, pedidoId, novaForma });
+            toast.success('Forma atualizada!');
         } catch (error) { toast.error('Erro ao atualizar.'); }
-    }, [estabelecimentoAtivo]);
+    }, []);
 
-    // 🔄 iFood Auto-Polling Silencioso
-    // Chama a Cloud Function ifoodPolling a cada 30s.
-    // Quando ela salva novos pedidos no Firestore, o onSnapshot acima detecta automaticamente.
     useEffect(() => {
-        if (!estabelecimentoAtivo || authLoading) return;
-
+        if (estabs.length === 0 || authLoading) return;
         const ifoodPolling = httpsCallable(functions, 'ifoodPolling');
         let isMounted = true;
 
         const executarPolling = async () => {
             if (!isMounted) return;
-            try {
-                const result = await ifoodPolling({ estabelecimentoId: estabelecimentoAtivo });
-                if (result.data?.pedidosNovos > 0) {
-                    console.log(`🟢 iFood: ${result.data.pedidosNovos} novo(s) pedido(s) sincronizado(s)`);
-                }
-            } catch (err) {
-                // Silencioso - não exibe toast para não incomodar o usuário
-                console.warn('⚠️ iFood polling silencioso falhou:', err.message);
+            for (const estabId of estabs) {
+                try {
+                    const result = await ifoodPolling({ estabelecimentoId: estabId });
+                    if (result.data?.pedidosNovos > 0) {
+                        console.log(`🟢 iFood [${estabId}]: ${result.data.pedidosNovos} pedidos`);
+                    }
+                } catch (err) { }
             }
         };
 
-        // Executa imediatamente ao abrir a tela
         executarPolling();
-
-        // Depois repete a cada 30 segundos
         const intervalId = setInterval(executarPolling, 30000);
 
-        return () => {
-            isMounted = false;
-            clearInterval(intervalId);
-        };
-    }, [estabelecimentoAtivo, authLoading]);
+        return () => { isMounted = false; clearInterval(intervalId); };
+    }, [estabs.join(','), authLoading]);
 
     return {
         dataSelecionada, setDataSelecionada,
-        estabelecimentoInfo,
+        estabelecimentosInfo,
         pedidos, loading, motoboys,
         abaAtiva, setAbaAtiva,
         colunaMobile, setColunaMobile,

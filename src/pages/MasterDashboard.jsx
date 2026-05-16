@@ -42,7 +42,9 @@ function MasterDashboard() {
     financeiroFiltrado,
     crescimento,
     ticketMedio,
-    contatosEstabelecimentos
+    contatosEstabelecimentos,
+    selectedStore,
+    setSelectedStore
   } = useMasterDashboardData(currentUser, isMasterAdmin);
 
   const [lojaAberta, setLojaAberta] = useState(null);
@@ -186,8 +188,20 @@ function MasterDashboard() {
           
           {/* MAIN FATURAMENTO CARD (CLEAN GLASS) */}
           <div className="col-span-12 lg:col-span-5 bg-white/80 backdrop-blur-xl border border-white/50 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col justify-between hover:shadow-[0_15px_40px_rgb(0,0,0,0.06)] transition-all">
-            <div className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4">
-              <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest">{financeiroFiltrado ? 'Faturamento Isolado' : 'Visão Geral Hoje'}</p>
+            <div className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4 w-full">
+              <div className="flex flex-col gap-2">
+                 <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest">{financeiroFiltrado ? 'Faturamento Isolado' : 'Visão Geral Hoje'}</p>
+                 <select
+                   value={selectedStore}
+                   onChange={(e) => setSelectedStore(e.target.value)}
+                   className="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl px-3 py-2 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all font-semibold shadow-sm w-full sm:w-auto max-w-[200px] truncate"
+                 >
+                   <option value="">Todas as Lojas</option>
+                   {Object.entries(estabelecimentosMap).map(([id, nome]) => (
+                     <option key={id} value={id}>{nome}</option>
+                   ))}
+                 </select>
+              </div>
               <DateRangeFilter
                 activePreset={datePreset}
                 dateRange={dateRange}

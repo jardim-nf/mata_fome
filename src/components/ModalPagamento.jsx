@@ -33,6 +33,18 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
     const rawRole = String(userData?.role || userData?.cargo || 'admin').toLowerCase().trim();
     const isGarcom = rawRole.includes('garcom') || rawRole.includes('garçom') || rawRole.includes('atendente');
 
+    const isCpfValid = React.useMemo(() => {
+        if (cpfNota.length !== 11) return false;
+        if (/^(\d)\1{10}$/.test(cpfNota)) return false;
+        let s = 0; for (let i = 0; i < 9; i++) s += parseInt(cpfNota[i]) * (10 - i);
+        let r = (s * 10) % 11; if (r >= 10) r = 0;
+        if (r !== parseInt(cpfNota[9])) return false;
+        s = 0; for (let i = 0; i < 10; i++) s += parseInt(cpfNota[i]) * (11 - i);
+        r = (s * 10) % 11; if (r >= 10) r = 0;
+        if (r !== parseInt(cpfNota[10])) return false;
+        return true;
+    }, [cpfNota]);
+
     // --- UI RENDERIZADORES ---
     const renderHistoricoPagamentos = () => {
         if (jaPago <= 0) return null;
@@ -228,7 +240,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                             <p className="text-[10px] text-gray-400 font-bold mb-1">CONSUMO:</p>
                                             <div className="text-xs text-gray-500 space-y-1 max-h-20 overflow-y-auto">
                                                 {dados.itens.filter(i => i.preco > 0).map((item, idx) => (
-                                                    <div key={idx} className="flex justify-between">
+                                                    <div key={item.id || idx} className="flex justify-between">
                                                         <span>{item.quantidade || 1}x {item.nome}</span>
                                                         <span>{((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</span>
                                                     </div>
@@ -348,20 +360,10 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                                         setCpfNota(nums);
                                     }}
                                     className={`w-full p-3 bg-gray-50 border rounded-xl text-sm focus:ring-2 outline-none ${
-                                        cpfNota.length > 0 && cpfNota.length !== 11
-                                            ? 'border-red-400 focus:ring-red-300'
-                                            : cpfNota.length === 11
-                                                ? (() => {
-                                                    if (/^(\d)\1{10}$/.test(cpfNota)) return 'border-red-400 focus:ring-red-300';
-                                                    let s = 0; for (let i = 0; i < 9; i++) s += parseInt(cpfNota[i]) * (10 - i);
-                                                    let r = (s * 10) % 11; if (r >= 10) r = 0;
-                                                    if (r !== parseInt(cpfNota[9])) return 'border-red-400 focus:ring-red-300';
-                                                    s = 0; for (let i = 0; i < 10; i++) s += parseInt(cpfNota[i]) * (11 - i);
-                                                    r = (s * 10) % 11; if (r >= 10) r = 0;
-                                                    if (r !== parseInt(cpfNota[10])) return 'border-red-400 focus:ring-red-300';
-                                                    return 'border-emerald-400 focus:ring-emerald-300';
-                                                  })()
-                                                : 'border-gray-300 focus:ring-emerald-500'
+                                        cpfNota.length === 0 ? 'border-gray-300 focus:ring-emerald-500' :
+                                        cpfNota.length < 11 ? 'border-red-400 focus:ring-red-300' :
+                                        isCpfValid ? 'border-emerald-400 focus:ring-emerald-300' :
+                                        'border-red-400 focus:ring-red-300'
                                     }`}
                                     maxLength={11}
                                 />
@@ -396,6 +398,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                             {carregando ? 'Processando...' : (troco > 0 ? 'Encerrar com Troco' : 'Encerrar Mesa (Tudo Pago)')}
                         </button>
                     )}
+
                 </div>
             </div>
         );
