@@ -3,9 +3,10 @@ import { db } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { FaMicrophoneAlt, FaMusic } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
+import { useParams } from 'react-router-dom';
 
 export default function KaraokeTV() {
-  const { estabelecimentoIdPrincipal } = useAuth();
+  const { estabelecimentoId } = useParams();
   const [queue, setQueue] = useState([]);
 
   useEffect(() => {
@@ -17,11 +18,11 @@ export default function KaraokeTV() {
   }, []);
 
   useEffect(() => {
-    if (!estabelecimentoIdPrincipal) return;
+    if (!estabelecimentoId) return;
 
     const q = query(
       collection(db, 'karaoke_queue'),
-      where('estabelecimentoId', '==', estabelecimentoIdPrincipal)
+      where('estabelecimentoId', '==', estabelecimentoId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

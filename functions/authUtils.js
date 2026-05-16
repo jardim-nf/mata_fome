@@ -13,6 +13,9 @@ export async function verifyAdminAccess(request, estabelecimentoId) {
             ? token.estabelecimentos.includes(estabelecimentoId)
             : !!token.estabelecimentos[estabelecimentoId];
     }
+    if (token.estabelecimentoId === estabelecimentoId) {
+        hasAccess = true;
+    }
 
     // Se já é master ou já tem acesso via token, libera direto sem query lenta.
     if (isMaster || hasAccess) return;
@@ -22,6 +25,10 @@ export async function verifyAdminAccess(request, estabelecimentoId) {
     if (userDoc.exists) {
         const data = userDoc.data();
         isMaster = data.isMasterAdmin === true || data.role === 'master';
+        
+        if (data.estabelecimentoId === estabelecimentoId) {
+            hasAccess = true;
+        }
         
         if (data.estabelecimentosGerenciados) {
             hasAccess = Array.isArray(data.estabelecimentosGerenciados)

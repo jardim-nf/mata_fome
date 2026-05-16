@@ -75,7 +75,7 @@ function App() {
                 <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
                 <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
                 <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
-                <Route path="/karaoke/tv" element={<KaraokeTV />} />
+                <Route path="/karaoke/tv/:estabelecimentoId" element={<KaraokeTV />} />
                 <Route path="/cardapio" element={<ListaEstabelecimentos />} />
                 <Route path="/catalogo" element={<ListaEstabelecimentos />} />
                 <Route path="/cardapio/:estabelecimentoSlug" element={<Menu />} />

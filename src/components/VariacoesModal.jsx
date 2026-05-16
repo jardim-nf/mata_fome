@@ -22,9 +22,11 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
         let listaFinal = [];
         if (listaCrua && Array.isArray(listaCrua)) {
             listaCrua.forEach(adic => {
-                // Se for um GRUPO com variações dentro
-                if (adic.variacoes && adic.variacoes.length > 0) {
-                    const itensDeDentro = adic.variacoes.map(subItem => ({
+                // Se for um GRUPO com variações/opções dentro
+                const subLista = adic.variacoes || adic.opcoes || adic.itens;
+                
+                if (subLista && Array.isArray(subLista) && subLista.length > 0) {
+                    const itensDeDentro = subLista.map(subItem => ({
                         ...subItem,
                         id: subItem.id || `${adic.id}-${subItem.nome}`, 
                         nome: subItem.nome,

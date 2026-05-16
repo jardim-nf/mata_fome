@@ -448,3 +448,93 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
         return { success: false, message: e.message || 'Erro desconhecido interno' };
     }
 });
+
+// ==================================================================
+// 6. CANCELAR PEDIDO BACKEND
+// ==================================================================
+export const cancelarPedidoBackend = onCall({ cors: true, maxInstances: 1 }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
+
+    const { estabelecimentoId, pedidoId } = request.data || {};
+    if (!estabelecimentoId || !pedidoId) {
+        throw new HttpsError('invalid-argument', 'Dados incompletos (estabelecimentoId ou pedidoId).');
+    }
+
+    const { verifyAdminAccess } = await import('../authUtils.js');
+    await verifyAdminAccess(request, estabelecimentoId);
+
+    try {
+        const pedidoRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('pedidos').doc(pedidoId);
+        const pedidoSnap = await pedidoRef.get();
+        
+        if (!pedidoSnap.exists) {
+            throw new HttpsError('not-found', 'Pedido não encontrado.');
+        }
+
+        const pedidoData = pedidoSnap.data();
+        if (pedidoData.status === 'cancelado') {
+            throw new HttpsError('failed-precondition', 'Este pedido já está cancelado.');
+        }
+
+        const batch = db.batch();
+
+        // 1. Atualizar status para cancelado
+        batch.update(pedidoRef, {
+            status: 'cancelado',
+            updatedAt: FieldValue.serverTimestamp(),
+            canceladoEm: FieldValue.serverTimestamp(),
+            canceladoPor: uid
+        });
+
+        // 2. Estornar Cashback (se houve resgate)
+        if (pedidoData.cashbackResgatado > 0 && pedidoData.clienteId) {
+            const clienteRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('clientes').doc(pedidoData.clienteId);
+            batch.update(clienteRef, {
+                saldoCashback: FieldValue.increment(pedidoData.cashbackResgatado)
+            });
+        }
+
+        // 3. Estornar Usos do Cupom
+        if (pedidoData.cupomAplicado) {
+            const cupomRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('cupons').doc(pedidoData.cupomAplicado);
+            batch.update(cupomRef, {
+                usos: FieldValue.increment(-1)
+            });
+        }
+
+        // 4. Estornar Estoque
+        const itens = pedidoData.itens || [];
+        itens.forEach((item) => {
+            const categoriaId = item.categoriaId || item.category || item.categoria;
+            const produtoId = item.produtoIdOriginal || item.id;
+            const tipoColecao = item.tipoColecao || 'produtos';
+            
+            if (!categoriaId || !produtoId) return;
+            
+            const qtd = Number(item.quantidade || item.qtd) || 1;
+            
+            if (Array.isArray(item.fichaTecnica) && item.fichaTecnica.length > 0) {
+                item.fichaTecnica.forEach((ficha) => {
+                    if (ficha.insumoId) {
+                        const iRef = db.doc(`estabelecimentos/${estabelecimentoId}/insumos/${ficha.insumoId}`);
+                        batch.set(iRef, { estoqueAtual: FieldValue.increment(ficha.quantidade * qtd) }, { merge: true });
+                    }
+                });
+            } else {
+                const pRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/${tipoColecao}/${produtoId}`);
+                batch.set(pRef, { estoqueAtual: FieldValue.increment(qtd) }, { merge: true });
+            }
+        });
+
+        await batch.commit();
+
+        logger.info(`✅ Pedido ${pedidoId} cancelado com sucesso por ${uid}. Estoque e cashback estornados se aplicável.`);
+
+        return { success: true, message: 'Pedido cancelado e recursos estornados com sucesso.' };
+
+    } catch (error) {
+        logger.error("Erro em cancelarPedidoBackend:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});

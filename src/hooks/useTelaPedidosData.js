@@ -310,7 +310,28 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             }
         }
 
-        const itemEnriquecido = enrichWithGlobalAdicionais(itemAtualizado);
+        let itemEnriquecido = enrichWithGlobalAdicionais(itemAtualizado);
+        
+        // 🔥 Buscar variações para os adicionais globais que são produtos/itens e ainda não tem variações carregadas
+        if (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0) {
+            const toastIdAdics = toast.loading("Carregando extras...", { autoClose: false });
+            try {
+                const adicsPromises = itemEnriquecido.adicionais.map(async (adic) => {
+                    if (adic.tipoColecao && !adic.variacoes && !adic.opcoes && !adic.itens) {
+                        const varsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', adic.categoriaId, adic.tipoColecao, adic.id, 'variacoes'));
+                        const variacoes = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        return { ...adic, variacoes };
+                    }
+                    return adic;
+                });
+                itemEnriquecido.adicionais = await Promise.all(adicsPromises);
+                toast.dismiss(toastIdAdics);
+            } catch (e) {
+                console.error("Erro ao buscar subcoleções dos adicionais:", e);
+                toast.dismiss(toastIdAdics);
+            }
+        }
+
         const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || 
                           (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || 
                           (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || 

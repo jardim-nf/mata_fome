@@ -4,7 +4,7 @@ import { db } from "../firebaseCore.js";
 import { verifyAdminAccess } from "../authUtils.js";
 import * as logger from "firebase-functions/logger";
 
-export const gerenciarMesa = onCall({ enforceAppCheck: false }, async (request) => {
+export const gerenciarMesa = onCall({ enforceAppCheck: false, cors: true, maxInstances: 1 }, async (request) => {
   const { auth, data } = request;
   if (!auth) {
     throw new HttpsError("unauthenticated", "Usuário não autenticado.");
@@ -159,7 +159,7 @@ export const gerenciarMesa = onCall({ enforceAppCheck: false }, async (request) 
   }
 });
 
-export const chamarGarcomWeb = onCall({ enforceAppCheck: false }, async (request) => {
+export const chamarGarcomWeb = onCall({ enforceAppCheck: false, cors: true, maxInstances: 1 }, async (request) => {
   // ATENÇÃO: Esta function não requer autenticação (request.auth)
   // pois é usada pelo cliente via QR Code na mesa (usuário anônimo).
   
@@ -200,7 +200,7 @@ export const chamarGarcomWeb = onCall({ enforceAppCheck: false }, async (request
   }
 });
 
-export const salvarPedidoMesaBackend = onCall({ cors: true }, async (request) => {
+export const salvarPedidoMesaBackend = onCall({ cors: true, maxInstances: 1 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
 
