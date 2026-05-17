@@ -70,7 +70,15 @@ async function carregarProdutosRapido(estabId) {
         getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'produtos'))
       ]);
 
-      return [...itensSnap.docs, ...produtosSnap.docs]
+      const allDocs = [...itensSnap.docs, ...produtosSnap.docs];
+      const unicos = new Map();
+      allDocs.forEach(d => {
+        if (!unicos.has(d.id)) {
+          unicos.set(d.id, d);
+        }
+      });
+
+      return Array.from(unicos.values())
         .filter(d => d.data().ativo !== false)
         .map(docItem => {
           const dados = docItem.data();
@@ -81,6 +89,7 @@ async function carregarProdutosRapido(estabId) {
             id: docItem.id,
             categoria: cat.nome || 'Geral',
             categoriaId: cat.id,
+            tipoColecao: itensSnap.docs.some(x => x.id === docItem.id) ? 'itens' : 'produtos',
             adicionais: Array.isArray(dados.adicionais) && dados.adicionais.length > 0 ? dados.adicionais : [],
             variacoes: Array.isArray(dados.variacoes) && dados.variacoes.length > 0 ? dados.variacoes : [],
             _needsEnrichment: !(

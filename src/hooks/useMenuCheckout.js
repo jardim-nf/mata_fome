@@ -285,6 +285,7 @@ export function useMenuCheckout({
                 precoFinal: item.precoFinal,
                 categoria: item.categoria || item.categoriaId || '',
                 categoriaId: item.categoriaId || item.categoria || '',
+                tipoColecao: item.tipoColecao || 'produtos', // Adicionado para correção de estoque no backend
                 observacao: item.observacao || '',
                 variacaoSelecionada: item.variacaoSelecionada || null,
                 adicionaisSelecionados: item.adicionaisSelecionados || [],
