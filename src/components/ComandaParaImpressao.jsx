@@ -329,14 +329,27 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                 {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
                                 {itens.map((item, index) => {
                                     
-                                    let adicionais = [];
-                                    if (Array.isArray(item.adicionais)) {
-                                        adicionais = item.adicionais;
+                                    let adicionaisRaw = [];
+                                    if (Array.isArray(item.adicionaisSelecionados) && item.adicionaisSelecionados.length > 0) {
+                                        adicionaisRaw = item.adicionaisSelecionados;
+                                    } else if (item.adicionaisSelecionados && typeof item.adicionaisSelecionados === 'object' && Object.keys(item.adicionaisSelecionados).length > 0) {
+                                        adicionaisRaw = Object.values(item.adicionaisSelecionados);
+                                    } else if (Array.isArray(item.adicionais)) {
+                                        adicionaisRaw = item.adicionais;
                                     } else if (item.adicionais && typeof item.adicionais === 'object') {
-                                        adicionais = Object.values(item.adicionais);
+                                        adicionaisRaw = Object.values(item.adicionais);
                                     } else if (Array.isArray(item.produto?.adicionais)) {
-                                        adicionais = item.produto.adicionais;
+                                        adicionaisRaw = item.produto.adicionais;
                                     }
+
+                                    const lixo = ['COMPLEMENTOS', 'MOLHOS', 'CARNES', 'PAES', 'SALADAS', 'QUEIJOS', 'BANHEIRO', 'FICHAS', 'ADICIONAIS', 'EXTRAS'];
+                                    const adicionais = adicionaisRaw.filter(a => {
+                                        const nomeStr = typeof a === 'string' ? a : (a.nome || '');
+                                        const nomeUpper = String(nomeStr).toUpperCase();
+                                        const isLixo = lixo.some(lx => nomeUpper === lx || nomeUpper.includes(lx));
+                                        const temPreco = a.preco !== undefined && a.preco !== null && Number(a.preco) > 0;
+                                        return !isLixo || temPreco;
+                                    });
 
                                     const nomeProduto = item.nome || item.produto?.nome || 'Item sem nome';
                                     const qtdProduto = item.quantidade || item.qtd || 1;
@@ -351,11 +364,14 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">
-                                                    {adicionais.map((adic, idx) => (
-                                                        <div key={idx} className="flex items-center text-[12px] font-bold text-black uppercase">
-                                                            <span className="mr-1">+</span><span>{adic.quantidade || 1}X {adic.nome}</span>
-                                                        </div>
-                                                    ))}
+                                                    {adicionais.map((adic, idx) => {
+                                                        const nomeAdic = typeof adic === 'string' ? adic : (adic.nome || 'Adicional');
+                                                        return (
+                                                            <div key={idx} className="flex items-center text-[12px] font-bold text-black uppercase">
+                                                                <span className="mr-1">+</span><span>{adic.quantidade || 1}X {nomeAdic}</span>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                             {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block break-words whitespace-normal">OBS: {item.observacao}</div>}

@@ -560,6 +560,7 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
         mesaNumero: mesaData.numero || 'N/A',
         estabelecimentoId,
         createdAt: FieldValue.serverTimestamp(),
+        criadoEm: FieldValue.serverTimestamp(), // Necessário para filtros de datas e relatórios
         pagamentos: pagamentosValidos,
         total: totalPagoAgora,
         incluirTaxa: incluirTaxa || false,

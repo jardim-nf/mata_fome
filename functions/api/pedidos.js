@@ -128,6 +128,33 @@ export const atualizarStatusPedidoBackend = onCall({ cors: true }, async (reques
   }
 });
 
+export const atribuirMotoboyBackend = onCall({ cors: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
+
+  const { estabelecimentoId, pedidoId, motoboyId, motoboyNome } = request.data || {};
+  if (!estabelecimentoId || !pedidoId || !motoboyId) {
+    throw new HttpsError('invalid-argument', 'Dados incompletos (estabelecimentoId, pedidoId ou motoboyId).');
+  }
+
+  const { verifyAdminAccess } = await import('../authUtils.js');
+  await verifyAdminAccess(request, estabelecimentoId);
+
+  try {
+    const pedidoRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('pedidos').doc(pedidoId);
+    await pedidoRef.update({
+      motoboyId,
+      motoboyNome: motoboyNome || '',
+      status: 'em_entrega',
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    logger.error("Erro em atribuirMotoboyBackend:", error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
 export const atualizarFormaPagamentoPedidoBackend = onCall({ cors: true }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
@@ -179,6 +206,7 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
         ...vendaData,
         id: vendaRef.id, // Força ter o ID dentro do documento
         createdAt: FieldValue.serverTimestamp(),
+        criadoEm: FieldValue.serverTimestamp(), // Necessário para filtros de datas e relatórios
         funcionarioId: uid,
         funcionario: request.auth.token?.name || request.auth.token?.email || 'Sistema'
     };
@@ -290,6 +318,14 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
             if (!produtoId || !categoriaId) continue;
 
             subtotalReal += (item.precoFinal || 0) * (item.qtd || 1);
+            
+            // SANITIZAÇÃO DE SEGURANÇA: Removemos 'adicionais' por completo para impedir 
+            // poluição no banco de dados, oriunda de versões antigas do frontend em cache.
+            // O sistema passa a utilizar apenas 'adicionaisSelecionados'.
+            if (item.adicionais) {
+                delete item.adicionais;
+            }
+
             itensValidados.push(item);
         }
 

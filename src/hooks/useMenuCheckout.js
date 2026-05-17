@@ -274,9 +274,26 @@ export function useMenuCheckout({
             // ---- REFATORAÇÃO DE SEGURANÇA: ENVIAR PARA A CLOUD FUNCTION ----
             const finalizarPedidoBackend = httpsCallable(functions, 'finalizarCheckoutDelivery');
             
+            // 🔥 CORREÇÃO: Limpar o carrinho para evitar o envio de `item.adicionais` poluído com todos os globais
+            const carrinhoLimpo = carrinho.map(item => ({
+                id: item.id,
+                produtoIdOriginal: item.produtoIdOriginal || item.id,
+                nome: item.nome,
+                qtd: item.qtd || item.quantidade,
+                quantidade: item.qtd || item.quantidade,
+                preco: item.preco,
+                precoFinal: item.precoFinal,
+                categoria: item.categoria || item.categoriaId || '',
+                categoriaId: item.categoriaId || item.categoria || '',
+                observacao: item.observacao || '',
+                variacaoSelecionada: item.variacaoSelecionada || null,
+                adicionaisSelecionados: item.adicionaisSelecionados || [],
+                // NOTA: Ignoramos propositalmente `item.adicionais` aqui, pois no Menu.jsx ele contém todos os globais
+            }));
+
             const reqData = cleanData({
                 estabelecimentoId: actualEstabelecimentoId,
-                carrinho: carrinho,
+                carrinho: carrinhoLimpo,
                 clienteDados: {
                     nome: nomeCliente,
                     telefone: telefoneCliente,

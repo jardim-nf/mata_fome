@@ -239,17 +239,21 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
 
     const { estabelecimentoId, startDate, endDate } = request.data || {};
     if (!estabelecimentoId || !startDate || !endDate) {
-        throw new HttpsError('invalid-argument', 'Parâmetros incompletos.');
+        throw new HttpsError('invalid-argument', 'Parâmetros insuficientes.');
     }
 
     await verifyAdminAccess(request, estabelecimentoId);
 
-    try {
-        const start = new Date(startDate + 'T00:00:00');
-        const end = new Date(endDate + 'T23:59:59');
-        const startTs = Timestamp.fromDate(start);
-        const endTs = Timestamp.fromDate(end);
+    // Fuso horário do Brasil (UTC-3)
+    // Se a data é '2026-05-16', queremos que comece as 00:00:00 do Brasil (03:00:00 UTC)
+    const [yS, mS, dS] = startDate.split('-');
+    const startTs = Timestamp.fromDate(new Date(Date.UTC(yS, mS - 1, dS, 3, 0, 0, 0)));
 
+    // E termine as 23:59:59 do Brasil (02:59:59 UTC do dia seguinte)
+    const [yE, mE, dE] = endDate.split('-');
+    const endTs = Timestamp.fromDate(new Date(Date.UTC(yE, mE - 1, dE, 26, 59, 59, 999)));
+
+    try {
         const pedidosRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('pedidos');
         const vendasRef = db.collection('vendas'); // Global, mas filtra por estabelecimento
         const pedidosGlobalRef = db.collection('pedidos'); // Casos antigos
@@ -261,8 +265,12 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
         const [snapSub, snapGlob, snapMesa] = await Promise.all([qSub, qGlob, qMesa]);
 
         let allDataMap = new Map();
-        
-        const isMesaDoc = (data) => data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
+        const isMesaDoc = (data) => data.tipo === 'mesa' || data.origem === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
+
+        const safeNum = (val) => {
+            const n = Number(val);
+            return isNaN(n) ? 0 : n;
+        };
 
         // Mapeamento simples
         const extractData = (doc, origem) => {
@@ -270,14 +278,16 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
             const dateVal = data.createdAt || data.criadoEm || data.data;
             const parsedDate = dateVal?.toDate ? dateVal.toDate() : (dateVal ? new Date(dateVal) : new Date());
 
+            const isMesa = isMesaDoc(data) || origem === 'mesa';
+
             const base = {
                 id: doc.id,
                 origem,
                 dataStr: parsedDate.toISOString(),
-                totalFinal: Number(data.totalFinal || data.total || 0),
-                taxaEntrega: Number(data.taxaEntrega || 0),
-                tipo: data.tipo || 'delivery',
-                status: data.status || '',
+                totalFinal: safeNum(data.totalFinal !== undefined ? data.totalFinal : data.total),
+                taxaEntrega: safeNum(data.taxaEntrega),
+                tipo: isMesa ? 'mesa' : (data.tipo || 'delivery'),
+                status: data.status || (isMesa ? 'finalizada' : ''),
                 formaPagamento: data.formaPagamento || '',
                 pagamentos: data.pagamentos || {},
                 clienteNome: data.clienteNome || data.nomeCliente || '',
@@ -287,8 +297,8 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
                 mesaNumero: data.mesaNumero || data.numeroMesa || null,
                 itens: (data.itens || []).map(it => ({
                     nome: it.nome || 'Item',
-                    preco: Number(it.preco || 0),
-                    quantidade: Number(it.quantidade || 1),
+                    preco: safeNum(it.preco),
+                    quantidade: safeNum(it.quantidade || 1),
                     status: it.status || ''
                 })),
                 pedidoId: data.pedidoId || null
@@ -309,11 +319,67 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
         // Ordenar do mais novo para o mais velho
         dedup.sort((a, b) => new Date(b.dataStr) - new Date(a.dataStr));
 
-        return { success: true, pedidos: dedup };
+        // Sanitização recursiva agressiva para impedir que qualquer NaN chegue ao Firebase Encode
+        const sanitizePayload = (obj) => {
+            if (obj === null || obj === undefined) return null;
+            if (typeof obj === 'number') {
+                return (isNaN(obj) || !isFinite(obj)) ? 0 : obj;
+            }
+            if (typeof obj === 'string' || typeof obj === 'boolean') {
+                return obj;
+            }
+            if (Array.isArray(obj)) {
+                return obj.map(item => sanitizePayload(item));
+            }
+            if (typeof obj === 'object') {
+                const newObj = {};
+                for (const key of Object.keys(obj)) {
+                    newObj[key] = sanitizePayload(obj[key]);
+                }
+                return newObj;
+            }
+            return null;
+        };
+
+        const safeDedup = sanitizePayload(dedup);
+
+        return { success: true, pedidos: safeDedup };
 
     } catch (error) {
         logger.error('Erro em gerarRelatorioBackend:', error);
         throw new HttpsError('internal', error.message);
+    }
+});
+
+// Endpoint temporário para consertar vendas sem criadoEm
+export const fixVendasEndpoint = onRequest({ cors: true, maxInstances: 1 }, async (req, res) => {
+    try {
+        const vendasSnap = await db.collection('vendas').get();
+        let count = 0;
+        let batch = db.batch();
+        
+        const commitPromises = [];
+
+        vendasSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.createdAt && !data.criadoEm) {
+                batch.update(doc.ref, { criadoEm: data.createdAt });
+                count++;
+                if (count % 400 === 0) {
+                    commitPromises.push(batch.commit());
+                    batch = db.batch();
+                }
+            }
+        });
+        if (count % 400 !== 0) {
+            commitPromises.push(batch.commit());
+        }
+        
+        await Promise.all(commitPromises);
+        
+        res.status(200).send({ success: true, count, message: "Vendas corrigidas" });
+    } catch (e) {
+        res.status(500).send({ error: e.message });
     }
 });
 

@@ -307,10 +307,21 @@ export default function ImpressaoIsolada() {
                         <tbody>
                             {dados.itens.map((item, idx) => {
                                 let adicionais = [];
-                                if (Array.isArray(item.adicionaisSelecionados)) adicionais = item.adicionaisSelecionados;
-                                else if (Array.isArray(item.adicionais)) adicionais = item.adicionais;
-                                else if (Array.isArray(item.produto?.adicionais)) adicionais = item.produto.adicionais;
-                                else if (Array.isArray(item.item?.adicionais)) adicionais = item.item.adicionais;
+                                if (Array.isArray(item.adicionaisSelecionados) && item.adicionaisSelecionados.length > 0) {
+                                    adicionais = item.adicionaisSelecionados;
+                                } else if (Array.isArray(item.adicionais)) {
+                                    const lixo = ['COMPLEMENTOS', 'MOLHOS', 'CARNES', 'PAES', 'SALADAS', 'QUEIJOS', 'BANHEIRO', 'FICHAS', 'ADICIONAIS', 'EXTRAS'];
+                                    adicionais = item.adicionais.filter(a => {
+                                        const nomeUpper = String(a.nome || '').toUpperCase();
+                                        const isLixo = lixo.some(lx => nomeUpper === lx || nomeUpper.includes(lx));
+                                        const temPreco = a.preco !== undefined && a.preco !== null && Number(a.preco) > 0;
+                                        return !isLixo || temPreco;
+                                    });
+                                } else if (Array.isArray(item.produto?.adicionais)) {
+                                    adicionais = item.produto.adicionais;
+                                } else if (Array.isArray(item.item?.adicionais)) {
+                                    adicionais = item.item.adicionais;
+                                }
 
                                 return (
                                     <tr key={idx}>
@@ -325,10 +336,13 @@ export default function ImpressaoIsolada() {
 
                                             {adicionais.length > 0 && (
                                                 <div style={{ fontSize: '11px', marginTop: '2px' }}>
-                                                    {adicionais.map((adc, i) => (
-                                                        <div key={i}>+ {adc.nome}</div>
-                                                    ))}
-                                                </div>
+                                                    {(() => {
+                                            const adics = adicionais;
+                                            return adics.map((adc, i) => {
+                                            const nomeAdic = typeof adc === 'string' ? adc : (adc.nome || 'Adicional');
+                                            return <div key={i}>+ {nomeAdic}</div>;
+                                        });
+                                    })()}                             </div>
                                             )}
 
                                             {item.obsCalculada && <div style={{ fontSize: '11px', marginTop: '2px', fontWeight: 'bold' }}>* OBS: {item.obsCalculada}</div>}

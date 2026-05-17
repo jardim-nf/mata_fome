@@ -671,7 +671,7 @@ function ClientOrderHistory() {
                             quantidade: item.quantidade || item.qtd || 1,
                             observacao: item.observacoes || item.observacao || '',
                             variacaoSelecionada: item.variacao || item.variacaoSelecionada || null,
-                            adicionaisSelecionados: item.adicionais || item.adicionaisSelecionados || []
+                            adicionaisSelecionados: item.adicionaisSelecionados || []
                           }));
                           localStorage.setItem('ideafood_repetir_pedido', JSON.stringify(itensParaRepetir));
                           const slug = estabelecimentos[order.estabelecimentoId]?.slug || order.estabelecimentoId;

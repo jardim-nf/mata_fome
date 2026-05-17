@@ -58,7 +58,34 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
     const processarDadosPedido = useCallback((pedidoData) => {
         if (!pedidoData || !pedidoData.id) return null;
         
-        const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens : [];
+        // CORREÇÃO: Sanitiza os itens para remover a poluição de categorias globais de adicionais
+        const rawItens = Array.isArray(pedidoData.itens) ? pedidoData.itens.map(item => {
+            let adics = item.adicionaisSelecionados;
+            
+            // Se adicionaisSelecionados não existe ou não é array, fazemos o fallback para adicionais
+            if (!adics || !Array.isArray(adics)) {
+                adics = Array.isArray(item.adicionais) ? item.adicionais : [];
+            } else if (adics.length === 0 && Array.isArray(item.adicionais) && item.adicionais.length > 0) {
+                 adics = item.adicionais;
+            }
+
+            // Sempre filtrar lixo de forma incondicional (pois o cache do cliente pode ter salvo lixo no adicionaisSelecionados)
+            const lixo = ['COMPLEMENTOS', 'MOLHOS', 'CARNES', 'PAES', 'SALADAS', 'QUEIJOS', 'BANHEIRO', 'FICHAS', 'ADICIONAIS', 'EXTRAS'];
+            adics = adics.filter(a => {
+                const nomeStr = typeof a === 'string' ? a : (a.nome || '');
+                const nomeUpper = String(nomeStr).toUpperCase();
+                const isLixo = lixo.some(lx => nomeUpper === lx || nomeUpper.includes(lx));
+                const temPreco = a.preco !== undefined && a.preco !== null && Number(a.preco) > 0;
+                return !isLixo || temPreco;
+            });
+
+            return {
+                ...item,
+                adicionaisSelecionados: adics,
+                adicionais: adics // Sobrescreve para que PedidoCard e printService usem a lista limpa
+            };
+        }) : [];
+
         const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
         const clienteLimpo = limparDadosCliente(pedidoData.cliente);
         

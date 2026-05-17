@@ -247,7 +247,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
 
     const produtosFiltrados = useMemo(() => {
         return cardapio.filter(p =>
-            (!termoBusca || p.nome.toLowerCase().includes(termoBusca.toLowerCase())) &&
+            (!termoBusca || (p.nome || '').toLowerCase().includes((termoBusca || '').toLowerCase())) &&
             (categoriaAtiva === 'Todos' || p.categoria === categoriaAtiva)
         );
     }, [cardapio, termoBusca, categoriaAtiva]);

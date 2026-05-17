@@ -112,13 +112,25 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
                   
                   {/* Adicionais — checa ambas as chaves possíveis */}
                   {(() => {
-                    const listaAdicionais = item.adicionaisSelecionados || item.adicionais || [];
+                    let listaAdicionais = [];
+                    if (Array.isArray(item.adicionaisSelecionados) && item.adicionaisSelecionados.length > 0) {
+                        listaAdicionais = item.adicionaisSelecionados;
+                    } else if (item.adicionaisSelecionados && typeof item.adicionaisSelecionados === 'object' && Object.keys(item.adicionaisSelecionados).length > 0) {
+                        listaAdicionais = Object.values(item.adicionaisSelecionados);
+                    } else if (Array.isArray(item.adicionais)) {
+                        listaAdicionais = item.adicionais;
+                    } else if (item.adicionais && typeof item.adicionais === 'object') {
+                        listaAdicionais = Object.values(item.adicionais);
+                    } else if (Array.isArray(item.produto?.adicionais)) {
+                        listaAdicionais = item.produto.adicionais;
+                    }
+                    
                     if (!listaAdicionais || listaAdicionais.length === 0) return null;
                     return (
                       <div className="obs">
                         {listaAdicionais.map((a, ai) => {
                           const precoAdc = a.preco || a.valor || 0;
-                          const nomeAdc = a.nome || 'Adicional';
+                          const nomeAdc = typeof a === 'string' ? a : (a.nome || 'Adicional');
                           return (
                             <div key={ai}>+ {nomeAdc}{precoAdc > 0 ? ` (R$ ${Number(precoAdc).toFixed(2)})` : ''}</div>
                           );

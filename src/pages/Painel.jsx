@@ -14,13 +14,51 @@ import { useOrdersPanel } from '../hooks/useOrdersPanel';
 import { useFiscalNfce } from '../hooks/useFiscalNfce';
 import GrupoPedidosMesa from '../components/painel/GrupoPedidosMesa';
 import { db } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { matchTermos, TERMOS_BEBIDA } from '../utils/categoriaUtils';
 function Painel() {
     const navigate = useNavigate();
     const { loading: authLoading, estabelecimentosGerenciados , estabelecimentoIdPrincipal, userData } = useAuth();
     const estabelecimentoAtivo = useMemo(() => estabelecimentoIdPrincipal || null, [estabelecimentosGerenciados]);
+    // === INÍCIO DO SCRIPT DE RECUPERAÇÃO DE VENDAS INVISÍVEIS E PEDIDOS ===
+    React.useEffect(() => {
+        if (!estabelecimentoAtivo) return;
+
+        const fixOrder = async () => {
+            try {
+                // Recuperar pedidos perdidos com status "entrega"
+                const pedidosRef = collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos');
+                const q = query(pedidosRef, where('status', '==', 'entrega'));
+                const snap = await getDocs(q);
+                snap.forEach(async (docSnap) => {
+                    await updateDoc(docSnap.ref, { status: 'em_entrega' });
+                    toast.success('🎉 Pedido perdido recuperado!');
+                });
+
+                // Recuperar vendas invisíveis (tem createdAt, mas não criadoEm)
+                const vendasRef = collection(db, 'vendas');
+                const vendasQ = query(vendasRef, where('estabelecimentoId', '==', estabelecimentoAtivo));
+                const vendasSnap = await getDocs(vendasQ);
+                let countVendas = 0;
+                vendasSnap.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    if (data.createdAt && !data.criadoEm) {
+                        updateDoc(docSnap.ref, { criadoEm: data.createdAt });
+                        countVendas++;
+                    }
+                });
+                if (countVendas > 0) {
+                    toast.success(`🎉 ${countVendas} vendas invisíveis foram recuperadas!`);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        fixOrder();
+    }, [estabelecimentoAtivo]);
+    // === FIM DO SCRIPT ===
 
     const {
         dataSelecionada, setDataSelecionada,

@@ -112,10 +112,35 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
                                             <div className="italic">- {item.variacaoSelecionada?.nome || item.variacao?.nome}</div>
                                         )}
 
-                                        {/* Adicionais Selecionados */}
-                                        {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
-                                            <div key={i}>+ {adc.nome}</div>
-                                        ))}
+                                        {(() => {
+                                            let adics = [];
+                                            if (Array.isArray(item.adicionaisSelecionados) && item.adicionaisSelecionados.length > 0) {
+                                                adics = item.adicionaisSelecionados;
+                                            } else if (item.adicionaisSelecionados && typeof item.adicionaisSelecionados === 'object' && Object.keys(item.adicionaisSelecionados).length > 0) {
+                                                adics = Object.values(item.adicionaisSelecionados);
+                                            } else if (Array.isArray(item.adicionais)) {
+                                                adics = item.adicionais;
+                                            } else if (item.adicionais && typeof item.adicionais === 'object') {
+                                                adics = Object.values(item.adicionais);
+                                            } else if (Array.isArray(item.produto?.adicionais)) {
+                                                adics = item.produto.adicionais;
+                                            }
+
+                                            // Filtra lixo
+                                            const lixoTotal = ['COMPLEMENTOS', 'MOLHOS', 'CARNES', 'PAES', 'SALADAS', 'QUEIJOS', 'BANHEIRO', 'FICHAS', 'ADICIONAIS', 'EXTRAS'];
+                                            adics = adics.filter(a => {
+                                                const nomeStr = typeof a === 'string' ? a : (a.nome || '');
+                                                const nomeUpper = String(nomeStr).toUpperCase();
+                                                const isLixo = lixoTotal.some(lx => nomeUpper === lx || nomeUpper.includes(lx));
+                                                const temPreco = a.preco !== undefined && a.preco !== null && Number(a.preco) > 0;
+                                                return !isLixo || temPreco;
+                                            });
+
+                                            return adics.map((adc, i) => {
+                                                const nomeAdic = typeof adc === 'string' ? adc : (adc.nome || '');
+                                                return <div key={i}>+ {nomeAdic}</div>;
+                                            });
+                                        })()}
 
                                         {item.observacao && (
                                             <div className="font-bold mt-0.5 uppercase">** {item.observacao}</div>
@@ -210,9 +235,46 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao, setor }) => {
                                     <div className="italic">- {item.variacao?.nome || item.variacaoSelecionada?.nome}</div>
                                 )}
                                 
-                                {((item.adicionaisSelecionados && item.adicionaisSelecionados.length > 0) ? item.adicionaisSelecionados : (item.adicionais || [])).map((adc, i) => (
-                                    <div key={i}>+ {adc.nome}</div>
-                                ))}
+                                {(() => {
+                                    let adics = [];
+                                    if (Array.isArray(item.adicionaisSelecionados) && item.adicionaisSelecionados.length > 0) {
+                                        adics = item.adicionaisSelecionados;
+                                    } else if (item.adicionaisSelecionados && typeof item.adicionaisSelecionados === 'object' && Object.keys(item.adicionaisSelecionados).length > 0) {
+                                        adics = Object.values(item.adicionaisSelecionados);
+                                    } else if (Array.isArray(item.adicionais)) {
+                                        const lixo = ['COMPLEMENTOS', 'MOLHOS', 'CARNES', 'PAES', 'SALADAS', 'QUEIJOS', 'BANHEIRO', 'FICHAS', 'ADICIONAIS', 'EXTRAS'];
+                                        adics = item.adicionais.filter(a => {
+                                            const nomeUpper = String(a.nome || '').toUpperCase();
+                                            const isLixo = lixo.some(lx => nomeUpper === lx || nomeUpper.includes(lx));
+                                            const temPreco = a.preco !== undefined && a.preco !== null && Number(a.preco) > 0;
+                                            return !isLixo || temPreco;
+                                        });
+                                    } else if (item.adicionais && typeof item.adicionais === 'object') {
+                                        const lixo = ['COMPLEMENTOS', 'MOLHOS', 'CARNES', 'PAES', 'SALADAS', 'QUEIJOS', 'BANHEIRO', 'FICHAS', 'ADICIONAIS', 'EXTRAS'];
+                                        adics = Object.values(item.adicionais).filter(a => {
+                                            const nomeUpper = String(a.nome || '').toUpperCase();
+                                            const isLixo = lixo.some(lx => nomeUpper === lx || nomeUpper.includes(lx));
+                                            const temPreco = a.preco !== undefined && a.preco !== null && Number(a.preco) > 0;
+                                            return !isLixo || temPreco;
+                                        });
+                                    } else if (Array.isArray(item.produto?.adicionais)) {
+                                        adics = item.produto.adicionais;
+                                    }
+                                    
+                                    // Aplica filtro de lixo tbm no adicionaisSelecionados por segurança
+                                    const lixoTotal = ['COMPLEMENTOS', 'MOLHOS', 'CARNES', 'PAES', 'SALADAS', 'QUEIJOS', 'BANHEIRO', 'FICHAS', 'ADICIONAIS', 'EXTRAS'];
+                                    adics = adics.filter(a => {
+                                        const nomeUpper = String(a.nome || '').toUpperCase();
+                                        const isLixo = lixoTotal.some(lx => nomeUpper === lx || nomeUpper.includes(lx));
+                                        const temPreco = a.preco !== undefined && a.preco !== null && Number(a.preco) > 0;
+                                        return !isLixo || temPreco;
+                                    });
+
+                                    return adics.map((adc, i) => {
+                                        const nomeAdic = typeof adc === 'string' ? adc : (adc.nome || '');
+                                        return <div key={i}>+ {nomeAdic}</div>;
+                                    });
+                                })()}
 
                                 {item.observacao && <div className="font-bold uppercase">** {item.observacao}</div>}
                             </div>
