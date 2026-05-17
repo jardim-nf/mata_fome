@@ -11,7 +11,9 @@ const PRESETS = [
 ];
 
 const getPresetRange = (key) => {
-  const now = new Date();
+  // Ajuste do "Hoje" Operacional: atrasa o relógio interno do botão em 6 horas.
+  // Se for 02:00 da manhã de 17/05, "now" será interpretado como 20:00 de 16/05.
+  const now = new Date(Date.now() - (6 * 60 * 60 * 1000));
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 

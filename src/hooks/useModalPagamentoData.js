@@ -336,7 +336,13 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
             );
 
             const todosItensMesa = mesa?.itens || mesa?.pedidos || [];
-            const itensValidos = Object.values(pagamentosValidos).flatMap(p => p.itens || []);
+            let itensValidos = Object.values(pagamentosValidos).flatMap(p => p.itens || []);
+            
+            // Fallback de segurança: se a divisão igualitária ou manual esvaziar os itens
+            if (itensValidos.length === 0) {
+                itensValidos = todosItensMesa.filter(i => i.status !== 'cancelado');
+            }
+
             const itensCancelados = todosItensMesa.filter(i => i.status === 'cancelado');
             const itensParaSalvar = [...itensValidos, ...itensCancelados];
 
@@ -346,7 +352,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
             // ---- REFATORAÇÃO DE SEGURANÇA: ENVIAR PARA A CLOUD FUNCTION ----
             const fecharMesaBackend = httpsCallable(functions, 'fecharMesaBackend');
             
-            const reqData = {
+            const rawReqData = {
                 estabelecimentoId,
                 mesaId: mesa.id,
                 pagamentosValidos,
@@ -357,6 +363,14 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                 cpfNota,
                 emitirNota
             };
+
+            // Garantia ABSOLUTA de que NENHUM NaN ou valor infinito vai para o Firebase
+            const reqData = JSON.parse(JSON.stringify(rawReqData, (key, value) => {
+                if (typeof value === 'number' && (isNaN(value) || !isFinite(value))) {
+                    return 0;
+                }
+                return value;
+            }));
 
             const response = await fecharMesaBackend(reqData);
             

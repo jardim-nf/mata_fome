@@ -39,8 +39,16 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     const d = new Date(c); return isNaN(d.getTime()) ? null : d;
   };
 
-  const getDate = (item) => extrairData(item.createdAt) || extrairData(item.dataPedido) || 
-    extrairData(item.adicionadoEm) || extrairData(item.updatedAt) || extrairData(item.criadoEm);
+  const getDate = (item) => {
+    const rawDate = extrairData(item.createdAt) || extrairData(item.dataPedido) || 
+      extrairData(item.adicionadoEm) || extrairData(item.updatedAt) || extrairData(item.criadoEm);
+      
+    if (!rawDate) return null;
+    
+    // Dia Operacional (Virada de Caixa às 06:00)
+    // Subtrai 6 horas para que vendas até as 05:59 da manhã sejam contabilizadas no dia anterior
+    return new Date(rawDate.getTime() - (6 * 60 * 60 * 1000));
+  };
 
   const getTotal = (item) => Number(item.totalFinal) || Number(item.total) || Number(item.valorFinal) || 0;
 
@@ -146,8 +154,11 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
         .filter(d => !isPedidoCancelado(d));
       
       const tudo = [...pedidosFiltrados, ...vendasFiltradas];
-      const hoje = startOfDay(new Date());
-      const ontem = startOfDay(subDays(new Date(), 1));
+      
+      // Ajuste do "Hoje" Operacional: Se for 02:00 da manhã, "hoje" pro sistema ainda é o dia anterior!
+      const dataAtualOperacional = new Date(Date.now() - (6 * 60 * 60 * 1000));
+      const hoje = startOfDay(dataAtualOperacional);
+      const ontem = startOfDay(subDays(dataAtualOperacional, 1));
 
       const doDia = tudo.filter(item => { const d = getDate(item); return d && d >= hoje; });
       const doOntem = tudo.filter(item => { const d = getDate(item); return d && d >= ontem && d < hoje; });
@@ -276,7 +287,9 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     const vendasFiltradas = dadosBrutos.vendas.filter(d => !isPedidoCancelado(d));
     const tudo = [...pedidosFiltrados, ...vendasFiltradas];
     
-    const hoje = startOfDay(new Date());
+    // Ajuste do "Hoje" Operacional
+    const dataAtualOperacional = new Date(Date.now() - (6 * 60 * 60 * 1000));
+    const hoje = startOfDay(dataAtualOperacional);
 
     const doPeriodo = tudo.filter(item => {
       let estabId = item.estabelecimentoId;

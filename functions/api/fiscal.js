@@ -62,21 +62,30 @@ export const emitirNfcePlugNotas = onCall({
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
 
     const { vendaId, cpf } = request.data;
-    if (!vendaId) throw new HttpsError('invalid-argument', 'ID da venda obrigatório.');
+    if (!vendaId) {
+        logger.warn('Falha: ID da venda obrigatório.', { data: request.data });
+        throw new HttpsError('invalid-argument', 'ID da venda obrigatório.');
+    }
 
     try {
         const vendaRef = db.collection('vendas').doc(vendaId);
         const vendaSnap = await vendaRef.get();
-        if (!vendaSnap.exists) throw new HttpsError('not-found', 'Venda não encontrada.');
+        if (!vendaSnap.exists) {
+            logger.warn(`Falha: Venda não encontrada (${vendaId}).`);
+            throw new HttpsError('not-found', 'Venda não encontrada.');
+        }
         const venda = vendaSnap.data();
 
-        const token = request.auth.token;
-        const isMaster = token.isMasterAdmin === true || token.role === 'master';
-        const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(venda.estabelecimentoId);
         const isClient = request.auth.uid === venda.userId;
 
-        if (!isMaster && !hasAccess && !isClient) {
-            throw new HttpsError('permission-denied', 'Acesso negado a esta venda.');
+        if (!isClient) {
+            const { verifyAdminAccess } = await import('../authUtils.js');
+            try {
+                await verifyAdminAccess(request, venda.estabelecimentoId);
+            } catch (e) {
+                logger.warn(`Falha: Acesso negado. UID: ${request.auth.uid}, VendaId: ${vendaId}, VendaEstab: ${venda.estabelecimentoId}, Token: ${JSON.stringify(request.auth.token)}`);
+                throw new HttpsError('permission-denied', 'Acesso negado a esta venda.');
+            }
         }
 
         const estabelecimentoRef = db.collection('estabelecimentos').doc(venda.estabelecimentoId);
@@ -84,6 +93,7 @@ export const emitirNfcePlugNotas = onCall({
         const estabelecimento = estabelecimentoSnap.data();
 
         if (!estabelecimento?.fiscal?.cnpj) {
+            logger.warn(`Falha: Estabelecimento sem configuração fiscal (ID: ${venda.estabelecimentoId})`);
             throw new HttpsError('failed-precondition', 'Estabelecimento sem configuração fiscal.');
         }
 
@@ -94,7 +104,18 @@ export const emitirNfcePlugNotas = onCall({
         const itensValidos = venda.itens.filter(i => i.status !== 'cancelado' && i.status !== 'removido' && !i.excluido);
 
         if (itensValidos.length === 0) {
-            throw new HttpsError('failed-precondition', 'Nenhum item válido para emitir nota.');
+            logger.warn(`Fallback ativado: Venda ${vendaId} sem itens. Injetando item genérico de consumo.`);
+            itensValidos.push({
+                id: '999999',
+                nome: 'Consumo Diversos',
+                preco: venda.total > 0 ? venda.total : 0.01,
+                quantidade: 1,
+                precoFinal: venda.total > 0 ? venda.total : 0.01,
+                fiscal: {
+                    ncm: "06029090",
+                    cfop: "5102"
+                }
+            });
         }
 
         const itensNfce = itensValidos.map((item, index) => {
@@ -133,25 +154,74 @@ export const emitirNfcePlugNotas = onCall({
 
         somaDosItens = Number(somaDosItens.toFixed(2));
 
-        let meioPagamento = "01";
-        const metodoRaw = venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "";
-        const metodoLower = String(metodoRaw).toLowerCase().trim();
+        let pagamentosNfce = [];
 
-        if (metodoLower.includes('pix')) meioPagamento = "20";
-        else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('credit')) meioPagamento = "03";
-        else if (metodoLower.includes('débito') || metodoLower.includes('debito') || metodoLower.includes('debit')) meioPagamento = "04";
-        else if (metodoLower.includes('cartao') || metodoLower.includes('cartão') || metodoLower.includes('card')) meioPagamento = "03";
+        // Mesas salvam múltiplos pagamentos num objeto
+        if (venda.pagamentos && typeof venda.pagamentos === 'object' && Object.keys(venda.pagamentos).length > 0) {
+            const keys = Object.keys(venda.pagamentos);
+            let somaPagamentosRaw = 0;
+            
+            for (const key of keys) {
+                somaPagamentosRaw += Number(venda.pagamentos[key].valor) || 0;
+            }
 
+            let somaProcessada = 0;
+            let indexGeral = 0;
+            const validKeys = keys.filter(k => (Number(venda.pagamentos[k].valor) || 0) > 0);
+
+            for (const key of validKeys) {
+                const pag = venda.pagamentos[key];
+                const valorBruto = Number(pag.valor) || 0;
+
+                // Distribui proporcionalmente para bater exato com somaDosItens
+                let valorCalculado = Number(((valorBruto / somaPagamentosRaw) * somaDosItens).toFixed(2));
+                
+                // Ajuste de centavos no último pagamento
+                if (indexGeral === validKeys.length - 1) {
+                    valorCalculado = Number((somaDosItens - somaProcessada).toFixed(2));
+                }
+                
+                somaProcessada += valorCalculado;
+                indexGeral++;
+
+                const metodoLower = String(pag.formaPagamento || pag.metodo || "").toLowerCase().trim();
+                let meio = "01";
+                if (metodoLower.includes('pix')) meio = "17";
+                else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('credit')) meio = "03";
+                else if (metodoLower.includes('débito') || metodoLower.includes('debito') || metodoLower.includes('debit')) meio = "04";
+                else if (metodoLower.includes('cartao') || metodoLower.includes('cartão') || metodoLower.includes('card')) meio = "03";
+
+                const dadosPag = { aVista: true, meio, valor: valorCalculado };
+                if (meio === "03" || meio === "04") dadosPag.cartao = { tipoIntegracao: 2 };
+                
+                pagamentosNfce.push(dadosPag);
+            }
+        }
+
+        // Fallback: se não tem pagamentos múltiplos (ex: Delivery/Balcão), usa o antigo
+        if (pagamentosNfce.length === 0) {
+            let meio = "01";
+            const metodoRaw = venda.tipoPagamento || venda.metodoPagamento || venda.formaPagamento || "";
+            const metodoLower = String(metodoRaw).toLowerCase().trim();
+
+            if (metodoLower.includes('pix')) meio = "17";
+            else if (metodoLower.includes('crédito') || metodoLower.includes('credito') || metodoLower.includes('credit')) meio = "03";
+            else if (metodoLower.includes('débito') || metodoLower.includes('debito') || metodoLower.includes('debit')) meio = "04";
+            else if (metodoLower.includes('cartao') || metodoLower.includes('cartão') || metodoLower.includes('card')) meio = "03";
+
+            const dadosPag = { aVista: true, meio, valor: somaDosItens };
+            if (meio === "03" || meio === "04") dadosPag.cartao = { tipoIntegracao: 2 };
+            pagamentosNfce.push(dadosPag);
+        }
+
+        // Se houver Pix confirmado via Webhook, ajusta o primeiro pagamento para Pix
         try {
             const pixDocSnap = await db.collection('pagamentos_pix').doc(vendaId).get();
-            if (pixDocSnap.exists && pixDocSnap.data()?.status === 'pago') meioPagamento = "17";
+            if (pixDocSnap.exists && pixDocSnap.data()?.status === 'pago') {
+                pagamentosNfce[0].meio = "17";
+                delete pagamentosNfce[0].cartao;
+            }
         } catch (e) {}
-
-        const dadosPagamento = { aVista: true, meio: meioPagamento, valor: somaDosItens };
-
-        if (meioPagamento === "03" || meioPagamento === "04") {
-            dadosPagamento.cartao = { tipoIntegracao: 2 };
-        }
 
         const payload = [{
             idIntegracao: vendaId,
@@ -162,7 +232,7 @@ export const emitirNfcePlugNotas = onCall({
             emitente: { cpfCnpj: String(configFiscal.cnpj).replace(/\D/g, '') },
             destinatario: cpf ? { cpf: String(cpf).replace(/\D/g, '') } : undefined,
             itens: itensNfce,
-            pagamentos: [dadosPagamento]
+            pagamentos: pagamentosNfce
         }];
 
         const response = await fetch("https://api.plugnotas.com.br/nfce", {

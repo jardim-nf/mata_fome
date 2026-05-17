@@ -139,7 +139,16 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 });
 
                 const results = await Promise.all(categoryPromises);
-                const produtosFinaisBrutos = results.flat();
+                const produtosFinaisBrutosRaw = results.flat();
+                
+                const produtosUnicosMap = new Map();
+                produtosFinaisBrutosRaw.forEach(p => {
+                    if (!produtosUnicosMap.has(p.id)) {
+                        produtosUnicosMap.set(p.id, p);
+                    }
+                });
+                const produtosFinaisBrutos = Array.from(produtosUnicosMap.values());
+                
                 const catsFinais = [...new Set(listaCats)];
 
                 if (!isMounted) return;

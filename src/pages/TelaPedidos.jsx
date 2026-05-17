@@ -187,7 +187,7 @@ const TelaPedidos = () => {
                     {ocupantes.filter(n => n !== 'Mesa').map((nome, idx) => (
                         <div key={idx} className="flex-shrink-0">
                             {editandoNomeIndex === idx ? (
-                                <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => runSalvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && runSalvarEdicaoPessoa(idx)} />
+                                <input autoFocus className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-[16px] min-w-[120px] w-auto shadow-md" style={{ borderColor: coresEstabelecimento.destaque }} value={novoNomeTemp} onChange={e => setNovoNomeTemp(e.target.value)} onBlur={() => runSalvarEdicaoPessoa(idx)} onKeyDown={e => e.key === 'Enter' && runSalvarEdicaoPessoa(idx)} />
                             ) : (
                                 <button onClick={() => setClienteSelecionado(nome)} className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`} style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}>
                                     <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />{nome}
@@ -201,7 +201,7 @@ const TelaPedidos = () => {
                         {isAddingPerson ? (
                             <input 
                                 autoFocus 
-                                className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-sm w-36 shadow-md animate-in fade-in zoom-in duration-200" 
+                                className="px-3 py-2 rounded-xl border-2 outline-none font-bold text-[16px] w-36 shadow-md animate-in fade-in zoom-in duration-200" 
                                 style={{ borderColor: coresEstabelecimento.destaque }} 
                                 placeholder="Nome..." 
                                 value={novoNomeTemp} 
@@ -226,7 +226,7 @@ const TelaPedidos = () => {
 
                 <div className="relative w-full px-4">
                     <IoSearch className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-                    <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-sm outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
+                    <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-[16px] outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
                     {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-7 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
                 </div>
 

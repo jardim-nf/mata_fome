@@ -266,7 +266,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
 
                     <div className="mt-6">
                         <label className="block text-sm font-bold mb-2 text-gray-700">Observações:</label>
-                        <textarea className="w-full p-3 rounded-xl bg-white border border-gray-300 text-gray-900 resize-none focus:outline-none focus:ring-2"
+                        <textarea className="w-full p-3 rounded-xl bg-white border border-gray-300 text-[16px] text-gray-900 resize-none focus:outline-none focus:ring-2"
                                   rows="3" placeholder="Ex: Tirar cebola, ponto da carne..." value={observacao} onChange={e => setObservacao(e.target.value)}
                                   style={{ '--tw-ring-color': cores.destaque }} />
                     </div>

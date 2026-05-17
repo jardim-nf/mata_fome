@@ -4,7 +4,7 @@ import { db } from "../firebaseCore.js";
 import { verifyAdminAccess } from "../authUtils.js";
 import * as logger from "firebase-functions/logger";
 
-export const gerenciarMesa = onCall({ enforceAppCheck: false, cors: true, maxInstances: 1 }, async (request) => {
+export const gerenciarMesa = onCall({ enforceAppCheck: false, cors: true }, async (request) => {
   const { auth, data } = request;
   if (!auth) {
     throw new HttpsError("unauthenticated", "Usuário não autenticado.");
@@ -159,7 +159,7 @@ export const gerenciarMesa = onCall({ enforceAppCheck: false, cors: true, maxIns
   }
 });
 
-export const chamarGarcomWeb = onCall({ enforceAppCheck: false, cors: true, maxInstances: 1 }, async (request) => {
+export const chamarGarcomWeb = onCall({ enforceAppCheck: false, cors: true }, async (request) => {
   // ATENÇÃO: Esta function não requer autenticação (request.auth)
   // pois é usada pelo cliente via QR Code na mesa (usuário anônimo).
   
@@ -200,7 +200,7 @@ export const chamarGarcomWeb = onCall({ enforceAppCheck: false, cors: true, maxI
   }
 });
 
-export const salvarPedidoMesaBackend = onCall({ cors: true, maxInstances: 1 }, async (request) => {
+export const salvarPedidoMesaBackend = onCall({ cors: true }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
 
@@ -523,8 +523,13 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
     const batch = db.batch();
 
     // Organizar itens pagos
-    const itensValidos = Object.values(pagamentosValidos || {}).flatMap(p => p.itens || []);
+    let itensValidos = Object.values(pagamentosValidos || {}).flatMap(p => p.itens || []);
     const itensMesa = mesaData.itens || [];
+
+    // Fallback de segurança: se a divisão esvaziar os itens (ex: Rateio cego)
+    if (itensValidos.length === 0) {
+        itensValidos = itensMesa.filter(i => i.status !== 'cancelado');
+    }
     
     // Verificar quais itens ainda não tiveram estoque baixado
     const itensParaBaixa = itensMesa.filter(item => 
@@ -532,24 +537,36 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
         !item._estoqueBaixadoAoPagar
     );
 
-    const totalPagoAgora = Object.values(pagamentosValidos || {}).reduce((acc, pgto) => acc + (pgto.valor || 0), 0);
+    // Função segura para conversão de valores que podem vir como string com vírgula do front
+    const safeNum = (val) => {
+        if (typeof val === 'string') {
+            val = val.replace(',', '.');
+        }
+        const n = Number(val);
+        return isNaN(n) ? 0 : n;
+    };
+
+    const totalPagoAgora = Object.values(pagamentosValidos || {}).reduce((acc, pgto) => acc + safeNum(pgto.valor), 0);
     const pagamentosParciaisAntigos = mesaData.pagamentosParciais || [];
-    const totalPagoGeral = pagamentosParciaisAntigos.reduce((acc, p) => acc + (p.valor || 0), 0) + totalPagoAgora;
+    const totalPagoGeral = pagamentosParciaisAntigos.reduce((acc, p) => acc + safeNum(p.valor), 0) + totalPagoAgora;
 
     // Calcular consumo total real
-    const totalConsumo = itensMesa.reduce((acc, item) => item.status === 'cancelado' ? acc : acc + (item.preco * (item.quantidade || item.qtd || 1)), 0);
+    const totalConsumo = itensMesa.reduce((acc, item) => item.status === 'cancelado' ? acc : acc + (safeNum(item.preco) * safeNum(item.quantidade || item.qtd || 1)), 0);
     const taxa = incluirTaxa ? totalConsumo * 0.10 : 0;
     
     let desconto = 0;
-    if (valorDescontoInput > 0) {
+    const descInput = safeNum(valorDescontoInput);
+    if (descInput > 0) {
         if (tipoDesconto === 'porcentagem') {
-            desconto = totalConsumo * (Math.min(valorDescontoInput, 100) / 100);
+            desconto = totalConsumo * (Math.min(descInput, 100) / 100);
         } else {
-            desconto = Math.min(valorDescontoInput, totalConsumo);
+            desconto = Math.min(descInput, totalConsumo);
         }
     }
 
-    const restanteFinal = (totalConsumo + taxa - desconto) - totalPagoGeral;
+    let restanteFinal = (totalConsumo + taxa - desconto) - totalPagoGeral;
+    if (isNaN(restanteFinal) || !isFinite(restanteFinal)) restanteFinal = 0;
+
     const quitouMesa = restanteFinal <= 0.10;
 
     // 1. Salvar venda

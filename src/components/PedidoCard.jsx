@@ -155,7 +155,7 @@ const PedidoCard = ({
             return;
         }
         
-        const nomeCliente = item.cliente?.nome || 'Cliente';
+        const nomeCliente = item.cliente?.nome || item.nomeCliente || item.clienteNome || item.nome || 'Cliente';
         const idCurto = item.id?.slice(0,4).toUpperCase();
         const totalFormatado = formatarMoeda(valorTotalExibicao);
         const formaPag = (item.formaPagamento || '').toLowerCase();
@@ -363,7 +363,7 @@ const PedidoCard = ({
                         
                         {!isSalaoOuMesa && (
                             <span className="text-[11px] sm:text-xs text-gray-600 flex flex-wrap items-center gap-1 mt-1 break-words">
-                                <IoPerson className="w-3 h-3 shrink-0" /> <span className="break-words line-clamp-1">{item.cliente?.nome || 'Cliente'}</span>
+                                <IoPerson className="w-3 h-3 shrink-0" /> <span className="break-words line-clamp-1">{item.cliente?.nome || item.nomeCliente || item.clienteNome || item.nome || 'Cliente'}</span>
                             </span>
                         )}
                         

@@ -488,7 +488,7 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
 // ==================================================================
 // 6. CANCELAR PEDIDO BACKEND
 // ==================================================================
-export const cancelarPedidoBackend = onCall({ cors: true, maxInstances: 1 }, async (request) => {
+export const cancelarPedidoBackend = onCall({ cors: true }, async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
 
