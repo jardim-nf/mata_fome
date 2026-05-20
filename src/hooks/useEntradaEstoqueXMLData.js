@@ -96,13 +96,16 @@ export function useEntradaEstoqueXMLData(estabelecimentoIdPrincipal) {
     // MARGEM MAGICA
     useEffect(() => {
         if (!notaLida) return;
-        setNotaLida(prev => ({
-            ...prev,
-            produtos: prev.produtos.map(p => ({
-                ...p,
-                precoVendaSugerido: (p.valorUnit * (1 + margemPadrao / 100)).toFixed(2)
-            }))
-        }));
+        setNotaLida(prev => {
+            if (!prev || !prev.produtos) return prev;
+            return {
+                ...prev,
+                produtos: prev.produtos.map(p => ({
+                    ...p,
+                    precoVendaSugerido: (p.valorUnit * (1 + margemPadrao / 100)).toFixed(2)
+                }))
+            };
+        });
     }, [margemPadrao]);
 
     const detectarFornecedor = useCallback(async (cnpj) => {

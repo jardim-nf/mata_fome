@@ -5,17 +5,29 @@ import { FieldValue } from 'firebase-admin/firestore';
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 import { db } from '../firebaseCore.js';
+import { verifyAdminAccess } from '../authUtils.js';
 
 const whatsappVerifyToken = defineSecret('WHATSAPP_VERIFY_TOKEN');
 const whatsappApiToken = defineSecret('WHATSAPP_API_TOKEN');
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
+const metaApiTokenSecret = defineSecret('META_API_TOKEN');
+const metaVerifyTokenSecret = defineSecret('META_VERIFY_TOKEN');
 
 // ==================================================================
 // 14. WHATSAPP BUSINESS API & UAZAPI E MOTOR FLUXO (HÍBRIDO)
 // ==================================================================
-const conversas = {};
+// Nota: estado das conversas migrado para Firestore (suporta múltiplas instâncias Cloud Run)
+// A variável `conversas` em RAM foi removida para evitar perda de contexto entre instâncias.
+
+// Cache de produtos por estabelecimento (TTL: 5 minutos)
+// Evita N+1 queries ao Firestore a cada mensagem recebida no bot
+const _produtosCache = new Map();
 
 async function buscarProdutosRobo(estabId) {
+    const cached = _produtosCache.get(estabId);
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+        return cached.data;
+    }
     const produtos = [];
     const categoriasSnap = await db.collection(`estabelecimentos/${estabId}/cardapio`).get();
     for (const catDoc of categoriasSnap.docs) {
@@ -25,29 +37,41 @@ async function buscarProdutosRobo(estabId) {
             produtos.push({ id: d.id, ...data, categoria: data.categoriaNome || catDoc.data().nome || 'Outros' });
         });
     }
+    _produtosCache.set(estabId, { data: produtos, timestamp: Date.now() });
     return produtos;
 }
 
 // Função centralizada para atender requisições de WhatsApp, Messenger e Instagram
 async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText, from, origem) {
     const agora = Date.now();
-    // Se a última mensagem foi há mais de 3 minutos, reseta a conversa para não ficar insistindo no erro
-    if (conversas[chatKey] && conversas[chatKey].ultimaMensagem && (agora - conversas[chatKey].ultimaMensagem) > 3 * 60 * 1000) {
-        delete conversas[chatKey];
-    }
 
-    if (!conversas[chatKey]) conversas[chatKey] = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
-    const chat = conversas[chatKey];
+    // ── Estado persistido no Firestore (suporta múltiplas instâncias Cloud Run) ──
+    // conversas em RAM causavam bug: com maxInstances:10, cada mensagem podia
+    // cair em instâncias diferentes e o bot perdia o contexto do pedido.
+    const chatRef = db.doc(`conversasBot/${chatKey}`);
+    const chatSnap = await chatRef.get();
+    let chat;
+
+    if (chatSnap.exists()) {
+        chat = chatSnap.data();
+        // FIX: reset aumentado para 20 min (antes 3 min causava perda de pedido em celulares lentos)
+        if (chat.ultimaMensagem && (agora - chat.ultimaMensagem) > 20 * 60 * 1000) {
+            chat = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
+        }
+    } else {
+        chat = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
+    }
     chat.ultimaMensagem = agora;
 
     let resposta = '';
+    let finalizarConversa = false; // true = deletar doc do Firestore ao final;
     const msgLower = (messageText || '').toLowerCase().trim();
 
     const frasesCancelamento = ['cancelar', 'sair', 'reiniciar', 'não quero', 'nao quero', 'deixa pra la', 'deixa pra lá', 'obrigado', 'obrigada', 'encerrar', 'pare', 'parar', 'desisto'];
 
     // ——— REINICIAR / CANCELAR ———
     if (frasesCancelamento.some(f => msgLower.includes(f)) || msgLower === 'nao' || msgLower === 'não') {
-      delete conversas[chatKey];
+      finalizarConversa = true;
       resposta = '✅ Atendimento encerrado! Qualquer coisa é só mandar um *"oi"*. 😉';
 
     // ——— CARDÁPIO / INÍCIO ———
@@ -216,10 +240,10 @@ async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText
         totalFinal = totalFinal - descontoAplicado;
         
         const formatTel = chat.telefoneContato.replace(/\D/g, '');
-        await db.doc(`estabelecimentos/${estabId}/clientes/${formatTel}`).set({
-          saldoCashback: chat.saldoDisponivel - descontoAplicado,
+        await db.doc(`estabelecimentos/${estabId}/clientes/${formatTel}`).update({
+          saldoCashback: FieldValue.increment(-descontoAplicado),
           updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
+        });
       }
 
       const pedidoRef = await db.collection(`estabelecimentos/${estabId}/pedidos`).add({
@@ -241,10 +265,17 @@ async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText
       const descTexto = descontoAplicado > 0 ? `\n🎁 Cashback Usado: -R$ ${descontoAplicado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
       const taxaTexto = taxaEntrega > 0 ? `\n🛵 Taxa: R$ ${taxaEntrega.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
       resposta = `✅ *Pedido confirmado!*\n\n🆔 #${pedidoRef.id.slice(-6).toUpperCase()}\n👤 ${chat.nome}\n📞 Tel: ${chat.telefoneContato}\n📍 ${chat.enderecoEntrega}${chat.bairro ? ` — ${chat.bairro}` : ''}${taxaTexto}${descTexto}\n💰 *Total: R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\nSeu pedido está sendo preparado! 🎉\nPedido ficará pronto entre 45 a 60 minutos ok?\nDigite *"oi"* para novo pedido.`;
-      delete conversas[chatKey];
+      finalizarConversa = true;
 
     } else if (!['inicio', 'pedindo', 'bairro', 'endereco', 'nome', 'telefone_contato', 'verificador_saldo', 'pergunta_cashback', 'salvar_pedido'].includes(chat.etapa)) {
       resposta = 'Olá! 👋 Digite *"oi"* ou *"menu"* para começar seu pedido!';
+    }
+
+    // ── Persistir estado no Firestore ────────────────────────────────────────
+    if (finalizarConversa) {
+        await chatRef.delete();
+    } else {
+        await chatRef.set(chat);
     }
 
     return resposta;
@@ -283,7 +314,9 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
         return res.status(200).send('OK');
       }
 
-      if (!from || !messageText) return res.status(200).send('OK');
+      // FIX: Não retornar 200 ainda se from existir mas messageText vazio (sticker/imagem/áudio)
+      // Vamos verificar se há conversa ativa e avisar o cliente
+      if (!from) return res.status(200).send('OK');
 
       let estabQuery;
       if (isUazapi) {
@@ -300,6 +333,25 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       const wConfig = estab.whatsapp || {};
 
       const produtos = await buscarProdutosRobo(estabId);
+
+      // FIX: Mensagem sem texto (sticker, imagem, áudio) — avisa cliente se houver conversa ativa
+      if (!messageText) {
+        const chatKey = `${estabId}_${from}`;
+        const chatSnap = await db.doc(`conversasBot/${chatKey}`).get();
+        if (chatSnap.exists && chatSnap.data()?.etapa && chatSnap.data().etapa !== 'inicio') {
+          const aviso = '⚠️ Só consigo processar *mensagens de texto*. Por favor, responda com texto para continuar seu pedido! 😊';
+          if (wConfig.serverUrl && wConfig.apiKey && wConfig.instanceName) {
+            const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
+            const telFinal = from.replace(/\D/g, '').startsWith('55') ? from.replace(/\D/g, '') : `55${from.replace(/\D/g, '')}`;
+            await fetch(`${urlFormatada}/send/text`, {
+              method: 'POST',
+              headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ number: telFinal, text: aviso })
+            });
+          }
+        }
+        return res.status(200).send('OK');
+      }
 
       const chatKey = `${estabId}_${from}`;
       // Chama o robô genérico unificado, que foi isolado acima
@@ -373,10 +425,10 @@ export const enviarMensagemWhatsApp = onCall(async (request) => {
 // ==================================================================
 // 15B. WEBHOOK META (INSTAGRAM E MESSENGER)
 // ==================================================================
-export const webhookMetaChat = onRequest({ maxInstances: 5 }, async (req, res) => {
+export const webhookMetaChat = onRequest({ secrets: [metaApiTokenSecret, metaVerifyTokenSecret], maxInstances: 5 }, async (req, res) => {
     
-    const verifyTokenReal = 'MataFomeMetaToken2026';
-    const apiTokenReal = 'EAAZAURhftZA9cBRJeGSJXlZBy4bkdWgYAKM3wmXMlH8RnKx9at6wOcVJdRBze0kVrn7N3kHhTSoQ7VA5r98uXQkTTsIY5zM34S8iO0r5VLm84cbPYA3OuGil6TRugY0KxVsgdOfKNCgs2ZBE85XrLpnLHkMwaZB7FkvduqTTvTV3wqUD8Cu1H8h2jxVB0KJPlM03x6wZDZD';
+    const verifyTokenReal = metaVerifyTokenSecret.value();
+    const apiTokenReal = metaApiTokenSecret.value();
 
     // Verificação oficial exigida pela Meta na configuração do Webhook
     if (req.method === 'GET') {
@@ -540,6 +592,22 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
       const limiteData = new Date(hoje);
       limiteData.setDate(limiteData.getDate() - diasInativo);
 
+      // FIX: Carregar campanhas já enviadas HOJE para evitar duplicatas em caso de reexecução
+      const inicioHoje = new Date(hoje);
+      const campanhasHojeSnap = await db.collection('estabelecimentos').doc(estabDoc.id)
+        .collection('campanhas')
+        .where('tipo', '==', 'reengajamento')
+        .where('sucesso', '==', true)
+        .where('enviadoEm', '>=', inicioHoje)
+        .get();
+      const telJaEnviadosHoje = new Set(campanhasHojeSnap.docs.map(d => d.data().clienteTelefone));
+
+      // ✅ FIX: Carregar opt-outs ANTES do loop para que a verificação de
+      // aniversariantes funcione corretamente (antes estava declarado depois do uso)
+      const optoutsSnap = await db.collection('estabelecimentos').doc(estabDoc.id)
+        .collection('optout').get();
+      const telOptouts = new Set(optoutsSnap.docs.map(d => d.id));
+
       const clientesInativos = [];
       const aniversariantes = [];
 
@@ -549,7 +617,7 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
           clientesInativos.push(cliente);
         }
 
-        // Aniversário hoje — também verifica opt-out
+        // Aniversário hoje — verifica opt-out (telOptouts já disponível)
         if (mktConfig.aniversario && cliente.dataNascimento && !telOptouts.has(cliente.telefone)) {
           let nascimento = null;
           if (cliente.dataNascimento?.toDate) nascimento = cliente.dataNascimento.toDate();
@@ -563,11 +631,6 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
 
       logger.info(`📤 ${nomeEstab}: ${clientesInativos.length} inativos | ${aniversariantes.length} aniversariantes`);
 
-        // 👇 Pré-carregar lista de optouts para não fazer query por cliente
-      const optoutsSnap = await db.collection('estabelecimentos').doc(estabDoc.id)
-        .collection('optout').get();
-      const telOptouts = new Set(optoutsSnap.docs.map(d => d.id));
-
       // 5. Enviar mensagens para inativos (até o limite diário)
       let enviadosHoje = 0;
 
@@ -580,6 +643,12 @@ export const marketingAutomatico = onSchedule({ schedule: "every day 10:00", tim
         // 🚫 Pular clientes que fizeram opt-out
         if (telOptouts.has(cliente.telefone)) {
           logger.info(`🚫 Opt-out: pulando ${cliente.telefone}`);
+          continue;
+        }
+
+        // 📅 FIX: Pular clientes que já receberam mensagem de reengajamento hoje
+        if (telJaEnviadosHoje.has(cliente.telefone)) {
+          logger.info(`📅 Já enviado hoje: pulando ${cliente.telefone}`);
           continue;
         }
 
@@ -963,19 +1032,16 @@ export const notificarClienteWhatsApp = onDocumentUpdated(
             const telDocRef = db.doc(`estabelecimentos/${event.params.estabId}/clientes/${formatTel}`);
             
             try {
-              const telDoc = await telDocRef.get();
-              let saldoAtual = 0;
-              if (telDoc.exists) {
-                saldoAtual = Number(telDoc.data().saldoCashback) || 0;
-              }
-              const novoSaldo = saldoAtual + valorCashback;
-              
               await telDocRef.set({
                 nome: nomeCliente,
                 telefone: formatTel,
-                saldoCashback: novoSaldo,
+                saldoCashback: FieldValue.increment(valorCashback),
                 updatedAt: FieldValue.serverTimestamp()
               }, { merge: true });
+
+              // Read back updated saldo for the notification message
+              const telDocUpdated = await telDocRef.get();
+              const novoSaldo = Number(telDocUpdated.data()?.saldoCashback) || valorCashback;
               
               const pedidoDocRef = db.doc(`estabelecimentos/${event.params.estabId}/pedidos/${event.params.pedidoId}`);
               await pedidoDocRef.update({
@@ -1099,10 +1165,14 @@ export const notificarPedidoNovo = onDocumentCreated(
  * Salva em estabelecimentos/{estabId}/optout/{telefone}
  */
 export const registrarOptout = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
+
   const { estabelecimentoId, telefone, motivo } = request.data || {};
   if (!estabelecimentoId || !telefone) {
     throw new HttpsError('invalid-argument', 'estabelecimentoId e telefone são obrigatórios.');
   }
+
+  await verifyAdminAccess(request, estabelecimentoId);
 
   const telLimpo = String(telefone).replace(/\D/g, '');
   if (telLimpo.length < 10) throw new HttpsError('invalid-argument', 'Telefone inválido.');

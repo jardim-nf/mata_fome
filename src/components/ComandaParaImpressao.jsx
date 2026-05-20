@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -7,9 +7,10 @@ import { IoPrint } from 'react-icons/io5';
 
 import { matchTermos, TERMOS_BEBIDA, TERMOS_BOMBONIERE } from '../utils/categoriaUtils';
 
-let ultimoPedidoImpresso = null;
+
 
 const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
+    const ultimoPedidoImpressoRef = useRef(null);
     const params = useParams();
     const idUrl = params.id || params.pedidoId;
     const [searchParams] = useSearchParams();
@@ -166,8 +167,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 return () => clearTimeout(timer);
             }
 
-            if (ultimoPedidoImpresso !== pedido.id) {
-                ultimoPedidoImpresso = pedido.id; 
+            if (ultimoPedidoImpressoRef.current !== pedido.id) {
+                ultimoPedidoImpressoRef.current = pedido.id; 
 
                 const timer = setTimeout(() => {
                     window.focus();
@@ -360,7 +361,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             <div className="flex justify-between items-start">
                                                 <span className="font-black text-[13px] flex-1 pr-2 uppercase">{qtdProduto}X {nomeProduto}</span>
                                                 {(setor !== 'cozinha' || isDelivery) && <span className="font-bold whitespace-nowrap text-[13px]">{formatMoney(valor * qtdProduto)}</span>}                                            </div>
-                                            {item.variacaoSelecionada && !item.variacaoSelecionada.nome.toLowerCase().includes('padrão') && !item.variacaoSelecionada.nome.toLowerCase().includes('padrao') && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
+                                            {item.variacaoSelecionada && !item.variacaoSelecionada?.nome?.toLowerCase().includes('padrão') && !item.variacaoSelecionada?.nome?.toLowerCase().includes('padrao') && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
                                             
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">
@@ -378,11 +379,19 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                             <div className="mt-1 flex justify-between text-[10px] font-bold uppercase italic border-t border-dashed border-gray-400 pt-0.5">
                                                 <span>ATENDENTE: {item.adicionadoPor || pedido.atendente || pedido.funcionario || 'Caixa'}</span>
                                                 <span>
-                                                    {(item.adicionadoEm || pedido.createdAt || pedido.dataPedido) && (
-                                                        (item.adicionadoEm?.toDate || pedido.createdAt?.toDate || pedido.dataPedido?.toDate)
-                                                            ? (item.adicionadoEm?.toDate ? item.adicionadoEm.toDate() : (pedido.createdAt?.toDate ? pedido.createdAt.toDate() : pedido.dataPedido.toDate())).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                                                            : new Date(item.adicionadoEm || pedido.createdAt || pedido.dataPedido).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace('Invalid Date', '')
-                                                    )}
+                                                    {(() => {
+                                                        const dVal = item.adicionadoEm || pedido.createdAt || pedido.dataPedido;
+                                                        if (!dVal) return '';
+                                                        try {
+                                                            let d;
+                                                            if (dVal.toDate) d = dVal.toDate();
+                                                            else if (dVal.seconds) d = new Date(dVal.seconds * 1000);
+                                                            else if (dVal._seconds) d = new Date(dVal._seconds * 1000);
+                                                            else d = new Date(dVal);
+                                                            if (isNaN(d.getTime())) return '';
+                                                            return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                                                        } catch(e) { return ''; }
+                                                    })()}
                                                 </span>
                                             </div>
                                         </div>

@@ -8,7 +8,17 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "coverage": "vitest run --coverage",
-    "prepare": "husky"
+    "prepare": "husky",
+
+    "deploy:front": "npm run build && firebase deploy --only hosting",
+    "deploy:back": "firebase deploy --only functions",
+    "deploy:all": "npm run build && firebase deploy",
+
+    "deploy:pedidos": "firebase deploy --only functions:finalizarCheckoutDelivery,functions:cancelarPedidoBackend,functions:atualizarStatusPedidoBackend,functions:atribuirMotoboyBackend",
+    "deploy:mesas": "firebase deploy --only functions:fecharMesaBackend,functions:atualizarStatusPedidoBackend,functions:atualizarFormaPagamentoPedidoBackend",
+    "deploy:fiscal": "firebase deploy --only functions:emitirNfceBackend,functions:cancelarNfceBackend,functions:consultarStatusNfce",
+    "deploy:wpp": "firebase deploy --only functions:handleWebhookPost",
+    "deploy:admin": "firebase deploy --only functions:criarEstabelecimento,functions:atualizarEstabelecimento"
   },
   "dependencies": {
     "@google/model-viewer": "^4.2.0",
@@ -34,7 +44,6 @@
     "mercadopago": "^2.12.0",
     "node-forge": "^1.4.0",
     "papaparse": "^5.5.3",
-    "playwright": "^1.58.2",
     "qrcode": "^1.5.4",
     "qz-tray": "^2.2.5",
     "react": "^18.2.0",
@@ -73,6 +82,7 @@
     "vite": "^7.2.2",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.2",
-    "xml2js": "^0.6.2"
+    "xml2js": "^0.6.2",
+    "playwright": "^1.58.2"
   }
 }

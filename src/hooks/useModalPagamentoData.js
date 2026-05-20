@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion, writeBatch } from 'firebase/firestore';
 import { db, auth, functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -13,6 +13,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
     const [pagamentos, setPagamentos] = useState({});
     const [selecionados, setSelecionados] = useState({});
     const [carregando, setCarregando] = useState(false);
+    const newKeyRef = useRef('');
 
     // NFC-e
     const [emitirNota, setEmitirNota] = useState(false);
@@ -170,14 +171,12 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
 
     const adicionarPessoa = useCallback(() => {
         setPagamentos(prev => {
-            const novaPessoa = `Pagante Extra ${Object.keys(prev).length + 1}`;
-            return { ...prev, [novaPessoa]: { valor: 0, formaPagamento: 'dinheiro', itens: [] } };
+            const key = `Pagante Extra ${Object.keys(prev).length + 1}`;
+            newKeyRef.current = key;
+            return { ...prev, [key]: { valor: 0, formaPagamento: 'dinheiro', itens: [] } };
         });
-        setSelecionados(prev => {
-            const novaPessoa = `Pagante Extra ${Object.keys(pagamentos).length + 1}`;
-            return { ...prev, [novaPessoa]: true };
-        });
-    }, [pagamentos]);
+        setSelecionados(prev => ({ ...prev, [newKeyRef.current]: true }));
+    }, []);
 
     const removerPessoa = useCallback((pessoaId) => {
         if (Object.keys(pagamentos).length <= 1) return;
@@ -322,6 +321,11 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
         `;
         
         const win = window.open('', '', 'height=600,width=400');
+        // CORREÇÃO CRÍTICA: Verifica se o popup foi bloqueado antes de usar
+        if (!win) {
+            toast.error("⚠️ Popup bloqueado! Vá em Configurações do navegador e permita popups neste site.");
+            return;
+        }
         win.document.write(conteudo);
         win.document.close();
         setTimeout(() => { win.focus(); win.print(); win.close(); }, 500);
@@ -412,11 +416,8 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
 
             if (onSucesso) onSucesso({ ...dadosVendaSimulados, parcial: !quitouMesa });
             
-            try {
-                if (typeof isMaquininha === 'undefined' || !isMaquininha) onClose();
-            } catch (e) {
-                onClose(); // Fallback
-            }
+            // CORREÇÃO CRÍTICA: isMaquininha não existe neste hook, remover referência e fechar diretamente
+            onClose();
 
         } catch (error) {
             console.error('Erro:', error);

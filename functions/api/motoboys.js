@@ -5,6 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 import { db } from '../firebaseCore.js';
+import { verifyAdminAccess } from '../authUtils.js';
 
 // ==================================================================
 // 22. ACERTO COM MOTOBOYS
@@ -22,13 +23,7 @@ export const gerarAcertoMotoboy = onCall({ cors: true }, async (request) => {
     throw new HttpsError('invalid-argument', 'estabelecimentoId, motoboyId, dataInicio e dataFim são obrigatórios.');
   }
 
-  const token = request.auth.token;
-  const isMaster = token.isMasterAdmin === true || token.role === 'master';
-  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
-
-  if (!isMaster && !hasAccess) {
-      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
-  }
+  await verifyAdminAccess(request, estabelecimentoId);
 
   try {
     const inicio = new Date(dataInicio);
@@ -128,13 +123,7 @@ export const marcarAcertoPago = onCall({ cors: true }, async (request) => {
   const { estabelecimentoId, acertoId } = request.data || {};
   if (!estabelecimentoId || !acertoId) throw new HttpsError('invalid-argument', 'Dados incompletos.');
 
-  const token = request.auth.token;
-  const isMaster = token.isMasterAdmin === true || token.role === 'master';
-  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
-
-  if (!isMaster && !hasAccess) {
-      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
-  }
+  await verifyAdminAccess(request, estabelecimentoId);
 
   try {
     await db.collection('estabelecimentos').doc(estabelecimentoId)
@@ -162,13 +151,7 @@ export const listarAcertosMotoboy = onCall({ cors: true }, async (request) => {
   const { estabelecimentoId, motoboyId } = request.data || {};
   if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
 
-  const token = request.auth.token;
-  const isMaster = token.isMasterAdmin === true || token.role === 'master';
-  const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
-
-  if (!isMaster && !hasAccess) {
-      throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
-  }
+  await verifyAdminAccess(request, estabelecimentoId);
 
   try {
     let q = db.collection('estabelecimentos').doc(estabelecimentoId)

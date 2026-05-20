@@ -32,7 +32,7 @@ export const processarDado = (doc, origem) => {
                        data.criadoEm?.toDate?.() || 
                        data.dataFechamento?.toDate?.() || 
                        data.updatedAt?.toDate?.() || 
-                       new Date();
+                       null;
 
     const parseVal = (v) => {
         if (typeof v === 'number') return v;

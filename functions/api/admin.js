@@ -120,7 +120,8 @@ export const abrirCaixaBackend = onCall({ cors: true }, async (request) => {
         return { success: true, id: newDoc.id };
     } catch (e) {
         logger.error('Erro ao abrir caixa:', e);
-        return { success: false, error: e.message };
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError('internal', e.message || 'Erro interno.');
     }
 });
 
@@ -142,7 +143,8 @@ export const fecharCaixaBackend = onCall({ cors: true }, async (request) => {
         return { success: true };
     } catch (e) {
         logger.error('Erro ao fechar caixa:', e);
-        return { success: false, error: e.message };
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError('internal', e.message || 'Erro interno.');
     }
 });
 
@@ -163,7 +165,8 @@ export const adicionarMovimentacaoCaixaBackend = onCall({ cors: true }, async (r
         return { success: true };
     } catch (e) {
         logger.error('Erro ao adicionar movimentacao:', e);
-        return { success: false, error: e.message };
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError('internal', e.message || 'Erro interno.');
     }
 });
 

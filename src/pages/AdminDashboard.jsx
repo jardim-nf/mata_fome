@@ -163,6 +163,7 @@ const AdminDashboard = () => {
         { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', perm: 'pdv' },
         { path: `/totem/${estabelecimentoIdPrincipal || 'loja'}`, title: '🚀 Lançar Totem', sub: 'Abre o app de Autoatendimento', icon: <IoDesktopOutline />, cor: 'yellow', adminOnly: true },
         ...(isVarejo ? [] : [{ path: '/admin/karaoke', title: 'Painel do Karaokê', sub: 'Gerencie a fila da TV', icon: <FaMicrophoneAlt />, cor: 'orange', adminOnly: true }]),
+        { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
       ]
     },
     {
@@ -191,7 +192,6 @@ const AdminDashboard = () => {
       description: "Seus lucros e inteligência",
       items: [
         { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
-        { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
         { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, salários, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
         ...(isVarejo ? [] : [{ path: '/admin/auditoria-mesas', title: 'Auditoria de Mesas', sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true }]),

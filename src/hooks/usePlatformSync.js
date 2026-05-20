@@ -262,20 +262,16 @@ export const usePlatformSync = () => {
     }
   }, [platforms, estabelecimentoIdPrincipal]);
 
-  // ⏱️ Iniciar o Loop de Auto-Polling
-  useEffect(() => {
-    if (!estabelecimentoIdPrincipal || !platforms?.ifood?.connected) return;
+  // [IFOOD DESATIVADO] - Auto-polling a cada 15s desativado.
+  // Era o mais agressivo: 4 chamadas/min por usuário conectado.
+  // useEffect(() => {
+  //   if (!estabelecimentoIdPrincipal || !platforms?.ifood?.connected) return;
+  //   syncSilent();
+  //   const intervalId = setInterval(() => { syncSilent(); }, 15000);
+  //   return () => clearInterval(intervalId);
+  // }, [estabelecimentoIdPrincipal, platforms?.ifood?.connected, syncSilent]);
 
-    // Executa imediatamente a primeira vez (não espera o timer)
-    syncSilent();
 
-    // Roda a cada 15 segundos
-    const intervalId = setInterval(() => {
-      syncSilent();
-    }, 15000);
-
-    return () => clearInterval(intervalId);
-  }, [estabelecimentoIdPrincipal, platforms?.ifood?.connected, syncSilent]);
 
   // 🔄 Ouvir pedidos em tempo real
   useEffect(() => {

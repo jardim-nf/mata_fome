@@ -24,7 +24,12 @@ export const criarPedidoSeguro = onCall({ cors: true }, async (request) => {
         for (const item of itens) {
             if (!item.id) continue;
 
-            const produtoRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${item.id}`);
+            // FIX: caminho correto da subcoleção do cardápio
+            const categoriaId = item.categoriaId || item.category || item.categoria;
+            if (!categoriaId) {
+                throw new HttpsError('invalid-argument', `Item sem categoriaId: ${item.nome || item.id}`);
+            }
+            const produtoRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/itens/${item.id}`);
             const produtoSnap = await produtoRef.get();
 
             if (!produtoSnap.exists) {
@@ -353,60 +358,75 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
             taxaEntrega = 0;
         }
 
-        // Processar Cupom
+        // Processar Cupom — transação atômica para evitar uso acima do limite
         let cupomAplicadoId = null;
         if (cupom) {
             const cupomRef = db.collection(`estabelecimentos/${estabelecimentoId}/cupons`).doc(cupom);
-            const cupomSnap = await cupomRef.get();
-            if (cupomSnap.exists) {
-                const cData = cupomSnap.data();
-                if (cData.ativo !== false && subtotalReal >= (cData.valorMinimo || 0)) {
-                    if (!cData.limiteUso || (cData.usos || 0) < cData.limiteUso) {
-                        if (cData.tipo === 'porcentagem') {
-                            descontoValor += subtotalReal * (cData.valor / 100);
-                        } else if (cData.tipo === 'fixo') {
-                            descontoValor += cData.valor;
-                        }
-                        cupomAplicadoId = cupom;
-                    } else {
-                         throw new HttpsError('failed-precondition', 'Este cupom já atingiu o limite de usos.');
-                    }
-                } else {
-                     throw new HttpsError('failed-precondition', 'O cupom é inválido ou o valor mínimo não foi atingido.');
+            const cupomDesconto = await db.runTransaction(async (txn) => {
+                const cupomSnap = await txn.get(cupomRef);
+                if (!cupomSnap.exists) {
+                    throw new HttpsError('not-found', 'Cupom não encontrado.');
                 }
-            } else {
-                throw new HttpsError('not-found', 'Cupom não encontrado.');
-            }
+                const cData = cupomSnap.data();
+                if (cData.ativo === false || subtotalReal < (cData.valorMinimo || 0)) {
+                    throw new HttpsError('failed-precondition', 'O cupom é inválido ou o valor mínimo não foi atingido.');
+                }
+                if (cData.limiteUso && (cData.usos || 0) >= cData.limiteUso) {
+                    throw new HttpsError('failed-precondition', 'Este cupom já atingiu o limite de usos.');
+                }
+                // Incrementar usos atomicamente dentro da transação
+                txn.update(cupomRef, { usos: FieldValue.increment(1) });
+
+                let desconto = 0;
+                if (cData.tipo === 'porcentagem') {
+                    desconto = subtotalReal * (cData.valor / 100);
+                } else if (cData.tipo === 'fixo') {
+                    desconto = cData.valor;
+                }
+                return desconto;
+            });
+            descontoValor += cupomDesconto;
+            cupomAplicadoId = cupom;
         }
 
         let subtotalETaxas = subtotalReal + taxaEntrega - descontoValor;
 
-        // 5. Aplicar Cashback
+        // 5. Aplicar Cashback — transação atômica para evitar double-spend
         let cashbackAplicado = 0;
         let clienteDocRef = null;
+
         if (usarCashback) {
+            // Encontrar o doc do cliente (por UID ou telefone)
             const clienteRefUid = db.doc(`estabelecimentos/${estabelecimentoId}/clientes/${uid}`);
             const cSnap = await clienteRefUid.get();
-            let saldoCarteira = 0;
-            
+
             if (cSnap.exists) {
-                saldoCarteira = Number(cSnap.data().saldoCashback) || Number(cSnap.data().saldoCarteira) || 0;
                 clienteDocRef = clienteRefUid;
             } else if (clienteDados?.telefone) {
                 const tForm = clienteDados.telefone.replace(/\D/g, '');
                 const clienteRefTel = db.doc(`estabelecimentos/${estabelecimentoId}/clientes/${tForm}`);
                 const tSnap = await clienteRefTel.get();
-                if (tSnap.exists) {
-                    saldoCarteira = Number(tSnap.data().saldoCashback) || Number(tSnap.data().saldoCarteira) || 0;
-                    clienteDocRef = clienteRefTel;
-                }
+                if (tSnap.exists) clienteDocRef = clienteRefTel;
             }
-            cashbackAplicado = Math.min(saldoCarteira, subtotalETaxas);
+
+            if (clienteDocRef) {
+                // Transação atômica: lê saldo atual e deduz de forma segura (sem double-spend)
+                cashbackAplicado = await db.runTransaction(async (txn) => {
+                    const snap = await txn.get(clienteDocRef);
+                    if (!snap.exists) return 0;
+                    const saldo = Number(snap.data().saldoCashback) || Number(snap.data().saldoCarteira) || 0;
+                    const deducao = Math.min(saldo, subtotalETaxas);
+                    if (deducao > 0) {
+                        txn.update(clienteDocRef, { saldoCashback: FieldValue.increment(-deducao) });
+                    }
+                    return deducao;
+                });
+            }
         }
 
         const totalFinal = Math.max(0, subtotalETaxas - cashbackAplicado);
 
-        // 6. Transação / Batch
+        // 6. Batch (cashback já foi deduzido na transação acima)
         const batch = db.batch();
 
         const pedidoRef = db.collection(`estabelecimentos/${estabelecimentoId}/pedidos`).doc();
@@ -435,20 +455,9 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
 
         batch.set(pedidoRef, pedidoObj);
 
-        // Abater Cashback
-        if (cashbackAplicado > 0 && clienteDocRef) {
-            batch.update(clienteDocRef, {
-                saldoCashback: FieldValue.increment(-cashbackAplicado)
-            });
-        }
+        // Cashback já deduzido atomicamente acima via runTransaction
 
-        // Incrementar usos do cupom
-        if (cupomAplicadoId) {
-            const cupomRef = db.collection(`estabelecimentos/${estabelecimentoId}/cupons`).doc(cupomAplicadoId);
-            batch.update(cupomRef, {
-                usos: FieldValue.increment(1)
-            });
-        }
+        // Cupom usos já incrementado atomicamente na transação acima
 
         // Abater Estoque
         itensValidados.forEach((item) => {
@@ -481,7 +490,7 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
     } catch (e) {
         logger.error("Erro interno ao finalizar checkout (Geral):", e);
         if (e instanceof HttpsError) throw e;
-        return { success: false, message: e.message || 'Erro desconhecido interno' };
+        throw new HttpsError('internal', e.message || 'Erro interno ao finalizar checkout.');
     }
 });
 

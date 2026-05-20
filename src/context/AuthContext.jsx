@@ -91,67 +91,74 @@ export function AuthProvider({ children }) {
             isProcessingAuth.current = true;
             setLoading(true);
             
-            if (user) {
-                let tokenResult;
-                let claims = {};
-                try {
-                    tokenResult = await user.getIdTokenResult(false); 
-                    claims = tokenResult.claims || {};
-                } catch (e) { 
-                    console.error("❌ Falha token:", e); 
-                }
-                
-                const firestoreData = await getFirestoreUserData(user);
-                if (import.meta.env.DEV) console.log('📦 Firestore data:', { cargo: firestoreData?.cargo, isAdmin: firestoreData?.isAdmin });
-                
-                const isMasterAdmin = Boolean(claims.isMasterAdmin) || Boolean(firestoreData?.isMasterAdmin);
-                const isAdmin = Boolean(claims.isAdmin) || Boolean(firestoreData?.isAdmin) || isMasterAdmin;
-                
-                const docEstabs = mapToArray(firestoreData?.estabelecimentos);
-                const docEstabsGerenciados = mapToArray(firestoreData?.estabelecimentosGerenciados);
-                const claimEstabs = mapToArray(claims.estabelecimentos);
-                const claimEstabsGerenciados = mapToArray(claims.estabelecimentosGerenciados);
-                
-                let allEstabs = [...new Set([...docEstabs, ...docEstabsGerenciados, ...claimEstabs, ...claimEstabsGerenciados])];
-
-                if ((isMasterAdmin || isAdmin) && allEstabs.length === 0) {
+            try {
+                if (user) {
+                    let tokenResult;
+                    let claims = {};
                     try {
-                        const estres = await getDocs(collection(db, 'estabelecimentos'));
-                        allEstabs = estres.docs.map(doc => doc.id);
-                    } catch (error) { console.error(error); }
+                        tokenResult = await user.getIdTokenResult(false); 
+                        claims = tokenResult.claims || {};
+                    } catch (e) { 
+                        console.error("❌ Falha token:", e); 
+                    }
+                    
+                    const firestoreData = await getFirestoreUserData(user);
+                    if (import.meta.env.DEV) console.log('📦 Firestore data:', { cargo: firestoreData?.cargo, isAdmin: firestoreData?.isAdmin });
+                    
+                    const isMasterAdmin = Boolean(claims.isMasterAdmin) || Boolean(firestoreData?.isMasterAdmin);
+                    const isAdmin = Boolean(claims.isAdmin) || Boolean(firestoreData?.isAdmin) || isMasterAdmin;
+                    
+                    const docEstabs = mapToArray(firestoreData?.estabelecimentos);
+                    const docEstabsGerenciados = mapToArray(firestoreData?.estabelecimentosGerenciados);
+                    const claimEstabs = mapToArray(claims.estabelecimentos);
+                    const claimEstabsGerenciados = mapToArray(claims.estabelecimentosGerenciados);
+                    
+                    let allEstabs = [...new Set([...docEstabs, ...docEstabsGerenciados, ...claimEstabs, ...claimEstabsGerenciados])];
+
+                    if ((isMasterAdmin || isAdmin) && allEstabs.length === 0) {
+                        try {
+                            const estres = await getDocs(collection(db, 'estabelecimentos'));
+                            allEstabs = estres.docs.map(doc => doc.id);
+                        } catch (error) { console.error(error); }
+                    }
+
+                    const combinedData = {
+                        uid: user.uid,
+                        email: user.email,
+                        nome: firestoreData?.nome || user.displayName || user.email.split('@')[0],
+                        ...firestoreData,
+                        isAdmin,
+                        isMasterAdmin,
+                        estabelecimentosGerenciados: allEstabs,
+                        dataAtualizacao: new Date(),
+                        _claims: claims
+                    };
+
+                    if (import.meta.env.DEV) console.log('✅ auth ok:', { cargo: combinedData.cargo, isAdmin, isMasterAdmin });
+                    setCurrentUser({ ...user, ...combinedData });
+                    setUserData(combinedData);
+                    
+                    try {
+                        const clientDocRef = doc(db, 'clientes', user.uid);
+                        const cd = await getDoc(clientDocRef);
+                        if (cd.exists()) setCurrentClientData(cd.data());
+                    } catch (ce) { console.error('[AuthContext] Erro ao buscar dados do cliente:', ce); }
+
+                } else {
+                    setCurrentUser(null);
+                    setUserData(null);
+                    setCurrentClientData(null);
                 }
-
-                const combinedData = {
-                    uid: user.uid,
-                    email: user.email,
-                    nome: firestoreData?.nome || user.displayName || user.email.split('@')[0],
-                    ...firestoreData,
-                    isAdmin,
-                    isMasterAdmin,
-                    estabelecimentosGerenciados: allEstabs,
-                    dataAtualizacao: new Date(),
-                    _claims: claims
-                };
-
-                if (import.meta.env.DEV) console.log('✅ auth ok:', { cargo: combinedData.cargo, isAdmin, isMasterAdmin });
-                setCurrentUser({ ...user, ...combinedData });
-                setUserData(combinedData);
-                
-                try {
-                    const clientDocRef = doc(db, 'clientes', user.uid);
-                    const cd = await getDoc(clientDocRef);
-                    if (cd.exists()) setCurrentClientData(cd.data());
-                } catch (ce) { console.error('[AuthContext] Erro ao buscar dados do cliente:', ce); }
-
-            } else {
-                setCurrentUser(null);
-                setUserData(null);
-                setCurrentClientData(null);
+            } catch (err) {
+                // Catch-all para não deixar o loading preso em caso de erro inesperado
+                console.error('❌ Erro crítico no AuthContext:', err);
+            } finally {
+                // CORREÇÃO CRÍTICA: Sempre libera o lock e o loading, mesmo em caso de erro.
+                // Antes disso, um erro silencioso deixaria loading=true para sempre (tela branca).
+                isProcessingAuth.current = false;
+                setLoading(false);
+                setAuthChecked(true);
             }
-            
-            setLoading(false);
-            setAuthChecked(true);
-            isProcessingAuth.current = false; 
         });
 
         return unsubscribe;

@@ -10,9 +10,9 @@
     ],
     "headers": [
       {
-        "source": "/assets/**",
+        "source": "**",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
       },
       {
@@ -32,18 +32,6 @@
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
         ]
-      },
-      {
-        "source": "/index.html",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/sw.js",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
       }
     ]
   },
@@ -56,10 +44,17 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run lint"
+        "*.local",
+        "*.txt",
+        "*.log",
+        "*.bak",
+        "*.cjs",
+        "emulator.log",
+        "debug_logs.txt",
+        "functions_list.txt",
+        "list.txt",
+        "logs.txt",
+        "wpp_test_logs.txt"
       ]
     }
   ]

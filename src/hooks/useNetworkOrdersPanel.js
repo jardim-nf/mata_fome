@@ -374,28 +374,13 @@ export const useNetworkOrdersPanel = (estabelecimentosAtivos = [], authLoading) 
         } catch (error) { toast.error('Erro ao atualizar.'); }
     }, []);
 
-    useEffect(() => {
-        if (estabs.length === 0 || authLoading) return;
-        const ifoodPolling = httpsCallable(functions, 'ifoodPolling');
-        let isMounted = true;
+    // [IFOOD DESATIVADO] - Polling desativado. Ver useOrdersPanel.js para detalhes.
+    // useEffect(() => {
+    //     if (estabs.length === 0 || authLoading) return;
+    //     ... ifoodPolling a cada 30s por estabelecimento ...
+    // }, [estabs.join(','), authLoading]);
 
-        const executarPolling = async () => {
-            if (!isMounted) return;
-            for (const estabId of estabs) {
-                try {
-                    const result = await ifoodPolling({ estabelecimentoId: estabId });
-                    if (result.data?.pedidosNovos > 0) {
-                        console.log(`🟢 iFood [${estabId}]: ${result.data.pedidosNovos} pedidos`);
-                    }
-                } catch (err) { }
-            }
-        };
 
-        executarPolling();
-        const intervalId = setInterval(executarPolling, 30000);
-
-        return () => { isMounted = false; clearInterval(intervalId); };
-    }, [estabs.join(','), authLoading]);
 
     return {
         dataSelecionada, setDataSelecionada,

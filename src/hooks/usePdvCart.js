@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { tocarBeepErro } from '../utils/audioUtils';
 
 export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) {
     const [vendaAtual, setVendaAtual] = useState(null);
@@ -57,17 +58,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
 
     const excluirVendaSuspensa = (id) => { showConfirm("Excluir este pedido em espera?", () => setVendasSuspensas(prev => prev.filter(v => v.id !== id)), { variant: 'danger' }); };
 
-    const tocarBeepErro = () => { 
-        try { 
-            const ctx = new (window.AudioContext || window.webkitAudioContext)(); 
-            const osc = ctx.createOscillator(); const gain = ctx.createGain(); 
-            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); 
-            gain.gain.setValueAtTime(0.15, ctx.currentTime); 
-            gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5); 
-            osc.connect(gain); gain.connect(ctx.destination); 
-            osc.start(); osc.stop(ctx.currentTime + 0.5); 
-        } catch (e) { console.error(e); } 
-    };
+
 
     const handleProdutoClick = useCallback((p) => {
         const ePeso = p.vendidoPorPeso === true || String(p.fiscal?.unidade || '').trim().toUpperCase() === 'KG' || String(p.unidade || '').trim().toUpperCase() === 'KG';

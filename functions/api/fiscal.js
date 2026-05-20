@@ -5,6 +5,7 @@ import * as logger from 'firebase-functions/logger';
 import archiver from 'archiver';
 import nodemailer from 'nodemailer';
 import { db, bucket } from '../firebaseCore.js';
+import { verifyAdminAccess } from '../authUtils.js';
 
 const plugNotasApiKey = defineSecret('PLUGNOTAS_API_KEY');
 const plugNotasWebhookToken = defineSecret('PLUGNOTAS_WEBHOOK_TOKEN');
@@ -33,7 +34,7 @@ async function salvarArquivoNoStorage(estabelecimentoId, vendaId, urlOriginal, t
         const file = bucket.file(filePath);
         await file.save(contentBuffer, {
             metadata: {
-                contentType,
+                contentType: tipo === 'xml' ? 'application/xml' : 'application/pdf',
                 metadata: {
                     vendaId,
                     estabelecimentoId,
@@ -319,7 +320,7 @@ export const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, 
         res.status(200).json({ message: "Notificação processada com sucesso" });
     } catch (error) {
         logger.error('❌ Erro no webhook PlugNotas:', error);
-        res.status(500).send('Erro Interno');
+        res.status(200).send('OK'); // Sempre 200 — PlugNotas reenvia em loop se receber 500
     }
 });
 
@@ -411,13 +412,7 @@ export const cancelarNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApi
         if (!vendaSnap.exists) throw new HttpsError('not-found', 'Venda não encontrada.');
         const venda = vendaSnap.data();
         
-        const token = request.auth.token;
-        const isMaster = token.isMasterAdmin === true || token.role === 'master';
-        const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(venda.estabelecimentoId);
-
-        if (!isMaster && !hasAccess) {
-            throw new HttpsError('permission-denied', 'Acesso negado para cancelar.');
-        }
+        await verifyAdminAccess(request, venda.estabelecimentoId);
 
         const idPlugNotas = venda.fiscal?.idPlugNotas;
 
@@ -472,13 +467,7 @@ export const exportarXmlsContador = onCall({
         throw new HttpsError('invalid-argument', 'estabelecimentoId, ano e mes são obrigatórios.');
     }
 
-    const token = request.auth.token;
-    const isMaster = token.isMasterAdmin === true || token.role === 'master';
-    const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
-
-    if (!isMaster && !hasAccess) {
-        throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
-    }
+    await verifyAdminAccess(request, estabelecimentoId);
 
     const mesStr = String(mes).padStart(2, '0');
     const prefix = `nfce/${estabelecimentoId}/${ano}/${mesStr}/`;
@@ -539,13 +528,7 @@ export const enviarXmlsContadorEmail = onCall({
         throw new HttpsError('invalid-argument', 'estabelecimentoId, ano, mes e emailContador são obrigatórios.');
     }
 
-    const token = request.auth.token;
-    const isMaster = token.isMasterAdmin === true || token.role === 'master';
-    const hasAccess = token.estabelecimentos && token.estabelecimentos.includes(estabelecimentoId);
-
-    if (!isMaster && !hasAccess) {
-        throw new HttpsError('permission-denied', 'Acesso negado a este estabelecimento.');
-    }
+    await verifyAdminAccess(request, estabelecimentoId);
 
     const mesStr = String(mes).padStart(2, '0');
     const prefix = `nfce/${estabelecimentoId}/${ano}/${mesStr}/`;

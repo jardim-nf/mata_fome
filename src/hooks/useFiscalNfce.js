@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
@@ -215,27 +215,34 @@ export const useFiscalNfce = (estabelecimentoAtivo) => {
         return () => unsub();
     }, [mostrarRecibo, dadosRecibo?.id]);
 
+    // Ref to track dadosRecibo inside polling interval without restarting it
+    const dadosReciboRef = useRef(dadosRecibo);
+    useEffect(() => { dadosReciboRef.current = dadosRecibo; }, [dadosRecibo]);
+
     // Polling Automático
     useEffect(() => {
         let intervalo;
-        if (nfceStatus === 'loading' && dadosRecibo?.fiscal?.idPlugNotas) {
+        const reciboId = dadosRecibo?.id;
+        const idPlugNotas = dadosRecibo?.fiscal?.idPlugNotas;
+        if (nfceStatus === 'loading' && idPlugNotas) {
             intervalo = setInterval(async () => {
                 try {
-                    const res = await vendaService.consultarStatusNfce(dadosRecibo.id, dadosRecibo.fiscal.idPlugNotas);
+                    const current = dadosReciboRef.current;
+                    const res = await vendaService.consultarStatusNfce(current?.id || reciboId, current?.fiscal?.idPlugNotas || idPlugNotas);
                     if (res.sucesso && res.statusAtual !== 'PROCESSANDO') {
                         clearInterval(intervalo); 
                         const ns = (res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO') ? 'success' : 'error';
                         setNfceStatus(ns); 
                         if (ns === 'success') setNfceUrl(res.pdf);
                         setDadosRecibo(p => ({...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
-                        setVendasHistoricoExibicao(p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
+                        setVendasHistoricoExibicao(p => p.map(v => v.id === (current?.id || reciboId) ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v));
                         if (ns === 'error') tocarBeepErro();
                     }
                 } catch (e) { console.error(e); }
             }, 3000);
         }
         return () => clearInterval(intervalo);
-    }, [nfceStatus, dadosRecibo]);
+    }, [nfceStatus, dadosRecibo?.id, dadosRecibo?.fiscal?.idPlugNotas]);
 
     return {
         mostrarRecibo, setMostrarRecibo,

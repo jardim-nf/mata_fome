@@ -49,10 +49,17 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         else toast.warning("❌ Auto-Print: DESATIVADO", { autoClose: 2000 });
     };
 
-    const limparDadosCliente = useCallback((clienteData) => {
-        if (!clienteData || typeof clienteData !== 'object') return { nome: 'Cliente', telefone: '', endereco: {} };
-        if ('_methodName' in clienteData || 'toDate' in clienteData) return { nome: 'Cliente', telefone: '', endereco: {} };
-        return { nome: clienteData.nome || 'Cliente', telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
+    const limparDadosCliente = useCallback((clienteData, fallbackNome = 'Cliente') => {
+        if (!clienteData || typeof clienteData !== 'object') return { nome: fallbackNome, telefone: '', endereco: {} };
+        if ('_methodName' in clienteData || 'toDate' in clienteData) return { nome: fallbackNome, telefone: '', endereco: {} };
+        
+        let nomeFinal = clienteData.nome;
+        // FIX: Não rejeitar o nome 'Cliente' — pode ser nome real. Só usa fallback se vazio/nulo.
+        if (!nomeFinal || String(nomeFinal).trim() === '') {
+            nomeFinal = fallbackNome && String(fallbackNome).trim() !== '' ? fallbackNome : 'Cliente';
+        }
+        
+        return { nome: nomeFinal, telefone: clienteData.telefone || '', endereco: (clienteData.endereco && typeof clienteData.endereco === 'object') ? clienteData.endereco : {} };
     }, []);
 
     const processarDadosPedido = useCallback((pedidoData) => {
@@ -87,7 +94,8 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         }) : [];
 
         const itensFiltradosParaCozinha = rawItens.filter(isItemCozinha);
-        const clienteLimpo = limparDadosCliente(pedidoData.cliente);
+        const fallbackNome = pedidoData.clienteNome || pedidoData.nomeCliente || 'Cliente';
+        const clienteLimpo = limparDadosCliente(pedidoData.cliente, fallbackNome);
         
         let endereco = pedidoData.endereco || {};
         if (clienteLimpo.endereco && Object.keys(clienteLimpo.endereco).length > 0) endereco = { ...endereco, ...clienteLimpo.endereco };
@@ -382,39 +390,19 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         } catch (error) { toast.error('Erro ao atualizar.'); }
     }, [estabelecimentoAtivo]);
 
-    // 🔄 iFood Auto-Polling Silencioso
-    // Chama a Cloud Function ifoodPolling a cada 30s.
-    // Quando ela salva novos pedidos no Firestore, o onSnapshot acima detecta automaticamente.
-    useEffect(() => {
-        if (!estabelecimentoAtivo || authLoading) return;
+    // [IFOOD DESATIVADO] - Polling desativado pois causava gargalo nas Cloud Functions em fins de semana.
+    // Era disparado a cada 30s por cada aba/garçom aberto, somando centenas de chamadas/hora.
+    // Para reativar: implementar via Cloud Scheduler no backend (1 chamada/min centralizada).
+    // useEffect(() => {
+    //     if (!estabelecimentoAtivo || authLoading) return;
+    //     const ifoodPolling = httpsCallable(functions, 'ifoodPolling');
+    //     let isMounted = true;
+    //     const executarPolling = async () => { ... };
+    //     executarPolling();
+    //     const intervalId = setInterval(executarPolling, 30000);
+    //     return () => { isMounted = false; clearInterval(intervalId); };
+    // }, [estabelecimentoAtivo, authLoading]);
 
-        const ifoodPolling = httpsCallable(functions, 'ifoodPolling');
-        let isMounted = true;
-
-        const executarPolling = async () => {
-            if (!isMounted) return;
-            try {
-                const result = await ifoodPolling({ estabelecimentoId: estabelecimentoAtivo });
-                if (result.data?.pedidosNovos > 0) {
-                    console.log(`🟢 iFood: ${result.data.pedidosNovos} novo(s) pedido(s) sincronizado(s)`);
-                }
-            } catch (err) {
-                // Silencioso - não exibe toast para não incomodar o usuário
-                console.warn('⚠️ iFood polling silencioso falhou:', err.message);
-            }
-        };
-
-        // Executa imediatamente ao abrir a tela
-        executarPolling();
-
-        // Depois repete a cada 30 segundos
-        const intervalId = setInterval(executarPolling, 30000);
-
-        return () => {
-            isMounted = false;
-            clearInterval(intervalId);
-        };
-    }, [estabelecimentoAtivo, authLoading]);
 
     return {
         dataSelecionada, setDataSelecionada,

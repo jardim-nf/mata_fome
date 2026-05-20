@@ -42,6 +42,24 @@ export async function verifyAdminAccess(request, estabelecimentoId) {
         }
     }
 
+    // Fallback final: verifica se o uid existe como funcionário ativo na subcoleção do estabelecimento.
+    // Isso cobre garçons/funcionários antigos ou com dados inconsistentes no /usuarios.
+    if (!isMaster && !hasAccess) {
+        const funcionarioDoc = await db
+            .collection('estabelecimentos')
+            .doc(estabelecimentoId)
+            .collection('funcionarios')
+            .doc(uid)
+            .get();
+        if (funcionarioDoc.exists) {
+            const funcData = funcionarioDoc.data();
+            // Só libera se o funcionário estiver ativo
+            if (funcData.status !== 'inativo') {
+                hasAccess = true;
+            }
+        }
+    }
+
     if (!isMaster && !hasAccess) {
         throw new HttpsError('permission-denied', 'Acesso negado.');
     }

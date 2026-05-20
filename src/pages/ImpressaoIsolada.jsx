@@ -283,7 +283,7 @@ export default function ImpressaoIsolada() {
             <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
                 <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{tituloImpressao}</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '4px 0', textTransform: 'uppercase' }}>
-                    {printData.isRetirada ? '📦 RETIRADA' : printData.isDelivery ? '🚀 DELIVERY' : printData.isPDV ? '🏪 PDV/BALCÃO' : printData.isMesa ? `MESA ${printData.numero}` : 'BALCÃO'}
+                    {printData.isRetirada ? '📦 RETIRADA' : printData.isDelivery ? '🚀 DELIVERY' : printData.isMesa ? `MESA ${printData.numero}` : printData.isPDV ? '🏪 PDV/BALCÃO' : 'BALCÃO'}
                 </div>
                 <div style={{ fontSize: '12px' }}>{new Date().toLocaleString('pt-BR')}</div>
             </div>

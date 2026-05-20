@@ -114,17 +114,31 @@ export const gerenciarMesa = onCall({ enforceAppCheck: false, cors: true }, asyn
       case "CONFIRMAR_ABERTURA": {
         if (!mesaId) throw new HttpsError("invalid-argument", "mesaId é obrigatório.");
         const { qtd, nomeCliente } = payload;
-        await mesasRef.doc(mesaId).update({
-          status: "ocupada",
-          pessoas: qtd,
-          nome: nomeCliente || "",
-          tipo: "mesa",
-          updatedAt: FieldValue.serverTimestamp(),
-          bloqueadoPor: null,
-          bloqueadoPorNome: null,
-          bloqueadoEm: null
+
+        return await db.runTransaction(async (transaction) => {
+          const mesaDocRef = mesasRef.doc(mesaId);
+          const mesaDocCheck = await transaction.get(mesaDocRef);
+
+          if (!mesaDocCheck.exists) throw new HttpsError("not-found", "Mesa não existe mais!");
+
+          const dadosMesa = mesaDocCheck.data();
+          if (dadosMesa.bloqueadoPor && dadosMesa.bloqueadoPor !== uid) {
+              throw new HttpsError("failed-precondition", `Mesa sendo aberta por outro garçôm: ${dadosMesa.bloqueadoPorNome || 'outro usuário'}.`);
+          }
+
+          transaction.update(mesaDocRef, {
+            status: "ocupada",
+            pessoas: qtd,
+            nome: nomeCliente || "",
+            tipo: "mesa",
+            updatedAt: FieldValue.serverTimestamp(),
+            bloqueadoPor: null,
+            bloqueadoPorNome: null,
+            bloqueadoEm: null
+          });
+
+          return { success: true };
         });
-        return { success: true };
       }
 
       case "LIMPAR_IMPRESSAO": {
@@ -170,15 +184,19 @@ export const chamarGarcomWeb = onCall({ enforceAppCheck: false, cors: true }, as
   }
 
   try {
+    // FIX: mesa pode ter sido salva com numero como Number ou String — busca nos dois formatos
     const mesasRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('mesas');
-    const q = mesasRef.where('numero', '==', mesaNumero.toString());
-    const snapshot = await q.get();
+    const [snapNum, snapStr] = await Promise.all([
+        mesasRef.where('numero', '==', Number(mesaNumero)).get(),
+        mesasRef.where('numero', '==', mesaNumero.toString()).get()
+    ]);
 
-    if (snapshot.empty) {
-      throw new HttpsError("not-found", "Mesa não encontrada.");
+    const allDocs = [...snapNum.docs, ...snapStr.docs];
+    if (allDocs.length === 0) {
+        throw new HttpsError("not-found", "Mesa não encontrada.");
     }
 
-    const mesaDoc = snapshot.docs[0];
+    const mesaDoc = allDocs[0];
     
     // Só permitimos atualizar os alertas!
     const updates = {};
@@ -299,10 +317,14 @@ export const cancelarItemMesaBackend = onCall({ cors: true }, async (request) =>
 
   try {
     const mesaRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('mesas').doc(mesaId);
-    const mesaSnap = await mesaRef.get();
-    if (!mesaSnap.exists) throw new HttpsError('not-found', 'Mesa não encontrada.');
 
-    const mesaData = mesaSnap.data();
+    // Read mesa data inside a transaction to prevent concurrent modifications
+    const mesaData = await db.runTransaction(async (transaction) => {
+      const mesaSnap = await transaction.get(mesaRef);
+      if (!mesaSnap.exists) throw new HttpsError('not-found', 'Mesa não encontrada.');
+      return mesaSnap.data();
+    });
+
     const resumoPedido = mesaData.itens || [];
 
     const qtdAtual = itemParaExcluir.quantidade || 1;
@@ -346,6 +368,7 @@ export const cancelarItemMesaBackend = onCall({ cors: true }, async (request) =>
     return { success: true, cancelaInteiro, qtdRemover };
   } catch (error) {
     logger.error("Erro em cancelarItemMesaBackend:", error);
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message);
   }
 });
@@ -383,6 +406,8 @@ export const dispararImpressaoMesaBackend = onCall({ cors: true }, async (reques
 
   const { estabelecimentoId, mesaId, pedidoRecemEnviadoId, setor, nomeGarcom } = request.data || {};
   if (!estabelecimentoId || !mesaId) throw new HttpsError('invalid-argument', 'Dados incompletos.');
+
+  await verifyAdminAccess(request, estabelecimentoId);
 
   try {
     const estabelecimentoRef = db.collection('estabelecimentos').doc(estabelecimentoId);
@@ -516,11 +541,18 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
 
   try {
     const mesaRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('mesas').doc(mesaId);
-    const mesaSnap = await mesaRef.get();
-    if (!mesaSnap.exists) throw new HttpsError('not-found', 'Mesa não encontrada.');
 
-    const mesaData = mesaSnap.data();
-    const batch = db.batch();
+    // Read mesa data inside a transaction to prevent concurrent modifications during financial ops
+    const mesaData = await db.runTransaction(async (transaction) => {
+      const mesaSnap = await transaction.get(mesaRef);
+      if (!mesaSnap.exists) throw new HttpsError('not-found', 'Mesa não encontrada.');
+      return mesaSnap.data();
+    });
+
+    // Track multiple batches to avoid exceeding Firestore's 500 ops limit
+    let batch = db.batch();
+    let batchOpCount = 0;
+    const allBatches = [batch];
 
     // Organizar itens pagos
     let itensValidos = Object.values(pagamentosValidos || {}).flatMap(p => p.itens || []);
@@ -604,23 +636,44 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
         if (Array.isArray(item.fichaTecnica) && item.fichaTecnica.length > 0) {
             item.fichaTecnica.forEach((ficha) => {
                 if (ficha.insumoId) {
+                    // Check if approaching Firestore batch limit (500 ops)
+                    if (batchOpCount >= 490) {
+                        batch = db.batch();
+                        allBatches.push(batch);
+                        batchOpCount = 0;
+                    }
                     const iRef = db.doc(`estabelecimentos/${estabelecimentoId}/insumos/${ficha.insumoId}`);
                     batch.set(iRef, {
                         estoqueAtual: FieldValue.increment(-(ficha.quantidade * qtd)),
                         ultimaBaixa: FieldValue.serverTimestamp()
                     }, { merge: true });
+                    batchOpCount++;
                 }
             });
         } else {
+            // Check if approaching Firestore batch limit (500 ops)
+            if (batchOpCount >= 490) {
+                batch = db.batch();
+                allBatches.push(batch);
+                batchOpCount = 0;
+            }
             const pRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/${tipoColecao}/${produtoId}`);
             batch.set(pRef, {
                 estoqueAtual: FieldValue.increment(-qtd),
                 ultimaBaixa: FieldValue.serverTimestamp()
             }, { merge: true });
+            batchOpCount++;
         }
     });
 
     // 3. Atualizar a Mesa
+    // Check if approaching batch limit before mesa update
+    if (batchOpCount >= 490) {
+        batch = db.batch();
+        allBatches.push(batch);
+        batchOpCount = 0;
+    }
+
     if (quitouMesa) {
         batch.update(mesaRef, {
             status: 'livre',
@@ -667,7 +720,8 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
         });
     }
 
-    await batch.commit();
+    // Commit all batches
+    await Promise.all(allBatches.map(b => b.commit()));
 
     return { success: true, quitada: quitouMesa, restanteFinal, vendaId: vendaRef.id };
   } catch (error) {

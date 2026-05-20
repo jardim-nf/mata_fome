@@ -577,6 +577,14 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             const sanitizeNaNs = (obj) => {
                 if (obj === null || obj === undefined) return obj;
                 if (typeof obj === 'number' && Number.isNaN(obj)) return 0;
+                
+                if (obj instanceof Date) return obj.toISOString();
+                if (typeof obj === 'object' && obj !== null) {
+                    if (typeof obj.toDate === 'function') return obj.toDate().toISOString();
+                    if (obj.seconds !== undefined && obj.nanoseconds !== undefined) return new Date(obj.seconds * 1000).toISOString();
+                    if (obj._seconds !== undefined && obj._nanoseconds !== undefined) return new Date(obj._seconds * 1000).toISOString();
+                }
+
                 if (Array.isArray(obj)) return obj.map(sanitizeNaNs);
                 if (typeof obj === 'object') {
                     const newObj = {};

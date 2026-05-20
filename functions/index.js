@@ -12,9 +12,9 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 
 // Set global options to prevent GCP CPU quota exhaustion
 setGlobalOptions({
-  maxInstances: 1, // Reduzido de 2 para 1 temporariamente para não estourar a cota de CPU global
-  concurrency: 80, // allows single container to process 80 requests at the same time
-  memory: "512MiB" // Aumentado para evitar lentidão (GC thrashing) com bibliotecas pesadas
+  maxInstances: 2,    // 63 serviços × 2 instâncias × 0.5 vCPU (256MiB) = ~63 vCPU máximo (dentro da cota)
+  concurrency: 80,    // cada container aguenta 80 req simultâneas — compensa o maxInstances baixo
+  memory: "256MiB",  // menos memória = menos CPU alocada por instância no Cloud Run
 });
 
 // --- IMPORTS FIREBASE ADMIN ---
@@ -53,4 +53,6 @@ export * from "./api/referral.js";
 
 export * from "./api/mesas.js";
 
-export { ifoodTestarConexao, ifoodConfigurarWebhook, ifoodWebhook, ifoodPolling, ifoodAtualizarStatus } from "./api/ifood.js";
+// [IFOOD DESATIVADO] - As funções abaixo causavam ~1.440 requisições HTTP/hora em fins de semana
+// e colapsavam o sistema por excesso de polling. Reativar quando implementar Cloud Scheduler.
+// export { ifoodTestarConexao, ifoodConfigurarWebhook, ifoodWebhook, ifoodPolling, ifoodAtualizarStatus } from "./api/ifood.js";

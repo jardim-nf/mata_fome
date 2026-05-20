@@ -45,7 +45,7 @@ export const parseNfeXml = (xmlText, margemPadrao = 50) => {
             unidade: prod.getElementsByTagName('uCom')[0]?.textContent || 'UN',
             valorUnit: custo,
             valorTotal: parseFloat(prod.getElementsByTagName('vProd')[0]?.textContent || '0'),
-            precoVendaSugerido: (custo * (1 + margemPadrao / 100)).toFixed(2),
+            precoVendaSugerido: Math.round(custo * (1 + margemPadrao / 100) * 100) / 100,
             vinculoId: null, 
             vinculoNome: null, 
             vinculoPath: null, 

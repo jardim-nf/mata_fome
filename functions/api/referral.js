@@ -5,6 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 import { db } from '../firebaseCore.js';
+import { verifyAdminAccess } from '../authUtils.js';
 
 const openAiApiKey = defineSecret('OPENAI_API_KEY');
 
@@ -887,6 +888,8 @@ export const configurarBotPedidos = onCall({ cors: true }, async (request) => {
   const { estabelecimentoId, ativo, mensagemBoasVindas, horarioAtendimento } = request.data;
   if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
 
+  await verifyAdminAccess(request, estabelecimentoId);
+
   try {
     await db.collection('estabelecimentos').doc(estabelecimentoId).update({
       botPedidos: {
@@ -911,6 +914,8 @@ export const buscarConversasBot = onCall({ cors: true }, async (request) => {
 
   const { estabelecimentoId, limite = 50 } = request.data;
   if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  await verifyAdminAccess(request, estabelecimentoId);
 
   try {
     const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
@@ -947,10 +952,13 @@ export const buscarConversasBot = onCall({ cors: true }, async (request) => {
 export const sendMarketingPush = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Acesso negado.');
 
-  const { targetUid, titulo, mensagem, icone } = request.data;
+  const { estabelecimentoId, targetUid, titulo, mensagem, icone } = request.data;
   if (!targetUid || !titulo || !mensagem) {
     throw new HttpsError('invalid-argument', 'Faltam dados: targetUid, titulo, mensagem.');
   }
+  if (!estabelecimentoId) throw new HttpsError('invalid-argument', 'estabelecimentoId obrigatório.');
+
+  await verifyAdminAccess(request, estabelecimentoId);
 
   try {
     const clientSnap = await db.collection('clientes').doc(targetUid).get();

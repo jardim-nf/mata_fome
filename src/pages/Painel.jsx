@@ -20,7 +20,7 @@ import { matchTermos, TERMOS_BEBIDA } from '../utils/categoriaUtils';
 function Painel() {
     const navigate = useNavigate();
     const { loading: authLoading, estabelecimentosGerenciados , estabelecimentoIdPrincipal, userData } = useAuth();
-    const estabelecimentoAtivo = useMemo(() => estabelecimentoIdPrincipal || null, [estabelecimentosGerenciados]);
+    const estabelecimentoAtivo = useMemo(() => estabelecimentoIdPrincipal || null, [estabelecimentoIdPrincipal]);
     // === INÍCIO DO SCRIPT DE RECUPERAÇÃO DE VENDAS INVISÍVEIS E PEDIDOS ===
     React.useEffect(() => {
         if (!estabelecimentoAtivo) return;
@@ -31,23 +31,23 @@ function Painel() {
                 const pedidosRef = collection(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos');
                 const q = query(pedidosRef, where('status', '==', 'entrega'));
                 const snap = await getDocs(q);
-                snap.forEach(async (docSnap) => {
+                await Promise.all(snap.docs.map(async (docSnap) => {
                     await updateDoc(docSnap.ref, { status: 'em_entrega' });
                     toast.success('🎉 Pedido perdido recuperado!');
-                });
+                }));
 
                 // Recuperar vendas invisíveis (tem createdAt, mas não criadoEm)
                 const vendasRef = collection(db, 'vendas');
                 const vendasQ = query(vendasRef, where('estabelecimentoId', '==', estabelecimentoAtivo));
                 const vendasSnap = await getDocs(vendasQ);
                 let countVendas = 0;
-                vendasSnap.forEach((docSnap) => {
+                await Promise.all(vendasSnap.docs.map(async (docSnap) => {
                     const data = docSnap.data();
                     if (data.createdAt && !data.criadoEm) {
-                        updateDoc(docSnap.ref, { criadoEm: data.createdAt });
+                        await updateDoc(docSnap.ref, { criadoEm: data.createdAt });
                         countVendas++;
                     }
-                });
+                }));
                 if (countVendas > 0) {
                     toast.success(`🎉 ${countVendas} vendas invisíveis foram recuperadas!`);
                 }

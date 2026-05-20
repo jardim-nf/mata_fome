@@ -48,7 +48,7 @@ const PdvScreen = () => {
             if (!estabelecimentoAtivo && lojasCarregadas.length > 0) { setEstabelecimentoAtivo(lojasCarregadas[0].id); setNomeLoja(lojasCarregadas[0].nome); }
         };
         carregarLojas();
-    }, [userData, currentUser, estabelecimentoAtivo]);
+    }, [userData, currentUser]); // removed estabelecimentoAtivo — it's set inside this effect
 
     // Refs Globais e UI states básicos
     const inputBuscaRef = useRef(null);
@@ -88,15 +88,19 @@ const PdvScreen = () => {
         produtos, categorias, carregandoProdutos, categoriaAtiva, setCategoriaAtiva, busca, setBusca, produtosFiltrados 
     } = usePdvProducts(estabelecimentoAtivo);
 
-    // O hook de Carrinho precisa saber se o caixa tá aberto, passemos temporariamente true se os hooks tiverem ordem
+    // Ref to break circular dependency: pdvCaixa needs pdvCart.setVendaAtual, but pdvCart needs pdvCaixa.caixaAberto
+    const pdvCartRef = useRef(null);
+
     const pdvCaixa = usePdvCaixa(
         currentUser, estabelecimentoAtivo, 
-        // mocked setters para o useEffect do PDVCaixa:
-        (vd) => pdvCart.setVendaAtual(vd), 
+        (vd) => pdvCartRef.current?.setVendaAtual(vd), 
         setVendasBase, inputBuscaRef, setMostrarAberturaCaixa, setVendasHistoricoExibicao, setTituloHistorico, setMostrarListaTurnos, setMostrarHistorico
     );
 
     const pdvCart = usePdvCart(pdvCaixa.caixaAberto, inputBuscaRef, showPrompt, showConfirm);
+
+    // Keep ref in sync so pdvCaixa's callback can reach pdvCart
+    useEffect(() => { pdvCartRef.current = pdvCart; });
     
     // Sync for barcode
     useEffect(() => { 

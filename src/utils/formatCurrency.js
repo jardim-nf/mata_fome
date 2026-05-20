@@ -18,7 +18,7 @@ const formatter = new Intl.NumberFormat('pt-BR', {
 export const formatCurrency = (amount) => {
     // Trata strings com vírgula decimal ("10,00" → 10.00)
     const parsed = typeof amount === 'string'
-        ? parseFloat(amount.replace(',', '.'))
+        ? parseFloat(String(amount).replace(/\./g, '').replace(',', '.'))
         : parseFloat(amount);
 
     if (isNaN(parsed)) return 'R$ 0,00';

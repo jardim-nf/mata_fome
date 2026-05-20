@@ -54,8 +54,8 @@ function MasterDashboard() {
   const userName = currentUser?.displayName || currentUser?.nome || currentUser?.email?.split('@')[0] || 'Admin';
   const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // ── Módulos por Categoria ─────────
-  const categoriasDeModulos = [
+  // ── Módulos por Categoria (static list, memoized to avoid recreation on every render)
+  const categoriasDeModulos = useMemo(() => [
     {
       grupo: 'Operação & Vendas',
       badgeColor: 'bg-indigo-500',
@@ -97,7 +97,8 @@ function MasterDashboard() {
         { to: '/admin/audit-logs', title: 'Segurança Logs', icon: <FaShieldAlt />, colorStyle: 'text-red-600 bg-red-50 border-red-100 group-hover:bg-red-500 group-hover:text-white' },
       ]
     }
-  ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []); // Static list — no deps needed
 
   const categoriasExibidas = useMemo(() => {
     if (!searchQuery) return categoriasDeModulos;
@@ -107,7 +108,7 @@ function MasterDashboard() {
       ...cat,
       modulos: cat.modulos.filter(m => m.title.toLowerCase().includes(lowerQuery))
     })).filter(cat => cat.modulos.length > 0);
-  }, [searchQuery]);
+  }, [searchQuery, categoriasDeModulos]);
 
   // ── Loading ──────────────────────
   if (authLoading) return (

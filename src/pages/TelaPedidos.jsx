@@ -320,7 +320,25 @@ const TelaPedidos = () => {
                                                     )}
                                                     
                                                     <div className="mt-3 flex items-center justify-between">
-                                                        {item.adicionadoPor ? (<div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium"><IoPersonAdd className="text-gray-300" size={10} /> <span>{item.adicionadoPor}</span> {item.adicionadoEm && <span>- {(item.adicionadoEm?.toDate ? item.adicionadoEm.toDate() : new Date(item.adicionadoEm)).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }).replace('Invalid Date', '')}</span>}</div>) : <div></div>}
+                                                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium">
+                                                            <IoPersonAdd className="text-gray-300" size={10} /> 
+                                                            <span>{item.adicionadoPor || item.funcionario || item.atendente || 'Garçom'}</span> 
+                                                            {(item.adicionadoEm || item.createdAt) && (
+                                                                <span>- {(() => {
+                                                                    const dVal = item.adicionadoEm || item.createdAt;
+                                                                    if (!dVal) return '';
+                                                                    try {
+                                                                        let d;
+                                                                        if (dVal.toDate) d = dVal.toDate();
+                                                                        else if (dVal.seconds) d = new Date(dVal.seconds * 1000);
+                                                                        else if (dVal._seconds) d = new Date(dVal._seconds * 1000);
+                                                                        else d = new Date(dVal);
+                                                                        if (isNaN(d.getTime())) return '';
+                                                                        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                                                                    } catch(e) { return ''; }
+                                                                })()}</span>
+                                                            )}
+                                                        </div>
                                                         
                                                         {isCancelado ? null : 
                                                          item.status && item.status !== 'pendente' ? (
